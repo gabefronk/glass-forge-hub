@@ -1,0 +1,21 @@
+{
+  "name": "Jobs",
+  "type": "object",
+  "properties": {
+    "canonical_name": {
+      "type": "string",
+      "title": "Canonical Name"
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Aliases",
+      "default": []
+    }
+  },
+  "required": [
+    "canonical_name"
+  ]
+}

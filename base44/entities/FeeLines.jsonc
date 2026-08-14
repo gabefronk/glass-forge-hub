@@ -1,0 +1,125 @@
+{
+  "name": "FeeLines",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "title": "Job Id",
+      "description": "link to Jobs (nullable)"
+    },
+    "job_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Job Date"
+    },
+    "invoice_month": {
+      "type": "string",
+      "title": "Invoice Month",
+      "description": "YYYY-MM derived from job_date"
+    },
+    "job_name_raw": {
+      "type": "string",
+      "title": "Job Name Raw"
+    },
+    "job_name_norm": {
+      "type": "string",
+      "title": "Job Name Norm"
+    },
+    "line_description": {
+      "type": "string",
+      "title": "Line Description"
+    },
+    "calendar_event_id": {
+      "type": "string",
+      "title": "Calendar Event Id"
+    },
+    "probuild_project_id": {
+      "type": "string",
+      "title": "Probuild Project Id"
+    },
+    "probuild_post_id": {
+      "type": "string",
+      "title": "Probuild Post Id"
+    },
+    "calendar_labor_amt": {
+      "type": "number",
+      "title": "Calendar Labor Amt"
+    },
+    "note_text": {
+      "type": "string",
+      "title": "Note Text"
+    },
+    "man_hours": {
+      "type": "number",
+      "title": "Man Hours"
+    },
+    "trip_charges": {
+      "type": "number",
+      "title": "Trip Charges"
+    },
+    "photo_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Photo Urls",
+      "default": []
+    },
+    "labor_amt": {
+      "type": "number",
+      "title": "Labor Amt"
+    },
+    "fee_pct": {
+      "type": "number",
+      "title": "Fee Pct",
+      "default": 0.1
+    },
+    "fee_amt": {
+      "type": "number",
+      "title": "Fee Amt"
+    },
+    "billable": {
+      "type": "boolean",
+      "title": "Billable",
+      "default": true
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "calendar",
+        "probuild",
+        "both"
+      ],
+      "title": "Source"
+    },
+    "match_confidence": {
+      "type": "string",
+      "enum": [
+        "high",
+        "low",
+        "unmatched"
+      ],
+      "title": "Match Confidence"
+    },
+    "needs_review": {
+      "type": "boolean",
+      "title": "Needs Review",
+      "default": false
+    },
+    "manually_adjusted": {
+      "type": "boolean",
+      "title": "Manually Adjusted",
+      "default": false
+    }
+  },
+  "required": [
+    "job_date",
+    "job_name_raw",
+    "job_name_norm",
+    "labor_amt",
+    "fee_pct",
+    "fee_amt",
+    "source",
+    "match_confidence"
+  ]
+}
