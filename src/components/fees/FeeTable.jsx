@@ -23,7 +23,7 @@ export default function FeeTable({ rows, jobsById, onEdit }) {
           <div>Date</div>
           <div>Line</div>
           <div className="text-right">Labor $</div>
-          <div className="text-right">Fee $</div>
+          <div className="text-right">Fee %</div>
           <div>Source</div>
           <div className="text-center">Flags</div>
         </div>
@@ -98,7 +98,8 @@ function DesktopRow({ row, onEdit }) {
           <EditableText value={row.labor_amt} type="number" alignRight onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
         </div>
         <div className="flex items-center justify-end gap-1">
-          <EditableText value={row.fee_pct} type="number" alignRight className="w-14" onCommit={(v) => onEdit(row.id, { fee_pct: v })} />
+          <EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" alignRight className="w-14" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+          <span className="text-xs text-muted-foreground">%</span>
         </div>
         <div><SourceBadge source={row.source} /></div>
         <div className="flex items-center justify-center gap-1.5">
@@ -227,7 +228,7 @@ function MobileRow({ row, onEdit }) {
         <div className="mt-3 space-y-2 text-sm">
           <EditableField label="Line" value={row.line_description} onCommit={(v) => onEdit(row.id, { line_description: v })} />
           <EditableField label="Labor $" value={row.labor_amt} type="number" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
-          <EditableField label="Fee %" value={row.fee_pct} type="number" onCommit={(v) => onEdit(row.id, { fee_pct: v })} />
+          <EditableField label="Fee %" value={Math.round((row.fee_pct || 0) * 100)} type="number" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Billable</span>
             <EditableSwitch checked={row.billable} onCommit={(c) => onEdit(row.id, { billable: c })} />
