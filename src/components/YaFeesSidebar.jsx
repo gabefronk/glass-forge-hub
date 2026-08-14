@@ -13,7 +13,7 @@ export default function YaFeesSidebar() {
     <aside className="hidden sm:flex w-60 shrink-0 flex-col border-r border-border bg-sidebar">
       <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
         <span className="font-heading text-lg font-semibold tracking-tight text-sidebar-foreground">
-          YA Fees
+          Glass Forge
         </span>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
