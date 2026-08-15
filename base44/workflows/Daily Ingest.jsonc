@@ -1,0 +1,125 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 6 * * *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "daily_ingest",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "fetch_calendar": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "fetchCalendarEvents"
+          },
+          "then": "check_calendar",
+          "x-base44": {
+            "title": "Fetch calendar events",
+            "description": "iryedra@gmail.com, last 14 days"
+          }
+        }
+      },
+      {
+        "check_calendar": {
+          "switch": [
+            {
+              "when": "${ .fetch_calendar.error != null }",
+              "then": "alert_calendar"
+            },
+            {
+              "when": "${ true }",
+              "then": "fetch_probuild"
+            }
+          ],
+          "x-base44": {
+            "title": "Calendar ok?"
+          }
+        }
+      },
+      {
+        "alert_calendar": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "sendIngestAlert",
+            "args": {
+              "source": "calendar",
+              "detail": "${ .fetch_calendar.error }"
+            }
+          },
+          "then": "fetch_probuild",
+          "x-base44": {
+            "title": "Alert: calendar failed",
+            "description": "Email admin, no retry"
+          }
+        }
+      },
+      {
+        "fetch_probuild": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "fetchProbuildPosts"
+          },
+          "then": "check_probuild",
+          "x-base44": {
+            "title": "Fetch Probuild posts",
+            "description": "Last 14 days"
+          }
+        }
+      },
+      {
+        "check_probuild": {
+          "switch": [
+            {
+              "when": "${ .fetch_probuild.error != null }",
+              "then": "alert_probuild"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ],
+          "x-base44": {
+            "title": "Probuild ok?"
+          }
+        }
+      },
+      {
+        "alert_probuild": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "sendIngestAlert",
+            "args": {
+              "source": "probuild",
+              "detail": "${ .fetch_probuild.error }"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Alert: Probuild failed",
+            "description": "Email admin, no retry"
+          }
+        }
+      }
+    ]
+  },
+  "description": "Runs the Calendar and Probuild ingests once per day at 6am Denver. On either ingest failing, emails the admin an alert (no retry).",
+  "name": "Daily Ingest"
+}

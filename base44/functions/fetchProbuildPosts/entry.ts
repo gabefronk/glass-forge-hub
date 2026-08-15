@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { secrets } from 'base44:runtime';
-import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate } from '../../shared/ingestShared.ts';
+import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, mergeReviewFlags } from '../../shared/ingestShared.ts';
 
 // Ingest Probuild posts into FeeLines. One row per post.
 // Auth: Firebase refresh-token exchange (rotated token persisted to ProbuildAuth).
@@ -10,7 +10,7 @@ import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMont
 // from the verbatim note (never inferred). Upserts on probuild_post_id; never
 // overwrites a manually_adjusted row.
 const FIREBASE_API_KEY = 'AIzaSyD-bRl-_9tZLccN3HQ9IMy27pY37VKY1xc';
-const FIREBASE_TOKEN_URL = `https://securetoken.googleapis.com/v1/token?key=INVALID_FAILURE_TEST`;
+const FIREBASE_TOKEN_URL = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
 const DB_BASE = 'https://probuild-prod.firebaseio.com';
 const TEAM_ID = '-O7aXXhvthc41u60Koc6';
 
@@ -221,7 +221,8 @@ ${JSON.stringify(promptInputs)}`;
       const ex = existingByPostId.get(b.postId);
       if (ex) {
         if (ex.manually_adjusted) { skipped++; continue; }
-        toUpdate.push({ id: ex.id, ...row });
+        const merged = mergeReviewFlags(ex, row);
+        toUpdate.push({ id: ex.id, ...row, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
       } else {
         toCreate.push(row);
       }

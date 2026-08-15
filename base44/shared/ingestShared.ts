@@ -93,3 +93,39 @@ export function invoiceMonthFromDate(dateStr) {
   if (!dateStr) return "";
   return String(dateStr).slice(0, 7);
 }
+
+// Extract a dollar amount only when it appears on the same line as, or on the
+// line immediately following, the word "Labor" (case-insensitive: matches
+// "LABOR", "Labor$", "Labor-", "Labor:"). Never falls back to any other dollar
+// figure. Returns null when no labor-adjacent amount exists.
+export function extractLaborAmount(description) {
+  if (!description) return null;
+  const lines = String(description).split(/\r?\n/);
+  const moneyRe = /\$\s?([\d,]+(?:\.\d{1,2})?)/;
+  for (let i = 0; i < lines.length; i++) {
+    if (!/labor/i.test(lines[i])) continue;
+    const m = lines[i].match(moneyRe);
+    if (m) return Number(m[1].replace(/,/g, ''));
+    if (i + 1 < lines.length) {
+      const m2 = lines[i + 1].match(moneyRe);
+      if (m2) return Number(m2[1].replace(/,/g, ''));
+    }
+  }
+  return null;
+}
+
+const CONF_RANK = { unmatched: 0, low: 1, high: 2 };
+
+// Merge review flags on an ingest re-run. needs_review is sticky: once true, a
+// re-run can never clear it (only a human UI action can). A re-run may upgrade
+// match_confidence but never downgrade it.
+export function mergeReviewFlags(existing, incoming) {
+  const needs_review = !!(existing && existing.needs_review) || !!incoming.needs_review;
+  let mc = incoming.match_confidence || 'unmatched';
+  if (existing && existing.match_confidence) {
+    const er = CONF_RANK[existing.match_confidence] ?? 0;
+    const nr = CONF_RANK[mc] ?? 0;
+    if (nr < er) mc = existing.match_confidence;
+  }
+  return { needs_review, match_confidence: mc };
+}

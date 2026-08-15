@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate } from '../../shared/ingestShared.ts';
+import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, mergeReviewFlags } from '../../shared/ingestShared.ts';
 
 // Ingest Google Calendar events (iryedra@gmail.com) into FeeLines.
 // One row per event. Extracts an EXPLICIT labor dollar amount from the
@@ -64,8 +64,7 @@ export default async function(req) {
     for (const { ev, title, normName, m } of matched) {
       const description = ev.description || '';
       // Explicit labor dollar amount only — never invented
-      const moneyMatch = description.match(/\$\s?([\d,]+(?:\.\d{1,2})?)/);
-      const calendar_labor_amt = moneyMatch ? Number(moneyMatch[1].replace(/,/g, '')) : null;
+      const calendar_labor_amt = extractLaborAmount(description);
       const startRef = ev.start || {};
       const dateStr = startRef.dateTime ? String(startRef.dateTime).slice(0, 10) : (startRef.date || '');
       let jobId = m.job_id;
@@ -94,7 +93,8 @@ export default async function(req) {
       const ex = existingByEventId.get(ev.id);
       if (ex) {
         if (ex.manually_adjusted) { skipped++; continue; }
-        toUpdate.push({ id: ex.id, ...row });
+        const merged = mergeReviewFlags(ex, row);
+        toUpdate.push({ id: ex.id, ...row, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
       } else {
         toCreate.push(row);
       }
