@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 // rows: fee lines for selected month
 // jobs: map id->job
 // onEdit(id, patch)
-export default function FeeTable({ rows, jobsById, onEdit }) {
+export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0 }) {
   const groups = useMemo(() => groupByJob(rows, jobsById), [rows, jobsById]);
 
   return (
@@ -17,8 +17,11 @@ export default function FeeTable({ rows, jobsById, onEdit }) {
       </h2>
 
       {/* Desktop table */}
-      <div className="hidden md:block rounded-lg border border-border overflow-hidden">
-        <div className="grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2.5 bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+      <div className="hidden md:block rounded-lg border border-border">
+        <div
+          className="sticky z-10 grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-3 bg-primary text-primary-foreground text-[11px] uppercase tracking-wide font-semibold rounded-t-lg shadow-sm"
+          style={{ top: stickyTop }}
+        >
           <div>Job</div>
           <div>Date</div>
           <div>Line</div>
@@ -27,7 +30,7 @@ export default function FeeTable({ rows, jobsById, onEdit }) {
           <div>Source</div>
           <div className="text-center">Flags</div>
         </div>
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-border rounded-b-lg overflow-hidden">
           {groups.map((g) => (
             <JobGroup key={g.key} group={g} onEdit={onEdit} />
           ))}
@@ -57,17 +60,17 @@ function JobGroup({ group, onEdit }) {
     <div>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 bg-muted/30 hover:bg-muted/50 text-left"
+        className="w-full flex items-center gap-2 px-4 py-2.5 bg-muted hover:bg-muted/70 text-left border-l-2 border-l-primary"
       >
         {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-        <span className="font-medium text-sm">{jobName}</span>
+        <span className="font-semibold text-sm text-foreground">{jobName}</span>
         <span className="text-xs text-muted-foreground">· {group.lines.length} line{group.lines.length === 1 ? "" : "s"}</span>
-        <span className="ml-auto text-sm font-semibold tabular-nums">${formatMoney(group.feeTotal)}</span>
+        <span className="ml-auto text-sm font-bold tabular-nums text-primary">${formatMoney(group.feeTotal)}</span>
       </button>
       {open && (
         <div>
-          {group.lines.map((row) => (
-            <DesktopRow key={row.id} row={row} onEdit={onEdit} />
+          {group.lines.map((row, i) => (
+            <DesktopRow key={row.id} row={row} onEdit={onEdit} index={i} />
           ))}
         </div>
       )}
@@ -75,14 +78,14 @@ function JobGroup({ group, onEdit }) {
   );
 }
 
-function DesktopRow({ row, onEdit }) {
+function DesktopRow({ row, onEdit, index }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div>
       <div
         className={cn(
-          "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2 items-center cursor-pointer hover:bg-accent/30",
-          row.needs_review && "bg-amber-50/40"
+          "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2 items-center cursor-pointer hover:bg-accent/60",
+          row.needs_review ? "bg-amber-50" : (index % 2 === 1 ? "bg-muted/30" : "")
         )}
         onClick={() => setExpanded((e) => !e)}
       >
@@ -191,7 +194,7 @@ function MobileJobGroup({ group, onEdit }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-lg border border-border overflow-hidden">
-      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2 px-4 py-3 bg-muted/30 text-left">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2 px-4 py-3 bg-muted text-left">
         {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         <div className="min-w-0">
           <div className="font-medium text-sm truncate">{group.jobName}</div>

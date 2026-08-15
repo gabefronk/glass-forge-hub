@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import TopBar from "@/components/fees/TopBar";
 import NeedsReviewSection from "@/components/fees/NeedsReviewSection";
@@ -26,6 +26,15 @@ export default function YaFees() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const topBarRef = useRef(null);
+  const [topBarH, setTopBarH] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => setTopBarH(topBarRef.current?.offsetHeight || 0);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   const jobsById = useMemo(() => {
     const m = {};
@@ -119,6 +128,7 @@ export default function YaFees() {
         laborTotalVal={totals.labor}
         lineCount={totals.count}
         onExport={handleExport}
+        topRef={topBarRef}
       />
       <NeedsReviewSection
         rows={reviewRows}
@@ -126,7 +136,7 @@ export default function YaFees() {
         onAccept={handleAccept}
         onAssignToJob={handleAssignToJob}
       />
-      <FeeTable rows={monthRows} jobsById={jobsById} onEdit={handleEdit} />
+      <FeeTable rows={monthRows} jobsById={jobsById} onEdit={handleEdit} stickyTop={topBarH} />
     </div>
   );
 }

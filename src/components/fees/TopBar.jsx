@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, monthLabel } from "@/lib/feeMath";
 
-export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTotalVal, lineCount, onExport }) {
+export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTotalVal, lineCount, onExport, topRef }) {
   const [y, m] = month.split("-").map(Number);
   const prev = () => {
     const d = new Date(y, m - 2, 1);
@@ -14,7 +14,7 @@ export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTot
   };
 
   return (
-    <div className="sticky top-0 z-20 bg-background/90 backdrop-blur border-b border-border">
+    <div ref={topRef} className="sticky top-0 z-20 bg-background/90 backdrop-blur border-b border-border">
       <div className="px-4 sm:px-8 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="icon" onClick={prev} aria-label="Previous month">
