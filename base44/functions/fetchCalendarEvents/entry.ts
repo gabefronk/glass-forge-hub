@@ -77,6 +77,8 @@ export default async function(req) {
         job_name_norm: normName,
         line_description: description.slice(0, 150),
         calendar_event_id: ev.id,
+        calendar_creator: ev.creator?.email || null,
+        calendar_organizer: ev.organizer?.email || null,
         calendar_labor_amt,
         note_text: description,
         photo_urls: [],

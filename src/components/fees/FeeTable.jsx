@@ -4,6 +4,17 @@ import { feeMathString, formatMoney } from "@/lib/feeMath";
 import { EditableText, EditableSwitch, AdjustedMarker } from "@/components/fees/EditableCell";
 import { cn } from "@/lib/utils";
 
+const GABE_EMAIL = "gabriel.fronk.wd@gmail.com";
+const ISRAEL_EMAIL = "iryedra@gmail.com";
+
+// Different billing %: events manually added to the calendar (organizer is
+// Israel, not a builder system). Split into two tiers by who created them.
+function billingTier(row) {
+  if (row.calendar_creator === GABE_EMAIL) return "gabe";
+  if (row.calendar_creator === ISRAEL_EMAIL && row.calendar_organizer === ISRAEL_EMAIL) return "mine";
+  return null;
+}
+
 // rows: fee lines for selected month
 // jobs: map id->job
 // onEdit(id, patch)
@@ -80,12 +91,16 @@ function JobGroup({ group, onEdit }) {
 
 function DesktopRow({ row, onEdit, index }) {
   const [expanded, setExpanded] = useState(false);
+  const tier = billingTier(row);
   return (
     <div>
       <div
         className={cn(
           "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2 items-center cursor-pointer hover:bg-accent/60",
-          row.needs_review ? "bg-amber-50" : (index % 2 === 1 ? "bg-muted/30" : "")
+          tier === "gabe" && "bg-blue-50 border-l-2 border-l-blue-400",
+          tier === "mine" && "bg-violet-50 border-l-2 border-l-violet-400",
+          !tier && row.needs_review && "bg-amber-50",
+          !tier && !row.needs_review && index % 2 === 1 && "bg-muted/30"
         )}
         onClick={() => setExpanded((e) => !e)}
       >
@@ -106,6 +121,8 @@ function DesktopRow({ row, onEdit, index }) {
         </div>
         <div><SourceBadge source={row.source} /></div>
         <div className="flex items-center justify-center gap-1.5">
+          {tier === "gabe" && <span title="Created by Gabe Fronk — different billing %" className="h-2 w-2 rounded-full bg-blue-500" />}
+          {tier === "mine" && <span title="Manually added by you — different billing %" className="h-2 w-2 rounded-full bg-violet-500" />}
           {row.manually_adjusted && <AdjustedMarker />}
           {row.needs_review && <span title="Needs review" className="h-2 w-2 rounded-full bg-amber-500" />}
         </div>
@@ -124,6 +141,13 @@ function ExpandedDetail({ row, onEdit }) {
           <Detail label="Labor $" value={`$${formatMoney(row.labor_amt)}`} />
           <Detail label="Fee $" value={`$${formatMoney(row.fee_amt)}`} />
           <Detail label="Fee %" value={`${Math.round((row.fee_pct || 0) * 100)}%`} />
+          {billingTier(row) && (
+            <div>
+              <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium", billingTier(row) === "gabe" ? "bg-blue-100 text-blue-800" : "bg-violet-100 text-violet-800")}>
+                {billingTier(row) === "gabe" ? "Gabe Fronk — different billing %" : "Manually added — different billing %"}
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-6 pt-1">
             <label className="flex items-center gap-2 cursor-pointer">
               <EditableSwitch checked={row.billable} onCommit={(c) => onEdit(row.id, { billable: c })} />
@@ -147,6 +171,8 @@ function ExpandedDetail({ row, onEdit }) {
             <Detail label="Trip charges" value={row.trip_charges ?? "—"} />
             <Detail label="Calendar event id" value={row.calendar_event_id || "—"} />
             <Detail label="Probuild post id" value={row.probuild_post_id || "—"} />
+            <Detail label="Cal creator" value={row.calendar_creator || "—"} />
+            <Detail label="Cal organizer" value={row.calendar_organizer || "—"} />
           </div>
           {row.photo_urls && row.photo_urls.length > 0 && (
             <div>
@@ -215,12 +241,22 @@ function MobileJobGroup({ group, onEdit }) {
 
 function MobileRow({ row, onEdit }) {
   const [expanded, setExpanded] = useState(false);
+  const tier = billingTier(row);
   return (
-    <div className={cn("px-4 py-3", row.needs_review && "bg-amber-50/40")}>
+    <div className={cn("px-4 py-3 border-l-2",
+      tier === "gabe" ? "bg-blue-50 border-l-blue-400" :
+      tier === "mine" ? "bg-violet-50 border-l-violet-400" :
+      row.needs_review ? "bg-amber-50 border-l-transparent" : "border-l-transparent")}>
       <button onClick={() => setExpanded((e) => !e)} className="w-full flex items-center justify-between gap-2 text-left">
         <div className="min-w-0">
           <div className="text-sm font-medium truncate">{row.line_description || row.job_name_norm}</div>
-          <div className="text-xs text-muted-foreground">{row.job_date} · <SourceBadge source={row.source} /></div>
+          <div className="text-xs text-muted-foreground flex items-center flex-wrap gap-1.5">
+            <span>{row.job_date}</span>
+            <span>·</span>
+            <SourceBadge source={row.source} />
+            {tier === "gabe" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">Gabe</span>}
+            {tier === "mine" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-800">Manual</span>}
+          </div>
         </div>
         <div className="text-right">
           <div className="text-sm font-semibold tabular-nums">${formatMoney(row.fee_amt)}</div>
@@ -252,6 +288,8 @@ function MobileRow({ row, onEdit }) {
             <Detail label="Trip charges" value={row.trip_charges ?? "—"} />
             <Detail label="Cal event id" value={row.calendar_event_id || "—"} />
             <Detail label="PB post id" value={row.probuild_post_id || "—"} />
+            <Detail label="Cal creator" value={row.calendar_creator || "—"} />
+            <Detail label="Cal organizer" value={row.calendar_organizer || "—"} />
           </div>
           {row.photo_urls && row.photo_urls.length > 0 && (
             <div className="flex flex-wrap gap-2">

@@ -33,6 +33,16 @@
       "type": "string",
       "title": "Calendar Event Id"
     },
+    "calendar_creator": {
+      "type": "string",
+      "title": "Calendar Creator",
+      "description": "Email of the Google Calendar event creator"
+    },
+    "calendar_organizer": {
+      "type": "string",
+      "title": "Calendar Organizer",
+      "description": "Email of the Google Calendar event organizer"
+    },
     "probuild_project_id": {
       "type": "string",
       "title": "Probuild Project Id"
