@@ -97,8 +97,8 @@ function DesktopRow({ row, onEdit, index }) {
       <div
         className={cn(
           "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2 items-center cursor-pointer hover:bg-accent/60",
-          tier === "gabe" && "bg-blue-50 border-l-2 border-l-blue-400",
-          tier === "mine" && "bg-violet-50 border-l-2 border-l-violet-400",
+          tier === "gabe" && "bg-blue-100 border-l-4 border-l-blue-500",
+          tier === "mine" && "bg-violet-100 border-l-4 border-l-violet-500",
           !tier && row.needs_review && "bg-amber-50",
           !tier && !row.needs_review && index % 2 === 1 && "bg-muted/30"
         )}
@@ -121,8 +121,8 @@ function DesktopRow({ row, onEdit, index }) {
         </div>
         <div><SourceBadge source={row.source} /></div>
         <div className="flex items-center justify-center gap-1.5">
-          {tier === "gabe" && <span title="Created by Gabe Fronk — different billing %" className="h-2 w-2 rounded-full bg-blue-500" />}
-          {tier === "mine" && <span title="Manually added by you — different billing %" className="h-2 w-2 rounded-full bg-violet-500" />}
+          {tier === "gabe" && <span title="Created by Gabe Fronk — different billing %" className="h-2.5 w-2.5 rounded-full bg-blue-600" />}
+          {tier === "mine" && <span title="Manually added by you — different billing %" className="h-2.5 w-2.5 rounded-full bg-violet-600" />}
           {row.manually_adjusted && <AdjustedMarker />}
           {row.needs_review && <span title="Needs review" className="h-2 w-2 rounded-full bg-amber-500" />}
         </div>
@@ -143,7 +143,7 @@ function ExpandedDetail({ row, onEdit }) {
           <Detail label="Fee %" value={`${Math.round((row.fee_pct || 0) * 100)}%`} />
           {billingTier(row) && (
             <div>
-              <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium", billingTier(row) === "gabe" ? "bg-blue-100 text-blue-800" : "bg-violet-100 text-violet-800")}>
+              <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium", billingTier(row) === "gabe" ? "bg-blue-200 text-blue-900" : "bg-violet-200 text-violet-900")}>
                 {billingTier(row) === "gabe" ? "Gabe Fronk — different billing %" : "Manually added — different billing %"}
               </span>
             </div>
@@ -243,9 +243,9 @@ function MobileRow({ row, onEdit }) {
   const [expanded, setExpanded] = useState(false);
   const tier = billingTier(row);
   return (
-    <div className={cn("px-4 py-3 border-l-2",
-      tier === "gabe" ? "bg-blue-50 border-l-blue-400" :
-      tier === "mine" ? "bg-violet-50 border-l-violet-400" :
+    <div className={cn("px-4 py-3 border-l-4",
+      tier === "gabe" ? "bg-blue-100 border-l-blue-500" :
+      tier === "mine" ? "bg-violet-100 border-l-violet-500" :
       row.needs_review ? "bg-amber-50 border-l-transparent" : "border-l-transparent")}>
       <button onClick={() => setExpanded((e) => !e)} className="w-full flex items-center justify-between gap-2 text-left">
         <div className="min-w-0">
@@ -254,8 +254,8 @@ function MobileRow({ row, onEdit }) {
             <span>{row.job_date}</span>
             <span>·</span>
             <SourceBadge source={row.source} />
-            {tier === "gabe" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">Gabe</span>}
-            {tier === "mine" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-800">Manual</span>}
+            {tier === "gabe" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-200 text-blue-900">Gabe</span>}
+            {tier === "mine" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-200 text-violet-900">Manual</span>}
           </div>
         </div>
         <div className="text-right">
