@@ -18,8 +18,9 @@ export default async function(req) {
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('googlecalendar');
     const authHeader = { Authorization: `Bearer ${accessToken}` };
 
-    // Page through events in the window
-    const baseUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=100&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
+    // Page through events in the window (Israel's calendar, not the connector owner's primary)
+    const calendarId = body.calendar_id || 'iryedra@gmail.com';
+    const baseUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?maxResults=100&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
     const allItems = [];
     let pageToken = null;
     do {

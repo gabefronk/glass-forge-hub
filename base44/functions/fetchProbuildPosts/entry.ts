@@ -49,7 +49,7 @@ export default async function(req) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Referer': 'https://probuild.app/',
+        'Referer': 'https://portal.probuild.app/',
       },
       body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`,
     });
