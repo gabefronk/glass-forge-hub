@@ -33,9 +33,9 @@ function workType(row) {
 }
 
 function wtBg(wt, row, index = 0) {
-  if (wt === "zero") return "bg-rose-100";
-  if (wt === "install") return "bg-emerald-100";
-  if (wt === "service") return "bg-amber-100";
+  if (wt === "zero") return "bg-slate-200";
+  if (wt === "install") return "bg-teal-100";
+  if (wt === "service") return "bg-fuchsia-100";
   if (row.needs_review) return "bg-amber-50";
   return index % 2 === 1 ? "bg-muted/30" : "";
 }
@@ -43,9 +43,9 @@ function wtBg(wt, row, index = 0) {
 function leftBorder(tier, wt) {
   if (tier === "gabe") return "border-l-blue-500";
   if (tier === "mine") return "border-l-violet-500";
-  if (wt === "zero") return "border-l-rose-500";
-  if (wt === "install") return "border-l-emerald-500";
-  if (wt === "service") return "border-l-amber-500";
+  if (wt === "zero") return "border-l-slate-500";
+  if (wt === "install") return "border-l-teal-500";
+  if (wt === "service") return "border-l-fuchsia-500";
   return "border-l-transparent";
 }
 
@@ -61,9 +61,9 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0 }) {
         By Job
       </h2>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-muted-foreground">
-        <Legend swatch="bg-rose-100 border-rose-500" label="Zero $" />
-        <Legend swatch="bg-emerald-100 border-emerald-500" label="Install labor" />
-        <Legend swatch="bg-amber-100 border-amber-500" label="Service labor" />
+        <Legend swatch="bg-slate-200 border-slate-500" label="Zero $" />
+        <Legend swatch="bg-teal-100 border-teal-500" label="Install labor" />
+        <Legend swatch="bg-fuchsia-100 border-fuchsia-500" label="Service labor" />
         <Legend swatch="bg-blue-100 border-blue-500" label="Gabe" />
         <Legend swatch="bg-violet-100 border-violet-500" label="Mine" />
       </div>
@@ -192,9 +192,9 @@ function ExpandedDetail({ row, onEdit }) {
           {wt !== "other" && (
             <div>
               <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium",
-                wt === "zero" ? "bg-rose-200 text-rose-900" :
-                wt === "install" ? "bg-emerald-200 text-emerald-900" :
-                "bg-amber-200 text-amber-900")}>
+                wt === "zero" ? "bg-slate-300 text-slate-900" :
+                wt === "install" ? "bg-teal-200 text-teal-900" :
+                "bg-fuchsia-200 text-fuchsia-900")}>
                 {wt === "zero" ? "Zero-dollar ticket" : wt === "install" ? "Install labor" : "Service labor"}
               </span>
             </div>
@@ -312,9 +312,9 @@ function MobileRow({ row, onEdit }) {
             <span>{row.job_date}</span>
             <span>·</span>
             <SourceBadge source={row.source} />
-            {wt === "zero" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900">Zero $</span>}
-            {wt === "install" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-emerald-200 text-emerald-900">Install</span>}
-            {wt === "service" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-amber-200 text-amber-900">Service</span>}
+            {wt === "zero" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-slate-300 text-slate-900">Zero $</span>}
+            {wt === "install" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-teal-200 text-teal-900">Install</span>}
+            {wt === "service" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-fuchsia-200 text-fuchsia-900">Service</span>}
             {tier === "gabe" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-200 text-blue-900">Gabe</span>}
             {tier === "mine" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-200 text-violet-900">Manual</span>}
           </div>
