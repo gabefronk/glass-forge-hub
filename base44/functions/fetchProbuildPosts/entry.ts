@@ -47,7 +47,10 @@ export default async function(req) {
     // 2. Exchange refresh token
     const tokenRes = await fetch(FIREBASE_TOKEN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Referer': 'https://probuild.app/',
+      },
       body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`,
     });
     if (tokenRes.status === 401) {
