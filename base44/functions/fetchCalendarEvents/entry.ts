@@ -29,7 +29,7 @@ export default async function(req) {
       const res = await fetch(url, { headers: authHeader });
       if (!res.ok) {
         const txt = await res.text();
-        return Response.json({ error: 'calendar_api_error', status: res.status, detail: txt }, { status: 502 });
+        return Response.json({ error: 'calendar_api_error', status: res.status, detail: txt }, { status: 200 });
       }
       const data = await res.json();
       allItems.push(...(data.items || []));
@@ -115,6 +115,6 @@ export default async function(req) {
       flagged_for_review: flagged,
     });
   } catch (error) {
-    return Response.json({ error: error.message, stack: error.stack }, { status: 500 });
+    return Response.json({ error: error.message, stack: error.stack }, { status: 200 });
   }
 }

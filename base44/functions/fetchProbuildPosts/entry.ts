@@ -42,7 +42,7 @@ export default async function(req) {
     // 1. Current refresh token (ProbuildAuth first, secret fallback)
     const authRecords = await base44.asServiceRole.entities.ProbuildAuth.list('-updated_date', 1);
     let refreshToken = authRecords.length > 0 ? authRecords[0].refresh_token : secrets.get('PROBUILD_REFRESH_TOKEN');
-    if (!refreshToken) return Response.json({ error: 'no_refresh_token' }, { status: 500 });
+    if (!refreshToken) return Response.json({ error: 'no_refresh_token' }, { status: 200 });
 
     // 2. Exchange refresh token
     const tokenRes = await fetch(FIREBASE_TOKEN_URL, {
@@ -54,11 +54,11 @@ export default async function(req) {
       body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`,
     });
     if (tokenRes.status === 401) {
-      return Response.json({ error: 'probuild_auth_401', detail: 'Refresh token rejected (401). Capture a fresh Probuild refresh token and update PROBUILD_REFRESH_TOKEN / ProbuildAuth.' }, { status: 401 });
+      return Response.json({ error: 'probuild_auth_401', detail: 'Refresh token rejected (401). Capture a fresh Probuild refresh token and update PROBUILD_REFRESH_TOKEN / ProbuildAuth.' }, { status: 200 });
     }
     if (!tokenRes.ok) {
       const txt = await tokenRes.text();
-      return Response.json({ error: 'probuild_auth_failed', status: tokenRes.status, detail: txt }, { status: 502 });
+      return Response.json({ error: 'probuild_auth_failed', status: tokenRes.status, detail: txt }, { status: 200 });
     }
     const tokenData = await tokenRes.json();
     const idToken = tokenData.id_token;
@@ -76,7 +76,7 @@ export default async function(req) {
     const projectsRes = await fetch(`${DB_BASE}/teams/${TEAM_ID}/projects.json?auth=${idToken}`);
     if (!projectsRes.ok) {
       const txt = await projectsRes.text();
-      return Response.json({ error: 'projects_fetch_failed', status: projectsRes.status, detail: txt }, { status: 502 });
+      return Response.json({ error: 'projects_fetch_failed', status: projectsRes.status, detail: txt }, { status: 200 });
     }
     const projectsJson = await projectsRes.json();
     const projectEntries = [];
@@ -248,6 +248,6 @@ ${JSON.stringify(promptInputs)}`;
       phillip_grover_rows: phillipGrover,
     });
   } catch (error) {
-    return Response.json({ error: error.message, stack: error.stack }, { status: 500 });
+    return Response.json({ error: error.message, stack: error.stack }, { status: 200 });
   }
 }
