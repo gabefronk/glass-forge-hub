@@ -92,6 +92,15 @@
       ],
       "title": "Source"
     },
+    "written_by": {
+      "type": "string",
+      "enum": [
+        "calendar",
+        "probuild"
+      ],
+      "title": "Written By",
+      "description": "Which ingest function created this row"
+    },
     "match_confidence": {
       "type": "string",
       "enum": [
@@ -120,6 +129,7 @@
     "fee_pct",
     "fee_amt",
     "source",
+    "written_by",
     "match_confidence"
   ]
 }

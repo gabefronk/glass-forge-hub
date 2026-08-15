@@ -1,0 +1,19 @@
+{
+  "name": "ProbuildAuth",
+  "type": "object",
+  "properties": {
+    "refresh_token": {
+      "type": "string",
+      "title": "Refresh Token",
+      "description": "Current Probuild Firebase refresh token (rotated on each exchange)"
+    },
+    "last_exchanged_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Last Exchanged At"
+    }
+  },
+  "required": [
+    "refresh_token"
+  ]
+}
