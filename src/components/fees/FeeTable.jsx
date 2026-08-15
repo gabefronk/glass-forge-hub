@@ -15,6 +15,40 @@ function billingTier(row) {
   return null;
 }
 
+const SERVICE_RE = /service|warranty|wty|warr|per report/i;
+const INSTALL_RE = /install/i;
+
+// Classify a ticket by work type. Type takes priority over the zero-dollar
+// fallback so warranty/repair tickets still show as service even when no labor
+// has been entered yet. Mutually exclusive: install > service > zero.
+function workType(row) {
+  const labor = Number(row.labor_amt) || 0;
+  const text = `${row.job_name_raw || ""} ${row.note_text || ""}`;
+  const isService = SERVICE_RE.test(text);
+  const isInstall = INSTALL_RE.test(text);
+  if (isInstall && !isService) return "install";
+  if (isService) return "service";
+  if (labor > 0) return "service";
+  return "zero";
+}
+
+function wtBg(wt, row, index = 0) {
+  if (wt === "zero") return "bg-rose-100";
+  if (wt === "install") return "bg-emerald-100";
+  if (wt === "service") return "bg-amber-100";
+  if (row.needs_review) return "bg-amber-50";
+  return index % 2 === 1 ? "bg-muted/30" : "";
+}
+
+function leftBorder(tier, wt) {
+  if (tier === "gabe") return "border-l-blue-500";
+  if (tier === "mine") return "border-l-violet-500";
+  if (wt === "zero") return "border-l-rose-500";
+  if (wt === "install") return "border-l-emerald-500";
+  if (wt === "service") return "border-l-amber-500";
+  return "border-l-transparent";
+}
+
 // rows: fee lines for selected month
 // jobs: map id->job
 // onEdit(id, patch)
@@ -26,6 +60,13 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0 }) {
       <h2 className="font-heading text-sm font-semibold uppercase tracking-wide mb-3">
         By Job
       </h2>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-muted-foreground">
+        <Legend swatch="bg-rose-100 border-rose-500" label="Zero $" />
+        <Legend swatch="bg-emerald-100 border-emerald-500" label="Install labor" />
+        <Legend swatch="bg-amber-100 border-amber-500" label="Service labor" />
+        <Legend swatch="bg-blue-100 border-blue-500" label="Gabe" />
+        <Legend swatch="bg-violet-100 border-violet-500" label="Mine" />
+      </div>
 
       {/* Desktop table */}
       <div className="hidden md:block rounded-lg border border-border">
@@ -92,15 +133,14 @@ function JobGroup({ group, onEdit }) {
 function DesktopRow({ row, onEdit, index }) {
   const [expanded, setExpanded] = useState(false);
   const tier = billingTier(row);
+  const wt = workType(row);
   return (
     <div>
       <div
         className={cn(
-          "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2 items-center cursor-pointer hover:bg-accent/60",
-          tier === "gabe" && "bg-blue-100 border-l-4 border-l-blue-500",
-          tier === "mine" && "bg-violet-100 border-l-4 border-l-violet-500",
-          !tier && row.needs_review && "bg-amber-50",
-          !tier && !row.needs_review && index % 2 === 1 && "bg-muted/30"
+          "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2 items-center cursor-pointer hover:bg-accent/60 border-l-4",
+          wtBg(wt, row, index),
+          leftBorder(tier, wt)
         )}
         onClick={() => setExpanded((e) => !e)}
       >
@@ -133,6 +173,7 @@ function DesktopRow({ row, onEdit, index }) {
 }
 
 function ExpandedDetail({ row, onEdit }) {
+  const wt = workType(row);
   return (
     <div className="px-6 pb-4 pt-1 bg-muted/20 border-t border-border">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm">
@@ -145,6 +186,16 @@ function ExpandedDetail({ row, onEdit }) {
             <div>
               <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium", billingTier(row) === "gabe" ? "bg-blue-200 text-blue-900" : "bg-violet-200 text-violet-900")}>
                 {billingTier(row) === "gabe" ? "Gabe Fronk — different billing %" : "Manually added — different billing %"}
+              </span>
+            </div>
+          )}
+          {wt !== "other" && (
+            <div>
+              <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium",
+                wt === "zero" ? "bg-rose-200 text-rose-900" :
+                wt === "install" ? "bg-emerald-200 text-emerald-900" :
+                "bg-amber-200 text-amber-900")}>
+                {wt === "zero" ? "Zero-dollar ticket" : wt === "install" ? "Install labor" : "Service labor"}
               </span>
             </div>
           )}
@@ -199,6 +250,15 @@ function Detail({ label, value, mono }) {
   );
 }
 
+function Legend({ swatch, label }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn("h-3 w-3 rounded border", swatch)} />
+      {label}
+    </span>
+  );
+}
+
 function SourceBadge({ source }) {
   const map = {
     calendar: { icon: Calendar, label: "Cal", cls: "bg-blue-100 text-blue-800" },
@@ -242,11 +302,9 @@ function MobileJobGroup({ group, onEdit }) {
 function MobileRow({ row, onEdit }) {
   const [expanded, setExpanded] = useState(false);
   const tier = billingTier(row);
+  const wt = workType(row);
   return (
-    <div className={cn("px-4 py-3 border-l-4",
-      tier === "gabe" ? "bg-blue-100 border-l-blue-500" :
-      tier === "mine" ? "bg-violet-100 border-l-violet-500" :
-      row.needs_review ? "bg-amber-50 border-l-transparent" : "border-l-transparent")}>
+    <div className={cn("px-4 py-3 border-l-4", wtBg(wt, row), leftBorder(tier, wt))}>
       <button onClick={() => setExpanded((e) => !e)} className="w-full flex items-center justify-between gap-2 text-left">
         <div className="min-w-0">
           <div className="text-sm font-medium truncate">{row.line_description || row.job_name_norm}</div>
@@ -254,6 +312,9 @@ function MobileRow({ row, onEdit }) {
             <span>{row.job_date}</span>
             <span>·</span>
             <SourceBadge source={row.source} />
+            {wt === "zero" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900">Zero $</span>}
+            {wt === "install" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-emerald-200 text-emerald-900">Install</span>}
+            {wt === "service" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-amber-200 text-amber-900">Service</span>}
             {tier === "gabe" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-200 text-blue-900">Gabe</span>}
             {tier === "mine" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-200 text-violet-900">Manual</span>}
           </div>
