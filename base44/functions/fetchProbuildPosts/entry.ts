@@ -10,7 +10,7 @@ import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMont
 // from the verbatim note (never inferred). Upserts on probuild_post_id; never
 // overwrites a manually_adjusted row.
 const FIREBASE_API_KEY = 'AIzaSyD-bRl-_9tZLccN3HQ9IMy27pY37VKY1xc';
-const FIREBASE_TOKEN_URL = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
+const FIREBASE_TOKEN_URL = `https://securetoken.googleapis.com/v1/token?key=INVALID_FAILURE_TEST`;
 const DB_BASE = 'https://probuild-prod.firebaseio.com';
 const TEAM_ID = '-O7aXXhvthc41u60Koc6';
 

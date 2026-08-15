@@ -1,5 +1,22 @@
 {
   "name": "Daily Ingest",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "one_time",
+      "cron_expression": null,
+      "one_time_date": "2026-08-15T04:04:00Z",
+      "timezone": "UTC",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
   "definition": {
     "document": {
       "dsl": "1.0.0",
@@ -104,22 +121,5 @@
       }
     ]
   },
-  "description": "Runs the Calendar and Probuild ingests once per day at 6am Denver. On either ingest failing, emails the admin an alert (no retry).",
-  "trigger": {
-    "condition": null,
-    "config": {
-      "trigger_type": "scheduled",
-      "events": [],
-      "schedule_mode": "recurring",
-      "cron_expression": "0 6 * * *",
-      "one_time_date": null,
-      "timezone": "America/Denver",
-      "interval_value": null,
-      "interval_unit": null,
-      "interval_anchor": null,
-      "ends_type": "never",
-      "ends_on_date": null,
-      "ends_after_count": null
-    }
-  }
+  "description": "Runs the Calendar and Probuild ingests once per day at 6am Denver. On either ingest failing, emails the admin an alert (no retry)."
 }
