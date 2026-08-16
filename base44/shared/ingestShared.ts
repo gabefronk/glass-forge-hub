@@ -2,23 +2,14 @@
 // Never copy this logic into a function — import it.
 
 // Normalize a raw job name to a canonical comparison key.
-// Rules: lowercase; strip leading "YA -", the "#N" job number, parenthetical
-// tags like "(L.I.)", trailing account tags like "CASH ACCOUNT", and trailing
-// punctuation; collapse whitespace.
 export function normalizeJobName(raw) {
   if (!raw) return "";
   let s = String(raw).toLowerCase().trim();
-  // strip leading "YA -" (dash optional, word-bounded so "yard" is safe)
   s = s.replace(/^ya\b\s*[-–—]?\s*/, "");
-  // strip leading "#N" job number
   s = s.replace(/^#\d+\s*/, "");
-  // strip parenthetical tags like "(L.I.)"
   s = s.replace(/\([^)]*\)/g, " ");
-  // strip trailing account tags like "CASH ACCOUNT"
   s = s.replace(/\bcash\s+account\b\s*$/, "");
-  // strip trailing punctuation
   s = s.replace(/[.,;:!?\-–—]+$/, "");
-  // collapse whitespace
   s = s.replace(/\s+/g, " ").trim();
   return s;
 }
@@ -49,8 +40,6 @@ export function similarity(a, b) {
 }
 
 // Extract a BFS purchase order number from free text.
-// Matches "PO 7104345", "PO#: 7104345", "PO# 7104345", "Orig. PO#: 7006336".
-// Also catches "PO# PELLA WINDOWS- 7006336" via the second pattern.
 const PO_RE_1 = /PO#?\s*:?\s*#?\s*(\d{5,})/gi;
 const PO_RE_2 = /PO#\s+[A-Z][^\d]{0,30}[-:]?\s*(\d{5,})/gi;
 export function extractPO(text) {
@@ -64,15 +53,6 @@ export function extractPO(text) {
 }
 
 // Extract an order element number from free text.
-// Matches "OE: 78661292-02" and "OE 79409948-01" (colon optional).
-// Also catches bare "79327171-00" at the start of a line (preceded by newline
-// + optional whitespace), e.g.:
-//     *   4010PW
-//
-// 79327171-00 | (Cam: 385-315-7903)
-// The line-start guard prevents matching random 8-digit-2-digit numbers
-// embedded in prose. Labeled patterns are tried first so "OE: 79409948-01"
-// is never double-matched.
 const OE_RE_1 = /OE:\s*(\d{6,}-\d{2,})/gi;
 const OE_RE_2 = /OE\s+(\d{6,}-\d{2,})/gi;
 const OE_RE_3 = /(?:^|\n)\s*(\d{7,8}-\d{2})/g;
@@ -89,12 +69,55 @@ export function extractOE(text) {
   return m ? m[1] : null;
 }
 
-// jobs: array of Jobs records (id, canonical_name, aliases, po_numbers, oe_numbers)
-// Match hierarchy: 1) PO number, 2) OE number, 3) name normalization + alias.
-// poNumber/oeNumber are optional — pass null/undefined for name-only matching
-// (e.g. Probuild posts, non-BFS jobs).
+// Normalize an address for comparison: lowercase, standardize street
+// suffixes, strip punctuation/zip/state so "50 W 250 N, MIDWAY, UT, 84049"
+// and "50 W 250 N Midway" both become "50 w 250 n midway".
+export function normalizeAddress(addr) {
+  if (!addr) return "";
+  let s = String(addr).toLowerCase().trim();
+  s = s.replace(/\bstreet\b/g, "st").replace(/\bavenue\b/g, "ave")
+       .replace(/\bboulevard\b/g, "blvd").replace(/\bdrive\b/g, "dr")
+       .replace(/\blane\b/g, "ln").replace(/\broad\b/g, "rd")
+       .replace(/\bplace\b/g, "pl").replace(/\bcourt\b/g, "ct")
+       .replace(/\bcircle\b/g, "cir");
+  s = s.replace(/[,.#]/g, " ");
+  s = s.replace(/\b\d{5}(?:-\d{4})?\b/g, ""); // zip
+  s = s.replace(/,\s*ut\b/g, " "); // Utah state after comma
+  s = s.replace(/\but\b/g, " "); // bare UT
+  s = s.replace(/\busa\b/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  return s;
+}
+
+// Virtual meeting locations that are NOT real addresses.
+const VIRTUAL_RE = /microsoft teams|zoom|google meet|meet\.google|virtual|teleconference|video call|online meeting/i;
+
+// Extract a job site address. Priority: Google Calendar location field
+// (filtered for virtual meetings), then "Address:" label in description.
+export function extractAddress(location, description) {
+  if (location && location.trim() && !VIRTUAL_RE.test(location)) return location.trim();
+  if (description) {
+    const m = description.match(/address\s*:\s*(.+?)(?:\n|$)/i);
+    if (m && m[1].trim() && !VIRTUAL_RE.test(m[1])) return m[1].trim();
+  }
+  return null;
+}
+
+// Extract the builder/GC name from a job name — the part before the first
+// dash, after stripping "YA -". e.g. "X3 Homes - 29 Skyridge" → "X3 Homes".
+export function extractBuilder(jobName) {
+  if (!jobName) return null;
+  let s = String(jobName).replace(/^ya\b\s*[-–—]?\s*/, "").trim();
+  const m = s.match(/^([A-Z][A-Za-z0-9&\s.'-]+?)\s*[-–—]\s*/);
+  if (m && m[1].trim()) return m[1].trim();
+  return null;
+}
+
+// jobs: array of Jobs records (id, canonical_name, aliases, po_numbers, oe_numbers, address)
+// Match hierarchy: 1) PO number, 2) OE number, 3) Address, 4) Name normalization + alias.
+// poNumber/oeNumber/address are optional — pass null/undefined for name-only matching.
 // returns { job_id, match_confidence, needs_review, autoCreate }
-export function matchJob(normName, jobs, poNumber, oeNumber) {
+export function matchJob(normName, jobs, poNumber, oeNumber, address) {
   // 1. PO number match — hard identifier, highest confidence
   if (poNumber) {
     for (const j of jobs) {
@@ -111,7 +134,19 @@ export function matchJob(normName, jobs, poNumber, oeNumber) {
       }
     }
   }
-  // 3. Name normalization + alias matching (unchanged)
+  // 3. Address match — a job's address doesn't change even when its name
+  //    is written five different ways. Normalized comparison.
+  if (address) {
+    const normAddr = normalizeAddress(address);
+    if (normAddr) {
+      for (const j of jobs) {
+        if (j.address && normalizeAddress(j.address) === normAddr) {
+          return { job_id: j.id, match_confidence: "high", needs_review: false, autoCreate: false };
+        }
+      }
+    }
+  }
+  // 4. Name normalization + alias matching
   if (!normName) {
     return { job_id: null, match_confidence: "unmatched", needs_review: true, autoCreate: false };
   }
@@ -155,11 +190,6 @@ export function invoiceMonthFromDate(dateStr) {
   return String(dateStr).slice(0, 7);
 }
 
-// Extract the BFS ticket sequence from the "-win" / "-win2" suffix on the
-// labor line. "-win" = 1 (original ticket), "-win2" = 2 (first rework), etc.
-// Only matches "win" + optional digits + word boundary on a line containing
-// "labor" — excludes "window", "WinDor", "awning", etc. Returns null when no
-// -win suffix is present on any labor line.
 export function extractTicketSequence(description) {
   if (!description) return null;
   const lines = String(description).split(/\r?\n/);
@@ -175,10 +205,6 @@ export function extractTicketSequence(description) {
   return maxSeq > 0 ? maxSeq : null;
 }
 
-// Extract a dollar amount only when it appears on the same line as, or on the
-// line immediately following, the word "Labor" (case-insensitive: matches
-// "LABOR", "Labor$", "Labor-", "Labor:"). Never falls back to any other dollar
-// figure. Returns null when no labor-adjacent amount exists.
 export function extractLaborAmount(description) {
   if (!description) return null;
   const lines = String(description).split(/\r?\n/);
@@ -197,9 +223,6 @@ export function extractLaborAmount(description) {
 
 const CONF_RANK = { unmatched: 0, low: 1, high: 2 };
 
-// Merge review flags on an ingest re-run. needs_review is sticky: once true, a
-// re-run can never clear it (only a human UI action can). A re-run may upgrade
-// match_confidence but never downgrade it.
 export function mergeReviewFlags(existing, incoming) {
   const needs_review = !!(existing && existing.needs_review) || !!incoming.needs_review;
   let mc = incoming.match_confidence || 'unmatched';

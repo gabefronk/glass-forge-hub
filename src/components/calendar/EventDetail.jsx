@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Lock } from "lucide-react";
+import { Lock, Briefcase } from "lucide-react";
 import EventForm from "./EventForm";
 import { formatMoney } from "@/lib/feeMath";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,12 @@ export default function EventDetail({ event, jobs, onEdit, onDelete, onClose, sa
           <span className={cn("px-2 py-0.5 rounded text-xs font-medium", event.source === "app" ? "bg-teal-100 text-teal-900" : "bg-slate-100 text-slate-700")}>
             {event.source === "app" ? "App" : "Google"}
           </span>
+          {event.job_id && (
+            <Link to={`/jobs/${event.job_id}`} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+              <Briefcase className="h-3 w-3" />
+              View Job
+            </Link>
+          )}
           <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
         </div>
       </div>

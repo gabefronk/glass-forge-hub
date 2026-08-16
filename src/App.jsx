@@ -10,6 +10,8 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 import YaFees from '@/pages/YaFees';
 import CalendarPage from '@/pages/CalendarPage';
+import JobsHub from '@/pages/JobsHub';
+import JobDetail from '@/pages/JobDetail';
 import { Navigate } from 'react-router-dom';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
@@ -51,6 +53,8 @@ const AuthenticatedApp = () => {
         <Route element={<Layout />}>
           <Route path="/" element={<YaFees />} />
           <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/jobs" element={<JobsHub />} />
+          <Route path="/jobs/:id" element={<JobDetail />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />

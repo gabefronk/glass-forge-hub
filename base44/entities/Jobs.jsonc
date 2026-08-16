@@ -31,6 +31,16 @@
       "title": "OE Numbers",
       "default": [],
       "description": "Order element numbers linked to this job (many-to-one)"
+    },
+    "address": {
+      "type": "string",
+      "title": "Address",
+      "description": "Job site address \u2014 a hard match key that doesn't change when the name is written differently"
+    },
+    "builder": {
+      "type": "string",
+      "title": "Builder",
+      "description": "Builder / GC name extracted from the job name (part before the dash)"
     }
   },
   "required": [

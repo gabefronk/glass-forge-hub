@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { extractPO, extractOE } from '../../shared/ingestShared.ts';
+import { extractPO, extractOE, extractAddress, extractBuilder } from '../../shared/ingestShared.ts';
 import { buildInstallerEvent, upsertInstallerEvent } from '../../shared/installerCalendar.ts';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
@@ -59,7 +59,8 @@ export default async function(req) {
         start_time,
         job_name: ev.summary || '(untitled)',
         builder: null,
-        address: ev.location || null,
+        address: extractAddress(ev.location, ev.description),
+        builder: extractBuilder(ev.summary),
         scope_notes: ev.description || '',
         labor_amt: 0,
         crew: null,

@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags } from '../../shared/ingestShared.ts';
+import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder } from '../../shared/ingestShared.ts';
 
 // Derive FeeLines from CalendarEvents (the single Google reader).
 // Reads CalendarEvents (source='google') instead of re-reading the Google API.
@@ -11,37 +11,35 @@ export default async function(req) {
     const base44 = createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
 
-    // Optional date window filter (defaults to all CalendarEvents)
     const startStr = body.start_date || null;
     const endStr = body.end_date || null;
 
-    // Load CalendarEvents — the single source of truth for Google calendar data
     const allCalEvents = await base44.asServiceRole.entities.CalendarEvents.list('-created_date', 2000);
-    // Only google-sourced events; skip app-authored (owned by pushCalendarEvent)
     let calEvents = allCalEvents.filter(e => e.source === 'google' && e.google_event_id);
     if (startStr) calEvents = calEvents.filter(e => (e.event_date || '') >= startStr);
     if (endStr) calEvents = calEvents.filter(e => (e.event_date || '') <= endStr);
 
-    // Existing FeeLines (by calendar_event_id) + Jobs
     const existingFees = await base44.asServiceRole.entities.FeeLines.list('-created_date', 5000);
     const existingByEventId = new Map();
     for (const f of existingFees) if (f.calendar_event_id) existingByEventId.set(f.calendar_event_id, f);
     const jobsArr = await base44.asServiceRole.entities.Jobs.list('-created_date', 500);
 
-    // First pass: match jobs
+    // First pass: match jobs (now with address as a match key)
     const matched = calEvents.map((ev) => {
       const title = ev.job_name || '(untitled)';
       const normName = normalizeJobName(title);
-      const m = matchJob(normName, jobsArr, ev.po_number, ev.oe_number);
+      const m = matchJob(normName, jobsArr, ev.po_number, ev.oe_number, ev.address);
       return { ev, title, normName, m };
     });
     const autoCreateNames = [...new Set(matched.filter((x) => x.m.autoCreate).map((x) => x.normName).filter(Boolean))];
-    // Seed PO/OE onto auto-created jobs so future events match by hard key
-    const autoPO = {}, autoOE = {};
+    // Seed PO/OE/address/builder onto auto-created jobs
+    const autoPO = {}, autoOE = {}, autoAddr = {}, autoBuilder = {};
     for (const { m, normName, ev } of matched) {
       if (m.autoCreate && normName) {
         if (ev.po_number && !autoPO[normName]) autoPO[normName] = ev.po_number;
         if (ev.oe_number && !autoOE[normName]) autoOE[normName] = ev.oe_number;
+        if (ev.address && !autoAddr[normName]) autoAddr[normName] = ev.address;
+        if (ev.builder && !autoBuilder[normName]) autoBuilder[normName] = ev.builder;
       }
     }
     const newJobs = autoCreateNames.length
@@ -49,6 +47,8 @@ export default async function(req) {
           canonical_name: n, aliases: [n],
           po_numbers: autoPO[n] ? [autoPO[n]] : [],
           oe_numbers: autoOE[n] ? [autoOE[n]] : [],
+          address: autoAddr[n] || null,
+          builder: autoBuilder[n] || extractBuilder(n) || null,
         })))
       : [];
     const jobByNorm = new Map();
@@ -61,7 +61,6 @@ export default async function(req) {
     const flagged = [];
     for (const { ev, title, normName, m } of matched) {
       const description = ev.scope_notes || '';
-      // Explicit labor dollar amount from the description — never invented
       const calendar_labor_amt = extractLaborAmount(description);
       const ticket_sequence = extractTicketSequence(description);
       const dateStr = ev.event_date || '';
@@ -108,25 +107,31 @@ export default async function(req) {
     for (const batch of chunk(toCreate, 500)) await base44.asServiceRole.entities.FeeLines.bulkCreate(batch);
     for (const batch of chunk(toUpdate, 500)) await base44.asServiceRole.entities.FeeLines.bulkUpdate(batch);
 
-    // Add PO/OE to matched jobs' arrays (many-to-one: multiple POs per job).
-    // Jobs matched by PO/OE already have the key; name-matched jobs get it added
-    // so future events with the same PO/OE link by hard key instead of name.
+    // Add PO/OE/address/builder to matched jobs' arrays (many-to-one).
     const allJobs = [...jobsArr, ...newJobs];
     const jobPatches = new Map();
     for (const { ev, m, normName } of matched) {
       let jobId = m.job_id;
       if (m.autoCreate) jobId = jobByNorm.get(normName)?.id || null;
-      if (!jobId || (!ev.po_number && !ev.oe_number)) continue;
+      if (!jobId) continue;
       const job = allJobs.find(j => j.id === jobId);
       if (!job) continue;
       const existingPOs = new Set(job.po_numbers || []);
       const existingOEs = new Set(job.oe_numbers || []);
-      if (!jobPatches.has(jobId)) jobPatches.set(jobId, { id: jobId, po_numbers: [...(job.po_numbers || [])], oe_numbers: [...(job.oe_numbers || [])] });
+      if (!jobPatches.has(jobId)) jobPatches.set(jobId, {
+        id: jobId,
+        po_numbers: [...(job.po_numbers || [])],
+        oe_numbers: [...(job.oe_numbers || [])],
+        address: job.address || null,
+        builder: job.builder || null,
+      });
       const u = jobPatches.get(jobId);
       if (ev.po_number && !existingPOs.has(ev.po_number) && !u.po_numbers.includes(ev.po_number)) u.po_numbers.push(ev.po_number);
       if (ev.oe_number && !existingOEs.has(ev.oe_number) && !u.oe_numbers.includes(ev.oe_number)) u.oe_numbers.push(ev.oe_number);
+      if (!u.address && ev.address) u.address = ev.address;
+      if (!u.builder && ev.builder) u.builder = ev.builder;
     }
-    if (jobPatches.size) await base44.asServiceRole.entities.Jobs.bulkUpdate([...jobPatches.values()]);
+    for (const batch of chunk([...jobPatches.values()], 500)) await base44.asServiceRole.entities.Jobs.bulkUpdate(batch);
 
     return Response.json({
       source: 'calendar_events',
