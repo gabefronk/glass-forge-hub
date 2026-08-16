@@ -17,12 +17,27 @@ export default async function(req) {
 
     const allCalEvents = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 1000);
     let calEvents = allCalEvents.filter(e => e.source === 'google' && e.google_event_id);
-    if (startStr) calEvents = calEvents.filter(e => (e.event_date || '') >= startStr);
+    if (startStr) {
+      calEvents = calEvents.filter(e => (e.event_date || '') >= startStr);
+    } else {
+      // Default to trailing 14-day window (daily ingest scope).
+      // Historical months are locked by sheet-import rows — see month lock below.
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 14);
+      calEvents = calEvents.filter(e => (e.event_date || '') >= cutoff.toISOString().slice(0, 10));
+    }
     if (endStr) calEvents = calEvents.filter(e => (e.event_date || '') <= endStr);
 
     const existingFees = await fetchAllPages(base44.asServiceRole.entities.FeeLines, '-created_date', 1000);
     const existingByEventId = new Map();
     for (const f of existingFees) if (f.calendar_event_id) existingByEventId.set(f.calendar_event_id, f);
+
+    // Month lock: if a month has ANY sheet-import rows, never write calendar rows into it.
+    const lockedMonths = new Set();
+    for (const f of existingFees) {
+      if (f.source === 'sheet-import' && f.invoice_month) lockedMonths.add(f.invoice_month);
+    }
+    calEvents = calEvents.filter(e => !lockedMonths.has(invoiceMonthFromDate(e.event_date || '')));
     const jobsArr = await fetchAllPages(base44.asServiceRole.entities.Jobs, '-created_date', 1000);
 
     // First pass: match jobs (now with address as a match key)
