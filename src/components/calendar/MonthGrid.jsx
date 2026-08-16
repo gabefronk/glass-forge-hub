@@ -38,17 +38,8 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate }) 
                   </div>
                   <div className="space-y-1">
                     {dayEvents.map((e) => (
-                      <button
-                        key={e.id}
-                        type="button"
-                        onClick={() => onSelect(e)}
-                        className={cn(
-                          "block w-full text-left text-xs px-1.5 py-1 rounded truncate border-l-2",
-                          e.source === "app"
-                            ? "bg-[#A1E9E6]/25 border-[#A1E9E6] hover:bg-[#A1E9E6]/40"
-                            : "bg-[#F4C7D0]/30 border-[#F4C7D0] hover:bg-[#F4C7D0]/50"
-                        )}
-                      >
+                      <button key={e.id} type="button" onClick={() => onSelect(e)} className="block w-full text-left text-xs px-1.5 py-1 rounded truncate hover:bg-black/[0.03]">
+                        <span className={cn("inline-block h-1.5 w-1.5 rounded-full mr-1 align-middle", e.source === "app" ? "bg-[#A1E9E6]" : "bg-[#F4C7D0]")} />
                         {e.start_time && <span className="tabular-nums mr-1 text-muted-foreground">{e.start_time}</span>}
                         <span className="text-foreground">{e.job_name}</span>
                       </button>
