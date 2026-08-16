@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Calendar, HardDrive, Layers, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Calendar, HardDrive, Layers, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { feeMathString, formatMoney, computeProfit } from "@/lib/feeMath";
 import { EditableText, EditableSwitch, AdjustedMarker } from "@/components/fees/EditableCell";
@@ -45,7 +45,7 @@ function leftBorder(tier, wt) {
   return "border-l-transparent";
 }
 
-export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddSplit, splitForm, onBulkSet }) {
+export default function FeeTable({ rows, jobsById, onEdit, onDelete, stickyTop = 0, onAddSplit, splitForm, onBulkSet }) {
   const groups = useMemo(() => groupByJob(rows, jobsById), [rows, jobsById]);
 
   return (
@@ -95,7 +95,7 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddS
         </div>
         <div className="divide-y divide-border border border-t-0 border-border rounded-b-lg overflow-hidden">
           {groups.map((g) => (
-            <JobGroup key={g.key} group={g} onEdit={onEdit} />
+            <JobGroup key={g.key} group={g} onEdit={onEdit} onDelete={onDelete} />
           ))}
           {!groups.length && (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">No fee lines this month.</div>
@@ -106,7 +106,7 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddS
       {/* Mobile stacked cards */}
       <div className="md:hidden space-y-3">
         {groups.map((g) => (
-          <MobileJobGroup key={g.key} group={g} onEdit={onEdit} />
+          <MobileJobGroup key={g.key} group={g} onEdit={onEdit} onDelete={onDelete} />
         ))}
         {!groups.length && (
           <div className="py-10 text-center text-sm text-muted-foreground">No fee lines this month.</div>
@@ -116,7 +116,7 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddS
   );
 }
 
-function JobGroup({ group, onEdit }) {
+function JobGroup({ group, onEdit, onDelete }) {
   const [open, setOpen] = useState(true);
   const jobName = group.jobName;
   return (
@@ -136,7 +136,7 @@ function JobGroup({ group, onEdit }) {
       {open && (
         <div>
           {group.lines.map((row, i) => (
-            <DesktopRow key={row.id} row={row} onEdit={onEdit} index={i} />
+            <DesktopRow key={row.id} row={row} onEdit={onEdit} onDelete={onDelete} index={i} />
           ))}
         </div>
       )}
@@ -144,7 +144,7 @@ function JobGroup({ group, onEdit }) {
   );
 }
 
-function DesktopRow({ row, onEdit, index }) {
+function DesktopRow({ row, onEdit, onDelete, index }) {
   const [expanded, setExpanded] = useState(false);
   const tier = billingTier(row);
   const wt = workType(row);
@@ -202,12 +202,12 @@ function DesktopRow({ row, onEdit, index }) {
           {row.needs_review && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-foreground leading-none">Rev</span>}
         </div>
       </div>
-      {expanded && <ExpandedDetail row={row} onEdit={onEdit} />}
+      {expanded && <ExpandedDetail row={row} onEdit={onEdit} onDelete={onDelete} />}
     </div>
   );
 }
 
-function ExpandedDetail({ row, onEdit }) {
+function ExpandedDetail({ row, onEdit, onDelete }) {
   const wt = workType(row);
   return (
     <div className="px-6 pb-4 pt-2 bg-[#dffcf5] border-t border-border">
@@ -315,6 +315,15 @@ function ExpandedDetail({ row, onEdit }) {
           )}
         </div>
       </div>
+      {onDelete && (
+        <div className="mt-3 pt-3 border-t border-border flex justify-end">
+          <Button size="sm" variant="destructive" onClick={() => {
+            if (confirm(`Delete this fee line?\n${row.job_name_norm} — ${row.job_date}`)) onDelete(row.id);
+          }}>
+            <Trash2 className="h-4 w-4 mr-1" /> Delete line
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -351,7 +360,7 @@ function SourceBadge({ source }) {
 }
 
 // Mobile
-function MobileJobGroup({ group, onEdit }) {
+function MobileJobGroup({ group, onEdit, onDelete }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-lg border border-border overflow-hidden">
@@ -366,7 +375,7 @@ function MobileJobGroup({ group, onEdit }) {
       {open && (
         <div className="divide-y divide-border">
           {group.lines.map((row) => (
-            <MobileRow key={row.id} row={row} onEdit={onEdit} />
+            <MobileRow key={row.id} row={row} onEdit={onEdit} onDelete={onDelete} />
           ))}
         </div>
       )}
@@ -374,7 +383,7 @@ function MobileJobGroup({ group, onEdit }) {
   );
 }
 
-function MobileRow({ row, onEdit }) {
+function MobileRow({ row, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const tier = billingTier(row);
   const wt = workType(row);
@@ -452,6 +461,15 @@ function MobileRow({ row, onEdit }) {
               {row.photo_urls.map((url, i) => (
                 <img key={i} src={url} alt={`photo ${i + 1}`} className="h-12 w-12 rounded object-cover border border-border" />
               ))}
+            </div>
+          )}
+          {onDelete && (
+            <div className="pt-2 border-t border-border">
+              <Button size="sm" variant="destructive" className="w-full" onClick={() => {
+                if (confirm(`Delete this fee line?\n${row.job_name_norm} — ${row.job_date}`)) onDelete(row.id);
+              }}>
+                <Trash2 className="h-4 w-4 mr-1" /> Delete line
+              </Button>
             </div>
           )}
         </div>

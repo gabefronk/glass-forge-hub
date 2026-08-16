@@ -112,6 +112,11 @@ export default function YaFees() {
     await base44.entities.FeeLines.update(id, rest);
   };
 
+  const handleDelete = async (id) => {
+    setFeeLines((prev) => prev.filter((r) => r.id !== id));
+    await base44.entities.FeeLines.delete(id);
+  };
+
   const handleAccept = async (id) => {
     handleEdit(id, { needs_review: false, manually_adjusted: true });
   };
@@ -260,6 +265,7 @@ export default function YaFees() {
         rows={filteredRows}
         jobsById={jobsById}
         onEdit={handleEdit}
+        onDelete={handleDelete}
         stickyTop={topBarH}
         onBulkSet={handleBulkSet}
         onAddSplit={() => setShowSplitForm((v) => !v)}
