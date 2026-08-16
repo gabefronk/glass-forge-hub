@@ -2,7 +2,12 @@
 // pricing-adjacent lines so crews never see money. Fail closed: if any "$"
 // survives, drop the entire description and flag the event.
 
-const PRICING_WORDS = ['labor', 'cost', 'price', 'quote', 'vpo', 'spr', 'invoice', 'bid', 'total'];
+// Narrowed to words whose amounts can appear WITHOUT a dollar sign.
+// Removed spr, vpo, quote, invoice, bid — those always appear with a "$" in
+// the data, so the money rule (drop any line containing "$") already catches
+// them. Keeping them only caused false positives like stripping SPR contact
+// lines ("SPR: Westin Kriser (334) 796-2590") that installers need on site.
+const PRICING_WORDS = ['labor', 'cost', 'price', 'total'];
 
 // A pricing word "adjacent to a number": the word and a digit appear on the
 // same line. Conservative — drops the whole line toward hiding money.
