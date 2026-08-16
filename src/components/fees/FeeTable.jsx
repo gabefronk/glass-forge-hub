@@ -238,12 +238,19 @@ function ExpandedDetail({ row, onEdit }) {
             </>
           ) : (
             <>
-              <Detail label="Labor $" value={`$${formatMoney(row.labor_amt)}`} />
-              <div className="flex items-baseline gap-2">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee $</span>
-                <span className="font-semibold tabular-nums text-accent">${formatMoney(row.fee_amt)}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Labor $</span>
+                <EditableText value={row.labor_amt} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
               </div>
-              <Detail label="Fee %" value={`${Math.round((row.fee_pct || 0) * 100)}%`} />
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee $</span>
+                <EditableText value={row.fee_amt} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { fee_amt: v })} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee %</span>
+                <EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" className="w-14" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+                <span className="text-xs text-muted-foreground">%</span>
+              </div>
             </>
           )}
           {billingTier(row) && (
@@ -415,6 +422,7 @@ function MobileRow({ row, onEdit, onDelete }) {
         <div className="mt-3 space-y-2 text-sm">
           <EditableField label="Line" value={row.line_description} onCommit={(v) => onEdit(row.id, { line_description: v })} />
           <EditableField label="Labor $" value={row.labor_amt} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
+          <EditableField label="Fee $" value={row.fee_amt} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { fee_amt: v })} />
           <EditableField label="Fee %" value={Math.round((row.fee_pct || 0) * 100)} type="number" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Billable</span>
