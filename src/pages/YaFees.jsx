@@ -32,6 +32,7 @@ export default function YaFees() {
   const [hideZeros, setHideZeros] = useState(false);
   const [showSplitForm, setShowSplitForm] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -41,8 +42,17 @@ export default function YaFees() {
         base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000),
         base44.entities.Jobs.list("-created_date", 5000),
       ]);
-      setFeeLines(fl);
-      setJobs(jb);
+      setDebugInfo({
+        month,
+        feeLinesType: Array.isArray(fl) ? "array" : typeof fl,
+        feeLinesLen: Array.isArray(fl) ? fl.length : (fl ? Object.keys(fl).length : 0),
+        feeLinesRaw: JSON.stringify(fl).slice(0, 300),
+        jobsType: Array.isArray(jb) ? "array" : typeof jb,
+        jobsLen: Array.isArray(jb) ? jb.length : (jb ? Object.keys(jb).length : 0),
+        hasToken: !!(base44?.auth?.token || base44?._token),
+      });
+      setFeeLines(Array.isArray(fl) ? fl : []);
+      setJobs(Array.isArray(jb) ? jb : []);
     } catch (e) {
       console.error("YaFees load error:", e);
       setLoadError(e);
@@ -268,6 +278,19 @@ export default function YaFees() {
           <p className="text-sm text-red-700 mb-3">An error occurred while fetching fee lines:</p>
           <pre className="text-xs text-red-900 bg-red-100 rounded p-3 overflow-auto whitespace-pre-wrap">{loadError.message || String(loadError)}</pre>
           <button onClick={load} className="mt-4 px-4 py-2 bg-red-800 text-white rounded text-sm font-medium">Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (debugInfo && debugInfo.feeLinesLen === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-8">
+        <div className="max-w-lg rounded-lg border border-amber-300 bg-amber-50 p-6">
+          <h2 className="text-lg font-bold text-amber-800 mb-2">Debug: 0 fee lines returned</h2>
+          <p className="text-sm text-amber-700 mb-3">The query succeeded but returned no data. Diagnostic info:</p>
+          <pre className="text-xs text-amber-900 bg-amber-100 rounded p-3 overflow-auto whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
+          <button onClick={load} className="mt-4 px-4 py-2 bg-amber-800 text-white rounded text-sm font-medium">Retry</button>
         </div>
       </div>
     );
