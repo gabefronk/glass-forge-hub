@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchAllPages } from "@/lib/pagination";
 import MonthGrid from "@/components/calendar/MonthGrid";
 import EventForm from "@/components/calendar/EventForm";
 import EventDetail from "@/components/calendar/EventDetail";
@@ -24,8 +25,8 @@ export default function CalendarPage() {
 
   const load = async () => {
     const [evs, jobsArr] = await Promise.all([
-      base44.entities.CalendarEvents.list("-created_date", 2000),
-      base44.entities.Jobs.list("-created_date", 500),
+      fetchAllPages(base44.entities.CalendarEvents, "-created_date", 1000),
+      fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
     ]);
     setEvents(evs);
     setJobs(jobsArr);

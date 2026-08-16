@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { secrets } from 'base44:runtime';
 import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, mergeReviewFlags } from '../../shared/ingestShared.ts';
+import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Ingest Probuild posts into FeeLines. One row per post.
 // Auth: Firebase refresh-token exchange (rotated token persisted to ProbuildAuth).
@@ -166,7 +167,7 @@ ${JSON.stringify(promptInputs)}`;
     }
 
     // 9. Jobs: match, auto-create missing
-    const jobsArr = await base44.asServiceRole.entities.Jobs.list('-created_date', 500);
+    const jobsArr = await fetchAllPages(base44.asServiceRole.entities.Jobs, '-created_date', 1000);
     const matched = inWindowPosts.map((b) => {
       const normName = normalizeJobName(b.projectName);
       const m = matchJob(normName, jobsArr);
@@ -181,7 +182,7 @@ ${JSON.stringify(promptInputs)}`;
     for (const j of jobsArr) { const n = normalizeJobName(j.canonical_name); if (n) jobByNorm.set(n, j); }
 
     // 10. Build rows + upsert on probuild_post_id
-    const existingFees = await base44.asServiceRole.entities.FeeLines.list('-created_date', 1000);
+    const existingFees = await fetchAllPages(base44.asServiceRole.entities.FeeLines, '-created_date', 1000);
     const existingByPostId = new Map();
     for (const f of existingFees) if (f.probuild_post_id) existingByPostId.set(f.probuild_post_id, f);
 

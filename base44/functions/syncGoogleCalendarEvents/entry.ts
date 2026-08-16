@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { extractPO, extractOE, extractAddress, extractBuilder } from '../../shared/ingestShared.ts';
 import { buildInstallerEvent, upsertInstallerEvent } from '../../shared/installerCalendar.ts';
+import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
@@ -40,7 +41,7 @@ export default async function(req) {
       pageToken = data.nextPageToken || null;
     } while (pageToken);
 
-    const existing = await base44.asServiceRole.entities.CalendarEvents.list('-created_date', 2000);
+    const existing = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 1000);
     const byGoogleId = new Map();
     for (const e of existing) if (e.google_event_id) byGoogleId.set(e.google_event_id, e);
 

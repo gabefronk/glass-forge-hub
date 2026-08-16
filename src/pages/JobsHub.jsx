@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Search, MapPin, FileText, Briefcase, ChevronRight, Upload } from "lucide-react";
 import { formatMoney } from "@/lib/feeMath";
+import { fetchAllPages } from "@/lib/pagination";
 
 function formatReportDate(yyyyMmDd) {
   if (!yyyyMmDd) return "";
@@ -21,8 +22,8 @@ export default function JobsHub() {
     const load = async () => {
       try {
         const [jb, fl] = await Promise.all([
-          base44.entities.Jobs.list('-created_date', 500),
-          base44.entities.FeeLines.list('-created_date', 5000),
+          fetchAllPages(base44.entities.Jobs, '-created_date', 1000),
+          fetchAllPages(base44.entities.FeeLines, '-created_date', 1000),
         ]);
         setJobs(jb);
         setFeeLines(fl);

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder } from '../../shared/ingestShared.ts';
+import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Derive FeeLines from CalendarEvents (the single Google reader).
 // Reads CalendarEvents (source='google') instead of re-reading the Google API.
@@ -14,15 +15,15 @@ export default async function(req) {
     const startStr = body.start_date || null;
     const endStr = body.end_date || null;
 
-    const allCalEvents = await base44.asServiceRole.entities.CalendarEvents.list('-created_date', 2000);
+    const allCalEvents = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 1000);
     let calEvents = allCalEvents.filter(e => e.source === 'google' && e.google_event_id);
     if (startStr) calEvents = calEvents.filter(e => (e.event_date || '') >= startStr);
     if (endStr) calEvents = calEvents.filter(e => (e.event_date || '') <= endStr);
 
-    const existingFees = await base44.asServiceRole.entities.FeeLines.list('-created_date', 5000);
+    const existingFees = await fetchAllPages(base44.asServiceRole.entities.FeeLines, '-created_date', 1000);
     const existingByEventId = new Map();
     for (const f of existingFees) if (f.calendar_event_id) existingByEventId.set(f.calendar_event_id, f);
-    const jobsArr = await base44.asServiceRole.entities.Jobs.list('-created_date', 500);
+    const jobsArr = await fetchAllPages(base44.asServiceRole.entities.Jobs, '-created_date', 1000);
 
     // First pass: match jobs (now with address as a match key)
     const matched = calEvents.map((ev) => {

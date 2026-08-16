@@ -17,8 +17,8 @@ export default function YaFees() {
     setLoading(true);
     try {
       const [fl, jb] = await Promise.all([
-        base44.entities.FeeLines.list(),
-        base44.entities.Jobs.list(),
+        base44.entities.FeeLines.filter({ invoice_month: month }, '-job_date', 5000),
+        base44.entities.Jobs.list('-created_date', 5000),
       ]);
       setFeeLines(fl);
       setJobs(jb);
@@ -27,7 +27,7 @@ export default function YaFees() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [month]);
 
   const topBarRef = useRef(null);
   const [topBarH, setTopBarH] = useState(0);
