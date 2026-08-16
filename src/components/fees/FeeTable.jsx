@@ -7,8 +7,6 @@ import { cn } from "@/lib/utils";
 const GABE_EMAIL = "gabriel.fronk.wd@gmail.com";
 const ISRAEL_EMAIL = "iryedra@gmail.com";
 
-// Different billing %: events manually added to the calendar (organizer is
-// Israel, not a builder system). Split into two tiers by who created them.
 function billingTier(row) {
   if (row.calendar_creator === GABE_EMAIL) return "gabe";
   if (row.calendar_creator === ISRAEL_EMAIL && row.calendar_organizer === ISRAEL_EMAIL) return "mine";
@@ -18,9 +16,6 @@ function billingTier(row) {
 const SERVICE_RE = /service|warranty|wty|warr|per report/i;
 const INSTALL_RE = /install/i;
 
-// Classify a ticket by work type. Type takes priority over the zero-dollar
-// fallback so warranty/repair tickets still show as service even when no labor
-// has been entered yet. Mutually exclusive: install > service > zero.
 function workType(row) {
   const labor = Number(row.labor_amt) || 0;
   const text = `${row.job_name_raw || ""} ${row.note_text || ""}`;
@@ -33,45 +28,42 @@ function workType(row) {
 }
 
 function wtBg(wt, row, index = 0) {
-  if (wt === "zero") return "bg-slate-200";
-  if (wt === "install") return "bg-teal-100";
-  if (wt === "service") return "bg-fuchsia-100";
-  if (row.needs_review) return "bg-amber-50";
-  return index % 2 === 1 ? "bg-muted/30" : "";
+  if (wt === "zero") return "bg-[#f1f3f5]";
+  if (wt === "install") return "bg-[#dffcf5]";
+  if (wt === "service") return "bg-[#fce4ec]";
+  if (row.needs_review) return "bg-[#fff5e6]";
+  return index % 2 === 1 ? "bg-[#f9f9f9]" : "";
 }
 
 function leftBorder(tier, wt) {
   if (tier === "gabe") return "border-l-blue-500";
   if (tier === "mine") return "border-l-violet-500";
-  if (wt === "zero") return "border-l-slate-500";
-  if (wt === "install") return "border-l-teal-500";
-  if (wt === "service") return "border-l-fuchsia-500";
+  if (wt === "zero") return "border-l-[#E0E0E0]";
+  if (wt === "install") return "border-l-[#A1E9E6]";
+  if (wt === "service") return "border-l-[#F4C7D0]";
   return "border-l-transparent";
 }
 
-// rows: fee lines for selected month
-// jobs: map id->job
-// onEdit(id, patch)
 export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0 }) {
   const groups = useMemo(() => groupByJob(rows, jobsById), [rows, jobsById]);
 
   return (
     <section className="px-4 sm:px-8 pt-6 pb-16">
-      <h2 className="font-heading text-sm font-semibold uppercase tracking-wide mb-3">
+      <h2 className="font-heading text-xs font-bold uppercase tracking-widest mb-3 text-foreground">
         By Job
       </h2>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-muted-foreground">
-        <Legend swatch="bg-slate-200 border-slate-500" label="Zero $" />
-        <Legend swatch="bg-teal-100 border-teal-500" label="Install labor" />
-        <Legend swatch="bg-fuchsia-100 border-fuchsia-500" label="Service labor" />
+        <Legend swatch="bg-[#f1f3f5] border-[#E0E0E0]" label="Zero $" />
+        <Legend swatch="bg-[#dffcf5] border-[#A1E9E6]" label="Install labor" />
+        <Legend swatch="bg-[#fce4ec] border-[#F4C7D0]" label="Service labor" />
         <Legend swatch="bg-blue-100 border-blue-500" label="Gabe" />
         <Legend swatch="bg-violet-100 border-violet-500" label="Mine" />
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block rounded-lg border border-border">
+      <div className="hidden md:block rounded-lg border border-border overflow-hidden">
         <div
-          className="sticky z-10 grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-3 bg-primary text-primary-foreground text-[11px] uppercase tracking-wide font-semibold rounded-t-lg shadow-sm"
+          className="sticky z-10 grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-3 bg-primary text-primary-foreground text-[11px] uppercase tracking-wide font-semibold"
           style={{ top: stickyTop }}
         >
           <div>Job</div>
@@ -82,7 +74,7 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0 }) {
           <div>Source</div>
           <div className="text-center">Flags</div>
         </div>
-        <div className="divide-y divide-border rounded-b-lg overflow-hidden">
+        <div className="divide-y divide-border">
           {groups.map((g) => (
             <JobGroup key={g.key} group={g} onEdit={onEdit} />
           ))}
@@ -112,12 +104,15 @@ function JobGroup({ group, onEdit }) {
     <div>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 bg-muted hover:bg-muted/70 text-left border-l-2 border-l-primary"
+        className={cn(
+          "w-full flex items-center gap-2 px-4 py-3 text-left transition-colors",
+          open ? "bg-[#dffcf5]" : "bg-[#f9f9f9] hover:bg-[#f1f3f5]"
+        )}
       >
         {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-        <span className="font-semibold text-sm text-foreground">{jobName}</span>
+        <span className="font-bold text-sm text-foreground uppercase tracking-wide">{jobName}</span>
         <span className="text-xs text-muted-foreground">· {group.lines.length} line{group.lines.length === 1 ? "" : "s"}</span>
-        <span className="ml-auto text-sm font-bold tabular-nums text-primary">${formatMoney(group.feeTotal)}</span>
+        <span className="ml-auto text-sm font-bold tabular-nums text-accent">${formatMoney(group.feeTotal)}</span>
       </button>
       {open && (
         <div>
@@ -138,7 +133,7 @@ function DesktopRow({ row, onEdit, index }) {
     <div>
       <div
         className={cn(
-          "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2 items-center cursor-pointer hover:bg-accent/60 border-l-4",
+          "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2.5 items-center cursor-pointer hover:bg-black/[0.02] border-l-4 transition-colors",
           wtBg(wt, row, index),
           leftBorder(tier, wt)
         )}
@@ -148,7 +143,7 @@ function DesktopRow({ row, onEdit, index }) {
           {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
           <span className="truncate text-sm text-muted-foreground">{row.job_name_norm}</span>
         </div>
-        <div className="text-sm text-muted-foreground">{row.job_date}</div>
+        <div className="text-xs text-muted-foreground tabular-nums">{row.job_date}</div>
         <div>
           <EditableText value={row.line_description} onCommit={(v) => onEdit(row.id, { line_description: v })} />
         </div>
@@ -163,8 +158,8 @@ function DesktopRow({ row, onEdit, index }) {
         <div className="flex items-center justify-center gap-1.5">
           {tier === "gabe" && <span title="Created by Gabe Fronk — different billing %" className="h-2.5 w-2.5 rounded-full bg-blue-600" />}
           {tier === "mine" && <span title="Manually added by you — different billing %" className="h-2.5 w-2.5 rounded-full bg-violet-600" />}
-          {row.manually_adjusted && <AdjustedMarker />}
-          {row.needs_review && <span title="Needs review" className="h-2 w-2 rounded-full bg-amber-500" />}
+          {row.manually_adjusted && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground leading-none">Edit</span>}
+          {row.needs_review && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-foreground leading-none">Rev</span>}
         </div>
       </div>
       {expanded && <ExpandedDetail row={row} onEdit={onEdit} />}
@@ -175,12 +170,15 @@ function DesktopRow({ row, onEdit, index }) {
 function ExpandedDetail({ row, onEdit }) {
   const wt = workType(row);
   return (
-    <div className="px-6 pb-4 pt-1 bg-muted/20 border-t border-border">
+    <div className="px-6 pb-4 pt-2 bg-[#dffcf5] border-t border-border">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm">
         <div className="space-y-2">
           <Detail label="Fee math" value={feeMathString(row)} mono />
           <Detail label="Labor $" value={`$${formatMoney(row.labor_amt)}`} />
-          <Detail label="Fee $" value={`$${formatMoney(row.fee_amt)}`} />
+          <div className="flex items-baseline gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee $</span>
+            <span className="font-semibold tabular-nums text-accent">${formatMoney(row.fee_amt)}</span>
+          </div>
           <Detail label="Fee %" value={`${Math.round((row.fee_pct || 0) * 100)}%`} />
           {billingTier(row) && (
             <div>
@@ -192,9 +190,9 @@ function ExpandedDetail({ row, onEdit }) {
           {wt !== "other" && (
             <div>
               <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium",
-                wt === "zero" ? "bg-slate-300 text-slate-900" :
-                wt === "install" ? "bg-teal-200 text-teal-900" :
-                "bg-fuchsia-200 text-fuchsia-900")}>
+                wt === "zero" ? "bg-[#f1f3f5] text-foreground" :
+                wt === "install" ? "bg-[#A1E9E6] text-foreground" :
+                "bg-[#F4C7D0] text-foreground")}>
                 {wt === "zero" ? "Zero-dollar ticket" : wt === "install" ? "Install labor" : "Service labor"}
               </span>
             </div>
@@ -214,7 +212,7 @@ function ExpandedDetail({ row, onEdit }) {
           {row.note_text && (
             <div>
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Note (verbatim)</div>
-              <div className="rounded bg-background border border-border p-2 text-sm whitespace-pre-wrap">{row.note_text}</div>
+              <div className="rounded bg-white border border-border p-2 text-sm whitespace-pre-wrap">{row.note_text}</div>
             </div>
           )}
           <div className="grid grid-cols-2 gap-2 text-xs">
@@ -253,7 +251,7 @@ function Detail({ label, value, mono }) {
 function Legend({ swatch, label }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className={cn("h-3 w-3 rounded border", swatch)} />
+      <span className={cn("h-2.5 w-2.5 rounded-full border", swatch)} />
       {label}
     </span>
   );
@@ -261,17 +259,13 @@ function Legend({ swatch, label }) {
 
 function SourceBadge({ source }) {
   const map = {
-    calendar: { icon: Calendar, label: "Cal", cls: "bg-blue-100 text-blue-800" },
-    probuild: { icon: HardDrive, label: "PB", cls: "bg-emerald-100 text-emerald-800" },
-    both: { icon: Layers, label: "Both", cls: "bg-violet-100 text-violet-800" },
+    calendar: { label: "Cal", cls: "text-muted-foreground italic" },
+    probuild: { label: "PB", cls: "text-muted-foreground italic" },
+    both: { label: "Both", cls: "text-muted-foreground italic" },
   };
   const m = map[source] || map.calendar;
-  const Icon = m.icon;
   return (
-    <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium", m.cls)}>
-      <Icon className="h-3 w-3" />
-      {m.label}
-    </span>
+    <span className={cn("text-xs font-medium", m.cls)}>{m.label}</span>
   );
 }
 
@@ -280,13 +274,13 @@ function MobileJobGroup({ group, onEdit }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-lg border border-border overflow-hidden">
-      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2 px-4 py-3 bg-muted text-left">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2 px-4 py-3 bg-[#f9f9f9] text-left">
         {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         <div className="min-w-0">
-          <div className="font-medium text-sm truncate">{group.jobName}</div>
+          <div className="font-bold text-sm truncate uppercase tracking-wide">{group.jobName}</div>
           <div className="text-xs text-muted-foreground">{group.lines.length} line{group.lines.length === 1 ? "" : "s"}</div>
         </div>
-        <span className="ml-auto font-semibold text-sm tabular-nums">${formatMoney(group.feeTotal)}</span>
+        <span className="ml-auto font-bold text-sm tabular-nums text-accent">${formatMoney(group.feeTotal)}</span>
       </button>
       {open && (
         <div className="divide-y divide-border">
@@ -309,18 +303,18 @@ function MobileRow({ row, onEdit }) {
         <div className="min-w-0">
           <div className="text-sm font-medium truncate">{row.line_description || row.job_name_norm}</div>
           <div className="text-xs text-muted-foreground flex items-center flex-wrap gap-1.5">
-            <span>{row.job_date}</span>
+            <span className="tabular-nums">{row.job_date}</span>
             <span>·</span>
             <SourceBadge source={row.source} />
-            {wt === "zero" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-slate-300 text-slate-900">Zero $</span>}
-            {wt === "install" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-teal-200 text-teal-900">Install</span>}
-            {wt === "service" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-fuchsia-200 text-fuchsia-900">Service</span>}
+            {wt === "zero" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-[#f1f3f5] text-foreground">Zero $</span>}
+            {wt === "install" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-[#A1E9E6] text-foreground">Install</span>}
+            {wt === "service" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-[#F4C7D0] text-foreground">Service</span>}
             {tier === "gabe" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-200 text-blue-900">Gabe</span>}
             {tier === "mine" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-200 text-violet-900">Manual</span>}
           </div>
         </div>
         <div className="text-right">
-          <div className="text-sm font-semibold tabular-nums">${formatMoney(row.fee_amt)}</div>
+          <div className="text-sm font-bold tabular-nums text-accent">${formatMoney(row.fee_amt)}</div>
           <div className="text-xs text-muted-foreground">labor ${formatMoney(row.labor_amt)}</div>
         </div>
       </button>
@@ -341,7 +335,7 @@ function MobileRow({ row, onEdit }) {
           {row.note_text && (
             <div>
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Note (verbatim)</div>
-              <div className="rounded bg-background border border-border p-2 text-sm whitespace-pre-wrap">{row.note_text}</div>
+              <div className="rounded bg-white border border-border p-2 text-sm whitespace-pre-wrap">{row.note_text}</div>
             </div>
           )}
           <div className="grid grid-cols-2 gap-2 text-xs">

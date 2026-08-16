@@ -14,32 +14,32 @@ export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTot
   };
 
   return (
-    <div ref={topRef} className="sticky top-0 z-20 bg-background/90 backdrop-blur border-b border-border">
+    <div ref={topRef} className="sticky top-0 z-20 bg-background border-b border-border">
       <div className="px-4 sm:px-8 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" onClick={prev} aria-label="Previous month">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={prev} aria-label="Previous month" className="border-border">
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-[10rem] text-center">
-            <span className="font-heading text-base font-semibold">{monthLabel(month)}</span>
+            <span className="font-heading text-sm font-semibold uppercase tracking-wide">{monthLabel(month)}</span>
           </div>
-          <Button variant="outline" size="icon" onClick={next} aria-label="Next month">
+          <Button variant="outline" size="icon" onClick={next} aria-label="Next month" className="border-border">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-8">
           <Stat label="Invoice Total" value={`$${formatMoney(invoiceTotalVal)}`} />
           <Stat label="Labor Total" value={`$${formatMoney(laborTotalVal)}`} />
           <Stat label="Line Count" value={lineCount} />
           {futureLaborVal > 0 && (
-            <Stat label="Scheduled (not yet billable)" value={`$${formatMoney(futureLaborVal)}`} muted />
+            <Stat label="Scheduled (not billable)" value={`$${formatMoney(futureLaborVal)}`} muted />
           )}
         </div>
 
-        <Button onClick={onExport} variant="default" className="gap-2">
+        <Button onClick={onExport} variant="outline" className="gap-2 uppercase text-xs tracking-wide font-semibold">
           <Download className="h-4 w-4" />
-          Export to CSV
+          Export CSV
         </Button>
       </div>
     </div>
@@ -49,8 +49,8 @@ export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTot
 function Stat({ label, value, muted }) {
   return (
     <div className="flex flex-col">
-      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className={muted ? "font-heading text-sm font-medium tabular-nums text-amber-600" : "font-heading text-lg font-semibold tabular-nums"}>{value}</span>
+      <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{label}</span>
+      <span className={muted ? "font-heading text-lg font-semibold tabular-nums text-accent" : "font-heading text-lg font-semibold tabular-nums"}>{value}</span>
     </div>
   );
 }

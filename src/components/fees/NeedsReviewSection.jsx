@@ -20,10 +20,10 @@ export default function NeedsReviewSection({ rows, jobs, onAccept, onAssignToJob
   return (
     <section className="px-4 sm:px-8 pt-6">
       <div className="flex items-center gap-2 mb-3">
-        <AlertTriangle className="h-4 w-4 text-amber-500" />
-        <h2 className="font-heading text-sm font-semibold uppercase tracking-wide">Needs Review</h2>
+        <AlertTriangle className="h-4 w-4 text-accent" />
+        <h2 className="font-heading text-xs font-bold uppercase tracking-widest">Needs Review</h2>
         <span className="text-xs text-muted-foreground">({rows.length})</span>
-        <span className="ml-auto text-sm text-amber-700">
+        <span className="ml-auto text-sm text-accent">
           <span className="text-xs uppercase tracking-wide mr-2">Held out</span>
           <span className="font-semibold tabular-nums">${formatMoney(laborSub)}</span>
           <span className="text-xs mx-1">labor ·</span>
@@ -60,19 +60,19 @@ function ReviewRow({ row, jobs, onAccept, onAssignToJob }) {
   }
 
   return (
-    <div className="rounded-lg border border-amber-300/60 bg-amber-50/40 p-4">
+    <div className="rounded-lg border border-border bg-[#f9f9f9] p-4 border-l-4 border-l-accent">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-sm">{row.job_name_raw}</span>
             <span className="text-xs text-muted-foreground">· {row.job_date}</span>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-200/60 text-amber-900">{row.match_confidence}</span>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-primary text-primary-foreground font-medium">{row.match_confidence}</span>
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{row.source}</span>
           </div>
           {row.line_description && (
             <div className="text-sm text-muted-foreground">{row.line_description}</div>
           )}
-          <div className="text-xs text-amber-700">
+          <div className="text-xs text-accent">
             {reasons.join(" · ")}
           </div>
           <div className="text-xs text-muted-foreground font-mono">{feeMathString(row)}</div>

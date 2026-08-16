@@ -2,9 +2,6 @@ import { useMemo } from "react";
 import { CalendarClock, AlertTriangle } from "lucide-react";
 import { formatMoney, isFutureRow, isBillableFuture } from "@/lib/feeMath";
 
-// "Scheduled — not yet billable" section: future-dated rows (job_date > today).
-// Split into billable-future (the not-yet-billable subtotal) and held-out-future
-// (needs_review / non-billable), each with its own subtotal so nothing is hidden.
 export default function ScheduledSection({ rows }) {
   const future = useMemo(
     () => rows.filter(isFutureRow).sort((a, b) => a.job_date.localeCompare(b.job_date)),
@@ -28,53 +25,53 @@ export default function ScheduledSection({ rows }) {
 
   return (
     <section className="px-4 sm:px-8 pt-4 pb-2">
-      <div className="rounded-lg border border-amber-300 bg-amber-50 overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 bg-amber-100 border-b border-amber-300">
-          <CalendarClock className="h-4 w-4 text-amber-700" />
-          <h2 className="font-heading text-sm font-semibold text-amber-900">
+      <div className="rounded-lg border border-border bg-white overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 bg-[#f9f9f9] border-b border-border">
+          <CalendarClock className="h-4 w-4 text-accent" />
+          <h2 className="font-heading text-xs font-bold uppercase tracking-wide text-foreground">
             Scheduled — not yet billable
           </h2>
-          <span className="text-xs text-amber-800 ml-1">({billable.length})</span>
-          <span className="ml-auto text-sm text-amber-900">
-            <span className="text-xs uppercase tracking-wide text-amber-700 mr-2">Upcoming</span>
-            <span className="font-semibold tabular-nums">${formatMoney(billableSub.labor)}</span>
-            <span className="text-xs text-amber-700 mx-1">labor ·</span>
-            <span className="font-semibold tabular-nums">${formatMoney(billableSub.fee)}</span>
-            <span className="text-xs text-amber-700 ml-1">fee</span>
+          <span className="text-xs text-muted-foreground ml-1">({billable.length})</span>
+          <span className="ml-auto text-sm">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-2">Upcoming</span>
+            <span className="font-semibold tabular-nums text-foreground">${formatMoney(billableSub.labor)}</span>
+            <span className="text-xs text-muted-foreground mx-1">labor ·</span>
+            <span className="font-semibold tabular-nums text-accent">${formatMoney(billableSub.fee)}</span>
+            <span className="text-xs text-muted-foreground ml-1">fee</span>
           </span>
         </div>
-        <div className="divide-y divide-amber-200">
+        <div className="divide-y divide-border">
           {billable.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 px-4 py-2 text-sm">
-              <span className="tabular-nums text-muted-foreground w-24">{r.job_date}</span>
+            <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm border-l-4 border-l-accent">
+              <span className="tabular-nums text-muted-foreground w-24 text-xs">{r.job_date}</span>
               <span className="font-medium truncate flex-1">{r.job_name_norm}</span>
               <span className="tabular-nums text-muted-foreground w-24 text-right">${formatMoney(r.labor_amt)}</span>
-              <span className="tabular-nums font-medium w-24 text-right">${formatMoney(r.fee_amt)}</span>
+              <span className="tabular-nums font-medium w-24 text-right text-accent">${formatMoney(r.fee_amt)}</span>
             </div>
           ))}
         </div>
         {heldOut.length > 0 && (
           <>
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border-t border-amber-200">
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-[#f9f9f9] border-t border-border">
+              <AlertTriangle className="h-3.5 w-3.5 text-accent" />
+              <span className="text-xs font-bold uppercase tracking-wide text-foreground">
                 Held out (needs review)
               </span>
-              <span className="text-xs text-amber-700 ml-1">({heldOut.length})</span>
-              <span className="ml-auto text-xs text-amber-800">
-                <span className="font-semibold tabular-nums">${formatMoney(heldSub.labor)}</span>
-                <span className="text-xs mx-1">labor ·</span>
-                <span className="font-semibold tabular-nums">${formatMoney(heldSub.fee)}</span>
-                <span className="text-xs ml-1">fee</span>
+              <span className="text-xs text-muted-foreground ml-1">({heldOut.length})</span>
+              <span className="ml-auto text-xs">
+                <span className="font-semibold tabular-nums text-foreground">${formatMoney(heldSub.labor)}</span>
+                <span className="text-muted-foreground mx-1">labor ·</span>
+                <span className="font-semibold tabular-nums text-accent">${formatMoney(heldSub.fee)}</span>
+                <span className="text-muted-foreground ml-1">fee</span>
               </span>
             </div>
-            <div className="divide-y divide-amber-200/60">
+            <div className="divide-y divide-border">
               {heldOut.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 px-4 py-2 text-sm bg-amber-50/30">
-                  <span className="tabular-nums text-muted-foreground w-24">{r.job_date}</span>
+                <div key={r.id} className="flex items-center gap-3 px-4 py-2 text-sm border-l-4 border-l-accent/50">
+                  <span className="tabular-nums text-muted-foreground w-24 text-xs">{r.job_date}</span>
                   <span className="font-medium truncate flex-1">{r.job_name_norm}</span>
                   <span className="tabular-nums text-muted-foreground w-24 text-right">${formatMoney(r.labor_amt)}</span>
-                  <span className="tabular-nums font-medium w-24 text-right">${formatMoney(r.fee_amt)}</span>
+                  <span className="tabular-nums font-medium w-24 text-right text-accent">${formatMoney(r.fee_amt)}</span>
                 </div>
               ))}
             </div>

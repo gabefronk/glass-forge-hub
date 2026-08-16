@@ -19,7 +19,7 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate }) 
   const today = new Date().toISOString().slice(0, 10);
   return (
     <div className="rounded-lg border border-border overflow-hidden">
-      <div className="grid grid-cols-7 bg-muted text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+      <div className="grid grid-cols-7 bg-background text-[11px] uppercase tracking-wide font-semibold text-muted-foreground border-b border-border">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <div key={d} className="px-2 py-2 text-center">{d}</div>
         ))}
@@ -38,12 +38,13 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate }) 
                   </div>
                   <div className="space-y-1">
                     {dayEvents.slice(0, 3).map((e) => (
-                      <button key={e.id} type="button" onClick={() => onSelect(e)} className={cn("block w-full text-left text-xs px-1.5 py-1 rounded truncate", e.source === "app" ? "bg-teal-100 text-teal-900" : "bg-slate-100 text-slate-700")}>
-                        {e.start_time && <span className="tabular-nums mr-1">{e.start_time}</span>}
-                        {e.job_name}
+                      <button key={e.id} type="button" onClick={() => onSelect(e)} className="block w-full text-left text-xs px-1.5 py-1 rounded truncate hover:bg-black/[0.03]">
+                        <span className={cn("inline-block h-1.5 w-1.5 rounded-full mr-1 align-middle", e.source === "app" ? "bg-[#A1E9E6]" : "bg-[#F4C7D0]")} />
+                        {e.start_time && <span className="tabular-nums mr-1 text-muted-foreground">{e.start_time}</span>}
+                        <span className="text-foreground">{e.job_name}</span>
                       </button>
                     ))}
-                    {dayEvents.length > 3 && <div className="text-[10px] text-muted-foreground px-1">+{dayEvents.length - 3} more</div>}
+                    {dayEvents.length > 3 && <div className="text-[10px] text-primary-foreground bg-primary rounded-full px-1.5 py-0.5 inline-block ml-1 leading-none">+{dayEvents.length - 3} more</div>}
                   </div>
                 </>
               )}

@@ -134,6 +134,9 @@ export default function YaFees() {
         onExport={handleExport}
         topRef={topBarRef}
       />
+      <div className="px-4 sm:px-8 pt-6">
+        <h1 className="font-heading text-2xl font-bold uppercase tracking-tight">YA Fees</h1>
+      </div>
       <NeedsReviewSection
         rows={reviewRows}
         jobs={jobs}

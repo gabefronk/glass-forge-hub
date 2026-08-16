@@ -1,8 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar } from "lucide-react";
+import { Receipt, Calendar, Diamond } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Single nav item. To add a second nav item later, append one object to NAV_ITEMS.
 const NAV_ITEMS = [
   { label: "YA Fees", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },
@@ -11,9 +10,10 @@ const NAV_ITEMS = [
 export default function YaFeesSidebar() {
   const { pathname } = useLocation();
   return (
-    <aside className="hidden sm:flex w-60 shrink-0 flex-col border-r border-border bg-sidebar">
-      <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
-        <span className="font-heading text-lg font-semibold tracking-tight text-sidebar-foreground">
+    <aside className="hidden sm:flex w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
+      <div className="h-16 flex items-center gap-2 px-6 border-b border-sidebar-border">
+        <Diamond className="h-5 w-5 text-sidebar-foreground" />
+        <span className="font-heading text-sm font-bold uppercase tracking-widest text-sidebar-foreground">
           Glass Forge
         </span>
       </div>
@@ -26,10 +26,10 @@ export default function YaFeesSidebar() {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors uppercase tracking-wide",
                 active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                  ? "bg-sidebar-foreground text-sidebar-background"
+                  : "text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-foreground/10"
               )}
             >
               <Icon className="h-4 w-4" />

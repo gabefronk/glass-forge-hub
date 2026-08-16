@@ -77,7 +77,7 @@ export default function CalendarPage() {
   return (
     <div className="px-4 sm:px-8 pt-6 pb-16">
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <h1 className="font-heading text-xl font-semibold">Calendar</h1>
+        <h1 className="font-heading text-xl font-bold uppercase tracking-tight">Installation Schedule</h1>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="sm" onClick={() => shiftMonth(-1)}>Prev</Button>
           <span className="font-medium px-2 min-w-[140px] text-center">{formatMonth(month)}</span>
@@ -85,8 +85,8 @@ export default function CalendarPage() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <div className="flex rounded-md border border-border overflow-hidden">
-            <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 text-sm", view === "month" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-accent")}>Month</button>
-            <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 text-sm", view === "list" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-accent")}>List</button>
+            <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 text-xs uppercase tracking-wide font-semibold", view === "month" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-foreground")}>Month</button>
+            <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 text-xs uppercase tracking-wide font-semibold", view === "list" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-foreground")}>List</button>
           </div>
           <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
             <RefreshCw className="h-4 w-4 mr-1" />{syncing ? "Syncing…" : "Sync Google"}
@@ -98,8 +98,8 @@ export default function CalendarPage() {
       </div>
 
       <div className="flex gap-4 mb-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-teal-200" />App-authored</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-slate-200" />Google (read-only)</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#A1E9E6]" />Install</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#F4C7D0]" />Service</span>
       </div>
 
       {creating && (
@@ -121,7 +121,7 @@ export default function CalendarPage() {
           {monthEvents.map((e) => (
             <button key={e.id} type="button" onClick={() => setSelected(e)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-accent/60">
               <span className="text-sm tabular-nums text-muted-foreground w-24">{e.event_date}{e.start_time ? ` ${e.start_time}` : ""}</span>
-              <span className={cn("px-1.5 py-0.5 rounded text-xs font-medium", e.source === "app" ? "bg-teal-100 text-teal-900" : "bg-slate-100 text-slate-700")}>{e.source === "app" ? "App" : "Google"}</span>
+              <span className={cn("h-2 w-2 rounded-full", e.source === "app" ? "bg-[#A1E9E6]" : "bg-[#F4C7D0]")} />
               <span className="text-sm font-medium truncate flex-1">{e.job_name}</span>
             </button>
           ))}
