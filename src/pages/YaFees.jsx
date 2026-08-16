@@ -1,24 +1,43 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import TopBar from "@/components/fees/TopBar";
+import Toolbar from "@/components/fees/Toolbar";
+import NotYetBilled from "@/components/fees/NotYetBilled";
 import NeedsReviewSection from "@/components/fees/NeedsReviewSection";
 import FeeTable from "@/components/fees/FeeTable";
-import { computeFeeAmt, computeLaborAmt, currentMonthStr, invoiceTotal, invoiceTotalByType, laborTotal, futureLaborTotal, futureFeeTotal, suppressedLaborRows, isBillableNow, paymentStats, filterRows } from "@/lib/feeMath";
-import ScheduledSection from "@/components/fees/ScheduledSection";
 import ProfitSplitForm from "@/components/fees/ProfitSplitForm";
+import { computeFeeAmt, computeLaborAmt, currentMonthStr, invoiceTotalByType, laborTotal, futureLaborTotal, futureFeeTotal, suppressedLaborRows, isFutureRow, paymentStats, filterRows } from "@/lib/feeMath";
+import { workType, billingTier, isZeroRow } from "@/lib/feeUI";
+
+function matchesLegend(row, key) {
+  switch (key) {
+    case "install": return workType(row) === "install";
+    case "service": return workType(row) === "service";
+    case "zero": return workType(row) === "zero";
+    case "split": return row.fee_type === "profit_split";
+    case "gabe": return billingTier(row) === "gabe";
+    case "mine": return billingTier(row) === "mine";
+    default: return true;
+  }
+}
 
 export default function YaFees() {
   const [month, setMonth] = useState(currentMonthStr());
   const [feeLines, setFeeLines] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+  const [legendFilter, setLegendFilter] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [hideZeros, setHideZeros] = useState(false);
+  const [showSplitForm, setShowSplitForm] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
       const [fl, jb] = await Promise.all([
-        base44.entities.FeeLines.filter({ invoice_month: month }, '-job_date', 5000),
-        base44.entities.Jobs.list('-created_date', 5000),
+        base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000),
+        base44.entities.Jobs.list("-created_date", 5000),
       ]);
       setFeeLines(fl);
       setJobs(jb);
@@ -44,28 +63,22 @@ export default function YaFees() {
     return m;
   }, [jobs]);
 
-  const [showSplitForm, setShowSplitForm] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const monthRows = useMemo(() => feeLines.filter((r) => r.invoice_month === month), [feeLines, month]);
 
-  const monthRows = useMemo(
-    () => feeLines.filter((r) => r.invoice_month === month),
-    [feeLines, month]
-  );
-
-  // Annotate rows with double-count suppression flag.
   const annotatedRows = useMemo(() => {
     const suppressed = suppressedLaborRows(monthRows);
     return monthRows.map((r) => ({ ...r, _suppressed: suppressed.has(r.id) }));
   }, [monthRows]);
 
-  const filteredRows = useMemo(() => filterRows(annotatedRows, filter), [annotatedRows, filter]);
+  const filteredRows = useMemo(() => {
+    let rows = filterRows(annotatedRows, filter);
+    if (legendFilter) rows = rows.filter((r) => matchesLegend(r, legendFilter));
+    return rows;
+  }, [annotatedRows, filter, legendFilter]);
 
   const payStats = useMemo(() => paymentStats(annotatedRows), [annotatedRows]);
 
-  const reviewRows = useMemo(
-    () => monthRows.filter((r) => r.needs_review),
-    [monthRows]
-  );
+  const reviewRows = useMemo(() => monthRows.filter((r) => r.needs_review), [monthRows]);
 
   const totals = useMemo(() => {
     const byType = invoiceTotalByType(annotatedRows);
@@ -80,19 +93,34 @@ export default function YaFees() {
     };
   }, [annotatedRows, monthRows]);
 
+  // ── Selection handlers ─────────────────────────────────────────────
+  const toggleRow = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = (ids) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // ── Edit / delete ────────────────────────────────────────────────────
   const handleEdit = async (id, patch) => {
-    // local optimistic
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
-    // Enforce payment chain: invoiced_to_ya requires paid_to_ya
-    if (patch.invoiced_to_ya === true && !row.paid_to_ya && !patch.paid_to_ya) {
-      patch.paid_to_ya = true;
-    }
-    if (patch.paid_to_ya === false) {
-      patch.invoiced_to_ya = false;
-    }
+    if (patch.invoiced_to_ya === true && !row.paid_to_ya && !patch.paid_to_ya) patch.paid_to_ya = true;
+    if (patch.paid_to_ya === false) patch.invoiced_to_ya = false;
     const merged = { ...row, ...patch, manually_adjusted: true };
-    const isProfitSplit = merged.fee_type === 'profit_split';
+    const isProfitSplit = merged.fee_type === "profit_split";
     const recomputeTriggers = isProfitSplit
       ? (patch.sale_price !== undefined || patch.cost !== undefined || patch.split_pct !== undefined)
       : (patch.labor_amt !== undefined || patch.fee_pct !== undefined);
@@ -125,12 +153,9 @@ export default function YaFees() {
     const line = feeLines.find((r) => r.id === lineId);
     const job = jobs.find((j) => j.id === jobId);
     if (!line || !job) return;
-    // append job_name_norm to job aliases
     const aliases = Array.from(new Set([...(job.aliases || []), line.job_name_norm]));
-    const updatedJob = { ...job, aliases };
-    setJobs((prev) => prev.map((j) => (j.id === jobId ? updatedJob : j)));
+    setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, aliases } : j)));
     await base44.entities.Jobs.update(jobId, { aliases });
-    // link the line
     handleEdit(lineId, { job_id: jobId, needs_review: false, manually_adjusted: true });
   };
 
@@ -160,45 +185,42 @@ export default function YaFees() {
     const split = 0.5;
     const feeAmt = Math.round((sale - costNum) * split * 100) / 100;
     const row = await base44.entities.FeeLines.create({
-      job_id: jobId,
-      job_date: date,
-      invoice_month: date.slice(0, 7),
-      job_name_raw: jobName,
-      job_name_norm: jobName,
+      job_id: jobId, job_date: date, invoice_month: date.slice(0, 7),
+      job_name_raw: jobName, job_name_norm: jobName,
       line_description: `Profit split — sale $${sale.toFixed(2)} / cost $${costNum.toFixed(2)}`,
-      fee_type: 'profit_split',
-      sale_price: sale,
-      cost: costNum,
-      split_pct: split,
-      labor_amt: 0,
-      fee_pct: 0,
-      fee_amt: feeAmt,
-      billable: true,
-      source: 'app',
-      written_by: 'app',
-      match_confidence: 'high',
-      needs_review: false,
-      manually_adjusted: true,
+      fee_type: "profit_split", sale_price: sale, cost: costNum, split_pct: split,
+      labor_amt: 0, fee_pct: 0, fee_amt: feeAmt, billable: true,
+      source: "app", written_by: "app", match_confidence: "high",
+      needs_review: false, manually_adjusted: true,
     });
     setFeeLines((prev) => [...prev, row]);
     setShowSplitForm(false);
   };
 
-  const handleBulkSet = async (field, value) => {
-    const targetRows = filter === 'unpaid'
-      ? annotatedRows.filter(r => isBillableNow(r) && !r.paid_to_ya)
-      : filter === 'uninvoiced'
-      ? annotatedRows.filter(r => isBillableNow(r) && !r.invoiced_to_ya)
-      : annotatedRows.filter(r => isBillableNow(r));
-    if (!targetRows.length) return;
-    const updates = targetRows.map(r => {
+  // ── Bulk actions ────────────────────────────────────────────────────
+  const handleBulkSetSelected = async (field, value) => {
+    const selected = feeLines.filter((r) => selectedIds.has(r.id));
+    if (!selected.length) return;
+    const updates = selected.map((r) => {
       const patch = { [field]: value, manually_adjusted: true };
-      if (field === 'invoiced_to_ya' && value && !r.paid_to_ya) patch.paid_to_ya = true;
-      if (field === 'paid_to_ya' && !value) patch.invoiced_to_ya = false;
+      if (field === "invoiced_to_ya" && value && !r.paid_to_ya) patch.paid_to_ya = true;
+      if (field === "paid_to_ya" && !value) patch.invoiced_to_ya = false;
       return { id: r.id, ...patch };
     });
-    setFeeLines(prev => prev.map(r => {
-      const u = updates.find(u => u.id === r.id);
+    setFeeLines((prev) => prev.map((r) => {
+      const u = updates.find((u) => u.id === r.id);
+      return u ? { ...r, ...u } : r;
+    }));
+    await base44.entities.FeeLines.bulkUpdate(updates);
+    clearSelection();
+  };
+
+  const handleMarkAllBilled = async () => {
+    const unbilled = annotatedRows.filter((r) => !r.billed_to_bfs && !isFutureRow(r) && !isZeroRow(r));
+    if (!unbilled.length) return;
+    const updates = unbilled.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
+    setFeeLines((prev) => prev.map((r) => {
+      const u = updates.find((u) => u.id === r.id);
       return u ? { ...r, ...u } : r;
     }));
     await base44.entities.FeeLines.bulkUpdate(updates);
@@ -234,25 +256,38 @@ export default function YaFees() {
   }
 
   return (
-    <div>
+    <div style={{ backgroundColor: "#f3f3f1", minHeight: "100vh" }}>
       <TopBar
+        topRef={topBarRef}
         month={month}
         onMonthChange={setMonth}
-        invoiceTotalVal={totals.invoice}
-        bfsFeesVal={totals.bfsFees}
-        splitFeesVal={totals.splitFees}
-        laborTotalVal={totals.labor}
-        lineCount={totals.count}
-        futureLaborVal={totals.futureLabor}
         onExport={handleExport}
-        topRef={topBarRef}
-        payStats={payStats}
+        invoiceTotal={totals.invoice}
+        notYetBilledTotal={payStats.notBilled?.total || 0}
+        notYetBilledCount={payStats.notBilled?.count || 0}
+        bfsFees={totals.bfsFees}
+        laborTotal={totals.labor}
+        lineCount={totals.count}
+        scheduledLabor={totals.futureLabor}
+        awaitingPayment={payStats.awaitingPayment?.total || 0}
+        awaitingPaymentCount={payStats.awaitingPayment?.count || 0}
+      />
+      <Toolbar
         filter={filter}
         onFilterChange={setFilter}
+        legendFilter={legendFilter}
+        onLegendFilterChange={setLegendFilter}
+        rows={annotatedRows}
+        selectedCount={selectedIds.size}
+        onClearSelection={clearSelection}
+        onBulkSetSelected={handleBulkSetSelected}
+        onAddSplit={() => setShowSplitForm((v) => !v)}
       />
-      <div className="px-4 sm:px-8 pt-6">
-        <h1 className="font-heading text-2xl font-bold uppercase tracking-tight">YA Fees</h1>
-      </div>
+      {showSplitForm && (
+        <div className="px-4 sm:px-8 pt-4">
+          <ProfitSplitForm jobs={jobs} onSaved={handleCreateSplit} onCancel={() => setShowSplitForm(false)} />
+        </div>
+      )}
       <NeedsReviewSection
         rows={reviewRows}
         jobs={jobs}
@@ -260,18 +295,25 @@ export default function YaFees() {
         onAssignToJob={handleAssignToJob}
         onCreateJob={handleCreateJob}
       />
-      <ScheduledSection rows={annotatedRows} />
+      <NotYetBilled
+        rows={annotatedRows}
+        selectedIds={selectedIds}
+        onToggleRow={toggleRow}
+        onToggleAll={toggleAll}
+        hideZeros={hideZeros}
+        onHideZerosChange={setHideZeros}
+        onEdit={handleEdit}
+        onMarkAllBilled={handleMarkAllBilled}
+      />
       <FeeTable
         rows={filteredRows}
         jobsById={jobsById}
         onEdit={handleEdit}
         onDelete={handleDelete}
         stickyTop={topBarH}
-        onBulkSet={handleBulkSet}
-        onAddSplit={() => setShowSplitForm((v) => !v)}
-        splitForm={showSplitForm && (
-          <ProfitSplitForm jobs={jobs} onSaved={handleCreateSplit} onCancel={() => setShowSplitForm(false)} />
-        )}
+        selectedIds={selectedIds}
+        onToggleRow={toggleRow}
+        onToggleAll={toggleAll}
       />
     </div>
   );

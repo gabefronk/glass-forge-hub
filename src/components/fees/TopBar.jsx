@@ -1,8 +1,11 @@
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, monthLabel } from "@/lib/feeMath";
+import { C } from "@/lib/feeUI";
 
-export default function TopBar({ month, onMonthChange, invoiceTotalVal, bfsFeesVal = 0, splitFeesVal = 0, laborTotalVal, lineCount, onExport, topRef, futureLaborVal = 0, payStats, filter, onFilterChange }) {
+export default function TopBar({ month, onMonthChange, onExport, topRef,
+  invoiceTotal, notYetBilledTotal, notYetBilledCount,
+  bfsFees, laborTotal, lineCount, scheduledLabor, awaitingPayment, awaitingPaymentCount }) {
   const [y, m] = month.split("-").map(Number);
   const prev = () => {
     const d = new Date(y, m - 2, 1);
@@ -13,69 +16,92 @@ export default function TopBar({ month, onMonthChange, invoiceTotalVal, bfsFeesV
     onMonthChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   };
 
+  const isZero = (val, count) => (Number(val) || 0) === 0 && (count === undefined || count === 0);
+
   return (
-    <div ref={topRef} className="sticky top-0 z-20 bg-background border-b border-border">
-      <div className="px-4 sm:px-8 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div ref={topRef} className="sticky top-0 z-20 border-b" style={{ backgroundColor: C.pageBg, borderColor: C.border }}>
+      {/* Row 1: month nav + export */}
+      <div className="px-4 sm:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={prev} aria-label="Previous month" className="border-border">
+          <Button variant="outline" size="icon" onClick={prev} aria-label="Previous month" style={{ borderColor: C.border }}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-[10rem] text-center">
-            <span className="font-heading text-sm font-semibold uppercase tracking-wide">{monthLabel(month)}</span>
-          </div>
-          <Button variant="outline" size="icon" onClick={next} aria-label="Next month" className="border-border">
+          <span className="font-bold tabular-nums" style={{ fontSize: "22px", fontWeight: 700, color: C.accentDark, minWidth: "10rem", textAlign: "center" }}>
+            {monthLabel(month)}
+          </span>
+          <Button variant="outline" size="icon" onClick={next} aria-label="Next month" style={{ borderColor: C.border }}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-
-        <div className="flex items-center gap-8">
-          <Stat label="Invoice Total" value={`$${formatMoney(invoiceTotalVal)}`} />
-          <Stat label="BFS Labor" value={`$${formatMoney(bfsFeesVal)}`} />
-          <Stat label="Sales Split" value={`$${formatMoney(splitFeesVal)}`} />
-          <Stat label="Labor Total" value={`$${formatMoney(laborTotalVal)}`} />
-          <Stat label="Line Count" value={lineCount} />
-          {futureLaborVal > 0 && (
-            <Stat label="Scheduled (not billable)" value={`$${formatMoney(futureLaborVal)}`} muted />
-          )}
-        </div>
-
-        <Button onClick={onExport} variant="outline" className="gap-2 uppercase text-xs tracking-wide font-semibold">
+        <Button onClick={onExport} variant="outline" className="gap-2 uppercase text-xs tracking-wide font-semibold" style={{ borderColor: C.border }}>
           <Download className="h-4 w-4" />
           Export CSV
         </Button>
       </div>
-      <div className="px-4 sm:px-8 pb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-border pt-3">
-        <div className="flex items-center gap-6 flex-wrap">
-          <PayStat label="Invoiced to YA" data={payStats?.invoicedToYA} />
-          <PayStat label="Awaiting payment" data={payStats?.awaitingPayment} />
-          <PayStat label="Not yet billed" data={payStats?.notBilled} />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Show:</span>
-          <Button size="sm" variant={filter === 'all' ? 'default' : 'outline'} onClick={() => onFilterChange('all')}>All</Button>
-          <Button size="sm" variant={filter === 'unpaid' ? 'default' : 'outline'} onClick={() => onFilterChange('unpaid')}>Unpaid only</Button>
-          <Button size="sm" variant={filter === 'uninvoiced' ? 'default' : 'outline'} onClick={() => onFilterChange('uninvoiced')}>Uninvoiced only</Button>
+
+      {/* Row 2: totals card */}
+      <div className="px-4 sm:px-8 pb-4">
+        <div
+          className="flex flex-wrap items-center gap-x-8 gap-y-4 px-6 py-5 rounded-lg"
+          style={{ backgroundColor: C.card, border: `1px solid ${C.border}`, boxShadow: "0 1px 3px rgba(18,33,30,0.06)" }}
+        >
+          {/* Hero figures */}
+          <div className="flex items-end gap-8">
+            <Hero label="Invoice Total" value={`$${formatMoney(invoiceTotal)}`} color={C.accentDark} />
+            <Hero
+              label="Not Yet Billed"
+              value={`$${formatMoney(notYetBilledTotal)}`}
+              color={C.accent}
+              sub={`${notYetBilledCount} lines`}
+            />
+          </div>
+
+          {/* Divider */}
+          <div className="hidden lg:block w-px self-stretch" style={{ backgroundColor: C.border }} />
+
+          {/* Small grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-3">
+            <Mini label="BFS Labor" value={`$${formatMoney(bfsFees)}`} zero={isZero(bfsFees)} />
+            <Mini label="Labor Total" value={`$${formatMoney(laborTotal)}`} zero={isZero(laborTotal)} />
+            <Mini label="Line Count" value={lineCount} zero={lineCount === 0} />
+            <Mini label="Scheduled" value={`$${formatMoney(scheduledLabor)}`} amber zero={isZero(scheduledLabor)} />
+            <Mini label="Awaiting Payment" value={`$${formatMoney(awaitingPayment)}`} zero={isZero(awaitingPayment, awaitingPaymentCount)} />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function PayStat({ label, data }) {
-  if (!data) return null;
+function Hero({ label, value, color, sub }) {
   return (
     <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{label}</span>
-      <span className="font-heading text-sm font-semibold tabular-nums">${formatMoney(data.total)} <span className="text-muted-foreground font-normal">({data.count})</span></span>
+      <span className="font-semibold" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", color: C.text, opacity: 0.68 }}>
+        {label}
+      </span>
+      <div className="flex items-baseline gap-2">
+        <span className="font-bold tabular-nums" style={{ fontSize: "30px", fontWeight: 700, color, lineHeight: 1.1 }}>
+          {value}
+        </span>
+        {sub && (
+          <span className="tabular-nums" style={{ fontSize: "13px", color: C.text, opacity: 0.68 }}>
+            {sub}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
-function Stat({ label, value, muted }) {
+function Mini({ label, value, zero, amber }) {
   return (
-    <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{label}</span>
-      <span className={muted ? "font-heading text-lg font-semibold tabular-nums text-accent" : "font-heading text-lg font-semibold tabular-nums"}>{value}</span>
+    <div className="flex flex-col" style={{ opacity: zero ? 0.4 : 1 }}>
+      <span className="font-semibold" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", color: C.text, opacity: 0.68 }}>
+        {label}
+      </span>
+      <span className="font-semibold tabular-nums" style={{ fontSize: "15px", color: amber ? C.amber : C.text, whiteSpace: "nowrap" }}>
+        {value}
+      </span>
     </div>
   );
 }
