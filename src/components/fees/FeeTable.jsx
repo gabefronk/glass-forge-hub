@@ -230,11 +230,25 @@ function StatusBadge({ label, active, onClick, activeClass }) {
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       className={cn(
-        "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors",
         active ? cn(activeClass, "text-white border-transparent") : "bg-white text-muted-foreground border-border hover:bg-muted"
       )}
     >
+      <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-white" : "bg-muted-foreground/40")} />
       {label}
+    </button>
+  );
+}
+
+function CopyButton({ text, label = "Copy" }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+    >
+      {copied ? "Copied!" : label}
     </button>
   );
 }
@@ -253,7 +267,7 @@ function ExpandedDetail({ row, onEdit }) {
   const wtLabel = { install: "Install labor", service: "Service labor", zero: "Zero-dollar ticket" }[wt] || "—";
 
   return (
-    <div className="px-6 pb-5 pt-3 bg-[#dffcf5] border-t border-border">
+    <div className="px-6 pb-5 pt-3 bg-[#f5f5f5] border-t border-border">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left column */}
         <div className="space-y-4">
@@ -324,6 +338,7 @@ function ExpandedDetail({ row, onEdit }) {
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Paid date</span>
             <EditableText value={row.paid_date} type="date" onCommit={(v) => onEdit(row.id, { paid_date: v })} />
+            {!row.paid_date && <span className="text-xs text-muted-foreground/60 italic">not set</span>}
           </div>
 
           {/* Metadata */}
@@ -332,7 +347,11 @@ function ExpandedDetail({ row, onEdit }) {
             <Detail label="Trip charges" value={row.trip_charges ?? "—"} />
             <Detail label="Cal creator" value={row.calendar_creator || "—"} />
             <Detail label="Cal organizer" value={row.calendar_organizer || "—"} />
-            <Detail label="Calendar event id" value={row.calendar_event_id || "—"} mono />
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Calendar event</div>
+              <div className="font-mono text-xs break-all">{row.calendar_event_id || "—"}</div>
+              {row.calendar_event_id && <div className="mt-1"><CopyButton text={row.calendar_event_id} label="Copy ID" /></div>}
+            </div>
             <Detail label="Probuild post id" value={row.probuild_post_id || "—"} />
           </div>
         </div>
@@ -341,8 +360,11 @@ function ExpandedDetail({ row, onEdit }) {
         <div className="space-y-4">
           {row.note_text && (
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Note (verbatim)</div>
-              <div className="rounded-lg bg-[#f5f5f5] border border-border p-4 text-sm whitespace-pre-wrap text-foreground leading-relaxed">{row.note_text}</div>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Note (verbatim)</div>
+                <CopyButton text={row.note_text} label="Copy" />
+              </div>
+              <div className="rounded-lg bg-[#ebebeb] border border-border p-4 text-sm whitespace-pre-wrap text-foreground leading-relaxed">{row.note_text}</div>
             </div>
           )}
           {row.photo_urls && row.photo_urls.length > 0 && (
