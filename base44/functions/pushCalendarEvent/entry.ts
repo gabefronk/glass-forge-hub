@@ -81,7 +81,9 @@ export default async function(req) {
         const r2 = await fetch(`${CAL_API}/calendars/${encodeURIComponent(installerCal)}/events`, {
           method: 'POST', headers, body: JSON.stringify(buildEvent(installerDesc)),
         });
-        installerEventId = (await r2.json()).id;
+        const j2 = await r2.json();
+        if (!r2.ok) return Response.json({ error: 'installer_create_failed', status: r2.status, detail: JSON.stringify(j2) }, { status: 200 });
+        installerEventId = j2.id;
       }
     } else {
       const r1 = await fetch(`${CAL_API}/calendars/${encodeURIComponent(FULL_CAL)}/events`, {
@@ -93,7 +95,9 @@ export default async function(req) {
       const r2 = await fetch(`${CAL_API}/calendars/${encodeURIComponent(installerCal)}/events`, {
         method: 'POST', headers, body: JSON.stringify(buildEvent(installerDesc)),
       });
-      installerEventId = (await r2.json()).id;
+      const j2 = await r2.json();
+      if (!r2.ok) return Response.json({ error: 'installer_create_failed', status: r2.status, detail: JSON.stringify(j2) }, { status: 200 });
+      installerEventId = j2.id;
     }
 
     const recordData = {
