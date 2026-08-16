@@ -9,6 +9,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 import YaFees from '@/pages/YaFees';
+import CalendarPage from '@/pages/CalendarPage';
 import { Navigate } from 'react-router-dom';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
@@ -49,6 +50,7 @@ const AuthenticatedApp = () => {
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
           <Route path="/" element={<YaFees />} />
+          <Route path="/calendar" element={<CalendarPage />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />

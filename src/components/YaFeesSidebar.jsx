@@ -1,10 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt } from "lucide-react";
+import { Receipt, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Single nav item. To add a second nav item later, append one object to NAV_ITEMS.
 const NAV_ITEMS = [
   { label: "YA Fees", to: "/", icon: Receipt },
+  { label: "Calendar", to: "/calendar", icon: Calendar },
 ];
 
 export default function YaFeesSidebar() {

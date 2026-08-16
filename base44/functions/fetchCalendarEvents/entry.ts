@@ -94,7 +94,7 @@ export default async function(req) {
       row.fee_amt = computeFeeAmt(row);
       const ex = existingByEventId.get(ev.id);
       if (ex) {
-        if (ex.manually_adjusted) { skipped++; continue; }
+        if (ex.manually_adjusted || ex.written_by === 'app') { skipped++; continue; }
         const merged = mergeReviewFlags(ex, row);
         toUpdate.push({ id: ex.id, ...row, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
       } else {

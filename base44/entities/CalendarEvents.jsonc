@@ -1,0 +1,147 @@
+{
+  "name": "CalendarEvents",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "title": "Job Id",
+      "description": "link to Jobs (nullable)"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "app",
+        "google"
+      ],
+      "title": "Source",
+      "description": "app = authored in this app and pushed out; google = read-only event from Google Calendar"
+    },
+    "event_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Event Date"
+    },
+    "start_time": {
+      "type": "string",
+      "title": "Start Time",
+      "description": "HH:MM 24h, nullable = all-day"
+    },
+    "job_name": {
+      "type": "string",
+      "title": "Job Name"
+    },
+    "builder": {
+      "type": "string",
+      "title": "Builder"
+    },
+    "address": {
+      "type": "string",
+      "title": "Address"
+    },
+    "scope_notes": {
+      "type": "string",
+      "title": "Scope Notes",
+      "description": "Crew-safe details only"
+    },
+    "labor_amt": {
+      "type": "number",
+      "title": "Labor Amt",
+      "description": "Structured labor dollar amount \u2014 never parsed from text"
+    },
+    "crew": {
+      "type": "string",
+      "title": "Crew"
+    },
+    "prerequisites": {
+      "type": "string",
+      "title": "Prerequisites",
+      "description": "forklift, lift, access, materials"
+    },
+    "google_event_id": {
+      "type": "string",
+      "title": "Google Event Id",
+      "description": "full calendar event id"
+    },
+    "installer_event_id": {
+      "type": "string",
+      "title": "Installer Event Id",
+      "description": "sanitized installer calendar event id"
+    },
+    "sanitize_flagged": {
+      "type": "boolean",
+      "title": "Sanitize Flagged",
+      "default": false,
+      "description": "true if a $ survived sanitizing and the installer description was dropped entirely"
+    },
+    "created_by": {
+      "type": "string",
+      "title": "Created By"
+    }
+  },
+  "required": [
+    "source",
+    "event_date",
+    "job_name",
+    "labor_amt",
+    "google_event_id",
+    "created_by"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    }
+  }
+}

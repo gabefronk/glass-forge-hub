@@ -106,10 +106,11 @@
       "type": "string",
       "enum": [
         "calendar",
-        "probuild"
+        "probuild",
+        "app"
       ],
       "title": "Written By",
-      "description": "Which ingest function created this row"
+      "description": "Which source created this row: calendar/probuild ingest, or app-authored event"
     },
     "match_confidence": {
       "type": "string",
@@ -141,5 +142,27 @@
     "source",
     "written_by",
     "match_confidence"
-  ]
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
 }
