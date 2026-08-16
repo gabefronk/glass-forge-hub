@@ -3,7 +3,7 @@ import { Receipt, Calendar, Diamond, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { label: "YA Fees", to: "/", icon: Receipt },
+  { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Calendar", to: "/calendar", icon: Calendar },
 ];
