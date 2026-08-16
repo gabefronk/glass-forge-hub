@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import TopBar from "@/components/fees/TopBar";
 import NeedsReviewSection from "@/components/fees/NeedsReviewSection";
 import FeeTable from "@/components/fees/FeeTable";
-import { computeFeeAmt, computeLaborAmt, currentMonthStr, invoiceTotal, invoiceTotalByType, laborTotal, futureLaborTotal, futureFeeTotal, suppressedLaborRows } from "@/lib/feeMath";
+import { computeFeeAmt, computeLaborAmt, currentMonthStr, invoiceTotal, invoiceTotalByType, laborTotal, futureLaborTotal, futureFeeTotal, suppressedLaborRows, isBillableNow, paymentStats, filterRows } from "@/lib/feeMath";
 import ScheduledSection from "@/components/fees/ScheduledSection";
 import ProfitSplitForm from "@/components/fees/ProfitSplitForm";
 
@@ -45,6 +45,7 @@ export default function YaFees() {
   }, [jobs]);
 
   const [showSplitForm, setShowSplitForm] = useState(false);
+  const [filter, setFilter] = useState('all');
 
   const monthRows = useMemo(
     () => feeLines.filter((r) => r.invoice_month === month),
@@ -56,6 +57,10 @@ export default function YaFees() {
     const suppressed = suppressedLaborRows(monthRows);
     return monthRows.map((r) => ({ ...r, _suppressed: suppressed.has(r.id) }));
   }, [monthRows]);
+
+  const filteredRows = useMemo(() => filterRows(annotatedRows, filter), [annotatedRows, filter]);
+
+  const payStats = useMemo(() => paymentStats(annotatedRows), [annotatedRows]);
 
   const reviewRows = useMemo(
     () => monthRows.filter((r) => r.needs_review),
@@ -79,6 +84,13 @@ export default function YaFees() {
     // local optimistic
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
+    // Enforce payment chain: invoiced_to_ya requires paid_to_ya
+    if (patch.invoiced_to_ya === true && !row.paid_to_ya && !patch.paid_to_ya) {
+      patch.paid_to_ya = true;
+    }
+    if (patch.paid_to_ya === false) {
+      patch.invoiced_to_ya = false;
+    }
     const merged = { ...row, ...patch, manually_adjusted: true };
     const isProfitSplit = merged.fee_type === 'profit_split';
     const recomputeTriggers = isProfitSplit
@@ -167,6 +179,26 @@ export default function YaFees() {
     setShowSplitForm(false);
   };
 
+  const handleBulkSet = async (field, value) => {
+    const targetRows = filter === 'unpaid'
+      ? annotatedRows.filter(r => isBillableNow(r) && !r.paid_to_ya)
+      : filter === 'uninvoiced'
+      ? annotatedRows.filter(r => isBillableNow(r) && !r.invoiced_to_ya)
+      : annotatedRows.filter(r => isBillableNow(r));
+    if (!targetRows.length) return;
+    const updates = targetRows.map(r => {
+      const patch = { [field]: value, manually_adjusted: true };
+      if (field === 'invoiced_to_ya' && value && !r.paid_to_ya) patch.paid_to_ya = true;
+      if (field === 'paid_to_ya' && !value) patch.invoiced_to_ya = false;
+      return { id: r.id, ...patch };
+    });
+    setFeeLines(prev => prev.map(r => {
+      const u = updates.find(u => u.id === r.id);
+      return u ? { ...r, ...u } : r;
+    }));
+    await base44.entities.FeeLines.bulkUpdate(updates);
+  };
+
   const handleExport = () => {
     const cols = ["job_date", "job_name_norm", "line_description", "labor_amt", "fee_pct", "fee_amt", "billable", "source", "match_confidence", "needs_review", "manually_adjusted"];
     const header = cols.join(",");
@@ -209,6 +241,9 @@ export default function YaFees() {
         futureLaborVal={totals.futureLabor}
         onExport={handleExport}
         topRef={topBarRef}
+        payStats={payStats}
+        filter={filter}
+        onFilterChange={setFilter}
       />
       <div className="px-4 sm:px-8 pt-6">
         <h1 className="font-heading text-2xl font-bold uppercase tracking-tight">YA Fees</h1>
@@ -222,10 +257,11 @@ export default function YaFees() {
       />
       <ScheduledSection rows={annotatedRows} />
       <FeeTable
-        rows={annotatedRows}
+        rows={filteredRows}
         jobsById={jobsById}
         onEdit={handleEdit}
         stickyTop={topBarH}
+        onBulkSet={handleBulkSet}
         onAddSplit={() => setShowSplitForm((v) => !v)}
         splitForm={showSplitForm && (
           <ProfitSplitForm jobs={jobs} onSaved={handleCreateSplit} onCancel={() => setShowSplitForm(false)} />

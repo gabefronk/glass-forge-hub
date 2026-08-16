@@ -179,6 +179,28 @@ export function heldFutureFeeTotal(rows) {
     .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
 }
 
+// Payment tracking — the chain is: BFS bills → YA gets paid → I invoice YA.
+// invoiced_to_ya requires paid_to_ya (enforced in UI and on save).
+export function paymentStats(rows) {
+  const billable = rows.filter(isBillableNow);
+  const invoiced = billable.filter(r => r.invoiced_to_ya);
+  const awaiting = billable.filter(r => r.paid_to_ya && !r.invoiced_to_ya);
+  const notBilled = billable.filter(r => !r.billed_to_bfs);
+  const sum = (arr) => arr.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
+  return {
+    invoicedToYA: { total: sum(invoiced), count: invoiced.length },
+    awaitingPayment: { total: sum(awaiting), count: awaiting.length },
+    notBilled: { total: sum(notBilled), count: notBilled.length },
+  };
+}
+
+export function filterRows(rows, filter) {
+  if (!filter || filter === 'all') return rows;
+  if (filter === 'unpaid') return rows.filter(r => isBillableNow(r) && !r.paid_to_ya);
+  if (filter === 'uninvoiced') return rows.filter(r => isBillableNow(r) && !r.invoiced_to_ya);
+  return rows;
+}
+
 export function currentMonthStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;

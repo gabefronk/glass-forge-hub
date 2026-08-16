@@ -134,12 +134,37 @@
       "title": "Billable",
       "default": true
     },
+    "billed_to_bfs": {
+      "type": "boolean",
+      "title": "Billed to BFS",
+      "default": false,
+      "description": "Has BFS been billed for this line?"
+    },
+    "paid_to_ya": {
+      "type": "boolean",
+      "title": "Paid to YA",
+      "default": false,
+      "description": "Has YA received payment for this line?"
+    },
+    "invoiced_to_ya": {
+      "type": "boolean",
+      "title": "Invoiced to YA",
+      "default": false,
+      "description": "Have I invoiced YA my fee for this line? Requires paid_to_ya = true."
+    },
+    "paid_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Paid Date",
+      "description": "Date payment was received from BFS"
+    },
     "source": {
       "type": "string",
       "enum": [
         "calendar",
         "probuild",
-        "both"
+        "both",
+        "sheet-import"
       ],
       "title": "Source"
     },

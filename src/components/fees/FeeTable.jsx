@@ -45,7 +45,7 @@ function leftBorder(tier, wt) {
   return "border-l-transparent";
 }
 
-export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddSplit, splitForm }) {
+export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddSplit, splitForm, onBulkSet }) {
   const groups = useMemo(() => groupByJob(rows, jobsById), [rows, jobsById]);
 
   return (
@@ -61,6 +61,14 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddS
         )}
       </div>
       {splitForm}
+      {onBulkSet && rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Bulk set (visible):</span>
+          <Button size="sm" variant="outline" onClick={() => onBulkSet('billed_to_bfs', true)}>Mark all billed</Button>
+          <Button size="sm" variant="outline" onClick={() => onBulkSet('paid_to_ya', true)}>Mark all paid</Button>
+          <Button size="sm" variant="outline" onClick={() => onBulkSet('invoiced_to_ya', true)}>Mark all invoiced</Button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-muted-foreground">
         <Legend swatch="bg-[#f1f3f5] border-[#E0E0E0]" label="Zero $" />
         <Legend swatch="bg-[#dffcf5] border-[#A1E9E6]" label="Install labor" />
@@ -73,7 +81,7 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddS
       {/* Desktop table */}
       <div className="hidden md:block rounded-lg border border-border overflow-hidden">
         <div
-          className="sticky z-10 grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-3 bg-primary text-primary-foreground text-[11px] uppercase tracking-wide font-semibold"
+          className="sticky z-10 grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.5fr_0.5fr_0.5fr] gap-2 px-4 py-3 bg-primary text-primary-foreground text-[11px] uppercase tracking-wide font-semibold"
           style={{ top: stickyTop }}
         >
           <div>Job</div>
@@ -82,6 +90,7 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddS
           <div className="text-right">Labor $</div>
           <div className="text-right">Fee %</div>
           <div>Source</div>
+          <div className="text-center">Pay</div>
           <div className="text-center">Flags</div>
         </div>
         <div className="divide-y divide-border">
@@ -145,7 +154,7 @@ function DesktopRow({ row, onEdit, index }) {
     <div>
       <div
         className={cn(
-          "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2.5 items-center cursor-pointer hover:bg-black/[0.02] border-l-4 transition-colors",
+          "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.5fr_0.5fr_0.5fr] gap-2 px-4 py-2.5 items-center cursor-pointer hover:bg-black/[0.02] border-l-4 transition-colors",
           isSplit ? "bg-[#fef3c7]" : wtBg(wt, row, index),
           isSuppressed && "opacity-50",
           isSplit ? "border-l-[#f59e0b]" : leftBorder(tier, wt)
@@ -179,6 +188,11 @@ function DesktopRow({ row, onEdit, index }) {
           </>
         )}
         <div><SourceBadge source={row.source} /></div>
+        <div className="flex items-center justify-center gap-1">
+          <PayBadge letter="B" active={row.billed_to_bfs} title="Billed to BFS" activeClass="bg-green-600 text-white" />
+          <PayBadge letter="P" active={row.paid_to_ya} title="Paid to YA" activeClass="bg-blue-600 text-white" />
+          <PayBadge letter="I" active={row.invoiced_to_ya} title="Invoiced to YA" activeClass="bg-violet-600 text-white" />
+        </div>
         <div className="flex items-center justify-center gap-1.5">
           {isSplit && <span title="Profit-split job" className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-[#fef3c7] text-foreground leading-none">Split</span>}
           {isSuppressed && <span title="Suppressed — labor counted inside profit split" className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground leading-none line-through">Supp</span>}
@@ -256,6 +270,22 @@ function ExpandedDetail({ row, onEdit }) {
               <EditableSwitch checked={row.needs_review} onCommit={(c) => onEdit(row.id, { needs_review: c })} />
               <span className="text-xs text-muted-foreground">Needs review</span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <EditableSwitch checked={row.billed_to_bfs} onCommit={(c) => onEdit(row.id, { billed_to_bfs: c })} />
+              <span className="text-xs text-muted-foreground">Billed to BFS</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <EditableSwitch checked={row.paid_to_ya} onCommit={(c) => onEdit(row.id, { paid_to_ya: c })} />
+              <span className="text-xs text-muted-foreground">Paid to YA</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <EditableSwitch checked={row.invoiced_to_ya} onCommit={(c) => onEdit(row.id, { invoiced_to_ya: c })} />
+              <span className="text-xs text-muted-foreground">Invoiced to YA</span>
+            </label>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Paid date</span>
+            <EditableText value={row.paid_date} type="date" onCommit={(v) => onEdit(row.id, { paid_date: v })} />
           </div>
         </div>
         <div className="space-y-2">
@@ -312,6 +342,7 @@ function SourceBadge({ source }) {
     calendar: { label: "Cal", cls: "text-muted-foreground italic" },
     probuild: { label: "PB", cls: "text-muted-foreground italic" },
     both: { label: "Both", cls: "text-muted-foreground italic" },
+    "sheet-import": { label: "Sheet", cls: "text-amber-700 font-medium" },
   };
   const m = map[source] || map.calendar;
   return (
@@ -361,6 +392,9 @@ function MobileRow({ row, onEdit }) {
             {wt === "service" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-[#F4C7D0] text-foreground">Service</span>}
             {row.fee_type === 'profit_split' && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-[#fef3c7] text-foreground">Split</span>}
             {row._suppressed && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground line-through">Supp</span>}
+            {row.billed_to_bfs && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">B</span>}
+            {row.paid_to_ya && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">P</span>}
+            {row.invoiced_to_ya && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-800">I</span>}
             {tier === "gabe" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-200 text-blue-900">Gabe</span>}
             {tier === "mine" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-200 text-violet-900">Manual</span>}
           </div>
@@ -385,6 +419,19 @@ function MobileRow({ row, onEdit }) {
             <span className="text-xs text-muted-foreground">Needs review</span>
             <EditableSwitch checked={row.needs_review} onCommit={(c) => onEdit(row.id, { needs_review: c })} />
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Billed to BFS</span>
+            <EditableSwitch checked={row.billed_to_bfs} onCommit={(c) => onEdit(row.id, { billed_to_bfs: c })} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Paid to YA</span>
+            <EditableSwitch checked={row.paid_to_ya} onCommit={(c) => onEdit(row.id, { paid_to_ya: c })} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Invoiced to YA</span>
+            <EditableSwitch checked={row.invoiced_to_ya} onCommit={(c) => onEdit(row.id, { invoiced_to_ya: c })} />
+          </div>
+          <EditableField label="Paid date" value={row.paid_date} type="date" onCommit={(v) => onEdit(row.id, { paid_date: v })} />
           <Detail label="Fee math" value={feeMathString(row)} mono />
           {row.note_text && (
             <div>
@@ -421,6 +468,15 @@ function EditableField({ label, value, onCommit, type }) {
         <EditableText value={value} type={type} onCommit={onCommit} />
       </div>
     </div>
+  );
+}
+
+function PayBadge({ letter, active, title, activeClass }) {
+  return (
+    <span title={title} className={cn(
+      "text-[9px] font-bold uppercase w-4 h-4 rounded flex items-center justify-center leading-none",
+      active ? activeClass : "bg-muted text-muted-foreground"
+    )}>{letter}</span>
   );
 }
 

@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, monthLabel } from "@/lib/feeMath";
 
-export default function TopBar({ month, onMonthChange, invoiceTotalVal, bfsFeesVal = 0, splitFeesVal = 0, laborTotalVal, lineCount, onExport, topRef, futureLaborVal = 0 }) {
+export default function TopBar({ month, onMonthChange, invoiceTotalVal, bfsFeesVal = 0, splitFeesVal = 0, laborTotalVal, lineCount, onExport, topRef, futureLaborVal = 0, payStats, filter, onFilterChange }) {
   const [y, m] = month.split("-").map(Number);
   const prev = () => {
     const d = new Date(y, m - 2, 1);
@@ -44,6 +44,29 @@ export default function TopBar({ month, onMonthChange, invoiceTotalVal, bfsFeesV
           Export CSV
         </Button>
       </div>
+      <div className="px-4 sm:px-8 pb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-border pt-3">
+        <div className="flex items-center gap-6 flex-wrap">
+          <PayStat label="Invoiced to YA" data={payStats?.invoicedToYA} />
+          <PayStat label="Awaiting payment" data={payStats?.awaitingPayment} />
+          <PayStat label="Not yet billed" data={payStats?.notBilled} />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Show:</span>
+          <Button size="sm" variant={filter === 'all' ? 'default' : 'outline'} onClick={() => onFilterChange('all')}>All</Button>
+          <Button size="sm" variant={filter === 'unpaid' ? 'default' : 'outline'} onClick={() => onFilterChange('unpaid')}>Unpaid only</Button>
+          <Button size="sm" variant={filter === 'uninvoiced' ? 'default' : 'outline'} onClick={() => onFilterChange('uninvoiced')}>Uninvoiced only</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PayStat({ label, data }) {
+  if (!data) return null;
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{label}</span>
+      <span className="font-heading text-sm font-semibold tabular-nums">${formatMoney(data.total)} <span className="text-muted-foreground font-normal">({data.count})</span></span>
     </div>
   );
 }
