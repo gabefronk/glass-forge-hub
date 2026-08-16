@@ -26,7 +26,7 @@ export default function TopBar({ month, onMonthChange, onExport, topRef,
           <Button variant="outline" size="icon" onClick={prev} aria-label="Previous month" style={{ borderColor: C.border }}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="font-bold tabular-nums" style={{ fontSize: "22px", fontWeight: 700, color: C.accentDark, minWidth: "10rem", textAlign: "center" }}>
+          <span className="font-bold tabular-nums text-lg sm:text-[22px]" style={{ fontWeight: 700, color: C.accentDark, minWidth: "9rem", textAlign: "center" }}>
             {monthLabel(month)}
           </span>
           <Button variant="outline" size="icon" onClick={next} aria-label="Next month" style={{ borderColor: C.border }}>
@@ -35,7 +35,7 @@ export default function TopBar({ month, onMonthChange, onExport, topRef,
         </div>
         <Button onClick={onExport} variant="outline" className="gap-2 uppercase text-xs tracking-wide font-semibold" style={{ borderColor: C.border }}>
           <Download className="h-4 w-4" />
-          Export CSV
+          <span className="hidden sm:inline">Export CSV</span>
         </Button>
       </div>
 
@@ -46,7 +46,7 @@ export default function TopBar({ month, onMonthChange, onExport, topRef,
           style={{ backgroundColor: C.card, border: `1px solid ${C.border}`, boxShadow: "0 1px 3px rgba(18,33,30,0.06)" }}
         >
           {/* Hero figures */}
-          <div className="flex items-end gap-8">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-8">
             <Hero label="Invoice Total" value={`$${formatMoney(invoiceTotal)}`} color={C.accentDark} />
             <Hero
               label="Not Yet Billed"
@@ -80,7 +80,7 @@ function Hero({ label, value, color, sub }) {
         {label}
       </span>
       <div className="flex items-baseline gap-2">
-        <span className="font-bold tabular-nums" style={{ fontSize: "30px", fontWeight: 700, color, lineHeight: 1.1 }}>
+        <span className="font-bold tabular-nums text-2xl sm:text-[30px]" style={{ fontWeight: 700, color, lineHeight: 1.1 }}>
           {value}
         </span>
         {sub && (
