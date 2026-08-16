@@ -209,116 +209,145 @@ function DesktopRow({ row, onEdit, onDelete, index }) {
   );
 }
 
+function FeeMathDisplay({ row }) {
+  const formula = feeMathString(row);
+  const idx = formula.lastIndexOf(" = ");
+  const lhs = idx >= 0 ? formula.slice(0, idx) : formula;
+  const result = idx >= 0 ? formula.slice(idx + 3) : "";
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">Fee Math</div>
+      <div className="text-sm text-muted-foreground">
+        {lhs} = <span className="text-base font-bold text-[#006030]">{result}</span>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ label, active, onClick, activeClass }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className={cn(
+        "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+        active ? cn(activeClass, "text-white border-transparent") : "bg-white text-muted-foreground border-border hover:bg-muted"
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
 function ExpandedDetail({ row, onEdit }) {
   const wt = workType(row);
+  const tier = billingTier(row);
+  const isSplit = row.fee_type === 'profit_split';
+  const sourceLabel = {
+    calendar: "calendar labor",
+    probuild: "probuild",
+    "sheet-import": "sheet import",
+    both: "calendar + probuild",
+    app: "manual entry",
+  }[row.source] || row.source;
+  const wtLabel = { install: "Install labor", service: "Service labor", zero: "Zero-dollar ticket" }[wt] || "—";
+
   return (
-    <div className="px-6 pb-4 pt-2 bg-[#dffcf5] border-t border-border">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm">
-        <div className="space-y-2">
-          <Detail label="Fee math" value={feeMathString(row)} mono />
-          {row.fee_type === 'profit_split' ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Sale $</span>
-                <EditableText value={row.sale_price} type="number" onCommit={(v) => onEdit(row.id, { sale_price: v })} />
+    <div className="px-6 pb-5 pt-3 bg-[#dffcf5] border-t border-border">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left column */}
+        <div className="space-y-4">
+          <FeeMathDisplay row={row} />
+          <div className="text-xs text-muted-foreground">Source: {sourceLabel} · {wtLabel}</div>
+
+          {/* Editable fields */}
+          {isSplit ? (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-white border border-border px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Sale</div>
+                <EditableText value={row.sale_price} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { sale_price: v })} />
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Cost $</span>
-                <EditableText value={row.cost} type="number" onCommit={(v) => onEdit(row.id, { cost: v })} />
+              <div className="rounded-lg bg-white border border-border px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Cost</div>
+                <EditableText value={row.cost} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { cost: v })} />
               </div>
-              <Detail label="Profit $" value={`$${formatMoney(computeProfit(row))}`} />
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Split %</span>
-                <EditableText value={Math.round((row.split_pct || 0.5) * 100)} type="number" className="w-14" onCommit={(v) => onEdit(row.id, { split_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+              <div className="rounded-lg bg-white border border-border px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Split %</div>
+                <div className="flex items-baseline gap-1">
+                  <EditableText value={Math.round((row.split_pct || 0.5) * 100)} type="number" className="text-xl font-bold tabular-nums w-12 px-0 py-0" onCommit={(v) => onEdit(row.id, { split_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+                  <span className="text-xl font-bold text-muted-foreground">%</span>
+                </div>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee $</span>
-                <span className="font-semibold tabular-nums text-accent">${formatMoney(row.fee_amt)}</span>
-              </div>
-            </>
+            </div>
           ) : (
-            <>
-              <div className="grid grid-cols-3 gap-3 pt-1">
-                <div className="rounded-lg bg-white border border-border px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Labor</div>
-                  <EditableText value={row.labor_amt} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
-                </div>
-                <div className="rounded-lg bg-white border border-border px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Fee</div>
-                  <EditableText value={row.fee_amt} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums text-accent px-0 py-0" onCommit={(v) => onEdit(row.id, { fee_amt: v })} />
-                </div>
-                <div className="rounded-lg bg-white border border-border px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Fee %</div>
-                  <div className="flex items-baseline gap-1">
-                    <EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" className="text-xl font-bold tabular-nums w-12 px-0 py-0" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
-                    <span className="text-xl font-bold text-muted-foreground">%</span>
-                  </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-white border border-border px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Labor</div>
+                <EditableText value={row.labor_amt} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
+              </div>
+              <div className="rounded-lg bg-white border border-border px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Fee</div>
+                <EditableText value={row.fee_amt} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums text-accent px-0 py-0" onCommit={(v) => onEdit(row.id, { fee_amt: v })} />
+              </div>
+              <div className="rounded-lg bg-white border border-border px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Fee %</div>
+                <div className="flex items-baseline gap-1">
+                  <EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" className="text-xl font-bold tabular-nums w-12 px-0 py-0" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+                  <span className="text-xl font-bold text-muted-foreground">%</span>
                 </div>
               </div>
-            </>
-          )}
-          {billingTier(row) && (
-            <div>
-              <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium", billingTier(row) === "gabe" ? "bg-blue-200 text-blue-900" : "bg-violet-200 text-violet-900")}>
-                {billingTier(row) === "gabe" ? "Gabe Fronk — different billing %" : "Manually added — different billing %"}
-              </span>
             </div>
           )}
-          {wt !== "other" && (
-            <div>
-              <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium",
-                wt === "zero" ? "bg-[#f1f3f5] text-foreground" :
-                wt === "install" ? "bg-[#A1E9E6] text-foreground" :
-                "bg-[#F4C7D0] text-foreground")}>
-                {wt === "zero" ? "Zero-dollar ticket" : wt === "install" ? "Install labor" : "Service labor"}
-              </span>
-            </div>
-          )}
-          <div className="flex items-center gap-6 pt-1">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <EditableSwitch checked={row.billable} onCommit={(c) => onEdit(row.id, { billable: c })} />
-              <span className="text-xs text-muted-foreground">Billable</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <EditableSwitch checked={row.needs_review} onCommit={(c) => onEdit(row.id, { needs_review: c })} />
-              <span className="text-xs text-muted-foreground">Needs review</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <EditableSwitch checked={row.billed_to_bfs} onCommit={(c) => onEdit(row.id, { billed_to_bfs: c })} />
-              <span className="text-xs text-muted-foreground">Billed to BFS</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <EditableSwitch checked={row.paid_to_ya} onCommit={(c) => onEdit(row.id, { paid_to_ya: c })} />
-              <span className="text-xs text-muted-foreground">Paid to YA</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <EditableSwitch checked={row.invoiced_to_ya} onCommit={(c) => onEdit(row.id, { invoiced_to_ya: c })} />
-              <span className="text-xs text-muted-foreground">Invoiced to YA</span>
-            </label>
+
+          {/* Badges */}
+          <div className="flex flex-wrap gap-2">
+            {tier === "gabe" && <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-900">Gabe Fronk — different billing %</span>}
+            {tier === "mine" && <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-900">Manually added — different billing %</span>}
+            {wt === "zero" && <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-[#f1f3f5] text-foreground">Zero-dollar ticket</span>}
+            {wt === "install" && <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-[#A1E9E6] text-foreground">Install labor</span>}
+            {wt === "service" && <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-[#F4C7D0] text-foreground">Service labor</span>}
           </div>
-          <div className="flex items-center gap-2 pt-1">
-            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Paid date</span>
+
+          {/* Workflow */}
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Workflow</div>
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge label="Billable" active={row.billable} onClick={() => onEdit(row.id, { billable: !row.billable })} activeClass="bg-[#006030]" />
+              <StatusBadge label="Needs review" active={row.needs_review} onClick={() => onEdit(row.id, { needs_review: !row.needs_review })} activeClass="bg-amber-500" />
+              <StatusBadge label="Billed to BFS" active={row.billed_to_bfs} onClick={() => onEdit(row.id, { billed_to_bfs: !row.billed_to_bfs })} activeClass="bg-green-600" />
+              <StatusBadge label="Paid to YA" active={row.paid_to_ya} onClick={() => onEdit(row.id, { paid_to_ya: !row.paid_to_ya })} activeClass="bg-blue-600" />
+              <StatusBadge label="Invoiced to YA" active={row.invoiced_to_ya} onClick={() => onEdit(row.id, { invoiced_to_ya: !row.invoiced_to_ya })} activeClass="bg-violet-600" />
+            </div>
+          </div>
+
+          {/* Paid date */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Paid date</span>
             <EditableText value={row.paid_date} type="date" onCommit={(v) => onEdit(row.id, { paid_date: v })} />
           </div>
-        </div>
-        <div className="space-y-2">
-          {row.note_text && (
-            <div>
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Note (verbatim)</div>
-              <div className="rounded bg-white border border-border p-2 text-sm whitespace-pre-wrap">{row.note_text}</div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-2 text-xs">
+
+          {/* Metadata */}
+          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border">
             <Detail label="Man hours" value={row.man_hours ?? "—"} />
             <Detail label="Trip charges" value={row.trip_charges ?? "—"} />
-            <Detail label="Calendar event id" value={row.calendar_event_id || "—"} />
-            <Detail label="Probuild post id" value={row.probuild_post_id || "—"} />
             <Detail label="Cal creator" value={row.calendar_creator || "—"} />
             <Detail label="Cal organizer" value={row.calendar_organizer || "—"} />
+            <Detail label="Calendar event id" value={row.calendar_event_id || "—"} mono />
+            <Detail label="Probuild post id" value={row.probuild_post_id || "—"} />
           </div>
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-4">
+          {row.note_text && (
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Note (verbatim)</div>
+              <div className="rounded-lg bg-[#f5f5f5] border border-border p-4 text-sm whitespace-pre-wrap text-foreground leading-relaxed">{row.note_text}</div>
+            </div>
+          )}
           {row.photo_urls && row.photo_urls.length > 0 && (
             <div>
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Photos</div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Photos</div>
               <div className="flex flex-wrap gap-2">
                 {row.photo_urls.map((url, i) => (
                   <img key={i} src={url} alt={`photo ${i + 1}`} className="h-14 w-14 rounded object-cover border border-border" />
@@ -335,8 +364,8 @@ function ExpandedDetail({ row, onEdit }) {
 function Detail({ label, value, mono }) {
   return (
     <div>
-      <span className="text-[11px] uppercase tracking-wide text-muted-foreground mr-2">{label}</span>
-      <span className={mono ? "font-mono text-xs" : ""}>{value}</span>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">{label}</div>
+      <div className={cn("text-sm text-foreground", mono ? "font-mono text-xs break-all" : "break-words")}>{value}</div>
     </div>
   );
 }
