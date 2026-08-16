@@ -93,6 +93,26 @@ export default function YaFees() {
     handleEdit(lineId, { job_id: jobId, needs_review: false, manually_adjusted: true });
   };
 
+  const handleCreateJob = async (lineId) => {
+    const line = feeLines.find((r) => r.id === lineId);
+    if (!line) return;
+    const rawName = line.job_name_raw || line.job_name_norm;
+    const builder = (() => {
+      const s = String(rawName).replace(/^ya\b\s*[-–—]?\s*/i, "").trim();
+      const m = s.match(/^([A-Z][A-Za-z0-9&\s.'-]+?)\s*[-–—]\s*/);
+      return m ? m[1].trim() : null;
+    })();
+    const newJob = await base44.entities.Jobs.create({
+      canonical_name: line.job_name_norm,
+      aliases: [line.job_name_norm],
+      po_numbers: line.po_number ? [line.po_number] : [],
+      oe_numbers: line.oe_number ? [line.oe_number] : [],
+      builder,
+    });
+    setJobs((prev) => [...prev, newJob]);
+    handleEdit(lineId, { job_id: newJob.id, needs_review: false, manually_adjusted: true });
+  };
+
   const handleExport = () => {
     const cols = ["job_date", "job_name_norm", "line_description", "labor_amt", "fee_pct", "fee_amt", "billable", "source", "match_confidence", "needs_review", "manually_adjusted"];
     const header = cols.join(",");
@@ -142,6 +162,7 @@ export default function YaFees() {
         jobs={jobs}
         onAccept={handleAccept}
         onAssignToJob={handleAssignToJob}
+        onCreateJob={handleCreateJob}
       />
       <ScheduledSection rows={monthRows} />
       <FeeTable rows={monthRows} jobsById={jobsById} onEdit={handleEdit} stickyTop={topBarH} />

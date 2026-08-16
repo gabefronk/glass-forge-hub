@@ -65,7 +65,11 @@ export default async function(req) {
       const ticket_sequence = extractTicketSequence(description);
       const dateStr = ev.event_date || '';
       let jobId = m.job_id;
-      if (m.autoCreate) jobId = jobByNorm.get(normName)?.id || null;
+      let matchConf = m.match_confidence;
+      if (m.autoCreate) {
+        jobId = jobByNorm.get(normName)?.id || null;
+        if (jobId) matchConf = 'high'; // job was auto-created and linked
+      }
       const row = {
         job_id: jobId,
         job_date: dateStr,
@@ -86,7 +90,7 @@ export default async function(req) {
         billable: true,
         source: 'calendar',
         written_by: 'calendar',
-        match_confidence: m.match_confidence,
+        match_confidence: matchConf,
         needs_review: !!m.needs_review,
         manually_adjusted: false,
       };

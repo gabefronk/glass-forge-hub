@@ -156,6 +156,13 @@ export function matchJob(normName, jobs, poNumber, oeNumber, address) {
       return { job_id: j.id, match_confidence: "high", needs_review: false, autoCreate: false };
     }
   }
+  // If we have a hard identifier (PO/OE/address) that didn't match any job,
+  // it's a new job — auto-create. Don't let name similarity to a *different*
+  // lot/unit in the same neighborhood block creation.
+  if (poNumber || oeNumber || address) {
+    return { job_id: null, match_confidence: "unmatched", needs_review: false, autoCreate: true };
+  }
+  // No hard identifier — use name similarity to decide
   let best = 0;
   for (const j of jobs) {
     const candidates = [j.canonical_name, ...(j.aliases || [])].map(normalizeJobName).filter(Boolean);
@@ -167,7 +174,7 @@ export function matchJob(normName, jobs, poNumber, oeNumber, address) {
   if (best >= 0.85) {
     return { job_id: null, match_confidence: "unmatched", needs_review: true, autoCreate: false };
   }
-  return { job_id: null, match_confidence: "high", needs_review: false, autoCreate: true };
+  return { job_id: null, match_confidence: "unmatched", needs_review: false, autoCreate: true };
 }
 
 export function computeLaborAmt(row) {
@@ -224,12 +231,12 @@ export function extractLaborAmount(description) {
 const CONF_RANK = { unmatched: 0, low: 1, high: 2 };
 
 export function mergeReviewFlags(existing, incoming) {
-  const needs_review = !!(existing && existing.needs_review) || !!incoming.needs_review;
-  let mc = incoming.match_confidence || 'unmatched';
-  if (existing && existing.match_confidence) {
-    const er = CONF_RANK[existing.match_confidence] ?? 0;
-    const nr = CONF_RANK[mc] ?? 0;
-    if (nr < er) mc = existing.match_confidence;
+  // If the incoming row now has a job_id, the match succeeded — clear the
+  // flag. Stickiness only applies to rows that are STILL unresolved (no job).
+  if (incoming.job_id) {
+    return { needs_review: false, match_confidence: 'high' };
   }
-  return { needs_review, match_confidence: mc };
+  // No job_id — confidence is always "unmatched", never "high".
+  const needs_review = !!(existing && existing.needs_review) || !!incoming.needs_review;
+  return { needs_review, match_confidence: 'unmatched' };
 }

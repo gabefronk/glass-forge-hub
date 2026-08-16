@@ -1,19 +1,13 @@
 import { useState } from "react";
-import { AlertTriangle, Check, Link2 } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { feeMathString, formatMoney, isFutureRow } from "@/lib/feeMath";
+import { feeMathString, formatMoney } from "@/lib/feeMath";
+import JobAssignPicker from "@/components/fees/JobAssignPicker";
 
 // rows: fee lines needing review for the selected month
 // jobs: all jobs (for "Assign to Job")
-// onAccept(id), onAssignToJob(id, jobId)
-export default function NeedsReviewSection({ rows, jobs, onAccept, onAssignToJob }) {
+// onAccept(id), onAssignToJob(id, jobId), onCreateJob(id)
+export default function NeedsReviewSection({ rows, jobs, onAccept, onAssignToJob, onCreateJob }) {
   if (!rows.length) return null;
   const laborSub = rows.reduce((s, r) => s + (Number(r.labor_amt) || 0), 0);
   const feeSub = rows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
@@ -39,6 +33,7 @@ export default function NeedsReviewSection({ rows, jobs, onAccept, onAssignToJob
             jobs={jobs}
             onAccept={onAccept}
             onAssignToJob={onAssignToJob}
+            onCreateJob={onCreateJob}
           />
         ))}
       </div>
@@ -46,10 +41,9 @@ export default function NeedsReviewSection({ rows, jobs, onAccept, onAssignToJob
   );
 }
 
-function ReviewRow({ row, jobs, onAccept, onAssignToJob }) {
-  const [pickedJob, setPickedJob] = useState("");
+function ReviewRow({ row, jobs, onAccept, onAssignToJob, onCreateJob }) {
+  const [showPicker, setShowPicker] = useState(false);
   const isUnmatched = row.match_confidence === "unmatched";
-  const suggested = isUnmatched ? suggestJob(row, jobs) : null;
 
   const reasons = [];
   if (isUnmatched) reasons.push("Unmatched job name — no job linked");
@@ -76,62 +70,31 @@ function ReviewRow({ row, jobs, onAccept, onAssignToJob }) {
             {reasons.join(" · ")}
           </div>
           <div className="text-xs text-muted-foreground font-mono">{feeMathString(row)}</div>
-          {isUnmatched && suggested && (
-            <div className="text-xs text-muted-foreground">
-              Suggested Job:{" "}
-              <span className="font-medium text-foreground">{suggested.canonical_name}</span>
-            </div>
-          )}
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Button size="sm" variant="default" className="gap-1.5" onClick={() => onAccept(row.id)}>
             <Check className="h-3.5 w-3.5" />
             Accept
           </Button>
-          <div className="flex items-center gap-1.5">
-            <Select value={pickedJob} onValueChange={setPickedJob}>
-              <SelectTrigger size="sm" className="h-8 w-[12rem]">
-                <SelectValue placeholder="Assign to Job" />
-              </SelectTrigger>
-              <SelectContent>
-                {jobs.map((j) => (
-                  <SelectItem key={j.id} value={j.id}>{j.canonical_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {showPicker ? (
+            <JobAssignPicker
+              row={row}
+              jobs={jobs}
+              onAssign={(jobId) => { onAssignToJob(row.id, jobId); setShowPicker(false); }}
+              onCreate={() => { onCreateJob(row.id); setShowPicker(false); }}
+            />
+          ) : (
             <Button
               size="sm"
               variant="outline"
               className="gap-1.5"
-              disabled={!pickedJob}
-              onClick={() => onAssignToJob(row.id, pickedJob)}
+              onClick={() => setShowPicker(true)}
             >
-              <Link2 className="h-3.5 w-3.5" />
-              Assign
+              Assign to Job
             </Button>
-          </div>
+          )}
         </div>
       </div>
     </div>
   );
-}
-
-function suggestJob(row, jobs) {
-  if (!jobs.length) return null;
-  const norm = row.job_name_norm.toLowerCase();
-  // exact alias match first
-  for (const j of jobs) {
-    if ((j.aliases || []).some((a) => a.toLowerCase() === norm)) return j;
-  }
-  // canonical includes norm
-  for (const j of jobs) {
-    if (j.canonical_name.toLowerCase().includes(norm) || norm.includes(j.canonical_name.toLowerCase())) return j;
-  }
-  // shared token
-  const tokens = norm.split(/\s+/).filter((t) => t.length > 3);
-  for (const j of jobs) {
-    const cn = j.canonical_name.toLowerCase();
-    if (tokens.some((t) => cn.includes(t))) return j;
-  }
-  return jobs[0];
 }
