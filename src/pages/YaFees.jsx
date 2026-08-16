@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
 import TopBar from "@/components/fees/TopBar";
 import Toolbar from "@/components/fees/Toolbar";
 import NotYetBilled from "@/components/fees/NotYetBilled";
@@ -22,6 +23,7 @@ function matchesLegend(row, key) {
 }
 
 export default function YaFees() {
+  const { user: authUser } = useAuth();
   const [month, setMonth] = useState(currentMonthStr());
   const [feeLines, setFeeLines] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -49,7 +51,8 @@ export default function YaFees() {
         feeLinesRaw: JSON.stringify(fl).slice(0, 300),
         jobsType: Array.isArray(jb) ? "array" : typeof jb,
         jobsLen: Array.isArray(jb) ? jb.length : (jb ? Object.keys(jb).length : 0),
-        hasToken: !!(base44?.auth?.token || base44?._token),
+        authUser: authUser ? { id: authUser.id, email: authUser.email, role: authUser.role } : null,
+        localStorageToken: !!(typeof window !== "undefined" && window.localStorage?.getItem("base44_access_token")),
       });
       setFeeLines(Array.isArray(fl) ? fl : []);
       setJobs(Array.isArray(jb) ? jb : []);
