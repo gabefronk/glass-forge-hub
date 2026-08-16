@@ -119,9 +119,8 @@ export default function CalendarPage() {
         <div className="rounded-lg border border-border divide-y divide-border">
           {monthEvents.length === 0 && <div className="px-4 py-10 text-center text-sm text-muted-foreground">No events this month.</div>}
           {monthEvents.map((e) => (
-            <button key={e.id} type="button" onClick={() => setSelected(e)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-accent/60">
+            <button key={e.id} type="button" onClick={() => setSelected(e)} className={cn("w-full flex items-center gap-3 px-4 py-3 text-left border-l-2", e.source === "app" ? "bg-[#A1E9E6]/15 border-[#A1E9E6] hover:bg-[#A1E9E6]/25" : "bg-[#F4C7D0]/20 border-[#F4C7D0] hover:bg-[#F4C7D0]/30")}>
               <span className="text-sm tabular-nums text-muted-foreground w-24">{e.event_date}{e.start_time ? ` ${e.start_time}` : ""}</span>
-              <span className={cn("h-2 w-2 rounded-full", e.source === "app" ? "bg-[#A1E9E6]" : "bg-[#F4C7D0]")} />
               <span className="text-sm font-medium truncate flex-1">{e.job_name}</span>
             </button>
           ))}
