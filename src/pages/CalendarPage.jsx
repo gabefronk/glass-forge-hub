@@ -69,6 +69,7 @@ export default function CalendarPage() {
     setSyncing(true);
     try {
       await base44.functions.invoke("syncGoogleCalendarEvents", {});
+      await base44.functions.invoke("fetchCalendarEvents", {});
       await load();
     } finally { setSyncing(false); }
   };

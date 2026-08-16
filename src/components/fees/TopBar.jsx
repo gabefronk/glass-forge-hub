@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, monthLabel } from "@/lib/feeMath";
 
-export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTotalVal, lineCount, onExport, topRef }) {
+export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTotalVal, lineCount, onExport, topRef, futureLaborVal = 0 }) {
   const [y, m] = month.split("-").map(Number);
   const prev = () => {
     const d = new Date(y, m - 2, 1);
@@ -32,6 +32,9 @@ export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTot
           <Stat label="Invoice Total" value={`$${formatMoney(invoiceTotalVal)}`} />
           <Stat label="Labor Total" value={`$${formatMoney(laborTotalVal)}`} />
           <Stat label="Line Count" value={lineCount} />
+          {futureLaborVal > 0 && (
+            <Stat label="Scheduled (not yet billable)" value={`$${formatMoney(futureLaborVal)}`} muted />
+          )}
         </div>
 
         <Button onClick={onExport} variant="default" className="gap-2">
@@ -43,11 +46,11 @@ export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTot
   );
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, muted }) {
   return (
     <div className="flex flex-col">
       <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="font-heading text-lg font-semibold tabular-nums">{value}</span>
+      <span className={muted ? "font-heading text-sm font-medium tabular-nums text-amber-600" : "font-heading text-lg font-semibold tabular-nums"}>{value}</span>
     </div>
   );
 }

@@ -76,6 +76,11 @@
     "created_by": {
       "type": "string",
       "title": "Created By"
+    },
+    "organizer": {
+      "type": "string",
+      "title": "Organizer",
+      "description": "Email of the Google Calendar event organizer (populated for google-sourced events)"
     }
   },
   "required": [

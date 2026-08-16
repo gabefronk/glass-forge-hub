@@ -3,7 +3,8 @@ import { base44 } from "@/api/base44Client";
 import TopBar from "@/components/fees/TopBar";
 import NeedsReviewSection from "@/components/fees/NeedsReviewSection";
 import FeeTable from "@/components/fees/FeeTable";
-import { computeFeeAmt, computeLaborAmt, currentMonthStr, invoiceTotal, laborTotal } from "@/lib/feeMath";
+import { computeFeeAmt, computeLaborAmt, currentMonthStr, invoiceTotal, laborTotal, futureLaborTotal, futureFeeTotal } from "@/lib/feeMath";
+import ScheduledSection from "@/components/fees/ScheduledSection";
 
 export default function YaFees() {
   const [month, setMonth] = useState(currentMonthStr());
@@ -56,6 +57,8 @@ export default function YaFees() {
     invoice: invoiceTotal(monthRows),
     labor: laborTotal(monthRows),
     count: monthRows.length,
+    futureLabor: futureLaborTotal(monthRows),
+    futureFee: futureFeeTotal(monthRows),
   }), [monthRows]);
 
   const handleEdit = async (id, patch) => {
@@ -127,6 +130,7 @@ export default function YaFees() {
         invoiceTotalVal={totals.invoice}
         laborTotalVal={totals.labor}
         lineCount={totals.count}
+        futureLaborVal={totals.futureLabor}
         onExport={handleExport}
         topRef={topBarRef}
       />
@@ -136,6 +140,7 @@ export default function YaFees() {
         onAccept={handleAccept}
         onAssignToJob={handleAssignToJob}
       />
+      <ScheduledSection rows={monthRows} />
       <FeeTable rows={monthRows} jobsById={jobsById} onEdit={handleEdit} stickyTop={topBarH} />
     </div>
   );

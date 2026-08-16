@@ -46,15 +46,44 @@ export function formatMoney(n) {
   return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Today's date (YYYY-MM-DD) for future-event exclusion
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// A row is "future" if its job_date is after today — scheduled but not yet billable.
+export function isFutureRow(r) {
+  const d = r.job_date;
+  if (!d) return false;
+  return d > todayStr();
+}
+
 // Invoice Total = sum of fee_amt where billable = true AND (needs_review = false OR manually_adjusted = true)
+// AND job_date <= today (future-dated rows are excluded — not yet billable)
 export function invoiceTotal(rows) {
   return rows
-    .filter((r) => r.billable && (!r.needs_review || r.manually_adjusted))
+    .filter((r) => r.billable && (!r.needs_review || r.manually_adjusted) && !isFutureRow(r))
     .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
 }
 
 export function laborTotal(rows) {
-  return rows.reduce((sum, r) => sum + (Number(r.labor_amt) || 0), 0);
+  return rows
+    .filter((r) => !isFutureRow(r))
+    .reduce((sum, r) => sum + (Number(r.labor_amt) || 0), 0);
+}
+
+// Subtotal for future-dated rows (scheduled, not yet billable)
+export function futureLaborTotal(rows) {
+  return rows
+    .filter((r) => isFutureRow(r))
+    .reduce((sum, r) => sum + (Number(r.labor_amt) || 0), 0);
+}
+
+export function futureFeeTotal(rows) {
+  return rows
+    .filter((r) => r.billable && (!r.needs_review || r.manually_adjusted) && isFutureRow(r))
+    .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
 }
 
 export function currentMonthStr() {

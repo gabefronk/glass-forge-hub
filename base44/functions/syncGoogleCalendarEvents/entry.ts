@@ -64,6 +64,7 @@ export default async function(req) {
         installer_event_id: null,
         sanitize_flagged: false,
         created_by: ev.creator?.email || 'google',
+        organizer: ev.organizer?.email || null,
       };
       const ex = byGoogleId.get(ev.id);
       if (ex) {
