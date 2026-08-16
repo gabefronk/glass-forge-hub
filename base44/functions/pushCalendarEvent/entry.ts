@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { secrets } from 'base44:runtime';
-import { normalizeJobName, invoiceMonthFromDate } from '../../shared/ingestShared.ts';
+import { normalizeJobName, invoiceMonthFromDate, extractTicketSequence } from '../../shared/ingestShared.ts';
 import { sanitizeForInstaller } from '../../shared/sanitize.ts';
 
 // Idempotent create-or-update of an APP-authored event in BOTH Google calendars:
@@ -159,6 +159,7 @@ export default async function(req) {
       po_number: po_number || null,
       oe_number: oe_number || null,
       calendar_labor_amt: labor,
+      ticket_sequence: extractTicketSequence(scope_notes || ''),
       note_text: scope_notes || '',
       labor_amt: labor,
       fee_pct: 0.1,

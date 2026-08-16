@@ -143,6 +143,26 @@ export function invoiceMonthFromDate(dateStr) {
   return String(dateStr).slice(0, 7);
 }
 
+// Extract the BFS ticket sequence from the "-win" / "-win2" suffix on the
+// labor line. "-win" = 1 (original ticket), "-win2" = 2 (first rework), etc.
+// Only matches "win" + optional digits + word boundary on a line containing
+// "labor" — excludes "window", "WinDor", "awning", etc. Returns null when no
+// -win suffix is present on any labor line.
+export function extractTicketSequence(description) {
+  if (!description) return null;
+  const lines = String(description).split(/\r?\n/);
+  let maxSeq = 0;
+  for (const line of lines) {
+    if (!/labor/i.test(line)) continue;
+    const m = line.match(/win(\d*)\b/i);
+    if (m) {
+      const seq = m[1] ? parseInt(m[1], 10) : 1;
+      if (seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return maxSeq > 0 ? maxSeq : null;
+}
+
 // Extract a dollar amount only when it appears on the same line as, or on the
 // line immediately following, the word "Labor" (case-insensitive: matches
 // "LABOR", "Labor$", "Labor-", "Labor:"). Never falls back to any other dollar

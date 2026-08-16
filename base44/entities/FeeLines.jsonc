@@ -65,6 +65,11 @@
       "type": "number",
       "title": "Calendar Labor Amt"
     },
+    "ticket_sequence": {
+      "type": "integer",
+      "title": "Ticket Sequence",
+      "description": "BFS follow-up ticket number extracted from the -win / -win2 labor suffix. 1 = original ticket, 2 = first rework, etc. Null when no -win suffix is present on the labor line."
+    },
     "note_text": {
       "type": "string",
       "title": "Note Text"

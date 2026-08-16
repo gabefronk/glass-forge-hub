@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, mergeReviewFlags } from '../../shared/ingestShared.ts';
+import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags } from '../../shared/ingestShared.ts';
 
 // Derive FeeLines from CalendarEvents (the single Google reader).
 // Reads CalendarEvents (source='google') instead of re-reading the Google API.
@@ -63,6 +63,7 @@ export default async function(req) {
       const description = ev.scope_notes || '';
       // Explicit labor dollar amount from the description — never invented
       const calendar_labor_amt = extractLaborAmount(description);
+      const ticket_sequence = extractTicketSequence(description);
       const dateStr = ev.event_date || '';
       let jobId = m.job_id;
       if (m.autoCreate) jobId = jobByNorm.get(normName)?.id || null;
@@ -79,6 +80,7 @@ export default async function(req) {
         po_number: ev.po_number || null,
         oe_number: ev.oe_number || null,
         calendar_labor_amt,
+        ticket_sequence,
         note_text: description,
         photo_urls: [],
         fee_pct: 0.1,
