@@ -3,12 +3,19 @@ import { secrets } from 'base44:runtime';
 import { normalizeJobName, invoiceMonthFromDate } from '../../shared/ingestShared.ts';
 import { sanitizeForInstaller } from '../../shared/sanitize.ts';
 
-// Create or update an APP-authored event in BOTH Google calendars:
+// Idempotent create-or-update of an APP-authored event in BOTH Google calendars:
 //   - full calendar (iryedra@gmail.com): everything incl. labor_amt
 //   - installer calendar: sanitized, no labor_amt, no $ lines
-// Stores both event ids on the CalendarEvents record, then upserts a FeeLine
-// keyed on google_event_id using labor_amt directly (no description parsing).
-// Never touches a google-sourced event.
+//
+// Idempotency rules:
+//   - If the CalendarEvents record already has a google_event_id / installer_event_id,
+//     UPDATE that event rather than creating a new one.
+//   - If a stored event ID no longer exists in Google (404, deleted by hand),
+//     recreate it and store the new ID.
+//   - After each calendar push succeeds, persist the ID immediately so a later
+//     failure never loses the progress already made. A retry then only pushes
+//     the missing side — never re-pushes the one that worked.
+//   - Never touches a google-sourced event (source !== 'app').
 const CAL_API = 'https://www.googleapis.com/calendar/v3';
 const FULL_CAL = 'iryedra@gmail.com';
 const INSTALLER_CAL_ID = '9b5912fa9e6304d71fa5b1d00c830f5ddf6da4a685f23af44e281754ee8fca7d@group.calendar.google.com';
@@ -17,6 +24,29 @@ function addHour(hhmm) {
   const [h, m] = hhmm.split(':').map(Number);
   const h2 = (h + 1) % 24;
   return String(h2).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+// Upsert a single calendar event. If existingId is present, try PUT (update);
+// on 404 (deleted by hand) fall back to POST (recreate). Returns { id, error }.
+async function upsertEvent(calId, existingId, eventBody, headers) {
+  if (existingId) {
+    const r = await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(existingId)}`, {
+      method: 'PUT', headers, body: JSON.stringify(eventBody),
+    });
+    if (r.ok) return { id: existingId };
+    if (r.status === 404) {
+      // Event was deleted by hand — fall through to create.
+    } else {
+      const detail = await r.text();
+      return { error: 'update_failed', status: r.status, detail };
+    }
+  }
+  const r = await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events`, {
+    method: 'POST', headers, body: JSON.stringify(eventBody),
+  });
+  const j = await r.json();
+  if (!r.ok) return { error: 'create_failed', status: r.status, detail: JSON.stringify(j) };
+  return { id: j.id };
 }
 
 export default async function(req) {
@@ -59,49 +89,16 @@ export default async function(req) {
       extendedProperties: { private: { appSource: 'glassforge', laborAmt: String(labor) } },
     });
 
+    // Load existing record (if any). Only app-authored records are updatable.
     let record = null;
     if (id) {
       try { record = await base44.asServiceRole.entities.CalendarEvents.get(id); } catch {}
     }
-    const isAppUpdate = record && record.source === 'app' && record.google_event_id;
-
-    let googleEventId, installerEventId;
-
-    if (isAppUpdate) {
-      const r1 = await fetch(`${CAL_API}/calendars/${encodeURIComponent(FULL_CAL)}/events/${record.google_event_id}`, {
-        method: 'PUT', headers, body: JSON.stringify(buildEvent(fullDesc)),
-      });
-      if (!r1.ok) return Response.json({ error: 'full_update_failed', detail: await r1.text() }, { status: 200 });
-      googleEventId = record.google_event_id;
-      if (record.installer_event_id) {
-        await fetch(`${CAL_API}/calendars/${encodeURIComponent(installerCal)}/events/${record.installer_event_id}`, {
-          method: 'PUT', headers, body: JSON.stringify(buildEvent(installerDesc)),
-        });
-        installerEventId = record.installer_event_id;
-      } else {
-        const r2 = await fetch(`${CAL_API}/calendars/${encodeURIComponent(installerCal)}/events`, {
-          method: 'POST', headers, body: JSON.stringify(buildEvent(installerDesc)),
-        });
-        const j2 = await r2.json();
-        if (!r2.ok) return Response.json({ error: 'installer_create_failed', status: r2.status, detail: JSON.stringify(j2) }, { status: 200 });
-        installerEventId = j2.id;
-      }
-    } else {
-      const r1 = await fetch(`${CAL_API}/calendars/${encodeURIComponent(FULL_CAL)}/events`, {
-        method: 'POST', headers, body: JSON.stringify(buildEvent(fullDesc)),
-      });
-      const j1 = await r1.json();
-      if (!r1.ok) return Response.json({ error: 'full_create_failed', detail: JSON.stringify(j1) }, { status: 200 });
-      googleEventId = j1.id;
-      const r2 = await fetch(`${CAL_API}/calendars/${encodeURIComponent(installerCal)}/events`, {
-        method: 'POST', headers, body: JSON.stringify(buildEvent(installerDesc)),
-      });
-      const j2 = await r2.json();
-      if (!r2.ok) return Response.json({ error: 'installer_create_failed', status: r2.status, detail: JSON.stringify(j2) }, { status: 200 });
-      installerEventId = j2.id;
+    if (record && record.source !== 'app') {
+      return Response.json({ error: 'cannot_edit_google_sourced' }, { status: 200 });
     }
 
-    const recordData = {
+    const baseRecordData = {
       job_id: job_id || null,
       source: 'app',
       event_date,
@@ -113,20 +110,37 @@ export default async function(req) {
       labor_amt: labor,
       crew: crew || null,
       prerequisites: prerequisites || null,
-      google_event_id: googleEventId,
-      installer_event_id: installerEventId,
       sanitize_flagged: flagged,
       created_by: record?.created_by || user.email || 'app',
     };
 
-    if (isAppUpdate) {
-      await base44.asServiceRole.entities.CalendarEvents.update(record.id, recordData);
-      record = { ...record, ...recordData, id: record.id };
+    // --- STEP 1: FULL CALENDAR ---
+    const fullResult = await upsertEvent(FULL_CAL, record?.google_event_id, buildEvent(fullDesc), headers);
+    if (fullResult.error) {
+      return Response.json({ error: `full_${fullResult.error}`, status: fullResult.status, detail: fullResult.detail, step: 'full' }, { status: 200 });
+    }
+    const googleEventId = fullResult.id;
+
+    // Persist immediately so a later installer failure doesn't lose the full event ID.
+    // (If the ID changed due to 404-recreate, this also saves the new ID.)
+    if (record) {
+      record = await base44.asServiceRole.entities.CalendarEvents.update(record.id, { ...baseRecordData, google_event_id: googleEventId });
     } else {
-      record = await base44.asServiceRole.entities.CalendarEvents.create(recordData);
+      record = await base44.asServiceRole.entities.CalendarEvents.create({ ...baseRecordData, google_event_id: googleEventId, installer_event_id: null });
     }
 
-    // Feed FeeLines: upsert on calendar_event_id, written_by='app', labor_amt direct
+    // --- STEP 2: INSTALLER CALENDAR ---
+    const installerResult = await upsertEvent(installerCal, record?.installer_event_id, buildEvent(installerDesc), headers);
+    if (installerResult.error) {
+      // Full event already persisted — retry will only push the installer side.
+      return Response.json({ error: `installer_${installerResult.error}`, status: installerResult.status, detail: installerResult.detail, step: 'installer', record, full_event_id: googleEventId }, { status: 200 });
+    }
+    const installerEventId = installerResult.id;
+
+    // Persist installer ID.
+    record = await base44.asServiceRole.entities.CalendarEvents.update(record.id, { installer_event_id: installerEventId });
+
+    // --- STEP 3: FEE LINES upsert (keyed on calendar_event_id) ---
     const feeRow = {
       job_id: job_id || null,
       job_date: event_date,
