@@ -1,7 +1,8 @@
 // Calculation rules for FeeLines.
 // labor_amt: if calendar_labor_amt present use it; else (man_hours × 100) + (trip_charges × 75)
 // fee_amt = labor_amt × fee_pct
-// Rows where manually_adjusted = true are passed through exactly as stored (never recomputed).
+// Rows where manually_adjusted = true preserve their labor_amt (never recomputed from man_hours/trip_charges);
+// fee_amt is always derived from labor_amt × fee_pct.
 
 export const MAN_HOUR_RATE = 100;
 export const TRIP_RATE = 75;
@@ -15,7 +16,6 @@ export function computeLaborAmt(row) {
 }
 
 export function computeFeeAmt(row) {
-  if (row.manually_adjusted) return row.fee_amt;
   if (row.fee_type === 'profit_split') {
     const sale = Number(row.sale_price) || 0;
     const cost = Number(row.cost) || 0;
