@@ -31,9 +31,11 @@ export default function YaFees() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [hideZeros, setHideZeros] = useState(false);
   const [showSplitForm, setShowSplitForm] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const load = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [fl, jb] = await Promise.all([
         base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000),
@@ -41,6 +43,9 @@ export default function YaFees() {
       ]);
       setFeeLines(fl);
       setJobs(jb);
+    } catch (e) {
+      console.error("YaFees load error:", e);
+      setLoadError(e);
     } finally {
       setLoading(false);
     }
@@ -251,6 +256,19 @@ export default function YaFees() {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center h-screen p-8">
+        <div className="max-w-lg rounded-lg border border-red-300 bg-red-50 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-2">Failed to load data</h2>
+          <p className="text-sm text-red-700 mb-3">An error occurred while fetching fee lines:</p>
+          <pre className="text-xs text-red-900 bg-red-100 rounded p-3 overflow-auto whitespace-pre-wrap">{loadError.message || String(loadError)}</pre>
+          <button onClick={load} className="mt-4 px-4 py-2 bg-red-800 text-white rounded text-sm font-medium">Retry</button>
+        </div>
       </div>
     );
   }
