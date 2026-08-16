@@ -187,9 +187,20 @@ export function computeLaborAmt(row) {
 
 export function computeFeeAmt(row) {
   if (row.manually_adjusted) return row.fee_amt;
+  if (row.fee_type === 'profit_split') {
+    const sale = Number(row.sale_price) || 0;
+    const cost = Number(row.cost) || 0;
+    const split = row.split_pct != null ? Number(row.split_pct) : 0.5;
+    return (sale - cost) * split;
+  }
   const labor = Number(row.labor_amt) || 0;
   const pct = row.fee_pct != null ? Number(row.fee_pct) : 0.1;
   return labor * pct;
+}
+
+export function computeProfit(row) {
+  if (row.fee_type !== 'profit_split') return 0;
+  return (Number(row.sale_price) || 0) - (Number(row.cost) || 0);
 }
 
 export function invoiceMonthFromDate(dateStr) {

@@ -3,8 +3,9 @@ import { base44 } from "@/api/base44Client";
 import TopBar from "@/components/fees/TopBar";
 import NeedsReviewSection from "@/components/fees/NeedsReviewSection";
 import FeeTable from "@/components/fees/FeeTable";
-import { computeFeeAmt, computeLaborAmt, currentMonthStr, invoiceTotal, laborTotal, futureLaborTotal, futureFeeTotal } from "@/lib/feeMath";
+import { computeFeeAmt, computeLaborAmt, currentMonthStr, invoiceTotal, invoiceTotalByType, laborTotal, futureLaborTotal, futureFeeTotal, suppressedLaborRows } from "@/lib/feeMath";
 import ScheduledSection from "@/components/fees/ScheduledSection";
+import ProfitSplitForm from "@/components/fees/ProfitSplitForm";
 
 export default function YaFees() {
   const [month, setMonth] = useState(currentMonthStr());
@@ -43,33 +44,56 @@ export default function YaFees() {
     return m;
   }, [jobs]);
 
+  const [showSplitForm, setShowSplitForm] = useState(false);
+
   const monthRows = useMemo(
     () => feeLines.filter((r) => r.invoice_month === month),
     [feeLines, month]
   );
+
+  // Annotate rows with double-count suppression flag.
+  const annotatedRows = useMemo(() => {
+    const suppressed = suppressedLaborRows(monthRows);
+    return monthRows.map((r) => ({ ...r, _suppressed: suppressed.has(r.id) }));
+  }, [monthRows]);
 
   const reviewRows = useMemo(
     () => monthRows.filter((r) => r.needs_review),
     [monthRows]
   );
 
-  const totals = useMemo(() => ({
-    invoice: invoiceTotal(monthRows),
-    labor: laborTotal(monthRows),
-    count: monthRows.length,
-    futureLabor: futureLaborTotal(monthRows),
-    futureFee: futureFeeTotal(monthRows),
-  }), [monthRows]);
+  const totals = useMemo(() => {
+    const byType = invoiceTotalByType(annotatedRows);
+    return {
+      invoice: byType.total,
+      bfsFees: byType.laborPct,
+      splitFees: byType.profitSplit,
+      labor: laborTotal(annotatedRows),
+      count: monthRows.length,
+      futureLabor: futureLaborTotal(annotatedRows),
+      futureFee: futureFeeTotal(annotatedRows),
+    };
+  }, [annotatedRows, monthRows]);
 
   const handleEdit = async (id, patch) => {
     // local optimistic
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
     const merged = { ...row, ...patch, manually_adjusted: true };
-    // recompute if labor_amt or fee_pct changed and not already manually_adjusted-stored passthrough
-    if (patch.labor_amt !== undefined || patch.fee_pct !== undefined) {
-      merged.labor_amt = computeLaborAmt({ ...merged, manually_adjusted: true });
-      merged.fee_amt = computeFeeAmt({ ...merged, manually_adjusted: true });
+    const isProfitSplit = merged.fee_type === 'profit_split';
+    const recomputeTriggers = isProfitSplit
+      ? (patch.sale_price !== undefined || patch.cost !== undefined || patch.split_pct !== undefined)
+      : (patch.labor_amt !== undefined || patch.fee_pct !== undefined);
+    if (recomputeTriggers) {
+      if (isProfitSplit) {
+        const sale = Number(merged.sale_price) || 0;
+        const cost = Number(merged.cost) || 0;
+        const split = merged.split_pct != null ? Number(merged.split_pct) : 0.5;
+        merged.fee_amt = Math.round((sale - cost) * split * 100) / 100;
+      } else {
+        merged.labor_amt = computeLaborAmt({ ...merged, manually_adjusted: true });
+        merged.fee_amt = computeFeeAmt({ ...merged, manually_adjusted: true });
+      }
     }
     setFeeLines((prev) => prev.map((r) => (r.id === id ? merged : r)));
     const { id: _id, created_date, updated_date, created_by_id, ...rest } = merged;
@@ -113,6 +137,36 @@ export default function YaFees() {
     handleEdit(lineId, { job_id: newJob.id, needs_review: false, manually_adjusted: true });
   };
 
+  const handleCreateSplit = async ({ jobId, jobName, date, salePrice, cost }) => {
+    const sale = Number(salePrice) || 0;
+    const costNum = Number(cost) || 0;
+    const split = 0.5;
+    const feeAmt = Math.round((sale - costNum) * split * 100) / 100;
+    const row = await base44.entities.FeeLines.create({
+      job_id: jobId,
+      job_date: date,
+      invoice_month: date.slice(0, 7),
+      job_name_raw: jobName,
+      job_name_norm: jobName,
+      line_description: `Profit split — sale $${sale.toFixed(2)} / cost $${costNum.toFixed(2)}`,
+      fee_type: 'profit_split',
+      sale_price: sale,
+      cost: costNum,
+      split_pct: split,
+      labor_amt: 0,
+      fee_pct: 0,
+      fee_amt: feeAmt,
+      billable: true,
+      source: 'app',
+      written_by: 'app',
+      match_confidence: 'high',
+      needs_review: false,
+      manually_adjusted: true,
+    });
+    setFeeLines((prev) => [...prev, row]);
+    setShowSplitForm(false);
+  };
+
   const handleExport = () => {
     const cols = ["job_date", "job_name_norm", "line_description", "labor_amt", "fee_pct", "fee_amt", "billable", "source", "match_confidence", "needs_review", "manually_adjusted"];
     const header = cols.join(",");
@@ -148,6 +202,8 @@ export default function YaFees() {
         month={month}
         onMonthChange={setMonth}
         invoiceTotalVal={totals.invoice}
+        bfsFeesVal={totals.bfsFees}
+        splitFeesVal={totals.splitFees}
         laborTotalVal={totals.labor}
         lineCount={totals.count}
         futureLaborVal={totals.futureLabor}
@@ -164,8 +220,17 @@ export default function YaFees() {
         onAssignToJob={handleAssignToJob}
         onCreateJob={handleCreateJob}
       />
-      <ScheduledSection rows={monthRows} />
-      <FeeTable rows={monthRows} jobsById={jobsById} onEdit={handleEdit} stickyTop={topBarH} />
+      <ScheduledSection rows={annotatedRows} />
+      <FeeTable
+        rows={annotatedRows}
+        jobsById={jobsById}
+        onEdit={handleEdit}
+        stickyTop={topBarH}
+        onAddSplit={() => setShowSplitForm((v) => !v)}
+        splitForm={showSplitForm && (
+          <ProfitSplitForm jobs={jobs} onSaved={handleCreateSplit} onCancel={() => setShowSplitForm(false)} />
+        )}
+      />
     </div>
   );
 }

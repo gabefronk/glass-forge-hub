@@ -16,12 +16,31 @@ export function computeLaborAmt(row) {
 
 export function computeFeeAmt(row) {
   if (row.manually_adjusted) return row.fee_amt;
+  if (row.fee_type === 'profit_split') {
+    const sale = Number(row.sale_price) || 0;
+    const cost = Number(row.cost) || 0;
+    const split = row.split_pct != null ? Number(row.split_pct) : 0.5;
+    return Math.round((sale - cost) * split * 100) / 100;
+  }
   const labor = computeLaborAmt(row);
   return Math.round(labor * (Number(row.fee_pct) || 0) * 100) / 100;
 }
 
+// Profit = sale_price − cost (display only, never stored).
+export function computeProfit(row) {
+  if (row.fee_type !== 'profit_split') return 0;
+  return (Number(row.sale_price) || 0) - (Number(row.cost) || 0);
+}
+
 // Human-readable fee math, e.g. "2 man hours × $100 + 1 trip × $75 = $275 × 10% = $27.50"
 export function feeMathString(row) {
+  if (row.fee_type === 'profit_split') {
+    const sale = Number(row.sale_price) || 0;
+    const cost = Number(row.cost) || 0;
+    const profit = sale - cost;
+    const split = row.split_pct != null ? Number(row.split_pct) : 0.5;
+    return `$${formatMoney(sale)} − $${formatMoney(cost)} = $${formatMoney(profit)} × ${Math.round(split * 100)}% = $${formatMoney(row.fee_amt)}`;
+  }
   if (row.manually_adjusted) {
     return `$${formatMoney(row.labor_amt)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(row.fee_amt)} (manually adjusted)`;
   }
@@ -64,11 +83,11 @@ export function isFutureRow(r) {
 // labor is excluded too. Excluded rows are surfaced in their own sections with
 // visible subtotals so nothing is hidden.
 export function isBillableNow(r) {
-  return r.billable && (!r.needs_review || r.manually_adjusted) && !isFutureRow(r);
+  return r.billable && !r._suppressed && (!r.needs_review || r.manually_adjusted) && !isFutureRow(r);
 }
 
 export function isBillableFuture(r) {
-  return r.billable && (!r.needs_review || r.manually_adjusted) && isFutureRow(r);
+  return r.billable && !r._suppressed && (!r.needs_review || r.manually_adjusted) && isFutureRow(r);
 }
 
 // Held-out rows — visible in Needs Review / Scheduled sections, never in totals.
@@ -81,6 +100,39 @@ export function invoiceTotal(rows) {
   return rows
     .filter(isBillableNow)
     .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
+}
+
+// Double-count guard: labor_pct rows on a job that also has a profit_split
+// row are suppressed — their labor is already paid inside the profit split.
+// Returns a Set of suppressed row IDs.
+export function suppressedLaborRows(rows) {
+  const byJob = new Map();
+  for (const r of rows) {
+    const key = r.job_id || `__unmatched__${r.job_name_norm}`;
+    if (!byJob.has(key)) byJob.set(key, []);
+    byJob.get(key).push(r);
+  }
+  const suppressed = new Set();
+  for (const jobRows of byJob.values()) {
+    if (jobRows.some(r => r.fee_type === 'profit_split')) {
+      for (const r of jobRows) {
+        if (r.fee_type !== 'profit_split') suppressed.add(r.id);
+      }
+    }
+  }
+  return suppressed;
+}
+
+// Per-type subtotals for billable rows.
+export function invoiceTotalByType(rows) {
+  const billable = rows.filter(isBillableNow);
+  const laborPct = billable
+    .filter(r => r.fee_type !== 'profit_split')
+    .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
+  const profitSplit = billable
+    .filter(r => r.fee_type === 'profit_split')
+    .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
+  return { laborPct, profitSplit, total: laborPct + profitSplit };
 }
 
 export function laborTotal(rows) {

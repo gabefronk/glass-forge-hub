@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Calendar, HardDrive, Layers } from "lucide-react";
-import { feeMathString, formatMoney } from "@/lib/feeMath";
+import { ChevronDown, ChevronRight, Calendar, HardDrive, Layers, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { feeMathString, formatMoney, computeProfit } from "@/lib/feeMath";
 import { EditableText, EditableSwitch, AdjustedMarker } from "@/components/fees/EditableCell";
 import { cn } from "@/lib/utils";
 
@@ -44,18 +45,27 @@ function leftBorder(tier, wt) {
   return "border-l-transparent";
 }
 
-export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0 }) {
+export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddSplit, splitForm }) {
   const groups = useMemo(() => groupByJob(rows, jobsById), [rows, jobsById]);
 
   return (
     <section className="px-4 sm:px-8 pt-6 pb-16">
-      <h2 className="font-heading text-xs font-bold uppercase tracking-widest mb-3 text-foreground">
-        By Job
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-heading text-xs font-bold uppercase tracking-widest text-foreground">
+          By Job
+        </h2>
+        {onAddSplit && (
+          <Button size="sm" variant="outline" onClick={onAddSplit}>
+            <Plus className="h-4 w-4 mr-1" /> Add profit-split job
+          </Button>
+        )}
+      </div>
+      {splitForm}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-muted-foreground">
         <Legend swatch="bg-[#f1f3f5] border-[#E0E0E0]" label="Zero $" />
         <Legend swatch="bg-[#dffcf5] border-[#A1E9E6]" label="Install labor" />
         <Legend swatch="bg-[#fce4ec] border-[#F4C7D0]" label="Service labor" />
+        <Legend swatch="bg-[#fef3c7] border-[#f59e0b]" label="Profit Split" />
         <Legend swatch="bg-blue-100 border-blue-500" label="Gabe" />
         <Legend swatch="bg-violet-100 border-violet-500" label="Mine" />
       </div>
@@ -129,13 +139,16 @@ function DesktopRow({ row, onEdit, index }) {
   const [expanded, setExpanded] = useState(false);
   const tier = billingTier(row);
   const wt = workType(row);
+  const isSplit = row.fee_type === 'profit_split';
+  const isSuppressed = !!row._suppressed;
   return (
     <div>
       <div
         className={cn(
           "grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-2 px-4 py-2.5 items-center cursor-pointer hover:bg-black/[0.02] border-l-4 transition-colors",
-          wtBg(wt, row, index),
-          leftBorder(tier, wt)
+          isSplit ? "bg-[#fef3c7]" : wtBg(wt, row, index),
+          isSuppressed && "opacity-50",
+          isSplit ? "border-l-[#f59e0b]" : leftBorder(tier, wt)
         )}
         onClick={() => setExpanded((e) => !e)}
       >
@@ -147,15 +160,28 @@ function DesktopRow({ row, onEdit, index }) {
         <div>
           <EditableText value={row.line_description} onCommit={(v) => onEdit(row.id, { line_description: v })} />
         </div>
-        <div className="text-right">
-          <EditableText value={row.labor_amt} type="number" alignRight onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
-        </div>
-        <div className="flex items-center justify-end gap-1">
-          <EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" alignRight className="w-14" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
-          <span className="text-xs text-muted-foreground">%</span>
-        </div>
+        {isSplit ? (
+          <>
+            <div className="text-right text-sm font-medium tabular-nums text-accent">${formatMoney(computeProfit(row))}</div>
+            <div className="flex items-center justify-end gap-1">
+              <span className="text-xs text-muted-foreground tabular-nums">{Math.round((row.split_pct || 0.5) * 100)}%</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-right">
+              <EditableText value={row.labor_amt} type="number" alignRight onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
+            </div>
+            <div className="flex items-center justify-end gap-1">
+              <EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" alignRight className="w-14" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+              <span className="text-xs text-muted-foreground">%</span>
+            </div>
+          </>
+        )}
         <div><SourceBadge source={row.source} /></div>
         <div className="flex items-center justify-center gap-1.5">
+          {isSplit && <span title="Profit-split job" className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-[#fef3c7] text-foreground leading-none">Split</span>}
+          {isSuppressed && <span title="Suppressed — labor counted inside profit split" className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground leading-none line-through">Supp</span>}
           {tier === "gabe" && <span title="Created by Gabe Fronk — different billing %" className="h-2.5 w-2.5 rounded-full bg-blue-600" />}
           {tier === "mine" && <span title="Manually added by you — different billing %" className="h-2.5 w-2.5 rounded-full bg-violet-600" />}
           {row.manually_adjusted && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground leading-none">Edit</span>}
@@ -174,12 +200,36 @@ function ExpandedDetail({ row, onEdit }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm">
         <div className="space-y-2">
           <Detail label="Fee math" value={feeMathString(row)} mono />
-          <Detail label="Labor $" value={`$${formatMoney(row.labor_amt)}`} />
-          <div className="flex items-baseline gap-2">
-            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee $</span>
-            <span className="font-semibold tabular-nums text-accent">${formatMoney(row.fee_amt)}</span>
-          </div>
-          <Detail label="Fee %" value={`${Math.round((row.fee_pct || 0) * 100)}%`} />
+          {row.fee_type === 'profit_split' ? (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Sale $</span>
+                <EditableText value={row.sale_price} type="number" onCommit={(v) => onEdit(row.id, { sale_price: v })} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Cost $</span>
+                <EditableText value={row.cost} type="number" onCommit={(v) => onEdit(row.id, { cost: v })} />
+              </div>
+              <Detail label="Profit $" value={`$${formatMoney(computeProfit(row))}`} />
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Split %</span>
+                <EditableText value={Math.round((row.split_pct || 0.5) * 100)} type="number" className="w-14" onCommit={(v) => onEdit(row.id, { split_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee $</span>
+                <span className="font-semibold tabular-nums text-accent">${formatMoney(row.fee_amt)}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <Detail label="Labor $" value={`$${formatMoney(row.labor_amt)}`} />
+              <div className="flex items-baseline gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee $</span>
+                <span className="font-semibold tabular-nums text-accent">${formatMoney(row.fee_amt)}</span>
+              </div>
+              <Detail label="Fee %" value={`${Math.round((row.fee_pct || 0) * 100)}%`} />
+            </>
+          )}
           {billingTier(row) && (
             <div>
               <span className={cn("inline-block px-1.5 py-0.5 rounded text-xs font-medium", billingTier(row) === "gabe" ? "bg-blue-200 text-blue-900" : "bg-violet-200 text-violet-900")}>
@@ -309,13 +359,17 @@ function MobileRow({ row, onEdit }) {
             {wt === "zero" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-[#f1f3f5] text-foreground">Zero $</span>}
             {wt === "install" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-[#A1E9E6] text-foreground">Install</span>}
             {wt === "service" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-[#F4C7D0] text-foreground">Service</span>}
+            {row.fee_type === 'profit_split' && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-[#fef3c7] text-foreground">Split</span>}
+            {row._suppressed && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground line-through">Supp</span>}
             {tier === "gabe" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-200 text-blue-900">Gabe</span>}
             {tier === "mine" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-200 text-violet-900">Manual</span>}
           </div>
         </div>
         <div className="text-right">
           <div className="text-sm font-bold tabular-nums text-accent">${formatMoney(row.fee_amt)}</div>
-          <div className="text-xs text-muted-foreground">labor ${formatMoney(row.labor_amt)}</div>
+          <div className="text-xs text-muted-foreground">
+            {row.fee_type === 'profit_split' ? `profit $${formatMoney(computeProfit(row))}` : `labor $${formatMoney(row.labor_amt)}`}
+          </div>
         </div>
       </button>
       {expanded && (
@@ -384,7 +438,7 @@ function groupByJob(rows, jobsById) {
     }
     const g = map.get(key);
     g.lines.push(r);
-    g.feeTotal += Number(r.fee_amt) || 0;
+    if (!r._suppressed) g.feeTotal += Number(r.fee_amt) || 0;
   }
   return Array.from(map.values());
 }

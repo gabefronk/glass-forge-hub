@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, monthLabel } from "@/lib/feeMath";
 
-export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTotalVal, lineCount, onExport, topRef, futureLaborVal = 0 }) {
+export default function TopBar({ month, onMonthChange, invoiceTotalVal, bfsFeesVal = 0, splitFeesVal = 0, laborTotalVal, lineCount, onExport, topRef, futureLaborVal = 0 }) {
   const [y, m] = month.split("-").map(Number);
   const prev = () => {
     const d = new Date(y, m - 2, 1);
@@ -30,6 +30,8 @@ export default function TopBar({ month, onMonthChange, invoiceTotalVal, laborTot
 
         <div className="flex items-center gap-8">
           <Stat label="Invoice Total" value={`$${formatMoney(invoiceTotalVal)}`} />
+          <Stat label="BFS Labor" value={`$${formatMoney(bfsFeesVal)}`} />
+          <Stat label="Sales Split" value={`$${formatMoney(splitFeesVal)}`} />
           <Stat label="Labor Total" value={`$${formatMoney(laborTotalVal)}`} />
           <Stat label="Line Count" value={lineCount} />
           {futureLaborVal > 0 && (

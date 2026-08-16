@@ -94,6 +94,32 @@
       "type": "number",
       "title": "Labor Amt"
     },
+    "fee_type": {
+      "type": "string",
+      "enum": [
+        "labor_pct",
+        "profit_split"
+      ],
+      "title": "Fee Type",
+      "default": "labor_pct",
+      "description": "labor_pct = labor \u00d7 fee_pct (BFS). profit_split = (sale_price \u2212 cost) \u00d7 split_pct (outside jobs)."
+    },
+    "sale_price": {
+      "type": "number",
+      "title": "Sale Price",
+      "description": "Sale price for profit-split jobs (nullable for labor_pct)"
+    },
+    "cost": {
+      "type": "number",
+      "title": "Cost",
+      "description": "Cost for profit-split jobs \u2014 includes labor paid to YA (nullable for labor_pct)"
+    },
+    "split_pct": {
+      "type": "number",
+      "title": "Split Pct",
+      "default": 0.5,
+      "description": "Profit split percentage for profit_split rows"
+    },
     "fee_pct": {
       "type": "number",
       "title": "Fee Pct",
