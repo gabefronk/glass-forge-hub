@@ -238,18 +238,22 @@ function ExpandedDetail({ row, onEdit }) {
             </>
           ) : (
             <>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Labor $</span>
-                <EditableText value={row.labor_amt} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee $</span>
-                <EditableText value={row.fee_amt} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { fee_amt: v })} />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Fee %</span>
-                <EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" className="w-14" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
-                <span className="text-xs text-muted-foreground">%</span>
+              <div className="grid grid-cols-3 gap-3 pt-1">
+                <div className="rounded-lg bg-white border border-border px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Labor</div>
+                  <EditableText value={row.labor_amt} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
+                </div>
+                <div className="rounded-lg bg-white border border-border px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Fee</div>
+                  <EditableText value={row.fee_amt} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums text-accent px-0 py-0" onCommit={(v) => onEdit(row.id, { fee_amt: v })} />
+                </div>
+                <div className="rounded-lg bg-white border border-border px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-0.5">Fee %</div>
+                  <div className="flex items-baseline gap-1">
+                    <EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" className="text-xl font-bold tabular-nums w-12 px-0 py-0" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+                    <span className="text-xl font-bold text-muted-foreground">%</span>
+                  </div>
+                </div>
               </div>
             </>
           )}
