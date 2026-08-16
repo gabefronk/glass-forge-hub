@@ -99,8 +99,8 @@ export default function CalendarPage() {
       </div>
 
       <div className="flex gap-4 mb-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#A1E9E6]" />Install</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#F4C7D0]" />Service</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ backgroundColor: "#d6f5f0", borderLeft: "3px solid #0d9488" }} />Install</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ backgroundColor: "#fce4e4", borderLeft: "3px solid #c1625a" }} />Service</span>
       </div>
 
       {creating && (
