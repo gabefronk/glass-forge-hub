@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { extractPO, extractOE } from '../../shared/ingestShared.ts';
+import { buildInstallerEvent, upsertInstallerEvent } from '../../shared/installerCalendar.ts';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
@@ -83,8 +84,27 @@ export default async function(req) {
     // Chunk to stay under the 500-item bulk limit
     const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
     for (const batch of chunk(toUpdate, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
-    for (const batch of chunk(toCreate, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkCreate(batch);
-    return Response.json({ ok: true, fetched: allItems.length, created: toCreate.length, updated: toUpdate.length, skipped_app: skippedApp });
+    const createdRecords = [];
+    for (const batch of chunk(toCreate, 500)) {
+      const batchCreated = await base44.asServiceRole.entities.CalendarEvents.bulkCreate(batch);
+      createdRecords.push(...batchCreated);
+    }
+
+    // Push sanitized copies to the installer calendar (upsert on installer_event_id)
+    let installerPushed = 0, installerFailed = 0;
+    const installerFailures = [];
+    const installerIdUpdates = [];
+    for (const ev of [...createdRecords, ...toUpdate]) {
+      if (!ev.event_date || !ev.job_name) continue;
+      const eventBody = buildInstallerEvent(ev);
+      const result = await upsertInstallerEvent(ev.installer_event_id, eventBody, headers);
+      if (result.error) { installerFailed++; installerFailures.push({ id: ev.id, name: ev.job_name, error: result.error }); continue; }
+      installerPushed++;
+      if (result.id !== ev.installer_event_id) installerIdUpdates.push({ id: ev.id, installer_event_id: result.id });
+    }
+    for (const batch of chunk(installerIdUpdates, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
+
+    return Response.json({ ok: true, fetched: allItems.length, created: toCreate.length, updated: toUpdate.length, skipped_app: skippedApp, installer_pushed: installerPushed, installer_failed: installerFailed, installer_failures: installerFailures });
   } catch (error) {
     return Response.json({ error: error.message, stack: error.stack }, { status: 200 });
   }
