@@ -81,6 +81,16 @@
       "type": "string",
       "title": "Organizer",
       "description": "Email of the Google Calendar event organizer (populated for google-sourced events)"
+    },
+    "po_number": {
+      "type": "string",
+      "title": "PO Number",
+      "description": "BFS purchase order number extracted from the event description"
+    },
+    "oe_number": {
+      "type": "string",
+      "title": "OE Number",
+      "description": "Order element number extracted from the event description"
     }
   },
   "required": [

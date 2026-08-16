@@ -13,6 +13,24 @@
       },
       "title": "Aliases",
       "default": []
+    },
+    "po_numbers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "PO Numbers",
+      "default": [],
+      "description": "BFS purchase order numbers linked to this job (many-to-one: reorders get their own PO)"
+    },
+    "oe_numbers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "OE Numbers",
+      "default": [],
+      "description": "Order element numbers linked to this job (many-to-one)"
     }
   },
   "required": [

@@ -48,9 +48,58 @@ export function similarity(a, b) {
   return 1 - levenshtein(a, b) / max;
 }
 
-// jobs: array of Jobs records (id, canonical_name, aliases)
+// Extract a BFS purchase order number from free text.
+// Matches "PO 7104345", "PO#: 7104345", "PO# 7104345", "Orig. PO#: 7006336".
+// Also catches "PO# PELLA WINDOWS- 7006336" via the second pattern.
+const PO_RE_1 = /PO#?\s*:?\s*#?\s*(\d{5,})/gi;
+const PO_RE_2 = /PO#\s+[A-Z][^\d]{0,30}[-:]?\s*(\d{5,})/gi;
+export function extractPO(text) {
+  if (!text) return null;
+  PO_RE_1.lastIndex = 0;
+  let m = PO_RE_1.exec(text);
+  if (m) return m[1];
+  PO_RE_2.lastIndex = 0;
+  m = PO_RE_2.exec(text);
+  return m ? m[1] : null;
+}
+
+// Extract an order element number from free text.
+// Matches "OE: 78661292-02" and "OE 79409948-01" (colon optional).
+const OE_RE_1 = /OE:\s*(\d{6,}-\d{2,})/gi;
+const OE_RE_2 = /OE\s+(\d{6,}-\d{2,})/gi;
+export function extractOE(text) {
+  if (!text) return null;
+  OE_RE_1.lastIndex = 0;
+  let m = OE_RE_1.exec(text);
+  if (m) return m[1];
+  OE_RE_2.lastIndex = 0;
+  m = OE_RE_2.exec(text);
+  return m ? m[1] : null;
+}
+
+// jobs: array of Jobs records (id, canonical_name, aliases, po_numbers, oe_numbers)
+// Match hierarchy: 1) PO number, 2) OE number, 3) name normalization + alias.
+// poNumber/oeNumber are optional — pass null/undefined for name-only matching
+// (e.g. Probuild posts, non-BFS jobs).
 // returns { job_id, match_confidence, needs_review, autoCreate }
-export function matchJob(normName, jobs) {
+export function matchJob(normName, jobs, poNumber, oeNumber) {
+  // 1. PO number match — hard identifier, highest confidence
+  if (poNumber) {
+    for (const j of jobs) {
+      if ((j.po_numbers || []).includes(poNumber)) {
+        return { job_id: j.id, match_confidence: "high", needs_review: false, autoCreate: false };
+      }
+    }
+  }
+  // 2. OE number match — hard identifier
+  if (oeNumber) {
+    for (const j of jobs) {
+      if ((j.oe_numbers || []).includes(oeNumber)) {
+        return { job_id: j.id, match_confidence: "high", needs_review: false, autoCreate: false };
+      }
+    }
+  }
+  // 3. Name normalization + alias matching (unchanged)
   if (!normName) {
     return { job_id: null, match_confidence: "unmatched", needs_review: true, autoCreate: false };
   }

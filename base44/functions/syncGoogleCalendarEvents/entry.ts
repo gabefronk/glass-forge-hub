@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { extractPO, extractOE } from '../../shared/ingestShared.ts';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
@@ -42,7 +43,9 @@ export default async function(req) {
     const byGoogleId = new Map();
     for (const e of existing) if (e.google_event_id) byGoogleId.set(e.google_event_id, e);
 
-    let created = 0, updated = 0, skippedApp = 0;
+    const toUpdate = [];
+    const toCreate = [];
+    let skippedApp = 0;
     for (const ev of allItems) {
       if (ev.extendedProperties?.private?.appSource === 'glassforge') { skippedApp++; continue; }
       const startRef = ev.start || {};
@@ -65,18 +68,23 @@ export default async function(req) {
         sanitize_flagged: false,
         created_by: ev.creator?.email || 'google',
         organizer: ev.organizer?.email || null,
+        po_number: extractPO(ev.description || '') || null,
+        oe_number: extractOE(ev.description || '') || null,
       };
       const ex = byGoogleId.get(ev.id);
       if (ex) {
         if (ex.source === 'app') continue;
-        await base44.asServiceRole.entities.CalendarEvents.update(ex.id, row);
-        updated++;
+        // Preserve installer_event_id — it's managed by pushCalendarEvent, not sync
+        toUpdate.push({ id: ex.id, ...row, installer_event_id: ex.installer_event_id || null });
       } else {
-        await base44.asServiceRole.entities.CalendarEvents.create(row);
-        created++;
+        toCreate.push(row);
       }
     }
-    return Response.json({ ok: true, fetched: allItems.length, created, updated, skipped_app: skippedApp });
+    // Chunk to stay under the 500-item bulk limit
+    const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
+    for (const batch of chunk(toUpdate, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
+    for (const batch of chunk(toCreate, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkCreate(batch);
+    return Response.json({ ok: true, fetched: allItems.length, created: toCreate.length, updated: toUpdate.length, skipped_app: skippedApp });
   } catch (error) {
     return Response.json({ error: error.message, stack: error.stack }, { status: 200 });
   }

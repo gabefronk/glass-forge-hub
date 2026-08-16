@@ -58,7 +58,7 @@ export default async function(req) {
       return Response.json({ error: 'forbidden' }, { status: 403 });
     }
     const body = await req.json();
-    const { id, job_id, event_date, start_time, job_name, builder, address, scope_notes, labor_amt, crew, prerequisites } = body;
+    const { id, job_id, event_date, start_time, job_name, builder, address, scope_notes, labor_amt, crew, prerequisites, po_number, oe_number } = body;
     if (!event_date || !job_name) return Response.json({ error: 'missing_required' }, { status: 200 });
 
     const installerCal = INSTALLER_CAL_ID || secrets.get('INSTALLER_CALENDAR_ID');
@@ -75,7 +75,10 @@ export default async function(req) {
     ].filter(Boolean).join('\n');
 
     const installerInput = [scope_notes || '', prerequisites || ''].join('\n');
-    const { text: installerDesc, flagged } = sanitizeForInstaller(installerInput);
+    const { text: sanText, flagged } = sanitizeForInstaller(installerInput);
+    // PO/OE as explicit structured lines — survive even if sanitizer drops the body
+    const poOeLines = [po_number ? `PO: ${po_number}` : '', oe_number ? `OE: ${oe_number}` : ''].filter(Boolean).join('\n');
+    const installerDesc = [poOeLines, sanText].filter(Boolean).join('\n');
 
     const useTime = !!start_time && /^\d{2}:\d{2}$/.test(start_time);
     const start = useTime ? { dateTime: `${event_date}T${start_time}:00` } : { date: event_date };
@@ -112,6 +115,8 @@ export default async function(req) {
       prerequisites: prerequisites || null,
       sanitize_flagged: flagged,
       created_by: record?.created_by || user.email || 'app',
+      po_number: po_number || null,
+      oe_number: oe_number || null,
     };
 
     // --- STEP 1: FULL CALENDAR ---
@@ -151,6 +156,8 @@ export default async function(req) {
       calendar_event_id: googleEventId,
       calendar_creator: user.email || null,
       calendar_organizer: null,
+      po_number: po_number || null,
+      oe_number: oe_number || null,
       calendar_labor_amt: labor,
       note_text: scope_notes || '',
       labor_amt: labor,

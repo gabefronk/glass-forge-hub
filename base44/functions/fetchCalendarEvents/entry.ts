@@ -23,7 +23,7 @@ export default async function(req) {
     if (endStr) calEvents = calEvents.filter(e => (e.event_date || '') <= endStr);
 
     // Existing FeeLines (by calendar_event_id) + Jobs
-    const existingFees = await base44.asServiceRole.entities.FeeLines.list('-created_date', 1000);
+    const existingFees = await base44.asServiceRole.entities.FeeLines.list('-created_date', 5000);
     const existingByEventId = new Map();
     for (const f of existingFees) if (f.calendar_event_id) existingByEventId.set(f.calendar_event_id, f);
     const jobsArr = await base44.asServiceRole.entities.Jobs.list('-created_date', 500);
@@ -32,12 +32,24 @@ export default async function(req) {
     const matched = calEvents.map((ev) => {
       const title = ev.job_name || '(untitled)';
       const normName = normalizeJobName(title);
-      const m = matchJob(normName, jobsArr);
+      const m = matchJob(normName, jobsArr, ev.po_number, ev.oe_number);
       return { ev, title, normName, m };
     });
     const autoCreateNames = [...new Set(matched.filter((x) => x.m.autoCreate).map((x) => x.normName).filter(Boolean))];
+    // Seed PO/OE onto auto-created jobs so future events match by hard key
+    const autoPO = {}, autoOE = {};
+    for (const { m, normName, ev } of matched) {
+      if (m.autoCreate && normName) {
+        if (ev.po_number && !autoPO[normName]) autoPO[normName] = ev.po_number;
+        if (ev.oe_number && !autoOE[normName]) autoOE[normName] = ev.oe_number;
+      }
+    }
     const newJobs = autoCreateNames.length
-      ? await base44.asServiceRole.entities.Jobs.bulkCreate(autoCreateNames.map((n) => ({ canonical_name: n, aliases: [n] })))
+      ? await base44.asServiceRole.entities.Jobs.bulkCreate(autoCreateNames.map((n) => ({
+          canonical_name: n, aliases: [n],
+          po_numbers: autoPO[n] ? [autoPO[n]] : [],
+          oe_numbers: autoOE[n] ? [autoOE[n]] : [],
+        })))
       : [];
     const jobByNorm = new Map();
     for (const j of newJobs) jobByNorm.set(j.canonical_name, j);
@@ -64,6 +76,8 @@ export default async function(req) {
         calendar_event_id: ev.google_event_id,
         calendar_creator: ev.created_by || null,
         calendar_organizer: ev.organizer || null,
+        po_number: ev.po_number || null,
+        oe_number: ev.oe_number || null,
         calendar_labor_amt,
         note_text: description,
         photo_urls: [],
@@ -88,8 +102,29 @@ export default async function(req) {
       if (row.needs_review) flagged.push({ id: ev.google_event_id, title, job_date: dateStr });
     }
 
-    if (toCreate.length) await base44.asServiceRole.entities.FeeLines.bulkCreate(toCreate);
-    if (toUpdate.length) await base44.asServiceRole.entities.FeeLines.bulkUpdate(toUpdate);
+    const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
+    for (const batch of chunk(toCreate, 500)) await base44.asServiceRole.entities.FeeLines.bulkCreate(batch);
+    for (const batch of chunk(toUpdate, 500)) await base44.asServiceRole.entities.FeeLines.bulkUpdate(batch);
+
+    // Add PO/OE to matched jobs' arrays (many-to-one: multiple POs per job).
+    // Jobs matched by PO/OE already have the key; name-matched jobs get it added
+    // so future events with the same PO/OE link by hard key instead of name.
+    const allJobs = [...jobsArr, ...newJobs];
+    const jobPatches = new Map();
+    for (const { ev, m, normName } of matched) {
+      let jobId = m.job_id;
+      if (m.autoCreate) jobId = jobByNorm.get(normName)?.id || null;
+      if (!jobId || (!ev.po_number && !ev.oe_number)) continue;
+      const job = allJobs.find(j => j.id === jobId);
+      if (!job) continue;
+      const existingPOs = new Set(job.po_numbers || []);
+      const existingOEs = new Set(job.oe_numbers || []);
+      if (!jobPatches.has(jobId)) jobPatches.set(jobId, { id: jobId, po_numbers: [...(job.po_numbers || [])], oe_numbers: [...(job.oe_numbers || [])] });
+      const u = jobPatches.get(jobId);
+      if (ev.po_number && !existingPOs.has(ev.po_number) && !u.po_numbers.includes(ev.po_number)) u.po_numbers.push(ev.po_number);
+      if (ev.oe_number && !existingOEs.has(ev.oe_number) && !u.oe_numbers.includes(ev.oe_number)) u.oe_numbers.push(ev.oe_number);
+    }
+    if (jobPatches.size) await base44.asServiceRole.entities.Jobs.bulkUpdate([...jobPatches.values()]);
 
     return Response.json({
       source: 'calendar_events',

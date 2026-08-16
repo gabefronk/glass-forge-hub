@@ -43,6 +43,16 @@
       "title": "Calendar Organizer",
       "description": "Email of the Google Calendar event organizer"
     },
+    "po_number": {
+      "type": "string",
+      "title": "PO Number",
+      "description": "BFS purchase order number from the source event"
+    },
+    "oe_number": {
+      "type": "string",
+      "title": "OE Number",
+      "description": "Order element number from the source event"
+    },
     "probuild_project_id": {
       "type": "string",
       "title": "Probuild Project Id"
