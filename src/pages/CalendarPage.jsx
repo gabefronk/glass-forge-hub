@@ -17,7 +17,10 @@ export default function CalendarPage() {
   const [events, setEvents] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
-  const [view, setView] = useState("month");
+  const [view, setView] = useState(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) return "list";
+    return "month";
+  });
   const [creating, setCreating] = useState(null);
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -117,15 +120,36 @@ export default function CalendarPage() {
       {view === "month" ? (
         <MonthGrid month={month} events={monthEvents} onSelect={setSelected} onCreateForDate={(d) => { setSelected(null); setCreating({ event_date: d }); }} />
       ) : (
-        <div className="rounded-lg border border-border divide-y divide-border">
+        <div className="rounded-lg border border-border overflow-hidden">
           {monthEvents.length === 0 && <div className="px-4 py-10 text-center text-sm text-muted-foreground">No events this month.</div>}
-          {monthEvents.map((e) => (
-            <button key={e.id} type="button" onClick={() => setSelected(e)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-accent/60">
-              <span className="text-sm tabular-nums text-muted-foreground w-24">{e.event_date}{e.start_time ? ` ${e.start_time}` : ""}</span>
-              <span className={cn("h-2 w-2 rounded-full", e.source === "app" ? "bg-[#A1E9E6]" : "bg-[#F4C7D0]")} />
-              <span className="text-sm font-medium truncate flex-1">{e.job_name}</span>
-            </button>
-          ))}
+          {monthEvents.map((e) => {
+            const isInstall = e.source === "app";
+            const bg = isInstall ? "#d6f5f0" : "#fce4e4";
+            const bar = isInstall ? "#0d9488" : "#c1625a";
+            return (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => setSelected(e)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left border-b border-border last:border-b-0 hover:bg-accent/40"
+              >
+                <div className="flex flex-col items-center justify-center min-w-[42px] pr-1 border-r border-border/60">
+                  <span className="text-[10px] uppercase text-muted-foreground leading-none">
+                    {new Date(e.event_date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" })}
+                  </span>
+                  <span className="text-lg font-bold tabular-nums leading-tight">
+                    {e.event_date.slice(8)}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0 rounded-[3px] px-2 py-1.5" style={{ backgroundColor: bg, borderLeft: `3px solid ${bar}` }}>
+                  {e.start_time && (
+                    <span className="text-xs tabular-nums font-semibold mr-1.5" style={{ color: bar }}>{e.start_time}</span>
+                  )}
+                  <span className="text-sm font-medium truncate">{e.job_name}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
