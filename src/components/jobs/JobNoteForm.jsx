@@ -2,9 +2,8 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Paperclip, X, Loader2 } from "lucide-react";
+import { C, CARD_SHADOW } from "@/lib/feeUI";
 
-// Inline note form (no modal). Used for both creating and editing.
-// `editing` is the existing note object when editing, null/undefined when creating.
 export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel }) {
   const today = new Date().toISOString().slice(0, 10);
   const [noteDate, setNoteDate] = useState(editing?.note_date || today);
@@ -52,27 +51,26 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
   };
 
   return (
-    <div className="rounded-lg border border-border bg-white p-4 border-l-4 border-l-[#fef3c7]">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#fef3c7] text-foreground">Note</span>
-        <span className="text-xs text-muted-foreground">{editing ? "Edit note" : "New note"}</span>
-      </div>
+    <div className="rounded-lg p-3" style={{ border: `1px solid ${C.border}`, boxShadow: CARD_SHADOW, backgroundColor: C.card }}>
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Date</label>
+          <label className="text-xs font-medium uppercase tracking-wide whitespace-nowrap" style={{ color: C.text, opacity: 0.62 }}>Date</label>
           <input
             type="date"
             value={noteDate}
             onChange={(e) => setNoteDate(e.target.value)}
-            className="text-sm border border-border rounded px-2 py-1 focus:outline-none focus:border-foreground"
+            className="text-sm rounded px-2 py-1 focus:outline-none"
+            style={{ border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.cardAlt }}
           />
+          <span className="text-xs ml-auto whitespace-nowrap" style={{ color: C.text, opacity: 0.62 }}>{editing ? "Edit note" : "New note"}</span>
         </div>
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="What happened on the call / interaction..."
           rows={3}
-          className="w-full text-sm border border-border rounded p-2 resize-y focus:outline-none focus:border-foreground"
+          className="w-full text-sm rounded p-2 resize-y focus:outline-none"
+          style={{ border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.cardAlt }}
         />
         <div className="flex items-center gap-3 flex-wrap">
           <label className="cursor-pointer">
@@ -86,7 +84,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
                 e.target.value = "";
               }}
             />
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+            <span className="inline-flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: C.text, opacity: 0.68 }}>
               {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
               {uploading ? "Uploading…" : "Attach"}
             </span>
@@ -94,7 +92,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {attachments.map((url, i) => (
-                <div key={i} className="relative h-12 w-12 rounded border border-border overflow-hidden group">
+                <div key={i} className="relative h-12 w-12 rounded border overflow-hidden group" style={{ borderColor: C.border }}>
                   <img src={url} alt="" className="h-full w-full object-cover" />
                   <button
                     type="button"

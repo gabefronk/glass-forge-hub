@@ -82,3 +82,43 @@ export function formatDateGroup(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
+
+// ── Job-level helpers ──────────────────────────────────────────────────────
+export const JOBS_GRID = "grid grid-cols-[minmax(180px,1fr)_64px_96px_92px_78px_104px_18px] gap-3 items-center";
+
+export function formatShort(dateStr) {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-");
+  return new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+export function jobTotals(rows) {
+  const labor = rows.reduce((s, r) => s + (Number(r.labor_amt) || 0), 0);
+  const fee = rows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
+  const visits = rows.length;
+  return { labor, fee, visits };
+}
+
+export function jobStatus(rows) {
+  if (!rows.length) return { label: "Active", bg: C.tagCal.bg, text: C.tagCal.text, key: "active" };
+  const today = new Date().toISOString().slice(0, 10);
+  const labor = rows.reduce((s, r) => s + (Number(r.labor_amt) || 0), 0);
+  if (labor === 0) return { label: "No charge", bg: C.tagNoCharge.bg, text: C.tagNoCharge.text, key: "no_charge" };
+  const calendarRows = rows.filter(r => r.source === "calendar" || r.source === "both");
+  const probuildRows = rows.filter(r => r.source === "probuild" || r.source === "both");
+  const futureEvents = calendarRows.filter(r => (r.job_date || "") > today);
+  const pastEvents = calendarRows.filter(r => (r.job_date || "") <= today);
+  const hasNeedsReview = rows.some(r => r.needs_review);
+  const pastWithNoReport = pastEvents.filter(r => !probuildRows.some(p => (p.job_date || "") === (r.job_date || "")));
+  if (hasNeedsReview || pastWithNoReport.length > 0) return { label: "Needs report", bg: C.tagReview.bg, text: C.tagReview.text, key: "needs_report" };
+  if (futureEvents.length > 0) return { label: "Active", bg: C.tagCal.bg, text: C.tagCal.text, key: "active" };
+  if (probuildRows.length > 0) return { label: "Complete", bg: C.tagBillable.bg, text: C.tagBillable.text, key: "complete" };
+  return { label: "Active", bg: C.tagCal.bg, text: C.tagCal.text, key: "active" };
+}
+
+export function crewName(email) {
+  if (!email) return "";
+  if (email === "gabriel.fronk.wd@gmail.com") return "Gabe";
+  if (email === "iryedra@gmail.com") return "Ragen";
+  return email.split("@")[0];
+}
