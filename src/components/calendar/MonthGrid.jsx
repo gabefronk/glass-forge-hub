@@ -29,7 +29,7 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate }) 
           const dateStr = day ? `${month}-${String(day).padStart(2, "0")}` : null;
           const dayEvents = dateStr ? events.filter((e) => (e.event_date || "").slice(0, 10) === dateStr) : [];
           return (
-            <div key={i} className={cn("min-h-[96px] border-b border-r border-border p-1.5", !day && "bg-muted/40")}>
+            <div key={i} className={cn("min-h-[120px] border-b border-r border-border p-1.5 align-top", !day && "bg-muted/40")}>
               {day && (
                 <>
                   <div className="flex items-center justify-between mb-1">
@@ -37,14 +37,13 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate }) 
                     <button type="button" onClick={() => onCreateForDate?.(dateStr)} className="text-muted-foreground/50 hover:text-foreground text-xs leading-none">+</button>
                   </div>
                   <div className="space-y-1">
-                    {dayEvents.slice(0, 3).map((e) => (
+                    {dayEvents.map((e) => (
                       <button key={e.id} type="button" onClick={() => onSelect(e)} className="block w-full text-left text-xs px-1.5 py-1 rounded truncate hover:bg-black/[0.03]">
                         <span className={cn("inline-block h-1.5 w-1.5 rounded-full mr-1 align-middle", e.source === "app" ? "bg-[#A1E9E6]" : "bg-[#F4C7D0]")} />
                         {e.start_time && <span className="tabular-nums mr-1 text-muted-foreground">{e.start_time}</span>}
                         <span className="text-foreground">{e.job_name}</span>
                       </button>
                     ))}
-                    {dayEvents.length > 3 && <div className="text-[10px] text-primary-foreground bg-primary rounded-full px-1.5 py-0.5 inline-block ml-1 leading-none">+{dayEvents.length - 3} more</div>}
                   </div>
                 </>
               )}
