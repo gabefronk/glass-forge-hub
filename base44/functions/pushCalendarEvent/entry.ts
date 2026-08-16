@@ -11,6 +11,7 @@ import { sanitizeForInstaller } from '../../shared/sanitize.ts';
 // Never touches a google-sourced event.
 const CAL_API = 'https://www.googleapis.com/calendar/v3';
 const FULL_CAL = 'iryedra@gmail.com';
+const INSTALLER_CAL_ID = '9b5912fa9e6304d71fa5b1d00c830f5ddf6da4a685f23af44e281754ee8fca7d@group.calendar.google.com';
 
 function addHour(hhmm) {
   const [h, m] = hhmm.split(':').map(Number);
@@ -30,7 +31,7 @@ export default async function(req) {
     const { id, job_id, event_date, start_time, job_name, builder, address, scope_notes, labor_amt, crew, prerequisites } = body;
     if (!event_date || !job_name) return Response.json({ error: 'missing_required' }, { status: 200 });
 
-    const installerCal = secrets.get('INSTALLER_CALENDAR_ID');
+    const installerCal = INSTALLER_CAL_ID || secrets.get('INSTALLER_CALENDAR_ID');
     if (!installerCal) return Response.json({ error: 'installer_calendar_not_configured' }, { status: 200 });
 
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('googlecalendar');
