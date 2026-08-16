@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Calendar, HardDrive, Layers, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Calendar, HardDrive, Layers, Plus } from "lucide-react";
+import RowActions from "@/components/fees/RowActions";
 import { Button } from "@/components/ui/button";
 import { feeMathString, formatMoney, computeProfit } from "@/lib/feeMath";
 import { EditableText, EditableSwitch, AdjustedMarker } from "@/components/fees/EditableCell";
@@ -200,14 +201,15 @@ function DesktopRow({ row, onEdit, onDelete, index }) {
           {tier === "mine" && <span title="Manually added by you — different billing %" className="h-2.5 w-2.5 rounded-full bg-violet-600" />}
           {row.manually_adjusted && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground leading-none">Edit</span>}
           {row.needs_review && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-foreground leading-none">Rev</span>}
+          <RowActions row={row} onDelete={onDelete} onEdit={onEdit} />
         </div>
       </div>
-      {expanded && <ExpandedDetail row={row} onEdit={onEdit} onDelete={onDelete} />}
+      {expanded && <ExpandedDetail row={row} onEdit={onEdit} />}
     </div>
   );
 }
 
-function ExpandedDetail({ row, onEdit, onDelete }) {
+function ExpandedDetail({ row, onEdit }) {
   const wt = workType(row);
   return (
     <div className="px-6 pb-4 pt-2 bg-[#dffcf5] border-t border-border">
@@ -315,15 +317,6 @@ function ExpandedDetail({ row, onEdit, onDelete }) {
           )}
         </div>
       </div>
-      {onDelete && (
-        <div className="mt-3 pt-3 border-t border-border flex justify-end">
-          <Button size="sm" variant="destructive" onClick={() => {
-            if (confirm(`Delete this fee line?\n${row.job_name_norm} — ${row.job_date}`)) onDelete(row.id);
-          }}>
-            <Trash2 className="h-4 w-4 mr-1" /> Delete line
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
@@ -389,7 +382,7 @@ function MobileRow({ row, onEdit, onDelete }) {
   const wt = workType(row);
   return (
     <div className={cn("px-4 py-3 border-l-4", wtBg(wt, row), leftBorder(tier, wt))}>
-      <button onClick={() => setExpanded((e) => !e)} className="w-full flex items-center justify-between gap-2 text-left">
+      <div onClick={() => setExpanded((e) => !e)} className="w-full flex items-center justify-between gap-2 text-left">
         <div className="min-w-0">
           <div className="text-sm font-medium truncate">{row.line_description || row.job_name_norm}</div>
           <div className="text-xs text-muted-foreground flex items-center flex-wrap gap-1.5">
@@ -408,13 +401,16 @@ function MobileRow({ row, onEdit, onDelete }) {
             {tier === "mine" && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-violet-200 text-violet-900">Manual</span>}
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-sm font-bold tabular-nums text-accent">${formatMoney(row.fee_amt)}</div>
-          <div className="text-xs text-muted-foreground">
-            {row.fee_type === 'profit_split' ? `profit $${formatMoney(computeProfit(row))}` : `labor $${formatMoney(row.labor_amt)}`}
+        <div className="flex items-center gap-2">
+          <div className="text-right">
+            <div className="text-sm font-bold tabular-nums text-accent">${formatMoney(row.fee_amt)}</div>
+            <div className="text-xs text-muted-foreground">
+              {row.fee_type === 'profit_split' ? `profit $${formatMoney(computeProfit(row))}` : `labor $${formatMoney(row.labor_amt)}`}
+            </div>
           </div>
+          <RowActions row={row} onDelete={onDelete} onEdit={onEdit} />
         </div>
-      </button>
+      </div>
       {expanded && (
         <div className="mt-3 space-y-2 text-sm">
           <EditableField label="Line" value={row.line_description} onCommit={(v) => onEdit(row.id, { line_description: v })} />
@@ -461,15 +457,6 @@ function MobileRow({ row, onEdit, onDelete }) {
               {row.photo_urls.map((url, i) => (
                 <img key={i} src={url} alt={`photo ${i + 1}`} className="h-12 w-12 rounded object-cover border border-border" />
               ))}
-            </div>
-          )}
-          {onDelete && (
-            <div className="pt-2 border-t border-border">
-              <Button size="sm" variant="destructive" className="w-full" onClick={() => {
-                if (confirm(`Delete this fee line?\n${row.job_name_norm} — ${row.job_date}`)) onDelete(row.id);
-              }}>
-                <Trash2 className="h-4 w-4 mr-1" /> Delete line
-              </Button>
             </div>
           )}
         </div>
