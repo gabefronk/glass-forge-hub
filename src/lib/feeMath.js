@@ -59,30 +59,71 @@ export function isFutureRow(r) {
   return d > todayStr();
 }
 
-// Invoice Total = sum of fee_amt where billable = true AND (needs_review = false OR manually_adjusted = true)
-// AND job_date <= today (future-dated rows are excluded — not yet billable)
+// Billable-gated predicate — the ONLY filter for any total pair, so labor and
+// fee always iterate the identical row set. If a row's fee is excluded, its
+// labor is excluded too. Excluded rows are surfaced in their own sections with
+// visible subtotals so nothing is hidden.
+export function isBillableNow(r) {
+  return r.billable && (!r.needs_review || r.manually_adjusted) && !isFutureRow(r);
+}
+
+export function isBillableFuture(r) {
+  return r.billable && (!r.needs_review || r.manually_adjusted) && isFutureRow(r);
+}
+
+// Held-out rows — visible in Needs Review / Scheduled sections, never in totals.
+export function isReviewHeld(r) {
+  return !(r.billable && (!r.needs_review || r.manually_adjusted));
+}
+
+// Invoice Total / Labor Total — identical row set (billable now).
 export function invoiceTotal(rows) {
   return rows
-    .filter((r) => r.billable && (!r.needs_review || r.manually_adjusted) && !isFutureRow(r))
+    .filter(isBillableNow)
     .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
 }
 
 export function laborTotal(rows) {
   return rows
-    .filter((r) => !isFutureRow(r))
+    .filter(isBillableNow)
     .reduce((sum, r) => sum + (Number(r.labor_amt) || 0), 0);
 }
 
-// Subtotal for future-dated rows (scheduled, not yet billable)
+// Scheduled subtotals — identical row set (billable future).
 export function futureLaborTotal(rows) {
   return rows
-    .filter((r) => isFutureRow(r))
+    .filter(isBillableFuture)
     .reduce((sum, r) => sum + (Number(r.labor_amt) || 0), 0);
 }
 
 export function futureFeeTotal(rows) {
   return rows
-    .filter((r) => r.billable && (!r.needs_review || r.manually_adjusted) && isFutureRow(r))
+    .filter(isBillableFuture)
+    .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
+}
+
+// Held-out subtotals (Needs Review) — rows excluded from any total.
+export function heldLaborTotal(rows) {
+  return rows
+    .filter((r) => !isFutureRow(r) && isReviewHeld(r))
+    .reduce((sum, r) => sum + (Number(r.labor_amt) || 0), 0);
+}
+
+export function heldFeeTotal(rows) {
+  return rows
+    .filter((r) => !isFutureRow(r) && isReviewHeld(r))
+    .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
+}
+
+export function heldFutureLaborTotal(rows) {
+  return rows
+    .filter((r) => isFutureRow(r) && isReviewHeld(r))
+    .reduce((sum, r) => sum + (Number(r.labor_amt) || 0), 0);
+}
+
+export function heldFutureFeeTotal(rows) {
+  return rows
+    .filter((r) => isFutureRow(r) && isReviewHeld(r))
     .reduce((sum, r) => sum + (Number(r.fee_amt) || 0), 0);
 }
 

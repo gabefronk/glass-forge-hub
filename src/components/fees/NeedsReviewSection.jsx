@@ -8,19 +8,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { feeMathString, formatMoney } from "@/lib/feeMath";
+import { feeMathString, formatMoney, isFutureRow } from "@/lib/feeMath";
 
 // rows: fee lines needing review for the selected month
 // jobs: all jobs (for "Assign to Job")
 // onAccept(id), onAssignToJob(id, jobId)
 export default function NeedsReviewSection({ rows, jobs, onAccept, onAssignToJob }) {
   if (!rows.length) return null;
+  const laborSub = rows.reduce((s, r) => s + (Number(r.labor_amt) || 0), 0);
+  const feeSub = rows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
   return (
     <section className="px-4 sm:px-8 pt-6">
       <div className="flex items-center gap-2 mb-3">
         <AlertTriangle className="h-4 w-4 text-amber-500" />
         <h2 className="font-heading text-sm font-semibold uppercase tracking-wide">Needs Review</h2>
         <span className="text-xs text-muted-foreground">({rows.length})</span>
+        <span className="ml-auto text-sm text-amber-700">
+          <span className="text-xs uppercase tracking-wide mr-2">Held out</span>
+          <span className="font-semibold tabular-nums">${formatMoney(laborSub)}</span>
+          <span className="text-xs mx-1">labor ·</span>
+          <span className="font-semibold tabular-nums">${formatMoney(feeSub)}</span>
+          <span className="text-xs ml-1">fee</span>
+        </span>
       </div>
       <div className="space-y-3">
         {rows.map((row) => (
