@@ -79,9 +79,9 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddS
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block rounded-lg border border-border overflow-hidden">
+      <div className="hidden md:block">
         <div
-          className="sticky z-10 grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.5fr_0.5fr_0.5fr] gap-2 px-4 py-3 bg-primary text-primary-foreground text-[11px] uppercase tracking-wide font-semibold"
+          className="sticky z-10 grid grid-cols-[1.6fr_0.8fr_1.4fr_0.8fr_0.8fr_0.5fr_0.5fr_0.5fr] gap-2 px-4 py-3 bg-primary text-primary-foreground text-[11px] uppercase tracking-wide font-semibold rounded-t-lg border border-b-0 border-border"
           style={{ top: stickyTop }}
         >
           <div>Job</div>
@@ -93,7 +93,7 @@ export default function FeeTable({ rows, jobsById, onEdit, stickyTop = 0, onAddS
           <div className="text-center">Pay</div>
           <div className="text-center">Flags</div>
         </div>
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-border border border-t-0 border-border rounded-b-lg overflow-hidden">
           {groups.map((g) => (
             <JobGroup key={g.key} group={g} onEdit={onEdit} />
           ))}
