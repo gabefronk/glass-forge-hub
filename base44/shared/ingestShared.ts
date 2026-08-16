@@ -65,8 +65,17 @@ export function extractPO(text) {
 
 // Extract an order element number from free text.
 // Matches "OE: 78661292-02" and "OE 79409948-01" (colon optional).
+// Also catches bare "79327171-00" at the start of a line (preceded by newline
+// + optional whitespace), e.g.:
+//     *   4010PW
+//
+// 79327171-00 | (Cam: 385-315-7903)
+// The line-start guard prevents matching random 8-digit-2-digit numbers
+// embedded in prose. Labeled patterns are tried first so "OE: 79409948-01"
+// is never double-matched.
 const OE_RE_1 = /OE:\s*(\d{6,}-\d{2,})/gi;
 const OE_RE_2 = /OE\s+(\d{6,}-\d{2,})/gi;
+const OE_RE_3 = /(?:^|\n)\s*(\d{7,8}-\d{2})/g;
 export function extractOE(text) {
   if (!text) return null;
   OE_RE_1.lastIndex = 0;
@@ -74,6 +83,9 @@ export function extractOE(text) {
   if (m) return m[1];
   OE_RE_2.lastIndex = 0;
   m = OE_RE_2.exec(text);
+  if (m) return m[1];
+  OE_RE_3.lastIndex = 0;
+  m = OE_RE_3.exec(text);
   return m ? m[1] : null;
 }
 
