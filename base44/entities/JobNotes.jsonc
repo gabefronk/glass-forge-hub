@@ -1,0 +1,70 @@
+{
+  "name": "JobNotes",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "title": "Job Id",
+      "description": "link to Jobs"
+    },
+    "note_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Note Date",
+      "description": "When the interaction happened \u2014 not when the note was typed"
+    },
+    "body": {
+      "type": "string",
+      "title": "Body",
+      "description": "Free-text summary of the interaction"
+    },
+    "author": {
+      "type": "string",
+      "title": "Author",
+      "description": "Email/name of the user who wrote the note"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Attachments",
+      "default": [],
+      "description": "Optional file/photo URLs"
+    },
+    "edited": {
+      "type": "boolean",
+      "title": "Edited",
+      "default": false,
+      "description": "True once the note body or date has been changed after creation"
+    }
+  },
+  "required": [
+    "job_id",
+    "note_date",
+    "body",
+    "author"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

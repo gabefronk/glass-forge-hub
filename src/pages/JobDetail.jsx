@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ArrowLeft, MapPin, Calendar, User, Hash, DollarSign, AlertTriangle, Clock, CheckCircle2, Activity } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, User, Hash, DollarSign, AlertTriangle, Clock, CheckCircle2, Activity, Plus } from "lucide-react";
 import { formatMoney } from "@/lib/feeMath";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import JobNoteForm from "@/components/jobs/JobNoteForm";
+import JobNoteEntry from "@/components/jobs/JobNoteEntry";
 
 function deriveJobStatus(rows) {
   const today = new Date().toISOString().slice(0, 10);
@@ -44,35 +47,37 @@ function deriveJobStatus(rows) {
   return { status: "No Activity", reason: "no calendar events or field reports", level: "idle", icon: Clock };
 }
 
-function groupByDate(rows) {
-  const map = new Map();
-  for (const r of rows) {
-    const d = r.job_date || '—';
-    if (!map.has(d)) map.set(d, []);
-    map.get(d).push(r);
-  }
-  return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-}
-
 export default function JobDetail() {
   const { id } = useParams();
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [currentUser, setCurrentUser] = useState("");
+  const [showNoteForm, setShowNoteForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
 
+  const loadAll = async () => {
+    const [jb, fl, nt, me] = await Promise.all([
+      base44.entities.Jobs.get(id),
+      base44.entities.FeeLines.filter({ job_id: id }, '-job_date', 5000),
+      base44.entities.JobNotes.filter({ job_id: id }, '-note_date', 500),
+      base44.auth.me().catch(() => null),
+    ]);
+    setJob(jb);
+    setRows(fl);
+    setNotes(nt);
+    if (me) setCurrentUser(me.email || me.full_name || "");
+  };
+
   useEffect(() => {
-    const load = async () => {
+    (async () => {
       try {
-        const jb = await base44.entities.Jobs.get(id);
-        const fl = await base44.entities.FeeLines.filter({ job_id: id }, '-job_date', 5000);
-        setJob(jb);
-        setRows(fl);
+        await loadAll();
       } finally {
         setLoading(false);
       }
-    };
-    load();
+    })();
   }, [id]);
 
   const status = useMemo(() => deriveJobStatus(rows), [rows]);
@@ -84,7 +89,19 @@ export default function JobDetail() {
     const ds = rows.map(r => r.job_date).filter(Boolean).sort();
     return { first: ds[0], last: ds[ds.length - 1], visits: new Set(ds).size };
   }, [rows]);
-  const grouped = useMemo(() => groupByDate(rows), [rows]);
+  const grouped = useMemo(() => {
+    const items = [
+      ...rows.map(r => ({ type: 'fee', sort_date: r.job_date || '—', data: r })),
+      ...notes.map(n => ({ type: 'note', sort_date: n.note_date || '—', data: n })),
+    ];
+    const map = new Map();
+    for (const item of items) {
+      const d = item.sort_date;
+      if (!map.has(d)) map.set(d, []);
+      map.get(d).push(item);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [rows, notes]);
 
   if (loading) {
     return (
@@ -185,9 +202,24 @@ export default function JobDetail() {
       </div>
 
       {/* TIMELINE */}
-      <h2 className="font-heading text-xs font-bold uppercase tracking-widest mb-4">Timeline</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-heading text-xs font-bold uppercase tracking-widest">Timeline</h2>
+        <Button size="sm" variant="outline" onClick={() => setShowNoteForm((v) => !v)}>
+          <Plus className="h-4 w-4 mr-1" /> Add note
+        </Button>
+      </div>
+      {showNoteForm && (
+        <div className="mb-6">
+          <JobNoteForm
+            jobId={id}
+            author={currentUser}
+            onSaved={async () => { setShowNoteForm(false); await loadAll(); }}
+            onCancel={() => setShowNoteForm(false)}
+          />
+        </div>
+      )}
       <div className="space-y-6">
-        {grouped.map(([date, dateRows]) => (
+        {grouped.map(([date, dateItems]) => (
           <div key={date}>
             <div className="flex items-center gap-2 mb-2">
               <div className="h-px flex-1 bg-border" />
@@ -195,13 +227,15 @@ export default function JobDetail() {
               <div className="h-px flex-1 bg-border" />
             </div>
             <div className="space-y-3">
-              {dateRows.map((row) => (
-                <TimelineEntry key={row.id} row={row} onPhotoClick={setLightbox} />
+              {dateItems.map((item) => (
+                item.type === 'fee'
+                  ? <TimelineEntry key={item.data.id} row={item.data} onPhotoClick={setLightbox} />
+                  : <JobNoteEntry key={item.data.id} note={item.data} currentUser={currentUser} onChanged={loadAll} onPhotoClick={setLightbox} />
               ))}
             </div>
           </div>
         ))}
-        {!grouped.length && (
+        {!grouped.length && !showNoteForm && (
           <div className="py-10 text-center text-sm text-muted-foreground">No activity recorded.</div>
         )}
       </div>
