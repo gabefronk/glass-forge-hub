@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, MapPin, FileText, Briefcase, ChevronRight } from "lucide-react";
+import { Search, MapPin, FileText, Briefcase, ChevronRight, Upload } from "lucide-react";
 import { formatMoney } from "@/lib/feeMath";
+
+function formatReportDate(yyyyMmDd) {
+  if (!yyyyMmDd) return "";
+  const [y, m, d] = yyyyMmDd.split("-");
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 export default function JobsHub() {
   const [jobs, setJobs] = useState([]);
@@ -35,10 +42,22 @@ export default function JobsHub() {
     return m;
   }, [feeLines]);
 
+  // Most recent Probuild report upload date per job (YYYY-MM-DD).
+  // Jobs with no Probuild report sort after those that have one.
+  const lastReportDate = useMemo(() => {
+    const m = {};
+    for (const r of feeLines) {
+      if (!r.job_id || r.source !== "probuild") continue;
+      const d = r.job_date;
+      if (!d) continue;
+      if (!m[r.job_id] || d > m[r.job_id]) m[r.job_id] = d;
+    }
+    return m;
+  }, [feeLines]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return jobs;
-    return jobs.filter((j) => {
+    const base = !q ? jobs : jobs.filter((j) => {
       const name = (j.canonical_name || "").toLowerCase();
       const aliases = (j.aliases || []).join(" ").toLowerCase();
       const addr = (j.address || "").toLowerCase();
@@ -46,7 +65,14 @@ export default function JobsHub() {
       const oes = (j.oe_numbers || []).join(" ").toLowerCase();
       return [name, aliases, addr, pos, oes].some((s) => s.includes(q));
     });
-  }, [jobs, search]);
+    // Sort by most recent Probuild report first, then by job created_date.
+    return [...base].sort((a, b) => {
+      const da = lastReportDate[a.id] || "";
+      const db = lastReportDate[b.id] || "";
+      if (da !== db) return db.localeCompare(da);
+      return (b.created_date || "").localeCompare(a.created_date || "");
+    });
+  }, [jobs, search, lastReportDate]);
 
   if (loading) {
     return (
@@ -103,6 +129,12 @@ export default function JobsHub() {
                     <FileText className="h-3 w-3" />
                     {visitCounts[job.id] || 0} visit{(visitCounts[job.id] || 0) === 1 ? "" : "s"}
                   </span>
+                  {lastReportDate[job.id] && (
+                    <span className="flex items-center gap-1 text-accent font-medium">
+                      <Upload className="h-3 w-3" />
+                      Report {formatReportDate(lastReportDate[job.id])}
+                    </span>
+                  )}
                   {(job.po_numbers || []).length > 0 && (
                     <span>PO: {job.po_numbers.join(", ")}</span>
                   )}
