@@ -179,7 +179,7 @@ function DesktopRow({ row, onEdit, index }) {
         ) : (
           <>
             <div className="text-right">
-              <EditableText value={row.labor_amt} type="number" alignRight onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
+              <EditableText value={row.labor_amt} type="number" alignRight displayFormat="currency" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
             </div>
             <div className="flex items-center justify-end gap-1">
               <EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" alignRight className="w-14" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
@@ -409,7 +409,7 @@ function MobileRow({ row, onEdit }) {
       {expanded && (
         <div className="mt-3 space-y-2 text-sm">
           <EditableField label="Line" value={row.line_description} onCommit={(v) => onEdit(row.id, { line_description: v })} />
-          <EditableField label="Labor $" value={row.labor_amt} type="number" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
+          <EditableField label="Labor $" value={row.labor_amt} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
           <EditableField label="Fee %" value={Math.round((row.fee_pct || 0) * 100)} type="number" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Billable</span>
@@ -460,12 +460,12 @@ function MobileRow({ row, onEdit }) {
   );
 }
 
-function EditableField({ label, value, onCommit, type }) {
+function EditableField({ label, value, onCommit, type, displayFormat }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-muted-foreground w-20">{label}</span>
       <div className="flex-1">
-        <EditableText value={value} type={type} onCommit={onCommit} />
+        <EditableText value={value} type={type} displayFormat={displayFormat} onCommit={onCommit} />
       </div>
     </div>
   );

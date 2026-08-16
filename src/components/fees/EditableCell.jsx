@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/feeMath";
 
 // Inline editable text/number cell. Save on blur or Enter.
-export function EditableText({ value, onCommit, type = "text", className, alignRight }) {
+export function EditableText({ value, onCommit, type = "text", className, alignRight, displayFormat }) {
   const [v, setV] = useState(value ?? "");
   const [editing, setEditing] = useState(false);
   const ref = useRef(null);
@@ -56,7 +57,7 @@ export function EditableText({ value, onCommit, type = "text", className, alignR
         className
       )}
     >
-      {value === null || value === undefined || value === "" ? <span className="text-muted-foreground">—</span> : String(value)}
+      {value === null || value === undefined || value === "" ? <span className="text-muted-foreground">—</span> : displayFormat === "currency" ? `$${formatMoney(value)}` : String(value)}
     </button>
   );
 }
