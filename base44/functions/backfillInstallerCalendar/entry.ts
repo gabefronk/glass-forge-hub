@@ -1,10 +1,11 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { buildInstallerEvent, upsertInstallerEvent } from '../../shared/installerCalendar.ts';
+import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
 
 // One-time backfill: push a sanitized copy of every CalendarEvents record
-// from 7 days ago forward to the installer calendar. Upserts on
-// installer_event_id — never duplicates. Stores installer_event_id back on
-// each record. Never sends labor_amt, organizer, or creator email.
+// from 7 days ago forward to the installer calendar. Idempotent — matches on
+// installer_event_id OR sourceGoogleEventId (stored in extendedProperties).
+// Stores installer_event_id back on each record. Never sends labor_amt,
+// organizer, or creator email.
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -23,6 +24,9 @@ export default async function(req) {
     const allEvents = await base44.asServiceRole.entities.CalendarEvents.list('-created_date', 2000);
     const events = allEvents.filter(e => (e.event_date || '') >= startStr);
 
+    // Fetch existing installer events for idempotent matching.
+    const installerMap = await fetchInstallerEventMap(headers);
+
     let pushed = 0, failed = 0;
     const failures = [];
     const idUpdates = [];
@@ -30,7 +34,8 @@ export default async function(req) {
     for (const ev of events) {
       if (!ev.event_date || !ev.job_name) continue;
       const eventBody = buildInstallerEvent(ev);
-      const result = await upsertInstallerEvent(ev.installer_event_id, eventBody, headers);
+      const existingId = ev.installer_event_id || (ev.google_event_id ? installerMap.get(ev.google_event_id) : null);
+      const result = await upsertInstallerEvent(existingId, eventBody, headers);
       if (result.error) {
         failed++;
         failures.push({ id: ev.id, name: ev.job_name, date: ev.event_date, error: result.error, status: result.status, detail: (result.detail || '').slice(0, 200) });

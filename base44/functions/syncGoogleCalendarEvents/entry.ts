@@ -1,12 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { extractPO, extractOE, extractAddress, extractBuilder } from '../../shared/ingestShared.ts';
-import { buildInstallerEvent, upsertInstallerEvent } from '../../shared/installerCalendar.ts';
+import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
 // extendedProperty) — those are owned by pushCalendarEvent. Upserts on
 // google_event_id; never overwrites an existing app-sourced record.
+// Then pushes sanitized copies to the installer calendar (idempotent on
+// sourceGoogleEventId stored in extendedProperties).
 const CAL_API = 'https://www.googleapis.com/calendar/v3';
 const FULL_CAL = 'iryedra@gmail.com';
 
@@ -51,17 +53,22 @@ export default async function(req) {
     for (const ev of allItems) {
       if (ev.extendedProperties?.private?.appSource === 'glassforge') { skippedApp++; continue; }
       const startRef = ev.start || {};
+      const endRef = ev.end || {};
       const event_date = startRef.dateTime ? String(startRef.dateTime).slice(0, 10) : (startRef.date || '');
       if (!event_date) continue;
       const start_time = startRef.dateTime ? String(startRef.dateTime).slice(11, 16) : null;
+      const end_time = endRef.dateTime ? String(endRef.dateTime).slice(11, 16) : null;
+      const end_date = (!endRef.dateTime && endRef.date) ? endRef.date : null;
       const row = {
         source: 'google',
         event_date,
         start_time,
+        end_time,
+        end_date,
         job_name: ev.summary || '(untitled)',
-        builder: null,
-        address: extractAddress(ev.location, ev.description),
         builder: extractBuilder(ev.summary),
+        address: extractAddress(ev.location, ev.description),
+        source_location: ev.location || null,
         scope_notes: ev.description || '',
         labor_amt: 0,
         crew: null,
@@ -77,7 +84,7 @@ export default async function(req) {
       const ex = byGoogleId.get(ev.id);
       if (ex) {
         if (ex.source === 'app') continue;
-        // Preserve installer_event_id — it's managed by pushCalendarEvent, not sync
+        // Preserve installer_event_id — it's managed by the push, not the sync
         toUpdate.push({ id: ex.id, ...row, installer_event_id: ex.installer_event_id || null });
       } else {
         toCreate.push(row);
@@ -92,21 +99,45 @@ export default async function(req) {
       createdRecords.push(...batchCreated);
     }
 
-    // Push sanitized copies to the installer calendar (upsert on installer_event_id)
-    let installerPushed = 0, installerFailed = 0;
+    // Push sanitized copies to the installer calendar.
+    // Idempotent: match on installer_event_id (stored on row) OR sourceGoogleEventId
+    // (stored in extendedProperties on the installer event itself).
+    // By default only push NEW or NEVER-PUSHED events to avoid timeout.
+    // Pass { force_repush: true } to re-push all events (for repairs).
+    const forceRepush = !!body.force_repush;
+    const pushCandidates = forceRepush
+      ? [...createdRecords, ...toUpdate]
+      : [...createdRecords, ...toUpdate.filter(e => !e.installer_event_id)];
+
+    const installerMap = await fetchInstallerEventMap(headers);
+
+    let installerPushed = 0, installerFailed = 0, installerSkipped = 0;
     const installerFailures = [];
     const installerIdUpdates = [];
-    for (const ev of [...createdRecords, ...toUpdate]) {
-      if (!ev.event_date || !ev.job_name) continue;
+    for (const ev of pushCandidates) {
+      if (!ev.event_date || !ev.job_name) { installerSkipped++; continue; }
       const eventBody = buildInstallerEvent(ev);
-      const result = await upsertInstallerEvent(ev.installer_event_id, eventBody, headers);
+      const existingId = ev.installer_event_id || (ev.google_event_id ? installerMap.get(ev.google_event_id) : null);
+      const result = await upsertInstallerEvent(existingId, eventBody, headers);
       if (result.error) { installerFailed++; installerFailures.push({ id: ev.id, name: ev.job_name, error: result.error }); continue; }
       installerPushed++;
       if (result.id !== ev.installer_event_id) installerIdUpdates.push({ id: ev.id, installer_event_id: result.id });
     }
     for (const batch of chunk(installerIdUpdates, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
 
-    return Response.json({ ok: true, fetched: allItems.length, created: toCreate.length, updated: toUpdate.length, skipped_app: skippedApp, installer_pushed: installerPushed, installer_failed: installerFailed, installer_failures: installerFailures });
+    return Response.json({
+      ok: true,
+      fetched: allItems.length,
+      created: toCreate.length,
+      updated: toUpdate.length,
+      skipped_app: skippedApp,
+      force_repush: forceRepush,
+      push_candidates: pushCandidates.length,
+      installer_pushed: installerPushed,
+      installer_failed: installerFailed,
+      installer_skipped: installerSkipped,
+      installer_failures: installerFailures.slice(0, 20),
+    });
   } catch (error) {
     return Response.json({ error: error.message, stack: error.stack }, { status: 200 });
   }
