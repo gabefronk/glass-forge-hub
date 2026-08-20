@@ -248,6 +248,34 @@ export function htmlToText(html) {
   return s.trim();
 }
 
+// Detect a profit-split pattern in the event description: a "Project Total"
+// line (sale price) and a "Package Cost" / "Material Cost" line (cost).
+// Returns { sale_price, cost } when both are found and sale_price > cost,
+// indicating a side job where profit is split 50/50 with YA.
+export function extractProfitSplit(description) {
+  if (!description) return null;
+  const lines = String(description).split(/\r?\n/);
+  const moneyRe = /\$\s?([\d,]+(?:\.\d{1,2})?)/;
+  let salePrice = null;
+  let cost = null;
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    const m = line.match(moneyRe);
+    if (!m) continue;
+    const amt = Number(m[1].replace(/,/g, ''));
+    if (lower.includes('project total') && salePrice === null) {
+      salePrice = amt;
+    }
+    if ((lower.includes('package cost') || lower.includes('material cost')) && cost === null) {
+      cost = amt;
+    }
+  }
+  if (salePrice !== null && cost !== null && salePrice > cost) {
+    return { sale_price: salePrice, cost };
+  }
+  return null;
+}
+
 export function extractLaborAmount(description) {
   if (!description) return null;
   const lines = String(description).split(/\r?\n/);

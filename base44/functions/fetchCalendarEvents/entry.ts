@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText } from '../../shared/ingestShared.ts';
+import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit } from '../../shared/ingestShared.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Derive FeeLines from CalendarEvents (the single Google reader).
@@ -79,6 +79,7 @@ export default async function(req) {
       const description = htmlToText(ev.scope_notes || '');
       const calendar_labor_amt = extractLaborAmount(description);
       const ticket_sequence = extractTicketSequence(description);
+      const profitSplit = extractProfitSplit(description);
       const dateStr = ev.event_date || '';
       let jobId = m.job_id;
       let matchConf = m.match_confidence;
@@ -102,6 +103,10 @@ export default async function(req) {
         ticket_sequence,
         note_text: description,
         photo_urls: [],
+        fee_type: profitSplit ? 'profit_split' : 'labor_pct',
+        sale_price: profitSplit ? profitSplit.sale_price : null,
+        cost: profitSplit ? profitSplit.cost : null,
+        split_pct: profitSplit ? 0.5 : null,
         fee_pct: 0.1,
         billable: true,
         source: 'calendar',
