@@ -223,6 +223,31 @@ export function extractTicketSequence(description) {
   return maxSeq > 0 ? maxSeq : null;
 }
 
+// Convert HTML to plain text: block-level tags and <br> become newlines,
+// remaining tags are stripped, common entities are decoded. Lets downstream
+// line-by-line processing (sanitizer, extractors) work on Google Calendar's
+// HTML-formatted descriptions.
+export function htmlToText(html) {
+  if (!html) return '';
+  let s = String(html);
+  s = s.replace(/<br\s*\/?>/gi, '\n');
+  s = s.replace(/<\/p>/gi, '\n');
+  s = s.replace(/<\/li>/gi, '\n');
+  s = s.replace(/<\/ul>/gi, '\n');
+  s = s.replace(/<\/ol>/gi, '\n');
+  s = s.replace(/<\/div>/gi, '\n');
+  s = s.replace(/<\/h[1-6]>/gi, '\n');
+  s = s.replace(/<[^>]+>/g, '');
+  s = s.replace(/&amp;/g, '&');
+  s = s.replace(/&lt;/g, '<');
+  s = s.replace(/&gt;/g, '>');
+  s = s.replace(/&quot;/g, '"');
+  s = s.replace(/&#39;/g, "'");
+  s = s.replace(/&nbsp;/g, ' ');
+  s = s.replace(/\n{3,}/g, '\n\n');
+  return s.trim();
+}
+
 export function extractLaborAmount(description) {
   if (!description) return null;
   const lines = String(description).split(/\r?\n/);

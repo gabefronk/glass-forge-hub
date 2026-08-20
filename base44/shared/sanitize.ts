@@ -20,9 +20,12 @@ function pricingWordAdjacentToNumber(line) {
   return false;
 }
 
+import { htmlToText } from './ingestShared.ts';
+
 export function sanitizeForInstaller(text) {
   if (!text) return { text: '', flagged: false };
-  const lines = String(text).split(/\r?\n/);
+  const plain = htmlToText(text);
+  const lines = plain.split(/\r?\n/);
   const kept = [];
   for (const raw of lines) {
     const line = raw.trim();
