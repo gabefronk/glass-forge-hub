@@ -32,6 +32,30 @@ function toDenverDateString(utcIso) {
   return fmt.format(d); // YYYY-MM-DD
 }
 
+// Find an existing calendar-sourced FeeLine for the same job within ±3 days
+// that hasn't already been merged with a Probuild post and has no man_hours yet.
+// Merging the Probuild labor data into the calendar row gives the user a single
+// row per job with both the event details and the actual hours worked.
+function findCalendarRowToMerge(existingFees, jobId, postDate) {
+  if (!jobId || !postDate) return null;
+  const postMs = new Date(postDate + 'T00:00:00Z').getTime();
+  let best = null;
+  let minDiff = Infinity;
+  for (const f of existingFees) {
+    if (f.job_id !== jobId) continue;
+    if (f.source !== 'calendar') continue;
+    if (f.manually_adjusted) continue;
+    if (f.probuild_post_id) continue;
+    if (f.man_hours != null) continue;
+    const diff = Math.abs(new Date(f.job_date + 'T00:00:00Z').getTime() - postMs);
+    if (diff <= 3 * 86400000 && diff < minDiff) {
+      minDiff = diff;
+      best = f;
+    }
+  }
+  return best;
+}
+
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -189,6 +213,7 @@ ${JSON.stringify(promptInputs)}`;
     const toCreate = [];
     const toUpdate = [];
     let skipped = 0;
+    let merged_count = 0;
     const flagged = [];
     const phillipGrover = [];
     for (const { b, normName, m } of matched) {
@@ -225,7 +250,29 @@ ${JSON.stringify(promptInputs)}`;
         const merged = mergeReviewFlags(ex, row);
         toUpdate.push({ id: ex.id, ...row, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
       } else {
-        toCreate.push(row);
+        // New post — try to merge into an existing calendar row for the same job
+        const calRow = findCalendarRowToMerge(existingFees, jobId, b.jobDate);
+        if (calRow) {
+          const mergedRow = { ...calRow, man_hours: row.man_hours, trip_charges: row.trip_charges, source: 'both' };
+          mergedRow.labor_amt = computeLaborAmt(mergedRow);
+          mergedRow.fee_amt = computeFeeAmt(mergedRow);
+          const merged = mergeReviewFlags(calRow, { job_id: jobId, needs_review: row.needs_review });
+          toUpdate.push({
+            id: calRow.id,
+            source: 'both',
+            man_hours: row.man_hours,
+            trip_charges: row.trip_charges,
+            probuild_post_id: b.postId,
+            probuild_project_id: b.projectId,
+            labor_amt: mergedRow.labor_amt,
+            fee_amt: mergedRow.fee_amt,
+            needs_review: merged.needs_review,
+            match_confidence: merged.match_confidence,
+          });
+          merged_count++;
+        } else {
+          toCreate.push(row);
+        }
       }
       if (row.needs_review) flagged.push({ post_id: b.postId, job_date: b.jobDate, job_name: b.projectName });
       if (/phillip grover/i.test(b.projectName) || /phillip grover/i.test(post.message || '')) {
@@ -244,6 +291,7 @@ ${JSON.stringify(promptInputs)}`;
       posts_in_window: inWindowPosts.length,
       created: toCreate.length,
       updated: toUpdate.length,
+      merged_into_calendar: merged_count,
       skipped_manually_adjusted: skipped,
       auto_created_jobs: autoCreateNames,
       flagged_for_review: flagged,
