@@ -120,6 +120,17 @@ export default async function(req) {
       const ex = existingByEventId.get(ev.google_event_id);
       if (ex) {
         if (ex.manually_adjusted || ex.written_by === 'app') { skipped++; continue; }
+        // Preserve Probuild-merged labor data so labor_amt/fee_amt are
+        // recomputed from the full merged state, not just calendar-only fields.
+        // Without this, re-running calendar ingest zeroes out labor_amt on
+        // rows that had man_hours merged in from Probuild.
+        if (ex.man_hours != null) row.man_hours = ex.man_hours;
+        if (ex.trip_charges != null) row.trip_charges = ex.trip_charges;
+        if (ex.probuild_post_id) row.probuild_post_id = ex.probuild_post_id;
+        if (ex.probuild_project_id) row.probuild_project_id = ex.probuild_project_id;
+        if (ex.source === 'both') row.source = 'both';
+        row.labor_amt = computeLaborAmt(row);
+        row.fee_amt = computeFeeAmt(row);
         const merged = mergeReviewFlags(ex, row);
         toUpdate.push({ id: ex.id, ...row, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
       } else {
