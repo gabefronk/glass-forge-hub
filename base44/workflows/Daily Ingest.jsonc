@@ -5,7 +5,7 @@
       "trigger_type": "scheduled",
       "events": [],
       "schedule_mode": "recurring",
-      "cron_expression": "0 6 * * *",
+      "cron_expression": "0 1 * * *",
       "one_time_date": null,
       "timezone": "America/Denver",
       "interval_value": null,
@@ -133,6 +133,6 @@
       }
     ]
   },
-  "description": "Runs the CalendarEvents sync, then Calendar and Probuild ingests once per day at 6am Denver. On either ingest failing, emails the admin an alert (no retry).",
+  "description": "Runs the CalendarEvents sync, then Calendar and Probuild ingests once per day at 1am Denver. On either ingest failing, emails the admin an alert (no retry).",
   "name": "Daily Ingest"
 }
