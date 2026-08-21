@@ -1,0 +1,52 @@
+{
+  "name": "MonthlyProfit",
+  "type": "object",
+  "properties": {
+    "month": {
+      "type": "string",
+      "title": "Month",
+      "description": "YYYY-MM"
+    },
+    "ya_windows_profit": {
+      "type": "number",
+      "title": "YA Windows Profit",
+      "description": "Profit dollars from YA Windows monthly reports"
+    },
+    "glass_forge_profit": {
+      "type": "number",
+      "title": "Glass Forge Profit",
+      "description": "Profit dollars invoiced to YA (Glass Forge's revenue)"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "month",
+    "ya_windows_profit",
+    "glass_forge_profit"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

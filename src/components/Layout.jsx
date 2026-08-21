@@ -1,10 +1,11 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import YaFeesSidebar from "@/components/YaFeesSidebar";
-import { Receipt, Calendar, Briefcase } from "lucide-react";
+import { Receipt, Calendar, Briefcase, BarChart3 } from "lucide-react";
 import { C } from "@/lib/feeUI";
 
 const NAV_ITEMS = [
   { label: "Invoicing", to: "/", icon: Receipt },
+  { label: "Dashboard", to: "/dashboard", icon: BarChart3 },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Calendar", to: "/calendar", icon: Calendar },
 ];

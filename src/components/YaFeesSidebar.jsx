@@ -1,9 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { label: "Invoicing", to: "/", icon: Receipt },
+  { label: "Dashboard", to: "/dashboard", icon: BarChart3 },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Calendar", to: "/calendar", icon: Calendar },
 ];
