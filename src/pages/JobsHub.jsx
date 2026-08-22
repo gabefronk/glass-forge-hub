@@ -5,7 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
 import { C, jobTotals, jobStatus, formatShort } from "@/lib/feeUI";
 import { formatMoney } from "@/lib/feeMath";
-import JobListRow from "@/components/jobs/JobListRow";
+import JobListRow, { COLS, refsLabel } from "@/components/jobs/JobListRow";
 
 export default function JobsHub() {
   const [jobs, setJobs] = useState([]);
@@ -161,18 +161,20 @@ export default function JobsHub() {
         {/* Desktop table */}
         <div className="hidden min-[700px]:block rounded-[16px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
           {/* Header */}
-          <div
-            className="grid grid-cols-[minmax(180px,1fr)_80px_64px_96px_92px_78px_104px_18px] gap-3 px-4 py-2.5 items-center"
-            style={{ backgroundColor: C.headerBg, borderBottom: `1px solid ${C.border}` }}
-          >
-            <div className="mono-label-sm">Job</div>
-            <div className="mono-label-sm">Builder</div>
-            <div className="mono-label-sm text-right">Visits</div>
-            <div className="mono-label-sm text-right">Report</div>
-            <div className="mono-label-sm text-right">Labor</div>
-            <div className="mono-label-sm text-right">Fee</div>
-            <div className="mono-label-sm text-right">Status</div>
-            <div />
+          <div style={{
+            display: "grid", gridTemplateColumns: COLS, alignItems: "center",
+            gap: 16, padding: "12px 20px", background: "rgba(255,255,255,.03)",
+            fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 600,
+            letterSpacing: ".14em", color: "rgba(255,255,255,.40)", whiteSpace: "nowrap",
+          }}>
+            <span>JOB</span>
+            <span>BUILDER</span>
+            <span style={{ textAlign: "right" }}>VISITS</span>
+            <span style={{ textAlign: "right" }}>REPORT</span>
+            <span style={{ textAlign: "right" }}>LABOR</span>
+            <span style={{ textAlign: "right" }}>FEE</span>
+            <span>STATUS</span>
+            <span />
           </div>
           {/* Rows */}
           <div>
@@ -197,23 +199,19 @@ export default function JobsHub() {
           {visibleJobs.map((job) => {
             const stats = jobStats[job.id];
             const isZero = stats?.labor === 0;
+            const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
             return (
               <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[14px] font-semibold truncate" style={{ color: C.text }}>{job.canonical_name}</div>
-                    <div className="text-[11px] truncate mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${job.builder} · ` : ""}{job.address || ""}</div>
-                  </div>
-                  <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: stats?.status.bg, color: stats?.status.text }}>{stats?.status.label}</span>
+                <div className="text-[14px] font-semibold truncate" style={{ color: C.text }}>{job.canonical_name}</div>
+                <div className="text-[11px] truncate mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${job.builder} · ` : ""}{job.address || ""}</div>
+                <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                  <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, color: stats?.status.text }}>{stats?.status.label}</span>
+                  <span className="font-mono text-[9px] uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{stats?.visits || 0} visits</span>
+                  {refs && <span className="font-mono text-[9px] uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{refs}</span>}
                 </div>
-                <div className="flex items-center gap-2 mt-2 text-[11px]" style={{ color: C.textMuted }}>
-                  <span className="font-mono-num whitespace-nowrap">{stats?.visits || 0} visits</span>
-                  <span>·</span>
-                  <span className="font-mono-num whitespace-nowrap">{stats?.lastReport ? formatShort(stats.lastReport) : "No report"}</span>
-                </div>
-                <div className="flex items-baseline justify-end gap-1.5 mt-2">
-                  <span className="font-mono-num text-[11px]" style={{ color: C.textMuted }}>{isZero ? "" : `$${formatMoney(stats.labor)} labor`}</span>
+                <div className="flex flex-col items-end mt-2.5">
                   <span className="font-mono-num-bold text-[16px]" style={{ color: isZero ? C.textMuted : C.accent, letterSpacing: "-0.02em" }}>{isZero ? "—" : `$${formatMoney(stats.fee)}`}</span>
+                  {!isZero && <span className="font-mono-num text-[11px] mt-0.5" style={{ color: C.textMuted }}>${formatMoney(stats.labor)} labor</span>}
                 </div>
               </Link>
             );

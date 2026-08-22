@@ -1,9 +1,12 @@
 import { Link } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
-import { C, formatShort } from "@/lib/feeUI";
+import { formatShort } from "@/lib/feeUI";
 import { formatMoney } from "@/lib/feeMath";
 
-function refsLabel(pos, oes) {
+export const COLS = "minmax(320px,1fr) 170px 80px 96px 120px 116px 150px 28px";
+
+const money = (n) => `$${formatMoney(n)}`;
+
+export function refsLabel(pos, oes) {
   const total = pos.length + oes.length;
   if (total === 0) return null;
   if (total === 1) return pos.length === 1 ? `PO ${pos[0]}` : `OE ${oes[0]}`;
@@ -16,53 +19,38 @@ function refsLabel(pos, oes) {
 export default function JobListRow({ job, stats }) {
   const status = stats.status;
   const isZero = stats.labor === 0;
-  const reportOverdue = status.key === "needs_report";
-  const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
+  const statusStr = status.key === "complete" ? "COMPLETE" : status.key === "needs_report" ? "NEEDS REPORT" : "ACTIVE";
 
   return (
     <Link
       to={`/jobs/${job.id}`}
-      className="grid grid-cols-[minmax(180px,1fr)_64px_96px_92px_78px_104px_18px] gap-3 items-center px-4 transition-colors hover:bg-white/[0.02]"
-      style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
+      style={{
+        display: "grid", gridTemplateColumns: COLS, alignItems: "center",
+        gap: 16, padding: "14px 20px", minHeight: 60,
+        borderTop: "1px solid rgba(255,255,255,.06)", cursor: "pointer",
+      }}
     >
-      {/* JOB */}
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-[14px] font-semibold" style={{ color: C.text }}>{job.canonical_name}</span>
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            {job.address && <span className="truncate text-[11px]" style={{ color: C.textMuted }}>{job.address}</span>}
-            {refs && (
-              <span className="font-mono whitespace-nowrap px-1.5 py-0.5 rounded shrink-0 text-[10px]" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{refs}</span>
-            )}
-          </div>
-        </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ font: "600 14px 'Inter Tight',sans-serif", color: "#fff",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.canonical_name}</div>
+        <div style={{ font: "400 12px 'Inter Tight',sans-serif", color: "rgba(255,255,255,.42)",
+          marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.address || ""}</div>
       </div>
-      {/* BUILDER */}
-      <div className="truncate text-[12px]" style={{ color: C.textSecondary }}>{job.builder || "—"}</div>
-      {/* VISITS */}
-      <div className="text-right font-mono-num text-[13px]" style={{ color: C.text }}>{stats.visits}</div>
-      {/* REPORT */}
-      <div className="text-right font-mono-num text-[12px] whitespace-nowrap" style={{ color: reportOverdue ? C.amber : C.textMuted }}>
-        {stats.lastReport ? formatShort(stats.lastReport) : "—"}
-      </div>
-      {/* LABOR */}
-      <div className="text-right font-mono-num text-[13px]" style={{ color: isZero ? C.textMuted : C.text }}>
-        {isZero ? "—" : `$${formatMoney(stats.labor)}`}
-      </div>
-      {/* FEE */}
-      <div className="text-right font-mono-num-bold text-[13px] whitespace-nowrap" style={{ color: isZero ? C.textMuted : C.accent }}>
-        {isZero ? "—" : `$${formatMoney(stats.fee)}`}
-      </div>
-      {/* STATUS */}
-      <div className="flex justify-end">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: status.bg, color: status.text }}>{status.label}</span>
-      </div>
-      {/* Chevron */}
-      <div className="flex justify-end">
-        <ChevronRight className="h-4 w-4" style={{ color: C.textFaint }} />
-      </div>
+      <span style={{ minWidth: 0, font: "400 13px 'Inter Tight',sans-serif", color: "rgba(255,255,255,.62)",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.builder || "—"}</span>
+      <span style={{ textAlign: "right", font: "500 13px 'IBM Plex Mono',monospace", color: "rgba(255,255,255,.7)" }}>{stats.visits}</span>
+      <span style={{ textAlign: "right", font: "500 13px 'IBM Plex Mono',monospace", color: "rgba(255,255,255,.5)", whiteSpace: "nowrap" }}>{stats.lastReport ? formatShort(stats.lastReport) : "—"}</span>
+      <span style={{ textAlign: "right", font: "500 13.5px 'IBM Plex Mono',monospace", color: "rgba(255,255,255,.8)", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.labor)}</span>
+      <span style={{ textAlign: "right", font: "600 13.5px 'IBM Plex Mono',monospace", color: "#6EE7C0", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.fee)}</span>
+      <span style={{ minWidth: 0 }}>
+        <span style={{
+          display: "inline-block", font: "600 9.5px 'IBM Plex Mono',monospace", letterSpacing: ".1em",
+          padding: "4px 8px", borderRadius: 4, whiteSpace: "nowrap",
+          background: statusStr === "COMPLETE" ? "rgba(110,231,192,.14)" : "rgba(255,138,122,.14)",
+          color: statusStr === "COMPLETE" ? "#6EE7C0" : "#FF8A7A",
+        }}>{statusStr}</span>
+      </span>
+      <span style={{ display: "flex", justifyContent: "flex-end", color: "rgba(255,255,255,.3)" }}>›</span>
     </Link>
   );
 }
