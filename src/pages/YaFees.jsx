@@ -280,6 +280,7 @@ export default function YaFees() {
         month={month}
         onMonthChange={setMonth}
         onExport={handleExport}
+        onAddSplit={() => setShowSplitForm((v) => !v)}
         invoiceTotal={totals.invoice}
         notYetBilledTotal={payStats.notBilled?.total || 0}
         notYetBilledCount={payStats.notBilled?.count || 0}

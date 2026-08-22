@@ -4,8 +4,24 @@ import { ArrowLeft } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C, jobStatus, jobTotals } from "@/lib/feeUI";
 import JobDetailHeader from "@/components/jobs/JobDetailHeader";
-import JobTimeline from "@/components/jobs/JobTimeline";
-import JobRightRail from "@/components/jobs/JobRightRail";
+import Checklist, { CHECKLIST_TOTAL } from "@/components/jobs/Checklist";
+import StageTimeline from "@/components/jobs/StageTimeline";
+import SitePhotos from "@/components/jobs/SitePhotos";
+import LineItems from "@/components/jobs/LineItems";
+import NotesSection from "@/components/jobs/NotesSection";
+
+function computeStage(rows, job) {
+  const billable = rows.filter((r) => Number(r.labor_amt) > 0);
+  if (billable.length > 0 && billable.every((r) => r.billed_to_bfs)) return 4;
+  const hasProbuild = rows.some((r) => r.source === "probuild" || r.source === "both");
+  if (hasProbuild) return 3;
+  const hasPO = (job.po_numbers || []).length > 0 || (job.oe_numbers || []).length > 0;
+  if (hasPO) return 2;
+  const today = new Date().toISOString().slice(0, 10);
+  const hasPastEvents = rows.some((r) => (r.job_date || "") <= today);
+  if (hasPastEvents) return 1;
+  return 0;
+}
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -13,15 +29,15 @@ export default function JobDetail() {
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
   const [currentUser, setCurrentUser] = useState("");
-  const [showNoteForm, setShowNoteForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
+  const [checkedItems, setCheckedItems] = useState(new Set());
 
   const loadAll = async () => {
     const [jb, fl, nt, me] = await Promise.all([
       base44.entities.Jobs.get(id),
-      base44.entities.FeeLines.filter({ job_id: id }, '-job_date', 5000),
-      base44.entities.JobNotes.filter({ job_id: id }, '-note_date', 500),
+      base44.entities.FeeLines.filter({ job_id: id }, "-job_date", 5000),
+      base44.entities.JobNotes.filter({ job_id: id }, "-note_date", 500),
       base44.auth.me().catch(() => null),
     ]);
     setJob(jb);
@@ -43,23 +59,25 @@ export default function JobDetail() {
   const status = useMemo(() => jobStatus(rows), [rows]);
   const totals = useMemo(() => jobTotals(rows), [rows]);
   const dates = useMemo(() => {
-    const ds = rows.map(r => r.job_date).filter(Boolean).sort();
+    const ds = rows.map((r) => r.job_date).filter(Boolean).sort();
     return { first: ds[0], last: ds[ds.length - 1], visits: new Set(ds).size };
   }, [rows]);
-  const lastSynced = useMemo(() => {
-    const all = [...rows.map(r => r.job_date), ...notes.map(n => n.note_date)].filter(Boolean).sort();
-    return all[all.length - 1] || null;
+  const stage = useMemo(() => computeStage(rows, job), [rows, job]);
+  const photos = useMemo(() => {
+    const urls = [];
+    for (const r of rows) { if (r.photo_urls) urls.push(...r.photo_urls); }
+    for (const n of notes) { if (n.attachments) urls.push(...n.attachments); }
+    return urls;
   }, [rows, notes]);
 
-  const handleMarkBilled = async () => {
-    const unbilled = rows.filter(r => !r.billed_to_bfs && Number(r.labor_amt) > 0);
-    if (!unbilled.length) return;
-    const updates = unbilled.map(r => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
-    await base44.entities.FeeLines.bulkUpdate(updates);
-    await loadAll();
+  const toggleCheck = (i) => {
+    setCheckedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
   };
-
-  const handleNoteSaved = async () => { setShowNoteForm(false); await loadAll(); };
 
   if (loading) {
     return (
@@ -85,24 +103,36 @@ export default function JobDetail() {
           Back to jobs
         </Link>
 
-        <JobDetailHeader job={job} status={status} totals={totals} dates={dates} onAddNote={() => setShowNoteForm(v => !v)} />
+        <JobDetailHeader
+          job={job}
+          status={status}
+          totals={totals}
+          dates={dates}
+          stage={stage}
+          checklistDone={checkedItems.size}
+          checklistTotal={CHECKLIST_TOTAL}
+          onAddPhoto={() => setLightbox(null)}
+        />
 
         <div className="flex flex-col min-[700px]:flex-row gap-5 mt-5">
-          <div className="flex-1 min-w-0">
-            <JobTimeline
-              jobId={id}
-              rows={rows}
-              notes={notes}
-              currentUser={currentUser}
-              showNoteForm={showNoteForm}
-              onNoteSaved={handleNoteSaved}
-              onNoteCancel={() => setShowNoteForm(false)}
-              onChanged={loadAll}
-              onPhotoClick={setLightbox}
-            />
+          {/* Left column */}
+          <div className="flex-1 min-w-0 space-y-5">
+            <Checklist checked={checkedItems} onToggle={toggleCheck} />
+            {/* Site photos — mobile only (below checklist) */}
+            <div className="min-[700px]:hidden">
+              <SitePhotos photos={photos} onAddPhoto={() => {}} onPhotoClick={setLightbox} />
+            </div>
           </div>
-          <div className="min-[700px]:w-[300px] shrink-0">
-            <JobRightRail job={job} totals={totals} rows={rows} lastSynced={lastSynced} onMarkBilled={handleMarkBilled} />
+
+          {/* Right column */}
+          <div className="min-[700px]:w-[300px] shrink-0 space-y-5">
+            <StageTimeline currentStage={stage} />
+            <LineItems rows={rows} />
+            {/* Site photos — desktop only (right column) */}
+            <div className="hidden min-[700px]:block">
+              <SitePhotos photos={photos} onAddPhoto={() => {}} onPhotoClick={setLightbox} />
+            </div>
+            <NotesSection jobId={id} notes={notes} currentUser={currentUser} onChanged={loadAll} onPhotoClick={setLightbox} />
           </div>
         </div>
       </div>

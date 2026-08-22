@@ -132,9 +132,9 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
           })}
         </div>
 
-        {/* Footer */}
+        {/* Footer — desktop */}
         <div
-          className="flex items-center justify-between px-4 py-3 gap-3"
+          className="hidden min-[700px]:flex items-center justify-between px-4 py-3 gap-3"
           style={{ borderTop: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}
         >
           <div className="min-w-0">
@@ -159,6 +159,35 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
               Mark billed
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Mobile sticky bar */}
+      <div
+        className="min-[700px]:hidden fixed bottom-[78px] left-0 right-0 z-20 flex items-center justify-between px-[18px] py-3 gap-3"
+        style={{ borderTop: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}
+      >
+        <div className="min-w-0">
+          <div className="mono-label-sm">Unbilled total</div>
+          <div className="font-mono-num text-[11px] mt-0.5" style={{ color: C.textSecondary }}>
+            ${formatMoney(totals.labor)} labor · 10% fee
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="font-mono-num text-[11px] whitespace-nowrap" style={{ color: selectedIds.size > 0 ? C.accent : C.textMuted }}>
+            {selectedIds.size} sel · ${formatMoney(selectedFee)}
+          </span>
+          <button
+            onClick={onMarkAllBilled}
+            className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-3.5 py-2 rounded-full whitespace-nowrap transition-colors"
+            style={
+              selectedIds.size > 0
+                ? { backgroundColor: C.accent, color: C.accentDark }
+                : { backgroundColor: "rgba(255,255,255,.08)", color: C.textMuted }
+            }
+          >
+            Mark billed
+          </button>
         </div>
       </div>
     </section>
