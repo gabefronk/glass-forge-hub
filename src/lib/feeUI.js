@@ -1,30 +1,36 @@
 import { isFutureRow } from "@/lib/feeMath";
 
-// ── Palette ──────────────────────────────────────────────────────────────
+// ── Obsidian Palette ────────────────────────────────────────────────────
 export const C = {
-  pageBg: "#f3f3f1",
-  card: "#fbfbfa",
-  cardAlt: "#fdfdfc",
-  text: "#1b1c22",
-  accent: "#1f5049",
-  accentDark: "#12211e",
-  accentText: "#143a34",
-  border: "#e2e2de",
-  rowBorder: "#ebebe7",
-  headerBg: "#12211e",
-  headerText: "#cfdcd7",
-  tagBillable: { bg: "#dbe7e3", text: "#143a34" },
-  tagCal: { bg: "#e3eaf2", text: "#2c4a63" },
-  tagReview: { bg: "#f5e6cd", text: "#6b4a12" },
-  tagNoCharge: { bg: "#eeeeea", text: "#6b6b66" },
-  tagSplit: { bg: "#fef3c7", text: "#6b4a12" },
-  amber: "#8a5a12",
-  amberLight: "#f5e6cd",
-  accent18: "#d7dfde",
-  accent12: "#dde6e3",
-  mutedBg: "#f0f0ee",
-  mutedText: "#c4c4c0",
-  leftBarZero: "#dcdcd7",
+  pageBg: "#050606",
+  card: "#121514",
+  cardAlt: "#101312",
+  text: "#FFFFFF",
+  textSecondary: "rgba(255,255,255,.62)",
+  textMuted: "rgba(255,255,255,.42)",
+  textFaint: "rgba(255,255,255,.40)",
+  accent: "#6EE7C0",
+  accentDark: "#0A0C0C",
+  accentText: "#6EE7C0",
+  border: "rgba(255,255,255,.07)",
+  borderStrong: "rgba(255,255,255,.10)",
+  rowBorder: "rgba(255,255,255,.07)",
+  headerBg: "rgba(255,255,255,.03)",
+  headerText: "rgba(255,255,255,.40)",
+  tagBillable: { bg: "rgba(110,231,192,.14)", text: "#6EE7C0" },
+  tagCal: { bg: "rgba(255,255,255,.06)", text: "rgba(255,255,255,.62)" },
+  tagReview: { bg: "rgba(255,138,122,.14)", text: "#FF8A7A" },
+  tagNoCharge: { bg: "rgba(255,255,255,.05)", text: "rgba(255,255,255,.42)" },
+  tagSplit: { bg: "rgba(110,231,192,.14)", text: "#6EE7C0" },
+  amber: "#FF8A7A",
+  amberLight: "rgba(255,138,122,.14)",
+  accent18: "rgba(110,231,192,.14)",
+  accent12: "rgba(110,231,192,.10)",
+  accent06: "rgba(110,231,192,.06)",
+  mutedBg: "rgba(255,255,255,.05)",
+  mutedText: "rgba(255,255,255,.42)",
+  leftBarZero: "rgba(255,255,255,.2)",
+  sidebarBg: "#0B0D0D",
 };
 
 const GABE_EMAIL = "gabriel.fronk.wd@gmail.com";
@@ -75,8 +81,8 @@ export function statusTag(row) {
 export const UNBILLED_GRID = "grid grid-cols-[26px_minmax(130px,1fr)_90px_48px_82px_108px] gap-3";
 export const JOB_GRID = "grid grid-cols-[26px_minmax(190px,1.6fr)_68px_minmax(130px,1.4fr)_96px_52px_82px_minmax(108px,116px)] gap-3";
 
-export const CARD_SHADOW = "0 1px 1px rgba(18,33,30,0.06), 0 10px 24px -12px rgba(18,33,30,0.28), 0 26px 48px -28px rgba(18,33,30,0.22)";
-export const ROW_SHADOW = "inset 0 1px 0 #ffffff, 0 1px 0 rgba(18,33,30,0.04)";
+export const CARD_SHADOW = "none";
+export const ROW_SHADOW = "none";
 
 export function formatDateGroup(dateStr) {
   const d = new Date(dateStr + "T00:00:00");

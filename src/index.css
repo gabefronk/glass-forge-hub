@@ -1,91 +1,137 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 0%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 0%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 0%;
-    --primary: 0 0% 0%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 0%;
-    --muted: 210 14% 96%;
-    --muted-foreground: 210 4% 46%;
-    --accent: 171 44% 22%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 0% 0%;
-    --chart-1: 33 100% 50%;
-    --chart-2: 178 53% 77%;
-    --chart-3: 343 76% 88%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
-    --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
-    --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    --sidebar-background: 0 0% 0%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-accent: 0 0% 100%;
-    --sidebar-accent-foreground: 0 0% 0%;
-    --sidebar-border: 0 0% 20%;
-    --sidebar-ring: 33 100% 50%;
+    --background: #050606;
+    --foreground: #FFFFFF;
+    --card: #121514;
+    --card-foreground: #FFFFFF;
+    --popover: #101312;
+    --popover-foreground: #FFFFFF;
+    --primary: #6EE7C0;
+    --primary-foreground: #0A0C0C;
+    --secondary: rgba(255,255,255,.05);
+    --secondary-foreground: #FFFFFF;
+    --muted: rgba(255,255,255,.05);
+    --muted-foreground: rgba(255,255,255,.42);
+    --accent: #6EE7C0;
+    --accent-foreground: #0A0C0C;
+    --destructive: #FF8A7A;
+    --destructive-foreground: #0A0C0C;
+    --border: rgba(255,255,255,.07);
+    --input: rgba(255,255,255,.07);
+    --ring: #6EE7C0;
+    --chart-1: #6EE7C0;
+    --chart-2: rgba(110,231,192,.6);
+    --chart-3: rgba(110,231,192,.4);
+    --chart-4: rgba(110,231,192,.3);
+    --chart-5: rgba(110,231,192,.2);
+    --radius: 16px;
+    --font-heading: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+    --font-body: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sidebar-bg: #0B0D0D;
+    --sidebar-foreground: #FFFFFF;
+    --sidebar-primary: #6EE7C0;
+    --sidebar-primary-foreground: #0A0C0C;
+    --sidebar-accent: rgba(110,231,192,.14);
+    --sidebar-accent-foreground: #6EE7C0;
+    --sidebar-border: rgba(255,255,255,.07);
+    --sidebar-ring: #6EE7C0;
   }
 
   .dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
-    --card: 0 0% 0%;
-    --card-foreground: 0 0% 100%;
-    --popover: 0 0% 0%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 0 0% 100%;
-    --primary-foreground: 0 0% 0%;
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 64%;
-    --accent: 171 44% 22%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 31%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 14%;
-    --input: 0 0% 14%;
-    --ring: 0 0% 83%;
-    --chart-1: 33 100% 50%;
-    --chart-2: 178 53% 77%;
-    --chart-3: 343 76% 88%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --sidebar-background: 0 0% 0%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-accent: 0 0% 100%;
-    --sidebar-accent-foreground: 0 0% 0%;
-    --sidebar-border: 0 0% 20%;
-    --sidebar-ring: 33 100% 50%;
+    --background: #050606;
+    --foreground: #FFFFFF;
+    --card: #121514;
+    --card-foreground: #FFFFFF;
+    --popover: #101312;
+    --popover-foreground: #FFFFFF;
+    --primary: #6EE7C0;
+    --primary-foreground: #0A0C0C;
+    --secondary: rgba(255,255,255,.05);
+    --secondary-foreground: #FFFFFF;
+    --muted: rgba(255,255,255,.05);
+    --muted-foreground: rgba(255,255,255,.42);
+    --accent: #6EE7C0;
+    --accent-foreground: #0A0C0C;
+    --destructive: #FF8A7A;
+    --destructive-foreground: #0A0C0C;
+    --border: rgba(255,255,255,.07);
+    --input: rgba(255,255,255,.07);
+    --ring: #6EE7C0;
+    --chart-1: #6EE7C0;
+    --chart-2: rgba(110,231,192,.6);
+    --chart-3: rgba(110,231,192,.4);
+    --chart-4: rgba(110,231,192,.3);
+    --chart-5: rgba(110,231,192,.2);
+    --radius: 16px;
+    --font-heading: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+    --font-body: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sidebar-bg: #0B0D0D;
+    --sidebar-foreground: #FFFFFF;
+    --sidebar-primary: #6EE7C0;
+    --sidebar-primary-foreground: #0A0C0C;
+    --sidebar-accent: rgba(110,231,192,.14);
+    --sidebar-accent-foreground: #6EE7C0;
+    --sidebar-border: rgba(255,255,255,.07);
+    --sidebar-ring: #6EE7C0;
   }
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: var(--border);
+    outline-color: color-mix(in srgb, var(--ring) 50%, transparent);
   }
 
   body {
-    @apply bg-background text-foreground font-body;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-body);
+    font-feature-settings: "ss01", "cv01";
   }
+}
+
+@layer utilities {
+  .font-mono-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+  .font-mono-num-bold {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .mono-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.40);
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .mono-label-sm {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.40);
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .hero-glow {
+    background: radial-gradient(120% 90% at 20% 0%, rgba(110,231,192,.14) 0%, rgba(5,6,6,0) 62%);
+  }
+  .obsidian-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .obsidian-scroll::-webkit-scrollbar-track { background: transparent; }
+  .obsidian-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.10); border-radius: 99px; }
 }

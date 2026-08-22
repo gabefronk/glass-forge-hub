@@ -29,7 +29,7 @@ export default function EventDetail({ event, jobs, onEdit, onDelete, onClose, sa
           <div className="text-sm text-muted-foreground">{event.event_date}{event.start_time ? ` · ${event.start_time}` : ""}</div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={cn("px-2 py-0.5 rounded text-xs font-medium", event.source === "app" ? "bg-teal-100 text-teal-900" : "bg-slate-100 text-slate-700")}>
+          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: event.source === "app" ? "rgba(110,231,192,.14)" : "rgba(255,255,255,.06)", color: event.source === "app" ? "#6EE7C0" : "rgba(255,255,255,.62)" }}>
             {event.source === "app" ? "App" : "Google"}
           </span>
           {event.job_id && (
@@ -42,7 +42,7 @@ export default function EventDetail({ event, jobs, onEdit, onDelete, onClose, sa
         </div>
       </div>
       {readOnly && (
-        <div className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-900 rounded px-2 py-1.5">
+        <div className="flex items-center gap-1.5 text-xs rounded-[10px] px-2.5 py-1.5" style={{ backgroundColor: "rgba(255,138,122,.10)", color: "#FF8A7A" }}>
           <Lock className="h-3.5 w-3.5" /> Read-only — created in Google Calendar. Edit it there, not here.
         </div>
       )}

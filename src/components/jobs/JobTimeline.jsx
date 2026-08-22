@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { C, CARD_SHADOW, crewName } from "@/lib/feeUI";
+import { C, crewName } from "@/lib/feeUI";
 import { formatMoney } from "@/lib/feeMath";
 import JobNoteForm from "@/components/jobs/JobNoteForm";
 import JobNoteEntry from "@/components/jobs/JobNoteEntry";
@@ -24,8 +24,8 @@ export default function JobTimeline({ jobId, rows, notes, currentUser, showNoteF
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 style={{ fontSize: "15px", fontWeight: 700, color: C.accentDark }}>Timeline</h2>
-        <span className="text-sm whitespace-nowrap" style={{ color: C.text, opacity: 0.62 }}>
+        <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Timeline</h2>
+        <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textMuted }}>
           {reportCount} field report{reportCount === 1 ? "" : "s"} · {noteCount} note{noteCount === 1 ? "" : "s"}
         </span>
       </div>
@@ -65,12 +65,12 @@ function TimelineItem({ entry, currentUser, onChanged, onPhotoClick }) {
     <div className="relative pl-8">
       <div
         className="absolute left-[1px] top-3 w-[9px] h-[9px] rounded-full z-10"
-        style={{ backgroundColor: dotColor, boxShadow: `0 0 0 3px ${C.pageBg}` }}
+        style={{ backgroundColor: dotColor, boxShadow: `0 0 0 3px #050606` }}
       />
       {/* Head */}
       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-        <span className="font-mono tabular-nums whitespace-nowrap" style={{ fontSize: "12px", color: C.text, opacity: 0.68 }}>{dateStr}</span>
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: tagBg, color: tagText }}>{kindLabel}</span>
+        <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textSecondary }}>{dateStr}</span>
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: tagBg, color: tagText }}>{kindLabel}</span>
         {entry.kind === "fee" && entry.data.ticket_sequence != null && entry.data.ticket_sequence >= 2 && (
           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.tagReview.bg, color: C.tagReview.text }}>Rework #{entry.data.ticket_sequence}</span>
         )}
@@ -90,12 +90,12 @@ function FeeEntryCard({ row, onPhotoClick }) {
   const crew = crewName(row.calendar_creator);
 
   return (
-    <div className="rounded-lg p-3" style={{ border: `1px solid ${C.border}`, boxShadow: CARD_SHADOW, backgroundColor: C.card }}>
+    <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       {row.line_description && (
-        <p className="text-sm mb-2 truncate" style={{ color: C.accentDark }}>{row.line_description}</p>
+        <p className="text-[13px] mb-2 truncate font-medium" style={{ color: C.text }}>{row.line_description}</p>
       )}
       {row.note_text && (
-        <div className="text-sm whitespace-pre-wrap mb-2 rounded p-2" style={{ backgroundColor: C.mutedBg, color: C.text }}>{row.note_text}</div>
+        <div className="text-[13px] whitespace-pre-wrap mb-2 rounded p-2" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{row.note_text}</div>
       )}
       {row.photo_urls && row.photo_urls.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
@@ -106,10 +106,10 @@ function FeeEntryCard({ row, onPhotoClick }) {
           ))}
         </div>
       )}
-      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs" style={{ color: C.text, opacity: 0.68 }}>
-        <span className="whitespace-nowrap">Labor <span className="tabular-nums">{isZero ? "—" : `$${formatMoney(row.labor_amt)}`}</span></span>
+      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[11px]" style={{ color: C.textSecondary }}>
+        <span className="whitespace-nowrap">Labor <span className="font-mono-num">{isZero ? "—" : `$${formatMoney(row.labor_amt)}`}</span></span>
         <span className="whitespace-nowrap">·</span>
-        <span className="whitespace-nowrap">Fee <span className="tabular-nums font-semibold" style={{ color: C.accent }}>{isZero ? "—" : `$${formatMoney(row.fee_amt)}`}</span></span>
+        <span className="whitespace-nowrap">Fee <span className="font-mono-num-bold" style={{ color: C.accent }}>{isZero ? "—" : `$${formatMoney(row.fee_amt)}`}</span></span>
         {crew && (<><span className="whitespace-nowrap">·</span><span className="whitespace-nowrap">Crew {crew}</span></>)}
       </div>
     </div>

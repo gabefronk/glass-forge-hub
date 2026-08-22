@@ -2,7 +2,7 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Pencil, Trash2 } from "lucide-react";
 import JobNoteForm from "./JobNoteForm";
-import { C, CARD_SHADOW } from "@/lib/feeUI";
+import { C } from "@/lib/feeUI";
 
 export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClick }) {
   const [editing, setEditing] = useState(false);
@@ -27,24 +27,24 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
   };
 
   return (
-    <div className="rounded-lg p-3" style={{ border: `1px solid ${C.border}`, boxShadow: CARD_SHADOW, backgroundColor: C.card }}>
+    <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="flex items-center gap-2 mb-2">
         {note.edited && (
-          <span className="text-[10px] font-medium uppercase tracking-wide italic" style={{ color: C.text, opacity: 0.5 }}>edited</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.13em] italic" style={{ color: C.textMuted }}>edited</span>
         )}
-        <span className="text-xs truncate ml-auto" style={{ color: C.text, opacity: 0.68 }}>{note.author}</span>
+        <span className="font-mono text-[11px] truncate ml-auto" style={{ color: C.textSecondary }}>{note.author}</span>
         {isAuthor && (
           <div className="flex items-center gap-2 shrink-0">
-            <button type="button" onClick={() => setEditing(true)} style={{ color: C.text, opacity: 0.5 }} className="hover:opacity-100 transition-opacity">
+            <button type="button" onClick={() => setEditing(true)} style={{ color: C.textMuted }} className="hover:opacity-100 transition-opacity">
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <button type="button" onClick={handleDelete} style={{ color: C.text, opacity: 0.5 }} className="hover:text-red-600 transition-colors">
+            <button type="button" onClick={handleDelete} style={{ color: C.textMuted }} className="hover:opacity-100 transition-opacity">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
       </div>
-      <p className="text-sm whitespace-pre-wrap" style={{ color: C.accentDark }}>{note.body}</p>
+      <p className="text-[13px] whitespace-pre-wrap" style={{ color: C.text }}>{note.body}</p>
       {note.attachments && note.attachments.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
           {note.attachments.map((url, i) => (

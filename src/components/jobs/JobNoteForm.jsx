@@ -2,7 +2,7 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Paperclip, X, Loader2 } from "lucide-react";
-import { C, CARD_SHADOW } from "@/lib/feeUI";
+import { C } from "@/lib/feeUI";
 
 export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel }) {
   const today = new Date().toISOString().slice(0, 10);
@@ -51,10 +51,10 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
   };
 
   return (
-    <div className="rounded-lg p-3" style={{ border: `1px solid ${C.border}`, boxShadow: CARD_SHADOW, backgroundColor: C.card }}>
+    <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <label className="text-xs font-medium uppercase tracking-wide whitespace-nowrap" style={{ color: C.text, opacity: 0.62 }}>Date</label>
+          <label className="mono-label-sm">Date</label>
           <input
             type="date"
             value={noteDate}
@@ -62,7 +62,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
             className="text-sm rounded px-2 py-1 focus:outline-none"
             style={{ border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.cardAlt }}
           />
-          <span className="text-xs ml-auto whitespace-nowrap" style={{ color: C.text, opacity: 0.62 }}>{editing ? "Edit note" : "New note"}</span>
+          <span className="text-[11px] ml-auto whitespace-nowrap" style={{ color: C.textMuted }}>{editing ? "Edit note" : "New note"}</span>
         </div>
         <textarea
           value={body}
@@ -84,7 +84,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
                 e.target.value = "";
               }}
             />
-            <span className="inline-flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: C.text, opacity: 0.68 }}>
+            <span className="inline-flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: C.textSecondary }}>
               {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
               {uploading ? "Uploading…" : "Attach"}
             </span>

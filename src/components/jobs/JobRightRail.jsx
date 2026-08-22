@@ -1,12 +1,11 @@
-import { Button } from "@/components/ui/button";
-import { C, CARD_SHADOW, formatShort } from "@/lib/feeUI";
+import { C, formatShort } from "@/lib/feeUI";
 import { formatMoney } from "@/lib/feeMath";
 
 function DetailRow({ label, children }) {
   return (
     <div>
-      <div className="uppercase tracking-wide whitespace-nowrap" style={{ fontSize: "10px", fontWeight: 600, color: C.text, opacity: 0.62 }}>{label}</div>
-      <div style={{ fontSize: "13px", color: C.text }}>{children}</div>
+      <div className="mono-label-sm mb-1">{label}</div>
+      <div className="text-[13px]" style={{ color: C.text }}>{children}</div>
     </div>
   );
 }
@@ -20,27 +19,27 @@ export default function JobRightRail({ job, totals, rows, lastSynced, onMarkBill
   return (
     <div className="space-y-4">
       {/* Job details */}
-      <div className="rounded-lg p-4" style={{ border: `1px solid ${C.border}`, boxShadow: CARD_SHADOW, backgroundColor: C.card }}>
-        <h3 className="mb-3" style={{ fontSize: "13px", fontWeight: 700, color: C.accentDark }}>Job details</h3>
-        <div className="space-y-2.5">
+      <div className="rounded-[16px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+        <h3 className="font-heading text-[13px] font-semibold mb-3" style={{ color: C.text }}>Job details</h3>
+        <div className="space-y-3">
           {job.builder && <DetailRow label="Builder">{job.builder}</DetailRow>}
           {job.address && <DetailRow label="Address">{job.address}</DetailRow>}
           {pos.length > 0 && (
             <div>
-              <div className="uppercase tracking-wide mb-1 whitespace-nowrap" style={{ fontSize: "10px", fontWeight: 600, color: C.text, opacity: 0.62 }}>PO numbers</div>
+              <div className="mono-label-sm mb-1.5">PO numbers</div>
               <div className="flex flex-wrap gap-1.5">
                 {pos.map((po, i) => (
-                  <span key={i} className="font-mono whitespace-nowrap px-2 py-0.5 rounded" style={{ fontSize: "11px", backgroundColor: C.mutedBg, color: C.text }}>{po}</span>
+                  <span key={i} className="font-mono whitespace-nowrap px-2 py-0.5 rounded text-[11px]" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{po}</span>
                 ))}
               </div>
             </div>
           )}
           {oes.length > 0 && (
             <div>
-              <div className="uppercase tracking-wide mb-1 whitespace-nowrap" style={{ fontSize: "10px", fontWeight: 600, color: C.text, opacity: 0.62 }}>OE numbers</div>
+              <div className="mono-label-sm mb-1.5">OE numbers</div>
               <div className="flex flex-wrap gap-1.5">
                 {oes.map((oe, i) => (
-                  <span key={i} className="font-mono whitespace-nowrap px-2 py-0.5 rounded" style={{ fontSize: "11px", backgroundColor: C.mutedBg, color: C.text }}>{oe}</span>
+                  <span key={i} className="font-mono whitespace-nowrap px-2 py-0.5 rounded text-[11px]" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{oe}</span>
                 ))}
               </div>
             </div>
@@ -50,22 +49,33 @@ export default function JobRightRail({ job, totals, rows, lastSynced, onMarkBill
       </div>
 
       {/* Billing */}
-      <div className="rounded-lg p-4" style={{ border: `1px solid ${C.border}`, boxShadow: CARD_SHADOW, background: "linear-gradient(to bottom, #f6f8f6, #f1f4f1)" }}>
-        <h3 className="mb-3" style={{ fontSize: "13px", fontWeight: 700, color: C.accentDark }}>Billing</h3>
+      <div className="rounded-[16px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+        <h3 className="font-heading text-[13px] font-semibold mb-3" style={{ color: C.text }}>Billing</h3>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="whitespace-nowrap" style={{ fontSize: "13px", color: C.text, opacity: 0.68 }}>Labor</span>
-            <span className="tabular-nums" style={{ fontSize: "15px", fontWeight: 600, color: C.accentDark }}>{totals.labor ? `$${formatMoney(totals.labor)}` : "—"}</span>
+            <span className="text-[13px] whitespace-nowrap" style={{ color: C.textSecondary }}>Labor</span>
+            <span className="font-mono-num text-[15px] font-medium" style={{ color: C.text }}>{totals.labor ? `$${formatMoney(totals.labor)}` : "—"}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="whitespace-nowrap" style={{ fontSize: "13px", color: C.text, opacity: 0.68 }}>Fee at 10%</span>
-            <span className="tabular-nums" style={{ fontSize: "17px", fontWeight: 700, color: C.accent }}>{totals.fee ? `$${formatMoney(totals.fee)}` : "—"}</span>
+            <span className="text-[13px] whitespace-nowrap" style={{ color: C.textSecondary }}>Fee at 10%</span>
+            <span className="font-mono-num-bold text-[18px]" style={{ color: C.accent, letterSpacing: "-0.02em" }}>{totals.fee ? `$${formatMoney(totals.fee)}` : "—"}</span>
           </div>
           <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.border}` }}>
-            <span className="whitespace-nowrap" style={{ fontSize: "13px", color: C.text, opacity: 0.68 }}>Status</span>
-            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: allBilled ? C.tagBillable.bg : C.tagReview.bg, color: allBilled ? C.tagBillable.text : C.tagReview.text }}>{allBilled ? "Billed" : "Not billed"}</span>
+            <span className="text-[13px] whitespace-nowrap" style={{ color: C.textSecondary }}>Status</span>
+            <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: allBilled ? C.tagBillable.bg : C.tagReview.bg, color: allBilled ? C.tagBillable.text : C.tagReview.text }}>{allBilled ? "Billed" : "Not billed"}</span>
           </div>
-          <Button className="w-full" disabled={allBilled || !hasBillableRows} onClick={onMarkBilled}>Mark billed to BFS</Button>
+          <button
+            onClick={onMarkBilled}
+            disabled={allBilled || !hasBillableRows}
+            className="w-full py-2 rounded-full text-[12px] font-semibold whitespace-nowrap transition-colors"
+            style={
+              allBilled || !hasBillableRows
+                ? { backgroundColor: "rgba(255,255,255,.08)", color: C.textMuted }
+                : { backgroundColor: C.accent, color: C.accentDark }
+            }
+          >
+            Mark billed to BFS
+          </button>
         </div>
       </div>
     </div>

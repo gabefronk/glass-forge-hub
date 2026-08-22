@@ -64,30 +64,30 @@ export default function JobDetail() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.pageBg }}>
-        <div className="w-8 h-8 border-4 rounded-full animate-spin" style={{ borderColor: C.border, borderTopColor: C.accentDark }} />
+        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "rgba(255,255,255,.10)", borderTopColor: C.accent }} />
       </div>
     );
   }
   if (!job) {
     return (
-      <div className="px-8 pt-16 text-center" style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-        <p className="text-sm" style={{ color: C.text, opacity: 0.68 }}>Job not found.</p>
-        <Link to="/jobs" style={{ color: C.accent }} className="text-sm mt-2 inline-block">← Back to Jobs</Link>
+      <div className="px-[26px] pt-16 text-center" style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
+        <p className="text-[14px]" style={{ color: C.textMuted }}>Job not found.</p>
+        <Link to="/jobs" style={{ color: C.accent }} className="text-[13px] mt-2 inline-block">← Back to Jobs</Link>
       </div>
     );
   }
 
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-      <div className="px-4 sm:px-8 pt-6 pb-16 max-w-6xl">
-        <Link to="/jobs" className="inline-flex items-center gap-1 text-sm mb-4 hover:underline" style={{ color: C.text, opacity: 0.68 }}>
+      <div className="px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-16 max-w-6xl">
+        <Link to="/jobs" className="inline-flex items-center gap-1 text-[13px] mb-4 transition-colors hover:opacity-80" style={{ color: C.textSecondary }}>
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to jobs
         </Link>
 
         <JobDetailHeader job={job} status={status} totals={totals} dates={dates} onAddNote={() => setShowNoteForm(v => !v)} />
 
-        <div className="flex flex-col lg:flex-row gap-6 mt-6">
+        <div className="flex flex-col min-[700px]:flex-row gap-5 mt-5">
           <div className="flex-1 min-w-0">
             <JobTimeline
               jobId={id}
@@ -101,15 +101,15 @@ export default function JobDetail() {
               onPhotoClick={setLightbox}
             />
           </div>
-          <div className="lg:w-[300px] shrink-0">
+          <div className="min-[700px]:w-[300px] shrink-0">
             <JobRightRail job={job} totals={totals} rows={rows} lastSynced={lastSynced} onMarkBilled={handleMarkBilled} />
           </div>
         </div>
       </div>
 
       {lightbox && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-8" onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="photo" className="max-w-full max-h-full rounded-lg" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-8" style={{ backgroundColor: "rgba(0,0,0,.85)" }} onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="photo" className="max-w-full max-h-full rounded-[12px]" />
         </div>
       )}
     </div>

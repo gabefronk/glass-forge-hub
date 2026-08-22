@@ -75,7 +75,7 @@ export function EditableSwitch({ checked, onCommit, className }) {
 export function AdjustedMarker() {
   return (
     <span title="Manually adjusted" className="inline-flex items-center justify-center">
-      <Check className="h-3 w-3 text-violet-600" />
+      <Check className="h-3 w-3" style={{ color: "#6EE7C0" }} />
     </span>
   );
 }

@@ -54,10 +54,10 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
   };
 
   return (
-    <div className="rounded-lg border border-border bg-[#fef3c7] p-4 mb-4 border-l-4 border-l-[#f59e0b]">
+    <div className="rounded-[14px] p-4 mb-4" style={{ backgroundColor: "#121514", border: "1px solid rgba(255,255,255,.07)", borderLeft: "3px solid #6EE7C0" }}>
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#fef3c7] text-foreground">Profit Split</span>
-        <span className="text-xs text-muted-foreground">New profit-split job</span>
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(110,231,192,.14)", color: "#6EE7C0" }}>Profit split</span>
+        <span className="text-[12px]" style={{ color: "rgba(255,255,255,.42)" }}>New profit-split job</span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
@@ -67,16 +67,17 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
             value={selectedJob ? selectedJob.canonical_name : jobQuery}
             onChange={(e) => { setJobQuery(e.target.value); setSelectedJob(null); }}
             placeholder="Search or type new job name..."
-            className="w-full mt-1 text-sm border border-border rounded px-2 py-1.5 bg-white focus:outline-none focus:border-foreground"
+            className="w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
+            style={{ border: "1px solid rgba(255,255,255,.07)", backgroundColor: "#101312", color: "#FFFFFF" }}
           />
           {filteredJobs.length > 0 && !selectedJob && (
-            <div className="mt-1 rounded border border-border bg-white max-h-40 overflow-auto">
+            <div className="mt-1 rounded-[10px] max-h-40 overflow-auto" style={{ border: "1px solid rgba(255,255,255,.07)", backgroundColor: "#101312" }}>
               {filteredJobs.map(j => (
                 <button
                   key={j.id}
                   type="button"
                   onClick={() => { setSelectedJob(j); setJobQuery(""); }}
-                  className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted text-foreground"
+                  className="w-full text-left px-2 py-1.5 text-sm hover:bg-white/5 transition-colors" style={{ color: "#FFFFFF" }}
                 >
                   {j.canonical_name}
                   {j.address && <span className="text-xs text-muted-foreground ml-2">· {j.address}</span>}
@@ -91,7 +92,8 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full mt-1 text-sm border border-border rounded px-2 py-1.5 bg-white focus:outline-none focus:border-foreground"
+            className="w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
+            style={{ border: "1px solid rgba(255,255,255,.07)", backgroundColor: "#101312", color: "#FFFFFF" }}
           />
         </div>
         <div>
@@ -102,7 +104,8 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
             value={salePrice}
             onChange={(e) => setSalePrice(e.target.value)}
             placeholder="0.00"
-            className="w-full mt-1 text-sm border border-border rounded px-2 py-1.5 bg-white focus:outline-none focus:border-foreground"
+            className="w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
+            style={{ border: "1px solid rgba(255,255,255,.07)", backgroundColor: "#101312", color: "#FFFFFF" }}
           />
         </div>
         <div>
@@ -113,7 +116,8 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
             value={cost}
             onChange={(e) => setCost(e.target.value)}
             placeholder="0.00"
-            className="w-full mt-1 text-sm border border-border rounded px-2 py-1.5 bg-white focus:outline-none focus:border-foreground"
+            className="w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
+            style={{ border: "1px solid rgba(255,255,255,.07)", backgroundColor: "#101312", color: "#FFFFFF" }}
           />
         </div>
       </div>

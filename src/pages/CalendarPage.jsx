@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { Button } from "@/components/ui/button";
 import { Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchAllPages } from "@/lib/pagination";
+import { C } from "@/lib/feeUI";
 import MonthGrid from "@/components/calendar/MonthGrid";
 import EventForm from "@/components/calendar/EventForm";
 import EventDetail from "@/components/calendar/EventDetail";
@@ -13,16 +13,20 @@ function formatMonth(m) {
   return new Date(y, mm - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+const INSTALL_COLOR = "#6EE7C0";
+const SERVICE_COLOR = "#FF8A7A";
+
 export default function CalendarPage() {
   const [events, setEvents] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [view, setView] = useState(() => {
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) return "list";
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 699px)").matches) return "list";
     return "month";
   });
   const [creating, setCreating] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
@@ -37,10 +41,15 @@ export default function CalendarPage() {
   useEffect(() => { load(); }, []);
 
   const monthEvents = useMemo(() => events.filter((e) => (e.event_date || "").slice(0, 7) === month), [events, month]);
+  const selectedDayEvents = useMemo(() => {
+    return monthEvents.filter((e) => (e.event_date || "").slice(0, 10) === selectedDay).sort((a, b) => (a.start_time || "99").localeCompare(b.start_time || "99"));
+  }, [monthEvents, selectedDay]);
 
   const shiftMonth = (delta) => {
     const [y, m] = month.split("-").map(Number);
-    setMonth(new Date(y, m - 1 + delta, 1).toISOString().slice(0, 7));
+    const newMonth = new Date(y, m - 1 + delta, 1).toISOString().slice(0, 7);
+    setMonth(newMonth);
+    setSelectedDay(`${newMonth}-01`);
   };
 
   const handleSave = async (f) => {
@@ -78,80 +87,131 @@ export default function CalendarPage() {
     } finally { setSyncing(false); }
   };
 
+  const dayLabel = (d) => {
+    const date = new Date(d + "T00:00:00");
+    return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  };
+
   return (
-    <div className="px-4 sm:px-8 pt-6 pb-16">
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <h1 className="font-heading text-xl font-bold uppercase tracking-tight">Installation Schedule</h1>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={() => shiftMonth(-1)}>Prev</Button>
-          <span className="font-medium px-2 min-w-[140px] text-center">{formatMonth(month)}</span>
-          <Button variant="outline" size="sm" onClick={() => shiftMonth(1)}>Next</Button>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex rounded-md border border-border overflow-hidden">
-            <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 text-xs uppercase tracking-wide font-semibold", view === "month" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-foreground")}>Month</button>
-            <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 text-xs uppercase tracking-wide font-semibold", view === "list" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-foreground")}>List</button>
+    <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
+      <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
+        {/* Header */}
+        <div className="flex flex-wrap items-center gap-3 mb-5">
+          <div className="mono-label-sm">Installation schedule</div>
+          <div className="flex items-center gap-2 ml-auto">
+            <div className="flex rounded-full p-0.5" style={{ border: `1px solid ${C.border}` }}>
+              <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.13em] transition-colors", view === "month" ? "text-[#0A0C0C]" : "")} style={view === "month" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>Month</button>
+              <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.13em] transition-colors", view === "list" ? "text-[#0A0C0C]" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
+            </div>
+            <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-white/5" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+              <RefreshCw className="h-3.5 w-3.5" />{syncing ? "Syncing…" : "Sync Google"}
+            </button>
+            <button onClick={() => { setSelected(null); setCreating({ event_date: selectedDay }); }} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
+              <Plus className="h-3.5 w-3.5" />New event
+            </button>
           </div>
-          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
-            <RefreshCw className="h-4 w-4 mr-1" />{syncing ? "Syncing…" : "Sync Google"}
-          </Button>
-          <Button size="sm" onClick={() => { setSelected(null); setCreating({ event_date: month + "-01" }); }}>
-            <Plus className="h-4 w-4 mr-1" />New event
-          </Button>
         </div>
-      </div>
 
-      <div className="flex gap-4 mb-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ backgroundColor: "#d6f5f0", borderLeft: "3px solid #0d9488" }} />Install</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ backgroundColor: "#fce4e4", borderLeft: "3px solid #c1625a" }} />Service</span>
-      </div>
-
-      {creating && (
-        <div className="mb-4">
-          <EventForm initial={creating} jobs={jobs} onSave={handleSave} onCancel={() => setCreating(null)} saving={saving} />
+        <div className="flex items-center gap-4 mb-4">
+          <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="inline-flex items-center gap-1.5" style={{ color: C.textSecondary }}>
+              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: INSTALL_COLOR }} />Install
+            </span>
+            <span className="inline-flex items-center gap-1.5" style={{ color: C.textSecondary }}>
+              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: SERVICE_COLOR }} />Service
+            </span>
+          </div>
         </div>
-      )}
-      {selected && (
-        <div className="mb-4">
-          <EventDetail event={selected} jobs={jobs} onEdit={handleSave} onDelete={handleDelete} onClose={() => setSelected(null)} saving={saving} />
-        </div>
-      )}
 
-      {view === "month" ? (
-        <MonthGrid month={month} events={monthEvents} onSelect={setSelected} onCreateForDate={(d) => { setSelected(null); setCreating({ event_date: d }); }} />
-      ) : (
-        <div className="rounded-lg border border-border overflow-hidden">
-          {monthEvents.length === 0 && <div className="px-4 py-10 text-center text-sm text-muted-foreground">No events this month.</div>}
-          {monthEvents.map((e) => {
-            const isInstall = e.source === "app";
-            const bg = isInstall ? "#d6f5f0" : "#fce4e4";
-            const bar = isInstall ? "#0d9488" : "#c1625a";
-            return (
-              <button
-                key={e.id}
-                type="button"
-                onClick={() => setSelected(e)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left border-b border-border last:border-b-0 hover:bg-accent/40"
-              >
-                <div className="flex flex-col items-center justify-center min-w-[42px] pr-1 border-r border-border/60">
-                  <span className="text-[10px] uppercase text-muted-foreground leading-none">
-                    {new Date(e.event_date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" })}
-                  </span>
-                  <span className="text-lg font-bold tabular-nums leading-tight">
-                    {e.event_date.slice(8)}
-                  </span>
+        {creating && (
+          <div className="mb-4">
+            <EventForm initial={creating} jobs={jobs} onSave={handleSave} onCancel={() => setCreating(null)} saving={saving} />
+          </div>
+        )}
+        {selected && (
+          <div className="mb-4">
+            <EventDetail event={selected} jobs={jobs} onEdit={handleSave} onDelete={handleDelete} onClose={() => setSelected(null)} saving={saving} />
+          </div>
+        )}
+
+        {view === "month" ? (
+          <>
+            <MonthGrid
+              month={month}
+              events={monthEvents}
+              onSelect={setSelected}
+              onCreateForDate={(d) => { setSelected(null); setCreating({ event_date: d }); }}
+              selectedDate={selectedDay}
+              onSelectDay={setSelectedDay}
+            />
+            {/* Selected day panel */}
+            <div className="mt-4 rounded-[16px] p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-heading text-[14px] font-semibold" style={{ color: C.text }}>{dayLabel(selectedDay)}</h3>
+                <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>{selectedDayEvents.length} {selectedDayEvents.length === 1 ? "event" : "events"}</span>
+              </div>
+              {selectedDayEvents.length === 0 ? (
+                <div className="rounded-[12px] py-8 text-center" style={{ border: `1.5px dashed ${C.border}` }}>
+                  <p className="text-[13px] mb-2" style={{ color: C.textMuted }}>Nothing scheduled</p>
+                  <button onClick={() => { setCreating({ event_date: selectedDay }); }} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>Add event</button>
                 </div>
-                <div className="flex-1 min-w-0 rounded-[3px] px-2 py-1.5" style={{ backgroundColor: bg, borderLeft: `3px solid ${bar}` }}>
-                  {e.start_time && (
-                    <span className="text-xs tabular-nums font-semibold mr-1.5" style={{ color: bar }}>{e.start_time}</span>
-                  )}
-                  <span className="text-sm font-medium truncate">{e.job_name}</span>
+              ) : (
+                <div className="grid grid-cols-1 min-[700px]:grid-cols-2 gap-3">
+                  {selectedDayEvents.map((e) => {
+                    const isInstall = e.source === "app";
+                    const color = isInstall ? INSTALL_COLOR : SERVICE_COLOR;
+                    return (
+                      <button key={e.id} type="button" onClick={() => setSelected(e)} className="flex items-center gap-3 rounded-[12px] p-3 text-left transition-colors hover:bg-white/[0.03]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
+                        <div className="w-[2px] self-stretch shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                        <div className="font-mono-num text-[13px] w-[52px] shrink-0" style={{ color: C.textSecondary }}>{e.start_time || "—"}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-medium truncate" style={{ color: C.text }}>{e.job_name}</div>
+                          {e.address && <div className="text-[11px] truncate" style={{ color: C.textMuted }}>{e.address}</div>}
+                        </div>
+                        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "rgba(110,231,192,.13)" : "rgba(255,138,122,.13)", color }}>{isInstall ? "Install" : "Service"}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="rounded-[16px] overflow-hidden" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+            {monthEvents.length === 0 && <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No events this month.</div>}
+            {monthEvents.sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "")).map((e) => {
+              const isInstall = e.source === "app";
+              const color = isInstall ? INSTALL_COLOR : SERVICE_COLOR;
+              const bg = isInstall ? "rgba(110,231,192,.13)" : "rgba(255,138,122,.13)";
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => setSelected(e)}
+                  className="w-full flex items-center gap-3 px-4 text-left transition-colors hover:bg-white/[0.02]"
+                  style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
+                >
+                  <div className="flex flex-col items-center justify-center min-w-[42px] pr-1" style={{ borderRight: `1px solid ${C.border}` }}>
+                    <span className="font-mono text-[10px] uppercase tracking-wider leading-none" style={{ color: C.textMuted }}>
+                      {new Date(e.event_date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" })}
+                    </span>
+                    <span className="font-mono-num-bold text-[18px] leading-tight" style={{ color: C.text }}>
+                      {e.event_date.slice(8)}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0 rounded-[4px] px-2.5 py-1.5" style={{ backgroundColor: bg, borderLeft: `2px solid ${color}` }}>
+                    {e.start_time && (
+                      <span className="font-mono-num text-[12px] font-semibold mr-1.5" style={{ color }}>{e.start_time}</span>
+                    )}
+                    <span className="text-[13px] font-medium truncate" style={{ color: C.text }}>{e.job_name}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

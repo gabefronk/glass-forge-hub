@@ -1,15 +1,13 @@
 import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { C, workType, billingTier } from "@/lib/feeUI";
-import { cn } from "@/lib/utils";
 
 const LEGEND_ITEMS = [
-  { key: "install", label: "Install labor", dot: C.tagBillable.bg, border: C.accent },
-  { key: "service", label: "Service labor", dot: C.tagCal.bg, border: C.tagCal.text },
-  { key: "zero", label: "Zero $", dot: C.tagNoCharge.bg, border: C.tagNoCharge.text },
-  { key: "split", label: "Profit Split", dot: C.tagSplit.bg, border: "#f59e0b" },
-  { key: "gabe", label: "Gabe", dot: C.tagCal.bg, border: C.tagCal.text },
-  { key: "mine", label: "Mine", dot: C.tagBillable.bg, border: C.accent },
+  { key: "install", label: "Install" },
+  { key: "service", label: "Service" },
+  { key: "zero", label: "Zero $" },
+  { key: "split", label: "Profit split" },
+  { key: "gabe", label: "Gabe" },
+  { key: "mine", label: "Mine" },
 ];
 
 function matchesLegend(row, key) {
@@ -33,20 +31,20 @@ export default function Toolbar({ filter, onFilterChange, legendFilter, onLegend
   })).filter((item) => item.count > 0);
 
   return (
-    <div className="px-4 sm:px-8 pt-4">
-      {/* Main toolbar row */}
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        {/* Segmented control */}
-        <div className="flex items-center rounded-lg p-0.5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+    <div className="px-[26px] max-[699px]:px-[18px] pt-4">
+      {/* Filter row */}
+      <div className="flex items-center gap-3 mb-3 overflow-x-auto obsidian-scroll" style={{ scrollbarWidth: "none" }}>
+        {/* Main filters */}
+        <div className="flex items-center gap-1.5 shrink-0">
           {["all", "unpaid", "uninvoiced"].map((f) => (
             <button
               key={f}
               onClick={() => onFilterChange(f)}
-              className="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wide transition-colors whitespace-nowrap"
+              className="px-3 py-1.5 rounded-full text-[12px] font-medium capitalize whitespace-nowrap transition-colors"
               style={
                 filter === f
-                  ? { backgroundColor: C.accentDark, color: "#eef2f0" }
-                  : { color: C.text, opacity: 0.68 }
+                  ? { backgroundColor: C.accent, color: C.accentDark }
+                  : { backgroundColor: "rgba(255,255,255,.06)", border: `1px solid ${C.border}`, color: C.textSecondary }
               }
             >
               {f === "all" ? "All" : f === "unpaid" ? "Unpaid" : "Uninvoiced"}
@@ -55,58 +53,53 @@ export default function Toolbar({ filter, onFilterChange, legendFilter, onLegend
         </div>
 
         {/* Divider */}
-        <div className="h-6 w-px" style={{ backgroundColor: C.border }} />
+        <div className="h-5 w-px shrink-0" style={{ backgroundColor: C.border }} />
 
         {/* Legend chips */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           {counts.map((item) => {
             const active = legendFilter === item.key;
             return (
               <button
                 key={item.key}
                 onClick={() => onLegendFilterChange(active ? null : item.key)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors"
                 style={
                   active
-                    ? { borderColor: C.accent, backgroundColor: C.accent12, color: C.accentText }
-                    : { borderColor: C.border, backgroundColor: "transparent", color: C.text, opacity: 0.72 }
+                    ? { backgroundColor: C.accent18, color: C.accent }
+                    : { backgroundColor: "rgba(255,255,255,.06)", border: `1px solid ${C.border}`, color: C.textSecondary }
                 }
               >
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.dot, border: `1px solid ${item.border}` }} />
                 {item.label}
-                <span className="tabular-nums font-semibold" style={{ opacity: 0.8 }}>{item.count}</span>
+                <span className="font-mono-num text-[11px]" style={{ opacity: 0.7 }}>{item.count}</span>
               </button>
             );
           })}
         </div>
 
-        {/* Right: add split */}
-        <div className="ml-auto">
-          {onAddSplit && (
-            <Button size="sm" variant="outline" onClick={onAddSplit} style={{ borderColor: C.border }}>
-              <Plus className="h-4 w-4 mr-1" /> Add profit-split job
-            </Button>
-          )}
-        </div>
+        {/* Line count */}
+        <span className="ml-auto font-mono-num text-[12px] whitespace-nowrap shrink-0" style={{ color: C.textMuted }}>
+          {rows.length} lines
+        </span>
       </div>
 
       {/* Bulk selection bar */}
       {selectedCount > 0 && (
         <div
-          className="flex flex-wrap items-center gap-3 px-4 py-2.5 rounded-lg mb-3"
-          style={{ backgroundColor: C.accentDark, color: "#eef2f0" }}
+          className="flex flex-wrap items-center gap-3 px-4 py-2.5 rounded-[12px] mb-3"
+          style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}
         >
-          <span className="text-sm font-semibold tabular-nums whitespace-nowrap">
-            {selectedCount} line{selectedCount === 1 ? "" : "s"} selected
+          <span className="font-mono-num text-[13px] font-semibold whitespace-nowrap" style={{ color: C.accent }}>
+            {selectedCount} selected
           </span>
-          <div className="h-4 w-px" style={{ backgroundColor: "#3a4a47" }} />
+          <div className="h-4 w-px" style={{ backgroundColor: C.border }} />
           <BulkBtn label="Mark billed" onClick={() => onBulkSetSelected("billed_to_bfs", true)} />
           <BulkBtn label="Mark paid" onClick={() => onBulkSetSelected("paid_to_ya", true)} />
           <BulkBtn label="Mark invoiced" onClick={() => onBulkSetSelected("invoiced_to_ya", true)} />
           <button
             onClick={onClearSelection}
-            className="text-xs font-medium uppercase tracking-wide whitespace-nowrap transition-opacity hover:opacity-100"
-            style={{ opacity: 0.7, marginLeft: "auto" }}
+            className="text-[12px] font-medium whitespace-nowrap transition-opacity hover:opacity-100 ml-auto"
+            style={{ color: C.textMuted, opacity: 0.7 }}
           >
             Clear
           </button>
@@ -120,8 +113,8 @@ function BulkBtn({ label, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="text-xs font-medium uppercase tracking-wide whitespace-nowrap transition-opacity hover:opacity-100"
-      style={{ opacity: 0.85 }}
+      className="text-[12px] font-medium whitespace-nowrap transition-colors hover:text-white"
+      style={{ color: C.textSecondary }}
     >
       {label}
     </button>

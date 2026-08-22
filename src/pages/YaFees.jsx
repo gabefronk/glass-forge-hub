@@ -254,27 +254,27 @@ export default function YaFees() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: "#050606" }}>
+        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "rgba(255,255,255,.10)", borderTopColor: "#6EE7C0" }} />
       </div>
     );
   }
 
   if (loadError) {
     return (
-      <div className="flex items-center justify-center h-screen p-8">
-        <div className="max-w-lg rounded-lg border border-red-300 bg-red-50 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-2">Failed to load data</h2>
-          <p className="text-sm text-red-700 mb-3">An error occurred while fetching fee lines:</p>
-          <pre className="text-xs text-red-900 bg-red-100 rounded p-3 overflow-auto whitespace-pre-wrap">{loadError.message || String(loadError)}</pre>
-          <button onClick={load} className="mt-4 px-4 py-2 bg-red-800 text-white rounded text-sm font-medium">Retry</button>
+      <div className="flex items-center justify-center h-screen p-8" style={{ backgroundColor: "#050606" }}>
+        <div className="max-w-lg rounded-[16px] p-6" style={{ backgroundColor: "#121514", border: "1px solid rgba(255,138,122,.3)" }}>
+          <h2 className="text-lg font-semibold mb-2" style={{ color: "#FF8A7A" }}>Failed to load data</h2>
+          <p className="text-sm mb-3" style={{ color: "rgba(255,255,255,.62)" }}>An error occurred while fetching fee lines:</p>
+          <pre className="text-xs rounded p-3 overflow-auto whitespace-pre-wrap" style={{ backgroundColor: "rgba(255,255,255,.05)", color: "rgba(255,255,255,.62)" }}>{loadError.message || String(loadError)}</pre>
+          <button onClick={load} className="mt-4 px-4 py-2 rounded-full text-sm font-medium" style={{ backgroundColor: "#6EE7C0", color: "#0A0C0C" }}>Retry</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ backgroundColor: "#f3f3f1", minHeight: "100vh" }}>
+    <div style={{ backgroundColor: "#050606", minHeight: "100vh" }}>
       <TopBar
         topRef={topBarRef}
         month={month}
@@ -302,7 +302,7 @@ export default function YaFees() {
         onAddSplit={() => setShowSplitForm((v) => !v)}
       />
       {showSplitForm && (
-        <div className="px-4 sm:px-8 pt-4">
+        <div className="px-[26px] max-[699px]:px-[18px] pt-4">
           <ProfitSplitForm jobs={jobs} onSaved={handleCreateSplit} onCancel={() => setShowSplitForm(false)} />
         </div>
       )}
@@ -313,26 +313,34 @@ export default function YaFees() {
         onAssignToJob={handleAssignToJob}
         onCreateJob={handleCreateJob}
       />
-      <NotYetBilled
-        rows={annotatedRows}
-        selectedIds={selectedIds}
-        onToggleRow={toggleRow}
-        onToggleAll={toggleAll}
-        hideZeros={hideZeros}
-        onHideZerosChange={setHideZeros}
-        onEdit={handleEdit}
-        onMarkAllBilled={handleMarkAllBilled}
-      />
-      <FeeTable
-        rows={filteredRows}
-        jobsById={jobsById}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        stickyTop={topBarH}
-        selectedIds={selectedIds}
-        onToggleRow={toggleRow}
-        onToggleAll={toggleAll}
-      />
+      <div className="px-[26px] max-[699px]:px-[18px] pb-10">
+        <div className="grid grid-cols-1 min-[700px]:grid-cols-[1.9fr_1fr] gap-5 align-start">
+          <div className="min-w-0">
+            <NotYetBilled
+              rows={annotatedRows}
+              selectedIds={selectedIds}
+              onToggleRow={toggleRow}
+              onToggleAll={toggleAll}
+              hideZeros={hideZeros}
+              onHideZerosChange={setHideZeros}
+              onEdit={handleEdit}
+              onMarkAllBilled={handleMarkAllBilled}
+            />
+          </div>
+          <div className="min-w-0">
+            <FeeTable
+              rows={filteredRows}
+              jobsById={jobsById}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              stickyTop={topBarH}
+              selectedIds={selectedIds}
+              onToggleRow={toggleRow}
+              onToggleAll={toggleAll}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
-import { C, JOBS_GRID, ROW_SHADOW, formatShort } from "@/lib/feeUI";
+import { C, formatShort } from "@/lib/feeUI";
 import { formatMoney } from "@/lib/feeMath";
-import { cn } from "@/lib/utils";
 
 function refsLabel(pos, oes) {
   const total = pos.length + oes.length;
@@ -17,53 +16,52 @@ function refsLabel(pos, oes) {
 export default function JobListRow({ job, stats }) {
   const status = stats.status;
   const isZero = stats.labor === 0;
-  const barColor = isZero ? C.leftBarZero : C.accent;
   const reportOverdue = status.key === "needs_report";
   const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
 
   return (
     <Link
       to={`/jobs/${job.id}`}
-      className={cn(JOBS_GRID, "px-4 py-3 items-center transition-colors hover:bg-[#f6f8f6]")}
-      style={{ borderTop: `1px solid ${C.rowBorder}`, boxShadow: ROW_SHADOW }}
+      className="grid grid-cols-[minmax(180px,1fr)_64px_96px_92px_78px_104px_18px] gap-3 items-center px-4 transition-colors hover:bg-white/[0.02]"
+      style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
     >
-      {/* JOB — two tight lines */}
+      {/* JOB */}
       <div className="flex items-center gap-2 min-w-0">
-        <div className="w-[3px] h-9 rounded-full shrink-0" style={{ backgroundColor: barColor }} />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="truncate whitespace-nowrap" style={{ fontSize: "14px", fontWeight: 600, color: C.accentDark }}>{job.canonical_name}</span>
-            {job.builder && <span className="truncate whitespace-nowrap" style={{ fontSize: "11.5px", color: C.text, opacity: 0.68 }}>{job.builder}</span>}
+            <span className="truncate text-[14px] font-semibold" style={{ color: C.text }}>{job.canonical_name}</span>
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            {job.address && <span className="truncate" style={{ fontSize: "11.5px", color: C.text, opacity: 0.68 }}>{job.address}</span>}
+            {job.address && <span className="truncate text-[11px]" style={{ color: C.textMuted }}>{job.address}</span>}
             {refs && (
-              <span className="font-mono whitespace-nowrap px-1.5 py-0.5 rounded shrink-0" style={{ fontSize: "10px", backgroundColor: C.mutedBg, color: C.text, opacity: 0.72 }}>{refs}</span>
+              <span className="font-mono whitespace-nowrap px-1.5 py-0.5 rounded shrink-0 text-[10px]" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{refs}</span>
             )}
           </div>
         </div>
       </div>
-      {/* Visits */}
-      <div className="text-right tabular-nums" style={{ fontSize: "13px", color: C.text }}>{stats.visits}</div>
-      {/* Last report */}
-      <div className="text-right tabular-nums whitespace-nowrap" style={{ fontSize: "13px", color: reportOverdue ? C.amber : C.text, opacity: reportOverdue ? 1 : 0.68 }}>
+      {/* BUILDER */}
+      <div className="truncate text-[12px]" style={{ color: C.textSecondary }}>{job.builder || "—"}</div>
+      {/* VISITS */}
+      <div className="text-right font-mono-num text-[13px]" style={{ color: C.text }}>{stats.visits}</div>
+      {/* REPORT */}
+      <div className="text-right font-mono-num text-[12px] whitespace-nowrap" style={{ color: reportOverdue ? C.amber : C.textMuted }}>
         {stats.lastReport ? formatShort(stats.lastReport) : "—"}
       </div>
-      {/* Labor */}
-      <div className="text-right tabular-nums" style={{ fontSize: "13px", color: C.text, opacity: isZero ? 0.5 : 1 }}>
+      {/* LABOR */}
+      <div className="text-right font-mono-num text-[13px]" style={{ color: isZero ? C.textMuted : C.text }}>
         {isZero ? "—" : `$${formatMoney(stats.labor)}`}
       </div>
-      {/* Fee */}
-      <div className="text-right tabular-nums font-semibold whitespace-nowrap" style={{ fontSize: "13px", color: isZero ? C.text : C.accent, opacity: isZero ? 0.5 : 1 }}>
+      {/* FEE */}
+      <div className="text-right font-mono-num-bold text-[13px] whitespace-nowrap" style={{ color: isZero ? C.textMuted : C.accent }}>
         {isZero ? "—" : `$${formatMoney(stats.fee)}`}
       </div>
-      {/* Status */}
+      {/* STATUS */}
       <div className="flex justify-end">
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: status.bg, color: status.text }}>{status.label}</span>
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: status.bg, color: status.text }}>{status.label}</span>
       </div>
       {/* Chevron */}
       <div className="flex justify-end">
-        <ChevronRight className="h-4 w-4" style={{ color: C.text, opacity: 0.4 }} />
+        <ChevronRight className="h-4 w-4" style={{ color: C.textFaint }} />
       </div>
     </Link>
   );
