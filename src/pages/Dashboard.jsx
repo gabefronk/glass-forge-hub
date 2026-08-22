@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { formatMoney } from "@/lib/feeMath";
 import { C } from "@/lib/feeUI";
-import { Download, Plus, MapPin, Check } from "lucide-react";
+import { Download, Plus, Check } from "lucide-react";
 
 function todayStr() {
   return new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
