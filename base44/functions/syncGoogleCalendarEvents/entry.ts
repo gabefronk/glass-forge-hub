@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { extractPO, extractOE, extractAddress, extractBuilder } from '../../shared/ingestShared.ts';
+import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmount, htmlToText } from '../../shared/ingestShared.ts';
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
@@ -70,7 +70,7 @@ export default async function(req) {
         address: extractAddress(ev.location, ev.description),
         source_location: ev.location || null,
         scope_notes: ev.description || '',
-        labor_amt: 0,
+        labor_amt: extractLaborAmount(htmlToText(ev.description || '')) || 0,
         crew: null,
         prerequisites: null,
         google_event_id: ev.id,
