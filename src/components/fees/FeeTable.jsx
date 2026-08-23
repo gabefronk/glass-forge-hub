@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { formatMoney, computeProfit } from "@/lib/feeMath";
+import { formatMoney, computeProfit, computeFeeAmt } from "@/lib/feeMath";
 import { EditableText, EditableSwitch } from "@/components/fees/EditableCell";
 import { C, statusTag, noteTokens } from "@/lib/feeUI";
 import CheckBox from "@/components/fees/CheckBox";
@@ -103,7 +103,7 @@ function DesktopRow({ row, onEdit, onDelete, index, selected, onToggle }) {
           {isSplit ? `$${formatMoney(computeProfit(row))}` : `$${formatMoney(row.labor_amt)}`}
         </div>
         <div className="text-right font-mono-num-bold text-[12px]" style={{ color: C.accent }}>
-          ${formatMoney(row.fee_amt)}
+          ${formatMoney(isSplit ? computeFeeAmt(row) : row.fee_amt)}
         </div>
       </div>
       {expanded && <ExpandedDetail row={row} onEdit={onEdit} onDelete={onDelete} />}

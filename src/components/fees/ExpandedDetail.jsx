@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { feeMathString } from "@/lib/feeMath";
+import { feeMathString, computeFeeAmt, formatMoney } from "@/lib/feeMath";
 import { EditableText } from "@/components/fees/EditableCell";
 import { C } from "@/lib/feeUI";
 
@@ -27,9 +27,9 @@ export default function ExpandedDetail({ row, onEdit, onDelete }) {
 
           {isSplit ? (
             <div className="grid grid-cols-3 gap-3">
-              <FieldCard label="Sale"><EditableText value={row.sale_price} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { sale_price: v })} /></FieldCard>
-              <FieldCard label="Cost"><EditableText value={row.cost} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { cost: v })} /></FieldCard>
-              <FieldCard label="Split %"><div className="flex items-baseline gap-1"><EditableText value={Math.round((row.split_pct || 0.5) * 100)} type="number" className="text-xl font-bold tabular-nums w-12 px-0 py-0" onCommit={(v) => onEdit(row.id, { split_pct: v == null || v === "" ? null : Number(v) / 100 })} /><span className="text-xl font-bold" style={{ color: C.textSecondary }}>%</span></div></FieldCard>
+              <FieldCard label="Sale"><EditableText value={row.sale_price} type="number" displayFormat="currency" className="text-base font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { sale_price: v })} /></FieldCard>
+              <FieldCard label="Cost"><EditableText value={row.cost} type="number" displayFormat="currency" className="text-base font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { cost: v })} /></FieldCard>
+              <FieldCard label="Split %"><div className="flex items-baseline gap-1"><EditableText value={Math.round((row.split_pct || 0.5) * 100)} type="number" className="text-base font-bold tabular-nums w-10 px-0 py-0" onCommit={(v) => onEdit(row.id, { split_pct: v == null || v === "" ? null : Number(v) / 100 })} /><span className="text-base font-bold" style={{ color: C.textSecondary }}>%</span></div></FieldCard>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-3">
@@ -112,6 +112,43 @@ export default function ExpandedDetail({ row, onEdit, onDelete }) {
 }
 
 function FeeMathDisplay({ row }) {
+  const isSplit = row.fee_type === "profit_split";
+  const fee = computeFeeAmt(row);
+
+  if (isSplit) {
+    const sale = Number(row.sale_price) || 0;
+    const cost = Number(row.cost) || 0;
+    const profit = sale - cost;
+    const split = row.split_pct != null ? Number(row.split_pct) : 0.5;
+    return (
+      <div>
+        <div className="font-semibold mb-2" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", color: C.textSecondary }}>Fee Math</div>
+        <div className="font-mono space-y-1.5" style={{ fontSize: "13px" }}>
+          <div className="flex items-center justify-between gap-2">
+            <span style={{ color: C.textSecondary }}>Sale</span>
+            <span className="tabular-nums" style={{ color: C.text }}>${formatMoney(sale)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span style={{ color: C.textSecondary }}>Cost</span>
+            <span className="tabular-nums" style={{ color: C.text }}>−${formatMoney(cost)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 pt-1.5" style={{ borderTop: `1px solid ${C.border}` }}>
+            <span style={{ color: C.textSecondary }}>Profit</span>
+            <span className="tabular-nums" style={{ color: C.text }}>${formatMoney(profit)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span style={{ color: C.textSecondary }}>Split</span>
+            <span className="tabular-nums" style={{ color: C.text }}>{Math.round(split * 100)}%</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 pt-2 mt-1" style={{ borderTop: `1px solid ${C.border}` }}>
+            <span className="font-semibold" style={{ color: C.textSecondary }}>Fee</span>
+            <span className="font-bold tabular-nums" style={{ fontSize: "18px", color: C.accent }}>${formatMoney(fee)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const formula = feeMathString(row);
   const idx = formula.lastIndexOf(" = ");
   const lhs = idx >= 0 ? formula.slice(0, idx) : formula;
@@ -119,8 +156,8 @@ function FeeMathDisplay({ row }) {
   return (
     <div>
       <div className="font-semibold mb-1" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", color: C.textSecondary }}>Fee Math</div>
-      <div className="font-mono" style={{ fontSize: "14px", color: C.textSecondary }}>
-        {lhs} = <span className="font-bold tabular-nums" style={{ fontSize: "20px", color: C.accent }}>{result}</span>
+      <div className="font-mono" style={{ fontSize: "13px", color: C.textSecondary, lineHeight: "1.6" }}>
+        {lhs} = <span className="font-bold tabular-nums" style={{ fontSize: "18px", color: C.accent }}>{result}</span>
       </div>
     </div>
   );

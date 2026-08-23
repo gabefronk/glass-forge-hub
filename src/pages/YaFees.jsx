@@ -127,8 +127,8 @@ export default function YaFees() {
     const merged = { ...row, ...patch, manually_adjusted: true };
     const isProfitSplit = merged.fee_type === "profit_split";
     const recomputeTriggers = isProfitSplit
-      ? (patch.sale_price !== undefined || patch.cost !== undefined || patch.split_pct !== undefined)
-      : (patch.labor_amt !== undefined || patch.fee_pct !== undefined);
+      ? (patch.sale_price !== undefined || patch.cost !== undefined || patch.split_pct !== undefined || patch.fee_type !== undefined)
+      : (patch.labor_amt !== undefined || patch.fee_pct !== undefined || patch.fee_type !== undefined);
     if (recomputeTriggers) {
       if (isProfitSplit) {
         const sale = Number(merged.sale_price) || 0;

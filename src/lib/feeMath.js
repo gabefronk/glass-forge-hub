@@ -39,7 +39,7 @@ export function feeMathString(row) {
     const cost = Number(row.cost) || 0;
     const profit = sale - cost;
     const split = row.split_pct != null ? Number(row.split_pct) : 0.5;
-    return `$${formatMoney(sale)} − $${formatMoney(cost)} = $${formatMoney(profit)} × ${Math.round(split * 100)}% = $${formatMoney(row.fee_amt)}`;
+    return `$${formatMoney(sale)} − $${formatMoney(cost)} = $${formatMoney(profit)} × ${Math.round(split * 100)}% = $${formatMoney(computeFeeAmt(row))}`;
   }
   if (row.manually_adjusted) {
     return `$${formatMoney(row.labor_amt)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(row.fee_amt)} (manually adjusted)`;
