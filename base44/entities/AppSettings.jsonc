@@ -1,0 +1,46 @@
+{
+  "name": "AppSettings",
+  "type": "object",
+  "properties": {
+    "compliance_start_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Compliance Start Date",
+      "description": "Date from which field report compliance is enforced (America/Denver). Calendar events before this date are marked pre_compliance \u2014 excluded from the Today tab, never rendered red on the calendar, and never accrue days_late. The matcher still runs and stores report_status_raw for tuning."
+    }
+  },
+  "required": [
+    "compliance_start_date"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

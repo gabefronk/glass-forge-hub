@@ -37,6 +37,13 @@ export default async function(req) {
     const body = await req.json().catch(() => ({}));
     const force = !!body.force;
 
+    // Read compliance start date from AppSettings (editable admin setting)
+    let complianceStartDate = null;
+    try {
+      const settings = await base44.asServiceRole.entities.AppSettings.list('-created_date', 10);
+      if (settings && settings.length > 0) complianceStartDate = settings[0].compliance_start_date;
+    } catch (e) { /* AppSettings entity may not exist yet */ }
+
     // Build the list of dates to audit
     let datesToAudit;
     if (body.target_date) {
@@ -334,7 +341,20 @@ export default async function(req) {
     for (const event of allEvents) {
       if (updatedIds.has(event.id)) continue;
       if (event.report_required === false) continue;
-      if (['ok', 'waived', 'rescheduled', 'no_source_data'].includes(event.report_status)) continue;
+      if (['ok', 'waived', 'rescheduled', 'no_source_data', 'pre_compliance'].includes(event.report_status)) continue;
+
+      // Mark events that should be pre_compliance but aren't yet
+      if (complianceStartDate && event.event_date && event.event_date < complianceStartDate) {
+        toUpdate.push({
+          id: event.id,
+          report_status_raw: event.report_status,
+          report_status: 'pre_compliance',
+          days_late: 0,
+          report_due_at: reportDueAtWithGrace(event.event_date),
+          report_checked_at: ranAt,
+        });
+        continue;
+      }
 
       const withinGrace = isWithinGrace(event.event_date);
       const daysLate = computeDaysLateWithGrace(event.event_date);
@@ -357,6 +377,21 @@ export default async function(req) {
           report_due_at: dueAt,
           report_checked_at: ranAt,
         });
+      }
+    }
+
+    // Apply compliance suppression: events before complianceStartDate get pre_compliance.
+    // The matcher's computed status is preserved in report_status_raw for tuning.
+    const eventDateById = new Map();
+    for (const e of allEvents) eventDateById.set(e.id, e.event_date);
+    for (const row of toUpdate) {
+      const eventDate = eventDateById.get(row.id);
+      if (complianceStartDate && eventDate && eventDate < complianceStartDate && row.report_status !== 'waived' && row.report_status !== 'rescheduled') {
+        row.report_status_raw = row.report_status;
+        row.report_status = 'pre_compliance';
+        row.days_late = 0;
+      } else {
+        row.report_status_raw = row.report_status;
       }
     }
 

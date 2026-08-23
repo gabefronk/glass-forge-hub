@@ -27,7 +27,7 @@ function missingText(event) {
   return "Missing: photos, notes";
 }
 
-export default function OutstandingReports({ events, user, onChanged }) {
+export default function OutstandingReports({ events, user, onChanged, complianceStartDate }) {
   const [uploading, setUploading] = useState(null);
   const [waiving, setWaiving] = useState(null);
   const [uploadPhotos, setUploadPhotos] = useState([]);
@@ -38,6 +38,7 @@ export default function OutstandingReports({ events, user, onChanged }) {
   const outstanding = (events || [])
     .filter((e) => e.report_required !== false &&
       ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"].includes(e.report_status))
+    .filter((e) => !complianceStartDate || (e.event_date || "") >= complianceStartDate)
     .sort((a, b) => {
       const aRes = a.report_status === "rescheduled" ? 1 : 0;
       const bRes = b.report_status === "rescheduled" ? 1 : 0;
@@ -47,11 +48,19 @@ export default function OutstandingReports({ events, user, onChanged }) {
 
   const noSourceDates = [...new Set((events || [])
     .filter((e) => e.report_status === "no_source_data")
+    .filter((e) => !complianceStartDate || (e.event_date || "") >= complianceStartDate)
     .map((e) => e.event_date))]
     .sort()
     .reverse();
 
-  if (!outstanding.length && !noSourceDates.length) return null;
+  if (!outstanding.length && !noSourceDates.length) {
+    return (
+      <div className="rounded-[18px] px-5 py-4 mb-5 flex items-center gap-3" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: C.accent }} />
+        <div className="text-[13px] font-medium" style={{ color: C.textSecondary }}>All field reports current</div>
+      </div>
+    );
+  }
 
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;

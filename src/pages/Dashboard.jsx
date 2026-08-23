@@ -4,6 +4,7 @@ import { formatMoney } from "@/lib/feeMath";
 import { C } from "@/lib/feeUI";
 import { Download, Plus, Check } from "lucide-react";
 import OutstandingReports from "@/components/dashboard/OutstandingReports";
+import ComplianceSettings from "@/components/dashboard/ComplianceSettings";
 
 function todayStr() {
   return new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
@@ -51,6 +52,7 @@ export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checked, setChecked] = useState(new Set());
+  const [complianceStartDate, setComplianceStartDate] = useState(null);
 
   const today = todayStr();
   const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString("sv-SE");
@@ -58,11 +60,12 @@ export default function Dashboard() {
 
   const load = async () => {
     try {
-      const [mp, allEvents, fl, me] = await Promise.all([
+      const [mp, allEvents, fl, me, settings] = await Promise.all([
         base44.entities.MonthlyProfit.list("-month", 500),
         base44.entities.CalendarEvents.list("-event_date", 5000),
         base44.entities.FeeLines.filter({ invoice_month: currentMonth }, "-job_date", 5000),
         base44.auth.me().catch(() => null),
+        base44.entities.AppSettings.list("-created_date", 10).catch(() => []),
       ]);
       setProfits(Array.isArray(mp) ? mp : []);
       setAllCalendarEvents(Array.isArray(allEvents) ? allEvents : []);
@@ -70,6 +73,7 @@ export default function Dashboard() {
       setTomorrowEvents((Array.isArray(allEvents) ? allEvents : []).filter((e) => (e.event_date || "").slice(0, 10) === tomorrow));
       setFeeLines(Array.isArray(fl) ? fl : []);
       if (me) setUser(me);
+      if (Array.isArray(settings) && settings.length > 0) setComplianceStartDate(settings[0].compliance_start_date);
     } finally {
       setLoading(false);
     }
@@ -178,7 +182,10 @@ export default function Dashboard() {
 
       {/* Body */}
       <div className="px-[26px] max-[699px]:px-[18px] pb-10">
-        <OutstandingReports events={allCalendarEvents} user={user} onChanged={load} />
+        <OutstandingReports events={allCalendarEvents} user={user} onChanged={load} complianceStartDate={complianceStartDate} />
+        {user?.role === "admin" && (
+          <ComplianceSettings value={complianceStartDate} onChanged={load} />
+        )}
 
         <div className="grid grid-cols-1 min-[700px]:grid-cols-[1.55fr_1fr] gap-5">
           {/* Left: Run sheet */}

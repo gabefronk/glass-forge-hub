@@ -124,11 +124,25 @@
         "missing_all",
         "rescheduled",
         "waived",
-        "no_source_data"
+        "no_source_data",
+        "pre_compliance"
       ],
       "title": "Report Status",
       "default": "pending",
-      "description": "Current field-report audit status. pending = within grace period (not yet late). no_source_data = Probuild pull found zero reports for D-1/D/D+1 (sync incomplete, flags suppressed)."
+      "description": "Current field-report audit status. pending = within grace period (not yet late). no_source_data = Probuild pull found zero reports for D-1/D/D+1 (sync incomplete, flags suppressed). pre_compliance = event scheduled before COMPLIANCE_START_DATE \u2014 suppressed from Today tab, never red, never accrues days_late."
+    },
+    "report_status_raw": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "ok",
+        "missing_photos",
+        "missing_notes",
+        "missing_all",
+        "no_source_data"
+      ],
+      "title": "Report Status Raw",
+      "description": "What the matcher concluded before compliance suppression. For post-compliance events, same as report_status. For pre_compliance events, what the status would have been \u2014 kept for matcher tuning on the Match Debug screen."
     },
     "report_due_at": {
       "type": "string",
@@ -151,7 +165,7 @@
       "type": "number",
       "title": "Days Late",
       "default": 0,
-      "description": "Whole days past the grace day while report_status is not ok. 0 during grace period."
+      "description": "Whole days past the grace day while report_status is not ok. 0 during grace period. Always 0 for pre_compliance events."
     },
     "original_scheduled_date": {
       "type": "string",
