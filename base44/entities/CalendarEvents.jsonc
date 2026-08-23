@@ -218,18 +218,6 @@
           "user_condition": {
             "role": "manager"
           }
-        },
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "role": "installer"
-              }
-            },
-            {
-              "data.created_by": "{{user.email}}"
-            }
-          ]
         }
       ]
     },
