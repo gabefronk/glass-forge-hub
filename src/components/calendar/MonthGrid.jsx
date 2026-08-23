@@ -84,11 +84,6 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
           const dayEvents = dateStr ? events.filter((e) => (e.event_date || "").slice(0, 10) === dateStr) : [];
           const isToday = dateStr === today;
           const isSelected = dateStr === selectedDate;
-          const maxDesktop = 3;
-          const desktopVisible = dayEvents.slice(0, maxDesktop);
-          const desktopOverflow = dayEvents.length - desktopVisible.length;
-          const mobileVisible = dayEvents.slice(0, 3);
-          const mobileOverflow = dayEvents.length - mobileVisible.length;
 
           return (
             <div
@@ -132,8 +127,8 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                   </div>
 
                   {/* Mobile: density dots */}
-                  <div className="flex flex-col gap-1 min-h-0 flex-1 min-[700px]:hidden">
-                    {mobileVisible.map((e) => {
+                  <div className="flex flex-col gap-1 min-h-0 flex-1 min-[700px]:hidden overflow-y-auto obsidian-scroll" style={{ maxHeight: "60px" }}>
+                    {dayEvents.map((e) => {
                       const { text } = eventColors(e);
                       const flagged = isFlagged(e);
                       const rescheduled = e.report_status === "rescheduled";
@@ -142,31 +137,13 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                         <button key={e.id} type="button" onClick={() => onSelect(e)} className="h-1.5 w-1.5 rounded-full shrink-0 self-start" style={{ backgroundColor: dotColor }} aria-label={e.job_name} />
                       );
                     })}
-                    {mobileOverflow > 0 && (
-                      <span className="font-mono text-[9px] leading-none pt-0.5" style={{ color: C.textFaint }}>
-                        +{mobileOverflow}
-                      </span>
-                    )}
                   </div>
 
                   {/* Desktop: full text blocks */}
-                  <div className="hidden min-[700px]:flex flex-col gap-0.5 min-h-0 flex-1">
-                    {desktopVisible.map((e) => (
+                  <div className="hidden min-[700px]:flex flex-col gap-0.5 min-h-0 flex-1 overflow-y-auto obsidian-scroll" style={{ maxHeight: "130px" }}>
+                    {dayEvents.map((e) => (
                       <DesktopEventBlock key={e.id} event={e} onClick={() => onSelect(e)} />
                     ))}
-                    {desktopOverflow > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const firstHidden = dayEvents[maxDesktop];
-                          if (firstHidden) onSelect(firstHidden);
-                        }}
-                        className="font-mono text-[10px] text-left pl-1 pt-0.5 transition-colors hover:opacity-80"
-                        style={{ color: C.textMuted }}
-                      >
-                        +{desktopOverflow} more
-                      </button>
-                    )}
                   </div>
                 </>
               )}
