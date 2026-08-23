@@ -29,18 +29,29 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [unreportedOnly, setUnreportedOnly] = useState(false);
+  const [user, setUser] = useState(null);
 
   const load = async () => {
-    const [evs, jobsArr] = await Promise.all([
+    const [evs, jobsArr, me] = await Promise.all([
       fetchAllPages(base44.entities.CalendarEvents, "-created_date", 1000),
       fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
+      base44.auth.me().catch(() => null),
     ]);
     setEvents(evs);
     setJobs(jobsArr);
+    if (me) setUser(me);
   };
   useEffect(() => { load(); }, []);
 
-  const monthEvents = useMemo(() => events.filter((e) => (e.event_date || "").slice(0, 7) === month), [events, month]);
+  const monthEvents = useMemo(() => {
+    let filtered = events.filter((e) => (e.event_date || "").slice(0, 7) === month);
+    if (unreportedOnly) {
+      filtered = filtered.filter((e) => e.report_required !== false &&
+        ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"].includes(e.report_status));
+    }
+    return filtered;
+  }, [events, month, unreportedOnly]);
   const selectedDayEvents = useMemo(() => {
     return monthEvents.filter((e) => (e.event_date || "").slice(0, 10) === selectedDay).sort((a, b) => (a.start_time || "99").localeCompare(b.start_time || "99"));
   }, [monthEvents, selectedDay]);
@@ -103,6 +114,7 @@ export default function CalendarPage() {
               <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.13em] transition-colors", view === "month" ? "text-[#0A0C0C]" : "")} style={view === "month" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>Month</button>
               <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.13em] transition-colors", view === "list" ? "text-[#0A0C0C]" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
             </div>
+            <button type="button" onClick={() => setUnreportedOnly(!unreportedOnly)} className="px-3 py-1.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.13em] whitespace-nowrap transition-colors" style={unreportedOnly ? { backgroundColor: C.amber, color: C.accentDark } : { border: `1px solid ${C.border}`, color: C.textSecondary }}>Unreported only</button>
             <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-white/5" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <RefreshCw className="h-3.5 w-3.5" />{syncing ? "Syncing…" : "Sync Google"}
             </button>
@@ -131,7 +143,7 @@ export default function CalendarPage() {
         )}
         {selected && (
           <div className="mb-4">
-            <EventDetail event={selected} jobs={jobs} onEdit={handleSave} onDelete={handleDelete} onClose={() => setSelected(null)} saving={saving} />
+            <EventDetail event={selected} jobs={jobs} onEdit={handleSave} onDelete={handleDelete} onClose={() => setSelected(null)} saving={saving} user={user} onChanged={load} />
           </div>
         )}
 

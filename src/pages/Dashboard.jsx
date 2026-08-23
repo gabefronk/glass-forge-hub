@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { formatMoney } from "@/lib/feeMath";
 import { C } from "@/lib/feeUI";
 import { Download, Plus, Check } from "lucide-react";
+import OutstandingReports from "@/components/dashboard/OutstandingReports";
 
 function todayStr() {
   return new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
@@ -46,6 +47,7 @@ export default function Dashboard() {
   const [todayEvents, setTodayEvents] = useState([]);
   const [tomorrowEvents, setTomorrowEvents] = useState([]);
   const [feeLines, setFeeLines] = useState([]);
+  const [allCalendarEvents, setAllCalendarEvents] = useState([]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checked, setChecked] = useState(new Set());
@@ -54,25 +56,25 @@ export default function Dashboard() {
   const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString("sv-SE");
   const currentMonth = today.slice(0, 7);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [mp, allEvents, fl, me] = await Promise.all([
-          base44.entities.MonthlyProfit.list("-month", 500),
-          base44.entities.CalendarEvents.list("-event_date", 5000),
-          base44.entities.FeeLines.filter({ invoice_month: currentMonth }, "-job_date", 5000),
-          base44.auth.me().catch(() => null),
-        ]);
-        setProfits(Array.isArray(mp) ? mp : []);
-        setTodayEvents((Array.isArray(allEvents) ? allEvents : []).filter((e) => (e.event_date || "").slice(0, 10) === today));
-        setTomorrowEvents((Array.isArray(allEvents) ? allEvents : []).filter((e) => (e.event_date || "").slice(0, 10) === tomorrow));
-        setFeeLines(Array.isArray(fl) ? fl : []);
-        if (me) setUser(me);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const load = async () => {
+    try {
+      const [mp, allEvents, fl, me] = await Promise.all([
+        base44.entities.MonthlyProfit.list("-month", 500),
+        base44.entities.CalendarEvents.list("-event_date", 5000),
+        base44.entities.FeeLines.filter({ invoice_month: currentMonth }, "-job_date", 5000),
+        base44.auth.me().catch(() => null),
+      ]);
+      setProfits(Array.isArray(mp) ? mp : []);
+      setAllCalendarEvents(Array.isArray(allEvents) ? allEvents : []);
+      setTodayEvents((Array.isArray(allEvents) ? allEvents : []).filter((e) => (e.event_date || "").slice(0, 10) === today));
+      setTomorrowEvents((Array.isArray(allEvents) ? allEvents : []).filter((e) => (e.event_date || "").slice(0, 10) === tomorrow));
+      setFeeLines(Array.isArray(fl) ? fl : []);
+      if (me) setUser(me);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { load(); }, []);
 
   const ytdProfit = useMemo(() => {
     return profits.reduce((s, p) => s + (Number(p.ya_windows_profit) || 0) + (Number(p.glass_forge_profit) || 0), 0);
@@ -176,6 +178,8 @@ export default function Dashboard() {
 
       {/* Body */}
       <div className="px-[26px] max-[699px]:px-[18px] pb-10">
+        <OutstandingReports events={allCalendarEvents} user={user} onChanged={load} />
+
         <div className="grid grid-cols-1 min-[700px]:grid-cols-[1.55fr_1fr] gap-5">
           {/* Left: Run sheet */}
           <div className="rounded-[18px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>

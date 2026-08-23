@@ -1,0 +1,44 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "40 0 * * *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "probuild_pull",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "pull_probuild": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "fetchProbuildPosts"
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Pull Probuild posts",
+            "description": "Runs at 12:40 AM Denver so the 1 AM audit has yesterday's reports"
+          }
+        }
+      }
+    ]
+  },
+  "description": "Pulls Probuild posts at 12:40 AM Denver so the 1 AM field report audit has data. Must complete before the audit runs.",
+  "name": "Probuild Pull"
+}

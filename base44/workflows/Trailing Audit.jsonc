@@ -1,0 +1,47 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 7,9,11,13,15,17,19 * * *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "trailing_audit",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_audit": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "auditFieldReports",
+            "args": {
+              "days_back": 3
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Re-audit trailing 3 days",
+            "description": "Every 2 hours 7 AM \u2013 7 PM so late uploads clear automatically"
+          }
+        }
+      }
+    ]
+  },
+  "description": "Re-runs the field report audit every 2 hours from 7 AM to 7 PM Denver for the trailing 3 days, so late Probuild uploads clear their own flags automatically.",
+  "name": "Trailing Audit"
+}

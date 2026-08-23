@@ -1,0 +1,80 @@
+{
+  "name": "ReportAudit",
+  "type": "object",
+  "properties": {
+    "audit_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Audit Date",
+      "description": "The denver_date the audit was run for"
+    },
+    "calendar_event_id": {
+      "type": "string",
+      "title": "Calendar Event Id",
+      "description": "The CalendarEvents record evaluated"
+    },
+    "result": {
+      "type": "string",
+      "title": "Result",
+      "description": "The report_status outcome of this audit evaluation"
+    },
+    "matched_post_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Matched Post Ids",
+      "default": []
+    },
+    "candidates_considered": {
+      "type": "number",
+      "title": "Candidates Considered",
+      "description": "How many FieldReports were scored against this event"
+    },
+    "top_score": {
+      "type": "number",
+      "title": "Top Score",
+      "description": "Highest match score (0\u20131) among candidates"
+    },
+    "ran_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Ran At",
+      "description": "When this audit evaluation executed"
+    },
+    "run_id": {
+      "type": "string",
+      "title": "Run Id",
+      "description": "Identifier for the audit run (groups rows from the same invocation)"
+    }
+  },
+  "required": [
+    "audit_date",
+    "calendar_event_id",
+    "result",
+    "ran_at",
+    "run_id"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

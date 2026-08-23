@@ -1,0 +1,45 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 1 * * *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "field_report_audit",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_audit": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "auditFieldReports",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Audit field reports",
+            "description": "Runs at 1 AM Denver for yesterday's events"
+          }
+        }
+      }
+    ]
+  },
+  "description": "Runs auditFieldReports at 1:00 AM Denver for yesterday's events. Matches CalendarEvents to Probuild FieldReports and sets report_status.",
+  "name": "Field Report Audit"
+}

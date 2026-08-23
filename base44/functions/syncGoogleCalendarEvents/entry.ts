@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmount, htmlToText } from '../../shared/ingestShared.ts';
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
+import { endOfDayDenver } from '../../shared/reportMatching.ts';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
@@ -80,13 +81,29 @@ export default async function(req) {
         organizer: ev.organizer?.email || null,
         po_number: extractPO(ev.description || '') || null,
         oe_number: extractOE(ev.description || '') || null,
+        report_required: true,
+        report_due_at: endOfDayDenver(event_date),
       };
       const ex = byGoogleId.get(ev.id);
       if (ex) {
         if (ex.source === 'app') continue;
-        // Preserve installer_event_id — it's managed by the push, not the sync
-        toUpdate.push({ id: ex.id, ...row, installer_event_id: ex.installer_event_id || null });
+        const updateRow = { id: ex.id, ...row, installer_event_id: ex.installer_event_id || null };
+        // Detect reschedule: date changed while report is still outstanding
+        if (ex.event_date !== event_date) {
+          const outstanding = ex.report_status && ex.report_status !== 'ok' && ex.report_status !== 'waived';
+          if (outstanding) {
+            updateRow.report_status = 'rescheduled';
+            updateRow.original_scheduled_date = ex.original_scheduled_date || ex.event_date;
+            updateRow.reschedule_count = (ex.reschedule_count || 0) + 1;
+          }
+          updateRow.report_due_at = endOfDayDenver(event_date);
+        }
+        toUpdate.push(updateRow);
       } else {
+        row.report_status = 'pending';
+        row.days_late = 0;
+        row.reschedule_count = 0;
+        row.matched_post_ids = [];
         toCreate.push(row);
       }
     }

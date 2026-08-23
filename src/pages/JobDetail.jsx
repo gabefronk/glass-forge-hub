@@ -9,6 +9,8 @@ import StageTimeline from "@/components/jobs/StageTimeline";
 import SitePhotos from "@/components/jobs/SitePhotos";
 import LineItems from "@/components/jobs/LineItems";
 import NotesSection from "@/components/jobs/NotesSection";
+import VisitReports from "@/components/jobs/VisitReports";
+import { fetchAllPages } from "@/lib/pagination";
 
 function computeStage(rows, job) {
   const billable = rows.filter((r) => Number(r.labor_amt) > 0);
@@ -32,6 +34,7 @@ export default function JobDetail() {
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
   const [checkedItems, setCheckedItems] = useState(new Set());
+  const [calEvents, setCalEvents] = useState([]);
 
   const loadAll = async () => {
     const [jb, fl, nt, me] = await Promise.all([
@@ -44,6 +47,12 @@ export default function JobDetail() {
     setRows(fl);
     setNotes(nt);
     if (me) setCurrentUser(me.email || me.full_name || "");
+    // Load CalendarEvents for this job (matched via FeeLines' calendar_event_id)
+    const calIds = new Set(fl.filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
+    if (calIds.size > 0) {
+      const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
+      setCalEvents(allCal.filter((e) => calIds.has(e.google_event_id)));
+    }
   };
 
   useEffect(() => {
@@ -133,6 +142,7 @@ export default function JobDetail() {
               <SitePhotos photos={photos} onAddPhoto={() => {}} onPhotoClick={setLightbox} />
             </div>
             <NotesSection jobId={id} notes={notes} currentUser={currentUser} onChanged={loadAll} onPhotoClick={setLightbox} />
+            <VisitReports events={calEvents} />
           </div>
         </div>
       </div>

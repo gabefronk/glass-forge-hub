@@ -62,7 +62,7 @@
     "labor_amt": {
       "type": "number",
       "title": "Labor Amt",
-      "description": "Structured labor dollar amount \u2014 never parsed from text"
+      "description": "Labor dollar amount \u2014 parsed from scope notes for Google events, manually set for app events"
     },
     "crew": {
       "type": "string",
@@ -107,6 +107,95 @@
       "type": "string",
       "title": "OE Number",
       "description": "Order element number extracted from the event description"
+    },
+    "report_required": {
+      "type": "boolean",
+      "title": "Report Required",
+      "default": true,
+      "description": "Whether this event requires a Probuild field report. Default true; can be turned off for specific event types later."
+    },
+    "report_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "ok",
+        "missing_photos",
+        "missing_notes",
+        "missing_all",
+        "rescheduled",
+        "waived"
+      ],
+      "title": "Report Status",
+      "default": "pending",
+      "description": "Current field-report audit status for this event"
+    },
+    "report_due_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Report Due At",
+      "description": "End of the event's day in America/Denver (UTC ISO). The report is due by this time."
+    },
+    "report_checked_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Report Checked At",
+      "description": "Last audit run timestamp against this event"
+    },
+    "days_late": {
+      "type": "number",
+      "title": "Days Late",
+      "default": 0,
+      "description": "Whole days past report_due_at while report_status is not ok"
+    },
+    "original_scheduled_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Original Scheduled Date",
+      "description": "Set the first time an event's date changes, so we keep the date it was originally supposed to be done"
+    },
+    "reschedule_count": {
+      "type": "number",
+      "title": "Reschedule Count",
+      "default": 0
+    },
+    "matched_post_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Matched Post Ids",
+      "default": [],
+      "description": "Probuild post IDs matched to this event by the audit"
+    },
+    "match_method": {
+      "type": "string",
+      "enum": [
+        "address",
+        "name_date",
+        "manual",
+        "none"
+      ],
+      "title": "Match Method",
+      "description": "How the field report was matched to this event"
+    },
+    "match_confidence": {
+      "type": "number",
+      "title": "Match Confidence",
+      "description": "0\u20131 confidence score from the matcher"
+    },
+    "waived_by": {
+      "type": "string",
+      "title": "Waived By",
+      "description": "Email of the admin who waived the report requirement"
+    },
+    "waived_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Waived At"
+    },
+    "waive_reason": {
+      "type": "string",
+      "title": "Waive Reason"
     }
   },
   "required": [
@@ -129,6 +218,18 @@
           "user_condition": {
             "role": "manager"
           }
+        },
+        {
+          "$and": [
+            {
+              "user_condition": {
+                "role": "installer"
+              }
+            },
+            {
+              "data.created_by": "{{user.email}}"
+            }
+          ]
         }
       ]
     },

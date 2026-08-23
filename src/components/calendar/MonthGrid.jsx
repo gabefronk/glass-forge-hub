@@ -28,14 +28,25 @@ function eventColors(event) {
 }
 
 // Desktop: full text block with time + job name
+function isFlagged(ev) {
+  return ev.report_required !== false &&
+    ["pending", "missing_photos", "missing_notes", "missing_all"].includes(ev.report_status);
+}
+
 function DesktopEventBlock({ event, onClick }) {
   const { bg, text } = eventColors(event);
+  const flagged = isFlagged(event);
+  const rescheduled = event.report_status === "rescheduled";
   return (
     <button
       type="button"
       onClick={onClick}
       className="block w-full text-left rounded-[4px] px-1.5 py-1 text-[11px] leading-tight truncate transition-opacity hover:opacity-80"
-      style={{ backgroundColor: bg, color: text }}
+      style={{
+        backgroundColor: bg,
+        color: text,
+        borderLeft: flagged ? "2px solid #FF8A7A" : rescheduled ? "2px solid rgba(255,255,255,.3)" : "none",
+      }}
     >
       {event.start_time && (
         <span className="font-mono-num mr-1" style={{ color: text }}>
@@ -43,6 +54,9 @@ function DesktopEventBlock({ event, onClick }) {
         </span>
       )}
       <span className="truncate">{event.job_name}</span>
+      {flagged && (
+        <span className="inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle shrink-0" style={{ backgroundColor: "#FF8A7A" }} />
+      )}
     </button>
   );
 }
@@ -121,8 +135,11 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                   <div className="flex flex-col gap-1 min-h-0 flex-1 min-[700px]:hidden">
                     {mobileVisible.map((e) => {
                       const { text } = eventColors(e);
+                      const flagged = isFlagged(e);
+                      const rescheduled = e.report_status === "rescheduled";
+                      const dotColor = flagged ? "#FF8A7A" : rescheduled ? "rgba(255,255,255,.3)" : text;
                       return (
-                        <button key={e.id} type="button" onClick={() => onSelect(e)} className="h-1.5 w-1.5 rounded-full shrink-0 self-start" style={{ backgroundColor: text }} aria-label={e.job_name} />
+                        <button key={e.id} type="button" onClick={() => onSelect(e)} className="h-1.5 w-1.5 rounded-full shrink-0 self-start" style={{ backgroundColor: dotColor }} aria-label={e.job_name} />
                       );
                     })}
                     {mobileOverflow > 0 && (

@@ -1,0 +1,47 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 6 * * *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "post_ingest_audit",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_audit": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "auditFieldReports",
+            "args": {
+              "days_back": 2
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Re-audit yesterday + day before",
+            "description": "Runs at 6 AM after the Daily Ingest to catch late Probuild uploads"
+          }
+        }
+      }
+    ]
+  },
+  "description": "Re-runs the field report audit at 6:00 AM Denver (after the Daily Ingest) for yesterday and the day before, so late Probuild uploads clear their flags.",
+  "name": "Post-Ingest Audit"
+}

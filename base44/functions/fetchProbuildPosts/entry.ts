@@ -56,6 +56,19 @@ function findCalendarRowToMerge(existingFees, jobId, postDate) {
   return best;
 }
 
+function extractPhotoUrls(post) {
+  if (!post) return [];
+  for (const key of ['attachments', 'photos', 'media', 'images', 'files']) {
+    if (Array.isArray(post[key])) {
+      return post[key].map(item => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') return item.url || item.uri || item.src || item.link || '';
+      }).filter(Boolean);
+    }
+  }
+  return [];
+}
+
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -281,6 +294,33 @@ ${JSON.stringify(promptInputs)}`;
     }
     if (toCreate.length) await base44.asServiceRole.entities.FeeLines.bulkCreate(toCreate);
     if (toUpdate.length) await base44.asServiceRole.entities.FeeLines.bulkUpdate(toUpdate);
+
+    // 11. Write FieldReports (upsert on post_id) — the report store for the audit
+    const existingReports = await fetchAllPages(base44.asServiceRole.entities.FieldReports, '-created_date', 1000);
+    const reportByPostId = new Map();
+    for (const r of existingReports) if (r.post_id) reportByPostId.set(r.post_id, r);
+    const frToCreate = [];
+    const frToUpdate = [];
+    for (const { b, normName, m } of matched) {
+      const post = b.post;
+      const ext = extractionMap.get(b.postId) || { needs_review: true };
+      const reportRow = {
+        job_date: b.jobDate,
+        job_name: b.projectName,
+        message: post.message || '',
+        photo_urls: extractPhotoUrls(post),
+        post_id: b.postId,
+        project_id: b.projectId,
+        created_at: post.createdAt || null,
+        man_hours: ext.man_hours != null ? Number(ext.man_hours) : null,
+        trip_charges: ext.trip_charges != null ? Number(ext.trip_charges) : null,
+      };
+      const exRep = reportByPostId.get(b.postId);
+      if (exRep) frToUpdate.push({ id: exRep.id, ...reportRow });
+      else frToCreate.push(reportRow);
+    }
+    if (frToCreate.length) await base44.asServiceRole.entities.FieldReports.bulkCreate(frToCreate);
+    if (frToUpdate.length) await base44.asServiceRole.entities.FieldReports.bulkUpdate(frToUpdate);
 
     return Response.json({
       source: 'probuild',

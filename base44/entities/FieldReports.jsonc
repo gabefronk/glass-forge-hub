@@ -1,0 +1,91 @@
+{
+  "name": "FieldReports",
+  "type": "object",
+  "properties": {
+    "job_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Job Date",
+      "description": "Denver-converted date of the Probuild post (UTC \u2192 America/Denver at ingest)"
+    },
+    "job_name": {
+      "type": "string",
+      "title": "Job Name",
+      "description": "Probuild project name"
+    },
+    "message": {
+      "type": "string",
+      "title": "Message",
+      "description": "Verbatim post message / notes"
+    },
+    "photo_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Photo Urls",
+      "default": [],
+      "description": "Attachment URLs from the Probuild post"
+    },
+    "post_id": {
+      "type": "string",
+      "title": "Post Id",
+      "description": "Probuild post ID (unique upsert key)"
+    },
+    "project_id": {
+      "type": "string",
+      "title": "Project Id",
+      "description": "Probuild project ID"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At",
+      "description": "Original UTC creation timestamp of the Probuild post"
+    },
+    "man_hours": {
+      "type": "number",
+      "title": "Man Hours"
+    },
+    "trip_charges": {
+      "type": "number",
+      "title": "Trip Charges"
+    }
+  },
+  "required": [
+    "job_date",
+    "job_name",
+    "post_id"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

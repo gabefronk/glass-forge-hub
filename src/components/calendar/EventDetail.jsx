@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Lock, Briefcase } from "lucide-react";
 import EventForm from "./EventForm";
+import FieldReportActions from "./FieldReportActions";
 import { formatMoney } from "@/lib/feeMath";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,7 @@ function Detail({ label, value }) {
   );
 }
 
-export default function EventDetail({ event, jobs, onEdit, onDelete, onClose, saving }) {
+export default function EventDetail({ event, jobs, onEdit, onDelete, onClose, saving, user, onChanged }) {
   const [editing, setEditing] = useState(false);
   if (editing && event.source === "app") {
     return <EventForm initial={event} jobs={jobs} onSave={onEdit} onCancel={() => setEditing(false)} saving={saving} />;
@@ -52,6 +53,7 @@ export default function EventDetail({ event, jobs, onEdit, onDelete, onClose, sa
         <Detail label="Address" value={event.address} />
         <Detail label="Labor $" value={event.labor_amt != null ? `$${formatMoney(event.labor_amt)}` : ""} />
       </div>
+      <FieldReportActions event={event} user={user} onChanged={onChanged} />
       {event.scope_notes && (
         <div>
           <div className="text-xs text-muted-foreground mb-1">Scope notes</div>
