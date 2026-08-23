@@ -27,6 +27,12 @@
       "default": [],
       "description": "Attachment URLs from the Probuild post"
     },
+    "attachment_count": {
+      "type": "number",
+      "title": "Attachment Count",
+      "default": 0,
+      "description": "Number of attachments on the Probuild post. Probuild stores attachments as a keyed object (attachment id \u2192 record), so this is computed with countAttachments() which handles both array and object shapes."
+    },
     "post_id": {
       "type": "string",
       "title": "Post Id",

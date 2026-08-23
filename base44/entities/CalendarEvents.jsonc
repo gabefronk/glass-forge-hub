@@ -123,11 +123,12 @@
         "missing_notes",
         "missing_all",
         "rescheduled",
-        "waived"
+        "waived",
+        "no_source_data"
       ],
       "title": "Report Status",
       "default": "pending",
-      "description": "Current field-report audit status for this event"
+      "description": "Current field-report audit status for this event. no_source_data = Probuild pull found zero reports for this date (sync incomplete, flags suppressed)."
     },
     "report_due_at": {
       "type": "string",
@@ -171,17 +172,31 @@
       "type": "string",
       "enum": [
         "address",
-        "name_date",
+        "project_date",
         "manual",
         "none"
       ],
       "title": "Match Method",
-      "description": "How the field report was matched to this event"
+      "description": "How the field report was matched to this event. project_date = resolved to a Probuild project and a post was found for that project on that date."
     },
     "match_confidence": {
       "type": "number",
       "title": "Match Confidence",
       "description": "0\u20131 confidence score from the matcher"
+    },
+    "lot_tokens": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Lot Tokens",
+      "default": [],
+      "description": "Numeric tokens (lot/building numbers) extracted from the event name during project matching. Used as a tiebreaker when two candidate projects score within 0.05 of each other."
+    },
+    "resolved_project_id": {
+      "type": "string",
+      "title": "Resolved Project Id",
+      "description": "Probuild project ID the audit resolved this event to (for debugging)."
     },
     "waived_by": {
       "type": "string",
