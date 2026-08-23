@@ -116,11 +116,11 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
             const feeSub = groupRows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
             return (
               <div key={date}>
-                <div className="sticky z-[5] px-4 py-1.5 flex items-center gap-2" style={{ top: 0, backgroundColor: "rgba(255,255,255,.03)", borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
-                  <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap" style={{ color: C.textSecondary }}>
+                <div className="sticky z-[5] px-4 py-2 flex items-center gap-2" style={{ top: "35px", backgroundColor: C.cardAlt, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+                  <span className="font-mono text-[13px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap" style={{ color: C.textSecondary }}>
                     {formatDateGroup(date)}
                   </span>
-                  <span className="font-mono-num text-[11px] whitespace-nowrap" style={{ color: C.textMuted }}>
+                  <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textMuted }}>
                     {groupRows.length} lines · ${formatMoney(feeSub)}
                   </span>
                 </div>
