@@ -117,7 +117,7 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
             return (
               <div key={date}>
                 <div className="sticky z-[5] px-4 py-2.5 flex items-center gap-2.5" style={{ top: "35px", backgroundColor: C.cardAlt, borderTop: `1px solid ${C.borderStrong}`, borderBottom: `1px solid ${C.borderStrong}`, boxShadow: "0 4px 12px rgba(0,0,0,.35)" }}>
-                  <span className="font-mono text-[15px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap" style={{ color: C.text }}>
+                  <span className="font-mono text-[15px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap" style={{ color: "#4DA8FF" }}>
                     {formatDateGroup(date)}
                   </span>
                   <span className="font-mono-num text-[13px] whitespace-nowrap" style={{ color: C.textSecondary }}>
