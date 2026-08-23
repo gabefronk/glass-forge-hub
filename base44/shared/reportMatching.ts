@@ -173,6 +173,39 @@ export function resolveProject(event, projects) {
   };
 }
 
+// Add n days to a YYYY-MM-DD date string, returning a YYYY-MM-DD string.
+export function addDays(dateStr, n) {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+// Report due at = end of the grace day (event_date + 1) in Denver.
+// The grace day is the full day after the scheduled day. The report is
+// not considered late until this time has passed.
+export function reportDueAtWithGrace(dateStr) {
+  if (!dateStr) return null;
+  return endOfDayDenver(addDays(dateStr, 1));
+}
+
+// Days late counting from the grace day (event_date + 1).
+// Returns 0 while within the grace period, then 1, 2, 3... after.
+export function computeDaysLateWithGrace(eventDateStr) {
+  if (!eventDateStr) return 0;
+  const nowDenver = toDenverDateString(new Date());
+  const graceDay = addDays(eventDateStr, 1);
+  const diff = Math.floor((new Date(nowDenver + 'T00:00:00Z').getTime() - new Date(graceDay + 'T00:00:00Z').getTime()) / 86400000);
+  return Math.max(0, diff);
+}
+
+// True if the current time is within the grace period (report not yet due).
+export function isWithinGrace(eventDateStr) {
+  if (!eventDateStr) return true;
+  const dueAt = reportDueAtWithGrace(eventDateStr);
+  if (!dueAt) return true;
+  return new Date().getTime() < new Date(dueAt).getTime();
+}
+
 // Evaluate a set of posts (for the same project group+date) and return the
 // aggregate report status. Uses attachment_count (or photo_urls as fallback).
 export function evaluatePosts(posts) {

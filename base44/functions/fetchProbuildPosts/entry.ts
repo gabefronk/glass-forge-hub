@@ -1,30 +1,21 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { secrets } from 'base44:runtime';
 import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, mergeReviewFlags } from '../../shared/ingestShared.ts';
 import { countAttachments } from '../../shared/reportMatching.ts';
+import { toMs, getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject, filterProjectsByWindow } from '../../shared/probuildApi.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
-// Ingest Probuild posts into FeeLines. One row per post.
+// Ingest Probuild posts into FeeLines + FieldReports. One row per post.
 // Auth: Firebase refresh-token exchange (rotated token persisted to ProbuildAuth).
-// Data: Firebase RTDB. Projects filtered by lastModifiedAt in window (no deletedAt),
-// posts fetched per-project (no global post query — blocked), createdAt converted
-// UTC -> America/Denver before deriving job_date. LLM extracts man_hours/trip_charges
-// from the verbatim note (never inferred). Upserts on probuild_post_id; never
-// overwrites a manually_adjusted row.
-const FIREBASE_API_KEY = 'AIzaSyD-bRl-_9tZLccN3HQ9IMy27pY37VKY1xc';
-const FIREBASE_TOKEN_URL = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
+// Data: Firebase RTDB. Projects filtered by lastModifiedAt within 21-day window
+// (no deletedAt). Posts fetched per-project, createdAt converted UTC → America/Denver
+// before deriving job_date. LLM extracts man_hours/trip_charges from the verbatim
+// note (never inferred). Upserts on probuild_post_id; never overwrites a
+// manually_adjusted row.
+//
+// The pull window extends through TODAY (not yesterday) so that D+1 posts
+// (crew posts the morning after the job) are always captured.
 const DB_BASE = 'https://probuild-prod.firebaseio.com';
 const TEAM_ID = '-O7aXXhvthc41u60Koc6';
-
-function toMs(v) {
-  if (v == null) return null;
-  if (typeof v === 'number') return v;
-  if (typeof v === 'string') {
-    const d = new Date(v);
-    return isNaN(d.getTime()) ? null : d.getTime();
-  }
-  return null;
-}
 
 function toDenverDateString(utcIso) {
   const d = new Date(utcIso);
@@ -35,8 +26,6 @@ function toDenverDateString(utcIso) {
 
 // Find an existing calendar-sourced FeeLine for the same job within ±3 days
 // that hasn't already been merged with a Probuild post and has no man_hours yet.
-// Merging the Probuild labor data into the calendar row gives the user a single
-// row per job with both the event details and the actual hours worked.
 function findCalendarRowToMerge(existingFees, jobId, postDate) {
   if (!jobId || !postDate) return null;
   const postMs = new Date(postDate + 'T00:00:00Z').getTime();
@@ -67,7 +56,6 @@ function extractPhotoUrls(post) {
         if (item && typeof item === 'object') return item.url || item.uri || item.src || item.link || '';
       }).filter(Boolean);
     }
-    // Probuild stores attachments as a keyed object (attachment id → record)
     if (val && typeof val === 'object') {
       return Object.values(val).map(item => {
         if (typeof item === 'string') return item;
@@ -83,85 +71,28 @@ export default async function(req) {
     const base44 = createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
     const today = new Date();
+    // Window extends through TODAY so D+1 posts are always captured.
     const endStr = body.end_date || today.toISOString().slice(0, 10);
-    const startStr = body.start_date || new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // Widen project scan from 14 to 21 days to reduce silent misses.
+    const startStr = body.start_date || new Date(today.getTime() - 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    // 1. Current refresh token (ProbuildAuth first, secret fallback)
-    const authRecords = await base44.asServiceRole.entities.ProbuildAuth.list('-updated_date', 1);
-    let refreshToken = authRecords.length > 0 ? authRecords[0].refresh_token : secrets.get('PROBUILD_REFRESH_TOKEN');
-    if (!refreshToken) return Response.json({ error: 'no_refresh_token' }, { status: 200 });
+    // 1. Auth — exchange refresh token (shared module)
+    const idToken = await getProbuildIdToken(base44);
 
-    // 2. Exchange refresh token
-    const tokenRes = await fetch(FIREBASE_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Referer': 'https://portal.probuild.app/',
-      },
-      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`,
-    });
-    if (tokenRes.status === 401) {
-      return Response.json({ error: 'probuild_auth_401', detail: 'Refresh token rejected (401). Capture a fresh Probuild refresh token and update PROBUILD_REFRESH_TOKEN / ProbuildAuth.' }, { status: 200 });
-    }
-    if (!tokenRes.ok) {
-      const txt = await tokenRes.text();
-      return Response.json({ error: 'probuild_auth_failed', status: tokenRes.status, detail: txt }, { status: 200 });
-    }
-    const tokenData = await tokenRes.json();
-    const idToken = tokenData.id_token;
-    const rotatedRefreshToken = tokenData.refresh_token;
-
-    // 3. Persist rotated refresh token
-    const nowIso = new Date().toISOString();
-    if (authRecords.length > 0) {
-      await base44.asServiceRole.entities.ProbuildAuth.update(authRecords[0].id, { refresh_token: rotatedRefreshToken, last_exchanged_at: nowIso });
-    } else {
-      await base44.asServiceRole.entities.ProbuildAuth.create({ refresh_token: rotatedRefreshToken, last_exchanged_at: nowIso });
-    }
-
-    // 4. Fetch projects
-    const projectsRes = await fetch(`${DB_BASE}/teams/${TEAM_ID}/projects.json?auth=${idToken}`);
-    if (!projectsRes.ok) {
-      const txt = await projectsRes.text();
-      return Response.json({ error: 'projects_fetch_failed', status: projectsRes.status, detail: txt }, { status: 200 });
-    }
-    const projectsJson = await projectsRes.json();
-    const projectEntries = [];
-    if (Array.isArray(projectsJson)) {
-      projectsJson.forEach((p, i) => { if (p) projectEntries.push({ id: String(i), ...p }); });
-    } else {
-      for (const [pid, p] of Object.entries(projectsJson || {})) { if (p) projectEntries.push({ id: pid, ...p }); }
-    }
-
-    // 5. Filter projects: no deletedAt AND lastModifiedAt within window (anchored to start_date)
+    // 2. Fetch + filter projects (shared module)
+    const projectEntries = await fetchProbuildProjects(idToken);
     const windowStartMs = new Date(startStr + 'T00:00:00Z').getTime();
     const windowEndMs = new Date(endStr + 'T23:59:59Z').getTime();
-    const qualifying = [];
-    for (const p of projectEntries) {
-      if (p.deletedAt) continue;
-      const lm = toMs(p.lastModifiedAt);
-      if (lm == null) continue;
-      if (lm >= windowStartMs && lm <= windowEndMs) qualifying.push(p);
-    }
+    const { qualifying, stats: projectStats } = filterProjectsByWindow(projectEntries, windowStartMs, windowEndMs);
 
-    // 6. Fetch posts per qualifying project (parallel)
+    // 3. Fetch posts per qualifying project (parallel)
     const postResults = await Promise.all(qualifying.map(async (p) => {
-      try {
-        const r = await fetch(`${DB_BASE}/teams/${TEAM_ID}/posts/${p.id}.json?auth=${idToken}`);
-        if (!r.ok) return [];
-        const j = await r.json();
-        if (!j) return [];
-        const out = [];
-        for (const [postId, post] of Object.entries(j)) {
-          if (!post) continue;
-          out.push({ projectId: p.id, projectName: p.name || p.title || '', postId, post });
-        }
-        return out;
-      } catch { return []; }
+      const posts = await fetchProbuildPostsForProject(idToken, p.id);
+      return posts.map(post => ({ ...post, projectName: p.name || p.title || '' }));
     }));
     const allPosts = postResults.flat();
 
-    // 7. Filter posts by Denver-derived job_date within window
+    // 4. Filter posts by Denver-derived job_date within window
     const inWindowPosts = [];
     for (const item of allPosts) {
       const createdIso = item.post.createdAt;
@@ -172,7 +103,7 @@ export default async function(req) {
       inWindowPosts.push({ ...item, jobDate });
     }
 
-    // 8. LLM extraction (the only place an LLM is used), batched
+    // 5. LLM extraction (batched)
     const extractionMap = new Map();
     const BATCH = 25;
     for (let i = 0; i < inWindowPosts.length; i += BATCH) {
@@ -212,7 +143,7 @@ ${JSON.stringify(promptInputs)}`;
       for (const r of results) extractionMap.set(r.post_id, r);
     }
 
-    // 9. Jobs: match, auto-create missing
+    // 6. Jobs: match, auto-create missing
     const jobsArr = await fetchAllPages(base44.asServiceRole.entities.Jobs, '-created_date', 1000);
     const matched = inWindowPosts.map((b) => {
       const normName = normalizeJobName(b.projectName);
@@ -227,7 +158,7 @@ ${JSON.stringify(promptInputs)}`;
     for (const j of newJobs) jobByNorm.set(j.canonical_name, j);
     for (const j of jobsArr) { const n = normalizeJobName(j.canonical_name); if (n) jobByNorm.set(n, j); }
 
-    // 10. Build rows + upsert on probuild_post_id
+    // 7. Build FeeLines rows + upsert on probuild_post_id
     const existingFees = await fetchAllPages(base44.asServiceRole.entities.FeeLines, '-created_date', 1000);
     const existingByPostId = new Map();
     for (const f of existingFees) if (f.probuild_post_id) existingByPostId.set(f.probuild_post_id, f);
@@ -272,7 +203,6 @@ ${JSON.stringify(promptInputs)}`;
         const merged = mergeReviewFlags(ex, row);
         toUpdate.push({ id: ex.id, ...row, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
       } else {
-        // New post — try to merge into an existing calendar row for the same job
         const calRow = findCalendarRowToMerge(existingFees, jobId, b.jobDate);
         if (calRow) {
           const mergedRow = { ...calRow, man_hours: row.man_hours, trip_charges: row.trip_charges, source: 'both' };
@@ -304,7 +234,7 @@ ${JSON.stringify(promptInputs)}`;
     if (toCreate.length) await base44.asServiceRole.entities.FeeLines.bulkCreate(toCreate);
     if (toUpdate.length) await base44.asServiceRole.entities.FeeLines.bulkUpdate(toUpdate);
 
-    // 11. Write FieldReports (upsert on post_id) — the report store for the audit
+    // 8. Write FieldReports (upsert on post_id)
     const existingReports = await fetchAllPages(base44.asServiceRole.entities.FieldReports, '-created_date', 1000);
     const reportByPostId = new Map();
     for (const r of existingReports) if (r.post_id) reportByPostId.set(r.post_id, r);
@@ -335,7 +265,7 @@ ${JSON.stringify(promptInputs)}`;
     return Response.json({
       source: 'probuild',
       window: { start_date: startStr, end_date: endStr },
-      projects_total: projectEntries.length,
+      project_scan: projectStats,
       projects_qualifying: qualifying.length,
       posts_fetched: allPosts.length,
       posts_in_window: inWindowPosts.length,

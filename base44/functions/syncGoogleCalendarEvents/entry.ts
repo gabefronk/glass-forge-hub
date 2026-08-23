@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmount, htmlToText } from '../../shared/ingestShared.ts';
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
-import { endOfDayDenver } from '../../shared/reportMatching.ts';
+import { reportDueAtWithGrace } from '../../shared/reportMatching.ts';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
@@ -82,7 +82,7 @@ export default async function(req) {
         po_number: extractPO(ev.description || '') || null,
         oe_number: extractOE(ev.description || '') || null,
         report_required: true,
-        report_due_at: endOfDayDenver(event_date),
+        report_due_at: reportDueAtWithGrace(event_date),
       };
       const ex = byGoogleId.get(ev.id);
       if (ex) {
@@ -96,7 +96,7 @@ export default async function(req) {
             updateRow.original_scheduled_date = ex.original_scheduled_date || ex.event_date;
             updateRow.reschedule_count = (ex.reschedule_count || 0) + 1;
           }
-          updateRow.report_due_at = endOfDayDenver(event_date);
+          updateRow.report_due_at = reportDueAtWithGrace(event_date);
         }
         toUpdate.push(updateRow);
       } else {

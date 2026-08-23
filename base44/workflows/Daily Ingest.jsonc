@@ -93,7 +93,7 @@
           "then": "check_probuild",
           "x-base44": {
             "title": "Fetch Probuild posts",
-            "description": "Last 14 days"
+            "description": "Last 21 days"
           }
         }
       },

@@ -20,6 +20,7 @@ function missingText(event) {
     const now = event.event_date ? formatDateGroup(event.event_date) : "";
     return `Originally ${orig} · now ${now} · still no report`;
   }
+  if (event.report_status === "pending") return "Within grace period — report not yet due";
   if (event.report_status === "missing_all") return "Missing: photos, notes";
   if (event.report_status === "missing_photos") return "Missing: photos";
   if (event.report_status === "missing_notes") return "Missing: notes";

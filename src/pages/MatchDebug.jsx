@@ -2,15 +2,18 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { Bug, RefreshCw, AlertTriangle, Search } from "lucide-react";
+import PostsHistogram from "@/components/matchdebug/PostsHistogram";
 
 const STATUS_STYLE = {
   ok: { color: "#6EE7C0", bg: "rgba(110,231,192,.14)", label: "OK" },
   missing_photos: { color: "#FF8A7A", bg: "rgba(255,138,122,.14)", label: "MISSING PHOTOS" },
   missing_notes: { color: "#FF8A7A", bg: "rgba(255,138,122,.14)", label: "MISSING NOTES" },
   missing_all: { color: "#FF8A7A", bg: "rgba(255,138,122,.18)", label: "MISSING ALL" },
-  no_source_data: { color: C.amber, bg: "rgba(255,181,71,.14)", label: "NO SOURCE DATA" },
-  pending: { color: "rgba(255,255,255,.42)", bg: "rgba(255,255,255,.06)", label: "PENDING" },
+  no_source_data: { color: "#FF8A7A", bg: "rgba(255,181,71,.14)", label: "NO SOURCE DATA" },
+  pending: { color: "#FFB54B", bg: "rgba(255,181,71,.14)", label: "PENDING (GRACE)" },
 };
+
+const OFFSET_LABELS = { 0: "Exact (0)", 1: "Next day (+1)", "-1": "Day before (-1)", null: "Unmatched" };
 
 export default function MatchDebug() {
   const [date, setDate] = useState(() => new Date(Date.now() - 86400000).toISOString().slice(0, 10));
@@ -43,7 +46,7 @@ export default function MatchDebug() {
     setRerunResult(null);
     try {
       const end = new Date();
-      const start = new Date(end.getTime() - 14 * 86400000);
+      const start = new Date(end.getTime() - 21 * 86400000);
       const result = await base44.functions.invoke("auditFieldReports", {
         start_date: start.toISOString().slice(0, 10),
         end_date: end.toISOString().slice(0, 10),
@@ -97,7 +100,7 @@ export default function MatchDebug() {
               style={{ backgroundColor: C.accent, color: C.accentDark }}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${rerunLoading ? "animate-spin" : ""}`} />
-              {rerunLoading ? "Re-running..." : "Re-run audit (14 days)"}
+              {rerunLoading ? "Re-running..." : "Re-run audit (21 days)"}
             </button>
           </div>
         </div>
@@ -107,6 +110,11 @@ export default function MatchDebug() {
             <div className="text-[13px] font-medium" style={{ color: C.accent }}>
               Re-run complete: {rerunResult.events_evaluated} events evaluated across {rerunResult.dates_audited?.length || 0} dates
             </div>
+            {rerunResult.offset_distribution && (
+              <div className="text-[12px] mt-1" style={{ color: C.textSecondary }}>
+                Offsets — exact: {rerunResult.offset_distribution['0'] || 0} · +1: {rerunResult.offset_distribution['1'] || 0} · -1: {rerunResult.offset_distribution['-1'] || 0} · unmatched: {rerunResult.offset_distribution['null'] || 0}
+              </div>
+            )}
             {(rerunResult.date_summaries || []).filter((d) => d.result === "no_source_data").length > 0 && (
               <div className="text-[12px] mt-1" style={{ color: C.amber }}>
                 No source data: {rerunResult.date_summaries.filter((d) => d.result === "no_source_data").map((d) => d.date).join(", ")}
@@ -115,18 +123,44 @@ export default function MatchDebug() {
           </div>
         )}
 
+        {data?.histogram && <PostsHistogram data={data.histogram} />}
+
+        {data?.project_scan && !data.project_scan.error && (
+          <div className="grid grid-cols-4 gap-3 mb-5">
+            <ScanCard label="Projects total" value={data.project_scan.total} />
+            <ScanCard label="Skipped (deleted)" value={data.project_scan.deleted} valueColor={data.project_scan.deleted > 0 ? C.textSecondary : undefined} />
+            <ScanCard label="Skipped (modified)" value={data.project_scan.skipped_modified} valueColor={C.amber} />
+            <ScanCard label="Qualifying" value={data.project_scan.qualifying} valueColor={C.accent} />
+          </div>
+        )}
+        {data?.project_scan?.error && (
+          <div className="rounded-[14px] px-4 py-3 mb-4 flex items-center gap-2" style={{ backgroundColor: "rgba(255,138,122,.10)", border: `1px solid rgba(255,138,122,.25)` }}>
+            <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: "#FF8A7A" }} />
+            <span className="text-[12px]" style={{ color: "#FF8A7A" }}>Project scan failed: {data.project_scan.error}</span>
+          </div>
+        )}
+
+        {data?.offset_distribution && (
+          <div className="grid grid-cols-4 gap-3 mb-5">
+            <ScanCard label="Offset 0 (exact)" value={data.offset_distribution['0'] || 0} valueColor={C.accent} />
+            <ScanCard label="Offset +1 (next day)" value={data.offset_distribution['1'] || 0} valueColor={C.accent} />
+            <ScanCard label="Offset -1 (day before)" value={data.offset_distribution['-1'] || 0} valueColor={C.amber} />
+            <ScanCard label="Unmatched" value={data.offset_distribution['null'] || 0} valueColor="#FF8A7A" />
+          </div>
+        )}
+
         {data && (
           <>
             <div className="grid grid-cols-3 gap-3 mb-5">
               <SummaryCard label="Calendar events" value={data.events_count} />
-              <SummaryCard label="Field reports" value={data.reports_available} valueColor={data.reports_available === 0 ? "#FF8A7A" : C.accent} />
-              <SummaryCard label="Projects" value={data.projects_available} />
+              <SummaryCard label="Reports on date" value={data.reports_available} valueColor={data.reports_available === 0 ? "#FF8A7A" : C.accent} />
+              <SummaryCard label="Reports D-1/D/D+1" value={data.reports_nearby} valueColor={data.reports_nearby === 0 ? "#FF8A7A" : C.accent} />
             </div>
 
-            {data.reports_available === 0 && (
+            {data.reports_nearby === 0 && (
               <div className="rounded-[14px] px-4 py-3 mb-4 flex items-center gap-2" style={{ backgroundColor: "rgba(255,138,122,.10)", border: `1px solid rgba(255,138,122,.25)` }}>
                 <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: "#FF8A7A" }} />
-                <span className="text-[13px]" style={{ color: "#FF8A7A" }}>No FieldReports ingested for this date — Probuild sync likely failed.</span>
+                <span className="text-[13px]" style={{ color: "#FF8A7A" }}>No FieldReports ingested for D-1/D/D+1 — Probuild sync likely failed.</span>
               </div>
             )}
 
@@ -139,14 +173,20 @@ export default function MatchDebug() {
                       <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: style.bg, color: style.color }}>
                         {style.label}
                       </span>
+                      {ev.matched_offset !== null && (
+                        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: ev.matched_offset === -1 ? "rgba(255,181,71,.14)" : "rgba(110,231,192,.10)", color: ev.matched_offset === -1 ? "#FFB54B" : C.accent }}>
+                          {OFFSET_LABELS[ev.matched_offset]}
+                        </span>
+                      )}
                       <span className="text-[14px] font-medium" style={{ color: C.text }}>{ev.raw_name}</span>
                     </div>
                     <div className="grid grid-cols-1 min-[700px]:grid-cols-2 gap-x-6 gap-y-1.5 ml-1">
                       <Detail label="Alpha tokens" value={ev.alpha_tokens.join(" ") || "—"} />
                       <Detail label="Lot tokens" value={ev.lot_tokens.join(" ") || "—"} />
-                      <Detail label="Address" value={ev.address || "—"} />
                       <Detail label="Resolved project" value={ev.resolved_project ? `${ev.resolved_project.name} (${ev.resolved_project.score.toFixed(3)})` : "none"} />
-                      <Detail label="Post found" value={ev.post_found ? `Yes · ${ev.post_count} post(s) · ${ev.note_length} chars · ${ev.attachment_count} attachments` : "No"} />
+                      <Detail label="D-1 posts" value={ev.date_search?.['-1']?.count ?? 0} />
+                      <Detail label="D (exact) posts" value={ev.date_search?.['0']?.count ?? 0} />
+                      <Detail label="D+1 posts" value={ev.date_search?.['1']?.count ?? 0} />
                       <Detail label="Why" value={ev.reason} />
                     </div>
                     {ev.top_candidates.length > 0 && (
@@ -180,6 +220,15 @@ function SummaryCard({ label, value, valueColor }) {
     <div className="rounded-[14px] p-4" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="mono-label-sm mb-1.5">{label}</div>
       <div className="font-mono-num-bold text-[24px]" style={{ color: valueColor || C.text, letterSpacing: "-0.025em" }}>{value}</div>
+    </div>
+  );
+}
+
+function ScanCard({ label, value, valueColor }) {
+  return (
+    <div className="rounded-[14px] p-3" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+      <div className="mono-label-sm mb-1">{label}</div>
+      <div className="font-mono-num-bold text-[20px]" style={{ color: valueColor || C.text }}>{value}</div>
     </div>
   );
 }
