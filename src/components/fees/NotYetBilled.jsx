@@ -85,7 +85,7 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
           {/* Column header */}
           <div
             className="sticky top-0 z-10 grid grid-cols-[22px_minmax(0,1fr)_70px_70px_70px] gap-2 px-4 py-2.5 items-center"
-            style={{ backgroundColor: C.headerBg, borderBottom: `1px solid ${C.border}` }}
+            style={{ backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }}
           >
             <div><CheckBox checked={allSelected} indeterminate={indeterminate} onChange={handleToggleAll} /></div>
             <div className="mono-label-sm">Line</div>
