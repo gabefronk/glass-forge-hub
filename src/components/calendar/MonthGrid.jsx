@@ -127,7 +127,7 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                   </div>
 
                   {/* Mobile: density dots */}
-                  <div className="flex flex-col gap-1 min-h-0 flex-1 min-[700px]:hidden overflow-y-auto obsidian-scroll" style={{ maxHeight: "60px" }}>
+                  <div className="flex flex-col gap-1 min-h-0 flex-1 min-[700px]:hidden">
                     {dayEvents.map((e) => {
                       const { text } = eventColors(e);
                       const flagged = isFlagged(e);
@@ -140,7 +140,7 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                   </div>
 
                   {/* Desktop: full text blocks */}
-                  <div className="hidden min-[700px]:flex flex-col gap-0.5 min-h-0 flex-1 overflow-y-auto obsidian-scroll" style={{ maxHeight: "130px" }}>
+                  <div className="hidden min-[700px]:flex flex-col gap-0.5 min-h-0 flex-1">
                     {dayEvents.map((e) => (
                       <DesktopEventBlock key={e.id} event={e} onClick={() => onSelect(e)} />
                     ))}
