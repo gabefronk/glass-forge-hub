@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import YaFeesSidebar from "@/components/YaFeesSidebar";
-import { Receipt, Calendar, Briefcase, BarChart3 } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { Receipt, Calendar, Briefcase, BarChart3, Bug } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
@@ -11,6 +13,8 @@ const NAV_ITEMS = [
 
 export default function Layout() {
   const { pathname } = useLocation();
+  const [user, setUser] = useState(null);
+  useEffect(() => { base44.auth.me().then((me) => { if (me) setUser(me); }).catch(() => {}); }, []);
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#050606" }}>
       <YaFeesSidebar />
@@ -38,6 +42,14 @@ export default function Layout() {
             </Link>
           );
         })}
+        {user?.role === "admin" && (
+          <Link to="/match-debug" className="flex flex-col items-center gap-1 py-2.5 px-3 flex-1">
+            <Bug className="h-5 w-5" style={{ color: pathname === "/match-debug" ? "#6EE7C0" : "rgba(255,255,255,.4)" }} />
+            <span className="font-mono text-[9px] font-medium uppercase tracking-[0.13em] whitespace-nowrap" style={{ color: pathname === "/match-debug" ? "#6EE7C0" : "rgba(255,255,255,.4)" }}>
+              Debug
+            </span>
+          </Link>
+        )}
       </nav>
     </div>
   );

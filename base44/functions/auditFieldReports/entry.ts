@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import {
   toDenverDateString, yesterdayDenver, endOfDayDenver, computeDaysLate,
-  resolveProject, evaluatePosts,
+  buildProjectGroups, resolveProject, evaluatePosts,
 } from '../../shared/reportMatching.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
@@ -103,16 +103,9 @@ export default async function(req) {
         continue;
       }
 
-      // Build unique projects from reports (project_id → { id, name, posts })
-      const projectMap = new Map();
-      for (const r of reports) {
-        if (!r.project_id) continue;
-        if (!projectMap.has(r.project_id)) {
-          projectMap.set(r.project_id, { id: r.project_id, name: r.job_name, posts: [] });
-        }
-        projectMap.get(r.project_id).posts.push(r);
-      }
-      const projects = [...projectMap.values()];
+      // Build project groups from reports (grouped by normalized alpha tokens
+      // so all lots on the same jobsite share one group)
+      const projects = buildProjectGroups(reports);
 
       // Stage 1: resolve each event to a project
       const resolutions = new Map(); // event.id → { best, candidates, lot_tokens }
@@ -121,8 +114,8 @@ export default async function(req) {
         resolutions.set(event.id, res);
       }
 
-      // Stage 2: group events by resolved project, evaluate posts for that project+date
-      const eventsByProject = new Map(); // project_id → [event]
+      // Stage 2: group events by resolved project group, evaluate posts for that group+date
+      const eventsByProject = new Map(); // group key → [event]
       const unresolvedEvents = [];
       for (const event of events) {
         const res = resolutions.get(event.id);
@@ -135,9 +128,9 @@ export default async function(req) {
       }
 
       // Evaluate each project group
-      for (const [projectId, groupEvents] of eventsByProject) {
-        const project = projectMap.get(projectId);
-        const posts = project ? project.posts : [];
+      for (const [groupKey, groupEvents] of eventsByProject) {
+        const group = projects.find((g) => g.id === groupKey);
+        const posts = group ? group.posts : [];
         const { result, post_ids } = evaluatePosts(posts);
 
         for (const event of groupEvents) {
@@ -153,7 +146,7 @@ export default async function(req) {
             match_method: 'project_date',
             match_confidence: res.best.score,
             lot_tokens: res.lot_tokens,
-            resolved_project_id: projectId,
+            resolved_project_id: groupKey,
           });
           updatedIds.add(event.id);
           audits.push({
@@ -198,7 +191,7 @@ export default async function(req) {
         });
       }
 
-      dateSummaries.push({ date: denverDate, events: events.length, reports_available, result: 'audited' });
+      dateSummaries.push({ date: denverDate, events: events.length, reports_available: reportsAvailable, result: 'audited' });
     }
 
     // Refresh days_late for all other outstanding events (not on audited dates)

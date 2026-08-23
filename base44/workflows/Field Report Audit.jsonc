@@ -5,7 +5,7 @@
       "trigger_type": "scheduled",
       "events": [],
       "schedule_mode": "recurring",
-      "cron_expression": "0 1 * * *",
+      "cron_expression": "15 1 * * *",
       "one_time_date": null,
       "timezone": "America/Denver",
       "interval_value": null,
@@ -20,7 +20,7 @@
     "document": {
       "dsl": "1.0.0",
       "name": "field_report_audit",
-      "version": "1.0",
+      "version": "1.1",
       "namespace": "base44"
     },
     "do": [
@@ -34,12 +34,12 @@
           "then": "end",
           "x-base44": {
             "title": "Audit field reports",
-            "description": "Runs at 1 AM Denver for yesterday's events"
+            "description": "Backup run at 1:15 AM Denver"
           }
         }
       }
     ]
   },
-  "description": "Runs auditFieldReports at 1:00 AM Denver for yesterday's events. Matches CalendarEvents to Probuild FieldReports and sets report_status.",
+  "description": "Backup audit run at 1:15 AM Denver. The primary audit now runs as the last step of the Daily Ingest workflow (after the Probuild pull). This is a safety net in case the Daily Ingest fails.",
   "name": "Field Report Audit"
 }

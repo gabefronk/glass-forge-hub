@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import {
-  toDenverDateString, resolveProject, normalizeEventForProjectMatch,
+  toDenverDateString, buildProjectGroups, resolveProject, normalizeEventForProjectMatch,
   evaluatePosts,
 } from '../../shared/reportMatching.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
@@ -23,27 +23,19 @@ export default async function(req) {
     const events = allEvents.filter((e) => e.event_date === targetDate && e.report_required !== false);
     const reports = allReports.filter((r) => r.job_date === targetDate);
 
-    // Build unique projects from reports
-    const projectMap = new Map();
-    for (const r of reports) {
-      if (!r.project_id) continue;
-      if (!projectMap.has(r.project_id)) {
-        projectMap.set(r.project_id, { id: r.project_id, name: r.job_name, posts: [] });
-      }
-      projectMap.get(r.project_id).posts.push(r);
-    }
-    const projects = [...projectMap.values()];
+    // Build project groups from reports (grouped by normalized alpha tokens)
+    const projects = buildProjectGroups(reports);
 
     const eventDebug = events.map((event) => {
       const { alpha_tokens, numeric_tokens } = normalizeEventForProjectMatch(event.job_name);
       const res = resolveProject(event, projects);
       const resolvedProject = res.best ? { id: res.best.id, name: res.best.name, score: res.best.score } : null;
 
-      // Find posts for the resolved project
+      // Find posts for the resolved project group
       let postInfo = null;
       if (resolvedProject) {
-        const project = projectMap.get(resolvedProject.id);
-        const posts = project ? project.posts : [];
+        const group = projects.find((g) => g.id === resolvedProject.id);
+        const posts = group ? group.posts : [];
         const evalResult = evaluatePosts(posts);
         postInfo = {
           found: posts.length > 0,
@@ -63,8 +55,8 @@ export default async function(req) {
         finalStatus = 'missing_all';
         reason = `No project matched above 0.80 threshold (top score: ${(res.candidates[0]?.score || 0).toFixed(3)}).`;
       } else if (postInfo && postInfo.found) {
-        const project = projectMap.get(resolvedProject.id);
-        const posts = project ? project.posts : [];
+        const group = projects.find((g) => g.id === resolvedProject.id);
+        const posts = group ? group.posts : [];
         const hasNotes = posts.some((p) => (p.message || "").trim().length >= 10);
         const hasPhotos = posts.some((p) => (Number(p.attachment_count) || (p.photo_urls || []).length) > 0);
         if (hasNotes && hasPhotos) { finalStatus = 'ok'; reason = `Matched project "${resolvedProject.name}" (${resolvedProject.score.toFixed(3)}), post has notes+photos.`; }

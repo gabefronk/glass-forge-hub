@@ -1,7 +1,7 @@
 // Shared field-report matching logic used by auditFieldReports and matchDebug.
 // Two-stage project-level matching: resolve each calendar event to a Probuild
-// project (alpha-token scoring), then one report satisfies every ticket on
-// that project for that date.
+// project group (alpha-token scoring), then one report satisfies every ticket
+// on that project group for that date.
 
 // Convert a UTC date to a Denver date string (YYYY-MM-DD)
 export function toDenverDateString(date) {
@@ -86,14 +86,10 @@ export function normalizeEventForProjectMatch(name) {
 }
 
 // Normalize a Probuild project name into alpha tokens for comparison.
-// Strips lot/building keywords and punctuation, lowercases, splits into tokens.
+// Uses the same normalization as normalizeEventForProjectMatch so both sides
+// are stripped identically.
 export function normalizeProjectName(name) {
-  if (!name) return [];
-  let s = String(name).toLowerCase();
-  s = s.replace(/\b(?:lot|bldg|blding|unit|apt|building)\s*\d*\b/g, " ");
-  s = s.replace(/[.,;:!?\-–—*]+/g, " ");
-  s = s.replace(/\s+/g, " ").trim();
-  return s.split(" ").filter(Boolean);
+  return normalizeEventForProjectMatch(name).alpha_tokens;
 }
 
 // Jaccard similarity between two token sets (intersection / union).
@@ -108,7 +104,28 @@ function jaccardTokens(eventTokens, projectTokens) {
   return union > 0 ? intersection / union : 0;
 }
 
-// Score a calendar event against a Probuild project (0–1).
+// Build project groups from FieldReports. Groups reports by normalized alpha
+// tokens of the project name, so "YA - #2 DURKIN 31 WILDWOOD" and
+// "YA - #2 DURKIN 33 WILDWOOD" end up in the same group (alpha: "durkin wildwood").
+// This is the key structural change: one report on any lot satisfies every
+// ticket on that jobsite for that date.
+export function buildProjectGroups(reports) {
+  const groups = new Map(); // key → { id, name, alpha_tokens, names, posts }
+  for (const r of reports) {
+    const alpha = normalizeEventForProjectMatch(r.job_name).alpha_tokens;
+    const key = alpha.join(" ");
+    if (!key) continue;
+    if (!groups.has(key)) {
+      groups.set(key, { id: key, name: r.job_name, alpha_tokens: alpha, names: [], posts: [] });
+    }
+    const g = groups.get(key);
+    if (!g.names.includes(r.job_name)) g.names.push(r.job_name);
+    g.posts.push(r);
+  }
+  return [...groups.values()];
+}
+
+// Score a calendar event against a Probuild project group (0–1).
 // Priority: (a) street-address match → 1.0 when both have the same street
 // number+name; (b) alpha-token Jaccard similarity otherwise.
 export function scoreEventToProject(event, project) {
@@ -120,28 +137,29 @@ export function scoreEventToProject(event, project) {
   }
   // (b) Alpha-token similarity
   const { alpha_tokens } = normalizeEventForProjectMatch(event.job_name);
-  const projectTokens = normalizeProjectName(project.name);
+  const projectTokens = project.alpha_tokens || normalizeProjectName(project.name);
   return jaccardTokens(alpha_tokens, projectTokens);
 }
 
-// Resolve a calendar event to the best-matching Probuild project.
+// Resolve a calendar event to the best-matching Probuild project group.
 // Returns { best: { id, name, score } | null, candidates: [{id, name, score}, ...] (top 3), lot_tokens }
 export function resolveProject(event, projects) {
   const { alpha_tokens, numeric_tokens } = normalizeEventForProjectMatch(event.job_name);
   const scored = [];
   for (const p of projects) {
     const score = scoreEventToProject(event, p);
-    scored.push({ id: p.id, name: p.name, score });
+    scored.push({ id: p.id, name: p.name, score, project: p });
   }
   scored.sort((a, b) => b.score - a.score);
 
-  // Tiebreaker: if top two score within 0.05, prefer the project whose name
-  // contains one of the event's lot tokens (numeric tokens).
+  // Tiebreaker: if top two score within 0.05, prefer the group whose names
+  // contain one of the event's lot tokens (numeric tokens).
   let best = scored[0] || null;
   if (scored.length >= 2 && best && Math.abs(scored[0].score - scored[1].score) <= 0.05 && numeric_tokens.length > 0) {
     for (const cand of scored) {
-      const projTokens = normalizeProjectName(cand.name).map(Number).filter((n) => !isNaN(n));
-      if (numeric_tokens.some((nt) => projTokens.includes(Number(nt)))) {
+      const allNames = cand.project.names || [cand.name];
+      const projNums = allNames.flatMap((n) => String(n).match(/\b\d{2,5}\b/g) || []);
+      if (numeric_tokens.some((nt) => projNums.includes(nt))) {
         best = cand;
         break;
       }
@@ -149,14 +167,14 @@ export function resolveProject(event, projects) {
   }
 
   return {
-    best: best && best.score >= 0.80 ? best : null,
-    candidates: scored.slice(0, 3),
+    best: best && best.score >= 0.80 ? { id: best.id, name: best.name, score: best.score } : null,
+    candidates: scored.slice(0, 3).map((s) => ({ id: s.id, name: s.name, score: s.score })),
     lot_tokens: numeric_tokens,
   };
 }
 
-// Evaluate a set of posts (for the same project+date) and return the aggregate
-// report status. Uses attachment_count (or photo_urls as fallback) for photos.
+// Evaluate a set of posts (for the same project group+date) and return the
+// aggregate report status. Uses attachment_count (or photo_urls as fallback).
 export function evaluatePosts(posts) {
   if (!posts || posts.length === 0) return { result: "missing_all", post_ids: [] };
   const postIds = posts.map((p) => p.post_id);
@@ -172,5 +190,5 @@ export function evaluatePosts(posts) {
   else if (hasPhotos) result = "missing_notes";
   else if (hasNotes) result = "missing_photos";
   else result = "missing_all";
-  return { result, post_ids };
+  return { result, post_ids: postIds };
 }

@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { secrets } from 'base44:runtime';
 import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, mergeReviewFlags } from '../../shared/ingestShared.ts';
+import { countAttachments } from '../../shared/reportMatching.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Ingest Probuild posts into FeeLines. One row per post.
@@ -59,8 +60,16 @@ function findCalendarRowToMerge(existingFees, jobId, postDate) {
 function extractPhotoUrls(post) {
   if (!post) return [];
   for (const key of ['attachments', 'photos', 'media', 'images', 'files']) {
-    if (Array.isArray(post[key])) {
-      return post[key].map(item => {
+    const val = post[key];
+    if (Array.isArray(val)) {
+      return val.map(item => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') return item.url || item.uri || item.src || item.link || '';
+      }).filter(Boolean);
+    }
+    // Probuild stores attachments as a keyed object (attachment id → record)
+    if (val && typeof val === 'object') {
+      return Object.values(val).map(item => {
         if (typeof item === 'string') return item;
         if (item && typeof item === 'object') return item.url || item.uri || item.src || item.link || '';
       }).filter(Boolean);
@@ -309,6 +318,7 @@ ${JSON.stringify(promptInputs)}`;
         job_name: b.projectName,
         message: post.message || '',
         photo_urls: extractPhotoUrls(post),
+        attachment_count: countAttachments(post.attachments),
         post_id: b.postId,
         project_id: b.projectId,
         created_at: post.createdAt || null,

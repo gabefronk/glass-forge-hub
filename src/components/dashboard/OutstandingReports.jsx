@@ -44,7 +44,13 @@ export default function OutstandingReports({ events, user, onChanged }) {
       return (b.days_late || 0) - (a.days_late || 0);
     });
 
-  if (!outstanding.length) return null;
+  const noSourceDates = [...new Set((events || [])
+    .filter((e) => e.report_status === "no_source_data")
+    .map((e) => e.event_date))]
+    .sort()
+    .reverse();
+
+  if (!outstanding.length && !noSourceDates.length) return null;
 
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;
@@ -86,6 +92,18 @@ export default function OutstandingReports({ events, user, onChanged }) {
 
   return (
     <>
+      {noSourceDates.length > 0 && (
+        <div className="rounded-[18px] px-5 py-4 mb-5 flex items-start gap-3" style={{ backgroundColor: "rgba(255,138,122,.10)", border: `1px solid rgba(255,138,122,.25)` }}>
+          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#FF8A7A" }} />
+          <div>
+            <div className="text-[14px] font-semibold mb-1" style={{ color: "#FF8A7A" }}>Probuild sync incomplete</div>
+            <div className="text-[12px]" style={{ color: C.textMuted }}>
+              No field reports ingested for {noSourceDates.join(", ")} — flags suppressed. The Probuild pull may have failed; check the ingest logs.
+            </div>
+          </div>
+        </div>
+      )}
+      {outstanding.length > 0 && (
       <div className="rounded-[18px] overflow-hidden mb-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
           <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Field reports outstanding</h2>
@@ -128,6 +146,7 @@ export default function OutstandingReports({ events, user, onChanged }) {
           })}
         </div>
       </div>
+      )}
 
       {uploading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,.80)" }} onClick={() => setUploading(null)}>

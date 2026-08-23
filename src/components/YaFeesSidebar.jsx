@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3 } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isFutureRow } from "@/lib/feeMath";
@@ -76,6 +76,20 @@ export default function YaFeesSidebar() {
             </Link>
           );
         })}
+        {user?.role === "admin" && (
+          <Link
+            to="/match-debug"
+            className="flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium transition-colors whitespace-nowrap"
+            style={{
+              borderRadius: "11px",
+              backgroundColor: pathname === "/match-debug" ? "rgba(110,231,192,.14)" : "transparent",
+              color: pathname === "/match-debug" ? "#6EE7C0" : "rgba(255,255,255,.62)",
+            }}
+          >
+            <Bug className="h-4 w-4 shrink-0" />
+            Match Debug
+          </Link>
+        )}
       </nav>
 
       {/* Unbilled mini card */}

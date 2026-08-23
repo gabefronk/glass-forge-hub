@@ -13,6 +13,7 @@ import CalendarPage from '@/pages/CalendarPage';
 import JobsHub from '@/pages/JobsHub';
 import JobDetail from '@/pages/JobDetail';
 import Dashboard from '@/pages/Dashboard';
+import MatchDebug from '@/pages/MatchDebug';
 import { Navigate } from 'react-router-dom';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
@@ -57,6 +58,7 @@ const AuthenticatedApp = () => {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/jobs" element={<JobsHub />} />
           <Route path="/jobs/:id" element={<JobDetail />} />
+          <Route path="/match-debug" element={<MatchDebug />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
