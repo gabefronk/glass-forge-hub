@@ -134,4 +134,8 @@
   .obsidian-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
   .obsidian-scroll::-webkit-scrollbar-track { background: transparent; }
   .obsidian-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.10); border-radius: 99px; }
+  .inv-line-grid { display: grid; grid-template-columns: 22px minmax(0,1fr) 90px; gap: 12px; align-items: center; }
+  @media (min-width: 700px) { .inv-line-grid { grid-template-columns: 22px minmax(0,1fr) 116px 118px 140px 30px; gap: 18px; } }
+  .inv-toolbar-scroll { overflow-x: auto; scrollbar-width: none; }
+  .inv-toolbar-scroll::-webkit-scrollbar { display: none; }
 }

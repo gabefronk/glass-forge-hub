@@ -8,7 +8,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
-import YaFees from '@/pages/YaFees';
+import Invoicing from '@/pages/Invoicing';
 import CalendarPage from '@/pages/CalendarPage';
 import JobsHub from '@/pages/JobsHub';
 import JobDetail from '@/pages/JobDetail';
@@ -53,7 +53,7 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
-          <Route path="/" element={<YaFees />} />
+          <Route path="/" element={<Invoicing />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/jobs" element={<JobsHub />} />
