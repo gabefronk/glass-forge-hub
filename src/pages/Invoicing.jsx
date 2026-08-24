@@ -8,7 +8,7 @@ import LineList from "@/components/invoicing/LineList";
 import JobsView from "@/components/invoicing/JobsView";
 import FloatingActionBar from "@/components/invoicing/FloatingActionBar";
 
-const isReady = (r) => r.billable && !r.billed_to_bfs && !isFutureRow(r) && !(r.needs_review && !r.manually_adjusted) && Number(r.labor_amt) > 0;
+const isReady = (r) => r.billable && !r.billed_to_bfs && !isFutureRow(r) && !(r.needs_review && !r.manually_adjusted) && (Number(r.labor_amt) > 0 || r.fee_type === "profit_split");
 const isBlocked = (r) => r.needs_review && !r.manually_adjusted;
 const isCustomFee = (r) => r.fee_type !== "profit_split" && Number(r.fee_pct) !== 0.1;
 
