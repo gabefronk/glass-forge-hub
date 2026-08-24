@@ -112,7 +112,7 @@
     "cost": {
       "type": "number",
       "title": "Cost",
-      "description": "Cost for profit-split jobs \u2014 includes labor paid to YA (nullable for labor_pct)"
+      "description": "Cost for profit-split jobs \u2014 includes labor paid to YA (nullable for labor_pct). Cost $0 is valid for labor-only profit-split jobs."
     },
     "split_pct": {
       "type": "number",
@@ -196,6 +196,11 @@
       "type": "boolean",
       "title": "Manually Adjusted",
       "default": false
+    },
+    "superseded_by": {
+      "type": "string",
+      "title": "Superseded By",
+      "description": "ID of the FeeLine that supersedes this row. Set on Probuild rows that duplicate a calendar row for the same job on the same day. Superseded rows are excluded from all totals but remain visible as proof of work. Calendar wins when both have an amount."
     }
   },
   "required": [
