@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { isReady } from "@/lib/invoicingFilters";
+import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
 import { formatMoney } from "@/lib/feeMath";
 
 const NAV_ITEMS = [
@@ -49,7 +49,8 @@ export default function YaFeesSidebar() {
         for (const e of (Array.isArray(calEvents) ? calEvents : [])) {
           if (e.google_event_id && (e.event_date || "").startsWith(month)) rsm.set(e.google_event_id, e.report_status);
         }
-        const readyRows = rows.filter((r) => isReady(r, rsm));
+        const ss = buildSupersededSet(rows);
+        const readyRows = rows.filter((r) => isReady(r, rsm, ss));
         const total = readyRows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
         setUnbilled({ total, count: readyRows.length });
       } catch {}

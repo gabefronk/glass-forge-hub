@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { computeFeeAmt, computeLaborAmt, formatMoney, currentMonthStr, isFutureRow } from "@/lib/feeMath";
-import { isReady, isMatchBlocked, isReportBlocked, isCustomFee } from "@/lib/invoicingFilters";
+import { isReady, isMatchBlocked, isReportBlocked, isCustomFee, buildSupersededSet } from "@/lib/invoicingFilters";
 import InvoicingTopBar from "@/components/invoicing/InvoicingTopBar";
 import InvoicingHero from "@/components/invoicing/InvoicingHero";
 import InvoicingToolbar from "@/components/invoicing/InvoicingToolbar";
@@ -57,9 +57,11 @@ export default function Invoicing() {
 
   const monthRows = useMemo(() => feeLines.filter((r) => r.invoice_month === month), [feeLines, month]);
 
+  const supersededSet = useMemo(() => buildSupersededSet(monthRows), [monthRows]);
+
   const filteredRows = useMemo(() => {
     let rows = monthRows;
-    if (filter === "ready") rows = rows.filter((r) => isReady(r, reportStatusMap));
+    if (filter === "ready") rows = rows.filter((r) => isReady(r, reportStatusMap, supersededSet));
     else if (filter === "needs_review") rows = rows.filter(isMatchBlocked);
     else if (filter === "needs_report") rows = rows.filter((r) => isReportBlocked(r, reportStatusMap));
     else if (filter === "billed") rows = rows.filter((r) => r.billed_to_bfs);
@@ -77,16 +79,17 @@ export default function Invoicing() {
 
   const filterCounts = useMemo(() => ({
     all: monthRows.length,
-    ready: monthRows.filter((r) => isReady(r, reportStatusMap)).length,
+    ready: monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet)).length,
     needs_review: monthRows.filter(isMatchBlocked).length,
     needs_report: monthRows.filter((r) => isReportBlocked(r, reportStatusMap)).length,
     billed: monthRows.filter((r) => r.billed_to_bfs).length,
   }), [monthRows, reportStatusMap]);
 
   const heroStats = useMemo(() => {
-    const ready = monthRows.filter((r) => isReady(r, reportStatusMap));
+    const ready = monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet));
     const matchBlocked = monthRows.filter(isMatchBlocked);
     const reportBlocked = monthRows.filter((r) => isReportBlocked(r, reportStatusMap));
+    const noSourceData = monthRows.filter((r) => r.calendar_event_id && reportStatusMap.get(r.calendar_event_id) === "no_source_data");
     const billed = monthRows.filter((r) => r.billed_to_bfs);
     const scheduled = monthRows.filter((r) => isFutureRow(r));
     return {
@@ -94,13 +97,14 @@ export default function Invoicing() {
       readyCount: ready.length,
       matchBlockedCount: matchBlocked.length,
       reportBlockedCount: reportBlocked.length,
+      noSourceDataCount: noSourceData.length,
       customFeeCount: monthRows.filter(isCustomFee).length,
       billedTotal: billed.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
       billedCount: billed.length,
       scheduledTotal: scheduled.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
       scheduledCount: scheduled.length,
     };
-  }, [monthRows, reportStatusMap]);
+  }, [monthRows, reportStatusMap, supersededSet]);
 
   const selectedFee = useMemo(() => {
     return monthRows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + (computeFeeAmt(r) || 0), 0);
@@ -161,8 +165,8 @@ export default function Invoicing() {
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const handleSelectAllReady = useCallback(() => {
-    setSelectedIds(new Set(monthRows.filter((r) => isReady(r, reportStatusMap)).map((r) => r.id)));
-  }, [monthRows, reportStatusMap]);
+    setSelectedIds(new Set(monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet)).map((r) => r.id)));
+  }, [monthRows, reportStatusMap, supersededSet]);
 
   // ── Edit / delete ────────────────────────────────────────────────
   const handleEdit = useCallback(async (id, patch) => {

@@ -54,7 +54,7 @@ function Stat({ label, value, sub, coral, onClick }) {
   );
 }
 
-export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCount, reportBlockedCount, customFeeCount, billedTotal, billedCount, scheduledTotal, scheduledCount, onFilterBlocked, onFilterMatchBlocked }) {
+export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCount, reportBlockedCount, noSourceDataCount, customFeeCount, billedTotal, billedCount, scheduledTotal, scheduledCount, onFilterBlocked, onFilterMatchBlocked }) {
   return (
     <div
       style={{
@@ -104,6 +104,11 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
           }}
         >
           {readyCount} lines ready · {reportBlockedCount} waiting on a report · {matchBlockedCount} match review · {customFeeCount} custom fee %
+          {noSourceDataCount > 0 && (
+            <span style={{ display: "block", marginTop: "6px", fontFamily: "'IBM Plex Mono',monospace", fontSize: "11px", color: "#FF8A7A" }}>
+              ⚠ Source data missing for {noSourceDataCount} {noSourceDataCount === 1 ? "line" : "lines"} — Probuild pull may have failed
+            </span>
+          )}
         </div>
       </div>
 
