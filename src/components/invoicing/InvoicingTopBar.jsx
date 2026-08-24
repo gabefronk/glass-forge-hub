@@ -1,6 +1,6 @@
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 
-export default function InvoicingTopBar({ month, onMonthChange, search, onSearchChange, readyCount, onSelectAllReady, searchRef }) {
+export default function InvoicingTopBar({ month, onMonthChange, search, onSearchChange, readyCount, onSelectAllReady, searchRef, onExportPdf, exporting }) {
   const [y, m] = month.split("-").map(Number);
   const monthName = new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const today = new Date();
@@ -128,6 +128,27 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
         </div>
 
         <div style={{ flex: 1 }} />
+
+        <button
+          onClick={onExportPdf}
+          disabled={exporting}
+          className="max-[699px]:hidden"
+          style={{
+            height: "36px",
+            borderRadius: "99px",
+            backgroundColor: "transparent",
+            color: "rgba(255,255,255,.62)",
+            fontFamily: "'Inter Tight',sans-serif",
+            fontSize: "13px",
+            fontWeight: 500,
+            padding: "0 14px",
+            border: "1px solid rgba(255,255,255,.10)",
+            cursor: exporting ? "wait" : "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {exporting ? "Generating\u2026" : "Export PDF"}
+        </button>
 
         <div className="max-[699px]:hidden" style={{ position: "relative", display: "flex", alignItems: "center" }}>
           <Search style={{ position: "absolute", left: "12px", width: "14px", height: "14px", color: "rgba(255,255,255,.34)", pointerEvents: "none" }} />

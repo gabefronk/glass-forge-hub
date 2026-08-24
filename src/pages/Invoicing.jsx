@@ -23,6 +23,7 @@ export default function Invoicing() {
   const [hideZeros, setHideZeros] = useState(() => localStorage.getItem("inv_hideZeros") === "true");
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [undo, setUndo] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const [reportAttached, setReportAttached] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("inv_reportAttached") || "[]")); } catch { return new Set(); }
   });
@@ -286,6 +287,19 @@ export default function Invoicing() {
     const a = document.createElement("a"); a.href = url; a.download = `job-${job.name}-${month}.csv`; a.click(); URL.revokeObjectURL(url);
   }, [month]);
 
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      const { exportInvoicePdf } = await import("@/lib/exportInvoicePdf");
+      const exportRows = monthRows.filter((r) => !isFutureRow(r) && Number(r.labor_amt) > 0);
+      await exportInvoicePdf(month, exportRows);
+    } catch (e) {
+      console.error("PDF export error:", e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // ── Keyboard shortcuts ───────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
@@ -323,6 +337,8 @@ export default function Invoicing() {
         readyCount={heroStats.readyCount}
         onSelectAllReady={handleSelectAllReady}
         searchRef={searchRef}
+        onExportPdf={handleExportPdf}
+        exporting={exporting}
       />
 
       <div
