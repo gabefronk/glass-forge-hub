@@ -69,22 +69,38 @@ export function extractOE(text) {
   return m ? m[1] : null;
 }
 
-// Normalize an address for comparison: lowercase, standardize street
-// suffixes, strip punctuation/zip/state so "50 W 250 N, MIDWAY, UT, 84049"
-// and "50 W 250 N Midway" both become "50 w 250 n midway".
+// Normalize an address for comparison. Both sides are reduced to a canonical
+// abbreviated form: street types (Street→st, Loop→lp, Hill→hl, etc.),
+// directionals (East→e, North→n), unit/suite markers stripped, punctuation
+// removed, and city/state/ZIP/country dropped (everything after the first
+// comma). So "677 E Silver Hl Lp, Hideout, UT 84036, USA" and
+// "677 East Silver Hill Loop" both become "677 e silver hl lp".
 export function normalizeAddress(addr) {
   if (!addr) return "";
   let s = String(addr).toLowerCase().trim();
+  // Keep only the street portion — drop city/state/ZIP/country after first comma
+  const commaIdx = s.indexOf(",");
+  if (commaIdx > -1) s = s.slice(0, commaIdx).trim();
+  // Street type abbreviations → canonical short form
   s = s.replace(/\bstreet\b/g, "st").replace(/\bavenue\b/g, "ave")
        .replace(/\bboulevard\b/g, "blvd").replace(/\bdrive\b/g, "dr")
        .replace(/\blane\b/g, "ln").replace(/\broad\b/g, "rd")
        .replace(/\bplace\b/g, "pl").replace(/\bcourt\b/g, "ct")
-       .replace(/\bcircle\b/g, "cir");
+       .replace(/\bcircle\b/g, "cir").replace(/\bparkway\b/g, "pkwy")
+       .replace(/\bloop\b/g, "lp").replace(/\bhill\b/g, "hl")
+       .replace(/\bhighway\b/g, "hwy").replace(/\btrail\b/g, "trl")
+       .replace(/\bterrace\b/g, "ter");
+  // Directionals → single letter
+  s = s.replace(/\beast\b/g, "e").replace(/\bsouth\b/g, "s")
+       .replace(/\bnorth\b/g, "n").replace(/\bwest\b/g, "w");
+  // Strip unit/suite markers
+  s = s.replace(/\b(?:unit|suite|ste)\s+#?\d*\b/g, "");
+  // Strip punctuation
   s = s.replace(/[,.#]/g, " ");
-  s = s.replace(/\b\d{5}(?:-\d{4})?\b/g, ""); // zip
-  s = s.replace(/,\s*ut\b/g, " "); // Utah state after comma
-  s = s.replace(/\but\b/g, " "); // bare UT
-  s = s.replace(/\busa\b/g, " ");
+  // Strip ZIP (fallback when no comma)
+  s = s.replace(/\b\d{5}(?:-\d{4})?\b/g, "");
+  // Strip state/country (fallback)
+  s = s.replace(/\but\b/g, " ").replace(/\busa\b/g, " ");
   s = s.replace(/\s+/g, " ").trim();
   return s;
 }
