@@ -54,7 +54,7 @@ function Stat({ label, value, sub, coral, onClick }) {
   );
 }
 
-export default function InvoicingHero({ readyTotal, readyCount, blockedCount, customFeeCount, billedTotal, billedCount, scheduledTotal, scheduledCount, onFilterBlocked }) {
+export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCount, reportBlockedCount, customFeeCount, billedTotal, billedCount, scheduledTotal, scheduledCount, onFilterBlocked, onFilterMatchBlocked }) {
   return (
     <div
       style={{
@@ -103,7 +103,7 @@ export default function InvoicingHero({ readyTotal, readyCount, blockedCount, cu
             whiteSpace: "nowrap",
           }}
         >
-          {readyCount} lines ready · {blockedCount} waiting on a report · {customFeeCount} custom fee %
+          {readyCount} lines ready · {reportBlockedCount} waiting on a report · {matchBlockedCount} match review · {customFeeCount} custom fee %
         </div>
       </div>
 
@@ -112,7 +112,9 @@ export default function InvoicingHero({ readyTotal, readyCount, blockedCount, cu
         <div style={{ width: "1px", height: "44px", backgroundColor: "rgba(255,255,255,.10)", margin: "0 20px" }} className="max-[699px]:mx-3" />
         <Stat label="SCHEDULED" value={`$${formatMoney(scheduledTotal)}`} sub={`${scheduledCount} lines`} />
         <div style={{ width: "1px", height: "44px", backgroundColor: "rgba(255,255,255,.10)", margin: "0 20px" }} className="max-[699px]:mx-3" />
-        <Stat label="NEEDS A REPORT" value={String(blockedCount)} sub="fix →" coral onClick={onFilterBlocked} />
+        <Stat label="NEEDS A REPORT" value={String(reportBlockedCount)} sub="fix →" coral onClick={onFilterBlocked} />
+        <div style={{ width: "1px", height: "44px", backgroundColor: "rgba(255,255,255,.10)", margin: "0 20px" }} className="max-[699px]:mx-3" />
+        <Stat label="MATCH REVIEW" value={String(matchBlockedCount)} sub="fix →" coral onClick={onFilterMatchBlocked} />
       </div>
     </div>
   );

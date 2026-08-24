@@ -1,6 +1,7 @@
 const FILTERS = [
   { key: "all", label: "All" },
   { key: "ready", label: "Ready" },
+  { key: "needs_review", label: "Needs review" },
   { key: "needs_report", label: "Needs a report" },
   { key: "billed", label: "Billed" },
 ];
@@ -47,7 +48,7 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
       <div className="inv-toolbar-scroll" style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
         {FILTERS.map((f) => {
           const active = filter === f.key;
-          const isCoral = f.key === "needs_report";
+          const isCoral = f.key === "needs_report" || f.key === "needs_review";
           return (
             <button
               key={f.key}

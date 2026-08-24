@@ -1,16 +1,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { computeFeeAmt, computeLaborAmt, formatMoney, currentMonthStr, isFutureRow } from "@/lib/feeMath";
+import { isReady, isMatchBlocked, isReportBlocked, isCustomFee } from "@/lib/invoicingFilters";
 import InvoicingTopBar from "@/components/invoicing/InvoicingTopBar";
 import InvoicingHero from "@/components/invoicing/InvoicingHero";
 import InvoicingToolbar from "@/components/invoicing/InvoicingToolbar";
 import LineList from "@/components/invoicing/LineList";
 import JobsView from "@/components/invoicing/JobsView";
 import FloatingActionBar from "@/components/invoicing/FloatingActionBar";
-
-const isReady = (r) => r.billable && !r.billed_to_bfs && !isFutureRow(r) && !(r.needs_review && !r.manually_adjusted) && (Number(r.labor_amt) > 0 || r.fee_type === "profit_split");
-const isBlocked = (r) => r.needs_review && !r.manually_adjusted;
-const isCustomFee = (r) => r.fee_type !== "profit_split" && Number(r.fee_pct) !== 0.1;
 
 export default function Invoicing() {
   const [month, setMonth] = useState(currentMonthStr());
@@ -24,6 +21,7 @@ export default function Invoicing() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [undo, setUndo] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [reportAttached, setReportAttached] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("inv_reportAttached") || "[]")); } catch { return new Set(); }
   });
@@ -39,7 +37,15 @@ export default function Invoicing() {
   const load = async () => {
     setLoading(true);
     try {
-      const fl = await base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000);
+      const [fl, calEvents] = await Promise.all([
+        base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000),
+        base44.entities.CalendarEvents.list("-event_date", 5000),
+      ]);
+      const rsm = new Map();
+      for (const e of (Array.isArray(calEvents) ? calEvents : [])) {
+        if (e.google_event_id && (e.event_date || "").startsWith(month)) rsm.set(e.google_event_id, e.report_status);
+      }
+      setReportStatusMap(rsm);
       setFeeLines(Array.isArray(fl) ? fl : []);
     } catch (e) {
       console.error("Invoicing load error:", e);
@@ -53,8 +59,9 @@ export default function Invoicing() {
 
   const filteredRows = useMemo(() => {
     let rows = monthRows;
-    if (filter === "ready") rows = rows.filter(isReady);
-    else if (filter === "needs_report") rows = rows.filter(isBlocked);
+    if (filter === "ready") rows = rows.filter((r) => isReady(r, reportStatusMap));
+    else if (filter === "needs_review") rows = rows.filter(isMatchBlocked);
+    else if (filter === "needs_report") rows = rows.filter((r) => isReportBlocked(r, reportStatusMap));
     else if (filter === "billed") rows = rows.filter((r) => r.billed_to_bfs);
     if (hideZeros) rows = rows.filter((r) => Number(r.labor_amt) !== 0);
     if (search.trim()) {
@@ -66,31 +73,34 @@ export default function Invoicing() {
       );
     }
     return rows;
-  }, [monthRows, filter, hideZeros, search]);
+  }, [monthRows, filter, hideZeros, search, reportStatusMap]);
 
   const filterCounts = useMemo(() => ({
     all: monthRows.length,
-    ready: monthRows.filter(isReady).length,
-    needs_report: monthRows.filter(isBlocked).length,
+    ready: monthRows.filter((r) => isReady(r, reportStatusMap)).length,
+    needs_review: monthRows.filter(isMatchBlocked).length,
+    needs_report: monthRows.filter((r) => isReportBlocked(r, reportStatusMap)).length,
     billed: monthRows.filter((r) => r.billed_to_bfs).length,
-  }), [monthRows]);
+  }), [monthRows, reportStatusMap]);
 
   const heroStats = useMemo(() => {
-    const ready = monthRows.filter(isReady);
-    const blocked = monthRows.filter(isBlocked);
+    const ready = monthRows.filter((r) => isReady(r, reportStatusMap));
+    const matchBlocked = monthRows.filter(isMatchBlocked);
+    const reportBlocked = monthRows.filter((r) => isReportBlocked(r, reportStatusMap));
     const billed = monthRows.filter((r) => r.billed_to_bfs);
     const scheduled = monthRows.filter((r) => isFutureRow(r));
     return {
       readyTotal: ready.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
       readyCount: ready.length,
-      blockedCount: blocked.length,
+      matchBlockedCount: matchBlocked.length,
+      reportBlockedCount: reportBlocked.length,
       customFeeCount: monthRows.filter(isCustomFee).length,
       billedTotal: billed.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
       billedCount: billed.length,
       scheduledTotal: scheduled.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
       scheduledCount: scheduled.length,
     };
-  }, [monthRows]);
+  }, [monthRows, reportStatusMap]);
 
   const selectedFee = useMemo(() => {
     return monthRows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + (computeFeeAmt(r) || 0), 0);
@@ -151,8 +161,8 @@ export default function Invoicing() {
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const handleSelectAllReady = useCallback(() => {
-    setSelectedIds(new Set(monthRows.filter(isReady).map((r) => r.id)));
-  }, [monthRows]);
+    setSelectedIds(new Set(monthRows.filter((r) => isReady(r, reportStatusMap)).map((r) => r.id)));
+  }, [monthRows, reportStatusMap]);
 
   // ── Edit / delete ────────────────────────────────────────────────
   const handleEdit = useCallback(async (id, patch) => {
@@ -291,7 +301,7 @@ export default function Invoicing() {
     setExporting(true);
     try {
       const { exportInvoicePdf } = await import("@/lib/exportInvoicePdf");
-      const exportRows = monthRows.filter((r) => !isFutureRow(r) && Number(r.labor_amt) > 0);
+      const exportRows = monthRows.filter((r) => !isFutureRow(r) && !r.superseded_by && (Number(r.labor_amt) > 0 || r.fee_type === "profit_split"));
       await exportInvoicePdf(month, exportRows);
     } catch (e) {
       console.error("PDF export error:", e);
@@ -365,6 +375,7 @@ export default function Invoicing() {
             <InvoicingHero
               {...heroStats}
               onFilterBlocked={() => setFilter("needs_report")}
+              onFilterMatchBlocked={() => setFilter("needs_review")}
             />
             <InvoicingToolbar
               view={view}

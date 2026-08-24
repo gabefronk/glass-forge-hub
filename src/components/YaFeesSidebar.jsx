@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { isFutureRow } from "@/lib/feeMath";
+import { isReady } from "@/lib/invoicingFilters";
 import { formatMoney } from "@/lib/feeMath";
 
 const NAV_ITEMS = [
@@ -32,15 +32,29 @@ export default function YaFeesSidebar() {
         const me = await base44.auth.me();
         if (me) setUser(me);
       } catch {}
-      try {
-        const month = currentMonthStr();
-        const rows = await base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000);
-        const unbilledRows = rows.filter((r) => !r.billed_to_bfs && !isFutureRow(r) && Number(r.labor_amt) > 0);
-        const total = unbilledRows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
-        setUnbilled({ total, count: unbilledRows.length });
-      } catch {}
     })();
   }, []);
+
+  // Recompute unbilled whenever the route changes (user navigates back to
+  // Invoicing after edits, or new ingest runs) — not just on first mount.
+  useEffect(() => {
+    (async () => {
+      try {
+        const month = currentMonthStr();
+        const [rows, calEvents] = await Promise.all([
+          base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000),
+          base44.entities.CalendarEvents.list("-event_date", 5000),
+        ]);
+        const rsm = new Map();
+        for (const e of (Array.isArray(calEvents) ? calEvents : [])) {
+          if (e.google_event_id && (e.event_date || "").startsWith(month)) rsm.set(e.google_event_id, e.report_status);
+        }
+        const readyRows = rows.filter((r) => isReady(r, rsm));
+        const total = readyRows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
+        setUnbilled({ total, count: readyRows.length });
+      } catch {}
+    })();
+  }, [pathname]);
 
   return (
     <aside
