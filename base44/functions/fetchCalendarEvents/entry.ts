@@ -7,6 +7,37 @@ import { fetchAllPages } from '../../shared/pagination.ts';
 // Skips app-authored events (source='app') — those are owned by pushCalendarEvent.
 // Upserts on calendar_event_id (= CalendarEvents.google_event_id); never
 // overwrites a manually_adjusted row or a written_by='app' row.
+//
+// Reverse merge: when creating a NEW calendar FeeLine, checks for an existing
+// Probuild-sourced FeeLine for the same job within ±3 days that has man_hours
+// or trip_charges (e.g. a "screen installed trip charge" note posted the day
+// after a $0 warranty calendar event). Merges the Probuild labor data into
+// the calendar row and supersedes the standalone Probuild row so the charge
+// appears on the calendar event's date, not scattered to a separate day.
+
+// Find an existing Probuild-sourced FeeLine for the same job within ±3 days
+// that has man_hours or trip_charges and hasn't been merged/superseded yet.
+function findProbuildRowToMerge(existingFees, jobId, eventDate) {
+  if (!jobId || !eventDate) return null;
+  const eventMs = new Date(eventDate + 'T00:00:00Z').getTime();
+  let best = null;
+  let minDiff = Infinity;
+  for (const f of existingFees) {
+    if (f.job_id !== jobId) continue;
+    if (f.source !== 'probuild') continue;
+    if (f.manually_adjusted) continue;
+    if (f.superseded_by) continue;
+    if (f.calendar_event_id) continue; // already linked to a calendar event
+    if (f.man_hours == null && f.trip_charges == null) continue;
+    const diff = Math.abs(new Date(f.job_date + 'T00:00:00Z').getTime() - eventMs);
+    if (diff <= 3 * 86400000 && diff < minDiff) {
+      minDiff = diff;
+      best = f;
+    }
+  }
+  return best;
+}
+
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -73,6 +104,7 @@ export default async function(req) {
 
     const toCreate = [];
     const toUpdate = [];
+    const probuildRowsToSupersede = [];
     let skipped = 0;
     const flagged = [];
     for (const { ev, title, normName, m } of matched) {
@@ -129,11 +161,41 @@ export default async function(req) {
         if (ex.probuild_post_id) row.probuild_post_id = ex.probuild_post_id;
         if (ex.probuild_project_id) row.probuild_project_id = ex.probuild_project_id;
         if (ex.source === 'both') row.source = 'both';
+        // Reverse merge: if this existing calendar row has no Probuild data yet,
+        // check for a standalone Probuild row (same job, ±3 days) with man_hours
+        // or trip_charges that should be folded in. Fixes the timing gap where
+        // Probuild ingest ran before the calendar event was synced.
+        if (!ex.probuild_post_id && row.man_hours == null && row.trip_charges == null) {
+          const probuildRow = findProbuildRowToMerge(existingFees, jobId, dateStr);
+          if (probuildRow) {
+            if (probuildRow.man_hours != null) row.man_hours = probuildRow.man_hours;
+            if (probuildRow.trip_charges != null) row.trip_charges = probuildRow.trip_charges;
+            row.probuild_post_id = probuildRow.probuild_post_id;
+            row.probuild_project_id = probuildRow.probuild_project_id;
+            row.source = 'both';
+            probuildRowsToSupersede.push({ id: probuildRow.id, calendar_row_id: ex.id });
+          }
+        }
         row.labor_amt = computeLaborAmt(row);
         row.fee_amt = computeFeeAmt(row);
         const merged = mergeReviewFlags(ex, row);
         toUpdate.push({ id: ex.id, ...row, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
       } else {
+        // Reverse merge: check for an existing Probuild row (same job, ±3 days)
+        // with man_hours or trip_charges that should be folded into this new
+        // calendar row. Handles the timing case where Probuild ingest ran
+        // before the calendar event was synced.
+        const probuildRow = findProbuildRowToMerge(existingFees, jobId, dateStr);
+        if (probuildRow) {
+          if (probuildRow.man_hours != null) row.man_hours = probuildRow.man_hours;
+          if (probuildRow.trip_charges != null) row.trip_charges = probuildRow.trip_charges;
+          row.probuild_post_id = probuildRow.probuild_post_id;
+          row.probuild_project_id = probuildRow.probuild_project_id;
+          row.source = 'both';
+          row.labor_amt = computeLaborAmt(row);
+          row.fee_amt = computeFeeAmt(row);
+          probuildRowsToSupersede.push({ id: probuildRow.id, calendar_row_key: toCreate.length });
+        }
         toCreate.push(row);
       }
       if (row.needs_review) flagged.push({ id: ev.google_event_id, title, job_date: dateStr });
@@ -142,6 +204,28 @@ export default async function(req) {
     const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
     for (const batch of chunk(toCreate, 500)) await base44.asServiceRole.entities.FeeLines.bulkCreate(batch);
     for (const batch of chunk(toUpdate, 500)) await base44.asServiceRole.entities.FeeLines.bulkUpdate(batch);
+
+    // Supersede Probuild rows that were reverse-merged into calendar rows.
+    // The calendar row now owns the labor data; the Probuild row is suppressed.
+    // Deduplicate by Probuild row id — multiple calendar events for the same
+    // job can match the same Probuild post; only the first match wins.
+    if (probuildRowsToSupersede.length) {
+      const seenProbuildIds = new Set();
+      const supersedeUpdates = [];
+      for (const p of probuildRowsToSupersede) {
+        if (seenProbuildIds.has(p.id)) continue;
+        seenProbuildIds.add(p.id);
+        if (p.calendar_row_id) {
+          supersedeUpdates.push({ id: p.id, superseded_by: p.calendar_row_id });
+        } else if (p.calendar_row_key != null) {
+          const createdRow = toCreate[p.calendar_row_key];
+          if (createdRow && createdRow.id) {
+            supersedeUpdates.push({ id: p.id, superseded_by: createdRow.id });
+          }
+        }
+      }
+      if (supersedeUpdates.length) await base44.asServiceRole.entities.FeeLines.bulkUpdate(supersedeUpdates);
+    }
 
     // Add PO/OE/address/builder to matched jobs' arrays (many-to-one).
     const allJobs = [...jobsArr, ...newJobs];
@@ -174,6 +258,7 @@ export default async function(req) {
       calendar_events_scanned: calEvents.length,
       created: toCreate.length,
       updated: toUpdate.length,
+      probuild_reverse_merged: probuildRowsToSupersede.length,
       skipped_manually_adjusted: skipped,
       auto_created_jobs: autoCreateNames,
       flagged_for_review: flagged,
