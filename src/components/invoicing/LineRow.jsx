@@ -135,7 +135,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
   const subline = reportAttached
     ? "Report attached · ready to bill"
-    : [row.po_number && `PO ${row.po_number}`, crewName(row.calendar_creator), noteTokens(row.note_text)].filter(Boolean).join(" · ") || "—";
+    : [row.line_description, row.po_number && `PO ${row.po_number}`, crewName(row.calendar_creator), noteTokens(row.note_text)].filter(Boolean).join(" · ") || "—";
 
   const handleClick = (e) => {
     if (e.shiftKey) onShiftClick(row.id);
@@ -194,7 +194,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
               minWidth: 0,
             }}
           >
-            {row.line_description || row.job_name_raw || row.job_name_norm}
+            {row.job_name_raw || row.job_name_norm || row.line_description}
           </span>
           {isCustomFee && (
             <span
