@@ -60,7 +60,7 @@ export default function Invoicing() {
   const supersededSet = useMemo(() => buildSupersededSet(monthRows), [monthRows]);
 
   const filteredRows = useMemo(() => {
-    let rows = monthRows;
+    let rows = monthRows.filter((r) => !supersededSet.has(r.id));
     if (filter === "ready") rows = rows.filter((r) => isReady(r, reportStatusMap, supersededSet));
     else if (filter === "needs_review") rows = rows.filter(isMatchBlocked);
     else if (filter === "needs_report") rows = rows.filter((r) => isReportBlocked(r, reportStatusMap));
@@ -75,15 +75,15 @@ export default function Invoicing() {
       );
     }
     return rows;
-  }, [monthRows, filter, hideZeros, search, reportStatusMap]);
+  }, [monthRows, filter, hideZeros, search, reportStatusMap, supersededSet]);
 
   const filterCounts = useMemo(() => ({
-    all: monthRows.length,
+    all: monthRows.filter((r) => !supersededSet.has(r.id)).length,
     ready: monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet)).length,
     needs_review: monthRows.filter(isMatchBlocked).length,
     needs_report: monthRows.filter((r) => isReportBlocked(r, reportStatusMap)).length,
     billed: monthRows.filter((r) => r.billed_to_bfs).length,
-  }), [monthRows, reportStatusMap]);
+  }), [monthRows, reportStatusMap, supersededSet]);
 
   const heroStats = useMemo(() => {
     const ready = monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet));
