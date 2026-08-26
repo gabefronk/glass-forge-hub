@@ -6,7 +6,7 @@ import { fetchAllPages } from "@/lib/pagination";
 import { C } from "@/lib/feeUI";
 import MonthGrid from "@/components/calendar/MonthGrid";
 import EventForm from "@/components/calendar/EventForm";
-import EventDetail from "@/components/calendar/EventDetail";
+import EventBubble from "@/components/calendar/EventBubble";
 
 function formatMonth(m) {
   const [y, mm] = m.split("-").map(Number);
@@ -142,9 +142,7 @@ export default function CalendarPage() {
           </div>
         )}
         {selected && (
-          <div className="mb-4">
-            <EventDetail event={selected} jobs={jobs} onEdit={handleSave} onDelete={handleDelete} onClose={() => setSelected(null)} saving={saving} user={user} onChanged={load} />
-          </div>
+          <EventBubble event={selected} jobs={jobs} onEdit={handleSave} onDelete={handleDelete} onClose={() => setSelected(null)} saving={saving} user={user} onChanged={load} />
         )}
 
         {view === "month" ? (
