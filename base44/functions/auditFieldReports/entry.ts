@@ -89,7 +89,7 @@ export default async function(req) {
     const audits = [];
     const updatedIds = new Set();
     const dateSummaries = [];
-    const offsetCounts = { '0': 0, '1': 0, '-1': 0, 'null': 0 };
+    const offsetCounts = { '0': 0, '1': 0, '-1': 0, '2': 0, 'null': 0 };
 
     // Step 1: identify no_source_data dates and mark those events
     const noSourceDates = new Set();
@@ -206,6 +206,17 @@ export default async function(req) {
         }
       }
 
+      // Phase 4: D+2 (offset +2) — last resort for late-posted reports
+      for (const date of [...eventsByDate.keys()].sort()) {
+        if (dateAssignments.has(date)) continue;
+        const next2Day = addDays(date, 2);
+        const datePosts = (postsByDate.get(next2Day) || []).filter((p) => !claimedPostIds.has(p.post_id));
+        if (datePosts.length > 0) {
+          dateAssignments.set(date, { posts: datePosts, offset: 2 });
+          for (const p of datePosts) claimedPostIds.add(p.post_id);
+        }
+      }
+
       // Evaluate each date assignment
       for (const [date, events] of eventsByDate) {
         const assignment = dateAssignments.get(date);
@@ -233,7 +244,7 @@ export default async function(req) {
               matched_post_ids: post_ids, candidates_considered: res.candidates.length,
               top_score: res.best.score, ran_at: ranAt, run_id: runId,
             });
-            offsetCounts[String(assignment.offset)]++;
+            offsetCounts[String(assignment.offset)] = (offsetCounts[String(assignment.offset)] || 0) + 1;
           }
         } else {
           // No match — check grace period
