@@ -1,6 +1,25 @@
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { base44 } from "@/api/base44Client";
+
+function relativeTime(iso) {
+  if (!iso) return "never";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 export default function InvoicingTopBar({ month, onMonthChange, search, onSearchChange, readyCount, onSelectAllReady, searchRef, onExportPdf, exporting }) {
+  const [probuildStatus, setProbuildStatus] = useState(null);
+
+  useEffect(() => {
+    base44.functions.invoke("probuildStatus", {}).then(setProbuildStatus).catch(() => {});
+  }, []);
   const [y, m] = month.split("-").map(Number);
   const monthName = new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const today = new Date();
@@ -128,6 +147,45 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
         </div>
 
         <div style={{ flex: 1 }} />
+
+        {probuildStatus && !probuildStatus.error && (
+          <div
+            className="max-[699px]:hidden"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "4px 10px",
+              borderRadius: "99px",
+              backgroundColor: "rgba(255,255,255,.04)",
+              border: "1px solid rgba(255,255,255,.08)",
+            }}
+            title={`Probuild team ID: ${probuildStatus.team_id}\nLast token exchange: ${probuildStatus.last_exchanged_at || "never"}\nLast audit run: ${probuildStatus.last_audit_at || "never"}`}
+          >
+            <span
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "99px",
+                backgroundColor: "#6EE7C0",
+                boxShadow: "0 0 6px rgba(110,231,192,.5)",
+              }}
+            />
+            <span
+              style={{
+                fontFamily: "'IBM Plex Mono',monospace",
+                fontSize: "9.5px",
+                fontWeight: 500,
+                letterSpacing: ".12em",
+                color: "rgba(255,255,255,.5)",
+                textTransform: "uppercase",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Probuild · {probuildStatus.team_id?.slice(0, 8)}… · Sync {relativeTime(probuildStatus.last_exchanged_at)}
+            </span>
+          </div>
+        )}
 
         <button
           onClick={onExportPdf}
