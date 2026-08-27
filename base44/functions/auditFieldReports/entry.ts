@@ -70,7 +70,7 @@ export default async function(req) {
     const minAuditDate = datesToAudit.sort()[0];
     const maxAuditDate = datesToAudit[datesToAudit.length - 1];
     const reportRangeStart = addDays(minAuditDate, -1);
-    const reportRangeEnd = addDays(maxAuditDate, 1);
+    const reportRangeEnd = addDays(maxAuditDate, 2);
     const reportsInRange = allReports.filter((r) => r.job_date >= reportRangeStart && r.job_date <= reportRangeEnd);
 
     // Build project groups from ALL reports in the expanded range
@@ -97,7 +97,8 @@ export default async function(req) {
       const nearCount =
         (reportsByDate.get(addDays(denverDate, -1)) || []).length +
         (reportsByDate.get(denverDate) || []).length +
-        (reportsByDate.get(addDays(denverDate, 1)) || []).length;
+        (reportsByDate.get(addDays(denverDate, 1)) || []).length +
+        (reportsByDate.get(addDays(denverDate, 2)) || []).length;
       if (nearCount === 0) {
         noSourceDates.add(denverDate);
         const events = allEvents.filter((e) => e.event_date === denverDate && e.report_required !== false && e.report_status !== 'waived');

@@ -70,6 +70,12 @@ export function normalizeEventForProjectMatch(name) {
   s = s.toLowerCase();
   // Strip lot/building/unit keywords and their numbers
   s = s.replace(/\b(?:lot|bldg|blding|unit|apt|building)\s*\d*\b/g, " ");
+  // Strip PO-variant suffixes: "reorder" creates a separate Probuild project
+  // for the same jobsite (new PO, same lot). Strip it so both variants group together.
+  s = s.replace(/\breorder\b/g, " ");
+  // Strip standalone "res" (abbreviation for "residence") — appears in calendar
+  // event names but not in Probuild project names, causing false mismatches.
+  s = s.replace(/\bres\b/g, " ");
   // Strip punctuation
   s = s.replace(/[.,;:!?\-–—*]+/g, " ");
   // Collapse whitespace
@@ -92,16 +98,18 @@ export function normalizeProjectName(name) {
   return normalizeEventForProjectMatch(name).alpha_tokens;
 }
 
-// Jaccard similarity between two token sets (intersection / union).
-// Returns 0–1.
-function jaccardTokens(eventTokens, projectTokens) {
+// Overlap coefficient between two token sets (intersection / smaller set size).
+// Returns 0–1. Better than Jaccard for cases where the calendar event name is
+// a shorter subset of the Probuild project name (e.g. "Gentry" vs "Eric & Valerie
+// Gentry" — Jaccard penalizes the extra tokens, overlap coefficient does not).
+function overlapCoeffTokens(eventTokens, projectTokens) {
   if (!eventTokens.length || !projectTokens.length) return 0;
   const eventSet = new Set(eventTokens);
   const projectSet = new Set(projectTokens);
   let intersection = 0;
   for (const t of eventSet) if (projectSet.has(t)) intersection++;
-  const union = eventSet.size + projectSet.size - intersection;
-  return union > 0 ? intersection / union : 0;
+  const minSize = Math.min(eventSet.size, projectSet.size);
+  return minSize > 0 ? intersection / minSize : 0;
 }
 
 // Build project groups from FieldReports. Groups reports by normalized alpha
@@ -135,10 +143,10 @@ export function scoreEventToProject(event, project) {
   if (eventStreet && projectStreet && eventStreet.number === projectStreet.number && eventStreet.name === projectStreet.name) {
     return 1.0;
   }
-  // (b) Alpha-token similarity
+  // (b) Alpha-token similarity (overlap coefficient — handles subset names)
   const { alpha_tokens } = normalizeEventForProjectMatch(event.job_name);
   const projectTokens = project.alpha_tokens || normalizeProjectName(project.name);
-  return jaccardTokens(alpha_tokens, projectTokens);
+  return overlapCoeffTokens(alpha_tokens, projectTokens);
 }
 
 // Resolve a calendar event to the best-matching Probuild project group.
@@ -167,7 +175,7 @@ export function resolveProject(event, projects) {
   }
 
   return {
-    best: best && best.score >= 0.80 ? { id: best.id, name: best.name, score: best.score } : null,
+    best: best && best.score >= 0.70 ? { id: best.id, name: best.name, score: best.score } : null,
     candidates: scored.slice(0, 3).map((s) => ({ id: s.id, name: s.name, score: s.score })),
     lot_tokens: numeric_tokens,
   };
