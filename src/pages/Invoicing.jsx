@@ -8,6 +8,7 @@ import InvoicingToolbar from "@/components/invoicing/InvoicingToolbar";
 import LineList from "@/components/invoicing/LineList";
 import JobsView from "@/components/invoicing/JobsView";
 import FloatingActionBar from "@/components/invoicing/FloatingActionBar";
+import UnprocessedEventsBanner from "@/components/invoicing/UnprocessedEventsBanner";
 
 export default function Invoicing() {
   const [month, setMonth] = useState(currentMonthStr());
@@ -21,6 +22,8 @@ export default function Invoicing() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [undo, setUndo] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [runningIngest, setRunningIngest] = useState(false);
+  const [unprocessedCount, setUnprocessedCount] = useState(0);
   const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [reportAttached, setReportAttached] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("inv_reportAttached") || "[]")); } catch { return new Set(); }
@@ -47,6 +50,11 @@ export default function Invoicing() {
       }
       setReportStatusMap(rsm);
       setFeeLines(Array.isArray(fl) ? fl : []);
+      const feeEventIds = new Set((Array.isArray(fl) ? fl : []).map((f) => f.calendar_event_id).filter(Boolean));
+      const unprocessed = (Array.isArray(calEvents) ? calEvents : []).filter(
+        (e) => (e.event_date || "").startsWith(month) && e.source === "google" && e.google_event_id && !feeEventIds.has(e.google_event_id)
+      );
+      setUnprocessedCount(unprocessed.length);
     } catch (e) {
       console.error("Invoicing load error:", e);
     } finally {
@@ -92,6 +100,7 @@ export default function Invoicing() {
     const noSourceData = monthRows.filter((r) => r.calendar_event_id && reportStatusMap.get(r.calendar_event_id) === "no_source_data");
     const billed = monthRows.filter((r) => r.billed_to_bfs);
     const scheduled = monthRows.filter((r) => isFutureRow(r));
+    const monthEarned = monthRows.filter((r) => !supersededSet.has(r.id) && !isFutureRow(r) && (Number(r.labor_amt) > 0 || r.fee_type === "profit_split"));
     return {
       readyTotal: ready.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
       readyCount: ready.length,
@@ -103,6 +112,8 @@ export default function Invoicing() {
       billedCount: billed.length,
       scheduledTotal: scheduled.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
       scheduledCount: scheduled.length,
+      monthEarnedTotal: monthEarned.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
+      monthEarnedCount: monthEarned.length,
     };
   }, [monthRows, reportStatusMap, supersededSet]);
 
@@ -301,6 +312,18 @@ export default function Invoicing() {
     const a = document.createElement("a"); a.href = url; a.download = `job-${job.name}-${month}.csv`; a.click(); URL.revokeObjectURL(url);
   }, [month]);
 
+  const handleRunIngest = async () => {
+    setRunningIngest(true);
+    try {
+      await base44.functions.invoke("fetchCalendarEvents", {});
+      await load();
+    } catch (e) {
+      console.error("Ingest error:", e);
+    } finally {
+      setRunningIngest(false);
+    }
+  };
+
   const handleExportPdf = async () => {
     setExporting(true);
     try {
@@ -376,6 +399,9 @@ export default function Invoicing() {
           </div>
         ) : (
           <>
+            {unprocessedCount > 0 && (
+              <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
+            )}
             <InvoicingHero
               {...heroStats}
               onFilterBlocked={() => setFilter("needs_report")}

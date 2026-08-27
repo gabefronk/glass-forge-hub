@@ -54,7 +54,7 @@ function Stat({ label, value, sub, coral, onClick }) {
   );
 }
 
-export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCount, reportBlockedCount, noSourceDataCount, customFeeCount, billedTotal, billedCount, scheduledTotal, scheduledCount, onFilterBlocked, onFilterMatchBlocked }) {
+export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCount, reportBlockedCount, noSourceDataCount, customFeeCount, billedTotal, billedCount, scheduledTotal, scheduledCount, monthEarnedTotal, monthEarnedCount, onFilterBlocked, onFilterMatchBlocked }) {
   return (
     <div
       style={{
@@ -113,6 +113,8 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
       </div>
 
       <div className="max-[699px]:w-full" style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
+        <Stat label="MONTH TOTAL" value={`$${formatMoney(monthEarnedTotal)}`} sub={`${monthEarnedCount} lines`} />
+        <div style={{ width: "1px", height: "44px", backgroundColor: "rgba(255,255,255,.10)", margin: "0 20px" }} className="max-[699px]:mx-3" />
         <Stat label="BILLED" value={`$${formatMoney(billedTotal)}`} sub={`${billedCount} lines`} />
         <div style={{ width: "1px", height: "44px", backgroundColor: "rgba(255,255,255,.10)", margin: "0 20px" }} className="max-[699px]:mx-3" />
         <Stat label="SCHEDULED" value={`$${formatMoney(scheduledTotal)}`} sub={`${scheduledCount} lines`} />
