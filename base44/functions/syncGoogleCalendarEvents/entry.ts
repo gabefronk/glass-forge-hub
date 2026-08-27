@@ -90,12 +90,9 @@ export default async function(req) {
         const updateRow = { id: ex.id, ...row, installer_event_id: ex.installer_event_id || null };
         // Detect reschedule: date changed while report is still outstanding
         if (ex.event_date !== event_date) {
-          const outstanding = ex.report_status && ex.report_status !== 'ok' && ex.report_status !== 'waived';
-          if (outstanding) {
-            updateRow.report_status = 'rescheduled';
-            updateRow.original_scheduled_date = ex.original_scheduled_date || ex.event_date;
-            updateRow.reschedule_count = (ex.reschedule_count || 0) + 1;
-          }
+          updateRow.report_status = 'rescheduled';
+          updateRow.original_scheduled_date = ex.original_scheduled_date || ex.event_date;
+          updateRow.reschedule_count = (ex.reschedule_count || 0) + 1;
           updateRow.report_due_at = reportDueAtWithGrace(event_date);
         }
         toUpdate.push(updateRow);
