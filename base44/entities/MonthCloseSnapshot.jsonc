@@ -17,18 +17,44 @@
       "title": "Closed By",
       "description": "Email of the admin who closed the month"
     },
+    "population_definition": {
+      "type": "string",
+      "title": "Population Definition",
+      "description": "Human-readable description of what the lines array and each subtotal include, so a snapshot read months later is self-documenting."
+    },
+    "total_rows": {
+      "type": "number",
+      "title": "Total Rows",
+      "description": "Count of ALL FeeLines for the month, including superseded, non-billable, future, and blocked rows."
+    },
     "total_labor": {
       "type": "number",
-      "title": "Total Labor"
+      "title": "Total Labor",
+      "description": "Sum of labor_amt across earned rows (non-superseded, non-future, labor > 0 or profit_split)."
     },
-    "total_fee": {
+    "earned_total": {
       "type": "number",
-      "title": "Total Fee",
-      "description": "Sum of fee_amt across all non-superseded, non-future, billable lines (labor > 0 or profit_split)"
+      "title": "Earned Total",
+      "description": "Sum of fee_amt across earned rows (non-superseded, non-future, labor > 0 or profit_split). Excludes scheduled future work."
+    },
+    "earned_line_count": {
+      "type": "number",
+      "title": "Earned Line Count"
+    },
+    "invoiced_subtotal": {
+      "type": "number",
+      "title": "Invoiced Subtotal",
+      "description": "Sum of fee_amt across rows that were ready to bill at close time: billable, not billed_to_bfs, not future, not match-blocked, not report-blocked, not superseded, labor > 0 or profit_split."
+    },
+    "invoiced_line_count": {
+      "type": "number",
+      "title": "Invoiced Line Count",
+      "description": "Count of rows included in invoiced_subtotal."
     },
     "line_count": {
       "type": "number",
-      "title": "Line Count"
+      "title": "Line Count",
+      "description": "Count of rows stored in the lines array (all month rows, including superseded/non-billable/future/blocked)."
     },
     "lines": {
       "type": "array",
@@ -70,12 +96,37 @@
           },
           "superseded_by": {
             "type": "string"
+          },
+          "superseded": {
+            "type": "boolean",
+            "description": "True if this row was excluded from totals by conditional supersession at close time."
+          },
+          "needs_review": {
+            "type": "boolean"
+          },
+          "match_confidence": {
+            "type": "string"
+          },
+          "calendar_event_id": {
+            "type": "string"
+          },
+          "report_status": {
+            "type": "string",
+            "description": "CalendarEvents report_status at close time (for calendar-linked rows)."
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "True if this row was ready to bill at close time (included in invoiced_subtotal)."
+          },
+          "future": {
+            "type": "boolean",
+            "description": "True if job_date was after close date."
           }
         }
       },
       "title": "Lines",
       "default": [],
-      "description": "Immutable line-level record of every FeeLine included in the month's totals at close time"
+      "description": "Every FeeLine for the month with its status at close time \u2014 billable, non-billable, superseded, future, and blocked rows are all stored so the record can answer 'why wasn't this billed' later."
     }
   },
   "required": [

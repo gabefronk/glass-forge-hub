@@ -1,4 +1,4 @@
-import { isFutureRow } from "@/lib/feeMath";
+import { isFutureRow, isTripChargeAmount } from "@/lib/feeMath";
 
 // Report statuses that are considered "ok" — no report blocking.
 // no_source_data is clear for billing: it means the Probuild pull failed that
@@ -22,38 +22,40 @@ export const isReportBlocked = (r, reportStatusMap) => {
 };
 
 // Conditional supersession — computed at read time, not a static field.
-// Within a linked duplicate group (probuild row has superseded_by → calendar row):
-//   - Calendar row has labor > 0 → Probuild row is superseded (excluded from totals)
-//   - Calendar row is $0 and Probuild row has man_hours or trip_charges → Probuild row bills, calendar row is excluded
-//   - Both $0 → neither bills, no harm
-//   - Both carry an amount → calendar wins, flag for review (shouldn't normally happen)
-// Returns the ID that should be excluded from totals, or null if neither.
+// Mirrors base44/shared/supersession.ts (kept in sync so the snapshot backend
+// and the UI agree on which rows count).
+//
+// Calendar row has calendar_labor_amt (notes amount):
+//   - Trip-charge case (pure trip charge + probuild man_hours) → probuild
+//     suppressed (its hours were added into the calendar row).
+//   - Otherwise → do NOT suppress (independent work; needs_review was set
+//     at ingest time so the calendar row is held from totals).
+// Calendar row has no calendar_labor_amt (labor came from the merge):
+//   - Calendar has labor > 0 → probuild is a duplicate, suppress it.
+//   - Calendar is $0, probuild has hours → probuild bills, suppress calendar.
+//   - Both $0 → neither bills.
 export function resolveSupersession(r, rowById) {
-  if (!r.superseded_by) {
-    // This might be a calendar row that's the target of a probuild row's superseded_by.
-    // Check if any probuild row points to this row and the probuild row should bill instead.
-    // This is handled by the caller iterating all rows — see isRowSuperseded below.
-    return null;
-  }
+  if (!r.superseded_by) return null;
   const calRow = rowById?.get(r.superseded_by);
   if (!calRow) return null;
+
   const calLabor = Number(calRow.labor_amt) || 0;
   const probuildLabor = Number(r.labor_amt) || 0;
   const probuildHasHours = (Number(r.man_hours) > 0 || Number(r.trip_charges) > 0);
+  const calHasNotesLabor = calRow.calendar_labor_amt != null && calRow.calendar_labor_amt !== "";
 
-  if (calLabor > 0 && probuildLabor > 0) {
-    // Both carry amount → calendar wins, this probuild row is superseded
-    return r.id; // probuild row excluded
+  if (calHasNotesLabor) {
+    const calAmt = Number(calRow.calendar_labor_amt) || 0;
+    if (isTripChargeAmount(calAmt) && Number(r.man_hours) > 0) {
+      return r.id; // trip charge + labor: probuild hours added into calendar
+    }
+    return null; // review case: don't suppress (needs_review set at ingest)
   }
-  if (calLabor > 0) {
-    // Calendar has labor → probuild superseded
-    return r.id; // probuild row excluded
-  }
-  if (probuildLabor > 0 || probuildHasHours) {
-    // Calendar is $0, probuild has hours → probuild bills, calendar is excluded
-    return calRow.id; // calendar row excluded
-  }
-  // Both $0 → neither bills
+
+  // Merge case: calendar row's labor came from the probuild merge
+  if (calLabor > 0 && probuildLabor > 0) return r.id;
+  if (calLabor > 0) return r.id;
+  if (probuildLabor > 0 || probuildHasHours) return calRow.id;
   return null;
 }
 

@@ -333,7 +333,7 @@ export default function Invoicing() {
 
   const handleCloseMonth = async () => {
     if (monthClosed) {
-      if (!window.confirm(`This month is already closed ($${monthClosed.total_fee?.toFixed(2)} on ${new Date(monthClosed.closed_at).toLocaleDateString()}). Create a new snapshot with current values?`)) return;
+      if (!window.confirm(`This month is already closed ($${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)} invoiced on ${new Date(monthClosed.closed_at).toLocaleDateString()}). Create a new snapshot with current values?`)) return;
     } else {
       if (!window.confirm(`Close ${month} and create an immutable snapshot of all billed lines? This captures line IDs, amounts, and totals so the month can be verified later even if data changes.`)) return;
     }

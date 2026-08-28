@@ -193,12 +193,31 @@ export function matchJob(normName, jobs, poNumber, oeNumber, address) {
   return { job_id: null, match_confidence: "unmatched", needs_review: false, autoCreate: true };
 }
 
+export const MAN_HOUR_RATE = 100;
+export const TRIP_RATE = 75;
+
+// A notes amount is a "pure trip charge" if it's a positive multiple of $75
+// but NOT also a multiple of $100. See feeMath.js isTripChargeAmount.
+export function isTripChargeAmount(amt) {
+  const n = Number(amt);
+  return n > 0 && n % TRIP_RATE === 0 && n % MAN_HOUR_RATE !== 0;
+}
+
 export function computeLaborAmt(row) {
   if (row.manually_adjusted) return row.labor_amt;
-  if (row.calendar_labor_amt != null) return Number(row.calendar_labor_amt) || 0;
+  const calAmt = row.calendar_labor_amt;
+  if (calAmt != null && calAmt !== "") {
+    const amt = Number(calAmt) || 0;
+    // Trip-charge + labor: notes amount is a pure trip charge and Probuild
+    // man_hours were merged in. Add them instead of overriding.
+    if (isTripChargeAmount(amt) && Number(row.man_hours) > 0) {
+      return amt + Number(row.man_hours) * MAN_HOUR_RATE;
+    }
+    return amt;
+  }
   const mh = Number(row.man_hours) || 0;
   const tc = Number(row.trip_charges) || 0;
-  return mh * 100 + tc * 75;
+  return mh * MAN_HOUR_RATE + tc * TRIP_RATE;
 }
 
 export function computeFeeAmt(row) {

@@ -222,11 +222,11 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
               border: "1px solid rgba(110,231,192,.28)",
               whiteSpace: "nowrap",
             }}
-            title={`Closed ${new Date(monthClosed.closed_at).toLocaleString()}\nBy ${monthClosed.closed_by}\nTotal: $${monthClosed.total_fee?.toFixed(2)} (${monthClosed.line_count} lines)`}
+            title={`Closed ${new Date(monthClosed.closed_at).toLocaleString()}\nBy ${monthClosed.closed_by}\nInvoiced: $${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)} (${monthClosed.invoiced_line_count ?? monthClosed.line_count} ready)\nEarned: $${monthClosed.earned_total?.toFixed(2)} (${monthClosed.earned_line_count} lines)\nTotal rows: ${monthClosed.total_rows}`}
           >
             <Lock style={{ width: "12px", height: "12px", color: "#6EE7C0" }} />
             <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "10px", fontWeight: 600, letterSpacing: ".08em", color: "#6EE7C0", textTransform: "uppercase" }}>
-              Closed · ${monthClosed.total_fee?.toFixed(2)}
+              Closed · ${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)}
             </span>
           </div>
         ) : (

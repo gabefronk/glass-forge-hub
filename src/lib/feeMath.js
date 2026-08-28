@@ -7,9 +7,27 @@
 export const MAN_HOUR_RATE = 100;
 export const TRIP_RATE = 75;
 
+// A notes amount is a "pure trip charge" if it's a positive multiple of $75
+// but NOT also a multiple of $100 (which would suggest man hours).
+// $75 = 1 trip, $150 = 2 trips → trip charge. $100 = 1 man hour → not.
+// $300 = ambiguous (3×$100 or 4×$75) → not a trip charge (review case).
+export function isTripChargeAmount(amt) {
+  const n = Number(amt);
+  return n > 0 && n % TRIP_RATE === 0 && n % MAN_HOUR_RATE !== 0;
+}
+
 export function computeLaborAmt(row) {
   if (row.manually_adjusted) return row.labor_amt;
-  if (row.calendar_labor_amt != null && row.calendar_labor_amt !== "") return Number(row.calendar_labor_amt) || 0;
+  const calAmt = row.calendar_labor_amt;
+  if (calAmt != null && calAmt !== "") {
+    const amt = Number(calAmt) || 0;
+    // Trip-charge + labor: notes amount is a pure trip charge and Probuild
+    // man_hours were merged in. Add them instead of overriding.
+    if (isTripChargeAmount(amt) && Number(row.man_hours) > 0) {
+      return amt + Number(row.man_hours) * MAN_HOUR_RATE;
+    }
+    return amt;
+  }
   const mh = Number(row.man_hours) || 0;
   const tc = Number(row.trip_charges) || 0;
   return mh * MAN_HOUR_RATE + tc * TRIP_RATE;
@@ -45,9 +63,15 @@ export function feeMathString(row) {
     return `$${formatMoney(row.labor_amt)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(row.fee_amt)} (manually adjusted)`;
   }
   if (row.calendar_labor_amt != null && row.calendar_labor_amt !== "") {
-    const labor = Number(row.calendar_labor_amt) || 0;
-    const fee = Math.round(labor * (Number(row.fee_pct) || 0) * 100) / 100;
-    return `calendar labor $${formatMoney(labor)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(fee)}`;
+    const calAmt = Number(row.calendar_labor_amt) || 0;
+    if (isTripChargeAmount(calAmt) && Number(row.man_hours) > 0) {
+      const mh = Number(row.man_hours) || 0;
+      const labor = calAmt + mh * MAN_HOUR_RATE;
+      const fee = Math.round(labor * (Number(row.fee_pct) || 0) * 100) / 100;
+      return `$${formatMoney(calAmt)} (trip) + ${mh} man hour${mh === 1 ? "" : "s"} × $${MAN_HOUR_RATE} = $${formatMoney(labor)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(fee)}`;
+    }
+    const fee = Math.round(calAmt * (Number(row.fee_pct) || 0) * 100) / 100;
+    return `calendar labor $${formatMoney(calAmt)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(fee)}`;
   }
   const mh = Number(row.man_hours) || 0;
   const tc = Number(row.trip_charges) || 0;

@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit } from '../../shared/ingestShared.ts';
+import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit, isTripChargeAmount } from '../../shared/ingestShared.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Derive FeeLines from CalendarEvents (the single Google reader).
@@ -36,6 +36,25 @@ function findProbuildRowToMerge(existingFees, jobId, eventDate) {
     }
   }
   return best;
+}
+
+// Decide how to handle a Probuild row found during reverse merge, given the
+// calendar row's notes amount (calendar_labor_amt).
+//   - Trip-charge case: notes amount is a pure trip charge + Probuild man_hours →
+//     add them, copy the hours, supersede the probuild row.
+//   - Review case: notes amount + independent Probuild hours, ambiguous → don't
+//     copy, set needs_review, don't supersede (both rows surface for decision).
+//   - Merge case: no notes amount → labor came from the merge, copy and supersede.
+function planProbuildMerge(calendar_labor_amt, probuildRow) {
+  const hasNotesLabor = calendar_labor_amt != null && calendar_labor_amt !== '';
+  if (hasNotesLabor) {
+    const amt = Number(calendar_labor_amt) || 0;
+    if (isTripChargeAmount(amt) && Number(probuildRow.man_hours) > 0) {
+      return { copyHours: true, supersede: true, needsReview: false };
+    }
+    return { copyHours: false, supersede: false, needsReview: true };
+  }
+  return { copyHours: true, supersede: true, needsReview: false };
 }
 
 export default async function(req) {
@@ -165,21 +184,28 @@ export default async function(req) {
         // check for a standalone Probuild row (same job, ±3 days) with man_hours
         // or trip_charges that should be folded in. Fixes the timing gap where
         // Probuild ingest ran before the calendar event was synced.
+        let provenanceReview = false;
         if (!ex.probuild_post_id && row.man_hours == null && row.trip_charges == null) {
           const probuildRow = findProbuildRowToMerge(existingFees, jobId, dateStr);
           if (probuildRow) {
-            if (probuildRow.man_hours != null) row.man_hours = probuildRow.man_hours;
-            if (probuildRow.trip_charges != null) row.trip_charges = probuildRow.trip_charges;
-            row.probuild_post_id = probuildRow.probuild_post_id;
-            row.probuild_project_id = probuildRow.probuild_project_id;
-            row.source = 'both';
-            probuildRowsToSupersede.push({ id: probuildRow.id, calendar_row_id: ex.id });
+            const plan = planProbuildMerge(row.calendar_labor_amt, probuildRow);
+            if (plan.copyHours) {
+              if (probuildRow.man_hours != null) row.man_hours = probuildRow.man_hours;
+              if (probuildRow.trip_charges != null) row.trip_charges = probuildRow.trip_charges;
+              row.probuild_post_id = probuildRow.probuild_post_id;
+              row.probuild_project_id = probuildRow.probuild_project_id;
+              row.source = 'both';
+            }
+            if (plan.supersede) probuildRowsToSupersede.push({ id: probuildRow.id, calendar_row_id: ex.id });
+            if (plan.needsReview) provenanceReview = true;
           }
         }
         row.labor_amt = computeLaborAmt(row);
         row.fee_amt = computeFeeAmt(row);
         const merged = mergeReviewFlags(ex, row);
-        toUpdate.push({ id: ex.id, ...row, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
+        // Q3: provenance review overrides job-match clearance
+        const finalNeedsReview = merged.needs_review || provenanceReview;
+        toUpdate.push({ id: ex.id, ...row, needs_review: finalNeedsReview, match_confidence: merged.match_confidence });
       } else {
         // Reverse merge: check for an existing Probuild row (same job, ±3 days)
         // with man_hours or trip_charges that should be folded into this new
@@ -187,14 +213,18 @@ export default async function(req) {
         // before the calendar event was synced.
         const probuildRow = findProbuildRowToMerge(existingFees, jobId, dateStr);
         if (probuildRow) {
-          if (probuildRow.man_hours != null) row.man_hours = probuildRow.man_hours;
-          if (probuildRow.trip_charges != null) row.trip_charges = probuildRow.trip_charges;
-          row.probuild_post_id = probuildRow.probuild_post_id;
-          row.probuild_project_id = probuildRow.probuild_project_id;
-          row.source = 'both';
+          const plan = planProbuildMerge(row.calendar_labor_amt, probuildRow);
+          if (plan.copyHours) {
+            if (probuildRow.man_hours != null) row.man_hours = probuildRow.man_hours;
+            if (probuildRow.trip_charges != null) row.trip_charges = probuildRow.trip_charges;
+            row.probuild_post_id = probuildRow.probuild_post_id;
+            row.probuild_project_id = probuildRow.probuild_project_id;
+            row.source = 'both';
+          }
+          if (plan.needsReview) row.needs_review = true;
           row.labor_amt = computeLaborAmt(row);
           row.fee_amt = computeFeeAmt(row);
-          probuildRowsToSupersede.push({ id: probuildRow.id, calendar_row_key: toCreate.length });
+          if (plan.supersede) probuildRowsToSupersede.push({ id: probuildRow.id, calendar_row_key: toCreate.length });
         }
         toCreate.push(row);
       }
