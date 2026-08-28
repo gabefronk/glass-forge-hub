@@ -1,4 +1,4 @@
-import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 
@@ -14,7 +14,7 @@ function relativeTime(iso) {
   return `${days}d ago`;
 }
 
-export default function InvoicingTopBar({ month, onMonthChange, search, onSearchChange, readyCount, onSelectAllReady, searchRef, onExportPdf, exporting }) {
+export default function InvoicingTopBar({ month, onMonthChange, search, onSearchChange, readyCount, onSelectAllReady, searchRef, onExportPdf, exporting, monthClosed, onCloseMonth, closing }) {
   const [probuildStatus, setProbuildStatus] = useState(null);
 
   useEffect(() => {
@@ -207,6 +207,50 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
         >
           {exporting ? "Generating\u2026" : "Export PDF"}
         </button>
+
+        {monthClosed ? (
+          <div
+            className="max-[699px]:hidden"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "0 12px",
+              height: "36px",
+              borderRadius: "99px",
+              backgroundColor: "rgba(110,231,192,.10)",
+              border: "1px solid rgba(110,231,192,.28)",
+              whiteSpace: "nowrap",
+            }}
+            title={`Closed ${new Date(monthClosed.closed_at).toLocaleString()}\nBy ${monthClosed.closed_by}\nTotal: $${monthClosed.total_fee?.toFixed(2)} (${monthClosed.line_count} lines)`}
+          >
+            <Lock style={{ width: "12px", height: "12px", color: "#6EE7C0" }} />
+            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "10px", fontWeight: 600, letterSpacing: ".08em", color: "#6EE7C0", textTransform: "uppercase" }}>
+              Closed · ${monthClosed.total_fee?.toFixed(2)}
+            </span>
+          </div>
+        ) : (
+          <button
+            onClick={onCloseMonth}
+            disabled={closing}
+            className="max-[699px]:hidden"
+            style={{
+              height: "36px",
+              borderRadius: "99px",
+              backgroundColor: "transparent",
+              color: "rgba(255,255,255,.62)",
+              fontFamily: "'Inter Tight',sans-serif",
+              fontSize: "13px",
+              fontWeight: 500,
+              padding: "0 14px",
+              border: "1px solid rgba(255,255,255,.10)",
+              cursor: closing ? "wait" : "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {closing ? "Closing\u2026" : "Close month"}
+          </button>
+        )}
 
         <div className="max-[699px]:hidden" style={{ position: "relative", display: "flex", alignItems: "center" }}>
           <Search style={{ position: "absolute", left: "12px", width: "14px", height: "14px", color: "rgba(255,255,255,.34)", pointerEvents: "none" }} />

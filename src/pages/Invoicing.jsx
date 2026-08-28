@@ -24,6 +24,8 @@ export default function Invoicing() {
   const [exporting, setExporting] = useState(false);
   const [runningIngest, setRunningIngest] = useState(false);
   const [unprocessedCount, setUnprocessedCount] = useState(0);
+  const [monthClosed, setMonthClosed] = useState(null);
+  const [closing, setClosing] = useState(false);
   const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [reportAttached, setReportAttached] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("inv_reportAttached") || "[]")); } catch { return new Set(); }
@@ -55,6 +57,11 @@ export default function Invoicing() {
         (e) => (e.event_date || "").startsWith(month) && e.source === "google" && e.google_event_id && !feeEventIds.has(e.google_event_id)
       );
       setUnprocessedCount(unprocessed.length);
+      try {
+        const snapshots = await base44.entities.MonthCloseSnapshot.list("-created_date", 100);
+        const snap = (Array.isArray(snapshots) ? snapshots : []).find((s) => s.month === month);
+        setMonthClosed(snap || null);
+      } catch { setMonthClosed(null); }
     } catch (e) {
       console.error("Invoicing load error:", e);
     } finally {
@@ -324,6 +331,28 @@ export default function Invoicing() {
     }
   };
 
+  const handleCloseMonth = async () => {
+    if (monthClosed) {
+      if (!window.confirm(`This month is already closed ($${monthClosed.total_fee?.toFixed(2)} on ${new Date(monthClosed.closed_at).toLocaleDateString()}). Create a new snapshot with current values?`)) return;
+    } else {
+      if (!window.confirm(`Close ${month} and create an immutable snapshot of all billed lines? This captures line IDs, amounts, and totals so the month can be verified later even if data changes.`)) return;
+    }
+    setClosing(true);
+    try {
+      const res = await base44.functions.invoke("closeMonthSnapshot", { month, force: !!monthClosed });
+      if (res?.error === "already_closed") {
+        window.alert(`Already closed on ${new Date(res.closed_at).toLocaleDateString()}.`);
+      }
+      const snapshots = await base44.entities.MonthCloseSnapshot.list("-created_date", 100);
+      const snap = (Array.isArray(snapshots) ? snapshots : []).find((s) => s.month === month);
+      setMonthClosed(snap || null);
+    } catch (e) {
+      console.error("Close month error:", e);
+    } finally {
+      setClosing(false);
+    }
+  };
+
   const handleExportPdf = async () => {
     setExporting(true);
     try {
@@ -376,6 +405,9 @@ export default function Invoicing() {
         searchRef={searchRef}
         onExportPdf={handleExportPdf}
         exporting={exporting}
+        monthClosed={monthClosed}
+        onCloseMonth={handleCloseMonth}
+        closing={closing}
       />
 
       <div

@@ -1,0 +1,111 @@
+{
+  "name": "MonthCloseSnapshot",
+  "type": "object",
+  "properties": {
+    "month": {
+      "type": "string",
+      "title": "Month",
+      "description": "YYYY-MM"
+    },
+    "closed_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Closed At"
+    },
+    "closed_by": {
+      "type": "string",
+      "title": "Closed By",
+      "description": "Email of the admin who closed the month"
+    },
+    "total_labor": {
+      "type": "number",
+      "title": "Total Labor"
+    },
+    "total_fee": {
+      "type": "number",
+      "title": "Total Fee",
+      "description": "Sum of fee_amt across all non-superseded, non-future, billable lines (labor > 0 or profit_split)"
+    },
+    "line_count": {
+      "type": "number",
+      "title": "Line Count"
+    },
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "job_date": {
+            "type": "string"
+          },
+          "job_name": {
+            "type": "string"
+          },
+          "line_description": {
+            "type": "string"
+          },
+          "labor_amt": {
+            "type": "number"
+          },
+          "fee_pct": {
+            "type": "number"
+          },
+          "fee_amt": {
+            "type": "number"
+          },
+          "fee_type": {
+            "type": "string"
+          },
+          "billable": {
+            "type": "boolean"
+          },
+          "billed_to_bfs": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          },
+          "superseded_by": {
+            "type": "string"
+          }
+        }
+      },
+      "title": "Lines",
+      "default": [],
+      "description": "Immutable line-level record of every FeeLine included in the month's totals at close time"
+    }
+  },
+  "required": [
+    "month",
+    "closed_at",
+    "closed_by",
+    "total_labor",
+    "total_fee",
+    "line_count"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
