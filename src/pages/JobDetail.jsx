@@ -17,7 +17,7 @@ function computeStage(rows, job) {
   if (billable.length > 0 && billable.every((r) => r.billed_to_bfs)) return 4;
   const hasProbuild = rows.some((r) => r.source === "probuild" || r.source === "both");
   if (hasProbuild) return 3;
-  const hasPO = (job.po_numbers || []).length > 0 || (job.oe_numbers || []).length > 0;
+  const hasPO = (job?.po_numbers || []).length > 0 || (job?.oe_numbers || []).length > 0;
   if (hasPO) return 2;
   const today = new Date().toISOString().slice(0, 10);
   const hasPastEvents = rows.some((r) => (r.job_date || "") <= today);
