@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
@@ -25,6 +25,16 @@ export default function YaFeesSidebar() {
   const { pathname } = useLocation();
   const [unbilled, setUnbilled] = useState({ total: 0, count: 0 });
   const [user, setUser] = useState(null);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await base44.auth.logout("/login");
+    } catch {
+      window.location.href = "/login";
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -136,6 +146,17 @@ export default function YaFeesSidebar() {
               {user?.email || ""}
             </div>
           </div>
+          <button
+            onClick={handleSignOut}
+            disabled={signingOut}
+            title="Sign out"
+            className="shrink-0 flex items-center justify-center h-7 w-7 rounded-full transition-colors"
+            style={{ color: "rgba(255,255,255,.42)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#FF8A7A")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,.42)")}
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
     </aside>
