@@ -1,0 +1,141 @@
+{
+  "auth": "oauth",
+  "tools": {
+    "functions": [
+      {
+        "name": "sync_calendar_events",
+        "title": "Sync calendar events",
+        "description": "Syncs Google Calendar events from the CalendarEvents store into FeeLines for invoicing. Call when new calendar events need to be processed into fee lines. Pass start_date and end_date (YYYY-MM-DD) to scope, or omit for the trailing 14-day window.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "start_date": { "type": "string", "description": "YYYY-MM-DD inclusive lower bound" },
+            "end_date": { "type": "string", "description": "YYYY-MM-DD inclusive upper bound" }
+          }
+        },
+        "handler": "fetchCalendarEvents",
+        "annotations": { "read_only_hint": false, "destructive_hint": false, "idempotent_hint": true }
+      },
+      {
+        "name": "sync_probuild_posts",
+        "title": "Sync Probuild field reports",
+        "description": "Pulls Probuild field report posts, extracts man hours and trip charges via LLM, and writes FeeLines and FieldReports. Call when new field reports need to be ingested. Pass start_date and end_date (YYYY-MM-DD) to scope, or omit for the trailing 21-day window through today.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "start_date": { "type": "string", "description": "YYYY-MM-DD inclusive lower bound" },
+            "end_date": { "type": "string", "description": "YYYY-MM-DD inclusive upper bound" }
+          }
+        },
+        "handler": "fetchProbuildPosts",
+        "annotations": { "read_only_hint": false, "destructive_hint": false, "idempotent_hint": true }
+      },
+      {
+        "name": "audit_field_reports",
+        "title": "Audit field reports",
+        "description": "Matches calendar events to Probuild field reports and updates report compliance status. Call to run the audit for a specific date, a date range, or the trailing N days. Pass target_date (YYYY-MM-DD) for a single date, or start_date + end_date for a range, or days_back (default 1) for trailing days. Set force true to re-evaluate already-ok events.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "target_date": { "type": "string", "description": "YYYY-MM-DD — audit a single date" },
+            "start_date": { "type": "string", "description": "YYYY-MM-DD — range start (inclusive, use with end_date)" },
+            "end_date": { "type": "string", "description": "YYYY-MM-DD — range end (inclusive)" },
+            "days_back": { "type": "number", "description": "Audit trailing N days from yesterday. Default 1" },
+            "force": { "type": "boolean", "description": "When true, re-evaluate all events except waived" }
+          }
+        },
+        "handler": "auditFieldReports",
+        "annotations": { "read_only_hint": false, "destructive_hint": false, "idempotent_hint": true }
+      },
+      {
+        "name": "close_month",
+        "title": "Close month snapshot",
+        "description": "Creates an immutable snapshot of all fee lines for a month, capturing billed and earned totals for later verification. Requires admin. Pass month (YYYY-MM, required). Set dry_run true to preview the numbers without writing. Set force true to overwrite an existing snapshot.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "month": { "type": "string", "description": "YYYY-MM (required)" },
+            "dry_run": { "type": "boolean", "description": "When true, compute and return the snapshot without writing to the database" },
+            "force": { "type": "boolean", "description": "When true, create a new snapshot even if one already exists for this month" }
+          },
+          "required": ["month"]
+        },
+        "handler": "closeMonthSnapshot",
+        "annotations": { "read_only_hint": false, "destructive_hint": false, "idempotent_hint": false }
+      },
+      {
+        "name": "get_probuild_status",
+        "title": "Get Probuild sync status",
+        "description": "Returns the authenticated Probuild team ID, last token exchange time, and last audit run time. Call to check whether the Probuild connection is active and when data was last synced.",
+        "input_schema": {
+          "type": "object",
+          "properties": {}
+        },
+        "handler": "probuildStatus",
+        "annotations": { "read_only_hint": true, "destructive_hint": false, "idempotent_hint": true }
+      },
+      {
+        "name": "search_probuild_projects",
+        "title": "Search Probuild projects",
+        "description": "Searches all Probuild projects by name and returns their posts within a date range. Use to find field reports that exist in Probuild but weren't captured by the normal ingest window. Pass search (required, pipe/comma/space-separated terms), optional start_date and end_date (YYYY-MM-DD).",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "search": { "type": "string", "description": "Required. Name pattern(s) to match, pipe/comma/space-separated (e.g. 'countryside|pearl')" },
+            "start_date": { "type": "string", "description": "YYYY-MM-DD inclusive lower bound" },
+            "end_date": { "type": "string", "description": "YYYY-MM-DD inclusive upper bound" }
+          },
+          "required": ["search"]
+        },
+        "handler": "probuildSearch",
+        "annotations": { "read_only_hint": true, "destructive_hint": false, "idempotent_hint": true }
+      },
+      {
+        "name": "get_probuild_project_posts",
+        "title": "Get Probuild project posts",
+        "description": "Fetches all posts for a specific Probuild project ID with Denver-converted dates. Use to inspect the raw field reports for a project. Pass project_id (required).",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "project_id": { "type": "string", "description": "Required. Probuild project ID" }
+          },
+          "required": ["project_id"]
+        },
+        "handler": "probuildProjectPosts",
+        "annotations": { "read_only_hint": true, "destructive_hint": false, "idempotent_hint": true }
+      },
+      {
+        "name": "debug_match_audit",
+        "title": "Debug match audit",
+        "description": "Returns diagnostic data for the field-report matcher: per-event audit status grouped by date, a 30-day posts-per-day histogram, and project scan stats. Use to investigate why a field report was or wasn't matched. Pass optional start_date and end_date (YYYY-MM-DD), defaulting to the trailing 21 days.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "start_date": { "type": "string", "description": "YYYY-MM-DD inclusive lower bound" },
+            "end_date": { "type": "string", "description": "YYYY-MM-DD inclusive upper bound" }
+          }
+        },
+        "handler": "matchDebug",
+        "annotations": { "read_only_hint": true, "destructive_hint": false, "idempotent_hint": true }
+      },
+      {
+        "name": "resolve_field_report",
+        "title": "Resolve field report flag",
+        "description": "Resolves a field report compliance flag on a calendar event. Actions: 'mark_reported' (admin/manager — report exists but matcher missed it), 'waive' (admin — requires a reason), 'upload' (any user — attach photos/notes as a job note). Pass event_id (required), action (required), and for waive a reason, for upload optional photos (array of URLs) and notes (string).",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "event_id": { "type": "string", "description": "Required. CalendarEvents record ID" },
+            "action": { "type": "string", "enum": ["mark_reported", "waive", "upload"], "description": "Required. mark_reported = report exists but matcher missed it; waive = admin waives the requirement (needs reason); upload = attach photos/notes" },
+            "reason": { "type": "string", "description": "Required for action 'waive'. Waiver reason." },
+            "photos": { "type": "array", "items": { "type": "string" }, "description": "For action 'upload'. Array of photo URLs to attach." },
+            "notes": { "type": "string", "description": "For action 'upload'. Note text for the job note." }
+          },
+          "required": ["event_id", "action"]
+        },
+        "handler": "resolveFieldReport",
+        "annotations": { "read_only_hint": false, "destructive_hint": false, "idempotent_hint": false }
+      }
+    ]
+  }
+}
