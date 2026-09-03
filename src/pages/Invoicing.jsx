@@ -387,14 +387,14 @@ export default function Invoicing() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: "#050606" }}>
-        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "rgba(255,255,255,.10)", borderTopColor: "#6EE7C0" }} />
+      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: "#EEF1F6" }}>
+        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "#DDE3EC", borderTopColor: "#2A5EA8" }} />
       </div>
     );
   }
 
   return (
-    <div style={{ backgroundColor: "#050606", minHeight: "100vh" }}>
+    <div style={{ backgroundColor: "#EEF1F6", minHeight: "100vh" }}>
       <InvoicingTopBar
         month={month}
         onMonthChange={setMonth}
@@ -416,15 +416,15 @@ export default function Invoicing() {
       >
         {showEmptyState ? (
           <div style={{ padding: "120px 0", textAlign: "center" }}>
-            <p style={{ fontFamily: "'Inter Tight',sans-serif", fontSize: "17px", color: "rgba(255,255,255,.5)", marginBottom: "8px" }}>
+            <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "17px", color: "#616D81", marginBottom: "8px" }}>
               {isPast ? "This month is closed." : "No data for this month yet."}
             </p>
-            <p style={{ fontFamily: "'Inter Tight',sans-serif", fontSize: "13px", color: "rgba(255,255,255,.34)", marginBottom: "20px" }}>
+            <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "13px", color: "#77839A", marginBottom: "20px" }}>
               {isPast ? "Switch back to the current month to continue working." : "Come back after the first jobs are posted."}
             </p>
             <button
               onClick={() => setMonth(currentMonth)}
-              style={{ padding: "10px 20px", borderRadius: "99px", border: "1px solid rgba(255,255,255,.10)", backgroundColor: "transparent", color: "#6EE7C0", fontFamily: "'Inter Tight',sans-serif", fontSize: "13px", fontWeight: 500, cursor: "pointer" }}
+              style={{ padding: "10px 20px", borderRadius: "10px", border: "1px solid #DDE3EC", backgroundColor: "#FFFFFF", color: "#1E4A85", fontFamily: "'Archivo',sans-serif", fontSize: "13px", fontWeight: 500, cursor: "pointer" }}
             >
               Back to {new Date().toLocaleDateString("en-US", { month: "long" })}
             </button>
@@ -499,33 +499,33 @@ export default function Invoicing() {
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 60,
-            backgroundColor: "#171B1A",
-            border: "1px solid rgba(255,255,255,.10)",
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DDE3EC",
             borderRadius: "99px",
             padding: "10px 16px",
             display: "flex",
             alignItems: "center",
             gap: "12px",
-            boxShadow: "0 14px 26px -10px rgba(0,0,0,.9)",
+            boxShadow: "0 1px 2px rgba(19,26,38,.05), 0 10px 24px -18px rgba(19,26,38,.22)",
           }}
         >
-          <span style={{ fontFamily: "'Inter Tight',sans-serif", fontSize: "13px", color: "rgba(255,255,255,.62)" }}>{undo.message}</span>
+          <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "13px", color: "#535E72" }}>{undo.message}</span>
           <button
             onClick={handleUndo}
             style={{
-              fontFamily: "'IBM Plex Mono',monospace",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "11px",
               fontWeight: 600,
-              letterSpacing: ".05em",
-              color: "#6EE7C0",
-              border: "1px solid rgba(110,231,192,.30)",
+              letterSpacing: ".01em",
+              color: "#1E4A85",
+              border: "1px solid #C3D4EE",
               borderRadius: "99px",
               padding: "4px 10px",
               cursor: "pointer",
-              backgroundColor: "transparent",
+              backgroundColor: "#E7EEFA",
             }}
           >
-            UNDO
+            Undo
           </button>
         </div>
       )}

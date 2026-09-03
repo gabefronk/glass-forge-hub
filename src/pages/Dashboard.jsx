@@ -140,7 +140,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.pageBg }}>
-        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "rgba(255,255,255,.10)", borderTopColor: C.accent }} />
+        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "#DDE3EC", borderTopColor: C.accent }} />
       </div>
     );
   }
@@ -160,7 +160,7 @@ export default function Dashboard() {
             </h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button className="hidden min-[700px]:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+            <button className="hidden min-[700px]:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <Download className="h-3.5 w-3.5" />
               Export statement
             </button>
@@ -189,7 +189,7 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 min-[700px]:grid-cols-[1.55fr_1fr] gap-5">
           {/* Left: Run sheet */}
-          <div className="rounded-[18px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+          <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
             <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
               <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Today's run sheet</h2>
               <span className="font-mono-num text-[12px]" style={{ color: C.textSecondary }}>
@@ -197,7 +197,7 @@ export default function Dashboard() {
               </span>
             </div>
             {/* Progress bar */}
-            <div className="h-[3px]" style={{ backgroundColor: "rgba(255,255,255,.05)" }}>
+            <div className="h-[3px]" style={{ backgroundColor: "#E9EDF4" }}>
               <div className="h-full transition-all duration-300" style={{ width: `${sortedToday.length ? (doneCount / sortedToday.length) * 100 : 0}%`, backgroundColor: C.accent }} />
             </div>
             <div>
@@ -241,8 +241,8 @@ export default function Dashboard() {
                     </div>
                     {/* Tag */}
                     <span
-                      className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
-                      style={{ backgroundColor: C.accent18, color: C.accent }}
+                      className="text-[9px] font-semibold tracking-[0.01em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
+                      style={{ backgroundColor: C.accent18, border: "1px solid #C3D4EE", color: C.accentText }}
                     >
                       {tag}
                     </span>
@@ -251,7 +251,7 @@ export default function Dashboard() {
                       onClick={() => toggleCheck(ev.id)}
                       className="ml-4 h-6 w-6 rounded-full shrink-0 flex items-center justify-center transition-all"
                       style={{
-                        border: isDone ? "none" : `1.5px solid rgba(255,255,255,.20)`,
+                        border: isDone ? "none" : `1.5px solid #CBD4E1`,
                         backgroundColor: isDone ? C.accent : "transparent",
                       }}
                     >
@@ -267,20 +267,20 @@ export default function Dashboard() {
           <div className="space-y-4">
             {/* First-up card */}
             {firstUp && (
-              <div className="rounded-[18px] p-5" style={{ backgroundColor: C.accent, color: C.accentDark }}>
-                <div className="mono-label-sm mb-2" style={{ color: "rgba(10,12,12,.50)" }}>First up</div>
+              <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.accent, color: "#FFFFFF" }}>
+                <div className="mono-label-sm mb-2" style={{ color: "rgba(255,255,255,.60)" }}>First up</div>
                 <div className="font-mono-num-bold text-[32px] mb-1" style={{ letterSpacing: "-0.03em" }}>
                   {firstUp.start_time || "All day"}
                 </div>
                 <div className="text-[15px] font-semibold mb-1 truncate">{firstUp.job_name}</div>
-                <div className="text-[12px] mb-3" style={{ color: "rgba(10,12,12,.60)" }}>
+                <div className="text-[12px] mb-3" style={{ color: "rgba(255,255,255,.60)" }}>
                   {crewForEvent(firstUp) ? `Crew: ${crewForEvent(firstUp)}` : ""}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.accentDark, color: C.accent }}>
+                  <button className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#FFFFFF", color: C.accent }}>
                     Open checklist
                   </button>
-                  <button className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(10,12,12,.12)", color: C.accentDark }}>
+                  <button className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "#FFFFFF" }}>
                     Directions
                   </button>
                 </div>
@@ -288,7 +288,7 @@ export default function Dashboard() {
             )}
 
             {/* Mini bar chart */}
-            <div className="rounded-[18px] p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+            <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-heading text-[13px] font-semibold" style={{ color: C.text }}>Monthly profit</h3>
                 <span className="mono-label-sm">8 mo</span>
@@ -304,7 +304,7 @@ export default function Dashboard() {
                   return (
                     <div key={d.month} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
                       <div className="w-full rounded-[3px] transition-all" style={{ height: `${h}%`, backgroundColor: C.accent, opacity, minHeight: "4px" }} />
-                      <span className="font-mono text-[8px] uppercase tracking-wider whitespace-nowrap" style={{ color: C.textFaint }}>
+                      <span className="text-[8px] tracking-[0.01em] whitespace-nowrap" style={{ color: C.textFaint }}>
                         {d.month.slice(5)}
                       </span>
                     </div>
@@ -314,7 +314,7 @@ export default function Dashboard() {
             </div>
 
             {/* Tomorrow card */}
-            <div className="rounded-[18px] p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+            <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-heading text-[13px] font-semibold" style={{ color: C.text }}>Tomorrow</h3>
                 <span className="font-mono-num text-[11px]" style={{ color: C.textSecondary }}>
@@ -345,7 +345,7 @@ export default function Dashboard() {
 
 function KpiCard({ label, value, valueColor, sub, subColor }) {
   return (
-    <div className="rounded-[16px] p-4" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] p-4 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="mono-label-sm mb-2">{label}</div>
       <div className="font-mono-num-bold text-[24px] mb-1" style={{ color: valueColor || C.text, letterSpacing: "-0.025em" }}>
         {value}

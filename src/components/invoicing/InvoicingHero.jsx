@@ -15,10 +15,10 @@ function Stat({ label, value, sub, coral, onClick }) {
     >
       <div
         style={{
-          fontFamily: "'IBM Plex Mono',monospace",
+          fontFamily: "'Archivo',sans-serif",
           fontSize: "9.5px",
-          letterSpacing: ".15em",
-          color: coral ? "#FF8A7A" : "rgba(255,255,255,.38)",
+          letterSpacing: ".01em",
+          color: coral ? "#8A4038" : "#616D81",
           whiteSpace: "nowrap",
           marginBottom: "4px",
         }}
@@ -27,10 +27,10 @@ function Stat({ label, value, sub, coral, onClick }) {
       </div>
       <div
         style={{
-          fontFamily: "'IBM Plex Mono',monospace",
+          fontFamily: "'Archivo',sans-serif",
           fontSize: "15px",
-          fontWeight: 600,
-          color: coral ? "#FF8A7A" : "#fff",
+          fontWeight: 700,
+          color: coral ? "#8A4038" : "#131A26",
           whiteSpace: "nowrap",
           letterSpacing: "-.02em",
         }}
@@ -40,9 +40,9 @@ function Stat({ label, value, sub, coral, onClick }) {
       {sub && (
         <div
           style={{
-            fontFamily: "'Inter Tight',sans-serif",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "11px",
-            color: coral ? "rgba(255,138,122,.6)" : "rgba(255,255,255,.34)",
+            color: coral ? "#8A4038" : "#616D81",
             whiteSpace: "nowrap",
             marginTop: "2px",
           }}
@@ -70,24 +70,23 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
       <div>
         <div
           style={{
-            fontFamily: "'IBM Plex Mono',monospace",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "10px",
-            letterSpacing: ".18em",
-            color: "rgba(255,255,255,.38)",
+            letterSpacing: ".01em",
+            color: "#616D81",
             whiteSpace: "nowrap",
             marginBottom: "10px",
           }}
         >
-          READY TO BILL
+          Ready to bill
         </div>
         <div
           style={{
-            fontFamily: "'IBM Plex Mono',monospace",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "64px",
-            fontWeight: 600,
-            color: "#6EE7C0",
+            fontWeight: 800,
+            color: "#1E4A85",
             letterSpacing: "-.045em",
-            textShadow: "0 0 46px rgba(110,231,192,.28)",
             lineHeight: 1,
           }}
           className="max-[699px]:text-[40px]"
@@ -96,16 +95,16 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
         </div>
         <div
           style={{
-            fontFamily: "'Inter Tight',sans-serif",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "15px",
-            color: "rgba(255,255,255,.5)",
+            color: "#535E72",
             marginTop: "10px",
             whiteSpace: "nowrap",
           }}
         >
           {readyCount} lines ready · {reportBlockedCount} waiting on a report · {matchBlockedCount} match review · {customFeeCount} custom fee %
           {noSourceDataCount > 0 && (
-            <span style={{ display: "block", marginTop: "6px", fontFamily: "'IBM Plex Mono',monospace", fontSize: "11px", color: "#FF8A7A" }}>
+            <span style={{ display: "block", marginTop: "6px", fontFamily: "'Archivo',sans-serif", fontSize: "11px", color: "#8A4038" }}>
               ⚠ Source data missing for {noSourceDataCount} {noSourceDataCount === 1 ? "line" : "lines"} — Probuild pull may have failed
             </span>
           )}
@@ -113,15 +112,15 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
       </div>
 
       <div className="max-[699px]:w-full" style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
-        <Stat label="EARNED TO DATE" value={`$${formatMoney(monthEarnedTotal)}`} sub={`${monthEarnedCount} lines · excl. scheduled`} />
-        <div style={{ width: "1px", height: "44px", backgroundColor: "rgba(255,255,255,.10)", margin: "0 20px" }} className="max-[699px]:mx-3" />
-        <Stat label="BILLED" value={`$${formatMoney(billedTotal)}`} sub={`${billedCount} lines`} />
-        <div style={{ width: "1px", height: "44px", backgroundColor: "rgba(255,255,255,.10)", margin: "0 20px" }} className="max-[699px]:mx-3" />
-        <Stat label="SCHEDULED" value={`$${formatMoney(scheduledTotal)}`} sub={`${scheduledCount} lines`} />
-        <div style={{ width: "1px", height: "44px", backgroundColor: "rgba(255,255,255,.10)", margin: "0 20px" }} className="max-[699px]:mx-3" />
-        <Stat label="NEEDS A REPORT" value={String(reportBlockedCount)} sub="fix →" coral onClick={onFilterBlocked} />
-        <div style={{ width: "1px", height: "44px", backgroundColor: "rgba(255,255,255,.10)", margin: "0 20px" }} className="max-[699px]:mx-3" />
-        <Stat label="MATCH REVIEW" value={String(matchBlockedCount)} sub="fix →" coral onClick={onFilterMatchBlocked} />
+        <Stat label="Earned to date" value={`$${formatMoney(monthEarnedTotal)}`} sub={`${monthEarnedCount} lines · excl. scheduled`} />
+        <div style={{ width: "1px", height: "44px", backgroundColor: "#DDE3EC", margin: "0 20px" }} className="max-[699px]:mx-3" />
+        <Stat label="Billed" value={`$${formatMoney(billedTotal)}`} sub={`${billedCount} lines`} />
+        <div style={{ width: "1px", height: "44px", backgroundColor: "#DDE3EC", margin: "0 20px" }} className="max-[699px]:mx-3" />
+        <Stat label="Scheduled" value={`$${formatMoney(scheduledTotal)}`} sub={`${scheduledCount} lines`} />
+        <div style={{ width: "1px", height: "44px", backgroundColor: "#DDE3EC", margin: "0 20px" }} className="max-[699px]:mx-3" />
+        <Stat label="Needs a report" value={String(reportBlockedCount)} sub="fix →" coral onClick={onFilterBlocked} />
+        <div style={{ width: "1px", height: "44px", backgroundColor: "#DDE3EC", margin: "0 20px" }} className="max-[699px]:mx-3" />
+        <Stat label="Match review" value={String(matchBlockedCount)} sub="fix →" coral onClick={onFilterMatchBlocked} />
       </div>
     </div>
   );

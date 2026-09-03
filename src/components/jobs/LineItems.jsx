@@ -3,7 +3,7 @@ import { formatMoney } from "@/lib/feeMath";
 
 export default function LineItems({ rows }) {
   return (
-    <div className="rounded-[16px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
         <h3 className="font-heading text-[13px] font-semibold" style={{ color: C.text }}>Line items</h3>
       </div>

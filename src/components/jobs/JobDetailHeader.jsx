@@ -18,7 +18,7 @@ function StatCell({ label, children, mono, fee }) {
 
 export default function JobDetailHeader({ job, status, totals, dates, stage, checklistDone, checklistTotal, onAddPhoto }) {
   return (
-    <div className="rounded-[18px] overflow-hidden" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+    <div className="rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       {/* Title row */}
       <div className="px-5 pt-5 pb-4">
         <div className="mono-label-sm mb-1">GF-2026 · {job.builder || "—"}</div>

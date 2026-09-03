@@ -116,7 +116,7 @@ export default function JobsHub() {
           <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Jobs</h1>
           <span className="font-mono-num text-[14px]" style={{ color: C.textMuted }}>({jobs.length.toLocaleString()})</span>
           <div className="ml-auto flex items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-white/5" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <Upload className="h-3.5 w-3.5" />Import
             </button>
             <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
@@ -159,13 +159,13 @@ export default function JobsHub() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden min-[700px]:block rounded-[16px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+        <div className="hidden min-[700px]:block rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
           {/* Header */}
           <div style={{
             display: "grid", gridTemplateColumns: COLS, alignItems: "center",
-            gap: 16, padding: "12px 20px", background: "rgba(255,255,255,.03)",
-            fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 600,
-            letterSpacing: ".14em", color: "rgba(255,255,255,.40)", whiteSpace: "nowrap",
+            gap: 16, padding: "12px 20px", background: C.headerBg,
+            fontFamily: "'Archivo',sans-serif", fontSize: 10, fontWeight: 600,
+            letterSpacing: ".01em", color: C.headerText, whiteSpace: "nowrap",
           }}>
             <span>JOB</span>
             <span>BUILDER</span>
@@ -189,7 +189,7 @@ export default function JobsHub() {
           {filtered.length > visibleCount && (
             <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}` }}>
               <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textMuted }}>Showing {visibleCount} of {filtered.length.toLocaleString()}</span>
-              <button onClick={() => setVisibleCount(c => c + 20)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-white/5" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
+              <button onClick={() => setVisibleCount(c => c + 20)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
             </div>
           )}
         </div>
@@ -201,13 +201,13 @@ export default function JobsHub() {
             const isZero = stats?.labor === 0;
             const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
             return (
-              <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+              <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
                 <div className="text-[14px] font-semibold truncate" style={{ color: C.text }}>{job.canonical_name}</div>
                 <div className="text-[11px] truncate mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${job.builder} · ` : ""}{job.address || ""}</div>
                 <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                  <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, color: stats?.status.text }}>{stats?.status.label}</span>
-                  <span className="font-mono text-[9px] uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{stats?.visits || 0} visits</span>
-                  {refs && <span className="font-mono text-[9px] uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{refs}</span>}
+                  <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, border: `1px solid ${stats?.status.border || C.border}`, color: stats?.status.text }}>{stats?.status.label}</span>
+                  <span className="text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>{stats?.visits || 0} visits</span>
+                  {refs && <span className="text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>{refs}</span>}
                 </div>
                 <div className="flex flex-col items-end mt-2.5">
                   <span className="font-mono-num-bold text-[16px]" style={{ color: isZero ? C.textMuted : C.accent, letterSpacing: "-0.02em" }}>{isZero ? "—" : `$${formatMoney(stats.fee)}`}</span>

@@ -13,8 +13,8 @@ function formatMonth(m) {
   return new Date(y, mm - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-const INSTALL_COLOR = "#6EE7C0";
-const SERVICE_COLOR = "#FF8A7A";
+const INSTALL_COLOR = "#2A5EA8";
+const SERVICE_COLOR = "#8A4038";
 
 export default function CalendarPage() {
   const [events, setEvents] = useState([]);
@@ -111,11 +111,11 @@ export default function CalendarPage() {
           <div className="mono-label-sm">Installation schedule</div>
           <div className="flex items-center gap-2 ml-auto">
             <div className="flex rounded-full p-0.5" style={{ border: `1px solid ${C.border}` }}>
-              <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.13em] transition-colors", view === "month" ? "text-[#0A0C0C]" : "")} style={view === "month" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>Month</button>
-              <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.13em] transition-colors", view === "list" ? "text-[#0A0C0C]" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
+              <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "month" ? "" : "")} style={view === "month" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>Month</button>
+              <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "list" ? "" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
             </div>
-            <button type="button" onClick={() => setUnreportedOnly(!unreportedOnly)} className="px-3 py-1.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-[0.13em] whitespace-nowrap transition-colors" style={unreportedOnly ? { backgroundColor: C.amber, color: C.accentDark } : { border: `1px solid ${C.border}`, color: C.textSecondary }}>Unreported only</button>
-            <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-white/5" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+            <button type="button" onClick={() => setUnreportedOnly(!unreportedOnly)} className="px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] whitespace-nowrap transition-colors" style={unreportedOnly ? { backgroundColor: C.amber, color: "#FFFFFF" } : { border: `1px solid ${C.border}`, color: C.textSecondary }}>Unreported only</button>
+            <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <RefreshCw className="h-3.5 w-3.5" />{syncing ? "Syncing…" : "Sync Google"}
             </button>
             <button onClick={() => { setSelected(null); setCreating({ event_date: selectedDay }); }} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
@@ -156,7 +156,7 @@ export default function CalendarPage() {
               onSelectDay={setSelectedDay}
             />
             {/* Selected day panel */}
-            <div className="mt-4 rounded-[16px] p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+            <div className="mt-4 rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-heading text-[14px] font-semibold" style={{ color: C.text }}>{dayLabel(selectedDay)}</h3>
                 <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>{selectedDayEvents.length} {selectedDayEvents.length === 1 ? "event" : "events"}</span>
@@ -164,7 +164,7 @@ export default function CalendarPage() {
               {selectedDayEvents.length === 0 ? (
                 <div className="rounded-[12px] py-8 text-center" style={{ border: `1.5px dashed ${C.border}` }}>
                   <p className="text-[13px] mb-2" style={{ color: C.textMuted }}>Nothing scheduled</p>
-                  <button onClick={() => { setCreating({ event_date: selectedDay }); }} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>Add event</button>
+                  <button onClick={() => { setCreating({ event_date: selectedDay }); }} className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>Add event</button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 min-[700px]:grid-cols-2 gap-3">
@@ -179,7 +179,7 @@ export default function CalendarPage() {
                           <div className="text-[13px] font-medium truncate" style={{ color: C.text }}>{e.job_name}</div>
                           {e.address && <div className="text-[11px] truncate" style={{ color: C.textMuted }}>{e.address}</div>}
                         </div>
-                        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "rgba(110,231,192,.13)" : "rgba(255,138,122,.13)", color }}>{isInstall ? "Install" : "Service"}</span>
+                        <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "#E7EEFA" : "#FBEDEA", border: isInstall ? "1px solid #C3D4EE" : "1px solid #EFD2CA", color }}>{isInstall ? "Install" : "Service"}</span>
                       </button>
                     );
                   })}
@@ -188,22 +188,22 @@ export default function CalendarPage() {
             </div>
           </>
         ) : (
-          <div className="rounded-[16px] overflow-hidden" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+          <div className="rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
             {monthEvents.length === 0 && <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No events this month.</div>}
             {monthEvents.sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "")).map((e) => {
               const isInstall = e.source === "app";
               const color = isInstall ? INSTALL_COLOR : SERVICE_COLOR;
-              const bg = isInstall ? "rgba(110,231,192,.13)" : "rgba(255,138,122,.13)";
+              const bg = isInstall ? "#E7EEFA" : "#FBEDEA";
               return (
                 <button
                   key={e.id}
                   type="button"
                   onClick={() => setSelected(e)}
-                  className="w-full flex items-center gap-3 px-4 text-left transition-colors hover:bg-white/[0.02]"
+                  className="w-full flex items-center gap-3 px-4 text-left transition-colors hover:bg-[#F8FAFD]"
                   style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
                 >
                   <div className="flex flex-col items-center justify-center min-w-[42px] pr-1" style={{ borderRight: `1px solid ${C.border}` }}>
-                    <span className="font-mono text-[10px] uppercase tracking-wider leading-none" style={{ color: C.textMuted }}>
+                    <span className="text-[10px] tracking-[0.01em] leading-none" style={{ color: C.textMuted }}>
                       {new Date(e.event_date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" })}
                     </span>
                     <span className="font-mono-num-bold text-[18px] leading-tight" style={{ color: C.text }}>

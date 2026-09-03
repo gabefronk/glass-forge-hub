@@ -19,15 +19,15 @@ export default function FieldReportActions({ event, user, onChanged }) {
   const isManager = user?.role === "manager" || isAdmin;
   const days = event.days_late || 0;
 
-  let statusText, statusColor, statusBg;
+  let statusText, statusColor, statusBg, statusBorder;
   if (event.report_status === "rescheduled") {
-    statusText = "RESCHEDULED"; statusColor = C.textMuted; statusBg = "rgba(255,255,255,.06)";
+    statusText = "Rescheduled"; statusColor = C.textMuted; statusBg = "#F6F8FC"; statusBorder = "#DDE3EC";
   } else if (days === 0) {
-    statusText = "AWAITING REPORT"; statusColor = C.amber; statusBg = "rgba(255,138,122,.10)";
+    statusText = "Awaiting report"; statusColor = "#8A5A10"; statusBg = "#FCF5E9"; statusBorder = "#EEDAB4";
   } else if (days >= 3) {
-    statusText = `${days} DAYS LATE`; statusColor = "#FF8A7A"; statusBg = "rgba(255,138,122,.18)";
+    statusText = `${days} days late`; statusColor = "#8A4038"; statusBg = "#FBEDEA"; statusBorder = "#EFD2CA";
   } else {
-    statusText = `${days} DAY${days > 1 ? "S" : ""} LATE`; statusColor = "#FF8A7A"; statusBg = "rgba(255,138,122,.14)";
+    statusText = `${days} day${days > 1 ? "s" : ""} late`; statusColor = "#8A4038"; statusBg = "#FBEDEA"; statusBorder = "#EFD2CA";
   }
 
   const missing = [];
@@ -68,9 +68,9 @@ export default function FieldReportActions({ event, user, onChanged }) {
 
   return (
     <>
-      <div className="rounded-[10px] p-3" style={{ backgroundColor: statusBg, border: `1px solid ${C.border}` }}>
+      <div className="rounded-[10px] p-3" style={{ backgroundColor: statusBg, border: `1px solid ${statusBorder}` }}>
         <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1" style={{ color: statusColor }}>
+          <span className="text-[10px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1" style={{ color: statusColor, backgroundColor: "#FFFFFF", border: `1px solid ${statusBorder}` }}>
             {days >= 3 && <AlertTriangle className="h-3 w-3" />}{statusText}
           </span>
           {missing.length > 0 && <span className="text-[12px]" style={{ color: C.textMuted }}>Missing: {missing.join(", ")}</span>}
@@ -79,16 +79,16 @@ export default function FieldReportActions({ event, user, onChanged }) {
           <div className="text-[12px] mb-2" style={{ color: C.textMuted }}>Originally {event.original_scheduled_date} · now {event.event_date}</div>
         )}
         <div className="flex items-center gap-2 flex-wrap">
-          {event.job_id && <Link to={`/jobs/${event.job_id}`} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Open job</Link>}
-          <button onClick={() => setUploading(true)} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Upload here</button>
-          {isManager && <button onClick={handleMarkReported} disabled={busy} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Mark reported</button>}
-          {isAdmin && <button onClick={() => setWaiving(true)} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Waive</button>}
+          {event.job_id && <Link to={`/jobs/${event.job_id}`} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Open job</Link>}
+          <button onClick={() => setUploading(true)} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Upload here</button>
+          {isManager && <button onClick={handleMarkReported} disabled={busy} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Mark reported</button>}
+          {isAdmin && <button onClick={() => setWaiving(true)} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Waive</button>}
         </div>
       </div>
 
       {uploading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,.80)" }} onClick={() => setUploading(false)}>
-          <div className="rounded-[16px] p-5 max-w-md w-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setUploading(false)}>
+          <div className="rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Upload field report</h3>
             <p className="text-[12px] mb-3" style={{ color: C.textMuted }}>{event.job_name}</p>
             <input type="file" multiple accept="image/*" onChange={(e) => setUploadPhotos([...e.target.files])} className="mb-3 w-full text-[12px]" style={{ color: C.textSecondary }} />
@@ -102,14 +102,14 @@ export default function FieldReportActions({ event, user, onChanged }) {
       )}
 
       {waiving && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,.80)" }} onClick={() => setWaiving(false)}>
-          <div className="rounded-[16px] p-5 max-w-md w-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setWaiving(false)}>
+          <div className="rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Waive report requirement</h3>
             <p className="text-[12px] mb-3" style={{ color: C.textMuted }}>{event.job_name}</p>
             <textarea value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} placeholder="Reason for waiving..." className="w-full rounded-[10px] p-2.5 text-[13px] mb-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} rows={3} />
             <div className="flex justify-end gap-2">
               <button onClick={() => setWaiving(false)} className="px-3 py-1.5 rounded-full text-[12px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Cancel</button>
-              <button onClick={handleWaive} disabled={busy || !waiveReason.trim()} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={{ backgroundColor: C.amber, color: C.accentDark, opacity: busy || !waiveReason.trim() ? 0.5 : 1 }}>{busy ? "Waiving..." : "Waive"}</button>
+              <button onClick={handleWaive} disabled={busy || !waiveReason.trim()} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={{ backgroundColor: C.amber, color: "#FFFFFF", opacity: busy || !waiveReason.trim() ? 0.5 : 1 }}>{busy ? "Waiving..." : "Waive"}</button>
             </div>
           </div>
         </div>

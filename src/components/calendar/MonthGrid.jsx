@@ -15,10 +15,10 @@ function buildWeeks(month) {
   return weeks;
 }
 
-const INSTALL_BG = "rgba(110,231,192,.13)";
-const INSTALL_TEXT = "#6EE7C0";
-const SERVICE_BG = "rgba(255,138,122,.13)";
-const SERVICE_TEXT = "#FF8A7A";
+const INSTALL_BG = "#E7EEFA";
+const INSTALL_TEXT = "#1E4A85";
+const SERVICE_BG = "#FBEDEA";
+const SERVICE_TEXT = "#8A4038";
 
 function eventColors(event) {
   const isInstall = event.source === "app";
@@ -27,7 +27,6 @@ function eventColors(event) {
     : { bg: SERVICE_BG, text: SERVICE_TEXT };
 }
 
-// Desktop: full text block with time + job name
 function isFlagged(ev) {
   return ev.report_required !== false &&
     ["pending", "missing_photos", "missing_notes", "missing_all"].includes(ev.report_status);
@@ -45,7 +44,7 @@ function DesktopEventBlock({ event, onClick }) {
       style={{
         backgroundColor: bg,
         color: text,
-        borderLeft: flagged ? "2px solid #FF8A7A" : rescheduled ? "2px solid rgba(255,255,255,.3)" : "none",
+        borderLeft: flagged ? "2px solid #8A4038" : rescheduled ? "2px solid #CBD4E1" : "none",
       }}
     >
       {event.start_time && (
@@ -55,7 +54,7 @@ function DesktopEventBlock({ event, onClick }) {
       )}
       <span className="truncate">{event.job_name}</span>
       {flagged && (
-        <span className="inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle shrink-0" style={{ backgroundColor: "#FF8A7A" }} />
+        <span className="inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle shrink-0" style={{ backgroundColor: "#8A4038" }} />
       )}
     </button>
   );
@@ -66,7 +65,7 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="rounded-[16px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       {/* Weekday header */}
       <div className="grid grid-cols-7" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
@@ -96,8 +95,8 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
               style={{
                 borderTop: `1px solid ${C.rowBorder}`,
                 borderRight: (i % 7) !== 6 ? `1px solid ${C.rowBorder}` : "none",
-                backgroundColor: isSelected ? "rgba(110,231,192,.10)" : "transparent",
-                boxShadow: isSelected ? "inset 0 0 0 2px #6EE7C0" : "none",
+                backgroundColor: isSelected ? "#E7EEFA" : "transparent",
+                boxShadow: isSelected ? "inset 0 0 0 2px #2A5EA8" : "none",
               }}
             >
               {day && (
@@ -132,7 +131,7 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                       const { text } = eventColors(e);
                       const flagged = isFlagged(e);
                       const rescheduled = e.report_status === "rescheduled";
-                      const dotColor = flagged ? "#FF8A7A" : rescheduled ? "rgba(255,255,255,.3)" : text;
+                      const dotColor = flagged ? "#8A4038" : rescheduled ? "#CBD4E1" : text;
                       return (
                         <button key={e.id} type="button" onClick={() => onSelect(e)} className="h-1.5 w-1.5 rounded-full shrink-0 self-start" style={{ backgroundColor: dotColor }} aria-label={e.job_name} />
                       );

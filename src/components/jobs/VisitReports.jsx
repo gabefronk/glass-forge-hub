@@ -9,7 +9,7 @@ export default function VisitReports({ events }) {
   const sorted = [...events].sort((a, b) => (a.event_date || "").localeCompare(b.event_date || ""));
 
   return (
-    <div className="rounded-[16px] p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <h3 className="font-heading text-[13px] font-semibold mb-3" style={{ color: C.text }}>Visit reports</h3>
       <div className="space-y-2">
         {sorted.map((ev) => {
@@ -39,20 +39,20 @@ export default function VisitReports({ events }) {
 
 function visitIcon(ev) {
   if (!ev.report_required || ev.report_required === false) {
-    return { icon: <Check className="h-3.5 w-3.5" style={{ color: C.textMuted }} />, label: "N/A", color: C.textMuted, bg: "rgba(255,255,255,.06)" };
+    return { icon: <Check className="h-3.5 w-3.5" style={{ color: C.textMuted }} />, label: "N/A", color: C.textMuted, bg: "#F6F8FC" };
   }
   if (ev.report_status === "ok") {
-    return { icon: <Check className="h-3.5 w-3.5" style={{ color: C.accent }} />, label: "Complete", color: C.accent, bg: "rgba(110,231,192,.14)" };
+    return { icon: <Check className="h-3.5 w-3.5" style={{ color: C.accentText }} />, label: "Complete", color: C.accentText, bg: "#E7EEFA" };
   }
   if (ev.report_status === "waived") {
-    return { icon: <Check className="h-3.5 w-3.5" style={{ color: C.textMuted }} />, label: "Waived", color: C.textMuted, bg: "rgba(255,255,255,.06)" };
+    return { icon: <Check className="h-3.5 w-3.5" style={{ color: C.textMuted }} />, label: "Waived", color: C.textMuted, bg: "#F6F8FC" };
   }
   if (ev.report_status === "rescheduled") {
-    return { icon: <Clock className="h-3.5 w-3.5" style={{ color: C.textMuted }} />, label: "Rescheduled", color: C.textMuted, bg: "rgba(255,255,255,.06)" };
+    return { icon: <Clock className="h-3.5 w-3.5" style={{ color: C.textMuted }} />, label: "Rescheduled", color: C.textMuted, bg: "#F6F8FC" };
   }
   const days = ev.days_late || 0;
   if (days > 0) {
-    return { icon: <X className="h-3.5 w-3.5" style={{ color: "#FF8A7A" }} />, label: `${days}d late`, color: "#FF8A7A", bg: "rgba(255,138,122,.14)" };
+    return { icon: <X className="h-3.5 w-3.5" style={{ color: "#8A4038" }} />, label: `${days}d late`, color: "#8A4038", bg: "#FBEDEA" };
   }
-  return { icon: <Clock className="h-3.5 w-3.5" style={{ color: C.amber }} />, label: "Awaiting", color: C.amber, bg: "rgba(255,138,122,.10)" };
+  return { icon: <Clock className="h-3.5 w-3.5" style={{ color: C.amber }} />, label: "Awaiting", color: C.amber, bg: "#FCF5E9" };
 }

@@ -17,12 +17,12 @@ export default function Checklist({ checked, onToggle }) {
   const pct = CHECKLIST_TOTAL ? (done / CHECKLIST_TOTAL) * 100 : 0;
 
   return (
-    <div className="rounded-[16px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
         <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Delivery &amp; install checklist</h2>
         <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>{done} of {CHECKLIST_TOTAL}</span>
       </div>
-      <div className="h-[3px]" style={{ backgroundColor: "rgba(255,255,255,.05)" }}>
+      <div className="h-[3px]" style={{ backgroundColor: "#E9EDF4" }}>
         <div className="h-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: C.accent }} />
       </div>
       <div>
@@ -38,7 +38,7 @@ export default function Checklist({ checked, onToggle }) {
               <div
                 className="h-[26px] w-[26px] rounded-full shrink-0 flex items-center justify-center transition-all"
                 style={{
-                  border: isDone ? "none" : `1.5px solid rgba(255,255,255,.2)`,
+                  border: isDone ? "none" : `1.5px solid #CBD4E1`,
                   backgroundColor: isDone ? C.accent : "transparent",
                 }}
               >

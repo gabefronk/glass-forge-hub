@@ -8,7 +8,7 @@ export default function NotesSection({ jobId, notes, currentUser, onChanged, onP
   const [showForm, setShowForm] = useState(false);
 
   return (
-    <div className="rounded-[16px] p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-heading text-[13px] font-semibold" style={{ color: C.text }}>Notes</h3>
         <button

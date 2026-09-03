@@ -19,7 +19,9 @@ export function refsLabel(pos, oes) {
 export default function JobListRow({ job, stats }) {
   const status = stats.status;
   const isZero = stats.labor === 0;
-  const statusStr = status.key === "complete" ? "COMPLETE" : status.key === "needs_report" ? "NEEDS REPORT" : "ACTIVE";
+  const statusStr = status.key === "complete" ? "Complete" : status.key === "needs_report" ? "Needs report" : "Active";
+  const isComplete = status.key === "complete";
+  const isNeedsReport = status.key === "needs_report";
 
   return (
     <Link
@@ -27,30 +29,31 @@ export default function JobListRow({ job, stats }) {
       style={{
         display: "grid", gridTemplateColumns: COLS, alignItems: "center",
         gap: 16, padding: "14px 20px", minHeight: 60,
-        borderTop: "1px solid rgba(255,255,255,.06)", cursor: "pointer",
+        borderTop: "1px solid #E9EDF4", cursor: "pointer",
       }}
     >
       <div style={{ minWidth: 0 }}>
-        <div style={{ font: "600 14px 'Inter Tight',sans-serif", color: "#fff",
+        <div style={{ fontFamily: "'Archivo',sans-serif", fontWeight: 700, fontSize: "14px", color: "#131A26",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.canonical_name}</div>
-        <div style={{ font: "400 12px 'Inter Tight',sans-serif", color: "rgba(255,255,255,.42)",
+        <div style={{ fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "12px", color: "#616D81",
           marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.address || ""}</div>
       </div>
-      <span style={{ minWidth: 0, font: "400 13px 'Inter Tight',sans-serif", color: "rgba(255,255,255,.62)",
+      <span style={{ minWidth: 0, fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "13px", color: "#535E72",
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.builder || "—"}</span>
-      <span style={{ textAlign: "right", font: "500 13px 'IBM Plex Mono',monospace", color: "rgba(255,255,255,.7)" }}>{stats.visits}</span>
-      <span style={{ textAlign: "right", font: "500 13px 'IBM Plex Mono',monospace", color: "rgba(255,255,255,.5)", whiteSpace: "nowrap" }}>{stats.lastReport ? formatShort(stats.lastReport) : "—"}</span>
-      <span style={{ textAlign: "right", font: "500 13.5px 'IBM Plex Mono',monospace", color: "rgba(255,255,255,.8)", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.labor)}</span>
-      <span style={{ textAlign: "right", font: "600 13.5px 'IBM Plex Mono',monospace", color: "#6EE7C0", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.fee)}</span>
+      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#131A26" }}>{stats.visits}</span>
+      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#616D81", whiteSpace: "nowrap" }}>{stats.lastReport ? formatShort(stats.lastReport) : "—"}</span>
+      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13.5px", color: "#131A26", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.labor)}</span>
+      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 700, fontSize: "13.5px", color: isZero ? "#657185" : "#1E4A85", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.fee)}</span>
       <span style={{ minWidth: 0 }}>
         <span style={{
-          display: "inline-block", font: "600 9.5px 'IBM Plex Mono',monospace", letterSpacing: ".1em",
+          display: "inline-block", fontFamily: "'Archivo',sans-serif", fontWeight: 600, fontSize: "9.5px", letterSpacing: ".01em",
           padding: "4px 8px", borderRadius: 4, whiteSpace: "nowrap",
-          background: statusStr === "COMPLETE" ? "rgba(110,231,192,.14)" : "rgba(255,138,122,.14)",
-          color: statusStr === "COMPLETE" ? "#6EE7C0" : "#FF8A7A",
+          backgroundColor: isComplete ? "#E7EEFA" : isNeedsReport ? "#FBEDEA" : "#F6F8FC",
+          border: isComplete ? "1px solid #C3D4EE" : isNeedsReport ? "1px solid #EFD2CA" : "1px solid #DDE3EC",
+          color: isComplete ? "#1E4A85" : isNeedsReport ? "#8A4038" : "#535E72",
         }}>{statusStr}</span>
       </span>
-      <span style={{ display: "flex", justifyContent: "flex-end", color: "rgba(255,255,255,.3)" }}>›</span>
+      <span style={{ display: "flex", justifyContent: "flex-end", color: "#77839A" }}>›</span>
     </Link>
   );
 }

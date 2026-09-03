@@ -6,12 +6,12 @@ import { AlertTriangle } from "lucide-react";
 
 function statusLabel(event) {
   if (event.report_status === "rescheduled") {
-    return { text: "RESCHEDULED", color: C.textMuted, bg: "rgba(255,255,255,.06)", dot: C.textMuted };
+    return { text: "Rescheduled", color: C.textMuted, bg: "#F6F8FC", border: "#DDE3EC", dot: C.textMuted };
   }
   const days = event.days_late || 0;
-  if (days === 0) return { text: "AWAITING REPORT", color: C.amber, bg: "rgba(255,138,122,.10)", dot: C.amber };
-  if (days >= 3) return { text: `${days} DAYS LATE`, color: "#FF8A7A", bg: "rgba(255,138,122,.18)", dot: "#FF8A7A", escalate: true };
-  return { text: `${days} DAY${days > 1 ? "S" : ""} LATE`, color: "#FF8A7A", bg: "rgba(255,138,122,.14)", dot: "#FF8A7A" };
+  if (days === 0) return { text: "Awaiting report", color: "#8A5A10", bg: "#FCF5E9", border: "#EEDAB4", dot: "#8A5A10" };
+  if (days >= 3) return { text: `${days} days late`, color: "#8A4038", bg: "#FBEDEA", border: "#EFD2CA", dot: "#8A4038", escalate: true };
+  return { text: `${days} day${days > 1 ? "s" : ""} late`, color: "#8A4038", bg: "#FBEDEA", border: "#EFD2CA", dot: "#8A4038" };
 }
 
 function missingText(event) {
@@ -55,8 +55,8 @@ export default function OutstandingReports({ events, user, onChanged, compliance
 
   if (!outstanding.length && !noSourceDates.length) {
     return (
-      <div className="rounded-[18px] px-5 py-4 mb-5 flex items-center gap-3" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: C.accent }} />
+      <div className="rounded-[14px] px-5 py-4 mb-5 flex items-center gap-3 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: C.successDot }} />
         <div className="text-[13px] font-medium" style={{ color: C.textSecondary }}>All field reports current</div>
       </div>
     );
@@ -103,10 +103,10 @@ export default function OutstandingReports({ events, user, onChanged, compliance
   return (
     <>
       {noSourceDates.length > 0 && (
-        <div className="rounded-[18px] px-5 py-4 mb-5 flex items-start gap-3" style={{ backgroundColor: "rgba(255,138,122,.10)", border: `1px solid rgba(255,138,122,.25)` }}>
-          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#FF8A7A" }} />
+        <div className="rounded-[14px] px-5 py-4 mb-5 flex items-start gap-3 card-shadow" style={{ backgroundColor: "#FBEDEA", border: `1px solid #EFD2CA` }}>
+          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#8A4038" }} />
           <div>
-            <div className="text-[14px] font-semibold mb-1" style={{ color: "#FF8A7A" }}>Probuild sync incomplete</div>
+            <div className="text-[14px] font-semibold mb-1" style={{ color: "#8A4038" }}>Probuild sync incomplete</div>
             <div className="text-[12px]" style={{ color: C.textMuted }}>
               No field reports ingested for {noSourceDates.join(", ")} — flags suppressed. The Probuild pull may have failed; check the ingest logs.
             </div>
@@ -114,7 +114,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
         </div>
       )}
       {outstanding.length > 0 && (
-      <div className="rounded-[18px] overflow-hidden mb-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+      <div className="rounded-[14px] overflow-hidden mb-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
           <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Field reports outstanding</h2>
           <span className="font-mono-num-bold text-[20px]" style={{ color: C.amber }}>{outstanding.length}</span>
@@ -129,24 +129,24 @@ export default function OutstandingReports({ events, user, onChanged, compliance
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[14px] font-medium truncate" style={{ color: C.text }}>{event.job_name}</span>
-                      <span className="font-mono text-[10px] whitespace-nowrap shrink-0" style={{ color: C.textMuted }}>
+                      <span className="text-[10px] whitespace-nowrap shrink-0" style={{ color: C.textMuted }}>
                         {event.event_date ? formatDateGroup(event.event_date) : ""}
                       </span>
-                      <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 flex items-center gap-1" style={{ backgroundColor: label.bg, color: label.color }}>
+                      <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 flex items-center gap-1" style={{ backgroundColor: label.bg, border: `1px solid ${label.border}`, color: label.color }}>
                         {label.escalate && <AlertTriangle className="h-2.5 w-2.5" />}{label.text}
                       </span>
                     </div>
                     <div className="text-[12px] mt-0.5" style={{ color: C.textMuted }}>{missingText(event)}</div>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       {event.job_id && (
-                        <Link to={`/jobs/${event.job_id}`} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Open job</Link>
+                        <Link to={`/jobs/${event.job_id}`} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Open job</Link>
                       )}
-                      <button onClick={() => setUploading(event)} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Upload here</button>
+                      <button onClick={() => setUploading(event)} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Upload here</button>
                       {isManager && (
-                        <button onClick={() => handleMarkReported(event)} disabled={busy} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Mark reported</button>
+                        <button onClick={() => handleMarkReported(event)} disabled={busy} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Mark reported</button>
                       )}
                       {isAdmin && (
-                        <button onClick={() => setWaiving(event)} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Waive</button>
+                        <button onClick={() => setWaiving(event)} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Waive</button>
                       )}
                     </div>
                   </div>
@@ -159,8 +159,8 @@ export default function OutstandingReports({ events, user, onChanged, compliance
       )}
 
       {uploading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,.80)" }} onClick={() => setUploading(null)}>
-          <div className="rounded-[16px] p-5 max-w-md w-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setUploading(null)}>
+          <div className="rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Upload field report</h3>
             <p className="text-[12px] mb-3" style={{ color: C.textMuted }}>{uploading.job_name}</p>
             <input type="file" multiple accept="image/*" onChange={(e) => setUploadPhotos([...e.target.files])} className="mb-3 w-full text-[12px]" style={{ color: C.textSecondary }} />
@@ -174,14 +174,14 @@ export default function OutstandingReports({ events, user, onChanged, compliance
       )}
 
       {waiving && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,.80)" }} onClick={() => setWaiving(null)}>
-          <div className="rounded-[16px] p-5 max-w-md w-full" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setWaiving(null)}>
+          <div className="rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Waive report requirement</h3>
             <p className="text-[12px] mb-3" style={{ color: C.textMuted }}>{waiving.job_name}</p>
             <textarea value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} placeholder="Reason for waiving..." className="w-full rounded-[10px] p-2.5 text-[13px] mb-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} rows={3} />
             <div className="flex justify-end gap-2">
               <button onClick={() => setWaiving(null)} className="px-3 py-1.5 rounded-full text-[12px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Cancel</button>
-              <button onClick={handleWaive} disabled={busy || !waiveReason.trim()} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={{ backgroundColor: C.amber, color: C.accentDark, opacity: busy || !waiveReason.trim() ? 0.5 : 1 }}>{busy ? "Waiving..." : "Waive"}</button>
+              <button onClick={handleWaive} disabled={busy || !waiveReason.trim()} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={{ backgroundColor: C.amber, color: "#FFFFFF", opacity: busy || !waiveReason.trim() ? 0.5 : 1 }}>{busy ? "Waiving..." : "Waive"}</button>
             </div>
           </div>
         </div>

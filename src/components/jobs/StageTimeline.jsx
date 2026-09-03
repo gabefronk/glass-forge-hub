@@ -12,7 +12,7 @@ export const STAGE_TOTAL = STAGES.length;
 
 export default function StageTimeline({ currentStage }) {
   return (
-    <div className="rounded-[16px] p-5" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <h3 className="font-heading text-[13px] font-semibold mb-4" style={{ color: C.text }}>Stage timeline</h3>
       <div className="relative">
         {STAGES.map((stage, i) => {
@@ -32,7 +32,7 @@ export default function StageTimeline({ currentStage }) {
                 style={
                   isComplete || isCurrent
                     ? { backgroundColor: C.accent, boxShadow: isCurrent ? "0 0 0 4px rgba(110,231,192,.18)" : "none" }
-                    : { backgroundColor: "transparent", border: `1.5px solid rgba(255,255,255,.2)` }
+                    : { backgroundColor: "transparent", border: `1.5px solid #CBD4E1` }
                 }
               />
               <div className="min-w-0 flex-1 pt-0.5">

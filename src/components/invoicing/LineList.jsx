@@ -25,17 +25,17 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
   if (rows.length === 0) {
     return (
       <div style={{ padding: "80px 0", textAlign: "center" }}>
-        <p style={{ fontFamily: "'Inter Tight',sans-serif", fontSize: "15px", color: "rgba(255,255,255,.5)" }}>Nothing matches those filters.</p>
+        <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "15px", color: "#616D81" }}>Nothing matches those filters.</p>
         <button
           onClick={onClearFilters}
           style={{
             marginTop: "12px",
             padding: "8px 16px",
-            borderRadius: "99px",
-            border: "1px solid rgba(255,255,255,.10)",
-            backgroundColor: "transparent",
-            color: "#6EE7C0",
-            fontFamily: "'Inter Tight',sans-serif",
+            borderRadius: "10px",
+            border: "1px solid #DDE3EC",
+            backgroundColor: "#FFFFFF",
+            color: "#1E4A85",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "13px",
             fontWeight: 500,
             cursor: "pointer",

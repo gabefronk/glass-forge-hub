@@ -23,7 +23,7 @@ export default function ComplianceSettings({ value, onChanged }) {
   };
 
   return (
-    <div className="rounded-[18px] px-5 py-4 mb-5 flex items-start gap-3" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] px-5 py-4 mb-5 flex items-start gap-3 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <Settings className="h-4 w-4 shrink-0 mt-1" style={{ color: C.textMuted }} />
       <div className="flex-1 min-w-0">
         <div className="mono-label-sm mb-1">Compliance start date</div>
@@ -48,7 +48,7 @@ export default function ComplianceSettings({ value, onChanged }) {
             <span className="font-mono-num text-[14px]" style={{ color: C.text }}>
               {value || "Not set"}
             </span>
-            <button onClick={() => { setEditing(true); setDraft(value || ""); }} className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+            <button onClick={() => { setEditing(true); setDraft(value || ""); }} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               Edit
             </button>
             <span className="text-[11px]" style={{ color: C.textMuted }}>

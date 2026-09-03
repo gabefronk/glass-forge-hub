@@ -17,8 +17,8 @@ function MenuItem({ icon: Icon, label, onClick, danger }) {
         borderRadius: "6px",
         border: "none",
         backgroundColor: "transparent",
-        color: danger ? "#FF8A7A" : "rgba(255,255,255,.72)",
-        fontFamily: "'Inter Tight',sans-serif",
+        color: danger ? "#8A4038" : "#535E72",
+        fontFamily: "'Archivo',sans-serif",
         fontSize: "12.5px",
         fontWeight: 500,
         cursor: "pointer",
@@ -45,12 +45,12 @@ function InlineEditor({ row, onSave, onCancel, onDelete }) {
   }, [labor, feePct]);
 
   const inputStyle = {
-    backgroundColor: "rgba(255,255,255,.05)",
-    border: "1px solid rgba(255,255,255,.10)",
-    borderRadius: "8px",
+    backgroundColor: "#FFFFFF",
+    border: "1px solid #DDE3EC",
+    borderRadius: "9px",
     padding: "8px 10px",
-    color: "#fff",
-    fontFamily: "'Inter Tight',sans-serif",
+    color: "#131A26",
+    fontFamily: "'Archivo',sans-serif",
     fontSize: "13px",
     outline: "none",
     width: "100%",
@@ -59,40 +59,40 @@ function InlineEditor({ row, onSave, onCancel, onDelete }) {
   return (
     <div
       style={{
-        backgroundColor: "rgba(255,255,255,.04)",
-        border: "1px solid rgba(110,231,192,.30)",
-        borderRadius: "10px",
+        backgroundColor: "#F6F8FC",
+        border: "1px solid #C3D4EE",
+        borderRadius: "14px",
         padding: "16px",
         margin: "4px 0",
       }}
     >
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }} className="max-[699px]:grid-cols-1">
         <div>
-          <label style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "9px", letterSpacing: ".12em", color: "rgba(255,255,255,.4)", display: "block", marginBottom: "4px" }}>DESCRIPTION</label>
+          <label style={{ fontFamily: "'Archivo',sans-serif", fontSize: "9px", letterSpacing: ".01em", color: "#616D81", display: "block", marginBottom: "4px" }}>Description</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
         </div>
         <div>
-          <label style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "9px", letterSpacing: ".12em", color: "rgba(255,255,255,.4)", display: "block", marginBottom: "4px" }}>DETAIL</label>
+          <label style={{ fontFamily: "'Archivo',sans-serif", fontSize: "9px", letterSpacing: ".01em", color: "#616D81", display: "block", marginBottom: "4px" }}>Detail</label>
           <input value={detail} onChange={(e) => setDetail(e.target.value)} style={inputStyle} />
         </div>
         <div>
-          <label style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "9px", letterSpacing: ".12em", color: "rgba(255,255,255,.4)", display: "block", marginBottom: "4px" }}>LABOR $</label>
-          <input type="number" value={labor} onChange={(e) => setLabor(e.target.value)} style={{ ...inputStyle, fontFamily: "'IBM Plex Mono',monospace" }} />
+          <label style={{ fontFamily: "'Archivo',sans-serif", fontSize: "9px", letterSpacing: ".01em", color: "#616D81", display: "block", marginBottom: "4px" }}>Labor $</label>
+          <input type="number" value={labor} onChange={(e) => setLabor(e.target.value)} style={inputStyle} />
         </div>
         <div>
-          <label style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "9px", letterSpacing: ".12em", color: "rgba(255,255,255,.4)", display: "block", marginBottom: "4px" }}>FEE %</label>
-          <input type="number" value={feePct} onChange={(e) => setFeePct(e.target.value)} style={{ ...inputStyle, fontFamily: "'IBM Plex Mono',monospace" }} />
+          <label style={{ fontFamily: "'Archivo',sans-serif", fontSize: "9px", letterSpacing: ".01em", color: "#616D81", display: "block", marginBottom: "4px" }}>Fee %</label>
+          <input type="number" value={feePct} onChange={(e) => setFeePct(e.target.value)} style={inputStyle} />
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
         <div>
-          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "10px", letterSpacing: ".12em", color: "rgba(255,255,255,.4)" }}>FEE </span>
-          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "17px", fontWeight: 600, color: "#6EE7C0" }}>${formatMoney(liveFee)}</span>
+          <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "10px", letterSpacing: ".01em", color: "#616D81" }}>Fee </span>
+          <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "17px", fontWeight: 700, color: "#1E4A85" }}>${formatMoney(liveFee)}</span>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={() => onDelete(row.id)} style={{ padding: "7px 14px", borderRadius: "99px", border: "1px solid rgba(255,138,122,.30)", backgroundColor: "transparent", color: "#FF8A7A", fontFamily: "'Inter Tight',sans-serif", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Delete line</button>
-          <button onClick={onCancel} style={{ padding: "7px 14px", borderRadius: "99px", border: "1px solid rgba(255,255,255,.10)", backgroundColor: "transparent", color: "rgba(255,255,255,.62)", fontFamily: "'Inter Tight',sans-serif", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}>Cancel</button>
-          <button onClick={() => onSave(row.id, { line_description: description, note_text: detail, labor_amt: Number(labor) || 0, fee_pct: (Number(feePct) || 0) / 100, manually_adjusted: true })} style={{ padding: "7px 16px", borderRadius: "99px", border: "none", backgroundColor: "#6EE7C0", color: "#0A0C0C", fontFamily: "'Inter Tight',sans-serif", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Save</button>
+          <button onClick={() => onDelete(row.id)} style={{ padding: "7px 14px", borderRadius: "10px", border: "1px solid #EFD2CA", backgroundColor: "transparent", color: "#8A4038", fontFamily: "'Archivo',sans-serif", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Delete line</button>
+          <button onClick={onCancel} style={{ padding: "7px 14px", borderRadius: "10px", border: "1px solid #DDE3EC", backgroundColor: "#FFFFFF", color: "#535E72", fontFamily: "'Archivo',sans-serif", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}>Cancel</button>
+          <button onClick={() => onSave(row.id, { line_description: description, note_text: detail, labor_amt: Number(labor) || 0, fee_pct: (Number(feePct) || 0) / 100, manually_adjusted: true })} style={{ padding: "7px 16px", borderRadius: "10px", border: "1px solid #1E4A85", backgroundColor: "#2A5EA8", color: "#FFFFFF", fontFamily: "'Archivo',sans-serif", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Save</button>
         </div>
       </div>
     </div>
@@ -130,8 +130,8 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   const isCustomFee = row.fee_type !== "profit_split" && Number(row.fee_pct) !== 0.1;
   const opacity = isBilled ? 0.45 : 1;
   const textOpacity = isZero && !isBilled ? 0.48 : 1;
-  const bg = selected ? "rgba(110,231,192,.07)" : blocked ? "rgba(255,138,122,.05)" : "transparent";
-  const insetBar = selected ? "inset 3px 0 0 #6EE7C0" : blocked ? "inset 3px 0 0 #FF8A7A" : "none";
+  const bg = selected ? "#E7EEFA" : blocked ? "#FBEDEA" : "transparent";
+  const insetBar = selected ? "inset 3px 0 0 #2A5EA8" : blocked ? "inset 3px 0 0 #8A4038" : "none";
 
   const subline = reportAttached
     ? "Report attached · ready to bill"
@@ -150,7 +150,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
         padding: "15px 12px",
         minHeight: "64px",
         borderRadius: "10px",
-        borderBottom: "1px solid rgba(255,255,255,.05)",
+        borderBottom: "1px solid #E9EDF4",
         backgroundColor: bg,
         boxShadow: insetBar,
         cursor: "pointer",
@@ -165,8 +165,8 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           width: "19px",
           height: "19px",
           borderRadius: "99px",
-          border: selected ? "none" : "1.5px solid rgba(255,255,255,.20)",
-          backgroundColor: selected ? "#6EE7C0" : "transparent",
+          border: selected ? "none" : "1.5px solid #CBD4E1",
+          backgroundColor: selected ? "#2A5EA8" : "transparent",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -174,7 +174,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           flexShrink: 0,
         }}
       >
-        {selected && <Check style={{ width: "12px", height: "12px", color: "#0A0C0C" }} strokeWidth={3} />}
+        {selected && <Check style={{ width: "12px", height: "12px", color: "#FFFFFF" }} strokeWidth={3} />}
       </button>
 
       {/* Title + subline + chip */}
@@ -182,10 +182,10 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
         <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
           <span
             style={{
-              fontFamily: "'Inter Tight',sans-serif",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "15px",
-              fontWeight: 500,
-              color: "#fff",
+              fontWeight: 600,
+              color: "#131A26",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -199,13 +199,14 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           {isCustomFee && (
             <span
               style={{
-                fontFamily: "'IBM Plex Mono',monospace",
+                fontFamily: "'Archivo',sans-serif",
                 fontSize: "10px",
                 fontWeight: 600,
                 padding: "2px 6px",
                 borderRadius: "4px",
-                backgroundColor: "rgba(110,231,192,.14)",
-                color: "#6EE7C0",
+                backgroundColor: "#E7EEFA",
+                border: "1px solid #C3D4EE",
+                color: "#1E4A85",
                 whiteSpace: "nowrap",
                 flexShrink: 0,
               }}
@@ -216,9 +217,9 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
         </div>
         <span
           style={{
-            fontFamily: "'Inter Tight',sans-serif",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "12.5px",
-            color: reportAttached ? "#6EE7C0" : "rgba(255,255,255,.34)",
+            color: reportAttached ? "#1E4A85" : "#616D81",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -234,10 +235,10 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
         className="max-[699px]:hidden"
         style={{
           textAlign: "right",
-          fontFamily: "'IBM Plex Mono',monospace",
+          fontFamily: "'Archivo',sans-serif",
           fontSize: "13.5px",
           fontWeight: 500,
-          color: "rgba(255,255,255,.5)",
+          color: "#535E72",
           whiteSpace: "nowrap",
           opacity: textOpacity,
         }}
@@ -249,10 +250,10 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
       <span
         style={{
           textAlign: "right",
-          fontFamily: "'IBM Plex Mono',monospace",
+          fontFamily: "'Archivo',sans-serif",
           fontSize: isBig ? "17px" : "13.5px",
-          fontWeight: isBig ? 600 : 500,
-          color: "#6EE7C0",
+          fontWeight: isBig ? 700 : 600,
+          color: "#1E4A85",
           whiteSpace: "nowrap",
           opacity: textOpacity,
         }}
@@ -266,16 +267,16 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           <button
             onClick={(e) => { e.stopPropagation(); onAddReport(row.id); }}
             style={{
-              fontFamily: "'IBM Plex Mono',monospace",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "10px",
               fontWeight: 600,
-              letterSpacing: ".05em",
+              letterSpacing: ".01em",
               padding: "5px 10px",
-              borderRadius: "6px",
-              border: "none",
+              borderRadius: "99px",
+              border: "1px solid #EFD2CA",
               cursor: "pointer",
-              backgroundColor: "#FF8A7A",
-              color: "#0A0C0C",
+              backgroundColor: "#FBEDEA",
+              color: "#8A4038",
               whiteSpace: "nowrap",
             }}
           >
@@ -285,35 +286,37 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
         {!blocked && isFuture && (
           <span
             style={{
-              fontFamily: "'IBM Plex Mono',monospace",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "10px",
               fontWeight: 600,
-              letterSpacing: ".1em",
+              letterSpacing: ".01em",
               padding: "4px 8px",
-              borderRadius: "4px",
-              backgroundColor: "rgba(255,255,255,.06)",
-              color: "rgba(255,255,255,.5)",
+              borderRadius: "99px",
+              backgroundColor: "#F6F8FC",
+              border: "1px solid #DDE3EC",
+              color: "#616D81",
               whiteSpace: "nowrap",
             }}
           >
-            SCHEDULED
+            Scheduled
           </span>
         )}
         {!blocked && !isFuture && isBilled && (
           <span
             style={{
-              fontFamily: "'IBM Plex Mono',monospace",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "10px",
               fontWeight: 600,
-              letterSpacing: ".1em",
+              letterSpacing: ".01em",
               padding: "4px 8px",
-              borderRadius: "4px",
-              backgroundColor: "rgba(110,231,192,.14)",
-              color: "#6EE7C0",
+              borderRadius: "99px",
+              backgroundColor: "#E7EEFA",
+              border: "1px solid #C3D4EE",
+              color: "#1E4A85",
               whiteSpace: "nowrap",
             }}
           >
-            BILLED
+            Billed
           </span>
         )}
       </div>
@@ -328,7 +331,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
             borderRadius: "6px",
             border: "none",
             backgroundColor: "transparent",
-            color: "rgba(255,255,255,.34)",
+            color: "#77839A",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
@@ -344,12 +347,12 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
               right: 0,
               top: "100%",
               zIndex: 30,
-              backgroundColor: "#171B1A",
-              border: "1px solid rgba(255,255,255,.10)",
+              backgroundColor: "#FFFFFF",
+              border: "1px solid #DDE3EC",
               borderRadius: "10px",
               padding: "4px",
               minWidth: "190px",
-              boxShadow: "0 14px 26px -10px rgba(0,0,0,.9)",
+              boxShadow: "0 1px 2px rgba(19,26,38,.05), 0 10px 24px -18px rgba(19,26,38,.22)",
             }}
           >
             <MenuItem icon={Pencil} label="Edit line" onClick={() => { setEditing(true); setMenuOpen(false); }} />

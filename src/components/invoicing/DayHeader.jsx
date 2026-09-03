@@ -2,7 +2,7 @@ import { formatMoney } from "@/lib/feeMath";
 
 export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelected, onSelectDay }) {
   const d = new Date(date + "T00:00:00");
-  const dateLabel = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
+  const dateLabel = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   return (
     <div
@@ -12,16 +12,17 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
         position: "sticky",
         top: "68px",
         zIndex: 20,
-        backgroundColor: "#050606",
+        backgroundColor: "#EEF1F6",
       }}
     >
       <div
+        className="card-shadow"
         style={{
           height: "46px",
-          borderRadius: "12px",
-          backgroundColor: "#171B1A",
-          border: "1px solid rgba(255,255,255,.10)",
-          boxShadow: "inset 3px 0 0 #6EE7C0, 0 14px 26px -16px rgba(0,0,0,.9)",
+          borderRadius: "14px",
+          backgroundColor: "#FFFFFF",
+          border: "1px solid #DDE3EC",
+          boxShadow: "inset 3px 0 0 #2A5EA8, 0 1px 2px rgba(19,26,38,.05), 0 6px 16px -10px rgba(19,26,38,.14)",
           display: "flex",
           alignItems: "center",
           padding: "0 16px",
@@ -30,11 +31,11 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
       >
         <span
           style={{
-            fontFamily: "'IBM Plex Mono',monospace",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "13px",
-            fontWeight: 600,
-            letterSpacing: ".14em",
-            color: "#fff",
+            fontWeight: 700,
+            letterSpacing: ".01em",
+            color: "#131A26",
             whiteSpace: "nowrap",
           }}
         >
@@ -42,9 +43,9 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
         </span>
         <span
           style={{
-            fontFamily: "'IBM Plex Mono',monospace",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "11px",
-            color: "rgba(255,255,255,.36)",
+            color: "#616D81",
             whiteSpace: "nowrap",
           }}
         >
@@ -53,16 +54,16 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
         <button
           onClick={onSelectDay}
           style={{
-            fontFamily: "'IBM Plex Mono',monospace",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "10px",
             fontWeight: 600,
-            letterSpacing: ".05em",
+            letterSpacing: ".01em",
             padding: "4px 10px",
             borderRadius: "99px",
-            border: "none",
+            border: allSelected ? "1px solid #C3D4EE" : "1px solid #DDE3EC",
             cursor: "pointer",
-            backgroundColor: allSelected ? "rgba(110,231,192,.14)" : "rgba(255,255,255,.06)",
-            color: allSelected ? "#6EE7C0" : "rgba(255,255,255,.5)",
+            backgroundColor: allSelected ? "#E7EEFA" : "#F6F8FC",
+            color: allSelected ? "#1E4A85" : "#535E72",
             whiteSpace: "nowrap",
           }}
         >
@@ -71,21 +72,21 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
         <div style={{ flex: 1 }} />
         <span
           style={{
-            fontFamily: "'IBM Plex Mono',monospace",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "10px",
-            letterSpacing: ".15em",
-            color: "rgba(255,255,255,.34)",
+            letterSpacing: ".01em",
+            color: "#616D81",
             whiteSpace: "nowrap",
           }}
         >
-          DAY FEE
+          Day fee
         </span>
         <span
           style={{
-            fontFamily: "'IBM Plex Mono',monospace",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "14.5px",
-            fontWeight: 600,
-            color: isLargest ? "#6EE7C0" : "rgba(255,255,255,.6)",
+            fontWeight: 700,
+            color: isLargest ? "#1E4A85" : "#535E72",
             whiteSpace: "nowrap",
           }}
         >

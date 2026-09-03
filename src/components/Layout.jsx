@@ -16,7 +16,7 @@ export default function Layout() {
   const [user, setUser] = useState(null);
   useEffect(() => { base44.auth.me().then((me) => { if (me) setUser(me); }).catch(() => {}); }, []);
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#050606" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#EEF1F6" }}>
       <YaFeesSidebar />
       <main className="min-[700px]:ml-[216px] min-w-0 pb-[80px] min-[700px]:pb-0">
         <Outlet />
@@ -25,8 +25,8 @@ export default function Layout() {
       <nav
         className="min-[700px]:hidden fixed bottom-0 left-0 right-0 z-30 flex items-stretch justify-around"
         style={{
-          backgroundColor: "rgba(10,12,12,.96)",
-          borderTop: "1px solid rgba(255,255,255,.07)",
+          backgroundColor: "rgba(255,255,255,.96)",
+          borderTop: "1px solid #DDE3EC",
           paddingBottom: "22px",
         }}
       >
@@ -35,8 +35,8 @@ export default function Layout() {
           const active = pathname === item.to;
           return (
             <Link key={item.to} to={item.to} className="flex flex-col items-center gap-1 py-2.5 px-3 flex-1">
-              <Icon className="h-5 w-5" style={{ color: active ? "#6EE7C0" : "rgba(255,255,255,.4)" }} />
-              <span className="font-mono text-[9px] font-medium uppercase tracking-[0.13em] whitespace-nowrap" style={{ color: active ? "#6EE7C0" : "rgba(255,255,255,.4)" }}>
+              <Icon className="h-5 w-5" style={{ color: active ? "#2A5EA8" : "#77839A" }} />
+              <span className="text-[9px] font-medium whitespace-nowrap" style={{ color: active ? "#2A5EA8" : "#77839A", letterSpacing: ".01em" }}>
                 {item.label}
               </span>
             </Link>
@@ -44,8 +44,8 @@ export default function Layout() {
         })}
         {user?.role === "admin" && (
           <Link to="/match-debug" className="flex flex-col items-center gap-1 py-2.5 px-3 flex-1">
-            <Bug className="h-5 w-5" style={{ color: pathname === "/match-debug" ? "#6EE7C0" : "rgba(255,255,255,.4)" }} />
-            <span className="font-mono text-[9px] font-medium uppercase tracking-[0.13em] whitespace-nowrap" style={{ color: pathname === "/match-debug" ? "#6EE7C0" : "rgba(255,255,255,.4)" }}>
+            <Bug className="h-5 w-5" style={{ color: pathname === "/match-debug" ? "#2A5EA8" : "#77839A" }} />
+            <span className="text-[9px] font-medium whitespace-nowrap" style={{ color: pathname === "/match-debug" ? "#2A5EA8" : "#77839A", letterSpacing: ".01em" }}>
               Debug
             </span>
           </Link>

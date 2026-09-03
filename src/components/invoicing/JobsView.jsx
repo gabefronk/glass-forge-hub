@@ -20,7 +20,7 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
   if (jobs.length === 0) {
     return (
       <div style={{ padding: "80px 0", textAlign: "center" }}>
-        <p style={{ fontFamily: "'Inter Tight',sans-serif", fontSize: "15px", color: "rgba(255,255,255,.5)" }}>No jobs for this month.</p>
+        <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "15px", color: "#616D81" }}>No jobs for this month.</p>
       </div>
     );
   }
@@ -33,17 +33,17 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "12px 12px",
-          borderBottom: "1px solid rgba(255,255,255,.08)",
+          borderBottom: "1px solid #DDE3EC",
         }}
       >
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "10px", letterSpacing: ".14em", color: "rgba(255,255,255,.40)" }}>SORT: FEE ↓</span>
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "11px", color: "rgba(255,255,255,.34)" }}>{jobs.length} jobs</span>
+        <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "10px", letterSpacing: ".01em", color: "#616D81" }}>Sort: fee ↓</span>
+        <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "11px", color: "#616D81" }}>{jobs.length} jobs</span>
       </div>
       {jobs.map((job) => {
         const key = job.id || job.name;
         const isOpen = expanded === key;
         return (
-          <div key={key} style={{ borderBottom: "1px solid rgba(255,255,255,.05)" }}>
+          <div key={key} style={{ borderBottom: "1px solid #E9EDF4" }}>
             <button
               onClick={() => setExpanded(isOpen ? null : key)}
               style={{
@@ -63,8 +63,10 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
-                    font: "500 15px 'Inter Tight',sans-serif",
-                    color: "#fff",
+                    fontFamily: "'Archivo',sans-serif",
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    color: "#131A26",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -72,21 +74,23 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
                 >
                   {job.name}
                 </div>
-                <div style={{ font: "400 12.5px 'Inter Tight',sans-serif", color: "rgba(255,255,255,.34)", marginTop: "2px" }}>
+                <div style={{ fontFamily: "'Archivo',sans-serif", fontSize: "12.5px", color: "#616D81", marginTop: "2px" }}>
                   {job.lines.length} lines
                 </div>
               </div>
               <span
                 style={{
                   textAlign: "right",
-                  font: `${job.fee >= 250 ? "600 17px" : "500 14px"} 'IBM Plex Mono',monospace`,
-                  color: "#6EE7C0",
+                  fontFamily: "'Archivo',sans-serif",
+                  fontSize: job.fee >= 250 ? "17px" : "14px",
+                  fontWeight: job.fee >= 250 ? 700 : 600,
+                  color: "#1E4A85",
                   whiteSpace: "nowrap",
                 }}
               >
                 ${formatMoney(job.fee)}
               </span>
-              <span style={{ textAlign: "right", color: "rgba(255,255,255,.3)", fontFamily: "'IBM Plex Mono',monospace", fontSize: "14px" }}>
+              <span style={{ textAlign: "right", color: "#77839A", fontFamily: "'Archivo',sans-serif", fontSize: "14px" }}>
                 {isOpen ? "⌄" : "›"}
               </span>
             </button>
@@ -99,14 +103,15 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
                       display: "flex",
                       justifyContent: "space-between",
                       padding: "8px 0",
-                      borderTop: "1px solid rgba(255,255,255,.05)",
+                      borderTop: "1px solid #E9EDF4",
                       gap: "12px",
                     }}
                   >
                     <span
                       style={{
-                        font: "400 13px 'Inter Tight',sans-serif",
-                        color: "rgba(255,255,255,.62)",
+                        fontFamily: "'Archivo',sans-serif",
+                        fontSize: "13px",
+                        color: "#535E72",
                         minWidth: 0,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -115,7 +120,7 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
                     >
                       {line.line_description || line.job_name_raw}
                     </span>
-                    <span style={{ font: "500 13px 'IBM Plex Mono',monospace", color: "#6EE7C0", whiteSpace: "nowrap" }}>
+                    <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "13px", fontWeight: 600, color: "#1E4A85", whiteSpace: "nowrap" }}>
                       ${formatMoney(computeFeeAmt(line))}
                     </span>
                   </div>
@@ -125,11 +130,13 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
                     onClick={() => onBillJob(job)}
                     style={{
                       padding: "8px 14px",
-                      borderRadius: "99px",
-                      border: "none",
-                      backgroundColor: "#6EE7C0",
-                      color: "#0A0C0C",
-                      font: "600 12px 'Inter Tight',sans-serif",
+                      borderRadius: "10px",
+                      border: "1px solid #1E4A85",
+                      backgroundColor: "#2A5EA8",
+                      color: "#FFFFFF",
+                      fontFamily: "'Archivo',sans-serif",
+                      fontSize: "12px",
+                      fontWeight: 600,
                       cursor: "pointer",
                       whiteSpace: "nowrap",
                     }}
@@ -140,11 +147,13 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
                     onClick={() => onExportJob(job)}
                     style={{
                       padding: "8px 14px",
-                      borderRadius: "99px",
-                      border: "1px solid rgba(255,255,255,.10)",
-                      backgroundColor: "transparent",
-                      color: "rgba(255,255,255,.62)",
-                      font: "500 12px 'Inter Tight',sans-serif",
+                      borderRadius: "10px",
+                      border: "1px solid #DDE3EC",
+                      backgroundColor: "#FFFFFF",
+                      color: "#131A26",
+                      fontFamily: "'Archivo',sans-serif",
+                      fontSize: "12px",
+                      fontWeight: 500,
                       cursor: "pointer",
                       whiteSpace: "nowrap",
                     }}
@@ -156,11 +165,13 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
                       onClick={() => navigate(`/jobs/${job.id}`)}
                       style={{
                         padding: "8px 14px",
-                        borderRadius: "99px",
-                        border: "1px solid rgba(255,255,255,.10)",
-                        backgroundColor: "transparent",
-                        color: "rgba(255,255,255,.62)",
-                        font: "500 12px 'Inter Tight',sans-serif",
+                        borderRadius: "10px",
+                        border: "1px solid #DDE3EC",
+                        backgroundColor: "#FFFFFF",
+                        color: "#131A26",
+                        fontFamily: "'Archivo',sans-serif",
+                        fontSize: "12px",
+                        fontWeight: 500,
                         cursor: "pointer",
                         whiteSpace: "nowrap",
                       }}

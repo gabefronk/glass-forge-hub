@@ -5,13 +5,13 @@ import { Bug, RefreshCw, AlertTriangle, Search } from "lucide-react";
 import PostsHistogram from "@/components/matchdebug/PostsHistogram";
 
 const STATUS_STYLE = {
-  ok: { color: "#6EE7C0", bg: "rgba(110,231,192,.14)", label: "OK" },
-  missing_photos: { color: "#FF8A7A", bg: "rgba(255,138,122,.14)", label: "MISSING PHOTOS" },
-  missing_notes: { color: "#FF8A7A", bg: "rgba(255,138,122,.14)", label: "MISSING NOTES" },
-  missing_all: { color: "#FF8A7A", bg: "rgba(255,138,122,.18)", label: "MISSING ALL" },
-  no_source_data: { color: "#FFB54B", bg: "rgba(255,181,71,.14)", label: "NO SOURCE DATA" },
-  pending: { color: "#FFB54B", bg: "rgba(255,181,71,.14)", label: "PENDING (GRACE)" },
-  pre_compliance: { color: "rgba(255,255,255,.42)", bg: "rgba(255,255,255,.06)", label: "PRE-COMPLIANCE" },
+  ok: { color: "#1E4A85", bg: "#E7EEFA", border: "#C3D4EE", label: "Ok" },
+  missing_photos: { color: "#8A4038", bg: "#FBEDEA", border: "#EFD2CA", label: "Missing photos" },
+  missing_notes: { color: "#8A4038", bg: "#FBEDEA", border: "#EFD2CA", label: "Missing notes" },
+  missing_all: { color: "#8A4038", bg: "#FBEDEA", border: "#EFD2CA", label: "Missing all" },
+  no_source_data: { color: "#8A5A10", bg: "#FCF5E9", border: "#EEDAB4", label: "No source data" },
+  pending: { color: "#8A5A10", bg: "#FCF5E9", border: "#EEDAB4", label: "Pending (grace)" },
+  pre_compliance: { color: "#616D81", bg: "#F6F8FC", border: "#DDE3EC", label: "Pre-compliance" },
 };
 
 const OFFSET_LABELS = { 0: "Exact (0)", 1: "Next day (+1)", "-1": "Day before (-1)", null: "Unmatched" };
@@ -96,8 +96,8 @@ export default function MatchDebug() {
 
         {/* Re-run result */}
         {rerunResult && (
-          <div className="rounded-[14px] px-4 py-3 mb-4" style={{ backgroundColor: "rgba(110,231,192,.10)", border: `1px solid rgba(110,231,192,.25)` }}>
-            <div className="text-[13px] font-medium" style={{ color: C.accent }}>
+          <div className="rounded-[14px] px-4 py-3 mb-4" style={{ backgroundColor: "#E7EEFA", border: `1px solid #C3D4EE` }}>
+            <div className="text-[13px] font-medium" style={{ color: C.accentText }}>
               Re-run complete: {rerunResult.events_evaluated} events evaluated across {rerunResult.dates_audited?.length || 0} dates
             </div>
             {rerunResult.offset_distribution && (
@@ -114,9 +114,9 @@ export default function MatchDebug() {
             <div className="grid grid-cols-2 min-[700px]:grid-cols-5 gap-3 mb-4">
               <SummaryCard label="Events evaluated" value={data.summary.events_evaluated} />
               <SummaryCard label="Photos + notes" value={data.summary.matched_ok} valueColor={C.accent} />
-              <SummaryCard label="Photos, no notes" value={data.summary.matched_missing_notes} valueColor="#FF8A7A" />
-              <SummaryCard label="Notes, no photos" value={data.summary.matched_missing_photos} valueColor="#FF8A7A" />
-              <SummaryCard label="No match found" value={data.summary.no_match} valueColor="#FF8A7A" />
+              <SummaryCard label="Photos, no notes" value={data.summary.matched_missing_notes} valueColor="#8A4038" />
+              <SummaryCard label="Notes, no photos" value={data.summary.matched_missing_photos} valueColor="#8A4038" />
+              <SummaryCard label="No match found" value={data.summary.no_match} valueColor="#8A4038" />
             </div>
             {data.summary.pre_compliance > 0 && (
               <div className="text-[11px] mb-3 font-mono" style={{ color: C.textMuted }}>
@@ -144,9 +144,9 @@ export default function MatchDebug() {
           </div>
         )}
         {data?.project_scan?.error && (
-          <div className="rounded-[14px] px-4 py-3 mb-4 flex items-center gap-2" style={{ backgroundColor: "rgba(255,138,122,.10)", border: `1px solid rgba(255,138,122,.25)` }}>
-            <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: "#FF8A7A" }} />
-            <span className="text-[12px]" style={{ color: "#FF8A7A" }}>Project scan failed: {data.project_scan.error}</span>
+          <div className="rounded-[14px] px-4 py-3 mb-4 flex items-center gap-2" style={{ backgroundColor: "#FBEDEA", border: `1px solid #EFD2CA` }}>
+            <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: "#8A4038" }} />
+            <span className="text-[12px]" style={{ color: "#8A4038" }}>Project scan failed: {data.project_scan.error}</span>
           </div>
         )}
 
@@ -156,28 +156,28 @@ export default function MatchDebug() {
             {data.events_by_date.map((dayGroup) => (
               <div key={dayGroup.date} className="mb-4">
                 <div className="flex items-center gap-2 mb-2 px-1">
-                  <span className="font-mono text-[11px] uppercase tracking-wider" style={{ color: C.textMuted }}>
+                  <span className="text-[11px] tracking-[0.01em]" style={{ color: C.textMuted }}>
                     {new Date(dayGroup.date + 'T00:00:00').toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                   </span>
                   <span className="font-mono-num text-[11px]" style={{ color: C.textFaint }}>{dayGroup.events.length} event(s)</span>
                 </div>
-                <div className="rounded-[16px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+                <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
                   {dayGroup.events.map((ev, i) => {
                     const style = STATUS_STYLE[ev.report_status_raw] || STATUS_STYLE.pending;
                     const isPreCompliance = ev.report_status === "pre_compliance";
                     return (
                       <div key={ev.event_id} className="px-5 py-3" style={{ borderTop: i > 0 ? `1px solid ${C.rowBorder}` : "none" }}>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: style.bg, color: style.color }}>
+                          <span className="text-[10px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: style.bg, border: `1px solid ${style.border}`, color: style.color }}>
                             {style.label}
                           </span>
                           {isPreCompliance && (
-                            <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: "rgba(255,255,255,.06)", color: C.textMuted }}>
-                              SUPPRESSED
+                            <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: "#F6F8FC", border: "1px solid #DDE3EC", color: C.textMuted }}>
+                              Suppressed
                             </span>
                           )}
                           {ev.report_date_offset !== null && ev.report_date_offset !== undefined && (
-                            <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: ev.report_date_offset === -1 ? "rgba(255,181,71,.14)" : "rgba(110,231,192,.10)", color: ev.report_date_offset === -1 ? "#FFB54B" : C.accent }}>
+                            <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: ev.report_date_offset === -1 ? "#FCF5E9" : "#E7EEFA", border: ev.report_date_offset === -1 ? "1px solid #EEDAB4" : "1px solid #C3D4EE", color: ev.report_date_offset === -1 ? "#8A5A10" : C.accentText }}>
                               {OFFSET_LABELS[ev.report_date_offset]}
                             </span>
                           )}
@@ -185,14 +185,14 @@ export default function MatchDebug() {
                         </div>
                         <div className="flex items-center gap-4 mt-1 ml-1 flex-wrap">
                           {ev.address && <span className="text-[11px]" style={{ color: C.textMuted }}>{ev.address}</span>}
-                          <span className="font-mono text-[10px]" style={{ color: C.textFaint }}>
-                            {ev.match_method ? ev.match_method.toUpperCase() : "—"}{ev.match_confidence != null ? ` · ${(ev.match_confidence * 100).toFixed(0)}%` : ""}
+                          <span className="text-[10px]" style={{ color: C.textFaint }}>
+                            {ev.match_method || "—"}{ev.match_confidence != null ? ` · ${(ev.match_confidence * 100).toFixed(0)}%` : ""}
                           </span>
                           {ev.matched_post_count > 0 && (
                             <span className="font-mono text-[10px]" style={{ color: C.textFaint }}>{ev.matched_post_count} post(s)</span>
                           )}
                           {ev.days_late > 0 && (
-                            <span className="font-mono text-[10px]" style={{ color: "#FF8A7A" }}>{ev.days_late}d late</span>
+                            <span className="text-[10px]" style={{ color: "#8A4038" }}>{ev.days_late}d late</span>
                           )}
                         </div>
                       </div>
@@ -215,7 +215,7 @@ export default function MatchDebug() {
 
 function SummaryCard({ label, value, valueColor }) {
   return (
-    <div className="rounded-[14px] p-4" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] p-4 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="mono-label-sm mb-1.5">{label}</div>
       <div className="font-mono-num-bold text-[24px]" style={{ color: valueColor || C.text, letterSpacing: "-0.025em" }}>{value}</div>
     </div>
@@ -224,7 +224,7 @@ function SummaryCard({ label, value, valueColor }) {
 
 function ScanCard({ label, value, valueColor }) {
   return (
-    <div className="rounded-[14px] p-3" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="rounded-[14px] p-3 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="mono-label-sm mb-1">{label}</div>
       <div className="font-mono-num-bold text-[20px]" style={{ color: valueColor || C.text }}>{value}</div>
     </div>

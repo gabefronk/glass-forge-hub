@@ -15,28 +15,29 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
         alignItems: "center",
         gap: "12px",
         paddingBottom: "12px",
-        borderBottom: "1px solid rgba(255,255,255,.08)",
+        borderBottom: "1px solid #DDE3EC",
         flexWrap: "nowrap",
       }}
     >
       {/* Lines / Jobs segmented toggle */}
-      <div style={{ display: "inline-flex", backgroundColor: "rgba(255,255,255,.05)", borderRadius: "99px", padding: "3px", flexShrink: 0 }}>
+      <div style={{ display: "inline-flex", backgroundColor: "#F6F8FC", borderRadius: "10px", padding: "3px", flexShrink: 0, border: "1px solid #DDE3EC" }}>
         {["lines", "jobs"].map((v) => (
           <button
             key={v}
             onClick={() => onViewChange(v)}
             style={{
               padding: "6px 16px",
-              borderRadius: "99px",
+              borderRadius: "9px",
               border: "none",
               cursor: "pointer",
-              fontFamily: "'Inter Tight',sans-serif",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "13px",
               fontWeight: 600,
-              backgroundColor: view === v ? "#fff" : "transparent",
-              color: view === v ? "#000" : "rgba(255,255,255,.62)",
+              backgroundColor: view === v ? "#FFFFFF" : "transparent",
+              color: view === v ? "#131A26" : "#535E72",
               whiteSpace: "nowrap",
               textTransform: "capitalize",
+              boxShadow: view === v ? "0 1px 2px rgba(19,26,38,.05)" : "none",
             }}
           >
             {v}
@@ -48,7 +49,8 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
       <div className="inv-toolbar-scroll" style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
         {FILTERS.map((f) => {
           const active = filter === f.key;
-          const isCoral = f.key === "needs_report" || f.key === "needs_review";
+          const isWarning = f.key === "needs_report";
+          const isReview = f.key === "needs_review";
           return (
             <button
               key={f.key}
@@ -56,21 +58,40 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
               style={{
                 padding: "6px 12px",
                 borderRadius: "99px",
-                border: "1px solid rgba(255,255,255,.07)",
+                border: active
+                  ? isWarning
+                    ? "1px solid #EFD2CA"
+                    : isReview
+                    ? "1px solid #EEDAB4"
+                    : "1px solid #C3D4EE"
+                  : "1px solid #DDE3EC",
                 cursor: "pointer",
-                fontFamily: "'Inter Tight',sans-serif",
+                fontFamily: "'Archivo',sans-serif",
                 fontSize: "12.5px",
                 fontWeight: 500,
-                backgroundColor: active ? (isCoral ? "rgba(255,138,122,.14)" : "rgba(255,255,255,.09)") : "transparent",
-                color: active ? (isCoral ? "#FF8A7A" : "#fff") : "rgba(255,255,255,.5)",
+                backgroundColor: active
+                  ? isWarning
+                    ? "#FBEDEA"
+                    : isReview
+                    ? "#FCF5E9"
+                    : "#E7EEFA"
+                  : "#FFFFFF",
+                color: active
+                  ? isWarning
+                    ? "#8A4038"
+                    : isReview
+                    ? "#8A5A10"
+                    : "#1E4A85"
+                  : "#535E72",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "6px",
                 whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               {f.label}
-              <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "11px" }}>{filterCounts[f.key] || 0}</span>
+              <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "11px", fontWeight: 600 }}>{filterCounts[f.key] || 0}</span>
             </button>
           );
         })}
@@ -82,21 +103,21 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
       <button
         onClick={() => onSortChange(sort === "date" ? "fee" : "date")}
         style={{
-          fontFamily: "'IBM Plex Mono',monospace",
+          fontFamily: "'Archivo',sans-serif",
           fontSize: "10px",
           fontWeight: 600,
-          letterSpacing: ".12em",
-          color: "rgba(255,255,255,.5)",
-          border: "1px solid rgba(255,255,255,.07)",
+          letterSpacing: ".01em",
+          color: "#535E72",
+          border: "1px solid #DDE3EC",
           borderRadius: "99px",
           padding: "5px 10px",
           cursor: "pointer",
-          backgroundColor: "transparent",
+          backgroundColor: "#FFFFFF",
           whiteSpace: "nowrap",
           flexShrink: 0,
         }}
       >
-        SORT: {sort === "date" ? "DATE" : "FEE ↓"}
+        Sort: {sort === "date" ? "date" : "fee ↓"}
       </button>
 
       {/* Hide $0 switch */}
@@ -109,7 +130,7 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
             borderRadius: "99px",
             border: "none",
             cursor: "pointer",
-            backgroundColor: hideZeros ? "#6EE7C0" : "rgba(255,255,255,.10)",
+            backgroundColor: hideZeros ? "#2A5EA8" : "#DDE3EC",
             position: "relative",
             transition: "background-color .2s",
             flexShrink: 0,
@@ -131,9 +152,9 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
         <span
           className="max-[699px]:hidden"
           style={{
-            fontFamily: "'IBM Plex Mono',monospace",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "11px",
-            color: "rgba(255,255,255,.34)",
+            color: "#616D81",
             whiteSpace: "nowrap",
           }}
         >

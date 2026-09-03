@@ -97,7 +97,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
                   <button
                     type="button"
                     onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}
-                    className="absolute top-0 right-0 bg-black/60 text-white rounded-bl p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-0 right-0 bg-[#131A26]/60 text-white rounded-bl p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <X className="h-3 w-3" />
                   </button>

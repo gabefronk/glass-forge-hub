@@ -39,34 +39,33 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
         position: "sticky",
         top: 0,
         zIndex: 50,
-        backgroundColor: "rgba(5,6,6,.96)",
+        backgroundColor: "rgba(238,241,246,.96)",
         backdropFilter: "blur(14px)",
-        borderBottom: "1px solid rgba(255,255,255,.08)",
+        borderBottom: "1px solid #DDE3EC",
       }}
     >
       <div
         className="max-[699px]:px-[18px]"
         style={{ maxWidth: "1180px", margin: "0 auto", padding: "0 40px", height: "68px", display: "flex", alignItems: "center", gap: "20px" }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1px", flexShrink: 0 }}>
           <span
             style={{
-              fontFamily: "'IBM Plex Mono',monospace",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "9.5px",
-              letterSpacing: ".18em",
-              color: "rgba(255,255,255,.4)",
-              textTransform: "uppercase",
+              letterSpacing: ".01em",
+              color: "#616D81",
               whiteSpace: "nowrap",
             }}
           >
-            Invoicing · Monthly Close
+            Invoicing · Monthly close
           </span>
           <span
             style={{
-              fontFamily: "'Inter Tight',sans-serif",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "19px",
-              fontWeight: 600,
-              color: "#fff",
+              fontWeight: 700,
+              color: "#131A26",
               letterSpacing: "-.02em",
               whiteSpace: "nowrap",
             }}
@@ -75,33 +74,34 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
           </span>
         </div>
 
-        <div style={{ width: "1px", height: "32px", backgroundColor: "rgba(255,255,255,.10)" }} />
+        <div style={{ width: "1px", height: "32px", backgroundColor: "#DDE3EC", flexShrink: 0 }} />
 
-        <div className="max-[699px]:hidden" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div className="max-[699px]:hidden" style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             <button
               onClick={() => shift(-1)}
               style={{
                 width: "28px",
                 height: "28px",
-                borderRadius: "99px",
-                backgroundColor: "rgba(255,255,255,.05)",
-                border: "none",
-                color: "rgba(255,255,255,.62)",
+                borderRadius: "10px",
+                backgroundColor: "#F6F8FC",
+                border: "1px solid #DDE3EC",
+                color: "#535E72",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
               }}
             >
               <ChevronLeft style={{ width: "14px", height: "14px" }} />
             </button>
             <span
               style={{
-                fontFamily: "'IBM Plex Mono',monospace",
+                fontFamily: "'Archivo',sans-serif",
                 fontSize: "13.5px",
-                fontWeight: 500,
-                color: "#fff",
+                fontWeight: 600,
+                color: "#131A26",
                 minWidth: "112px",
                 textAlign: "center",
                 whiteSpace: "nowrap",
@@ -114,14 +114,15 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
               style={{
                 width: "28px",
                 height: "28px",
-                borderRadius: "99px",
-                backgroundColor: "rgba(255,255,255,.05)",
-                border: "none",
-                color: "rgba(255,255,255,.62)",
+                borderRadius: "10px",
+                backgroundColor: "#F6F8FC",
+                border: "1px solid #DDE3EC",
+                color: "#535E72",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
               }}
             >
               <ChevronRight style={{ width: "14px", height: "14px" }} />
@@ -130,15 +131,17 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
           {isCurrent && daysLeft > 0 && (
             <span
               style={{
-                fontFamily: "'IBM Plex Mono',monospace",
+                fontFamily: "'Archivo',sans-serif",
                 fontSize: "9.5px",
                 fontWeight: 600,
-                letterSpacing: ".1em",
+                letterSpacing: ".01em",
                 padding: "3px 8px",
                 borderRadius: "99px",
-                backgroundColor: "rgba(255,138,122,.14)",
-                color: "#FF8A7A",
+                backgroundColor: "#FCF5E9",
+                border: "1px solid #EEDAB4",
+                color: "#8A5A10",
                 whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               Closes in {daysLeft} days
@@ -157,8 +160,9 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
               gap: "6px",
               padding: "4px 10px",
               borderRadius: "99px",
-              backgroundColor: "rgba(255,255,255,.04)",
-              border: "1px solid rgba(255,255,255,.08)",
+              backgroundColor: "#F6F8FC",
+              border: "1px solid #DDE3EC",
+              flexShrink: 0,
             }}
             title={`Probuild team ID: ${probuildStatus.team_id}\nLast token exchange: ${probuildStatus.last_exchanged_at || "never"}\nLast audit run: ${probuildStatus.last_audit_at || "never"}`}
           >
@@ -167,18 +171,16 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
                 width: "6px",
                 height: "6px",
                 borderRadius: "99px",
-                backgroundColor: "#6EE7C0",
-                boxShadow: "0 0 6px rgba(110,231,192,.5)",
+                backgroundColor: "#3B82F6",
               }}
             />
             <span
               style={{
-                fontFamily: "'IBM Plex Mono',monospace",
+                fontFamily: "'Archivo',sans-serif",
                 fontSize: "9.5px",
                 fontWeight: 500,
-                letterSpacing: ".12em",
-                color: "rgba(255,255,255,.5)",
-                textTransform: "uppercase",
+                letterSpacing: ".01em",
+                color: "#616D81",
                 whiteSpace: "nowrap",
               }}
             >
@@ -193,16 +195,17 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
           className="max-[699px]:hidden"
           style={{
             height: "36px",
-            borderRadius: "99px",
-            backgroundColor: "transparent",
-            color: "rgba(255,255,255,.62)",
-            fontFamily: "'Inter Tight',sans-serif",
+            borderRadius: "10px",
+            backgroundColor: "#FFFFFF",
+            color: "#131A26",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "13px",
             fontWeight: 500,
             padding: "0 14px",
-            border: "1px solid rgba(255,255,255,.10)",
+            border: "1px solid #DDE3EC",
             cursor: exporting ? "wait" : "pointer",
             whiteSpace: "nowrap",
+            flexShrink: 0,
           }}
         >
           {exporting ? "Generating\u2026" : "Export PDF"}
@@ -217,15 +220,16 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
               gap: "6px",
               padding: "0 12px",
               height: "36px",
-              borderRadius: "99px",
-              backgroundColor: "rgba(110,231,192,.10)",
-              border: "1px solid rgba(110,231,192,.28)",
+              borderRadius: "10px",
+              backgroundColor: "#E7EEFA",
+              border: "1px solid #C3D4EE",
               whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
             title={`Closed ${new Date(monthClosed.closed_at).toLocaleString()}\nBy ${monthClosed.closed_by}\nInvoiced: $${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)} (${monthClosed.invoiced_line_count ?? monthClosed.line_count} ready)\nEarned: $${monthClosed.earned_total?.toFixed(2)} (${monthClosed.earned_line_count} lines)\nTotal rows: ${monthClosed.total_rows}`}
           >
-            <Lock style={{ width: "12px", height: "12px", color: "#6EE7C0" }} />
-            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: "10px", fontWeight: 600, letterSpacing: ".08em", color: "#6EE7C0", textTransform: "uppercase" }}>
+            <Lock style={{ width: "12px", height: "12px", color: "#1E4A85" }} />
+            <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "10px", fontWeight: 600, letterSpacing: ".01em", color: "#1E4A85" }}>
               Closed · ${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)}
             </span>
           </div>
@@ -236,24 +240,25 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
             className="max-[699px]:hidden"
             style={{
               height: "36px",
-              borderRadius: "99px",
-              backgroundColor: "transparent",
-              color: "rgba(255,255,255,.62)",
-              fontFamily: "'Inter Tight',sans-serif",
+              borderRadius: "10px",
+              backgroundColor: "#FFFFFF",
+              color: "#131A26",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "13px",
               fontWeight: 500,
               padding: "0 14px",
-              border: "1px solid rgba(255,255,255,.10)",
+              border: "1px solid #DDE3EC",
               cursor: closing ? "wait" : "pointer",
               whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
           >
             {closing ? "Closing\u2026" : "Close month"}
           </button>
         )}
 
-        <div className="max-[699px]:hidden" style={{ position: "relative", display: "flex", alignItems: "center" }}>
-          <Search style={{ position: "absolute", left: "12px", width: "14px", height: "14px", color: "rgba(255,255,255,.34)", pointerEvents: "none" }} />
+        <div className="max-[699px]:hidden" style={{ position: "relative", display: "flex", alignItems: "center", flexShrink: 0 }}>
+          <Search style={{ position: "absolute", left: "12px", width: "14px", height: "14px", color: "#77839A", pointerEvents: "none" }} />
           <input
             ref={searchRef}
             value={search}
@@ -262,12 +267,12 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
             style={{
               width: "250px",
               height: "36px",
-              borderRadius: "99px",
-              backgroundColor: "rgba(255,255,255,.05)",
-              border: "1px solid rgba(255,255,255,.07)",
-              color: "#fff",
+              borderRadius: "10px",
+              backgroundColor: "#FFFFFF",
+              border: "1px solid #DDE3EC",
+              color: "#131A26",
               fontSize: "13px",
-              fontFamily: "'Inter Tight',sans-serif",
+              fontFamily: "'Archivo',sans-serif",
               paddingLeft: "34px",
               paddingRight: "40px",
               outline: "none",
@@ -277,10 +282,10 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
             style={{
               position: "absolute",
               right: "10px",
-              fontFamily: "'IBM Plex Mono',monospace",
+              fontFamily: "'Archivo',sans-serif",
               fontSize: "10px",
-              color: "rgba(255,255,255,.34)",
-              border: "1px solid rgba(255,255,255,.10)",
+              color: "#77839A",
+              border: "1px solid #DDE3EC",
               borderRadius: "4px",
               padding: "1px 4px",
               pointerEvents: "none",
@@ -294,17 +299,17 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
           onClick={onSelectAllReady}
           style={{
             height: "36px",
-            borderRadius: "99px",
-            backgroundColor: "#6EE7C0",
-            color: "#0A0C0C",
-            fontFamily: "'Inter Tight',sans-serif",
+            borderRadius: "10px",
+            backgroundColor: "#2A5EA8",
+            color: "#FFFFFF",
+            fontFamily: "'Archivo',sans-serif",
             fontSize: "13px",
             fontWeight: 600,
             padding: "0 16px",
-            border: "none",
+            border: "1px solid #1E4A85",
             cursor: "pointer",
             whiteSpace: "nowrap",
-            boxShadow: "0 0 0 6px rgba(110,231,192,.08)",
+            flexShrink: 0,
           }}
         >
           Select all ready{readyCount > 0 ? ` (${readyCount})` : ""}
