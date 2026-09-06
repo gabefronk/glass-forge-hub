@@ -120,6 +120,10 @@
     },
     "conversion_expires_at": {
       "type": "string"
+    },
+    "last_worker_lease_token": {
+      "type": "string",
+      "description": "Internal lease token for idempotent worker completion; never return to app users."
     }
   },
   "required": [
