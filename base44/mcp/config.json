@@ -1,6 +1,15 @@
 {
   "auth": "oauth",
+  "login_path": null,
+  "consent_path": null,
   "tools": {
+    "excluded_agents": [],
+    "entity_overrides": {
+      "QuoteWorkers": {
+        "operations": [],
+        "description": null
+      }
+    },
     "functions": [
       {
         "name": "sync_calendar_events",
@@ -19,12 +28,14 @@
             }
           }
         },
-        "handler": "fetchCalendarEvents",
         "annotations": {
           "read_only_hint": false,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "fetchCalendarEvents",
+        "disabled": false
       },
       {
         "name": "sync_probuild_posts",
@@ -43,12 +54,14 @@
             }
           }
         },
-        "handler": "fetchProbuildPosts",
         "annotations": {
           "read_only_hint": false,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "fetchProbuildPosts",
+        "disabled": false
       },
       {
         "name": "audit_field_reports",
@@ -59,15 +72,15 @@
           "properties": {
             "target_date": {
               "type": "string",
-              "description": "YYYY-MM-DD — audit a single date"
+              "description": "YYYY-MM-DD \u2014 audit a single date"
             },
             "start_date": {
               "type": "string",
-              "description": "YYYY-MM-DD — range start (inclusive, use with end_date)"
+              "description": "YYYY-MM-DD \u2014 range start (inclusive, use with end_date)"
             },
             "end_date": {
               "type": "string",
-              "description": "YYYY-MM-DD — range end (inclusive)"
+              "description": "YYYY-MM-DD \u2014 range end (inclusive)"
             },
             "days_back": {
               "type": "number",
@@ -79,12 +92,14 @@
             }
           }
         },
-        "handler": "auditFieldReports",
         "annotations": {
           "read_only_hint": false,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "auditFieldReports",
+        "disabled": false
       },
       {
         "name": "close_month",
@@ -110,12 +125,14 @@
             "month"
           ]
         },
-        "handler": "closeMonthSnapshot",
         "annotations": {
           "read_only_hint": false,
           "destructive_hint": false,
-          "idempotent_hint": false
-        }
+          "idempotent_hint": false,
+          "open_world_hint": null
+        },
+        "handler": "closeMonthSnapshot",
+        "disabled": false
       },
       {
         "name": "get_probuild_status",
@@ -125,12 +142,14 @@
           "type": "object",
           "properties": {}
         },
-        "handler": "probuildStatus",
         "annotations": {
           "read_only_hint": true,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "probuildStatus",
+        "disabled": false
       },
       {
         "name": "search_probuild_projects",
@@ -156,12 +175,14 @@
             "search"
           ]
         },
-        "handler": "probuildSearch",
         "annotations": {
           "read_only_hint": true,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "probuildSearch",
+        "disabled": false
       },
       {
         "name": "get_probuild_project_posts",
@@ -179,12 +200,14 @@
             "project_id"
           ]
         },
-        "handler": "probuildProjectPosts",
         "annotations": {
           "read_only_hint": true,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "probuildProjectPosts",
+        "disabled": false
       },
       {
         "name": "debug_match_audit",
@@ -203,17 +226,19 @@
             }
           }
         },
-        "handler": "matchDebug",
         "annotations": {
           "read_only_hint": true,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "matchDebug",
+        "disabled": false
       },
       {
         "name": "resolve_field_report",
         "title": "Resolve field report flag",
-        "description": "Resolves a field report compliance flag on a calendar event. Actions: 'mark_reported' (admin/manager — report exists but matcher missed it), 'waive' (admin — requires a reason), 'upload' (any user — attach photos/notes as a job note). Pass event_id (required), action (required), and for waive a reason, for upload optional photos (array of URLs) and notes (string).",
+        "description": "Resolves a field report compliance flag on a calendar event. Actions: 'mark_reported' (admin/manager \u2014 report exists but matcher missed it), 'waive' (admin \u2014 requires a reason), 'upload' (any user \u2014 attach photos/notes as a job note). Pass event_id (required), action (required), and for waive a reason, for upload optional photos (array of URLs) and notes (string).",
         "input_schema": {
           "type": "object",
           "properties": {
@@ -251,12 +276,14 @@
             "action"
           ]
         },
-        "handler": "resolveFieldReport",
         "annotations": {
           "read_only_hint": false,
           "destructive_hint": false,
-          "idempotent_hint": false
-        }
+          "idempotent_hint": false,
+          "open_world_hint": null
+        },
+        "handler": "resolveFieldReport",
+        "disabled": false
       },
       {
         "name": "submit_window_takeoff",
@@ -374,12 +401,14 @@
             "request_id"
           ]
         },
-        "handler": "windowQuotes",
         "annotations": {
           "read_only_hint": false,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "windowQuotes",
+        "disabled": false
       },
       {
         "name": "queue_window_quote",
@@ -404,12 +433,14 @@
             "quote_id"
           ]
         },
-        "handler": "windowQuotes",
         "annotations": {
           "read_only_hint": false,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "windowQuotes",
+        "disabled": false
       },
       {
         "name": "get_window_quote_status",
@@ -434,12 +465,14 @@
             "quote_id"
           ]
         },
-        "handler": "windowQuotes",
         "annotations": {
           "read_only_hint": true,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "windowQuotes",
+        "disabled": false
       },
       {
         "name": "list_window_quotes",
@@ -460,12 +493,14 @@
             "action"
           ]
         },
-        "handler": "windowQuotes",
         "annotations": {
           "read_only_hint": true,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "windowQuotes",
+        "disabled": false
       },
       {
         "name": "reply_window_quote",
@@ -498,12 +533,14 @@
             "client_message_id"
           ]
         },
-        "handler": "windowQuotes",
         "annotations": {
           "read_only_hint": false,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "windowQuotes",
+        "disabled": false
       },
       {
         "name": "update_window_takeoff",
@@ -618,12 +655,14 @@
             "quote_id"
           ]
         },
-        "handler": "windowQuotes",
         "annotations": {
           "read_only_hint": false,
           "destructive_hint": false,
-          "idempotent_hint": true
-        }
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "windowQuotes",
+        "disabled": false
       }
     ]
   }
