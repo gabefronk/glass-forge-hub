@@ -4,4 +4,4 @@ import { execution } from "../../shared/windowQuoteAgentRuntime.js";
 // Base44 Superagent is the only execution route. Local Codex worker actions are retired.
 export default createQuoteHandler({ getClient: createClientFromRequest, executionService: execution });
 
-// Edge fetch uses manual redirect handling.
+// Dispatch v2: edge-compatible manual redirects and private diagnostics.
