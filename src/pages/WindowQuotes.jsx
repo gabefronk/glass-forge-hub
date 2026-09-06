@@ -52,7 +52,7 @@ function QuoteForm({ quote, busy, onSave, onCancel }) {
     if (!quote && !message.trim() && !lines.length) issues.push("Describe your windows or add a window schedule.");
     if (issues.length) { setErrors(issues); return; }
     setErrors([]);
-    const normalizedSettings = { ...settings, yard: String(settings.yard || "").trim(), gross_margin: settings.gross_margin === "" ? null : Number(settings.gross_margin) };
+    const normalizedSettings = { ...settings, yard: String(settings.yard || "").trim(), gross_margin: settings.gross_margin === "" || settings.gross_margin === null || settings.gross_margin === undefined ? null : Number(settings.gross_margin) };
     onSave({ request_id: requestID.current, title: title.trim(), message: message.trim(), settings: normalizedSettings, lines: normalizeLines(lines), source }, queue);
   };
   return <div className="space-y-5">
