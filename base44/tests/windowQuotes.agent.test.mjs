@@ -503,4 +503,25 @@ test("explicit create auto_start false saves a draft and later queue invokes the
   assert.deepEqual(calls,["queue"]);
 });
 
+test("quick request notes and product preferences survive draft, edits and queue", async () => {
+  const dispatched = [];
+  const f = await fixture({ configured: true, async afterInput({ q }) { dispatched.push(clone(q)); return q; } });
+  const settings = { color: "Taupe", glass: "CozE (LowE)" };
+  const notes = "Four single-hung windows, 36 x 60 call size, kitchen has white inside and outside.";
+  const created = await f.create({ auto_start: false, settings, message: notes, lines: [] });
+  assert.equal(created.status, 200); assert.equal(created.quote.worker_status, "draft");
+  assert.equal(created.quote.request_text, notes); assert.deepEqual(created.quote.settings, settings);
+  assert.equal(dispatched.length, 0);
+  const editedSettings = { color: "Black exterior / White interior", glass: settings.glass };
+  const edited = await f.call({ action: "update", quote_id: created.quote.id, settings: editedSettings });
+  assert.equal(edited.status, 200); assert.equal(edited.quote.input_revision, 2);
+  assert.equal(dispatched.length, 0);
+  const detail = await f.call({ action: "detail", quote_id: created.quote.id });
+  assert.deepEqual(detail.quote.settings, editedSettings); assert.equal(detail.quote.request_text, notes);
+  await f.call({ action: "queue", quote_id: created.quote.id });
+  assert.equal(dispatched.length, 1); assert.deepEqual(dispatched[0].settings, editedSettings);
+  assert.equal(dispatched[0].conversation[0].content, notes);
+});
+
+
 
