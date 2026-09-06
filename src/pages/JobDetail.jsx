@@ -104,6 +104,15 @@ export default function JobDetail() {
     );
   }
 
+  const acceptedSnapshot = job.accepted_quote_snapshot || {};
+  const acceptedResult = acceptedSnapshot.result || {};
+  const acceptedLines = acceptedResult.lines?.length ? acceptedResult.lines : (acceptedSnapshot.lines || []);
+  const acceptedCount = acceptedLines.length && acceptedLines.every((line) => Number(line.qty ?? line.quantity) > 0)
+    ? acceptedLines.reduce((sum, line) => sum + Number(line.qty ?? line.quantity), 0) : null;
+  const acceptedTotal = acceptedResult.totals?.total ?? acceptedResult.totals?.customer_total;
+  const acceptedPrice = acceptedTotal !== null && acceptedTotal !== undefined && Number.isFinite(Number(acceptedTotal))
+    ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(acceptedTotal)) : "—";
+
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <div className="px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-16 max-w-6xl">
@@ -125,8 +134,12 @@ export default function JobDetail() {
 
         {job.source_window_quote_id && (
           <Link to={`/window-quotes?quote=${encodeURIComponent(job.source_window_quote_id)}`} className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#C3D4EE] bg-[#E7EEFA] p-4 text-sm text-[#1E4A85]">
-            <div><div className="font-semibold">Accepted window quote</div><div className="mt-1 text-xs">Revision {job.accepted_quote_revision || "—"} · Original specifications, pricing and conversation</div></div>
-            <span className="font-semibold">View quote →</span>
+            <div><div className="font-semibold">Accepted window package</div><div className="mt-1 text-xs">AMSCO {acceptedResult.native_quote_number || "—"} · Revision {job.accepted_quote_revision || acceptedSnapshot.revision || "—"}</div></div>
+            <div className="flex flex-wrap items-center gap-5">
+              <div><div className="text-[10px] font-medium uppercase tracking-wide">Accepted customer total</div><div className="mt-1 text-lg font-semibold">{acceptedPrice}</div></div>
+              <div><div className="text-[10px] font-medium uppercase tracking-wide">Windows / assemblies</div><div className="mt-1 text-lg font-semibold">{acceptedCount ?? "—"}</div></div>
+              <span className="font-semibold">View quote →</span>
+            </div>
           </Link>
         )}
 
