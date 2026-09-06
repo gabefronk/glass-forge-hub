@@ -7,17 +7,18 @@ import { C } from "@/lib/feeUI";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import TakeoffEditor, { inputClass, secondaryClass } from "@/components/window-quotes/TakeoffEditor";
 import ConnectClaude from "@/components/window-quotes/ConnectClaude";
+import WindowQuoteResults from "@/components/window-quotes/WindowQuoteResults";
 import { normalizeLines, validateLines, validateSettings } from "@/components/window-quotes/takeoff";
 
 const primaryClass = "inline-flex items-center justify-center gap-2 rounded-lg bg-[#2A5EA8] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#234F8E] disabled:cursor-not-allowed disabled:opacity-50";
 const statusInfo = {
   draft: { label: "Draft", color: "#616D81", bg: "#F6F8FC", text: "Review the request and start quoting when the details are ready." },
   queued: { label: "Queued", color: "#1E4A85", bg: "#E7EEFA", text: "Your request is in the queue. You can leave this page while it waits." },
-  running: { label: "Quoting", color: "#1E4A85", bg: "#E7EEFA", text: "The quoting computer is building and checking your AMSCO draft." },
+  running: { label: "Quoting", color: "#1E4A85", bg: "#E7EEFA", text: "We’re building and checking your window quote." },
   needs_details: { label: "Needs details", color: "#8A5A10", bg: "#FCF5E9", text: "Answer the questions below or update the schedule, then send the request back to quoting." },
   needs_sign_in: { label: "Needs sign-in", color: "#8A5A10", bg: "#FCF5E9", text: "Sign into the correct AMSCO account on the quoting computer, then retry this request. Keep passwords out of this conversation." },
-  failed: { label: "Needs attention", color: "#8A4038", bg: "#FBEDEA", text: "The quote could not be completed. Review the latest message before retrying." },
-  ready: { label: "Ready", color: "#276449", bg: "#EAF5EE", text: "The returned AMSCO draft has been checked. Review the result before accepting the sale." },
+  failed: { label: "Needs attention", color: "#8A4038", bg: "#FBEDEA", text: "Your quote needs attention before it can be completed. Please retry or contact your quoting team." },
+  ready: { label: "Ready", color: "#276449", bg: "#EAF5EE", text: "Your quote is ready to be viewed." },
 };
 const uid = () => crypto.randomUUID();
 const money = (value, currency = "USD") => value !== null && value !== undefined && Number.isFinite(Number(value)) ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(value)) : "—";
@@ -38,9 +39,6 @@ async function api(action, data = {}) {
   const response = await base44.functions.invoke("windowQuotes", { action, ...data });
   if (response.data?.error) throw new Error(response.data.error);
   return response.data;
-}
-function nativeURL(url) {
-  try { const parsed = new URL(url); return parsed.protocol === "https:" && parsed.hostname === "amsco.wtsparadigm.com" ? parsed.href : null; } catch { return null; }
 }
 function StatusBadge({ quote }) {
   const info = statusInfo[quote?.worker_status] || statusInfo.draft;
@@ -109,32 +107,6 @@ function ScheduleView({ quote }) {
     {quote.source?.filename && <p className="break-all text-xs text-[#616D81]">Takeoff source: {quote.source.filename}</p>}
   </div>;
 }
-function resultDimensions(line) {
-  const frame = line.frame_dimensions;
-  if (typeof frame === "string" && frame.trim()) return frame + " · frame";
-  const width = frame?.width ?? line.width;
-  const height = frame?.height ?? line.height;
-  if (width === undefined || height === undefined) return "";
-  const basis = frame?.width !== undefined ? "frame" : (line.dimension_basis || "").replaceAll("_", " ");
-  return `${width} × ${height} ${line.units || "in"}${basis ? ` · ${basis}` : ""}`;
-}
-function ResultView({ quote, onWon, busy }) {
-  const result = quote.result;
-  const verified = quote.worker_status === "ready" && result?.verified === true;
-  if (!verified) return <div className="rounded-xl border border-dashed border-[#CBD4E1] bg-[#F6F8FC] px-5 py-10 text-center"><FileText size={28} className="mx-auto mb-3 text-[#77839A]" /><h3 className="font-semibold text-[#131A26]">Your verified quote will appear here</h3><p className="mx-auto mt-2 max-w-sm text-sm text-[#616D81]">AMSCO draft details, line prices and totals are shown after the quoting worker completes its checks.</p></div>;
-  const url = nativeURL(result.native_quote_url);
-  const totals = result.totals || {};
-  return <div className="space-y-4">
-    <div className="rounded-xl border border-[#CADFCF] bg-[#EAF5EE] p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[#276449]"><CheckCircle2 size={14} />Verified AMSCO draft</div><h3 className="text-lg font-semibold text-[#131A26]">Quote {result.native_quote_number || "ready"}</h3><p className="mt-1 text-xs text-[#616D81]">Revision {quote.input_revision} · {quote.settings?.dealer} · {quote.settings?.yard}</p></div>{url && <a href={url} target="_blank" rel="noopener noreferrer" className={secondaryClass}>Open in AMSCO<ArrowUpRight size={14} /></a>}</div>
-      <div className="mt-5 text-xs font-medium uppercase tracking-wide text-[#616D81]">Quote total</div><div className="mt-1 text-3xl font-semibold tracking-tight text-[#131A26]">{money(totals.total, totals.currency || "USD")}</div>
-      <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-2 text-sm">{[["Subtotal", totals.subtotal], ["Dealer cost", totals.dealer_total ?? totals.dealer_cost], ["Labor", totals.labor], ["Delivery", totals.delivery], ["Freight", totals.freight], ["Tax", totals.tax]].filter(([, value]) => value !== undefined && value !== null).map(([label, value]) => <div className="flex flex-wrap justify-between gap-1" key={label}><dt className="text-[#616D81]">{label}</dt><dd className="font-medium text-[#131A26]">{money(value, totals.currency || "USD")}</dd></div>)}</dl>
-    </div>
-    {(result.lines || []).length > 0 && <div className="overflow-x-auto rounded-xl border border-[#DDE3EC]"><table className="w-full min-w-[430px] text-left text-xs"><thead className="bg-[#F6F8FC] text-[#616D81]"><tr><th className="p-3 font-medium">Verified line</th><th className="p-3 text-right font-medium">Qty</th><th className="p-3 text-right font-medium">Unit price</th><th className="p-3 text-right font-medium">Total</th></tr></thead><tbody>{result.lines.map((line, i) => <tr key={line.id || i} className="border-t border-[#E9EDF4]"><td className="p-3 text-[#131A26]"><div className="font-medium">{line.mark ? `${line.mark} · ` : ""}{line.style || line.description || `Line ${i + 1}`}</div><div className="mt-1 text-[#616D81]">{resultDimensions(line)}</div></td><td className="p-3 text-right">{line.qty ?? line.quantity ?? "—"}</td><td className="p-3 text-right">{money(line.customer_unit ?? line.unit_prices?.customer ?? line.customer_price ?? line.unit_price)}</td><td className="p-3 text-right">{money(line.customer_extended ?? line.line_totals?.customer ?? line.extended_price ?? line.total)}</td></tr>)}</tbody></table></div>}
-    {quote.job_id ? <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between rounded-xl border border-[#DDE3EC] bg-white p-4 text-sm font-semibold text-[#1E4A85]"><span className="flex items-center gap-2"><BriefcaseBusiness size={17} />Won · Open linked job</span><ArrowUpRight size={16} /></Link> : <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#DDE3EC] p-4"><div><h4 className="text-sm font-semibold text-[#131A26]">Won the sale?</h4><p className="mt-1 text-xs text-[#616D81]">Accept this revision and move it into Jobs.</p></div><button className={primaryClass} disabled={busy || quote.sales_status === "won"} onClick={onWon}><CheckCircle2 size={15} />Mark won</button></div>}
-  </div>;
-}
-
 export default function WindowQuotes() {
   const client = useQueryClient();
   const [params, setParams] = useSearchParams();
@@ -146,7 +118,6 @@ export default function WindowQuotes() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const messageID = useRef(null);
-  const latestMessage = useRef(null);
   const [wonOpen, setWonOpen] = useState(false);
   const listQuery = useQuery({ queryKey: ["windowQuotes"], queryFn: () => api("list"), refetchInterval: 12000, retry: 1 });
   const detailQuery = useQuery({ queryKey: ["windowQuotes", selectedID], queryFn: () => api("detail", { quote_id: selectedID }), enabled: !!selectedID, refetchInterval: 7000, retry: 1 });
@@ -159,7 +130,6 @@ export default function WindowQuotes() {
   const activeStatus = statusInfo[quote?.worker_status] || statusInfo.draft;
   const refresh = async () => { await client.invalidateQueries({ queryKey: ["windowQuotes"] }); };
   useEffect(() => { setMessage(""); messageID.current = null; setError(""); }, [selectedID]);
-  useEffect(() => { if (tab === "conversation") latestMessage.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [messages.length, tab]);
   const select = (id) => { setParams({ quote: id }); setTab("conversation"); };
   const operate = async (task) => {
     if (busy) return;
@@ -213,20 +183,18 @@ export default function WindowQuotes() {
           <div className="border-b border-[#E9EDF4] px-4 py-4 sm:px-5">
             <button onClick={() => setParams({})} className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-[#1E4A85] min-[1050px]:hidden"><ArrowLeft size={13} />All requests</button>
             <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="mb-2 flex flex-wrap items-center gap-2"><StatusBadge quote={quote} /><span className="text-[11px] text-[#77839A]">Revision {quote.input_revision || 1}</span></div><h2 className="break-words text-lg font-semibold text-[#131A26]">{quote.title || "Untitled window request"}</h2></div><div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => setForm("edit")} disabled={locked || busy}><Settings2 size={14} /><span>Details</span></button>{!locked && quote.worker_status !== "ready" && <button className={primaryClass} onClick={queue} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{["failed", "needs_sign_in"].includes(quote.worker_status) ? "Retry quote" : "Start quote"}</button>}</div></div>
-            <div className="mt-4 flex items-start gap-2 rounded-lg p-3 text-xs leading-relaxed" style={{ background: activeStatus.bg, color: activeStatus.color }}>{quote.worker_status === "ready" ? <CheckCircle2 size={15} className="shrink-0" /> : ["failed", "needs_sign_in", "needs_details"].includes(quote.worker_status) ? <AlertCircle size={15} className="shrink-0" /> : <Clock3 size={15} className="shrink-0" />}<span>{quote.sales_status === "won" ? "This revision was accepted. Its snapshot is linked to the job below." : activeStatus.text}</span></div>
+            {quote.worker_status !== "ready" && <div className="mt-4 flex items-start gap-2 rounded-lg p-3 text-xs leading-relaxed" style={{ background: activeStatus.bg, color: activeStatus.color }}>{quote.worker_status === "ready" ? <CheckCircle2 size={15} className="shrink-0" /> : ["failed", "needs_sign_in", "needs_details"].includes(quote.worker_status) ? <AlertCircle size={15} className="shrink-0" /> : <Clock3 size={15} className="shrink-0" />}<span>{activeStatus.text}</span></div>}
             <div className="mt-4 flex gap-1 overflow-x-auto" role="tablist" aria-label="Quote sections">{[["conversation", "Conversation", MessageSquare], ["schedule", "Schedule", ListChecks], ["result", "Quote result", FileText]].map(([key, label, Icon]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${tab === key ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#616D81] hover:bg-[#F6F8FC]"}`}><Icon size={14} />{label}{key === "result" && quote.worker_status === "ready" && <span className="h-1.5 w-1.5 rounded-full bg-[#276449]" />}</button>)}</div>
           </div>
           {tab === "conversation" ? <>
-            <div className="max-h-[520px] min-h-[290px] space-y-4 overflow-y-auto px-4 py-5 sm:px-5">
-              {(quote.missing_details || []).length > 0 && <div className="rounded-xl border border-[#EEDAB4] bg-[#FCF5E9] p-4 text-sm text-[#8A5A10]"><h3 className="font-semibold">A few details are needed</h3><ul className="mt-2 list-disc space-y-1 pl-4">{quote.missing_details.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
+            <div className="space-y-4 px-4 py-5 sm:px-5">
               {!messages.length && <div className="rounded-xl bg-[#F6F8FC] p-4 text-sm leading-relaxed text-[#535E72]">{quote.request_text || "Your schedule is saved. Start the quote when your dealer, yard and margin are ready."}</div>}
-              {messages.map((item) => <article key={item.id || item.client_message_id} className={`flex ${item.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[92%] rounded-2xl px-4 py-3 sm:max-w-[85%] ${item.role === "user" ? "rounded-br-md bg-[#E7EEFA]" : "rounded-bl-md border border-[#DDE3EC] bg-[#F6F8FC]"}`}><div className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-[#77839A]"><span>{item.role === "user" ? "You" : item.role === "system" ? "Quote update" : "Quoting assistant"}</span><span className="font-normal">{date(item.created_date)}</span></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#131A26]">{item.content}</p></div></article>)}
-              <div ref={latestMessage} />
+              {messages.map((item) => <article key={item.id || item.client_message_id} className={`flex ${item.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[92%] rounded-2xl px-4 py-3 sm:max-w-[85%] ${item.role === "user" ? "rounded-br-md bg-[#E7EEFA]" : "rounded-bl-md border border-[#DDE3EC] bg-[#F6F8FC]"}`}><div className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-[#77839A]"><span>{item.role === "user" ? "You" : item.role === "system" ? "Quote update" : "Quoting assistant"}</span><span className="font-normal">{date(item.created_date)}</span></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#131A26]">{item.content}</p>{item.kind === "ready" && <button type="button" className={primaryClass + " mt-3"} onClick={() => setTab("result")}><FileText size={15} />View quote</button>}</div></article>)}
             </div>
-            <form onSubmit={send} className="border-t border-[#E9EDF4] bg-[#F6F8FC] p-4">
-              <label htmlFor="quote-message" className="sr-only">Reply to this quote request</label><div className="flex items-end gap-2"><textarea id="quote-message" className={inputClass + " min-h-[76px] resize-y"} value={message} maxLength={18000} onChange={(e) => { setMessage(e.target.value); messageID.current = null; }} placeholder={locked ? quote.sales_status === "won" ? "Accepted revision — start a new request for changes." : "The request is being quoted. Replies reopen when input is needed." : "Add details or answer a question…"} disabled={locked || busy} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(e); }} /><button type="submit" aria-label="Send message" className={primaryClass + " h-10 px-3"} disabled={!message.trim() || locked || busy}>{busy ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}</button></div><p className="mt-2 text-[11px] text-[#77839A]">{locked ? "Saved requests and progress remain available while the quoting computer works." : "Sending saves your reply. Use Start quote to send the updated request to the worker."}</p>
-            </form>
-          </> : <div className="p-4 sm:p-5">{tab === "schedule" ? <ScheduleView quote={quote} /> : <ResultView quote={quote} onWon={() => setWonOpen(true)} busy={busy} />}</div>}
+            {quote.sales_status !== "won" && <form onSubmit={send} className="border-t border-[#E9EDF4] bg-[#F6F8FC] p-4">
+              <label htmlFor="quote-message" className="sr-only">Reply to this quote request</label><div className="flex items-end gap-2"><textarea id="quote-message" className={inputClass + " min-h-[76px] resize-y"} value={message} maxLength={18000} onChange={(e) => { setMessage(e.target.value); messageID.current = null; }} placeholder={locked ? quote.sales_status === "won" ? "Accepted revision — start a new request for changes." : "The request is being quoted. Replies reopen when input is needed." : "Add details or answer a question…"} disabled={locked || busy} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(e); }} /><button type="submit" aria-label="Send message" className={primaryClass + " h-10 px-3"} disabled={!message.trim() || locked || busy}>{busy ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}</button></div><p className="mt-2 text-[11px] text-[#77839A]">{locked ? "We’ll let you know here if we need a detail or your quote is ready." : "Sending saves your reply. Use Start quote to send the updated request to the worker."}</p>
+            </form>}
+          </> : <div className="p-4 sm:p-5">{tab === "schedule" ? <ScheduleView quote={quote} /> : <WindowQuoteResults quote={quote} onWon={() => setWonOpen(true)} busy={busy} />}</div>}
           {quote.job_id && tab !== "result" && <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between border-t border-[#E9EDF4] p-4 text-sm font-semibold text-[#1E4A85]"><span className="flex items-center gap-2"><BriefcaseBusiness size={16} />Open linked job</span><ArrowUpRight size={15} /></Link>}
         </> : <div className="p-10 text-center text-sm text-[#616D81]">This request is unavailable. Choose another request or refresh.</div>}
       </section>
