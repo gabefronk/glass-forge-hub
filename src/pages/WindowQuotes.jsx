@@ -109,6 +109,15 @@ function ScheduleView({ quote }) {
     {quote.source?.filename && <p className="break-all text-xs text-[#616D81]">Takeoff source: {quote.source.filename}</p>}
   </div>;
 }
+function resultDimensions(line) {
+  const frame = line.frame_dimensions;
+  if (typeof frame === "string" && frame.trim()) return frame + " · frame";
+  const width = frame?.width ?? line.width;
+  const height = frame?.height ?? line.height;
+  if (width === undefined || height === undefined) return "";
+  const basis = frame?.width !== undefined ? "frame" : (line.dimension_basis || "").replaceAll("_", " ");
+  return `${width} × ${height} ${line.units || "in"}${basis ? ` · ${basis}` : ""}`;
+}
 function ResultView({ quote, onWon, busy }) {
   const result = quote.result;
   const verified = quote.worker_status === "ready" && result?.verified === true;
@@ -121,7 +130,7 @@ function ResultView({ quote, onWon, busy }) {
       <div className="mt-5 text-xs font-medium uppercase tracking-wide text-[#616D81]">Quote total</div><div className="mt-1 text-3xl font-semibold tracking-tight text-[#131A26]">{money(totals.total, totals.currency || "USD")}</div>
       <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-2 text-sm">{[["Subtotal", totals.subtotal], ["Dealer cost", totals.dealer_total ?? totals.dealer_cost], ["Labor", totals.labor], ["Delivery", totals.delivery], ["Freight", totals.freight], ["Tax", totals.tax]].filter(([, value]) => value !== undefined && value !== null).map(([label, value]) => <div className="flex flex-wrap justify-between gap-1" key={label}><dt className="text-[#616D81]">{label}</dt><dd className="font-medium text-[#131A26]">{money(value, totals.currency || "USD")}</dd></div>)}</dl>
     </div>
-    {(result.lines || []).length > 0 && <div className="overflow-x-auto rounded-xl border border-[#DDE3EC]"><table className="w-full min-w-[430px] text-left text-xs"><thead className="bg-[#F6F8FC] text-[#616D81]"><tr><th className="p-3 font-medium">Verified line</th><th className="p-3 text-right font-medium">Qty</th><th className="p-3 text-right font-medium">Unit price</th><th className="p-3 text-right font-medium">Total</th></tr></thead><tbody>{result.lines.map((line, i) => <tr key={line.id || i} className="border-t border-[#E9EDF4]"><td className="p-3 text-[#131A26]">{line.description || line.style || line.mark || `Line ${i + 1}`}</td><td className="p-3 text-right">{line.qty ?? line.quantity ?? "—"}</td><td className="p-3 text-right">{money(line.customer_unit ?? line.customer_price ?? line.unit_price)}</td><td className="p-3 text-right">{money(line.customer_extended ?? line.extended_price ?? line.total)}</td></tr>)}</tbody></table></div>}
+    {(result.lines || []).length > 0 && <div className="overflow-x-auto rounded-xl border border-[#DDE3EC]"><table className="w-full min-w-[430px] text-left text-xs"><thead className="bg-[#F6F8FC] text-[#616D81]"><tr><th className="p-3 font-medium">Verified line</th><th className="p-3 text-right font-medium">Qty</th><th className="p-3 text-right font-medium">Unit price</th><th className="p-3 text-right font-medium">Total</th></tr></thead><tbody>{result.lines.map((line, i) => <tr key={line.id || i} className="border-t border-[#E9EDF4]"><td className="p-3 text-[#131A26]"><div className="font-medium">{line.mark ? `${line.mark} · ` : ""}{line.style || line.description || `Line ${i + 1}`}</div><div className="mt-1 text-[#616D81]">{resultDimensions(line)}</div></td><td className="p-3 text-right">{line.qty ?? line.quantity ?? "—"}</td><td className="p-3 text-right">{money(line.customer_unit ?? line.unit_prices?.customer ?? line.customer_price ?? line.unit_price)}</td><td className="p-3 text-right">{money(line.customer_extended ?? line.line_totals?.customer ?? line.extended_price ?? line.total)}</td></tr>)}</tbody></table></div>}
     {quote.job_id ? <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between rounded-xl border border-[#DDE3EC] bg-white p-4 text-sm font-semibold text-[#1E4A85]"><span className="flex items-center gap-2"><BriefcaseBusiness size={17} />Won · Open linked job</span><ArrowUpRight size={16} /></Link> : <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#DDE3EC] p-4"><div><h4 className="text-sm font-semibold text-[#131A26]">Won the sale?</h4><p className="mt-1 text-xs text-[#616D81]">Accept this revision and move it into Jobs.</p></div><button className={primaryClass} disabled={busy || quote.sales_status === "won"} onClick={onWon}><CheckCircle2 size={15} />Mark won</button></div>}
   </div>;
 }
