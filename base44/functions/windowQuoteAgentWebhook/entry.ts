@@ -4,4 +4,4 @@ import { execution, transport } from "../../shared/windowQuoteAgentRuntime.js";
 // Authenticate raw-body HMAC and refetch exact provider messages before result handling.
 export default createAgentWebhookHandler({ getClient: createClientFromRequest, execution, transport, secret: Deno.env.get("WINDOW_QUOTES_SUPERAGENT_WEBHOOK_SECRET") });
 
-// Dispatch v3: dedicated native execution conversation, serialized per-request capabilities.
+// Dispatch v4: shared execution channel with current-operation validation.
