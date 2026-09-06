@@ -5,9 +5,13 @@ export default async function(req: Request) {
  try {
   const client=createClientFromRequest(req); const user=await client.auth.me();
   if(user?.role!=="admin")return new Response('{"error":"Administrator access required"}',{status:403,headers});
-  const body=await req.json(); if(body.action!=="inspect")return new Response('{"error":"Read-only diagnostics only"}',{status:400,headers});
+  const body=await req.json(); if(!["inspect","probe_create"].includes(body.action))return new Response('{"error":"Read-only diagnostics only"}',{status:400,headers});
   const rows=await client.asServiceRole.entities.QuoteRequests.filter({id:body.quote_id},undefined,1); const q=rows[0];
   if(!q)return new Response('{"error":"Quote not found"}',{status:404,headers});
+  if(body.action==="probe_create") {
+   try { const c=await transport.createConversation({quote_id:q.id,input_revision:q.input_revision,operation_id:q.agent_run.operation_id}); return new Response(JSON.stringify({created:{id:c.id,metadata:c.metadata,message_count:c.messages.length,created_date:c.created_date}}),{headers}); }
+   catch(e) {return new Response(JSON.stringify({code:e?.code,operation:e?.operation,observed_conversation:e?.observed_conversation||null}),{headers});}
+  }
   const raw=await transport.listConversations();
   const shape=Array.isArray(raw)?"array":Object.keys(raw||{});
   const candidates=Array.isArray(raw)?raw:Array.isArray(raw?.conversations)?raw.conversations:Array.isArray(raw?.data)?raw.data:[];
