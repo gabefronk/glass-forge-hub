@@ -28,6 +28,29 @@
     },
     "author": {
       "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "initial_request",
+        "user_message",
+        "clarification",
+        "clarification_reply",
+        "progress",
+        "ready"
+      ],
+      "description": "Semantic display category. Optional for legacy messages; raw content remains in the audit."
+    },
+    "worker_status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "needs_details",
+        "needs_sign_in",
+        "failed",
+        "ready"
+      ],
+      "description": "Worker status when the message was recorded, used to distinguish questions from progress."
     }
   },
   "required": [
