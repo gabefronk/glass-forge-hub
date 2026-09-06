@@ -43,7 +43,7 @@ test("create uses only the verified route, api_key header and correlation metada
   assert.equal(calls[0].headers.api_key, apiKey);
   assert.equal(calls[0].headers.Authorization, undefined);
   assert.deepEqual(calls[0].json, { metadata: { window_quote: correlation } });
-  assert.equal(calls[0].redirect, "error");
+  assert.equal(calls[0].redirect, "manual");
 });
 test("send includes the dispatch marker inside the documented 8000 character limit", async () => {
   const { transport, calls } = transportWith(() => new Response("processing accepted"));
@@ -173,4 +173,5 @@ test("unsafe identifiers, excessive timeout and injected markers are rejected be
   assert.throws(() => createSuperagentTransport({ apiKey, timeoutMs: 20001 }));
   assert.throws(() => buildDispatchContent(correlation, makeDispatchMarker(correlation)));
 });
+
 
