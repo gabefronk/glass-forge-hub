@@ -216,6 +216,21 @@ test("worker completion retry repairs a failed slot release and cannot read a la
   assert.ok(replay.status===403||replay.status===409);
   assert.equal(replay.quote,undefined);
 });
+test("heartbeat renewal between worker read and slot claim prevents a second run",async()=>{
+  const f=await fixture(),q=(await f.create()).quote,c=await f.claim(q);
+  const next=(await f.create()).quote;
+  await f.call({action:"queue",quote_id:next.id});
+  f.advance(601000);
+  const originalFilter=f.entities.QuoteWorkers.filter;
+  f.entities.QuoteWorkers.filter=async function(query,...rest) {
+    const snapshot=await originalFilter.call(this,query,...rest);
+    if(query.token_hash) f.records.QuoteWorkers[0].busy_until="2026-09-06T18:30:00.000Z";
+    return snapshot;
+  };
+  assert.equal((await f.call({action:"worker_poll"},f.worker)).quote,null);
+  assert.equal(f.records.QuoteWorkers[0].busy_token,c.lease_token);
+  assert.equal(f.records.QuoteRequests.filter(q=>q.worker_status==="running").length,1);
+});
 test("heartbeat renewal between candidate read and reclaim cannot be stolen",async()=>{
   const f=await fixture(),q=(await f.create()).quote,c=await f.claim(q);
   f.advance(601000);
@@ -241,6 +256,7 @@ test("simultaneous creates return a canonical request and only that record can q
   }
   const claim=(await f.call({action:"worker_poll"},f.worker)).quote;
   assert.equal(claim.id,canonicalId);
+  assert.equal((await f.call({action:"list"})).quotes.length,1);
 });
 test("an exact edited-input retry does not create another revision",async()=>{
   const f=await fixture(),q=(await f.create()).quote;
