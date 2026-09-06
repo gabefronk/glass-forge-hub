@@ -1,0 +1,156 @@
+{
+  "name": "QuoteRequests",
+  "type": "object",
+  "properties": {
+    "request_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "requester_email": {
+      "type": "string"
+    },
+    "settings": {
+      "type": "object"
+    },
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "source": {
+      "type": "object"
+    },
+    "input_revision": {
+      "type": "integer",
+      "default": 1
+    },
+    "state_version": {
+      "type": "integer",
+      "default": 0
+    },
+    "worker_status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "queued",
+        "running",
+        "needs_details",
+        "needs_sign_in",
+        "failed",
+        "ready"
+      ],
+      "default": "draft"
+    },
+    "sales_status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "won"
+      ],
+      "default": "open"
+    },
+    "missing_details": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "result": {
+      "type": "object"
+    },
+    "checkpoint": {
+      "type": "object"
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "conversation": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "job_id": {
+      "type": "string",
+      "default": ""
+    },
+    "accepted_revision": {
+      "type": "integer",
+      "default": 0
+    },
+    "accepted_snapshot": {
+      "type": "object"
+    },
+    "accepted_at": {
+      "type": "string"
+    },
+    "queued_at": {
+      "type": "string"
+    },
+    "worker_id": {
+      "type": "string"
+    },
+    "lease_token": {
+      "type": "string",
+      "default": ""
+    },
+    "lease_revision": {
+      "type": "integer",
+      "default": 0
+    },
+    "lease_expires_at": {
+      "type": "string"
+    },
+    "last_worker_event_id": {
+      "type": "string"
+    },
+    "conversion_token": {
+      "type": "string",
+      "default": ""
+    },
+    "conversion_expires_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "title",
+    "requester_email",
+    "worker_status",
+    "sales_status",
+    "input_revision",
+    "state_version"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
