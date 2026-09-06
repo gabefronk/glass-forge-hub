@@ -74,7 +74,7 @@ async function fixture(executionService) {
   return {call,create,claim,ready,result,records,controls,entities,worker,advance:ms=>timestamp+=ms};
 }
 test("MCP prevents direct quote-table CRUD and exposes only guarded quote functions",()=>{
-  const config=JSON.parse(readFileSync(new URL("./mcp.config.json",import.meta.url),"utf8"));
+  const config=JSON.parse(readFileSync(new URL("../mcp/config.json",import.meta.url),"utf8"));
   assert.equal(config.auth,"oauth");
   for(const entity of ["QuoteWorkers","QuoteRequests","QuoteMessages"]) assert.deepEqual(config.tools.entity_overrides[entity].operations,[]);
   const tools=config.tools.functions.filter(t=>["windowQuotes","windowQuotesDraft"].includes(t.handler));
