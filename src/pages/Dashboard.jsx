@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { formatMoney } from "@/lib/feeMath";
 import { C } from "@/lib/feeUI";
@@ -44,6 +45,7 @@ function crewForEvent(ev) {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [profits, setProfits] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
   const [tomorrowEvents, setTomorrowEvents] = useState([]);
@@ -164,7 +166,7 @@ export default function Dashboard() {
               <Download className="h-3.5 w-3.5" />
               Export statement
             </button>
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
+            <button onClick={() => navigate("/window-quotes?new=1")} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
               <Plus className="h-3.5 w-3.5" />
               New quote
             </button>
