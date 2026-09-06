@@ -151,7 +151,7 @@ export function createSuperagentTransport({ apiKey, agentId = DEFAULT_AGENT_ID, 
         try {
           response = await fetchImpl(baseUrl + path, {
             method, headers: { api_key: apiKey, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
-            ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: abort.signal, redirect: "error"
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: abort.signal, redirect: "manual"
           });
         } catch (cause) {
           const error = new SuperagentTransportError(abort.signal.aborted ? "TIMEOUT" : "NETWORK_ERROR", operation, { uncertain: writes });
