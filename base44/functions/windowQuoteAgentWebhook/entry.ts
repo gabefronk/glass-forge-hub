@@ -5,3 +5,5 @@ import { execution, transport } from "../../shared/windowQuoteAgentRuntime.js";
 export default createAgentWebhookHandler({ getClient: createClientFromRequest, execution, transport, secret: Deno.env.get("WINDOW_QUOTES_SUPERAGENT_WEBHOOK_SECRET") });
 
 // Dispatch v4: shared execution channel with current-operation validation.
+// Dispatch v6: guarded saved-checkpoint continuations, default off; explicit result dimensions.
+
