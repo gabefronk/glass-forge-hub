@@ -32,6 +32,7 @@ function jsonValue(v, name, max = 150000) {
 }
 export function validateSettings(value = {}, required = false) {
   const settings = jsonValue(object(value, "settings"), "settings", 12000);
+  for (const key of ["dealer", "gross_margin"]) if (settings[key] === null || settings[key] === "") delete settings[key];
   if (own(settings, "dealer") && !["BFS", "BTB"].includes(settings.dealer)) fail(400, "Choose BFS or BTB");
   if (own(settings, "yard")) settings.yard = textValue(settings.yard, "yard", 200);
   if (own(settings, "gross_margin") && (typeof settings.gross_margin !== "number" || !Number.isFinite(settings.gross_margin) || settings.gross_margin < 0 || settings.gross_margin >= 100)) fail(400, "Gross margin must be a number from 0 to less than 100");
@@ -204,7 +205,8 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (own(body, "title")) patch.title = textValue(body.title, "title", 200, true);
         if (own(body, "settings")) patch.settings = validateSettings(body.settings);
         if (own(body, "lines")) patch.lines = validateLines(body.lines);
-        if (!["title", "settings", "lines"].some(k => own(body, k))) fail(400, "No changes supplied");
+        if (own(body, "source")) patch.source = jsonValue(object(body.source, "source"), "source", 150000);
+        if (!["title", "settings", "lines", "source"].some(k => own(body, k))) fail(400, "No changes supplied");
         q = await cas(q, patch);
         output = { quote: publicQuote(q) };
       } else if (action === "queue") {
