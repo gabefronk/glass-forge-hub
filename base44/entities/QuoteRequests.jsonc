@@ -124,6 +124,17 @@
     "last_worker_lease_token": {
       "type": "string",
       "description": "Internal lease token for idempotent worker completion; never return to app users."
+    },
+    "execution_provider": {
+      "type": "string",
+      "enum": [
+        "superagent",
+        "legacy"
+      ]
+    },
+    "agent_run": {
+      "type": "object",
+      "description": "Private Base44 operation capability, dispatch identity and recovery; never expose through public app/MCP responses."
     }
   },
   "required": [
