@@ -123,6 +123,13 @@ export default function JobDetail() {
           onAddPhoto={() => setLightbox(null)}
         />
 
+        {job.source_window_quote_id && (
+          <Link to={`/window-quotes?quote=${encodeURIComponent(job.source_window_quote_id)}`} className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#C3D4EE] bg-[#E7EEFA] p-4 text-sm text-[#1E4A85]">
+            <div><div className="font-semibold">Accepted window quote</div><div className="mt-1 text-xs">Revision {job.accepted_quote_revision || "—"} · Original specifications, pricing and conversation</div></div>
+            <span className="font-semibold">View quote →</span>
+          </Link>
+        )}
+
         <div className="flex flex-col min-[700px]:flex-row gap-5 mt-5">
           {/* Left column */}
           <div className="flex-1 min-w-0 space-y-5">
