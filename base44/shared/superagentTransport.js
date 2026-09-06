@@ -53,10 +53,18 @@ export function findConversationByCorrelation(conversations, correlation) {
   if (matches.length > 1) return { state: "ambiguous", conversation: null, count: matches.length, safe_to_resend: false };
   return { state: matches.length ? "found" : "not_found", conversation: matches[0] || null, safe_to_resend: false };
 }
-export function findDispatchedMessage(conversation, correlation) {
+export function findDispatchedMessage(conversation, correlation, binding) {
   const c = normalizedCorrelation(correlation);
   contract(Array.isArray(conversation?.messages), "MISSING_CONVERSATION_MESSAGES");
-  contract(conversation.metadata?.[CORRELATION_KEY]?.quote_id === c.quote_id, "CONVERSATION_QUOTE_MISMATCH");
+  if (binding) {
+    identifier(binding.conversationId, "CONVERSATION_ID");
+    identifier(binding.agentId, "AGENT_ID");
+    contract(conversation.id === binding.conversationId && conversation.app_id === binding.agentId, "BOUND_CONVERSATION_MISMATCH");
+  }
+  const hasQuoteMetadata = conversation.metadata && Object.prototype.hasOwnProperty.call(conversation.metadata, CORRELATION_KEY);
+  // A shared channel is safe only when the caller supplies its exact stored
+  // conversation/agent binding. Never infer ownership from the newest chat.
+  if (hasQuoteMetadata || !binding) contract(conversation.metadata?.[CORRELATION_KEY]?.quote_id === c.quote_id, "CONVERSATION_QUOTE_MISMATCH");
   const marker = makeDispatchMarker(c);
   const matches = conversation.messages.filter(m => m?.role === "user" && typeof m.content === "string" && (m.content === marker || m.content.startsWith(marker + "\n")));
   if (matches.length > 1) return { state: "ambiguous", message: null, count: matches.length, safe_to_resend: false };
@@ -122,7 +130,7 @@ export function matchAgentEnvelope(content, { correlation, validateResult } = {}
 }
 function authoritativeMessage(conversation, event, correlation, conversationId) {
   contract(conversation?.id === conversationId && conversation.id === event.conversation_id && conversation.app_id === event.agent_id, "AUTHORITATIVE_CONVERSATION_MISMATCH");
-  const dispatched = findDispatchedMessage(conversation, correlation);
+  const dispatched = findDispatchedMessage(conversation, correlation, { conversationId, agentId: event.agent_id });
   contract(dispatched.state === "accepted", "DISPATCH_NOT_UNIQUELY_CONFIRMED");
   const messages = conversation.messages;
   const matches = messages.map((m, index) => ({ m, index })).filter(item => item.m?.id === event.message_id);
@@ -138,7 +146,7 @@ export function createSuperagentTransport({ apiKey, agentId = DEFAULT_AGENT_ID, 
   contract(typeof fetchImpl === "function", "FETCH_REQUIRED");
   contract(Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 20000, "TIMEOUT_MUST_BE_AT_MOST_20000MS");
   const baseUrl = "https://app.base44.com/api/agents/" + agentId;
-  async function request(method, path, body, operation, flexibleResponse = false) {
+  async function request(method, path, body, operation, flexibleResponse = false, responseEvidence) {
     const writes = method === "POST";
     const abort = new AbortController();
     let timer;
@@ -155,9 +163,10 @@ export function createSuperagentTransport({ apiKey, agentId = DEFAULT_AGENT_ID, 
           });
         } catch (cause) {
           const error = new SuperagentTransportError(abort.signal.aborted ? "TIMEOUT" : "NETWORK_ERROR", operation, { uncertain: writes });
-          error.diagnostic = String(cause?.name || "Error") + ": " + String(cause?.message || "").replaceAll(apiKey, "[REDACTED]").slice(0, 500);
+          Object.defineProperty(error, "diagnostic", { value: (String(cause?.name || "Error") + ": " + String(cause?.message || "")).replaceAll(apiKey, "[REDACTED]").slice(0, 500) });
           throw error;
         }
+        if (responseEvidence) Object.assign(responseEvidence, { method, path, status: response.status });
         if (!response.ok) throw new SuperagentTransportError("HTTP_" + response.status, operation, { status: response.status, uncertain: writes && (response.status >= 500 || [408, 409, 429].includes(response.status)) });
         let text;
         try { text = await response.text(); } catch { throw new SuperagentTransportError("RESPONSE_INTERRUPTED", operation, { uncertain: writes }); }
@@ -167,20 +176,31 @@ export function createSuperagentTransport({ apiKey, agentId = DEFAULT_AGENT_ID, 
       })()]);
     } finally { clearTimeout(timer); }
   }
-  function validateConversation(value, id, operation, uncertain = false) {
-    if (!value || typeof value !== "object" || typeof value.id !== "string" || !/^[a-zA-Z0-9_-]{1,160}$/.test(value.id) || value.app_id !== agentId || !Array.isArray(value.messages) || !value.metadata || typeof value.metadata !== "object" || (id && value.id !== id)) throw new SuperagentTransportError("UNRECOGNIZED_CONVERSATION", operation, { uncertain });
+  function validateConversation(value, id, operation, uncertain = false, allowMissingMetadata = false) {
+    const validMetadata = value?.metadata && typeof value.metadata === "object" && !Array.isArray(value.metadata);
+    if (!value || typeof value !== "object" || typeof value.id !== "string" || !/^[a-zA-Z0-9_-]{1,160}$/.test(value.id) || value.app_id !== agentId || !Array.isArray(value.messages) || !(validMetadata || (allowMissingMetadata && value.metadata == null)) || (id && value.id !== id)) throw new SuperagentTransportError("UNRECOGNIZED_CONVERSATION", operation, { uncertain });
     return value;
   }
   const transport = {
     async createConversation(correlation) {
       const c = normalizedCorrelation(correlation);
-      const conversation = validateConversation(await request("POST", "/conversations", { metadata: { [CORRELATION_KEY]: c } }, "create conversation"), null, "create conversation", true);
-      if (!sameCorrelation(conversation.metadata[CORRELATION_KEY], c)) { const error = new SuperagentTransportError("CORRELATION_NOT_ACKNOWLEDGED", "create conversation", { uncertain: true }); error.observed_conversation = { id: conversation.id, app_id: conversation.app_id, metadata: conversation.metadata, message_count: conversation.messages.length, created_date: conversation.created_date }; throw error; }
+      const httpResponse = {};
+      const conversation = validateConversation(await request("POST", "/conversations", { metadata: { [CORRELATION_KEY]: c } }, "create conversation", false, httpResponse), null, "create conversation", true);
+      if (!sameCorrelation(conversation.metadata[CORRELATION_KEY], c)) {
+        const error = new SuperagentTransportError("CORRELATION_NOT_ACKNOWLEDGED", "create conversation", { uncertain: true });
+        // Preserve a validated candidate for private recovery without binding it
+        // as this quote's conversation or leaking the response in generic logs.
+        Object.defineProperties(error, {
+          observed_conversation: { value: { id: conversation.id, app_id: conversation.app_id, metadata: conversation.metadata, message_count: conversation.messages.length, created_date: conversation.created_date } },
+          http_response: { value: httpResponse }
+        });
+        throw error;
+      }
       return conversation;
     },
     async getConversation(conversationId) {
       identifier(conversationId, "CONVERSATION_ID");
-      return validateConversation(await request("GET", "/conversations/" + encodeURIComponent(conversationId), undefined, "read conversation"), conversationId, "read conversation");
+      return validateConversation(await request("GET", "/conversations/" + encodeURIComponent(conversationId), undefined, "read conversation"), conversationId, "read conversation", false, true);
     },
     async listConversations() {
       // No undocumented filters, sorting query, pagination or envelope assumptions.
@@ -206,7 +226,7 @@ export function createSuperagentTransport({ apiKey, agentId = DEFAULT_AGENT_ID, 
     },
     async reconcileDispatch({ conversationId, correlation }) {
       const conversation = await transport.getConversation(conversationId);
-      return { ...findDispatchedMessage(conversation, correlation), conversation };
+      return { ...findDispatchedMessage(conversation, correlation, { conversationId, agentId }), conversation };
     },
     async resolveWebhook({ rawBody, headers, webhookSecret, conversationId, correlation, validateResult }) {
       const event = await authenticateWebhook({ rawBody, headers, secret: webhookSecret, agentId, cryptoImpl });
@@ -218,4 +238,5 @@ export function createSuperagentTransport({ apiKey, agentId = DEFAULT_AGENT_ID, 
   };
   return Object.freeze(transport);
 }
+
 

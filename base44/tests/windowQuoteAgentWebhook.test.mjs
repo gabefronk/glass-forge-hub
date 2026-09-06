@@ -81,12 +81,12 @@ test('invalid signature, tampered body and wrong signed agent stop before databa
   }
 });
 
-test('unknown or ambiguous conversation does not resolve or mutate any quote', async () => {
+test('unknown conversation or quote does not resolve or mutate any quote', async () => {
   const missing = fixture();
   assert.deepEqual(await missing.call({ payload: { conversation_id: 'unrelated-conversation' } }), { status: 200, ok: true, ignored: true });
   assert.equal(missing.controls.reads, 0); assert.equal(missing.controls.reports.length, 0);
-  const ambiguous = fixture(); ambiguous.records.QuoteRequests.push({ ...clone(ambiguous.q), id: 'second-quote' });
-  assert.equal((await ambiguous.call()).ignored, true); assert.equal(ambiguous.controls.reports.length, 0);
+  const unknown = fixture({ schema_version: 1, ...correlation, quote_id: 'unrelated-quote', outcome: 'failed' });
+  assert.equal((await unknown.call()).ignored, true); assert.equal(unknown.controls.reports.length, 0); assert.equal(unknown.controls.reads, 0);
 });
 
 test('wrong authoritative conversation cannot reach execution reporting', async () => {
@@ -95,7 +95,7 @@ test('wrong authoritative conversation cannot reach execution reporting', async 
 });
 
 test('signed envelope must match current quote, revision and operation', async () => {
-  for (const wrong of [{ quote_id: 'other-quote' }, { input_revision: 2 }, { operation_id: 'old-operation' }]) {
+  for (const wrong of [{ input_revision: 2 }, { operation_id: 'old-operation' }]) {
     const f = fixture({ schema_version: 1, ...correlation, ...wrong, outcome: 'failed', message: 'Test only' });
     assert.equal((await f.call()).status, 401); assert.equal(f.controls.reports.length, 0); assert.equal(f.q.worker_status, 'running');
   }
@@ -107,6 +107,7 @@ test('generic ready prose is never a verified quote', async () => {
   const f = fixture('Your quote is ready. Total $142.27.');
   assert.equal((await f.call()).status, 200); assert.equal(f.controls.reports.length, 0);
   assert.equal(f.q.worker_status, 'running'); assert.equal(f.q.result, undefined);
+  assert.equal(f.controls.clientCalls, 0); assert.equal(f.controls.reads, 0);
 });
 
 test('signed payload text cannot replace the authoritative API message', async () => {
@@ -164,5 +165,48 @@ test('new callbacks after a terminal operation are ignored, not accepted as anot
   const count = f.controls.reports.length;
   assert.equal((await f.call({ message: { id: 'new-message-after-completion' } })).status, 200);
   assert.equal(f.controls.reports.length, count); assert.equal(f.q.worker_status, 'failed');
+});
+
+test('shared conversation resolves the named current quote even with multiple historical records', async () => {
+  const f = fixture({ schema_version: 1, ...correlation, outcome: 'needs_sign_in', message: 'Authorized BFS browser needed.' });
+  f.conversation.metadata = { analytics_channel: 'in_app' };
+  const historical = [1, 2, 3].map(number => ({ ...clone(f.q), id: 'historical-' + number, worker_status: 'ready', agent_run: { ...clone(f.q.agent_run), operation_id: 'historical-operation-' + number, phase: 'completed', event_ids: ['webhook:historical-message-' + number] } }));
+  f.records.QuoteRequests.unshift(...historical);
+  const before = clone(historical);
+  assert.equal((await f.call()).status, 200); assert.equal(f.q.worker_status, 'needs_sign_in');
+  assert.equal(f.controls.reports.length, 1); assert.equal(f.controls.reports[0].quote_id, f.q.id);
+  assert.deepEqual(historical, before);
+});
+
+test('terminal retry repairs only its historical quote and cannot release a later active run', async () => {
+  const f = fixture(readyEnvelope()); f.conversation.metadata = {};
+  assert.equal((await f.call()).status, 200);
+  const later = { ...clone(f.q), id: 'later-quote', worker_status: 'running', agent_run: { ...clone(f.q.agent_run), operation_id: 'later-operation', phase: 'sent', event_ids: [] } };
+  f.records.QuoteRequests.push(later); f.slot.busy_token = later.agent_run.operation_id; f.slot.active_quote_id = later.id;
+  const before = clone(later);
+  assert.equal((await f.call({ delivery: 'historical-retry' })).status, 200);
+  assert.equal(f.q.history.length, 1); assert.equal(f.q.conversation.filter(message => message.kind === 'ready').length, 1);
+  assert.equal(f.slot.busy_token, 'later-operation'); assert.equal(f.slot.active_quote_id, 'later-quote');
+  assert.deepEqual(later, before); assert.equal(f.controls.reports.at(-1).quote_id, f.q.id);
+});
+
+test('signed routing quote is only a candidate and authoritative different quote still rejects', async () => {
+  const f = fixture({ schema_version: 1, ...correlation, quote_id: 'different-quote', outcome: 'failed' });
+  f.conversation.metadata = {};
+  const signed = { schema_version: 1, ...correlation, outcome: 'failed' };
+  assert.equal((await f.call({ message: { content: JSON.stringify(signed) } })).status, 401);
+  assert.equal(f.controls.reports.length, 0); assert.equal(f.q.worker_status, 'running');
+});
+
+test('signed quote selector accepts fenced JSON but ignores invalid IDs and oversized content', async () => {
+  const envelope = { schema_version: 1, ...correlation, outcome: 'failed', message: 'Synthetic failure' };
+  const valid = fixture('```json\n' + JSON.stringify(envelope) + '\n```');
+  assert.equal((await valid.call()).status, 200); assert.equal(valid.q.worker_status, 'failed');
+  for (const quote_id of [{ $ne: '' }, '../quote-test', 'quote id', 'q'.repeat(151)]) {
+    const f = fixture({ ...envelope, quote_id });
+    assert.equal((await f.call()).ignored, true); assert.equal(f.controls.clientCalls, 0); assert.equal(f.controls.reports.length, 0);
+  }
+  const large = fixture(JSON.stringify({ ...envelope, padding: 'x'.repeat(500000) }));
+  assert.equal((await large.call()).ignored, true); assert.equal(large.controls.clientCalls, 0);
 });
 

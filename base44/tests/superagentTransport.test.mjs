@@ -75,11 +75,30 @@ test("create and send failures expose neither provider bodies nor API credential
   await assert.rejects(transport.createConversation(correlation), e => e instanceof SuperagentTransportError && e.uncertain && !String(e).includes(apiKey) && !JSON.stringify(e).includes(apiKey));
   assert.equal(calls.length, 1);
   const network = transportWith(() => { throw new Error("leaked header " + apiKey); });
-  await assert.rejects(network.transport.sendMessage({ conversationId: "conversation1", correlation, content: "A quote request" }), e => e.code === "NETWORK_ERROR" && !String(e).includes(apiKey));
+  await assert.rejects(network.transport.sendMessage({ conversationId: "conversation1", correlation, content: "A quote request" }), e => e.code === "NETWORK_ERROR" && !String(e).includes(apiKey) && !e.diagnostic.includes(apiKey) && e.diagnostic.includes('[REDACTED]') && !JSON.stringify(e).includes('leaked header'));
 });
 test("malformed successful creation remains uncertain and cannot trigger another create", async () => {
   const { transport, calls } = transportWith(() => jsonResponse({ id: "conversation1" }));
   await assert.rejects(transport.createConversation(correlation), e => e.code === "UNRECOGNIZED_CONVERSATION" && e.uncertain);
+  assert.equal(calls.length, 1);
+});
+test("unacknowledged creation preserves private candidate and HTTP provenance without accepting it", async () => {
+  const candidate = { ...conversation(), metadata: { analytics_channel: 'in_app' }, created_date: '2026-09-06T22:00:00Z' };
+  const { transport, calls } = transportWith(() => jsonResponse(candidate, 201));
+  await assert.rejects(transport.createConversation(correlation), error => {
+    assert.equal(error.code, 'CORRELATION_NOT_ACKNOWLEDGED');
+    assert.equal(error.uncertain, true);assert.equal(error.automaticRetryAllowed, false);
+    assert.deepEqual(error.observed_conversation, { id: candidate.id, app_id: candidate.app_id, metadata: candidate.metadata, message_count: 0, created_date: candidate.created_date });
+    assert.deepEqual(error.http_response, { method: 'POST', path: '/conversations', status: 201 });
+    assert.ok(!JSON.stringify(error).includes(candidate.id));
+    assert.ok(!JSON.stringify(error).includes('in_app'));
+    return true;
+  });
+  assert.equal(calls.length, 1);
+});
+test("another agent's conversation is never retained as a validated creation candidate", async () => {
+  const { transport, calls } = transportWith(() => jsonResponse({ ...conversation(), app_id: 'otherAgent' }));
+  await assert.rejects(transport.createConversation(correlation), error => error.code === 'UNRECOGNIZED_CONVERSATION' && error.uncertain && !error.observed_conversation);
   assert.equal(calls.length, 1);
 });
 test("reconciliation reads only the recorded conversation and never resends missing messages", async () => {
@@ -94,6 +113,22 @@ test("dispatch matching is exact and reports duplicate acceptance as ambiguous",
   assert.equal(findDispatchedMessage(conversation([{ ...dispatched(), content: "A quote request" }]), correlation).state, "not_found");
   assert.equal(findDispatchedMessage(conversation([dispatched(), { ...dispatched(), id: "user2" }]), correlation).state, "ambiguous");
   assert.throws(() => findDispatchedMessage(conversation([], { ...correlation, quote_id: "other" }), correlation), e => e.code === "CONVERSATION_QUOTE_MISMATCH");
+});
+test("missing quote metadata requires explicit exact conversation and agent binding", () => {
+  const shared = { ...conversation([dispatched()]), metadata: { analytics_channel: 'in_app' } };
+  const binding = { conversationId: 'conversation1', agentId: DEFAULT_AGENT_ID };
+  assert.throws(() => findDispatchedMessage(shared, correlation), e => e.code === 'CONVERSATION_QUOTE_MISMATCH');
+  assert.equal(findDispatchedMessage(shared, correlation, binding).state, 'accepted');
+  for (const change of [{ conversationId: 'wrong' }, { agentId: 'wrong' }]) assert.throws(() => findDispatchedMessage(shared, correlation, { ...binding, ...change }), e => e.code === 'BOUND_CONVERSATION_MISMATCH');
+  for (const window_quote of [null, {}, { ...correlation, quote_id: 'other' }]) assert.throws(() => findDispatchedMessage({ ...shared, metadata: { window_quote } }, correlation, binding), e => e.code === 'CONVERSATION_QUOTE_MISMATCH');
+});
+test("shared reconciliation tolerates absent metadata but never infers acceptance from an empty history", async () => {
+  const value = { ...conversation([dispatched()]) };delete value.metadata;
+  const accepted = transportWith(() => jsonResponse(value));
+  assert.equal((await accepted.transport.reconcileDispatch({ conversationId: 'conversation1', correlation })).state, 'accepted');
+  const empty = transportWith(() => jsonResponse({ ...value, messages: [] }));
+  const result = await empty.transport.reconcileDispatch({ conversationId: 'conversation1', correlation });
+  assert.equal(result.state, 'not_found');assert.equal(result.safe_to_resend, false);assert.equal(empty.calls.length, 1);
 });
 test("creation reconciliation requires exact metadata and does not assume an unverified list envelope", () => {
   assert.equal(findConversationByCorrelation([conversation()], correlation).state, "found");
@@ -160,6 +195,19 @@ test("resolveWebhook refuses another conversation, absent dispatch marker, and s
   await assert.rejects(transport.resolveWebhook({ ...signedEvent, webhookSecret, conversationId: "conversation1", correlation }), e => e.code === "RESULT_CORRELATION_MISMATCH");
   const absent = transportWith(() => jsonResponse(conversation([assistant()])));
   await assert.rejects(absent.transport.resolveWebhook({ ...signedEvent, webhookSecret, conversationId: "conversation1", correlation }), e => e.code === "DISPATCH_NOT_UNIQUELY_CONFIRMED");
+});
+test("shared webhook requires the exact marker and authoritative message even with authenticated completion", async () => {
+  const signedEvent = await signed(eventPayload());
+  const shared = { ...conversation([dispatched(), assistant()]), metadata: {} };
+  const good = transportWith(() => jsonResponse(shared));
+  assert.equal((await good.transport.resolveWebhook({ ...signedEvent, webhookSecret, conversationId: 'conversation1', correlation })).outcome.outcome, 'clarification');
+  for (const messages of [[], [assistant()], [dispatched(), dispatched(), assistant()]]) {
+    const missing = transportWith(() => jsonResponse({ ...shared, messages }));
+    await assert.rejects(missing.transport.resolveWebhook({ ...signedEvent, webhookSecret, conversationId: 'conversation1', correlation }), e => e.code === 'DISPATCH_NOT_UNIQUELY_CONFIRMED');
+  }
+  const omitted = { ...shared };delete omitted.messages;
+  const malformed = transportWith(() => jsonResponse(omitted));
+  await assert.rejects(malformed.transport.resolveWebhook({ ...signedEvent, webhookSecret, conversationId: 'conversation1', correlation }), e => e.code === 'UNRECOGNIZED_CONVERSATION');
 });
 test("same conversation supports a later input revision without changing original creation metadata", async () => {
   const reply = { ...correlation, input_revision: 2, operation_id: "quote:quote1:revision:2:input:reply" };

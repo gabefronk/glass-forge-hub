@@ -2,15 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { createAgentExecution, createAgentToolHandler, buildAgentPrompt } from '../shared/windowQuoteAgentService.js';
+import { publicQuote } from '../shared/windowQuotesCore.js';
 globalThis.crypto ??= webcrypto;
 const clone = x => JSON.parse(JSON.stringify(x));
 const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => row[key] === value);
 const NATIVE_ID = '12345678-1234-1234-1234-123456789abc';
 const NATIVE_URL = 'https://amsco.wtsparadigm.com/quotes/' + NATIVE_ID + '/details';
-async function fixture({ noSlot = false, fixedSlot = false } = {}) {
+async function fixture({ noSlot = false, fixedSlot = false, conversationId } = {}) {
   let sequence = 0, timestamp = Date.parse('2026-09-06T22:00:00Z');
   const records = { QuoteRequests: [], QuoteWorkers: [] };
-  const controls = { uncertainSend: false, failSendingWrite: false, failRelease: false };
+  const controls = { uncertainSend: false, failSendingWrite: false, failRelease: false, createError: null };
   const calls = { create: [], send: [] };
   const db = Object.fromEntries(Object.entries(records).map(([name, rows]) => [name, {
     async filter(query, sort, limit = 1000) {
@@ -31,11 +32,11 @@ async function fixture({ noSlot = false, fixedSlot = false } = {}) {
     }
   }]));
   const transport = {
-    async createConversation(correlation) { calls.create.push(clone(correlation));return { id: 'conversation-' + calls.create.length }; },
+    async createConversation(correlation) { calls.create.push(clone(correlation));if (controls.createError) throw controls.createError;return { id: 'conversation-' + calls.create.length }; },
     async sendMessage(payload) { calls.send.push(clone(payload));if (controls.uncertainSend) throw new Error('Uncertain provider acceptance');return { accepted: true }; }
   };
   const lock = noSlot ? null : await db.QuoteWorkers.create({ name: 'Base44 Window Quotes browser', token_hash: 'test-disabled-row', enabled: false, allowed_dealers: ['BFS'], busy_token: '', poll_generation: 0 });
-  const execution = createAgentExecution({ transport, ...(fixedSlot && lock ? { browserSlotId: lock.id } : {}), now: () => new Date(timestamp), uuid: () => 'generated-' + (++sequence) });
+  const execution = createAgentExecution({ transport, ...(fixedSlot && lock ? { browserSlotId: lock.id } : {}), ...(conversationId !== undefined ? { conversationId } : {}), now: () => new Date(timestamp), uuid: () => 'generated-' + (++sequence) });
   const create = async (changes = {}) => db.QuoteRequests.create({ request_id: 'r-' + (++sequence), title: 'Test', requester_email: 'owner@example.test', settings: { dealer: 'BFS', yard: 'BFS-UTAH DESIGN', gross_margin: 29.71 }, lines: [{ qty: 1, width: 36, height: 60, units: 'in', dimension_basis: 'call', style: 'Single Hung' }], conversation: [{ role: 'user', content: 'Build one window', revision: 1, client_message_id: 'initial' }], input_revision: 1, state_version: 0, worker_status: 'draft', sales_status: 'open', ...changes });
   const current = id => clone(records.QuoteRequests.find(q => q.id === id));
   const start = async (changes = {}) => execution.afterInput({ db, q: await create(changes) });
@@ -60,6 +61,34 @@ test('prompt provides exact HTTP fallback and transport-compatible failed envelo
   assert.ok(prompt.includes('https://base44.app/api/apps/6a7f0d7a4a5f825c724273e9/functions/windowQuoteAgentTools'));
   assert.ok(prompt.includes('"schema_version":1'));assert.ok(prompt.includes('"outcome":"failed"'));
   assert.ok(!prompt.includes('"status":"failed"'));
+  assert.ok(prompt.includes('Only the current scoped request and its protected read response define the work'));
+});
+test('configured shared conversation skips creation and serializes distinct scoped requests', async () => {
+  const f = await fixture({ conversationId: 'shared-conversation' });
+  f.controls.createError = new Error('This mode must never call creation');
+  const one = await f.start(), two = await f.start();
+  assert.equal(one.agent_run.conversation_id, 'shared-conversation');assert.equal(one.agent_run.conversation_mode, 'shared');
+  assert.equal(two.worker_status, 'queued');assert.equal(f.calls.create.length, 0);assert.equal(f.calls.send.length, 1);
+  await f.report(one, { status: 'needs_details', missing_details: ['Confirm call dimensions'] });
+  const next = f.current(two.id);
+  assert.equal(next.agent_run.conversation_id, 'shared-conversation');assert.equal(next.agent_run.phase, 'sent');
+  assert.equal(f.calls.create.length, 0);assert.equal(f.calls.send.length, 2);
+  assert.notEqual(one.agent_run.operation_id, next.agent_run.operation_id);assert.notEqual(one.agent_run.execution_token, next.agent_run.execution_token);
+  assert.ok(!f.calls.send[1].content.includes(one.agent_run.execution_token));
+});
+test('shared configuration rejects invalid IDs and a different prior binding before taking the browser lock', async () => {
+  for (const conversationId of ['', null, '../wrong', 'has spaces', 'x'.repeat(161)]) assert.throws(() => createAgentExecution({ transport: {}, conversationId }), e => e.status === 503);
+  const f = await fixture({ conversationId: 'shared-conversation' });
+  await assert.rejects(f.start({ agent_run: { conversation_id: 'other-conversation', input_revision: 0, phase: 'completed' } }), e => e.status === 409);
+  assert.equal(f.records.QuoteWorkers[0].busy_token, '');assert.equal(f.records.QuoteWorkers[0].poll_generation, 0);
+  assert.equal(f.calls.create.length, 0);assert.equal(f.calls.send.length, 0);
+});
+test('shared uncertain sends keep their binding and lock without automatic retry or creation', async () => {
+  const f = await fixture({ conversationId: 'shared-conversation' });f.controls.uncertainSend = true;
+  const q = await f.start();assert.equal(q.agent_run.phase, 'uncertain');assert.equal(q.agent_run.conversation_id, 'shared-conversation');
+  assert.equal(q.agent_run.error_code, 'INTERNAL');assert.equal(q.agent_run.error_operation, '');assert.equal(q.agent_run.error_status, null);
+  f.advance(86400000);await f.execution.afterInput({ db: f.db, q });await f.start();await f.execution.drain(f.db);
+  assert.equal(f.calls.create.length, 0);assert.equal(f.calls.send.length, 1);assert.equal(f.records.QuoteWorkers[0].busy_token, q.agent_run.operation_id);
 });
 test('missing or ambiguous browser slots fail closed without creating another mutex', async () => {
   const missing = await fixture({ noSlot: true });
@@ -94,6 +123,32 @@ test('successful conversation ID survives a failed pre-send state write', async 
   assert.equal(q.agent_run.phase, 'uncertain');assert.equal(q.agent_run.conversation_id, 'conversation-1');
   assert.equal(f.calls.create.length, 1);assert.equal(f.calls.send.length, 0);
   await f.execution.afterInput({ db: f.db, q });assert.equal(f.calls.create.length, 1);
+});
+test('unacknowledged creation candidate remains private evidence, never a send target or automatic retry', async () => {
+  const f = await fixture();
+  f.controls.createError = Object.assign(new Error('Correlation not acknowledged'), {
+    code: 'CORRELATION_NOT_ACKNOWLEDGED', uncertain: true,
+    observed_conversation: { id: 'setup-conversation', app_id: '6a9da9c1b336da0cae1bb8f5', metadata: { analytics_channel: 'in_app', api_key: 'do-not-store' }, message_count: 0, created_date: '2026-09-06T21:00:00Z', messages: ['private provider text'] },
+    http_response: { method: 'POST', path: '/conversations', status: 200, response_body: 'do-not-store' }
+  });
+  const q = await f.start(), observation = q.agent_run.creation_observation;
+  assert.equal(q.agent_run.phase, 'uncertain');assert.equal(q.agent_run.conversation_id, '');
+  assert.equal(observation.candidate_conversation_id, 'setup-conversation');
+  assert.deepEqual(observation.metadata, { analytics_channel: 'in_app' });
+  assert.deepEqual(observation.http_response, { method: 'POST', path: '/conversations', status: 200 });
+  assert.equal(observation.message_count, 0);assert.equal(observation.created_date, '2026-09-06T21:00:00Z');
+  assert.ok(!JSON.stringify(observation).includes('do-not-store'));assert.ok(!JSON.stringify(observation).includes('provider text'));
+  assert.equal(publicQuote(q).agent_run, undefined);assert.ok(!JSON.stringify(publicQuote(q)).includes('setup-conversation'));
+  f.advance(86400000);await f.execution.afterInput({ db: f.db, q });await f.start();await f.execution.drain(f.db);
+  assert.equal(f.calls.create.length, 1);assert.equal(f.calls.send.length, 0);
+  assert.equal(f.records.QuoteWorkers[0].busy_token, q.agent_run.operation_id);
+});
+test('untrusted or malformed creation candidates cannot become private validated observations', async () => {
+  for (const change of [{ app_id: 'otherAgent' }, { id: '../not-an-id' }]) {
+    const f = await fixture();
+    f.controls.createError = { code: 'CORRELATION_NOT_ACKNOWLEDGED', uncertain: true, observed_conversation: { id: 'candidate', app_id: '6a9da9c1b336da0cae1bb8f5', ...change } };
+    const q = await f.start();assert.equal(q.agent_run.creation_observation, undefined);assert.equal(q.agent_run.conversation_id, '');assert.equal(f.calls.send.length, 0);
+  }
 });
 test('capability, operation, provider and revision each fence the agent to one current request', async () => {
   const f = await fixture(), q = await f.start(), base = f.body(q, { action: 'read' });
