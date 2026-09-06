@@ -1,4 +1,6 @@
 // Verified Base44 Superagent Developer API contract. No credentials are stored here.
+import { buildContinuationDispatchContent } from "./checkpointContinuation.js";
+
 export const DEFAULT_AGENT_ID = "6a9da9c1b336da0cae1bb8f5";
 export const MAX_MESSAGE_CHARS = 8000;
 const MAX_RESPONSE_CHARS = 1000000;
@@ -223,6 +225,17 @@ export function createSuperagentTransport({ apiKey, agentId = DEFAULT_AGENT_ID, 
       const provider_response = await request("POST", "/conversations/" + encodeURIComponent(conversationId) + "/messages", { role: "user", content: dispatchContent, file_urls: fileUrls, additional_message_params: additionalMessageParams }, "send message", true);
       // A successful send acknowledgment is not a validated quote result.
       return { accepted: true, conversation_id: conversationId, dispatch_marker: makeDispatchMarker(correlation), provider_response };
+    },
+    async sendContinuation({ conversationId, correlation, continuationId, content }) {
+      identifier(conversationId, "CONVERSATION_ID");
+      identifier(continuationId, "CONTINUATION_ID");
+      const dispatchContent = buildContinuationDispatchContent(normalizedCorrelation(correlation), continuationId, content);
+      // Use a distinct marker so reconciliation still finds exactly one original
+      // dispatch. The checkpoint reservation owns deduplication; never retry here.
+      await request("POST", "/conversations/" + encodeURIComponent(conversationId) + "/messages", {
+        role: "user", content: dispatchContent, file_urls: [], additional_message_params: {}
+      }, "send continuation", true);
+      return { accepted: true };
     },
     async reconcileDispatch({ conversationId, correlation }) {
       const conversation = await transport.getConversation(conversationId);
