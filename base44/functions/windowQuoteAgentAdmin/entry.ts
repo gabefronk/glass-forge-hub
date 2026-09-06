@@ -13,5 +13,5 @@ export default async function(req: Request) {
   const candidates=Array.isArray(raw)?raw:Array.isArray(raw?.conversations)?raw.conversations:Array.isArray(raw?.data)?raw.data:[];
   const matching=candidates.filter(c=>c.metadata?.window_quote?.quote_id===q.id).map(c=>({id:c.id,keys:Object.keys(c),app_id:c.app_id,metadata:c.metadata,message_count:c.messages?.length}));
   return new Response(JSON.stringify({configured:execution.configured,quote_id:q.id,status:q.worker_status,phase:q.agent_run?.phase,recorded_conversation_id:q.agent_run?.conversation_id||"",collection_shape:shape,matching}),{headers});
- } catch(e) {return new Response(JSON.stringify({error:"Agent connection diagnostic failed",code:e?.code||"INTERNAL",operation:e?.operation,status:e?.status}),{status:503,headers});}
+ } catch(e) {return new Response(JSON.stringify({error:"Agent connection diagnostic failed",code:e?.code||"INTERNAL",operation:e?.operation,status:e?.status,diagnostic:e?.diagnostic}),{status:503,headers});}
 }
