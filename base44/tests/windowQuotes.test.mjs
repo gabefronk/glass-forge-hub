@@ -16,7 +16,7 @@ function matches(row, query) {
 async function fixture() {
   let sequence = 0, timestamp = Date.parse("2026-09-06T18:00:00Z");
   const records = { QuoteRequests: [], QuoteMessages: [], QuoteWorkers: [], Jobs: [] };
-  const controls = { failAfterJobCreate: false, failMessageProjection: false };
+  const controls = { failAfterJobCreate: false, failBeforeJobCreate: false, failMessageProjection: false, failWorkerRelease: false };
   const entities = Object.fromEntries(Object.entries(records).map(([name, rows]) => [name, {
     async filter(query, sort, limit = 1000) {
       const output = rows.filter(r => matches(r, query));
@@ -26,12 +26,14 @@ async function fixture() {
     async list(sort, limit) { return this.filter({}, sort, limit); },
     async create(data) {
       if (name === "QuoteMessages" && controls.failMessageProjection) throw new Error("projection unavailable");
+      if (name === "Jobs" && controls.failBeforeJobCreate) { controls.failBeforeJobCreate = false; throw new Error("create did not persist"); }
       const row = { ...(name === "QuoteWorkers" ? {poll_generation:0,busy_token:"",active_quote_id:""} : {}), ...clone(data), id: name + "-" + (++sequence), created_date: new Date(timestamp + sequence).toISOString(), updated_date: new Date(timestamp + sequence).toISOString() };
       rows.push(row);
       if (name === "Jobs" && controls.failAfterJobCreate) { controls.failAfterJobCreate = false; throw new Error("response lost after create"); }
       return clone(row);
     },
     async updateMany(query, update) {
+      if (name === "QuoteWorkers" && controls.failWorkerRelease && update.$set?.busy_token === "") { controls.failWorkerRelease = false; throw new Error("worker release failed"); }
       let updated = 0;
       for (const row of rows) if (matches(row, query)) { Object.assign(row, clone(update.$set || {})); updated++; }
       return { success: true, updated };
@@ -186,6 +188,68 @@ test("concurrent won conversion produces one job and an immutable accepted snaps
   await f.call({action:"update",quote_id:q.id,title:"New revision"});
   const reread=await f.call({action:"detail",quote_id:q.id});
   assert.deepEqual(reread.quote.accepted_snapshot,snapshot);
+});
+test("failed conversion stays open and can be retried after its uncertainty lease",async()=>{
+  const f=await fixture(),q=await f.ready((await f.create()).quote);
+  assert.equal((await f.call({action:"convert_won",quote_id:q.id,customer_name:42})).status,400);
+  assert.equal(f.records.QuoteRequests[0].accepted_revision,0);
+  f.controls.failBeforeJobCreate=true;
+  assert.equal((await f.call({action:"convert_won",quote_id:q.id})).status,503);
+  assert.equal(f.records.QuoteRequests[0].sales_status,"open");
+  assert.equal(f.records.Jobs.length,0);
+  assert.equal((await f.call({action:"convert_won",quote_id:q.id})).status,409);
+  f.advance(601000);
+  assert.equal((await f.call({action:"convert_won",quote_id:q.id})).status,200);
+  assert.equal(f.records.Jobs.length,1);
+  assert.equal(f.records.QuoteRequests[0].sales_status,"won");
+});
+test("worker completion retry repairs a failed slot release and cannot read a later dealer revision",async()=>{
+  const f=await fixture(),q=(await f.create()).quote,c=await f.claim(q);
+  const payload={action:"worker_update",quote_id:q.id,lease_token:c.lease_token,status:"needs_details",message:"Confirm glass",event_id:"event-1"};
+  f.controls.failWorkerRelease=true;
+  assert.equal((await f.call(payload,f.worker)).status,503);
+  assert.notEqual(f.records.QuoteWorkers[0].busy_token,"");
+  assert.equal((await f.call(payload,f.worker)).status,200);
+  assert.equal(f.records.QuoteWorkers[0].busy_token,"");
+  await f.call({action:"update",quote_id:q.id,settings:{dealer:"BTB",yard:"BTB yard",gross_margin:25}});
+  const replay=await f.call(payload,f.worker);
+  assert.ok(replay.status===403||replay.status===409);
+  assert.equal(replay.quote,undefined);
+});
+test("heartbeat renewal between candidate read and reclaim cannot be stolen",async()=>{
+  const f=await fixture(),q=(await f.create()).quote,c=await f.claim(q);
+  f.advance(601000);
+  const originalFilter=f.entities.QuoteRequests.filter;
+  f.entities.QuoteRequests.filter=async function(query,...rest) {
+    const snapshot=await originalFilter.call(this,query,...rest);
+    if(query.$or) f.records.QuoteRequests[0].lease_expires_at="2026-09-06T18:30:00.000Z";
+    return snapshot;
+  };
+  const reclaim=await f.call({action:"worker_poll"},f.worker);
+  assert.equal(reclaim.status,200);
+  assert.equal(reclaim.quote,null);
+  assert.equal(f.records.QuoteRequests[0].lease_token,c.lease_token);
+});
+test("simultaneous creates return a canonical request and only that record can queue",async()=>{
+  const f=await fixture();
+  const responses=await Promise.all([f.create({request_id:"same-simultaneous"}),f.create({request_id:"same-simultaneous"})]);
+  assert.equal(responses[0].quote.id,responses[1].quote.id);
+  const canonicalId=responses[0].quote.id;
+  for(const record of f.records.QuoteRequests) {
+    const response=await f.call({action:"queue",quote_id:record.id});
+    assert.equal(response.status,record.id===canonicalId?200:409);
+  }
+  const claim=(await f.call({action:"worker_poll"},f.worker)).quote;
+  assert.equal(claim.id,canonicalId);
+});
+test("an exact edited-input retry does not create another revision",async()=>{
+  const f=await fixture(),q=(await f.create()).quote;
+  const payload={action:"update",quote_id:q.id,settings:{yard:"Different yard",dealer:"BFS",gross_margin:29.71},title:""};
+  const one=await f.call(payload),two=await f.call(payload);
+  assert.equal(one.status,200);assert.equal(two.status,200);
+  assert.equal(one.quote.input_revision,two.quote.input_revision);
+  assert.equal(one.quote.title,q.title);
+  assert.equal(one.quote.request_text,"Build these windows from scratch");
 });
 test("an uncertain job-create response reconciles by source quote without duplication",async()=>{
   const f=await fixture(),q=await f.ready((await f.create()).quote);
