@@ -74,12 +74,15 @@ async function fixture(executionService) {
   return {call,create,claim,ready,result,records,controls,entities,worker,advance:ms=>timestamp+=ms};
 }
 test("MCP prevents direct quote-table CRUD and exposes only guarded quote functions",()=>{
-  const config=JSON.parse(readFileSync(new URL("../mcp/config.json",import.meta.url),"utf8"));
+  const config=JSON.parse(readFileSync(new URL("./mcp.config.json",import.meta.url),"utf8"));
   assert.equal(config.auth,"oauth");
   for(const entity of ["QuoteWorkers","QuoteRequests","QuoteMessages"]) assert.deepEqual(config.tools.entity_overrides[entity].operations,[]);
-  const tools=config.tools.functions.filter(t=>t.handler==="windowQuotes");
+  const tools=config.tools.functions.filter(t=>["windowQuotes","windowQuotesDraft"].includes(t.handler));
   assert.equal(tools.length,6);
+  const expected={submit_window_takeoff:["windowQuotesDraft","create"],queue_window_quote:["windowQuotes","queue"],get_window_quote_status:["windowQuotes","detail"],list_window_quotes:["windowQuotes","list"],reply_window_quote:["windowQuotes","message"],update_window_takeoff:["windowQuotes","update"]};
+  assert.equal(new Set(tools.map(t=>t.name)).size,6);
   for(const tool of tools) {
+    assert.deepEqual([tool.handler,tool.input_schema.properties.action.enum[0]],expected[tool.name]);
     assert.ok(tool.input_schema.required.includes("action"));
     assert.equal(tool.input_schema.properties.action.enum.length,1);
     assert.ok(!tool.input_schema.properties.action.enum[0].startsWith("worker_"));
