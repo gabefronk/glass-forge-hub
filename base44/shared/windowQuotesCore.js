@@ -77,16 +77,101 @@ export function validateResult(raw) {
   result.totals.currency ??= "USD";
   return result;
 }
-function publicQuote(quote) {
+const READY_MESSAGE = "Your quote is ready to be viewed.";
+const PRIVATE_PUBLIC_KEYS = new Set([
+  "checkpoint", "checkpoints", "history", "conversation", "audit", "auditlog", "workertrace",
+  "leasetoken", "leaserevision", "leaseexpiresat", "conversiontoken", "conversionexpiresat",
+  "lastworkereventid", "lastworkerleasetoken", "workerid", "tokenhash", "accesstoken", "refreshtoken"
+]);
+const NATIVE_HOST_PATTERN = String.raw`(?:[a-z0-9-]+\.)*(?:wtsparadigm\.com|myparadigmcloud\.com)|webcp-prod-gs\.azurewebsites\.net`;
+const NATIVE_HOST = new RegExp("(?:^|[^a-z0-9.-])(?:" + NATIVE_HOST_PATTERN + ")(?=[^a-z0-9.-]|$)", "i");
+const NATIVE_ADDRESS = new RegExp("(?:https?:\\/\\/|\\/\\/)?(?:" + NATIVE_HOST_PATTERN + ")(?::[0-9]+)?(?:[/?#][^\\s<>\\[\\]\\\"'`)]*)?", "gi");
+const keyName = key => key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+const isNativeAddress = text => NATIVE_HOST.test(text);
+function publicText(value) {
+  // Decode only whitespace-delimited tokens for inspection; never transform the product text itself.
+  let text = value.replace(/\S+/g, token => {
+    if (!/%[0-9a-f]{2}/i.test(token)) return token;
+    let decoded = token;
+    for (let i = 0; i < 2; i++) { try { decoded = decodeURIComponent(decoded); } catch { break; } }
+    return isNativeAddress(decoded) ? "" : token;
+  });
+  text = text.replace(/!?\[([^\]]*)\]\(([^)]*)\)/g, (whole, label, target) => isNativeAddress(target) ? "" : whole);
+  text = text.replace(/<([^<>]+)>/g, (whole, target) => isNativeAddress(target) ? "" : whole);
+  text = text.replace(NATIVE_ADDRESS, "");
+  return text === value ? value : text.replace(/[ \t]+\n/g, "\n").replace(/[ \t]{2,}/g, " ").trim();
+}
+export function sanitizePublic(value) {
+  if (typeof value === "string") return publicText(value);
+  if (Array.isArray(value)) return value.map(sanitizePublic);
+  if (!value || typeof value !== "object") return value;
+  const safe = {};
+  for (const [key, item] of Object.entries(value)) {
+    const normalized = keyName(key);
+    if (PRIVATE_PUBLIC_KEYS.has(normalized)) continue;
+    if (/(?:native|amsco|account|portal|dealer).*(?:url|uri|href|link)|(?:url|uri|href|link).*(?:native|amsco|account|portal)/.test(normalized)) continue;
+    if (/^(?:url|uri|href|link)$/.test(normalized) && typeof item === "string" && isNativeAddress(item)) continue;
+    // Also remove a URL used as a map key instead of a field value.
+    if (isNativeAddress(key)) continue;
+    safe[key] = sanitizePublic(item);
+  }
+  return safe;
+}
+function workerQuote(quote) {
   if (!quote) return null;
   const safe = copy(quote);
-  safe.request_text = (quote.conversation || []).find(m => m.role === "user")?.content || "";
+  safe.request_text = (quote.conversation || []).find(m => m?.role === "user")?.content || quote.request_text || "";
   for (const k of ["lease_token", "conversion_token", "conversion_expires_at", "last_worker_event_id", "last_worker_lease_token", "conversation"]) delete safe[k];
   return safe;
 }
-function publicMessage(m, quoteId) {
-  return { id: m.id || m.client_message_id, quote_id: quoteId, role: m.role, content: m.content, client_message_id: m.client_message_id, revision: m.revision, created_date: m.message_at };
+export function publicQuote(quote) {
+  return sanitizePublic(workerQuote(quote));
 }
+function workerMessage(m, quoteId) {
+  return { id: m.id || m.client_message_id, quote_id: quoteId, role: m.role, content: m.content, client_message_id: m.client_message_id, revision: m.revision, created_date: m.message_at || m.created_date, ...(m.kind ? { kind: m.kind } : {}), ...(m.worker_status ? { worker_status: m.worker_status } : {}) };
+}
+function publicMessage(m, quoteId) {
+  return sanitizePublic(workerMessage(m, quoteId));
+}
+export function publicMessages(quote) {
+  const raw = (Array.isArray(quote.conversation) ? quote.conversation : []).filter(m => m && typeof m === "object");
+  const clarificationRevisions = new Set((quote.history || []).filter(h => h?.worker_status === "needs_details").map(h => String(h.revision)));
+  if (quote.worker_status === "needs_details") clarificationRevisions.add(String(quote.input_revision));
+  const lastLegacyAssistant = new Map();
+  for (let i = 0; i < raw.length; i++) if (raw[i].role === "assistant" && !raw[i].kind) lastLegacyAssistant.set(String(raw[i].revision), i);
+  // Some early records have no status history. Keep a clearly phrased question immediately
+  // before its user reply, while never treating a tagged progress message as a question.
+  const legacyQuestions = new Set();
+  for (let i = 0; i < raw.length; i++) if (raw[i].role === "user") {
+    let previous = i - 1;
+    while (previous >= 0 && raw[previous].role === "system") previous--;
+    const candidate = raw[previous];
+    if (candidate?.role === "assistant" && !candidate.kind && /\?|\bplease\s+(?:confirm|provide|specify|choose|clarify)\b/i.test(candidate.content || "")) legacyQuestions.add(previous);
+  }
+  let userCount = 0;
+  const visible = [];
+  for (let i = 0; i < raw.length; i++) {
+    const m = raw[i];
+    if (m.role === "user") {
+      userCount++;
+      visible.push(publicMessage({ ...m, kind: m.kind || (userCount === 1 ? "initial_request" : "clarification_reply") }, quote.id));
+    } else if (m.role === "assistant" && (
+      m.kind === "clarification" || m.worker_status === "needs_details" ||
+      (!m.kind && ((clarificationRevisions.has(String(m.revision)) && lastLegacyAssistant.get(String(m.revision)) === i) || legacyQuestions.has(i)))
+    )) visible.push(publicMessage({ ...m, kind: "clarification" }, quote.id));
+  }
+  const currentQuestion = visible.some(m => m.kind === "clarification" && String(m.revision) === String(quote.input_revision));
+  if (quote.worker_status === "needs_details" && !currentQuestion && Array.isArray(quote.missing_details) && quote.missing_details.length) {
+    const details = sanitizePublic(quote.missing_details).filter(x => typeof x === "string" && x.trim());
+    if (details.length) visible.push({ id: "clarification:" + quote.id + ":" + quote.input_revision, quote_id: quote.id, role: "assistant", kind: "clarification", content: details.join("\n"), revision: quote.input_revision, created_date: quote.updated_date || quote.created_date });
+  }
+  if (quote.worker_status === "ready" && quote.result?.verified === true) {
+    const completion = [...raw].reverse().find(m => m.role === "assistant" && (m.kind === "ready" || m.worker_status === "ready") && String(m.revision) === String(quote.input_revision));
+    visible.push({ id: "ready:" + quote.id + ":" + quote.input_revision, quote_id: quote.id, role: "assistant", kind: "ready", content: READY_MESSAGE, revision: quote.input_revision, created_date: completion?.message_at || quote.updated_date || quote.created_date });
+  }
+  return visible;
+}
+
 export async function sha256(value) {
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))), b => b.toString(16).padStart(2, "0")).join("");
 }
@@ -142,7 +227,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           if (!existing.length) await db.QuoteMessages.create({ quote_id: q.id, ...message });
         } catch { /* A retry/detail still has the canonical conversation; never lose the accepted input. */ }
       };
-      const makeMessage = (content, role, revision, messageId, author) => ({ role, content: textValue(content, "message", 18000, true), revision, client_message_id: textValue(messageId, "client_message_id", 150, true), message_at: at(), author });
+      const makeMessage = (content, role, revision, messageId, author, kind = "user_message", workerStatus) => ({ role, content: textValue(content, "message", 18000, true), revision, client_message_id: textValue(messageId, "client_message_id", 150, true), message_at: at(), author, kind, ...(workerStatus ? { worker_status: workerStatus } : {}) });
       const canonical = async q => {
         const matches = await db.QuoteRequests.filter({ request_id: q.request_id, requester_email: q.requester_email }, "created_date", 20);
         matches.sort((a, b) => (a.created_date || "").localeCompare(b.created_date || "") || a.id.localeCompare(b.id));
@@ -169,7 +254,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         output = { quotes: quotes.filter(q => canonicalCards.get(JSON.stringify([q.requester_email, q.request_id])) === q.id).map(publicQuote), worker: { online: !!current?.last_seen_at && now().getTime() - Date.parse(current.last_seen_at) < 100000, last_seen_at: current?.last_seen_at || null, name: current?.name || null } };
       } else if (action === "detail") {
         const q = await getQuote(body.quote_id);
-        output = { quote: publicQuote(q), messages: (q.conversation || []).map(m => publicMessage(m, q.id)) };
+        output = { quote: publicQuote(q), messages: publicMessages(q) };
       } else if (action === "create") {
         const requestId = textValue(body.request_id, "request_id", 150, true);
         const requester = textValue(user.email || user.id, "requester", 320, true);
@@ -178,7 +263,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         else {
           const settings = validateSettings(body.settings || {});
           const lines = validateLines(body.lines || []);
-          const initial = body.message?.trim() ? makeMessage(body.message, "user", 1, requestId + ":initial", requester) : null;
+          const initial = body.message?.trim() ? makeMessage(body.message, "user", 1, requestId + ":initial", requester, "initial_request") : null;
           const q = await db.QuoteRequests.create({
             request_id: requestId, title: textValue(body.title, "title", 200) || "Window quote",
             requester_email: requester, settings, lines, source: body.source ? jsonValue(object(body.source, "source"), "source", 150000) : {},
@@ -200,7 +285,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           output = { quote: publicQuote(q), message: publicMessage(existing, q.id) };
         } else {
           editable(q);
-          const msg = makeMessage(body.message, "user", q.input_revision + 1, clientId, user.email || user.id);
+          const msg = makeMessage(body.message, "user", q.input_revision + 1, clientId, user.email || user.id, q.worker_status === "needs_details" ? "clarification_reply" : "user_message");
           q = await cas(q, { input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", conversation: [...(q.conversation || []), msg], history: history(q, "message"), missing_details: [] });
           await ensureMessage(q, msg);
           output = { quote: publicQuote(q), message: publicMessage(msg, q.id) };
@@ -253,7 +338,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
             if (!picked) { await releaseWorker(token); output = { quote: null }; }
             else {
               await db.QuoteWorkers.updateMany({ id: worker.id, busy_token: token }, { $set: { active_quote_id: picked.id } });
-              output = { quote: { ...publicQuote(picked), lease_token: token, messages: (picked.conversation || []).map(m => publicMessage(m, picked.id)) } };
+              output = { quote: { ...workerQuote(picked), lease_token: token, messages: (picked.conversation || []).map(m => workerMessage(m, picked.id)) } };
             }
           }
         }
@@ -275,7 +360,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           if (!(worker.allowed_dealers || []).includes(q.settings?.dealer)) fail(403, "Worker is not paired for this dealer");
           if (q.lease_revision !== q.input_revision || !body.lease_token || body.lease_token !== q.last_worker_lease_token) fail(409, "Worker event belongs to a different lease or revision");
           if (TERMINAL.has(q.worker_status)) await releaseWorker(body.lease_token);
-          output = { quote: publicQuote(q) };
+          output = { quote: workerQuote(q) };
         } else {
           await checkedLease(q);
           if (!["running", ...TERMINAL].includes(body.status)) fail(400, "Invalid worker status");
@@ -298,7 +383,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           if (body.status === "ready") { if (!own(body, "result")) fail(400, "Ready requires a verified AMSCO result"); patch.missing_details = []; patch.history = [...(q.history || []), { revision: q.input_revision, recorded_at: at(), reason: "verified", settings: copy(patch.settings || q.settings), lines: copy(patch.lines || q.lines), result: copy(patch.result), worker_status: "ready" }]; }
           let msg;
           if (body.message) {
-            msg = makeMessage(body.message, "assistant", q.input_revision, "worker:" + eventId, worker.name || worker.id);
+            msg = makeMessage(body.message, "assistant", q.input_revision, "worker:" + eventId, worker.name || worker.id, body.status === "needs_details" ? "clarification" : body.status === "ready" ? "ready" : "progress", body.status);
             patch.conversation = [...(q.conversation || []), msg];
           }
           if (TERMINAL.has(body.status)) { patch.lease_token = ""; patch.lease_expires_at = ""; }
@@ -308,7 +393,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           if (msg) await ensureMessage(q, msg);
           if (TERMINAL.has(body.status)) await releaseWorker(lease);
           else await db.QuoteWorkers.updateMany({ id: worker.id, busy_token: lease }, { $set: { last_seen_at: at(), busy_until: q.lease_expires_at } });
-          output = { quote: publicQuote(q) };
+          output = { quote: workerQuote(q) };
         }
       } else if (action === "convert_won") {
         let q = await getQuote(body.quote_id);
@@ -341,7 +426,10 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           output = { quote: publicQuote(q), job };
         }
       }
-      return new Response(JSON.stringify(output), { status: 200, headers });
+      // Apply the same boundary to every browser/MCP action, including linked Job snapshots.
+      // Worker transport keeps its private recovery data and complete stored conversation.
+      const responseOutput = USER_ACTIONS.has(action) ? sanitizePublic(output) : output;
+      return new Response(JSON.stringify(responseOutput), { status: 200, headers });
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 503;
       return new Response(JSON.stringify({ error: error instanceof HttpError ? error.message : "The quote service could not complete this request. Retry safely with the same request or message ID." }), { status, headers });
