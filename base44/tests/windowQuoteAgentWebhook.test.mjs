@@ -57,7 +57,7 @@ function fixture(outcome = { schema_version: 1, ...correlation, outcome: 'failed
     assert.ok(url.endsWith('/conversations/conversation-test'));
     return new Response(JSON.stringify(conversation), { status: 200 });
   } });
-  const service = createAgentExecution({ transport, browserSlotId: 'slot-test', now: () => new Date(time) });
+  const service = createAgentExecution({ transport, browserSlotId: 'slot-test', conversationId: 'conversation-test', now: () => new Date(time) });
   const execution = { report: async args => { controls.reports.push(clone(args.body)); return service.report(args); } };
   const handler = createAgentWebhookHandler({ secret: SECRET, transport, execution, getClient: async () => {
     controls.clientCalls++; return { asServiceRole: { entities: db } };
@@ -70,8 +70,40 @@ function fixture(outcome = { schema_version: 1, ...correlation, outcome: 'failed
     const response = await handler(new Request('https://example.invalid/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Base44-Signature': signed, 'X-Base44-Event': event, 'X-Base44-Delivery': delivery }, body: rawBody }));
     return { status: response.status, ...await response.json() };
   }
-  return { call, handler, controls, records, conversation, q: records.QuoteRequests[0], slot: records.QuoteWorkers[0] };
+  return { call, handler, service, db, controls, records, conversation, q: records.QuoteRequests[0], slot: records.QuoteWorkers[0] };
 }
+
+function pendingContinuation(f) {
+  Object.assign(f.q.agent_run, {
+    continuation_enabled: true, continuation_limit: 1,
+    continuations: [{ id: 'segment-test', checkpoint_event_id: 'saved-batch-test', from_segment_id: '', native_quote_id: f.q.checkpoint.native_quote_id, state: 'sent' }],
+    event_ids: ['saved-batch-test']
+  });
+}
+
+test('authoritative webhook without current continuation ID cannot complete a reserved or acknowledged segment', async () => {
+  for (const suppliedId of [undefined, 'old-segment']) {
+    for (const acknowledged of [false, true]) {
+      const f = fixture({ schema_version: 1, ...correlation, outcome: 'failed', ...(suppliedId ? { continuation_id: suppliedId } : {}) });
+      pendingContinuation(f);
+      if (acknowledged) await f.service.tool({ db: f.db, body: { action: 'read', ...correlation, execution_token: f.q.agent_run.execution_token, continuation_id: 'segment-test' } });
+      assert.equal((await f.call()).status, 503);
+      assert.equal(f.q.worker_status, 'running');assert.equal(f.slot.busy_token, correlation.operation_id);
+      assert.ok(!f.q.agent_run.event_ids.includes('webhook:message-test'));
+    }
+  }
+});
+
+test('authoritative webhook with acknowledged continuation ID completes and terminal retry repairs release', async () => {
+  const f = fixture({ schema_version: 1, ...correlation, outcome: 'failed', continuation_id: 'segment-test' });
+  pendingContinuation(f);
+  // A signed completion still cannot skip the first guarded acknowledgement read.
+  assert.equal((await f.call()).status, 503);assert.equal(f.q.worker_status, 'running');
+  await f.service.tool({ db: f.db, body: { action: 'read', ...correlation, execution_token: f.q.agent_run.execution_token, continuation_id: 'segment-test' } });
+  f.controls.failReleaseOnce = true;
+  assert.equal((await f.call()).status, 503);assert.equal(f.q.worker_status, 'failed');
+  assert.equal((await f.call({ delivery: 'retry-after-persist' })).status, 200);assert.equal(f.slot.busy_token, '');
+});
 
 test('invalid signature, tampered body and wrong signed agent stop before database access', async () => {
   for (const options of [{ signature: 'sha256=' + '0'.repeat(64) }, { mutateBody: body => body + ' ' }, { payload: { app_id: 'wrong-agent' } }]) {
