@@ -4,4 +4,4 @@ import { execution } from "../../shared/windowQuoteAgentRuntime.js";
 // Base44 Superagent is the only execution route. Local Codex worker actions are retired.
 export default createQuoteHandler({ getClient: createClientFromRequest, executionService: execution });
 
-// Dispatch v3: dedicated native execution conversation, serialized per-request capabilities.
+// Dispatch v4: explicitly configured native execution channel.
