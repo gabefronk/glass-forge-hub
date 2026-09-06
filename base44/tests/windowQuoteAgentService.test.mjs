@@ -8,11 +8,11 @@ const clone = x => JSON.parse(JSON.stringify(x));
 const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => row[key] === value);
 const NATIVE_ID = '12345678-1234-1234-1234-123456789abc';
 const NATIVE_URL = 'https://amsco.wtsparadigm.com/quotes/' + NATIVE_ID + '/details';
-async function fixture({ noSlot = false, fixedSlot = false, conversationId } = {}) {
+async function fixture({ noSlot = false, fixedSlot = false, conversationId, continuationEnabled = false, continuationLimit = 1 } = {}) {
   let sequence = 0, timestamp = Date.parse('2026-09-06T22:00:00Z');
   const records = { QuoteRequests: [], QuoteWorkers: [] };
-  const controls = { uncertainSend: false, failSendingWrite: false, failRelease: false, createError: null };
-  const calls = { create: [], send: [] };
+  const controls = { uncertainSend: false, failSendingWrite: false, failRelease: false, createError: null, uncertainContinuation: false, onContinuation: null, loseCheckpointReply: false, loseContinuationSendingReply: false };
+  const calls = { create: [], send: [], continuations: [] };
   const db = Object.fromEntries(Object.entries(records).map(([name, rows]) => [name, {
     async filter(query, sort, limit = 1000) {
       const result = rows.filter(row => matches(row, query));
@@ -28,15 +28,18 @@ async function fixture({ noSlot = false, fixedSlot = false, conversationId } = {
       if (name === 'QuoteWorkers' && controls.failRelease && patch.$set.busy_token === '') { controls.failRelease = false; throw new Error('release write failed'); }
       let updated = 0;
       for (const row of rows) if (matches(row, query)) { Object.assign(row, clone(patch.$set));updated++; }
+      if (name === 'QuoteRequests' && updated === 1 && controls.loseCheckpointReply && patch.$set.agent_run?.continuations?.at(-1)?.state === 'reserved') { controls.loseCheckpointReply = false; throw new Error('Simulated lost accepted-checkpoint reply'); }
+      if (name === 'QuoteRequests' && updated === 1 && controls.loseContinuationSendingReply && patch.$set.agent_run?.continuations?.at(-1)?.state === 'sending') { controls.loseContinuationSendingReply = false; throw new Error('Simulated lost sending CAS reply'); }
       return { updated };
     }
   }]));
   const transport = {
     async createConversation(correlation) { calls.create.push(clone(correlation));if (controls.createError) throw controls.createError;return { id: 'conversation-' + calls.create.length }; },
-    async sendMessage(payload) { calls.send.push(clone(payload));if (controls.uncertainSend) throw new Error('Uncertain provider acceptance');return { accepted: true }; }
+    async sendMessage(payload) { calls.send.push(clone(payload));if (controls.uncertainSend) throw new Error('Uncertain provider acceptance');return { accepted: true }; },
+    async sendContinuation(payload) { calls.continuations.push(clone(payload));if (controls.onContinuation) await controls.onContinuation(payload);if (controls.uncertainContinuation) throw new Error('Uncertain continuation acceptance');return { accepted: true }; }
   };
   const lock = noSlot ? null : await db.QuoteWorkers.create({ name: 'Base44 Window Quotes browser', token_hash: 'test-disabled-row', enabled: false, allowed_dealers: ['BFS'], busy_token: '', poll_generation: 0 });
-  const execution = createAgentExecution({ transport, ...(fixedSlot && lock ? { browserSlotId: lock.id } : {}), ...(conversationId !== undefined ? { conversationId } : {}), now: () => new Date(timestamp), uuid: () => 'generated-' + (++sequence) });
+  const execution = createAgentExecution({ transport, ...(fixedSlot && lock ? { browserSlotId: lock.id } : {}), ...(conversationId !== undefined ? { conversationId } : {}), continuationEnabled, continuationLimit, now: () => new Date(timestamp), uuid: () => 'generated-' + (++sequence) });
   const create = async (changes = {}) => db.QuoteRequests.create({ request_id: 'r-' + (++sequence), title: 'Test', requester_email: 'owner@example.test', settings: { dealer: 'BFS', yard: 'BFS-UTAH DESIGN', gross_margin: 29.71 }, lines: [{ qty: 1, width: 36, height: 60, units: 'in', dimension_basis: 'call', style: 'Single Hung' }], conversation: [{ role: 'user', content: 'Build one window', revision: 1, client_message_id: 'initial' }], input_revision: 1, state_version: 0, worker_status: 'draft', sales_status: 'open', ...changes });
   const current = id => clone(records.QuoteRequests.find(q => q.id === id));
   const start = async (changes = {}) => execution.afterInput({ db, q: await create(changes) });
@@ -45,7 +48,7 @@ async function fixture({ noSlot = false, fixedSlot = false, conversationId } = {
   const checkpoint = (q, fields = {}) => report(q, { status: 'running', checkpoint: { native_quote_id: NATIVE_ID, native_quote_url: NATIVE_URL, completed_lines: [], ...fields } });
   const result = { verified: true, native_quote_id: NATIVE_ID, native_quote_number: '1234567', native_quote_url: NATIVE_URL, lines: [{ native_line_id: 'line-1', native_line_number: 100, qty: 1, style: 'Single Hung', frame_dimensions: { width: 35.5, height: 59.5, units: 'in' }, unit_prices: { customer: 142.27, dealer: 100, list: 200 }, line_totals: { customer: 142.27, dealer: 100, list: 200 } }], totals: { customer_total: 142.27, dealer_cost: 100, gross_margin: 29.71, currency: 'USD' } };
   const verification = { reopened: true, dealer: 'BFS', yard: 'BFS-UTAH DESIGN', gross_margin: 29.71, checked_at: '2026-09-06T22:00:00Z' };
-  return { execution, db, records, controls, calls, lock, create, start, current, body, report, checkpoint, result, verification, advance: ms => timestamp += ms };
+  return { execution, transport, db, records, controls, calls, lock, create, start, current, body, report, checkpoint, result, verification, advance: ms => timestamp += ms };
 }
 test('start claims one configured slot and sends exactly one private correlated prompt', async () => {
   const f = await fixture(), q = await f.start();
@@ -261,5 +264,171 @@ test('scoped HTTP handler rejects malformed schema and wrong capabilities withou
   const valid = f.body(q, { action: 'read' });
   assert.equal((await handler(new Request('https://example.test', { method: 'POST', body: JSON.stringify(valid) }))).status, 200);
   assert.equal((await handler(new Request('https://example.test', { method: 'POST', body: JSON.stringify({ ...valid, execution_token: 'bad' }) }))).status, 403);
+});
+
+const enabledFixture = () => fixture({ conversationId: 'shared-conversation', continuationEnabled: true });
+const continuationBody = (f, q, extra = {}) => f.body(q, { action: 'checkpoint', request_continuation: true, checkpoint: { native_quote_id: NATIVE_ID, native_quote_url: NATIVE_URL, completed_lines: ['100'] }, continuation: { reason: 'batch_complete', browser_changes: 3, no_pending_user_action: true }, ...extra });
+const tool = (f, body) => f.execution.tool({ db: f.db, body });
+
+test('continuation is off by default and cannot retrofit an already running operation', async () => {
+  const f = await fixture({ conversationId: 'shared-conversation' }), q = await f.start();
+  assert.equal(q.agent_run.continuation_enabled, undefined);
+  assert.deepEqual((await tool(f, f.body(q, { action: 'read' }))).continuation_policy, { enabled: false });
+  const enabledLater = createAgentExecution({ transport: f.transport, conversationId: 'shared-conversation', continuationEnabled: true });
+  const response = await enabledLater.tool({ db: f.db, body: continuationBody(f, q) });
+  assert.deepEqual(response.continuation, { state: 'disabled', must_yield: true });
+  assert.equal(f.current(q.id).checkpoint.native_quote_id, NATIVE_ID);
+  assert.equal(f.current(q.id).agent_run.continuations, undefined);
+  assert.equal(f.calls.continuations.length, 0);
+});
+
+test('enabled continuation configuration requires exact shared conversation and bounded policy', () => {
+  for (const args of [{ transport: {} }, { transport: { sendContinuation() {} } }, { transport: {}, conversationId: 'shared' }, { transport: { sendContinuation() {} }, conversationId: 'shared', continuationLimit: 0 }]) {
+    assert.throws(() => createAgentExecution({ continuationEnabled: true, ...args }), e => e.status === 503);
+  }
+  assert.throws(() => createAgentExecution({ transport: {}, continuationEnabled: 'true' }), e => e.status === 503);
+});
+
+test('enabled checkpoint atomically accepts one reservation and keeps same operation, quote and browser lock', async () => {
+  const f = await enabledFixture(), q = await f.start(), body = continuationBody(f, q);
+  const response = await tool(f, body), current = f.current(q.id);
+  assert.deepEqual(response.continuation, { state: 'sent', must_yield: true });
+  assert.equal(current.agent_run.continuations.length, 1);assert.ok(current.agent_run.event_ids.includes(body.event_id));
+  assert.equal(current.agent_run.continuations[0].checkpoint_event_id, body.event_id);
+  assert.equal(current.agent_run.operation_id, q.agent_run.operation_id);assert.equal(current.agent_run.execution_token, q.agent_run.execution_token);
+  assert.equal(current.checkpoint.native_quote_id, NATIVE_ID);assert.equal(f.records.QuoteWorkers[0].busy_token, q.agent_run.operation_id);
+  assert.equal(f.calls.create.length, 0);assert.equal(f.calls.send.length, 1);assert.equal(f.calls.continuations.length, 1);
+  assert.equal(f.calls.continuations[0].conversationId, 'shared-conversation');
+  assert.ok(!JSON.stringify(response).includes(current.agent_run.continuations[0].id));
+  assert.ok(!JSON.stringify(response).includes(NATIVE_URL));
+  await tool(f, { ...body, checkpoint: { native_quote_id: 'changed-by-replay' }, continuation: {} });
+  assert.deepEqual(f.current(q.id), current);assert.equal(f.calls.continuations.length, 1);
+});
+
+test('lost accepted-checkpoint reply recovers recorded reservation without recreating its intent', async () => {
+  const f = await enabledFixture(), q = await f.start(), body = continuationBody(f, q);
+  f.controls.loseCheckpointReply = true;
+  await assert.rejects(tool(f, body));
+  const accepted = f.current(q.id);assert.equal(accepted.agent_run.continuations[0].state, 'reserved');assert.equal(f.calls.continuations.length, 0);
+  await tool(f, { ...body, request_continuation: false, checkpoint: { native_quote_id: 'changed-by-replay' } });
+  const current = f.current(q.id);assert.equal(current.agent_run.continuations[0].id, accepted.agent_run.continuations[0].id);
+  assert.equal(current.checkpoint.native_quote_id, NATIVE_ID);assert.equal(f.calls.continuations.length, 1);
+});
+
+test('ordinary checkpoint replay cannot add continuation intent and invalid checkpoint never reserves', async () => {
+  const f = await enabledFixture(), q = await f.start(), body = continuationBody(f, q, { request_continuation: false });
+  await tool(f, body);const current = f.current(q.id);
+  assert.equal((await tool(f, { ...body, request_continuation: true })).continuation.state, 'not_reserved');
+  assert.deepEqual(f.current(q.id), current);assert.equal(f.calls.continuations.length, 0);
+  await assert.rejects(tool(f, continuationBody(f, q, { checkpoint: { native_quote_id: NATIVE_ID, native_quote_url: 'https://example.test/wrong' } })), e => e.status === 400);
+  assert.deepEqual(f.current(q.id), current);
+});
+
+test('concurrent accepted checkpoint deliveries send one follow-up only', async () => {
+  const f = await enabledFixture(), q = await f.start(), body = continuationBody(f, q);
+  await Promise.allSettled([tool(f, body), tool(f, body), tool(f, body)]);
+  assert.equal(f.calls.continuations.length, 1);assert.equal(f.current(q.id).agent_run.continuations.length, 1);
+});
+
+test('sending ambiguity and timeout never resend or release ownership', async () => {
+  for (const lostSendingReply of [false, true]) {
+    const f = await enabledFixture(), q = await f.start(), body = continuationBody(f, q);
+    f.controls.uncertainContinuation = true;f.controls.loseContinuationSendingReply = lostSendingReply;
+    if (lostSendingReply) await assert.rejects(tool(f, body));else assert.equal((await tool(f, body)).continuation.state, 'uncertain');
+    const sends = f.calls.continuations.length;
+    await tool(f, body);await tool(f, body);await f.execution.afterInput({ db: f.db, q });
+    assert.equal(f.calls.continuations.length, sends);assert.equal(sends, lostSendingReply ? 0 : 1);
+    assert.equal(f.records.QuoteWorkers[0].busy_token, q.agent_run.operation_id);
+  }
+});
+
+test('continuation read acknowledges exact next segment and fences all late old-segment writes', async () => {
+  const f = await enabledFixture(), q = await f.start();await tool(f, continuationBody(f, q));
+  const id = f.current(q.id).agent_run.continuations[0].id;
+  await assert.rejects(tool(f, f.body(q, { action: 'read' })), e => e.status === 409);
+  await assert.rejects(tool(f, f.body(q, { action: 'report', continuation_id: id, status: 'failed' })), e => e.status === 409);
+  const read = await tool(f, f.body(q, { action: 'read', continuation_id: id }));
+  assert.equal(read.continuation_policy.active_continuation_id, id);assert.equal(read.continuation_policy.remaining_continuations, 0);
+  assert.equal(read.checkpoint.native_quote_id, NATIVE_ID);
+  await assert.rejects(tool(f, f.body(q, { action: 'report', status: 'failed' })), e => e.status === 409);
+  await assert.rejects(tool(f, continuationBody(f, q, { request_continuation: false })), e => e.status === 409);
+  const result = await tool(f, f.body(q, { action: 'report', continuation_id: id, status: 'ready', result: f.result, verification: f.verification }));
+  assert.equal(result.status, 'ready');assert.equal(f.records.QuoteWorkers[0].busy_token, '');
+});
+
+test('reentrant next-segment completion wins over late continuation success or timeout', async () => {
+  for (const uncertain of [false, true]) {
+    const f = await enabledFixture(), q = await f.start();f.controls.uncertainContinuation = uncertain;
+    f.controls.onContinuation = async payload => {
+      await tool(f, f.body(q, { action: 'read', continuation_id: payload.continuationId }));
+      await tool(f, f.body(q, { action: 'report', continuation_id: payload.continuationId, status: 'ready', result: f.result, verification: f.verification }));
+    };
+    const response = await tool(f, continuationBody(f, q));
+    assert.equal(response.status, 'ready');assert.equal(response.quote.worker_status, 'ready');
+    assert.equal(f.current(q.id).agent_run.phase, 'completed');assert.equal(f.current(q.id).agent_run.continuations[0].state, 'acknowledged');
+    assert.equal(f.records.QuoteWorkers[0].busy_token, '');assert.equal(f.calls.continuations.length, 1);
+  }
+});
+
+test('terminal replay repairs release and drains next quote despite continuation segment fencing', async () => {
+  const f = await enabledFixture(), one = await f.start(), two = await f.start();
+  await tool(f, continuationBody(f, one));const id = f.current(one.id).agent_run.continuations[0].id;
+  await tool(f, f.body(one, { action: 'read', continuation_id: id }));
+  const terminal = f.body(one, { action: 'report', continuation_id: id, status: 'failed', message: 'Saved checkpoint; continuation pilot finished.' });
+  f.controls.failRelease = true;await assert.rejects(tool(f, terminal));
+  assert.equal(f.current(one.id).worker_status, 'failed');assert.equal(f.current(two.id).worker_status, 'queued');
+  await tool(f, terminal);assert.equal(f.current(two.id).worker_status, 'running');assert.equal(f.calls.send.length, 2);
+  await tool(f, terminal);assert.equal(f.calls.send.length, 2);assert.equal(f.records.QuoteWorkers[0].active_quote_id, two.id);
+});
+
+test('turning the send flag off preserves existing segment fencing and permits acknowledged terminal completion', async () => {
+  const f = await enabledFixture(), q = await f.start();await tool(f, continuationBody(f, q));
+  const disabled = createAgentExecution({ transport: f.transport, conversationId: 'shared-conversation' });
+  const id = f.current(q.id).agent_run.continuations[0].id;
+  await assert.rejects(disabled.tool({ db: f.db, body: f.body(q, { action: 'read' }) }), e => e.status === 409);
+  const read = await disabled.tool({ db: f.db, body: f.body(q, { action: 'read', continuation_id: id }) });
+  assert.equal(read.continuation_policy.enabled, false);
+  await disabled.tool({ db: f.db, body: f.body(q, { action: 'report', continuation_id: id, status: 'failed' }) });
+  assert.equal(f.calls.continuations.length, 1);assert.equal(f.current(q.id).worker_status, 'failed');
+});
+
+test('continuation cap and recorded approval blockers cannot trigger additional sends', async () => {
+  const f = await enabledFixture(), q = await f.start();await tool(f, continuationBody(f, q));
+  const id = f.current(q.id).agent_run.continuations[0].id;
+  await tool(f, f.body(q, { action: 'read', continuation_id: id }));
+  const response = await tool(f, continuationBody(f, q, { continuation_id: id, checkpoint: { completed_lines: ['100', '200'] } }));
+  assert.equal(response.continuation.state, 'limit_reached');assert.deepEqual(f.current(q.id).checkpoint.completed_lines, ['100', '200']);
+  assert.equal(f.calls.continuations.length, 1);assert.equal(f.records.QuoteWorkers[0].busy_token, q.agent_run.operation_id);
+  for (const blocker of ['requires_mfa', 'requires_approval', 'requires_sign_in', 'pending_user_action']) {
+    const blocked = await enabledFixture(), running = await blocked.start({ checkpoint: { native_quote_id: NATIVE_ID, [blocker]: true } });
+    await assert.rejects(tool(blocked, continuationBody(blocked, running, { checkpoint: { native_quote_id: NATIVE_ID, [blocker]: false } })), e => e.status === 409);
+    assert.equal(blocked.calls.continuations.length, 0);assert.equal(blocked.current(running.id).agent_run.continuations, undefined);
+  }
+});
+
+test('initial prompt and read use exact renderer dimensions and observed price contract within provider limit', async () => {
+  const f = await enabledFixture(), q = await f.start(), prompt = buildAgentPrompt(q);
+  const read = await tool(f, f.body(q, { action: 'read' }));
+  for (const key of ['flat width and height', 'dimension_basis:call/frame/rough_opening', 'frame_dimensions:{width,height,units:in}', 'unit_prices:{list,dealer,customer}', 'line_totals:{list,dealer,customer}', 'never invent prices']) {
+    assert.ok(prompt.includes(key));assert.ok(read.contract.result.includes(key));
+  }
+  assert.ok(prompt.includes('stop ALL native actions immediately'));assert.ok(prompt.includes('no_pending_user_action:true'));
+  assert.ok(prompt.length < 7500);assert.equal(read.continuation_policy.remaining_continuations, 1);
+});
+
+test('pilot allowlist permits only a selected new operation and empty allowlist keeps every request disabled', async () => {
+  const f = await fixture({ conversationId: 'shared-conversation' });
+  const selected = await f.create(), other = await f.create();
+  const execution = createAgentExecution({ transport: f.transport, conversationId: 'shared-conversation', continuationEnabled: true, continuationQuoteIds: [selected.id] });
+  const eligible = await execution.afterInput({ db: f.db, q: selected });
+  assert.equal(eligible.agent_run.continuation_enabled, true);
+  await execution.report({ db: f.db, body: f.body(eligible, { action: 'report', status: 'failed' }) });
+  const ineligible = await execution.afterInput({ db: f.db, q: other });
+  assert.equal(ineligible.agent_run.continuation_enabled, undefined);
+  assert.deepEqual((await execution.tool({ db: f.db, body: f.body(ineligible, { action: 'read' }) })).continuation_policy, { enabled: false });
+  const empty = await fixture({ conversationId: 'shared-conversation' });
+  const disabled = createAgentExecution({ transport: empty.transport, conversationId: 'shared-conversation', continuationEnabled: true, continuationQuoteIds: [] });
+  assert.equal((await disabled.afterInput({ db: empty.db, q: await empty.create() })).agent_run.continuation_enabled, undefined);
+  for (const continuationQuoteIds of ['q1', ['../bad'], Array(21).fill('q1')]) assert.throws(() => createAgentExecution({ transport: {}, continuationQuoteIds }), e => e.status === 503);
 });
 
