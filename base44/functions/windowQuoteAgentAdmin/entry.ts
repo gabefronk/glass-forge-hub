@@ -13,3 +13,4 @@ export default async function(req: Request) {
   return new Response(JSON.stringify({configured:execution.configured,quote_id:q.id,status:q.worker_status,phase:q.agent_run?.phase,recorded_conversation_id:q.agent_run?.conversation_id||"",provider_conversation_id:c.id,message_count:c.messages.length,message_summary:c.messages.map(m=>({id:m.id,role:m.role,dispatch:typeof m.content==="string"&&m.content.startsWith("[WindowQuote operation=")})),last_error:q.agent_run?.error_code,last_error_diagnostic:q.agent_run?.error_diagnostic}),{headers});
  } catch(e) {return new Response(JSON.stringify({error:"Agent connection diagnostic failed",code:e?.code||"INTERNAL",operation:e?.operation,status:e?.status,diagnostic:e?.diagnostic}),{status:503,headers});}
 }
+// Dispatch v6: guarded saved-checkpoint continuations, default off; explicit result dimensions.
