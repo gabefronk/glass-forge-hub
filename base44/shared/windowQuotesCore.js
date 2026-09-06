@@ -6,7 +6,7 @@ const PRODUCT_SETTINGS = new Set(["color", "glass", "series", "altitude", "scree
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const copy = (v) => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 const stable = v => JSON.stringify(v, (_key, value) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map(k => [k, value[k]])) : value);
-class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
+export class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
 const fail = (status, message) => { throw new HttpError(status, message); };
 const textValue = (v, name, max = 4000, required = false) => {
   if (v === undefined || v === null) { if (required) fail(400, name + " is required"); return ""; }
@@ -81,7 +81,8 @@ const READY_MESSAGE = "Your quote is ready to be viewed.";
 const PRIVATE_PUBLIC_KEYS = new Set([
   "checkpoint", "checkpoints", "history", "conversation", "audit", "auditlog", "workertrace",
   "leasetoken", "leaserevision", "leaseexpiresat", "conversiontoken", "conversionexpiresat",
-  "lastworkereventid", "lastworkerleasetoken", "workerid", "tokenhash", "accesstoken", "refreshtoken"
+  "lastworkereventid", "lastworkerleasetoken", "workerid", "tokenhash", "accesstoken", "refreshtoken",
+  "agentrun", "agentconversationid", "agentoperationid", "agentdispatchtoken", "executiontoken"
 ]);
 const NATIVE_HOST_PATTERN = String.raw`(?:[a-z0-9-]+\.)*(?:wtsparadigm\.com|myparadigmcloud\.com)|webcp-prod-gs\.azurewebsites\.net`;
 const NATIVE_HOST = new RegExp("(?:^|[^a-z0-9.-])(?:" + NATIVE_HOST_PATTERN + ")(?=[^a-z0-9.-]|$)", "i");
@@ -109,6 +110,8 @@ export function sanitizePublic(value) {
   for (const [key, item] of Object.entries(value)) {
     const normalized = keyName(key);
     if (PRIVATE_PUBLIC_KEYS.has(normalized)) continue;
+    // Agent dispatch/recovery data stays private at every nesting level. Provider is public.
+    if (normalized.startsWith("agent")) continue;
     if (/(?:native|amsco|account|portal|dealer).*(?:url|uri|href|link)|(?:url|uri|href|link).*(?:native|amsco|account|portal)/.test(normalized)) continue;
     if (/^(?:url|uri|href|link)$/.test(normalized) && typeof item === "string" && isNativeAddress(item)) continue;
     // Also remove a URL used as a map key instead of a field value.
@@ -175,7 +178,7 @@ export function publicMessages(quote) {
 export async function sha256(value) {
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))), b => b.toString(16).padStart(2, "0")).join("");
 }
-export function createQuoteHandler({ getClient, now = () => new Date(), uuid = () => crypto.randomUUID() }) {
+export function createQuoteHandler({ getClient, now = () => new Date(), uuid = () => crypto.randomUUID(), executionService }) {
   return async function handle(req) {
     const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
     try {
@@ -187,6 +190,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
       object(body, "request");
       const action = body.action;
       if (!USER_ACTIONS.has(action) && !WORKER_ACTIONS.has(action)) fail(400, "Unknown action");
+      if (executionService && WORKER_ACTIONS.has(action)) fail(410, "The local quote worker is retired. Use Base44 Window Quotes");
       const client = await getClient(req);
       const db = client.asServiceRole.entities;
       const at = () => now().toISOString();
@@ -233,6 +237,16 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         matches.sort((a, b) => (a.created_date || "").localeCompare(b.created_date || "") || a.id.localeCompare(b.id));
         return matches[0] || q;
       };
+      const afterInput = async q => {
+        if (!executionService || (action === "create" && body.auto_start === false)) return q;
+        const selected = await canonical(q);
+        if (selected.id !== q.id) fail(409, "This request already exists as " + selected.id);
+        // The service owns queueing/dispatch and must dedupe retries for this request/revision.
+        // Pass the full internal record, never publicQuote(), so recovery and history survive.
+        const latest = await executionService.afterInput({ db, q, user, action });
+        if (!latest || typeof latest !== "object" || latest.id !== q.id) throw new Error("Execution service must return the latest quote");
+        return latest;
+      };
       const releaseWorker = async (token) => {
         await db.QuoteWorkers.updateMany({ id: worker.id, busy_token: token }, { $set: { busy_token: "", busy_until: "", active_quote_id: "", last_seen_at: at() } });
       };
@@ -244,14 +258,19 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
       let output;
       if (action === "list") {
         const quotes = await db.QuoteRequests.list("-updated_date", 200);
-        const workers = await db.QuoteWorkers.filter({ enabled: true }, "-last_seen_at", 1, 0, ["name", "last_seen_at"]);
-        const current = workers[0];
+        let workerInfo;
+        if (executionService) workerInfo = { configured: !!executionService.configured, online: !!executionService.configured, provider: "superagent", name: "Base44 Window Quotes" };
+        else {
+          const workers = await db.QuoteWorkers.filter({ enabled: true }, "-last_seen_at", 1, 0, ["name", "last_seen_at"]);
+          const current = workers[0];
+          workerInfo = { online: !!current?.last_seen_at && now().getTime() - Date.parse(current.last_seen_at) < 100000, last_seen_at: current?.last_seen_at || null, name: current?.name || null };
+        }
         const canonicalCards = new Map();
         for (const q of [...quotes].sort((a, b) => (a.created_date || "").localeCompare(b.created_date || "") || a.id.localeCompare(b.id))) {
           const key = JSON.stringify([q.requester_email, q.request_id]);
           if (!canonicalCards.has(key)) canonicalCards.set(key, q.id);
         }
-        output = { quotes: quotes.filter(q => canonicalCards.get(JSON.stringify([q.requester_email, q.request_id])) === q.id).map(publicQuote), worker: { online: !!current?.last_seen_at && now().getTime() - Date.parse(current.last_seen_at) < 100000, last_seen_at: current?.last_seen_at || null, name: current?.name || null } };
+        output = { quotes: quotes.filter(q => canonicalCards.get(JSON.stringify([q.requester_email, q.request_id])) === q.id).map(publicQuote), worker: workerInfo };
       } else if (action === "detail") {
         const q = await getQuote(body.quote_id);
         output = { quote: publicQuote(q), messages: publicMessages(q) };
@@ -259,7 +278,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         const requestId = textValue(body.request_id, "request_id", 150, true);
         const requester = textValue(user.email || user.id, "requester", 320, true);
         const existing = await db.QuoteRequests.filter({ request_id: requestId, requester_email: requester }, "created_date", 1);
-        if (existing.length) output = { quote: publicQuote(existing[0]) };
+        if (existing.length) output = { quote: publicQuote(await afterInput(existing[0])) };
         else {
           const settings = validateSettings(body.settings || {});
           const lines = validateLines(body.lines || []);
@@ -273,7 +292,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           });
           const selected = await canonical(q);
           if (initial && selected.id === q.id) await ensureMessage(q, initial);
-          output = { quote: publicQuote(selected) };
+          output = { quote: publicQuote(await afterInput(selected)) };
         }
       } else if (action === "message") {
         let q = await getQuote(body.quote_id);
@@ -282,13 +301,13 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (existing) {
           if (existing.content !== textValue(body.message, "message", 18000, true)) fail(409, "Message identifier is already used");
           await ensureMessage(q, existing);
-          output = { quote: publicQuote(q), message: publicMessage(existing, q.id) };
+          output = { quote: publicQuote(await afterInput(q)), message: publicMessage(existing, q.id) };
         } else {
           editable(q);
           const msg = makeMessage(body.message, "user", q.input_revision + 1, clientId, user.email || user.id, q.worker_status === "needs_details" ? "clarification_reply" : "user_message");
           q = await cas(q, { input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", conversation: [...(q.conversation || []), msg], history: history(q, "message"), missing_details: [] });
           await ensureMessage(q, msg);
-          output = { quote: publicQuote(q), message: publicMessage(msg, q.id) };
+          output = { quote: publicQuote(await afterInput(q)), message: publicMessage(msg, q.id) };
         }
       } else if (action === "update") {
         let q = await getQuote(body.quote_id);
@@ -303,7 +322,16 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         output = { quote: publicQuote(q) };
       } else if (action === "queue") {
         let q = await getQuote(body.quote_id);
-        if (["queued", "running"].includes(q.worker_status)) output = { quote: publicQuote(q) };
+        if (executionService) {
+          if (!["queued", "running"].includes(q.worker_status)) {
+            editable(q);
+            if (q.worker_status === "ready") fail(409, "Edit the request before building another revision");
+            if (!(q.lines || []).length && !(q.conversation || []).some(m => m.role === "user") && !Object.keys(q.source || {}).length) fail(400, "Add a message or window schedule first");
+          }
+          // The agent may need to clarify product or pricing facts; no mandatory settings here.
+          // Its service must persist draft -> queued before dispatching and reconcile retries.
+          output = { quote: publicQuote(await afterInput(q)) };
+        } else if (["queued", "running"].includes(q.worker_status)) output = { quote: publicQuote(q) };
         else {
           editable(q);
           if (q.worker_status === "ready") fail(409, "Edit the request before building another revision");
@@ -436,3 +464,5 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
     }
   };
 }
+
+
