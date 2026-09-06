@@ -41,6 +41,46 @@
       "type": "string",
       "title": "Builder",
       "description": "Builder / GC name extracted from the job name (part before the dash)"
+    },
+    "source_window_quote_id": {
+      "type": "string",
+      "description": "Source Window Quotes request; stable link and conversion reconciliation key."
+    },
+    "accepted_quote_revision": {
+      "type": "integer",
+      "description": "Accepted quote input revision.",
+      "rls": {
+        "read": {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "accepted_quote_snapshot": {
+      "type": "object",
+      "description": "Immutable accepted window schedule, pricing and AMSCO reference; admin-only finance data.",
+      "rls": {
+        "read": {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "customer_name": {
+      "type": "string",
+      "description": "Customer supplied when a window sale is won."
     }
   },
   "required": [
