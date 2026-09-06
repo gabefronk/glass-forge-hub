@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { createQuoteHandler, sha256, validateLines, validateResult, validateSettings } from "../shared/windowQuotesCore.js";
+import { createQuoteHandler, sha256, validateLines, validateResult, validateSettings, publicQuote, publicMessages, sanitizePublic } from "../shared/windowQuotesCore.js";
 globalThis.crypto ??= webcrypto;
 const clone = x => JSON.parse(JSON.stringify(x));
 const path = (o, key) => key.split(".").reduce((v, k) => v?.[k], o);
@@ -289,4 +289,70 @@ test("an uncertain job-create response reconciles by source quote without duplic
   assert.equal(retry.status,200);
   assert.equal(f.records.Jobs.length,1);
   assert.equal(retry.quote.job_id,f.records.Jobs[0].id);
+});
+
+test("public quote projection removes recursive native links and private recovery while retaining prices",()=>{
+  const quote={id:"q",input_revision:2,worker_status:"ready",history:[{result:{native_quote_url:"https://amsco.wtsparadigm.com/quotes/abc"}}],checkpoint:{native_quote_url:"https://amsco.wtsparadigm.com/quotes/abc"},lease_token:"private-lease",conversation:[{role:"user",content:"Quote my windows"}],result:{verified:true,native_quote_number:"123",native_quote_url:"https://amsco.wtsparadigm.com/quotes/abc",native_quote:{url:"https://amsco.wtsparadigm.com/quotes/abc"},lines:[{qty:1,width:36,customer_extended:123,options:{accountLink:"/quotes/abc",notes:"Taupe [View](https://amsco.wtsparadigm.com/quotes/abc)"}}],totals:{customer_total:123}},accepted_snapshot:{result:{verified:true,native_quote_url:"https://amsco.wtsparadigm.com/quotes/abc",totals:{total:123}},checkpoint:{secret:"private"}}};
+  const original=clone(quote),safe=publicQuote(quote);
+  assert.equal(safe.history,undefined);assert.equal(safe.checkpoint,undefined);assert.equal(safe.lease_token,undefined);
+  assert.equal(safe.result.native_quote_url,undefined);assert.equal(safe.result.native_quote_number,"123");
+  assert.equal(safe.result.lines[0].options.accountLink,undefined);
+  assert.equal(safe.result.lines[0].options.notes,"Taupe");
+  assert.equal(safe.result.totals.customer_total,123);assert.equal(safe.accepted_snapshot.result.totals.total,123);
+  assert.ok(!JSON.stringify(safe).includes("wtsparadigm"));assert.deepEqual(quote,original);
+});
+test("plain, markdown, bare, encoded and nested native addresses are removed, internal app links remain",()=>{
+  const values=["https://amsco.wtsparadigm.com/quotes/abc","//amsco.wtsparadigm.com/quotes/abc","amsco.wtsparadigm.com/quotes/abc","[View quote](https://amsco.wtsparadigm.com/quotes/abc)","<https://amsco.wtsparadigm.com/quotes/abc>",encodeURIComponent("https://amsco.wtsparadigm.com/quotes/abc"),"https://webcp-prod-auth.myparadigmcloud.com/webcp/token","https://webcp-prod-gs.azurewebsites.net/system"];
+  const safe=sanitizePublic({values,internal:"/WindowQuotes?id=q",options:{glass:"CozE",url:"https://amsco.wtsparadigm.com/quotes/abc"},account_url:"/quotes/abc"});
+  assert.ok(!JSON.stringify(safe).match(/wtsparadigm|myparadigmcloud|azurewebsites/i));
+  assert.equal(safe.internal,"/WindowQuotes?id=q");assert.equal(safe.options.glass,"CozE");assert.equal(safe.options.url,undefined);assert.equal(safe.account_url,undefined);
+});
+test("typed chat keeps all user input and clarification, suppresses progress, synthesizes one exact ready message",()=>{
+  const quote={id:"q",input_revision:3,worker_status:"ready",result:{verified:true},conversation:[
+    {role:"user",content:"Initial request",revision:1,kind:"initial_request"},
+    {role:"assistant",content:"Starting now",revision:1,kind:"progress"},
+    {role:"assistant",content:"Frame or call dimensions?",revision:1,kind:"clarification"},
+    {role:"user",content:"Call dimensions",revision:2,kind:"clarification_reply"},
+    {role:"user",content:"And use Taupe",revision:3,kind:"user_message"},
+    {role:"assistant",content:"Saving all lines",revision:3,kind:"progress"},
+    {role:"assistant",content:"Ready https://amsco.wtsparadigm.com/quotes/abc",revision:3,kind:"ready"},
+    {role:"system",content:"Debug trace",revision:3}
+  ]};
+  assert.deepEqual(publicMessages(quote).map(m=>m.content),["Initial request","Frame or call dimensions?","Call dimensions","And use Taupe","Your quote is ready to be viewed."]);
+  assert.equal(publicMessages(quote).at(-1).kind,"ready");
+});
+test("legacy clarification uses status history, preserves replies and hides completed progress",()=>{
+  const quote={id:"legacy",input_revision:2,worker_status:"ready",result:{verified:true},history:[{revision:1,worker_status:"needs_details"}],conversation:[
+    {role:"user",content:"Initial",revision:1},
+    {role:"assistant",content:"Starting configurator",revision:1},
+    {role:"assistant",content:"Please specify glass",revision:1},
+    {role:"user",content:"CozE",revision:2},
+    {role:"assistant",content:"Applied glass and saved native quote",revision:2},
+    {role:"assistant",content:"Here is your native link https://amsco.wtsparadigm.com/quotes/abc",revision:2}
+  ]};
+  assert.deepEqual(publicMessages(quote).map(m=>m.content),["Initial","Please specify glass","CozE","Your quote is ready to be viewed."]);
+});
+test("current missing details provide a question even when the worker did not store a message",()=>{
+  const quote={id:"q",input_revision:1,worker_status:"needs_details",missing_details:["Please confirm frame or call dimensions"],conversation:[{role:"user",content:"Initial",revision:1},{role:"assistant",content:"Starting",revision:1,kind:"progress"}]};
+  assert.deepEqual(publicMessages(quote).map(m=>m.content),["Initial","Please confirm frame or call dimensions"]);
+  assert.equal(publicMessages({...quote,worker_status:"failed"}).length,1);
+  assert.equal(publicMessages({...quote,worker_status:"needs_sign_in"}).length,1);
+});
+test("worker transport and stored audit keep private recovery; every app action response is sanitized",async()=>{
+  const f=await fixture(),q=(await f.create({message:"Initial https://amsco.wtsparadigm.com/quotes/source"})).quote,c=await f.claim(q);
+  assert.ok(c.messages[0].content.includes("wtsparadigm.com"));
+  const progress=await f.call({action:"worker_update",quote_id:q.id,lease_token:c.lease_token,status:"running",message:"Saved native draft https://amsco.wtsparadigm.com/quotes/abc",checkpoint:{native_quote_url:"https://amsco.wtsparadigm.com/quotes/abc",completed_lines:[1]}},f.worker);
+  assert.equal(progress.quote.checkpoint.completed_lines[0],1);
+  assert.ok(progress.quote.checkpoint.native_quote_url.includes("wtsparadigm.com"));
+  assert.equal(f.records.QuoteRequests[0].conversation.at(-1).kind,"progress");
+  assert.ok(f.records.QuoteRequests[0].conversation.at(-1).content.includes("wtsparadigm.com"));
+  const detail=await f.call({action:"detail",quote_id:q.id}),list=await f.call({action:"list"});
+  assert.equal(detail.messages.length,1);assert.ok(!JSON.stringify(detail).includes("wtsparadigm.com"));assert.ok(!JSON.stringify(list).includes("wtsparadigm.com"));
+  const ready=await f.call({action:"worker_update",quote_id:q.id,lease_token:c.lease_token,status:"ready",message:"Native quote saved",result:f.result},f.worker);
+  assert.ok(ready.quote.result.native_quote_url.includes("wtsparadigm.com"));
+  const converted=await f.call({action:"convert_won",quote_id:q.id});
+  assert.equal(converted.status,200);assert.ok(!JSON.stringify(converted).includes("wtsparadigm.com"));
+  assert.ok(f.records.Jobs[0].accepted_quote_snapshot.result.native_quote_url.includes("wtsparadigm.com"));
+  const final=await f.call({action:"detail",quote_id:q.id});
+  assert.deepEqual(final.messages.map(m=>m.content),["Initial","Your quote is ready to be viewed."]);
 });
