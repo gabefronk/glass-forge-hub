@@ -16,7 +16,7 @@ const statusInfo = {
   queued: { label: "Queued", color: "#1E4A85", bg: "#E7EEFA", text: "Your request is in the queue. You can leave this page while it waits." },
   running: { label: "Quoting", color: "#1E4A85", bg: "#E7EEFA", text: "We’re building and checking your window quote." },
   needs_details: { label: "Needs details", color: "#8A5A10", bg: "#FCF5E9", text: "Reply to the questions below to continue, or update the schedule and send it back to quoting." },
-  needs_sign_in: { label: "Needs sign-in", color: "#8A5A10", bg: "#FCF5E9", text: "Sign into the correct AMSCO account in the configured quoting browser, then retry this request. Keep passwords out of this conversation." },
+  needs_sign_in: { label: "Needs sign-in", color: "#8A5A10", bg: "#FCF5E9", text: "Your request is saved. The account owner needs to reconnect the quoting browser before this quote can continue." },
   failed: { label: "Needs attention", color: "#8A4038", bg: "#FBEDEA", text: "Your quote needs attention before it can be completed. Please retry or contact your quoting team." },
   ready: { label: "Ready", color: "#276449", bg: "#EAF5EE", text: "Your quote is ready to be viewed." },
 };
