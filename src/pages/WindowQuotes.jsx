@@ -24,7 +24,7 @@ const date = (value) => {
   if (!value) return "";
   // Base44 timestamps without an offset are UTC, like its explicit-Z message timestamps.
   const raw = String(value).trim();
-  const normalized = /^\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?$/.test(raw) ? raw.replace(" ", "T") + "Z" : raw;
+  const normalized = /^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:[.][0-9]+)?)?$/.test(raw) ? raw.replace(" ", "T") + "Z" : raw;
   const parsed = new Date(normalized);
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 };
