@@ -5,6 +5,7 @@ const TERMINAL = new Set(["needs_details", "needs_sign_in", "failed", "ready"]);
 const PRODUCT_SETTINGS = new Set(["color", "glass", "series", "altitude", "screen", "spacer", "tempered", "options", "finish", "grid", "hardware"]);
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const copy = (v) => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+const stable = v => JSON.stringify(v, (_key, value) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map(k => [k, value[k]])) : value);
 class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
 const fail = (status, message) => { throw new HttpError(status, message); };
 const textValue = (v, name, max = 4000, required = false) => {
@@ -79,6 +80,7 @@ export function validateResult(raw) {
 function publicQuote(quote) {
   if (!quote) return null;
   const safe = copy(quote);
+  safe.request_text = (quote.conversation || []).find(m => m.role === "user")?.content || "";
   for (const k of ["lease_token", "conversion_token", "conversion_expires_at", "last_worker_event_id", "conversation"]) delete safe[k];
   return safe;
 }
@@ -201,13 +203,13 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
       } else if (action === "update") {
         let q = await getQuote(body.quote_id);
         editable(q);
-        const patch = { input_revision: q.input_revision + 1, worker_status: "draft", history: history(q, "edited"), missing_details: [] };
-        if (own(body, "title")) patch.title = textValue(body.title, "title", 200, true);
+        const patch = {};
+        if (own(body, "title")) patch.title = textValue(body.title, "title", 200) || q.title || "Window quote";
         if (own(body, "settings")) patch.settings = validateSettings(body.settings);
         if (own(body, "lines")) patch.lines = validateLines(body.lines);
         if (own(body, "source")) patch.source = jsonValue(object(body.source, "source"), "source", 150000);
         if (!["title", "settings", "lines", "source"].some(k => own(body, k))) fail(400, "No changes supplied");
-        q = await cas(q, patch);
+        if (Object.entries(patch).some(([key, value]) => stable(value) !== stable(q[key]))) q = await cas(q, { ...patch, input_revision: q.input_revision + 1, worker_status: "draft", history: history(q, "edited"), missing_details: [] });
         output = { quote: publicQuote(q) };
       } else if (action === "queue") {
         let q = await getQuote(body.quote_id);
@@ -280,7 +282,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
             patch.missing_details = body.missing_details.map(x => textValue(x, "missing detail", 2000, true));
           }
           if (own(body, "result")) patch.result = body.status === "ready" ? validateResult(body.result) : jsonValue(object(body.result, "result"), "result", 400000);
-          if (body.status === "ready") { if (!own(body, "result")) fail(400, "Ready requires a verified AMSCO result"); patch.missing_details = []; patch.history = history(q, "verified"); }
+          if (body.status === "ready") { if (!own(body, "result")) fail(400, "Ready requires a verified AMSCO result"); patch.missing_details = []; patch.history = [...(q.history || []), { revision: q.input_revision, recorded_at: at(), reason: "verified", settings: copy(patch.settings || q.settings), lines: copy(patch.lines || q.lines), result: copy(patch.result), worker_status: "ready" }]; }
           let msg;
           if (body.message) {
             msg = makeMessage(body.message, "assistant", q.input_revision, "worker:" + eventId, worker.name || worker.id);
@@ -303,11 +305,12 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           output = { quote: publicQuote(q), job: linked[0] };
         } else {
           if (q.conversion_token && q.conversion_expires_at > at()) fail(409, "The job conversion is already running; retry shortly");
-          if (!q.accepted_snapshot) {
+          const hasAccepted = q.accepted_revision > 0 && q.accepted_snapshot?.result?.verified === true;
+          if (!hasAccepted) {
             if (q.worker_status !== "ready") fail(409, "Complete and verify the AMSCO quote before marking it won");
             validateResult(q.result);
           }
-          const snapshot = q.accepted_snapshot || { quote_id: q.id, title: q.title, revision: q.input_revision, accepted_at: at(), settings: copy(q.settings), lines: copy(q.lines), result: copy(q.result), source: copy(q.source) };
+          const snapshot = hasAccepted ? q.accepted_snapshot : { quote_id: q.id, title: q.title, revision: q.input_revision, accepted_at: at(), settings: copy(q.settings), lines: copy(q.lines), result: copy(q.result), source: copy(q.source) };
           const token = uuid();
           q = await cas(q, { conversion_token: token, conversion_expires_at: expiry(), sales_status: "won", accepted_revision: q.accepted_revision || q.input_revision, accepted_snapshot: snapshot, accepted_at: q.accepted_at || at() });
           // Reconcile again while owning the conversion lease. A retry after an uncertain create reuses this job.
