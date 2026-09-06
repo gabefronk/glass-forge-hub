@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import YaFeesSidebar from "@/components/YaFeesSidebar";
 import { base44 } from "@/api/base44Client";
-import { Receipt, Calendar, Briefcase, BarChart3, Bug } from "lucide-react";
+import { Receipt, Calendar, Briefcase, BarChart3, Bug, PanelsTopLeft } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
+  { label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },
@@ -27,14 +28,14 @@ export default function Layout() {
         style={{
           backgroundColor: "rgba(255,255,255,.96)",
           borderTop: "1px solid #DDE3EC",
-          paddingBottom: "22px",
+          paddingBottom: "max(12px, env(safe-area-inset-bottom))",
         }}
       >
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to;
           return (
-            <Link key={item.to} to={item.to} className="flex flex-col items-center gap-1 py-2.5 px-3 flex-1">
+            <Link key={item.to} to={item.to} aria-label={item.ariaLabel || item.label} className="flex min-w-0 flex-col items-center gap-1 py-2.5 px-1 flex-1">
               <Icon className="h-5 w-5" style={{ color: active ? "#2A5EA8" : "#77839A" }} />
               <span className="text-[9px] font-medium whitespace-nowrap" style={{ color: active ? "#2A5EA8" : "#77839A", letterSpacing: ".01em" }}>
                 {item.label}
@@ -43,7 +44,7 @@ export default function Layout() {
           );
         })}
         {user?.role === "admin" && (
-          <Link to="/match-debug" className="flex flex-col items-center gap-1 py-2.5 px-3 flex-1">
+          <Link to="/match-debug" className="flex min-w-0 flex-col items-center gap-1 py-2.5 px-1 flex-1">
             <Bug className="h-5 w-5" style={{ color: pathname === "/match-debug" ? "#2A5EA8" : "#77839A" }} />
             <span className="text-[9px] font-medium whitespace-nowrap" style={{ color: pathname === "/match-debug" ? "#2A5EA8" : "#77839A", letterSpacing: ".01em" }}>
               Debug
