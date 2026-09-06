@@ -13,12 +13,17 @@ export function createAgentWebhookHandler({ getClient, execution, transport, sec
       const rows = await db.QuoteRequests.filter({ 'agent_run.conversation_id': event.conversation_id, execution_provider: 'superagent' }, undefined, 2);
       if (rows.length !== 1) return new Response('{"ok":true,"ignored":true}', { status: 200, headers });
       const q = rows[0], r = q.agent_run;
-      if (q.worker_status !== 'running') return new Response('{"ok":true}', { status: 200, headers });
+      if (!r || r.input_revision !== q.input_revision || !r.operation_id || !r.execution_token) return new Response('{"error":"Invalid agent event"}', { status: 401, headers });
+      const eventId = 'webhook:' + event.message_id;
+      // A terminal report can persist before slot release/draining fails. Re-enter
+      // the service's idempotent path for that exact event so a retry repairs it.
+      const terminalRetry = r.phase === 'completed' && ['needs_details','needs_sign_in','failed','ready'].includes(q.worker_status) && (r.event_ids || []).includes(eventId);
+      if (q.worker_status !== 'running' && !terminalRetry) return new Response('{"ok":true}', { status: 200, headers });
       const correlation = { quote_id: q.id, input_revision: q.input_revision, operation_id: r.operation_id };
       const resolved = await transport.resolveWebhook({ rawBody, headers: req.headers, webhookSecret: secret, conversationId: r.conversation_id, correlation, validateResult });
       if (resolved.outcome) {
         const outcome = resolved.outcome;
-        await execution.report({ db, body: { ...outcome, status: outcome.outcome === 'clarification' ? 'needs_details' : outcome.outcome, missing_details: outcome.questions, action: 'report', execution_token: r.execution_token, event_id: 'webhook:' + event.message_id } });
+        await execution.report({ db, body: { ...outcome, status: outcome.outcome === 'clarification' ? 'needs_details' : outcome.outcome, missing_details: outcome.questions, action: 'report', execution_token: r.execution_token, event_id: eventId } });
       }
       // Generic chat text is not a result. Checkpoints and completion are normally
       // reported through the guarded function while the agent is still executing.
