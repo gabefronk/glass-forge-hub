@@ -175,7 +175,7 @@ export function createSuperagentTransport({ apiKey, agentId = DEFAULT_AGENT_ID, 
     async createConversation(correlation) {
       const c = normalizedCorrelation(correlation);
       const conversation = validateConversation(await request("POST", "/conversations", { metadata: { [CORRELATION_KEY]: c } }, "create conversation"), null, "create conversation", true);
-      if (!sameCorrelation(conversation.metadata[CORRELATION_KEY], c)) throw new SuperagentTransportError("CORRELATION_NOT_ACKNOWLEDGED", "create conversation", { uncertain: true });
+      if (!sameCorrelation(conversation.metadata[CORRELATION_KEY], c)) { const error = new SuperagentTransportError("CORRELATION_NOT_ACKNOWLEDGED", "create conversation", { uncertain: true }); error.observed_conversation = { id: conversation.id, app_id: conversation.app_id, metadata: conversation.metadata, message_count: conversation.messages.length, created_date: conversation.created_date }; throw error; }
       return conversation;
     },
     async getConversation(conversationId) {
