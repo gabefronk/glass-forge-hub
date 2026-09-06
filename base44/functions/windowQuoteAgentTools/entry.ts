@@ -4,4 +4,4 @@ import { execution } from "../../shared/windowQuoteAgentRuntime.js";
 // Scoped Base44 operation capabilities; never accepts legacy worker keys.
 export default createAgentToolHandler({ getClient: createClientFromRequest, execution });
 
-// Dispatch v3: dedicated native execution conversation, serialized per-request capabilities.
+// Dispatch v4: shared execution channel with current-operation validation.
