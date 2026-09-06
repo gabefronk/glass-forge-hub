@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createQuoteHandler, sha256, validateLines, validateResult, validateSettings } from "../shared/windowQuotesCore.js";
 globalThis.crypto ??= webcrypto;
 const clone = x => JSON.parse(JSON.stringify(x));
@@ -72,6 +73,18 @@ async function fixture() {
   };
   return {call,create,claim,ready,result,records,controls,entities,worker,advance:ms=>timestamp+=ms};
 }
+test("MCP prevents direct quote-table CRUD and exposes only guarded quote functions",()=>{
+  const config=JSON.parse(readFileSync(new URL("../mcp/config.json",import.meta.url),"utf8"));
+  assert.equal(config.auth,"oauth");
+  for(const entity of ["QuoteWorkers","QuoteRequests","QuoteMessages"]) assert.deepEqual(config.tools.entity_overrides[entity].operations,[]);
+  const tools=config.tools.functions.filter(t=>t.handler==="windowQuotes");
+  assert.equal(tools.length,6);
+  for(const tool of tools) {
+    assert.ok(tool.input_schema.required.includes("action"));
+    assert.equal(tool.input_schema.properties.action.enum.length,1);
+    assert.ok(!tool.input_schema.properties.action.enum[0].startsWith("worker_"));
+  }
+});
 test("authentication separates administrators from scoped workers", async () => {
   const f=await fixture();
   assert.equal((await f.call({action:"list"},"")).status,401);
