@@ -70,6 +70,52 @@ test("uncertain send times out once even if fetch ignores abort, without retryin
   assert.equal(calls.length, 1);
   assert.equal(calls[0].signal.aborted, true);
 });
+test("continuation sends one documented POST with a distinct marker and preserves original dispatch matching", async () => {
+  const { transport, calls } = transportWith(() => new Response(null, { status: 202 }));
+  const content = "Read this operation's saved checkpoint before continuing.";
+  const result = await transport.sendContinuation({ conversationId: "conversation1", correlation, continuationId: "segment-1", content });
+  assert.deepEqual(result, { accepted: true });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://app.base44.com/api/agents/" + DEFAULT_AGENT_ID + "/conversations/conversation1/messages");
+  assert.equal(calls[0].method, "POST");
+  assert.equal(calls[0].redirect, "manual");
+  assert.equal(calls[0].headers.api_key, apiKey);
+  const marker = "[WindowQuote continuation=segment-1 operation=" + encodeURIComponent(correlation.operation_id) + " quote=quote1 revision=1]";
+  assert.deepEqual(calls[0].json, { role: "user", content: marker + "\n" + content, file_urls: [], additional_message_params: {} });
+  assert.notEqual(marker, makeDispatchMarker(correlation));
+  const original = dispatched();
+  const reconciled = findDispatchedMessage(conversation([original, { id: "continuation-message", ...calls[0].json }]), correlation);
+  assert.equal(reconciled.state, "accepted");
+  assert.equal(reconciled.message.id, original.id);
+});
+test("continuation timeout remains uncertain and makes no automatic second POST", async () => {
+  const { transport, calls } = transportWith(() => new Promise(() => {}), { timeoutMs: 10 });
+  await assert.rejects(transport.sendContinuation({ conversationId: "conversation1", correlation, continuationId: "segment-1", content: "Continue from the saved checkpoint." }),
+    e => e instanceof SuperagentTransportError && e.code === "TIMEOUT" && e.operation === "send continuation" && e.uncertain === true && e.automaticRetryAllowed === false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].signal.aborted, true);
+});
+test("continuation refuses invalid identifiers, oversized content and nested dispatch markers before network", async () => {
+  const { transport, calls } = transportWith(() => new Response(null, { status: 202 }));
+  const input = { conversationId: "conversation1", correlation, continuationId: "segment-1", content: "Continue from the saved checkpoint." };
+  for (const change of [
+    { conversationId: "../other" }, { continuationId: "../other" },
+    { correlation: { ...correlation, quote_id: "../other" } },
+    { content: "x".repeat(MAX_MESSAGE_CHARS) },
+    { content: makeDispatchMarker(correlation) },
+    { content: "[WindowQuote continuation=other]" }
+  ]) await assert.rejects(transport.sendContinuation({ ...input, ...change }));
+  assert.equal(calls.length, 0);
+});
+test("continuation errors preserve manual redirect handling and redact provider failures without retries", async () => {
+  const input = { conversationId: "conversation1", correlation, continuationId: "segment-1", content: "Continue from the saved checkpoint." };
+  for (const status of [302, 503]) {
+    const { transport, calls } = transportWith(() => new Response(apiKey, { status, headers: { Location: "https://another.example/redirect" } }));
+    await assert.rejects(transport.sendContinuation(input), e => e instanceof SuperagentTransportError && e.code === "HTTP_" + status && e.uncertain === (status === 503) && e.automaticRetryAllowed === false && !String(e).includes(apiKey) && !JSON.stringify(e).includes(apiKey));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].redirect, "manual");
+  }
+});
 test("create and send failures expose neither provider bodies nor API credentials", async () => {
   const { transport, calls } = transportWith(() => new Response(apiKey, { status: 503 }));
   await assert.rejects(transport.createConversation(correlation), e => e instanceof SuperagentTransportError && e.uncertain && !String(e).includes(apiKey) && !JSON.stringify(e).includes(apiKey));
