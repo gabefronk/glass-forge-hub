@@ -161,7 +161,12 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         const quotes = await db.QuoteRequests.list("-updated_date", 200);
         const workers = await db.QuoteWorkers.filter({ enabled: true }, "-last_seen_at", 1, 0, ["name", "last_seen_at"]);
         const current = workers[0];
-        output = { quotes: quotes.map(publicQuote), worker: { online: !!current?.last_seen_at && now().getTime() - Date.parse(current.last_seen_at) < 100000, last_seen_at: current?.last_seen_at || null, name: current?.name || null } };
+        const canonicalCards = new Map();
+        for (const q of [...quotes].sort((a, b) => (a.created_date || "").localeCompare(b.created_date || "") || a.id.localeCompare(b.id))) {
+          const key = JSON.stringify([q.requester_email, q.request_id]);
+          if (!canonicalCards.has(key)) canonicalCards.set(key, q.id);
+        }
+        output = { quotes: quotes.filter(q => canonicalCards.get(JSON.stringify([q.requester_email, q.request_id])) === q.id).map(publicQuote), worker: { online: !!current?.last_seen_at && now().getTime() - Date.parse(current.last_seen_at) < 100000, last_seen_at: current?.last_seen_at || null, name: current?.name || null } };
       } else if (action === "detail") {
         const q = await getQuote(body.quote_id);
         output = { quote: publicQuote(q), messages: (q.conversation || []).map(m => publicMessage(m, q.id)) };
@@ -230,7 +235,8 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         else {
           const token = uuid(), until = expiry();
           const generation = worker.poll_generation || 0;
-          const claim = await db.QuoteWorkers.updateMany({ id: worker.id, enabled: true, poll_generation: generation }, { $set: { poll_generation: generation + 1, busy_token: token, busy_until: until, active_quote_id: "", last_seen_at: at() } });
+          const slotCondition = worker.busy_token ? { busy_token: worker.busy_token, busy_until: { $lte: at() } } : { busy_token: worker.busy_token || "" };
+          const claim = await db.QuoteWorkers.updateMany({ id: worker.id, enabled: true, poll_generation: generation, ...slotCondition }, { $set: { poll_generation: generation + 1, busy_token: token, busy_until: until, active_quote_id: "", last_seen_at: at() } });
           if (claim.updated !== 1) output = { quote: null };
           else {
             const candidates = await db.QuoteRequests.filter({ "settings.dealer": { $in: worker.allowed_dealers || [] }, $or: [{ worker_status: "queued" }, { worker_status: "running", lease_expires_at: { $lte: at() } }] }, "queued_at", 20);
@@ -258,7 +264,8 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           const until = expiry();
           const changed = await db.QuoteRequests.updateMany({ id: q.id, worker_id: worker.id, lease_token: q.lease_token, worker_status: "running", input_revision: q.lease_revision }, { $set: { lease_expires_at: until } });
           if (changed.updated !== 1) fail(409, "Worker lease changed; stop this run");
-          await db.QuoteWorkers.updateMany({ id: worker.id, enabled: true, busy_token: q.lease_token }, { $set: { last_seen_at: at(), busy_until: until } });
+          const renewed = await db.QuoteWorkers.updateMany({ id: worker.id, enabled: true, busy_token: q.lease_token }, { $set: { last_seen_at: at(), busy_until: until } });
+          if (renewed.updated !== 1) fail(409, "Worker slot changed; stop this run");
         } else await db.QuoteWorkers.updateMany({ id: worker.id, enabled: true }, { $set: { last_seen_at: at() } });
         output = { ok: true, last_seen_at: at(), lease_seconds: LEASE_MS / 1000 };
       } else if (action === "worker_update") {
