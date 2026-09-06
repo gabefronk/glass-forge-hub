@@ -1,0 +1,74 @@
+{
+  "name": "QuoteWorkers",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "token_hash": {
+      "type": "string",
+      "description": "SHA-256 lowercase hex of a high-entropy pairing token; never return to frontend."
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "allowed_dealers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "BFS",
+          "BTB"
+        ]
+      },
+      "default": []
+    },
+    "last_seen_at": {
+      "type": "string"
+    },
+    "poll_generation": {
+      "type": "integer",
+      "default": 0
+    },
+    "busy_token": {
+      "type": "string",
+      "default": ""
+    },
+    "busy_until": {
+      "type": "string"
+    },
+    "active_quote_id": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "required": [
+    "name",
+    "token_hash",
+    "enabled",
+    "allowed_dealers"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
