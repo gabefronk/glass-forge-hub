@@ -8,6 +8,14 @@
       "QuoteWorkers": {
         "operations": [],
         "description": null
+      },
+      "QuoteRequests": {
+        "operations": [],
+        "description": null
+      },
+      "QuoteMessages": {
+        "operations": [],
+        "description": null
       }
     },
     "functions": [
