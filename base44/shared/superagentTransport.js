@@ -153,8 +153,10 @@ export function createSuperagentTransport({ apiKey, agentId = DEFAULT_AGENT_ID, 
             method, headers: { api_key: apiKey, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
             ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: abort.signal, redirect: "error"
           });
-        } catch {
-          throw new SuperagentTransportError(abort.signal.aborted ? "TIMEOUT" : "NETWORK_ERROR", operation, { uncertain: writes });
+        } catch (cause) {
+          const error = new SuperagentTransportError(abort.signal.aborted ? "TIMEOUT" : "NETWORK_ERROR", operation, { uncertain: writes });
+          error.diagnostic = String(cause?.name || "Error") + ": " + String(cause?.message || "").replaceAll(apiKey, "[REDACTED]").slice(0, 500);
+          throw error;
         }
         if (!response.ok) throw new SuperagentTransportError("HTTP_" + response.status, operation, { status: response.status, uncertain: writes && (response.status >= 500 || [408, 409, 429].includes(response.status)) });
         let text;
