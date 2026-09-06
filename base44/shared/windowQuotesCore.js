@@ -81,7 +81,7 @@ function publicQuote(quote) {
   if (!quote) return null;
   const safe = copy(quote);
   safe.request_text = (quote.conversation || []).find(m => m.role === "user")?.content || "";
-  for (const k of ["lease_token", "conversion_token", "conversion_expires_at", "last_worker_event_id", "conversation"]) delete safe[k];
+  for (const k of ["lease_token", "conversion_token", "conversion_expires_at", "last_worker_event_id", "last_worker_lease_token", "conversation"]) delete safe[k];
   return safe;
 }
 function publicMessage(m, quoteId) {
@@ -196,7 +196,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         } else {
           editable(q);
           const msg = makeMessage(body.message, "user", q.input_revision + 1, clientId, user.email || user.id);
-          q = await cas(q, { input_revision: q.input_revision + 1, worker_status: "draft", conversation: [...(q.conversation || []), msg], history: history(q, "message"), missing_details: [] });
+          q = await cas(q, { input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", conversation: [...(q.conversation || []), msg], history: history(q, "message"), missing_details: [] });
           await ensureMessage(q, msg);
           output = { quote: publicQuote(q), message: publicMessage(msg, q.id) };
         }
@@ -209,7 +209,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (own(body, "lines")) patch.lines = validateLines(body.lines);
         if (own(body, "source")) patch.source = jsonValue(object(body.source, "source"), "source", 150000);
         if (!["title", "settings", "lines", "source"].some(k => own(body, k))) fail(400, "No changes supplied");
-        if (Object.entries(patch).some(([key, value]) => stable(value) !== stable(q[key]))) q = await cas(q, { ...patch, input_revision: q.input_revision + 1, worker_status: "draft", history: history(q, "edited"), missing_details: [] });
+        if (Object.entries(patch).some(([key, value]) => stable(value) !== stable(q[key]))) q = await cas(q, { ...patch, input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", history: history(q, "edited"), missing_details: [] });
         output = { quote: publicQuote(q) };
       } else if (action === "queue") {
         let q = await getQuote(body.quote_id);
@@ -238,7 +238,9 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
             for (const q of candidates) {
               try {
                 validateSettings(q.settings, true);
-                picked = await cas(q, { worker_status: "running", worker_id: worker.id, lease_token: token, lease_revision: q.input_revision, lease_expires_at: until, last_worker_event_id: "" });
+                if ((await canonical(q)).id !== q.id) continue;
+                const claimCondition = q.worker_status === "running" ? { worker_status: "running", lease_token: q.lease_token, lease_expires_at: { $lte: at() } } : { worker_status: "queued" };
+                picked = await cas(q, { worker_status: "running", worker_id: worker.id, lease_token: token, lease_revision: q.input_revision, lease_expires_at: until, last_worker_event_id: "", last_worker_lease_token: "" }, claimCondition);
                 break;
               } catch (e) { if (!(e instanceof HttpError && e.status === 409)) { await releaseWorker(token); throw e; } }
             }
@@ -262,11 +264,15 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
       } else if (action === "worker_update") {
         let q = await getQuote(body.quote_id);
         const eventId = body.event_id ? textValue(body.event_id, "event_id", 150, true) : await sha256(JSON.stringify({ lease_token: body.lease_token, status: body.status, message: body.message, result: body.result, checkpoint: body.checkpoint, settings: body.settings, lines: body.lines, missing_details: body.missing_details }));
-        if (q.worker_id === worker.id && q.last_worker_event_id === eventId) output = { quote: publicQuote(q) };
-        else {
+        if (q.worker_id === worker.id && q.last_worker_event_id === eventId) {
+          if (!(worker.allowed_dealers || []).includes(q.settings?.dealer)) fail(403, "Worker is not paired for this dealer");
+          if (q.lease_revision !== q.input_revision || !body.lease_token || body.lease_token !== q.last_worker_lease_token) fail(409, "Worker event belongs to a different lease or revision");
+          if (TERMINAL.has(q.worker_status)) await releaseWorker(body.lease_token);
+          output = { quote: publicQuote(q) };
+        } else {
           await checkedLease(q);
           if (!["running", ...TERMINAL].includes(body.status)) fail(400, "Invalid worker status");
-          const patch = { worker_status: body.status, last_worker_event_id: eventId };
+          const patch = { worker_status: body.status, last_worker_event_id: eventId, last_worker_lease_token: q.lease_token };
           if (own(body, "settings")) {
             const updates = validateSettings(body.settings);
             for (const [key, value] of Object.entries(updates)) {
@@ -299,6 +305,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         }
       } else if (action === "convert_won") {
         let q = await getQuote(body.quote_id);
+        const jobDetails = { customer_name: textValue(body.customer_name, "customer name", 300), address: textValue(body.address, "address", 1000), builder: textValue(body.builder, "builder", 300) };
         const linked = await db.Jobs.filter({ source_window_quote_id: q.id }, "created_date", 2);
         if (linked.length) {
           if (q.job_id !== linked[0].id) q = await cas(q, { job_id: linked[0].id, sales_status: "won", conversion_token: "", conversion_expires_at: "" });
@@ -312,20 +319,18 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           }
           const snapshot = hasAccepted ? q.accepted_snapshot : { quote_id: q.id, title: q.title, revision: q.input_revision, accepted_at: at(), settings: copy(q.settings), lines: copy(q.lines), result: copy(q.result), source: copy(q.source) };
           const token = uuid();
-          q = await cas(q, { conversion_token: token, conversion_expires_at: expiry(), sales_status: "won", accepted_revision: q.accepted_revision || q.input_revision, accepted_snapshot: snapshot, accepted_at: q.accepted_at || at() });
+          q = await cas(q, { conversion_token: token, conversion_expires_at: expiry(), accepted_revision: q.accepted_revision || q.input_revision, accepted_snapshot: snapshot, accepted_at: q.accepted_at || at() });
           // Reconcile again while owning the conversion lease. A retry after an uncertain create reuses this job.
           const existing = await db.Jobs.filter({ source_window_quote_id: q.id }, "created_date", 2);
           const job = existing[0] || await db.Jobs.create({
             canonical_name: snapshot.title || q.title,
-            customer_name: textValue(body.customer_name, "customer name", 300),
-            address: textValue(body.address, "address", 1000),
-            builder: textValue(body.builder, "builder", 300),
+            ...jobDetails,
             aliases: [], po_numbers: [], oe_numbers: [],
             source_window_quote_id: q.id,
             accepted_quote_revision: q.accepted_revision,
             accepted_quote_snapshot: snapshot
           });
-          q = await cas(q, { job_id: job.id, conversion_token: "", conversion_expires_at: "" }, { conversion_token: token });
+          q = await cas(q, { job_id: job.id, sales_status: "won", conversion_token: "", conversion_expires_at: "" }, { conversion_token: token });
           output = { quote: publicQuote(q), job };
         }
       }
