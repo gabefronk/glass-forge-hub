@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug, LogOut } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug, LogOut, PanelsTopLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/feeMath";
 
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
+  { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },
