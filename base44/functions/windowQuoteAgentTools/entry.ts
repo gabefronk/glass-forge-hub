@@ -5,3 +5,5 @@ import { execution } from "../../shared/windowQuoteAgentRuntime.js";
 export default createAgentToolHandler({ getClient: createClientFromRequest, execution });
 
 // Dispatch v5: dedicated channel and concise complete clarification questions.
+// Dispatch v6: guarded saved-checkpoint continuations, default off; explicit result dimensions.
+
