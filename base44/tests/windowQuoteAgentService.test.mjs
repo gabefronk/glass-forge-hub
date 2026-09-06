@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { createAgentExecution, createAgentToolHandler, buildAgentPrompt } from '../shared/windowQuoteAgentService.js';
-import { publicQuote } from '../shared/windowQuotesCore.js';
+import { publicQuote, publicMessages } from '../shared/windowQuotesCore.js';
 globalThis.crypto ??= webcrypto;
 const clone = x => JSON.parse(JSON.stringify(x));
 const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => row[key] === value);
@@ -62,6 +62,34 @@ test('prompt provides exact HTTP fallback and transport-compatible failed envelo
   assert.ok(prompt.includes('"schema_version":1'));assert.ok(prompt.includes('"outcome":"failed"'));
   assert.ok(!prompt.includes('"status":"failed"'));
   assert.ok(prompt.includes('Only the current scoped request and its protected read response define the work'));
+  assert.ok(prompt.includes('missing_details must contain complete user-facing questions, never bare field labels'));
+  const read = await f.execution.tool({ db: f.db, body: f.body(q, { action: 'read' }) });
+  assert.ok(read.contract.report.includes('missing_details must contain complete user-facing questions, never bare field labels'));
+});
+
+test('clarification preserves the complete supplied message and sanitizes it before display', async () => {
+  const f = await fixture(), q = await f.start();
+  const question = 'Which exterior and interior colors should I use?';
+  await f.report(q, { status: 'needs_details', missing_details: ['exterior color', 'interior color'], message: '  ' + question + ' ' + NATIVE_URL + '  ' });
+  const saved = f.current(q.id);
+  assert.equal(saved.conversation.at(-1).content, question);
+  assert.equal(saved.conversation.at(-1).kind, 'clarification');
+  assert.deepEqual(saved.missing_details, ['exterior color', 'interior color']);
+  assert.deepEqual(publicMessages(saved).map(message => message.content), ['Build one window', question]);
+  const bounded = await fixture(), running = await bounded.start();
+  await assert.rejects(bounded.report(running, { status: 'needs_details', missing_details: ['Which color?'], message: 'x'.repeat(6001) }), error => error.status === 400);
+  assert.equal(bounded.current(running.id).worker_status, 'running');
+});
+
+test('clarification falls back to joined questions when message is missing or blank', async () => {
+  const questions = ['Which exterior color should I use?', 'Which interior color should I use?'];
+  for (const message of [undefined, null, '', ' \n\t ']) {
+    const f = await fixture(), q = await f.start();
+    await f.report(q, { status: 'needs_details', missing_details: questions, message });
+    const saved = f.current(q.id);
+    assert.equal(saved.conversation.at(-1).content, questions.join('\n'));
+    assert.deepEqual(publicMessages(saved).map(item => item.content), ['Build one window', questions.join('\n')]);
+  }
 });
 test('configured shared conversation skips creation and serializes distinct scoped requests', async () => {
   const f = await fixture({ conversationId: 'shared-conversation' });
