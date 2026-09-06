@@ -45,10 +45,30 @@ function StatusBadge({ quote }) {
   return <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap" style={{ color: info.color, background: info.bg }}>{["queued", "running"].includes(quote?.worker_status) ? <Loader2 size={11} className={quote.worker_status === "running" ? "animate-spin" : ""} /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}{quote?.sales_status === "won" ? "Won" : info.label}</span>;
 }
 function Field({ label, children }) { return <label className="block min-w-0"><span className="mb-1.5 block text-xs font-medium text-[#535E72]">{label}</span>{children}</label>; }
+const colorChoices = [
+  ["White", "White — inside & outside"],
+  ["Taupe", "Taupe — inside & outside"],
+  ["Black exterior / White interior", "Black outside / White inside"],
+  ["Other / mixed — see notes", "Other / mixed — describe in notes"],
+];
+const glassChoices = [
+  ["CozE (LowE)", "CozE (Low-E)"],
+  ["Other / mixed — see notes", "Other / mixed — describe in notes"],
+];
+const productLabel = (value, choices) => choices.find(([key]) => key === value)?.[1] || (value && typeof value === "object" ? JSON.stringify(value) : value) || "Ask the quoting agent";
+function ProductChoice({ label, value, choices, onChange, disabled }) {
+  // Keep imported or previously saved custom selections until the user changes them.
+  const savedCustom = value !== undefined && value !== null && value !== "" && !choices.some(([key]) => key === value);
+  return <Field label={label}><select className={inputClass} value={savedCustom ? "__saved_selection__" : value || ""} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+    <option value="">Not sure — ask the quoting agent</option>
+    {choices.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
+    {savedCustom && <option value="__saved_selection__">{productLabel(value, choices)}</option>}
+  </select></Field>;
+}
 function QuoteForm({ quote, busy, onSave, onCancel }) {
   const [title, setTitle] = useState(quote?.title || "");
   const [message, setMessage] = useState(quote?.request_text || "");
-  const [settings, setSettings] = useState({ dealer: "", yard: "", gross_margin: "", ...quote?.settings });
+  const [settings, setSettings] = useState({ dealer: "", yard: "", gross_margin: "", color: "", glass: "", ...quote?.settings });
   const [lines, setLines] = useState(quote?.lines || []);
   const [source, setSource] = useState(quote?.source || null);
   const [errors, setErrors] = useState([]);
@@ -64,8 +84,16 @@ function QuoteForm({ quote, busy, onSave, onCancel }) {
     onSave({ request_id: requestID.current, title: title.trim(), message: message.trim(), settings: normalizedSettings, lines: normalizeLines(lines), source }, queue);
   };
   return <div className="space-y-5">
-    <Field label="Request name"><input autoFocus className={inputClass} placeholder="e.g. Lakeview • Lot 216" maxLength={180} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} /></Field>
-    {!quote && <Field label="What would you like quoted?"><textarea className={inputClass + " min-h-24 resize-y"} placeholder="Describe the window package, or add your checked takeoff below. Include sizes, colors and glass where known." value={message} maxLength={18000} onChange={(e) => setMessage(e.target.value)} disabled={busy} /></Field>}
+    <Field label="Request name (optional)"><input autoFocus className={inputClass} placeholder="e.g. Lakeview • Lot 216" maxLength={180} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} /></Field>
+    <div className="space-y-4 rounded-xl border border-[#DDE3EC] p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-[#131A26]"><ListChecks size={16} />Quick request</div>
+      {!quote && <Field label="Notes — what would you like quoted?"><textarea className={inputClass + " min-h-28 resize-y"} placeholder="e.g. 4 single-hung windows, 36 × 60 inches. Add rooms, quantities, sizes and any special requirements." value={message} maxLength={18000} onChange={(e) => setMessage(e.target.value)} disabled={busy} /></Field>}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ProductChoice label="Window color" value={settings.color} choices={colorChoices} onChange={(color) => setSettings({ ...settings, color })} disabled={busy} />
+        <ProductChoice label="Low-E glass" value={settings.glass} choices={glassChoices} onChange={(glass) => setSettings({ ...settings, glass })} disabled={busy} />
+      </div>
+      <p className="text-xs leading-relaxed text-[#616D81]">These choices apply to the package unless a window has its own specification. Describe any exceptions in your notes or schedule. Not sure? The quoting agent can help.</p>
+    </div>
     <div className="rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#131A26]"><Settings2 size={15} />Quoting settings</div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -97,8 +125,8 @@ function WonForm({ quote, busy, onSubmit, onCancel }) {
 function ScheduleView({ quote }) {
   const lines = quote.lines || [];
   return <div className="space-y-4">
-    <div className="grid grid-cols-3 gap-2">
-      {[["Dealer", quote.settings?.dealer || "Not set"], ["Yard", quote.settings?.yard || "Not set"], ["Gross margin", quote.settings?.gross_margin !== null && quote.settings?.gross_margin !== undefined ? `${quote.settings.gross_margin}%` : "Not set"]].map(([label, value]) => <div key={label} className="rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-3"><div className="text-[10px] font-semibold uppercase tracking-wider text-[#77839A]">{label}</div><div className="mt-1 break-words text-sm font-medium text-[#131A26]">{value}</div></div>)}
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {[["Color", productLabel(quote.settings?.color, colorChoices)], ["Low-E glass", productLabel(quote.settings?.glass, glassChoices)], ["Dealer", quote.settings?.dealer || "Not set"], ["Yard", quote.settings?.yard || "Not set"], ["Gross margin", quote.settings?.gross_margin !== null && quote.settings?.gross_margin !== undefined ? `${quote.settings.gross_margin}%` : "Not set"]].map(([label, value]) => <div key={label} className="rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-3"><div className="text-[10px] font-semibold uppercase tracking-wider text-[#77839A]">{label}</div><div className="mt-1 break-words text-sm font-medium text-[#131A26]">{value}</div></div>)}
     </div>
     <div><h3 className="text-sm font-semibold text-[#131A26]">Requested windows</h3><p className="mt-1 text-xs text-[#616D81]">{lines.length ? `${lines.length} lines · ${lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0)} windows / assemblies` : "The quoting agent will review your written request and ask for any missing details."}</p></div>
     {lines.map((line, index) => <div key={index} className="rounded-xl border border-[#DDE3EC] p-4">
@@ -202,7 +230,7 @@ export default function WindowQuotes() {
         </> : <div className="p-10 text-center text-sm text-[#616D81]">This request is unavailable. Choose another request or refresh.</div>}
       </section>
     </div>
-    <Dialog open={!!form} onOpenChange={(open) => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>{form === "edit" ? "Request details" : "New window quote"}</DialogTitle><DialogDescription>{form === "edit" ? "Changes create a new request revision. Previous verified results are kept in history." : "Start with a description or a checked takeoff. No job record is required."}</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{form && <QuoteForm key={form === "edit" ? selectedID : "new"} quote={form === "edit" ? quote : null} busy={busy} onSave={saveForm} onCancel={() => setForm(null)} />}</DialogContent></Dialog>
+    <Dialog open={!!form} onOpenChange={(open) => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>{form === "edit" ? "Request details" : "New window quote"}</DialogTitle><DialogDescription>{form === "edit" ? "Changes create a new request revision. Previous verified results are kept in history." : "Add your notes, choose color and Low-E glass, then save or send your request."}</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{form && <QuoteForm key={form === "edit" ? selectedID : "new"} quote={form === "edit" ? quote : null} busy={busy} onSave={saveForm} onCancel={() => setForm(null)} />}</DialogContent></Dialog>
     <Dialog open={wonOpen} onOpenChange={(open) => { if (!busy) setWonOpen(open); }}><DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>Accept quote & create job</DialogTitle><DialogDescription>Keep an accepted snapshot of this quote revision.</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{wonOpen && quote && <WonForm quote={quote} busy={busy} onSubmit={convert} onCancel={() => setWonOpen(false)} />}</DialogContent></Dialog>
   </div>;
 }
