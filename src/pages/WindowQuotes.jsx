@@ -20,7 +20,14 @@ const statusInfo = {
 };
 const uid = () => crypto.randomUUID();
 const money = (value, currency = "USD") => value !== null && value !== undefined && Number.isFinite(Number(value)) ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(value)) : "—";
-const date = (value) => value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+const date = (value) => {
+  if (!value) return "";
+  // Base44 timestamps without an offset are UTC, like its explicit-Z message timestamps.
+  const raw = String(value).trim();
+  const normalized = /^\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?$/.test(raw) ? raw.replace(" ", "T") + "Z" : raw;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+};
 const errorText = (error) => {
   const body = error?.response?.data;
   const detail = Array.isArray(body?.details) ? body.details.join(" ") : "";
@@ -57,7 +64,7 @@ function QuoteForm({ quote, busy, onSave, onCancel }) {
   };
   return <div className="space-y-5">
     <Field label="Request name"><input autoFocus className={inputClass} placeholder="e.g. Lakeview • Lot 216" maxLength={180} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} /></Field>
-    {!quote && <Field label="What would you like quoted?"><textarea className={inputClass + " min-h-24 resize-y"} placeholder="Describe the window package, or add your checked takeoff below. Include sizes, colors and glass where known." value={message} maxLength={20000} onChange={(e) => setMessage(e.target.value)} disabled={busy} /></Field>}
+    {!quote && <Field label="What would you like quoted?"><textarea className={inputClass + " min-h-24 resize-y"} placeholder="Describe the window package, or add your checked takeoff below. Include sizes, colors and glass where known." value={message} maxLength={18000} onChange={(e) => setMessage(e.target.value)} disabled={busy} /></Field>}
     <div className="rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#131A26]"><Settings2 size={15} />Quoting settings</div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -207,7 +214,7 @@ export default function WindowQuotes() {
               <div ref={latestMessage} />
             </div>
             <form onSubmit={send} className="border-t border-[#E9EDF4] bg-[#F6F8FC] p-4">
-              <label htmlFor="quote-message" className="sr-only">Reply to this quote request</label><div className="flex items-end gap-2"><textarea id="quote-message" className={inputClass + " min-h-[76px] resize-y"} value={message} maxLength={20000} onChange={(e) => { setMessage(e.target.value); messageID.current = null; }} placeholder={locked ? quote.sales_status === "won" ? "Accepted revision — start a new request for changes." : "The request is being quoted. Replies reopen when input is needed." : "Add details or answer a question…"} disabled={locked || busy} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(e); }} /><button type="submit" aria-label="Send message" className={primaryClass + " h-10 px-3"} disabled={!message.trim() || locked || busy}>{busy ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}</button></div><p className="mt-2 text-[11px] text-[#77839A]">{locked ? "Saved requests and progress remain available while the quoting computer works." : "Sending saves your reply. Use Start quote to send the updated request to the worker."}</p>
+              <label htmlFor="quote-message" className="sr-only">Reply to this quote request</label><div className="flex items-end gap-2"><textarea id="quote-message" className={inputClass + " min-h-[76px] resize-y"} value={message} maxLength={18000} onChange={(e) => { setMessage(e.target.value); messageID.current = null; }} placeholder={locked ? quote.sales_status === "won" ? "Accepted revision — start a new request for changes." : "The request is being quoted. Replies reopen when input is needed." : "Add details or answer a question…"} disabled={locked || busy} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(e); }} /><button type="submit" aria-label="Send message" className={primaryClass + " h-10 px-3"} disabled={!message.trim() || locked || busy}>{busy ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}</button></div><p className="mt-2 text-[11px] text-[#77839A]">{locked ? "Saved requests and progress remain available while the quoting computer works." : "Sending saves your reply. Use Start quote to send the updated request to the worker."}</p>
             </form>
           </> : <div className="p-4 sm:p-5">{tab === "schedule" ? <ScheduleView quote={quote} /> : <ResultView quote={quote} onWon={() => setWonOpen(true)} busy={busy} />}</div>}
           {quote.job_id && tab !== "result" && <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between border-t border-[#E9EDF4] p-4 text-sm font-semibold text-[#1E4A85]"><span className="flex items-center gap-2"><BriefcaseBusiness size={16} />Open linked job</span><ArrowUpRight size={15} /></Link>}
