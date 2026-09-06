@@ -93,7 +93,7 @@ export function createAgentExecution({ transport, browserSlotId, now = () => new
       if (current.agent_run?.operation_id === operation && !TERMINAL.has(current.worker_status)) {
         // A timeout does not cancel a remotely accepted message. Keep ownership and
         // native identity; never blindly issue the message again or start another job.
-        q = await cas(db, current, { agent_run: { ...current.agent_run, conversation_id: current.agent_run.conversation_id || run.conversation_id, phase: 'uncertain', checked_at: at() } });
+        q = await cas(db, current, { agent_run: { ...current.agent_run, conversation_id: current.agent_run.conversation_id || run.conversation_id, phase: 'uncertain', checked_at: at(), error_code: error?.code || 'INTERNAL', error_operation: error?.operation || '', error_status: error?.status || null, error_diagnostic: error?.diagnostic || '' } });
       } else q = current;
     }
     return q;
