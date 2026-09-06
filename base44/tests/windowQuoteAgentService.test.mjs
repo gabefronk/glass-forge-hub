@@ -432,3 +432,18 @@ test('pilot allowlist permits only a selected new operation and empty allowlist 
   for (const continuationQuoteIds of ['q1', ['../bad'], Array(21).fill('q1')]) assert.throws(() => createAgentExecution({ transport: {}, continuationQuoteIds }), e => e.status === 503);
 });
 
+test('scoped agent read keeps package preferences, notes and individual exceptions', async () => {
+  const f = await fixture();
+  const settings = { color: 'Taupe', glass: 'CozE (LowE)' };
+  const lines = [{ qty: 1, width: 36, height: 60, units: 'in', dimension_basis: 'call', style: 'Single Hung', options: { color: 'White' } }];
+  const conversation = [{ role: 'user', content: 'Kitchen window is white; remaining windows follow the package color.', client_message_id: 'initial', revision: 1 }];
+  const q = await f.start({ settings, lines, conversation });
+  const read = await f.execution.tool({ db: f.db, body: f.body(q, { action: 'read' }) });
+  assert.deepEqual(read.settings, settings); assert.deepEqual(read.lines, lines);
+  assert.equal(read.messages[0].content, conversation[0].content);
+  assert.match(read.contract.request_preferences, /ask a concise clarification/);
+  assert.match(read.contract.request_preferences, /Empty preferences are unspecified/);
+  assert.match(read.contract.request_preferences, /never a native product value/);
+});
+
+
