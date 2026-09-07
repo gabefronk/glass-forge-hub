@@ -156,14 +156,14 @@ function QuoteForm({ quote, seed, busy, onSave, onCancel }) {
         <option value="">Choose dimension basis…</option><option value="call">Call size — e.g. 3050 = 36 × 60 inches</option><option value="frame">Actual frame size — review required</option><option value="rough_opening">Rough opening — review required</option>
       </select></Field>
       <div className="rounded-lg border border-[#C3D4EE] bg-[#F6F8FC] p-3">
-        <label className="flex cursor-pointer items-start gap-2 text-sm font-medium text-[#131A26]"><input type="checkbox" className="mt-1 h-4 w-4 accent-[#2A5EA8]" checked={useStandard} onChange={(e) => setUseStandard(e.target.checked)} disabled={busy} /><span>Use the standard Studio Single Hung configuration</span></label>
-        <p className="ml-6 mt-2 text-xs leading-relaxed text-[#616D81]">{STANDARD_STUDIO_PROFILE.description}</p>
+        <label className="flex cursor-pointer items-start gap-2 text-sm font-medium text-[#131A26]"><input type="checkbox" className="mt-1 h-4 w-4 accent-[#2A5EA8]" checked={useStandard} onChange={(e) => setUseStandard(e.target.checked)} disabled={busy} /><span>Use my standard Studio preferences</span></label>
+        <p className="ml-6 mt-2 text-xs leading-relaxed text-[#616D81]">Keep my selected color, glass, account, yard and margin. Use compatible standard hardware, screen and glazing options when they have been checked for the requested window type.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <ProductChoice label="Window color" value={settings.color} choices={colorChoices} onChange={(color) => setSettings({ ...settings, color })} disabled={busy} />
         <ProductChoice label="Low-E glass" value={settings.glass} choices={glassChoices} onChange={(glass) => setSettings({ ...settings, glass })} disabled={busy} />
       </div>
-      <p className="text-xs leading-relaxed text-[#616D81]">White or Taupe, CozE Low-E and call sizes are supported for automatic Studio Single Hung quoting. Other products or special options stay here for review. A window’s own specification takes priority.</p>
+      <p className="text-xs leading-relaxed text-[#616D81]">The AI keeps each window’s requested style, fin, glass and special options. It checks the configuration with AMSCO and asks about missing or incompatible choices before pricing. A window’s own specification takes priority.</p>
     </div>
     <div className="rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#131A26]"><Settings2 size={15} />Quoting settings</div>

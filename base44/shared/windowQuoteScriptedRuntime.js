@@ -1,5 +1,5 @@
 import { createLazyScriptedRuntime } from './lazyScriptedRuntime.js';
-import { buildQuotePlan, verifyObservedQuote } from './amscoQuotePlan.js';
+import { buildQuotePlan, verifyObservedQuote, getProductProfileForLine } from './amscoQuotePlan.js';
 import { normalizeConversationalSchedule } from './structuredQuoteIntake.js';
 import { createConversationalIntake } from './conversationalIntake.js';
 
@@ -20,7 +20,7 @@ export async function invokeIntakeModel(params, { client }) {
 }
 const normalizeIntake = createConversationalIntake({
   invokeLLM: invokeIntakeModel,
-  normalizeStructured: normalizeConversationalSchedule
+  normalizeStructured: quote => normalizeConversationalSchedule(quote, { getProductProfileForLine })
 });
 // Private configuration is fetched once for each request, with no new env secret.
 const runtime = createLazyScriptedRuntime({ normalizeRequest: buildQuotePlan, normalizeIntake, validateReady: verifyObservedQuote });

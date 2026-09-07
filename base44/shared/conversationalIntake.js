@@ -1,6 +1,6 @@
 // Language understanding proposes inputs; the existing planner remains the
 // authority for product support, pricing, queueing and verified results.
-const VERSION = 2;
+const VERSION = 3;
 const LIMITS = { lines: 200, text: 70000, output: 160000 };
 const clone = value => structuredClone(value);
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -12,7 +12,7 @@ const optionalNumber = { type: 'number' };
 const optionTypes = {
   series: 'string', unit_type: 'string', color: 'string', exterior_color: 'string', interior_color: 'string', glass: 'string',
   glass_thickness: 'string', glazing_method: 'string', elevation: 'string', grilles: 'string', hardware: 'string', hardware_color: 'string',
-  screen: 'string', operation: 'string', fin: 'string', viewing_direction: 'string', number_wide: 'number',
+  screen: 'string', operation: 'string', fin: 'string', viewing_direction: 'string', patterned_glass: 'string', sash_split: 'string', number_wide: 'number',
   tempered: 'boolean', argon: 'boolean', super_spacer: 'boolean', capillary_tubes: 'boolean'
 };
 const citation = {
@@ -37,7 +37,7 @@ export const CONVERSATIONAL_INTAKE_SCHEMA = {
     removed_lines: { type: 'array', maxItems: LIMITS.lines, items: { type: 'object', additionalProperties: false, required: ['line_id', 'source_quote'], properties: { line_id: { type: 'string' }, source_quote: { type: 'string' } } } },
     settings_updates: { type: 'array', maxItems: 10, items: {
       type: 'object', additionalProperties: false, required: ['field', 'value', 'source_quote'],
-      properties: { field: { type: 'string', enum: ['dealer', 'yard', 'gross_margin', 'color', 'glass'] }, value: { type: 'string' }, source_quote: { type: 'string' } }
+      properties: { field: { type: 'string', enum: ['dealer', 'yard', 'gross_margin', 'color', 'glass', 'patterned_glass'] }, value: { type: 'string' }, source_quote: { type: 'string' } }
     } },
     questions: { type: 'array', maxItems: 10, items: { type: 'string' } },
     unresolved_requirements: { type: 'array', maxItems: 40, description: 'Customer specifications that cannot be represented in the schedule. Never execution-capability notices.', items: citation },
@@ -82,12 +82,12 @@ If the latest user message has an older revision than the current revision, the 
 prior_unresolved_requirements MUST remain unresolved unless the latest user reply explicitly removes or replaces that requirement. To resolve one, return resolved_requirements with detail copied EXACTLY from that list and source_quote citing the latest explicit user correction. A title, margin, yard or profile edit, silence, or 'do your best' never resolves a product requirement. Prior line_provenance identifies recipe-derived defaults; those are not explicit custom choices and must be recalculated when frame color changes. Preserve explicit contrasting options and ask if a global correction conflicts with them.
 Return ALL current window lines with stable line_id values from current_lines. Use new-1, new-2, etc. for additions. Never drop an existing line: explicit deletions go in removed_lines with an exact quote from the latest user reply. Do not merge windows with different glass, operation, fin or other specifications.
 Preserve the actual requested products, including XO/XOX sliders, picture/fixed windows, flush fin, nail fin, tempered/obscure glass and any unusual requirement. Never convert them to Single Hung merely to pass automation. If a CUSTOMER SPECIFICATION does not fit options, include it in unresolved_requirements and explain it plainly. No silent omissions. unresolved_requirements must NEVER contain execution-capability notices such as 'XO sliders are not supported by the automated planner'; the application's planner handles those notices itself. A slider or picture already represented as a schedule line is not an unrepresented requirement.
-Normalize explicit feet/inches arithmetic into inches (8 feet x 6 feet is 96 x 72). Four-digit trade codes such as 5050 mean 60 x 60 inches; describe that interpretation in assumptions. Physical size units are not dimension basis: omit dimension_basis unless the customer selected or stated call/frame/rough opening. Do not invent dimensions, quantity, opening direction, color, account, yard or margin.
-The selected Studio standard is a recipe only for Studio Single Hung. A generic 'do your best' does not permit replacing sliders, glass, safety requirements, or unknown dimensions. Use only confirmed profile defaults for compatible products. Do not fill defaults yourself; the planner applies confirmed defaults.
+Use style 'Studio XO Slider' for an explicitly requested XO slider and 'Studio Picture' for a rectangular picture/fixed window. Preserve XO in options.operation and explicit fin choices in options.fin. Do not infer XO from a generic slider or silently change XOX/OX to XO. Glass coating and privacy texture are separate: options.glass stores CozE (LowE), Clear, or another explicitly requested coating; options.patterned_glass stores Obscure, None, or the requested pattern. 'Standard obscure glass' means patterned_glass: 'Obscure', not a replacement for the selected CozE (LowE) coating. Tempered is a separate boolean and must remain true when requested. Do not interpret 'standard' as permission to select an unrequested pattern, thickness, fin, or safety specification.
+Normalize explicit feet/inches arithmetic into inches (8 feet x 6 feet is 96 x 72). Four-digit trade codes such as 5050 mean 60 x 60 inches; describe that interpretation in assumptions. Physical size units and trade codes alone do not establish dimension basis: omit dimension_basis unless the customer selected or stated call/frame/rough opening. Preserve an explicit basis even when the size is written as a trade code. Do not invent dimensions, quantity, opening direction, color, account, yard or margin.
+The selected Studio standard and current account settings carry the customer's existing routine preferences. Product-specific defaults are applied by the application only after their compatibility has been verified for the requested window family. Do not copy Single Hung hardware, screens, thickness or glazing choices into sliders or picture windows yourself. A generic 'do your best' does not permit replacing requested products, glass, safety requirements, fin choices, or unknown dimensions. Do not fill defaults yourself.
 Options must contain primitive values with correct types (tempered true/false, number_wide number). Omit unknown fields entirely; never use zero, false or another placeholder for unknowns. Cite exact short source_quotes from user-authored messages or current structured field values for each line. Assistant questions may establish context but cannot be cited as customer approval. Existing line changes/deletions must cite the latest user reply. Do not repeat or embellish quoted facts.
-settings_updates is only for explicitly stated customer settings, each with an exact user source_quote. Encode value as a string, including numeric margin (for example "25"). Existing dealer, yard and margin are preserved by the application; ask about conflicts rather than overriding them. A clear latest color/glass correction may update that selection. When the user clearly changes the color/glass for all windows, also update every affected line's color/glass option to the same choice and cite that latest correction; do not leave stale copies of the old global choice on individual lines. Preserve intentionally different exceptions and explicit contrasting hardware/screens, or ask if the intended scope is ambiguous. Do not infer dealer, yard or margin from a title or reference. Prefer per-line color/glass overrides when only one line changes.
-Ask at most 3 focused questions in normal language that actually move this request forward; group shared missing details. Never ask the user to reformat into CSV/JSON or quote parser syntax. Explain unsupported products once, without asking the customer to change what they need. summary should briefly state what you understood. assumptions contains only transparent grounded interpretations, never invented specifications.
-Automatic execution currently supports only Studio Single Hung complete units, 1 3/8 inch Fin Setback, non-tempered CozE LowE, SS over SS, 3/4 inch insulated, elevation 2501 to 6500, one-wide, no argon/spacer/capillary/grilles, call inches, BFS and the configured yard. Preserve unsupported products in the schedule; the real planner decides whether it can run.
+settings_updates is only for explicitly stated customer settings, each with an exact user source_quote. Encode value as a string, including numeric margin (for example "25"). Existing dealer, yard and margin are preserved by the application; ask about conflicts rather than overriding them. A clear latest color/glass/patterned_glass correction may update that selection. When the user clearly changes the color, coating or privacy texture for all windows, also update every affected line's corresponding option to the same choice and cite that latest correction; do not leave stale copies of the old global choice on individual lines. Global obscure/privacy-glass requests update patterned_glass, keeping the separately selected coating in glass. Preserve intentionally different exceptions and explicit contrasting hardware/screens, or ask if the intended scope is ambiguous. Do not infer dealer, yard or margin from a title or reference. Prefer per-line overrides when only one line changes.
+Ask at most 3 focused questions in normal language that actually move this request forward; group shared missing details. Never ask the user to reformat into CSV/JSON or quote parser syntax. summary should describe the actual windows and options you understood. Never put internal capability claims, planner/runner terminology, implementation limitations, or promises that pricing succeeded into summary, questions, assumptions or unresolved_requirements. The application checks availability and appends any relevant next steps separately. assumptions contains only transparent grounded interpretations, never invented specifications.
 CUSTOMER DATA:
 ${serialized}`;
 }
@@ -95,6 +95,41 @@ ${serialized}`;
 function representedCapabilityNotice(detail, lines) {
   const notice = detail.match(/^(?:(?:xo|xox)\s+)?(slider|picture|fixed)(?:\s+windows?)?\s+(?:are|is)\s+not\s+supported\s+by\s+(?:the\s+)?(?:current\s+)?(?:automated|automatic|scripted)\b[^.]*\b(?:planner|runner|quoting)\.?$/i);
   return !!notice && Array.isArray(lines) && lines.some(line => norm(line?.style).includes(norm(notice[1])));
+}
+function customerSummary(summary, lines) {
+  if (!/\b(?:planner|runner|scripted|execution\s+(?:path|capabilit)|supported\s+(?:product\s+configuration|quoting\s+path)|not supported|unsupported|only supports?)\b/i.test(summary)) return summary;
+  if (!lines.length) return 'I saved your request and need a few details about the windows.';
+  const descriptions = lines.slice(0, 4).map(line => {
+    const size = present(line.width) && present(line.height) ? ' (' + line.width + ' × ' + line.height + ' in)' : '';
+    return (present(line.qty) ? line.qty + ' × ' : '') + (line.style || 'window') + size;
+  });
+  return 'I understood: ' + descriptions.join('; ') + (lines.length > 4 ? '; and ' + (lines.length - 4) + ' more line items' : '') + '.';
+}
+const obscureTexture = value => ['obscure', 'standard obscure'].includes(norm(value).replace(/\s+glass$/, ''));
+function textureAssumption(assumptions) {
+  const note = 'Obscure describes the privacy texture, separate from the LowE or clear glass selection.';
+  if (!assumptions.includes(note)) assumptions.push(note);
+}
+function separateGlassPattern(line, assumptions, conflicts) {
+  if (obscureTexture(line.options?.patterned_glass)) line.options.patterned_glass = 'Obscure';
+  if (!obscureTexture(line.options?.glass)) return;
+  // Earlier intake versions stored privacy texture in the coating field.
+  // Move that fact without inventing a new coating or changing tempering.
+  if (present(line.options.patterned_glass) && norm(line.options.patterned_glass) !== 'obscure') {
+    conflicts.push('For ' + (line.mark || line.style || line.id) + ', the glass notes say Obscure but the saved privacy texture is ' + line.options.patterned_glass + '. Which privacy texture should I use?');
+    return;
+  }
+  line.options.patterned_glass = 'Obscure';
+  delete line.options.glass;
+  textureAssumption(assumptions);
+}
+function recordTradeSizeInterpretation(line, sourceQuotes, assumptions) {
+  for (const excerpt of sourceQuotes) for (const match of excerpt.matchAll(/\b([1-9])([0-9])([1-9])([0-9])\b/g)) {
+    const width = Number(match[1]) * 12 + Number(match[2]), height = Number(match[3]) * 12 + Number(match[4]);
+    if (line.width !== width || line.height !== height) continue;
+    if (assumptions.some(note => note.includes(match[0]) && note.includes(String(width)) && note.includes(String(height)))) continue;
+    assumptions.push('I read ' + match[0] + ' as ' + width + ' × ' + height + ' inches.');
+  }
 }
 function validateInterpretation(raw, q, context) {
   assert(JSON.stringify(raw).length <= LIMITS.output, 'AI response is too large');
@@ -184,7 +219,7 @@ function validateInterpretation(raw, q, context) {
       // The model sometimes repeats the selected global color/glass on each
       // new line. Keep that selection inherited so later global corrections
       // do not leave an accidental stale line override.
-      if (['color', 'glass'].includes(name) && !present(old?.options?.[name]) && same(value, q.settings?.[name])) continue;
+      if (['color', 'glass', 'patterned_glass'].includes(name) && !present(old?.options?.[name]) && same(value, q.settings?.[name])) continue;
       if (old && present(old.options?.[name]) && !same(old.options[name], value)) changes.push('options.' + name);
       line.options[name] = value;
     }
@@ -192,6 +227,8 @@ function validateInterpretation(raw, q, context) {
     line.units = 'in';
     if (!present(line.dimension_basis) && ['call', 'frame', 'rough_opening'].includes(q.source?.easy_request?.dimension_basis)) line.dimension_basis = q.source.easy_request.dimension_basis;
     line.source_reference = { ...(old?.source_reference || {}), intake_source_quotes: quotes };
+    separateGlassPattern(line, assumptions, conflicts);
+    recordTradeSizeInterpretation(line, quotes, assumptions);
     lines.push(line);
   }
   for (const [id, old] of existing) if (!ids.has(id) && !removed.has(id)) {
@@ -200,20 +237,30 @@ function validateInterpretation(raw, q, context) {
   }
   assert(lines.length <= LIMITS.lines, 'Too many combined window lines');
   const settings = clone(q.settings || {}), changedSettings = new Set(), appliedGlobalChanges = new Set();
+  separateGlassPattern({ id: 'the request', options: settings }, assumptions, conflicts);
   for (const entry of list(raw.settings_updates, 'settings updates', 10)) {
     keys(entry, ['field', 'value', 'source_quote'], 'setting update');
     const field = entry.field;
-    assert(['dealer', 'yard', 'gross_margin', 'color', 'glass'].includes(field) && !changedSettings.has(field), 'Invalid or duplicate setting update');
+    assert(['dealer', 'yard', 'gross_margin', 'color', 'glass', 'patterned_glass'].includes(field) && !changedSettings.has(field), 'Invalid or duplicate setting update');
     changedSettings.add(field);
     const excerpt = cited(entry.source_quote);
     assert(userText.includes(norm(excerpt)), 'Account and option updates need a customer statement');
     if (!hasCurrentReply) continue; // Do not replay a past correction after a Details edit.
+    if (field === 'patterned_glass' && obscureTexture(entry.value)) entry.value = 'Obscure';
+    if (field === 'glass' && obscureTexture(entry.value)) {
+      // Be tolerant of older model output that used the coating slot for a
+      // global privacy request, while retaining the user's actual coating.
+      if (!same(settings.patterned_glass, 'Obscure')) appliedGlobalChanges.add('patterned_glass');
+      settings.patterned_glass = 'Obscure';
+      textureAssumption(assumptions);
+      continue;
+    }
     if (field === 'gross_margin') {
       if (typeof entry.value === 'string') { assert(/^\d+(?:\.\d+)?$/.test(entry.value.trim()), 'Invalid gross margin'); entry.value = Number(entry.value); }
       assert(typeof entry.value === 'number' && Number.isFinite(entry.value) && entry.value >= 0 && entry.value < 100, 'Invalid gross margin');
     }
     else str(entry.value, field, 500);
-    if (present(settings[field]) && !same(settings[field], entry.value) && !(['color', 'glass'].includes(field) && latest.includes(norm(excerpt)))) conflicts.push('Your saved ' + field.replaceAll('_', ' ') + ' is ' + settings[field] + '; your notes specify ' + entry.value + '. Please update Details to confirm the intended choice.');
+    if (present(settings[field]) && !same(settings[field], entry.value) && !(['color', 'glass', 'patterned_glass'].includes(field) && latest.includes(norm(excerpt)))) conflicts.push('Your saved ' + field.replaceAll('_', ' ') + ' is ' + settings[field] + '; your notes specify ' + entry.value + '. Please update Details to confirm the intended choice.');
     else {
       if (present(settings[field]) && !same(settings[field], entry.value)) appliedGlobalChanges.add(field);
       settings[field] = entry.value;
@@ -221,13 +268,14 @@ function validateInterpretation(raw, q, context) {
   }
   for (const line of lines) {
     const old = existing.get(line.id);
-    for (const field of ['color', 'glass']) if (appliedGlobalChanges.has(field) && !present(old?.options?.[field]) && same(line.options?.[field], settings[field])) delete line.options[field];
+    for (const field of ['color', 'glass', 'patterned_glass']) if (appliedGlobalChanges.has(field) && !present(old?.options?.[field]) && same(line.options?.[field], settings[field])) delete line.options[field];
     const oldColor = old?.options?.color || q.settings?.color;
     const newColor = line.options?.color || settings.color;
     const colorChanged = appliedGlobalChanges.has('color') || (present(oldColor) && !same(oldColor, newColor));
     const conflictsForLine = [];
     if (appliedGlobalChanges.has('color') && present(line.options?.color) && !same(line.options.color, settings.color)) conflictsForLine.push('frame color ' + line.options.color);
     if (appliedGlobalChanges.has('glass') && present(line.options?.glass) && !same(line.options.glass, settings.glass)) conflictsForLine.push('glass ' + line.options.glass);
+    if (appliedGlobalChanges.has('patterned_glass') && present(line.options?.patterned_glass) && !same(line.options.patterned_glass, settings.patterned_glass)) conflictsForLine.push('privacy texture ' + line.options.patterned_glass);
     if (colorChanged && ['white', 'taupe'].includes(norm(newColor))) {
       for (const field of ['hardware_color', 'screen']) {
         const value = line.options?.[field] ?? settings[field];
@@ -237,13 +285,13 @@ function validateInterpretation(raw, q, context) {
     if (conflictsForLine.length) conflicts.push('For ' + (line.mark || line.style || line.id) + ', should the saved ' + conflictsForLine.join(' and ') + ' stay as specified, or change to match your new selection?');
   }
   if (!lines.length) clarification.push('Which windows do you need, and what are their sizes and quantities?');
-  return { summary, lines, settings, questions, assumptions, unresolved, clarification, conflicts };
+  return { summary: customerSummary(summary, lines), lines, settings, questions, assumptions, unresolved, clarification, conflicts };
 }
 
 function previousRequirements(q) {
   const previous = q.intake_assessment || {};
   const values = Array.isArray(previous.unresolved_requirements) ? previous.unresolved_requirements :
-    (previous.product_review || []).filter(value => typeof value === 'string' && !value.endsWith('needs a supported product configuration before automatic pricing.'));
+    (previous.product_review || []).filter(value => typeof value === 'string' && !value.endsWith('needs a supported product configuration before automatic pricing.') && !value.endsWith('needs its product options checked before I can price it.'));
   return [...new Set(values.filter(value => typeof value === 'string' && value.trim() && !representedCapabilityNotice(value, q.lines)))];
 }
 function assessment(q, status, summary, assumptions, questions, productReview) {
@@ -298,12 +346,16 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
     // Only its settings and lines are accepted back; retain original history/identity.
     const normalizedQuote = { ...candidate, settings: normalized.quote?.settings || candidate.settings, lines: normalized.quote?.lines || candidate.lines };
     const plannerIssues = Array.isArray(normalized.issues) ? normalized.issues : [];
+    const nativeConstraints = plannerIssues.filter(item => item.code === 'native_product_constraint');
+    const constrainedLines = new Set(nativeConstraints.map(item => item.path?.match(/^lines\[(\d+)\]/)?.[1]).filter(value => value !== undefined).map(Number));
     const unsupported = plannerIssues.filter(item => {
       const basis = item.path?.match(/^lines\[(\d+)\]\.dimension_basis$/);
-      return /unsupported|review|ambiguous_color/.test(item.code || '') && !(basis && !present(normalizedQuote.lines[Number(basis[1])]?.dimension_basis));
+      return (item.code === 'native_product_constraint' || /unsupported|unverified_product|review|ambiguous_color/.test(item.code || '')) && !(basis && !present(normalizedQuote.lines[Number(basis[1])]?.dimension_basis));
     });
     const unsupportedLines = new Set(unsupported.map(item => item.path?.match(/^lines\[(\d+)\]/)?.[1]).filter(value => value !== undefined).map(Number));
-    const productReview = [...new Set([...interpretation.unresolved, ...[...unsupportedLines].map(index => {
+    // A native product restriction is useful customer information. Keep its
+    // verified explanation instead of flattening it into a generic limitation.
+    const productReview = [...new Set([...interpretation.unresolved, ...nativeConstraints.map(item => item.message), ...[...unsupportedLines].filter(index => !constrainedLines.has(index)).map(index => {
       const line = interpretation.lines[index] || normalizedQuote.lines[index];
       const fields = new Set(unsupported.filter(item => item.path?.startsWith('lines[' + index + ']')).map(item => item.path.split('.').at(-1)));
       const variations = [...fields].filter(field => field !== 'style').map(field => {
@@ -313,8 +365,8 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
         if (field === 'dimension_basis') return line.dimension_basis ? line.dimension_basis.replaceAll('_', ' ') + ' dimensions' : '';
         return '';
       }).filter(Boolean);
-      return (line.mark ? line.mark + ' — ' : '') + (line.style || 'Window ' + (index + 1)) + (variations.length ? ' (' + [...new Set(variations)].join(', ') + ')' : '') + ' needs a supported product configuration before automatic pricing.';
-    }), ...unsupported.filter(item => !/^lines\[\d+\]/.test(item.path || '')).map(item => item.message)])];
+      return (line.mark ? line.mark + ' — ' : '') + (line.style || 'Window ' + (index + 1)) + (variations.length ? ' (' + [...new Set(variations)].join(', ') + ')' : '') + ' needs its product options checked before I can price it.';
+    }), ...unsupported.filter(item => item.code !== 'native_product_constraint' && !/^lines\[\d+\]/.test(item.path || '')).map(item => item.message)])];
     // Unsupported styles should not trigger a long questionnaire for unrelated
     // Single Hung hardware. Keep every planner issue internally, ask only what
     // helps the customer's actual package move forward.
@@ -327,15 +379,22 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
       return missing.length ? 'For ' + (line.mark || line.style || 'window ' + (index + 1)) + ', please confirm ' + missing.map(field => ({ qty: 'quantity', dimension_basis: 'whether the measurements are call, frame or rough-opening sizes' })[field] || field).join(', ') + '.' : '';
     }).filter(Boolean);
     const needsBasis = normalizedQuote.lines.some(line => !present(line.dimension_basis));
+    const basisQuestion = /\b(?:call sizes?|frame sizes?|rough[ -]?openings?|measurement basis|dimension basis)\b/i;
+    const needsFin = normalizedQuote.lines.filter(line => /slider|picture|fixed/i.test(line.style || '') &&
+      ![line.options?.fin, line.options?.series, normalizedQuote.settings?.fin, normalizedQuote.settings?.series].some(present));
     const essentialQuestions = [
+      ...nativeConstraints.map(item => item.customer_question).filter(value => typeof value === 'string' && value.trim() && value.length <= 1000 &&
+        (!needsBasis || !basisQuestion.test(value))),
       ...(needsBasis ? ['Are the measurements call sizes, actual frame sizes, or rough openings?'] : []),
       ...normalizedQuote.lines.map((line, index) => {
         const fields = ['width', 'height', 'qty'].filter(field => !present(line[field]));
         return fields.length ? 'For ' + (line.mark || line.style || 'window ' + (index + 1)) + ', what are the ' + fields.map(field => field === 'qty' ? 'quantity' : field).join(', ') + '?' : '';
-      }).filter(Boolean)
+      }).filter(Boolean),
+      ...(needsFin.length ? ['For ' + [...new Set(needsFin.map(line => line.mark || line.style))].join(' and ') + ', which installation style should I use: nail fin, flush fin, or another style?'] : [])
     ];
     const proposedQuestions = (interpretation.questions.length ? interpretation.questions : [...interpretation.clarification, ...missingLines, ...missingPlanner])
-      .filter(question => !needsBasis || !/\b(?:call sizes?|frame sizes?|rough[ -]?openings?)\b/i.test(question));
+      .filter(question => (!needsBasis || !basisQuestion.test(question)) &&
+        (!needsFin.length || !/\b(?:fin|installation style|installation series)\b/i.test(question)));
     const questions = [...new Set([...interpretation.conflicts, ...essentialQuestions, ...proposedQuestions])].slice(0, 3);
     const extraIssues = [...interpretation.unresolved.map(message => ({ code: 'intake_requirement_review', path: 'conversation', message })), ...interpretation.conflicts.map(message => ({ code: 'intake_conflict', path: 'conversation', message }))];
     const ok = normalized.ok === true && !productReview.length && !questions.length;
@@ -349,7 +408,7 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
     });
     const assistantMessage = [interpretation.summary,
       interpretation.assumptions.length ? 'I interpreted: ' + interpretation.assumptions.join(' ') : '',
-      productReview.length ? 'I kept your requested specifications. These items need a supported quoting path before automatic pricing:\n' + productReview.map(item => '• ' + item).join('\n') : '',
+      productReview.length ? 'I kept your requested specifications. These items need a closer check before pricing:\n' + productReview.map(item => '• ' + item).join('\n') : '',
       questions.length ? questions.map(item => '• ' + item).join('\n') : '',
       ok ? 'Your details are ready for automatic quoting.' : ''
     ].filter(Boolean).join('\n\n').slice(0, 17500);

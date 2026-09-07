@@ -41,8 +41,9 @@ test('Beaver package preserves sliders, different fins, picture size and tempere
   assert.equal(result.quote.lines[2].dimension_basis, undefined);
   assert.equal(result.quote.lines[2].options.hardware, undefined);
   assert.equal(result.quote.lines[0].options.series, undefined);
-  assert.equal(result.intake_assessment.questions.length, 1);
-  assert.equal(result.intake_assessment.product_review.length, 3);
+  assert.equal(result.intake_assessment.questions.length, 2);
+  assert.ok(result.intake_assessment.questions.some(question => /Picture.*installation style/.test(question)));
+  assert.equal(result.intake_assessment.product_review.length, 1);
 });
 
 test('short answers have preceding assistant context without treating assistant words as user facts', async () => {
