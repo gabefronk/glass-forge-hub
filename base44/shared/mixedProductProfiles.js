@@ -2,7 +2,7 @@
 // Only this server/runner source registry may enable a product; requests cannot.
 export const MIXED_SUPPORT_ID = 'studio-mixed-products-v2';
 export const PROFILE_CONTRACT_VERSION = 1;
-export const PROFILE_CONTRACT_HASH = '7e45589b8ad9a169ccff27c7ca18c142b0b58a376680e7d5a990b87abf6dab82';
+export const PROFILE_CONTRACT_HASH = '76c572a7219acec39ef34b812654c2902c54d5559468b504f59872e505d8e723';
 const choice = (values, aliases = {}) => ({ type: 'choice', values, aliases });
 const boolean = values => ({ type: 'boolean', values });
 const common = {
@@ -23,6 +23,10 @@ const obscurePicture = {
   glazing_method: choice(['1 inch Insulated Glass'], { '1" Insulated': '1 inch Insulated Glass' }),
   glass_thickness: choice(['3/16 inch over 3/16 inch'], { '3/16" over 3/16"': '3/16 inch over 3/16 inch' }),
   super_spacer: boolean([true]), capillary_tubes: boolean([true])
+};
+const regularPicture = {
+  ...obscurePicture, patterned_glass: choice(['None']),
+  glass_thickness: choice(['1/4 inch over 1/4 inch'], { '1/4" over 1/4"': '1/4 inch over 1/4 inch' })
 };
 const commonInformationalLabels = ['Daylight Opening (Sq.Ft.)', 'Series Type', 'NFRC', 'Sound', 'Northern Zone', 'North-Central Zone',
   'South-Central Zone', 'Southern Zone', 'Performance Rating', 'Air Infiltration', 'Water Penetration', 'Test Report', 'PPT Code',
@@ -94,6 +98,26 @@ const profiles = [
       saved_grid: 'work/amsco-validation/picture-obscure-saved-grid.json', reopened_summary: 'work/amsco-validation/picture-obscure-reopened-summary.json',
       reopened_grid: 'work/amsco-validation/picture-obscure-saved-grid.json', verified_margin: 'work/amsco-validation/picture-obscure-saved-grid.json' }, pending_evidence: []
   },
+  {
+    id: 'studio-setback-direct-set-regular-tempered-v1', status: 'verified', style: 'Studio Picture', family: 'picture_direct_set',
+    series: 'Studio 1 3/8 inch Fin Setback', selection: { tempered: true, patterned_glass: 'None' },
+    native: { series: 'Studio 1 3/8" Fin Setback', style: 'Direct Set', summary_style: 'Studio Direct Set',
+      question_values: { glazing_method: { '1 inch Insulated Glass': '1" Insulated' }, glass_thickness: { '1/4 inch over 1/4 inch': '1/4" over 1/4"' } },
+      fixed_questions: [{ step: 'Advanced Options', label: 'Keep Minimum Glass Thickness', value: 'No', before: 'Glass Thickness' }] },
+    color_pairs: [['White', 'White']], option_rules: regularPicture,
+    defaults: Object.fromEntries(Object.entries(regularPicture).map(([key, rule]) => [key, rule.values[0]])),
+    summary: { option_labels: baseSummary.option_labels,
+      fixed_fields: { 'Wildfire Glazing': 'None', 'Internal Surface LowE': 'None', 'Glass Tint': 'None', 'Debris Protect': 'None', 'Keep Minimum Glass Thickness': 'No',
+        'Glazing Tape Paper': 'Standard Glazing (Remove Paper)', 'Grille Pattern': 'None', 'Protective Wrap': 'No', 'Request Type': 'None',
+        'Remove Nailing Fin': 'No', 'Sloped Sill Adapter': 'No', 'Head Expander': 'No', 'Hide Bid Code In Description': 'No' },
+      blank_fields: ['Bid Code', 'vendorShortConfigDesc'], fixed_optional_fields: { 'Submit To Engineering For Review?': 'No' },
+      informational_labels: [...commonInformationalLabels, 'Fixed Glass (w x h)'], saved_description_phrases: ['Wet Glaze'],
+      absent_labels: ['Hardware Type', 'Hardware Finish', 'Screen', 'Operation / Venting', 'Sash Split'], screen: 'not_applicable' },
+    dimensions: { call: { cases: [{ width: 96, height: 72, call_width: 96, call_height: 72, frame_width: 95.5, frame_height: 71.5 }] } },
+    evidence: { configurator: 'work/amsco-validation/regular-picture-final-summary.json', saved_summary: 'work/amsco-validation/regular-picture-final-summary.json',
+      saved_grid: 'work/amsco-validation/regular-picture-saved-grid.json', reopened_summary: 'work/amsco-validation/regular-picture-reopened-summary.json',
+      reopened_grid: 'work/amsco-validation/regular-picture-saved-grid.json', verified_margin: 'work/amsco-validation/regular-picture-saved-grid.json' }, pending_evidence: []
+  },
   ...['setback', 'flush-fin'].map(installation => ({
     id: `studio-${installation}-direct-set-v1`, status: 'pending', style: 'Studio Picture', family: 'picture_direct_set',
     series: installation === 'setback' ? 'Studio 1 3/8 inch Fin Setback' : 'Studio Flush Fin',
@@ -153,3 +177,4 @@ export function profileIsExecutable(profile) {
     Object.keys(profile.dimensions || {}).length > 0 && Object.keys(profile.option_rules || {}).length > 0 &&
     typeof profile.native?.summary_style === 'string' && profile.color_pairs?.length > 0;
 }
+
