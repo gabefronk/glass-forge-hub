@@ -129,7 +129,8 @@
       "type": "string",
       "enum": [
         "superagent",
-        "legacy"
+        "legacy",
+        "deterministic"
       ]
     },
     "agent_run": {
