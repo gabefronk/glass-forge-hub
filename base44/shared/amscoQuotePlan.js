@@ -20,6 +20,12 @@ export function canonicalProductOption(rule, raw) {
   const direct = rule.values.find(value => norm(value) === norm(raw));
   return direct ?? Object.entries(rule.aliases || {}).find(([alias]) => norm(alias) === norm(raw))?.[1];
 }
+export function savedDescriptionMatches(raw, requiredPhrases) {
+  if (!Array.isArray(requiredPhrases) || requiredPhrases.length === 0) return true;
+  if (typeof raw !== 'string' || raw.length > 8000) return false;
+  const tokens = raw.split(/[,\r\n]+/).map(value => value.trim().toLowerCase());
+  return requiredPhrases.every(phrase => typeof phrase === 'string' && tokens.includes(phrase.trim().toLowerCase()));
+}
 function canonicalColors(raw, settings, profile, issues, path) {
   const source = ['color', 'exterior_color', 'interior_color'].some(key => present(raw[key])) ? raw : settings;
   const named = { white: ['White', 'White'], whitebothsides: ['White', 'White'], taupe: ['Taupe', 'Taupe'], taupebothsides: ['Taupe', 'Taupe'], blackoutsidewhiteinside: ['Black', 'White'], blackexteriorwhiteinterior: ['Black', 'White'], blackwhite: ['Black', 'White'] };
@@ -186,6 +192,7 @@ export function verifyObservedQuote(plan, observed) {
     if (!roomMatchesRequest(line.room, expected.room)) invalid('room_mismatch', path + '.room', 'The saved room label is missing or differs from the schedule.');
     const optionIssues = [];
     const profile = getProductProfileById(expected.product_profile_id);
+    if (!savedDescriptionMatches(line.saved_description, profile?.summary.saved_description_phrases)) invalid('saved_feature_missing', path + '.saved_description', 'The saved native description is missing a required verified product feature.');
     let actualOptions;
     if (expected.product_profile_id === SUPPORT_ID) {
       const checked = buildLegacyPlan({ id: plan.quote_id, input_revision: plan.input_revision, settings: plan.settings, lines: [line] });
@@ -221,3 +228,4 @@ export function verifyObservedQuote(plan, observed) {
   const cleanTotals = Object.fromEntries(['list_total', 'dealer_cost', 'customer_total', 'currency', 'tax', 'freight', 'labor'].map(key => [key, totals[key]]));
   return { ok: true, result: { verified: true, quote_id: plan.quote_id, input_revision: plan.input_revision, native_quote_id: observed.native_quote_id, native_quote_number: observed.native_quote_number, native_quote_url: observed.native_quote_url, dealer: 'BFS', yard: word(observed.yard), pricing_scope: plan.pricing_scope, lines: resultLines, totals: { ...cleanTotals, gross_margin: plan.settings.gross_margin }, verification: { profile_contract_version: PROFILE_CONTRACT_VERSION, profile_contract_hash: PROFILE_CONTRACT_HASH, reopened: true, checked_at: observed.checked_at, rounding_policy: clone(ROUNDING_POLICY) } } };
 }
+
