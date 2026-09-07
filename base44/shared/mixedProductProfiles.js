@@ -2,7 +2,7 @@
 // Only this server/runner source registry may enable a product; requests cannot.
 export const MIXED_SUPPORT_ID = 'studio-mixed-products-v2';
 export const PROFILE_CONTRACT_VERSION = 1;
-export const PROFILE_CONTRACT_HASH = '76c572a7219acec39ef34b812654c2902c54d5559468b504f59872e505d8e723';
+export const PROFILE_CONTRACT_HASH = '9bc0fe9b87a481438a1ff2eb3c740138d2f2d588c2c0cb40249f9343cb9171ab';
 const choice = (values, aliases = {}) => ({ type: 'choice', values, aliases });
 const boolean = values => ({ type: 'boolean', values });
 const common = {
@@ -28,6 +28,7 @@ const regularPicture = {
   ...obscurePicture, patterned_glass: choice(['None']),
   glass_thickness: choice(['1/4 inch over 1/4 inch'], { '1/4" over 1/4"': '1/4 inch over 1/4 inch' })
 };
+const standardPicture = { ...common, tempered: boolean([false]), patterned_glass: choice(['None']), glass_thickness: choice(['SS over SS']) };
 const commonInformationalLabels = ['Daylight Opening (Sq.Ft.)', 'Series Type', 'NFRC', 'Sound', 'Northern Zone', 'North-Central Zone',
   'South-Central Zone', 'Southern Zone', 'Performance Rating', 'Air Infiltration', 'Water Penetration', 'Test Report', 'PPT Code',
   'Product Category', 'Vendor Number', 'productDescription'];
@@ -117,6 +118,27 @@ const profiles = [
     evidence: { configurator: 'work/amsco-validation/regular-picture-final-summary.json', saved_summary: 'work/amsco-validation/regular-picture-final-summary.json',
       saved_grid: 'work/amsco-validation/regular-picture-saved-grid.json', reopened_summary: 'work/amsco-validation/regular-picture-reopened-summary.json',
       reopened_grid: 'work/amsco-validation/regular-picture-saved-grid.json', verified_margin: 'work/amsco-validation/regular-picture-saved-grid.json' }, pending_evidence: []
+  },
+  {
+    id: 'studio-setback-direct-set-regular-standard-v1', status: 'verified', style: 'Studio Picture', family: 'picture_direct_set',
+    series: 'Studio 1 3/8 inch Fin Setback', selection: { tempered: false, patterned_glass: 'None' },
+    native: { series: 'Studio 1 3/8" Fin Setback', style: 'Direct Set', summary_style: 'Studio Direct Set', question_values: sliderQuestionValues },
+    color_pairs: [['White', 'White']], option_rules: standardPicture,
+    defaults: Object.fromEntries(Object.entries(standardPicture).map(([key, rule]) => [key, rule.values[0]])),
+    summary: { option_labels: baseSummary.option_labels,
+      fixed_fields: { ...baseSummary.fixed_fields, 'Remove Nailing Fin': 'No', 'Sloped Sill Adapter': 'No', 'Head Expander': 'No', 'Hide Bid Code In Description': 'No' },
+      blank_fields: ['Bid Code', 'vendorShortConfigDesc'], fixed_optional_fields: { 'Submit To Engineering For Review?': 'No' },
+      informational_labels: [...commonInformationalLabels, 'Fixed Glass (w x h)'],
+      absent_labels: ['Hardware Type', 'Hardware Finish', 'Screen', 'Operation / Venting', 'Sash Split'], screen: 'not_applicable' },
+    // A native call-size selection is eligible for configuration, not a promise
+    // of product availability. SS-over-SS must remain valid in the native UI and
+    // match the Summary; larger sizes that need another glass recipe fail closed.
+    dimensions: { call: { widths: Array.from({ length: 19 }, (_, index) => 12 + index * 6), heights: Array.from({ length: 19 }, (_, index) => 12 + index * 6),
+      frame_width_offset: -0.5, frame_height_offset: -0.5,
+      cases: [{ width: 48, height: 48, call_width: 48, call_height: 48, frame_width: 47.5, frame_height: 47.5 }] } },
+    evidence: { configurator: 'work/amsco-validation/standard-picture-final-summary.json', saved_summary: 'work/amsco-validation/standard-picture-final-summary.json',
+      saved_grid: 'work/amsco-validation/standard-picture-saved-grid.json', reopened_summary: 'work/amsco-validation/standard-picture-reopened-summary.json',
+      reopened_grid: 'work/amsco-validation/standard-picture-saved-grid.json', verified_margin: 'work/amsco-validation/standard-picture-saved-grid.json' }, pending_evidence: []
   },
   ...['setback', 'flush-fin'].map(installation => ({
     id: `studio-${installation}-direct-set-v1`, status: 'pending', style: 'Studio Picture', family: 'picture_direct_set',
