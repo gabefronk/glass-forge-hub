@@ -315,7 +315,7 @@ export default function YaFees() {
         onCreateJob={handleCreateJob}
       />
       <div className="px-[26px] max-[699px]:px-[18px] pb-10">
-        <div className="grid grid-cols-1 min-[700px]:grid-cols-[1.9fr_1fr] gap-5 align-start">
+        <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-5 items-start">
           <div className="min-w-0">
             <NotYetBilled
               rows={annotatedRows}

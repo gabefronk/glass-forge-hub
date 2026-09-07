@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
-import { computeFeeAmt, computeLaborAmt, formatMoney, currentMonthStr, isFutureRow } from "@/lib/feeMath";
+import { computeFeeAmt, computeLaborAmt, currentMonthStr, isFutureRow } from "@/lib/feeMath";
 import { isReady, isMatchBlocked, isReportBlocked, isCustomFee, buildSupersededSet } from "@/lib/invoicingFilters";
 import InvoicingTopBar from "@/components/invoicing/InvoicingTopBar";
 import InvoicingHero from "@/components/invoicing/InvoicingHero";
@@ -411,8 +411,8 @@ export default function Invoicing() {
       />
 
       <div
-        className="max-[699px]:px-[18px]"
-        style={{ maxWidth: "1180px", margin: "0 auto", padding: "0 40px", paddingBottom: selectedIds.size > 0 ? "120px" : "60px" }}
+        className="mx-auto min-w-0 max-w-[1180px] px-4 sm:px-6 xl:px-10"
+        style={{ paddingBottom: selectedIds.size > 0 ? "220px" : "60px" }}
       >
         {showEmptyState ? (
           <div style={{ padding: "120px 0", textAlign: "center" }}>
@@ -503,6 +503,8 @@ export default function Invoicing() {
             border: "1px solid #DDE3EC",
             borderRadius: "99px",
             padding: "10px 16px",
+            maxWidth: "calc(100vw - 32px)",
+            width: "max-content",
             display: "flex",
             alignItems: "center",
             gap: "12px",

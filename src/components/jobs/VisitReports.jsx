@@ -1,5 +1,5 @@
 import { C, formatDateGroup } from "@/lib/feeUI";
-import { Check, Clock, X, AlertCircle } from "lucide-react";
+import { Check, Clock, X } from "lucide-react";
 
 // Shows each scheduled visit for a job with its field-report status icon:
 // green check = report complete, amber clock = awaiting, red X = late, grey clock = rescheduled
@@ -15,12 +15,12 @@ export default function VisitReports({ events }) {
         {sorted.map((ev) => {
           const icon = visitIcon(ev);
           return (
-            <div key={ev.id} className="flex items-center gap-3">
+            <div key={ev.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <div className="h-7 w-7 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: icon.bg }}>
                 {icon.icon}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-medium truncate" style={{ color: C.text }}>{ev.job_name}</div>
+              <div className="flex-1 min-w-0 basis-[120px]">
+                <div className="text-[13px] font-medium break-words" style={{ color: C.text }}>{ev.job_name}</div>
                 <div className="text-[11px]" style={{ color: C.textMuted }}>
                   {ev.event_date ? formatDateGroup(ev.event_date) : "—"}
                   {ev.report_status === "rescheduled" && ev.original_scheduled_date ? ` · originally ${formatDateGroup(ev.original_scheduled_date)}` : ""}

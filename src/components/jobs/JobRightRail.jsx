@@ -5,7 +5,7 @@ function DetailRow({ label, children }) {
   return (
     <div>
       <div className="mono-label-sm mb-1">{label}</div>
-      <div className="text-[13px]" style={{ color: C.text }}>{children}</div>
+      <div className="text-[13px] break-words" style={{ color: C.text }}>{children}</div>
     </div>
   );
 }
@@ -29,7 +29,7 @@ export default function JobRightRail({ job, totals, rows, lastSynced, onMarkBill
               <div className="mono-label-sm mb-1.5">PO numbers</div>
               <div className="flex flex-wrap gap-1.5">
                 {pos.map((po, i) => (
-                  <span key={i} className="font-mono whitespace-nowrap px-2 py-0.5 rounded text-[11px]" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{po}</span>
+                  <span key={i} className="max-w-full font-mono break-all px-2 py-0.5 rounded text-[11px]" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{po}</span>
                 ))}
               </div>
             </div>
@@ -39,7 +39,7 @@ export default function JobRightRail({ job, totals, rows, lastSynced, onMarkBill
               <div className="mono-label-sm mb-1.5">OE numbers</div>
               <div className="flex flex-wrap gap-1.5">
                 {oes.map((oe, i) => (
-                  <span key={i} className="font-mono whitespace-nowrap px-2 py-0.5 rounded text-[11px]" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{oe}</span>
+                  <span key={i} className="max-w-full font-mono break-all px-2 py-0.5 rounded text-[11px]" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{oe}</span>
                 ))}
               </div>
             </div>

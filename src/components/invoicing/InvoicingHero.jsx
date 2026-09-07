@@ -11,6 +11,7 @@ function Stat({ label, value, sub, coral, onClick }) {
         border: "none",
         background: "none",
         padding: 0,
+        minWidth: 0,
       }}
     >
       <div
@@ -19,7 +20,7 @@ function Stat({ label, value, sub, coral, onClick }) {
           fontSize: "9.5px",
           letterSpacing: ".01em",
           color: coral ? "#8A4038" : "#616D81",
-          whiteSpace: "nowrap",
+          overflowWrap: "anywhere",
           marginBottom: "4px",
         }}
       >
@@ -31,7 +32,7 @@ function Stat({ label, value, sub, coral, onClick }) {
           fontSize: "15px",
           fontWeight: 700,
           color: coral ? "#8A4038" : "#131A26",
-          whiteSpace: "nowrap",
+          overflowWrap: "anywhere",
           letterSpacing: "-.02em",
         }}
       >
@@ -43,7 +44,7 @@ function Stat({ label, value, sub, coral, onClick }) {
             fontFamily: "'Archivo',sans-serif",
             fontSize: "11px",
             color: coral ? "#8A4038" : "#616D81",
-            whiteSpace: "nowrap",
+            overflowWrap: "anywhere",
             marginTop: "2px",
           }}
         >
@@ -58,16 +59,13 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
   return (
     <div
       style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "flex-end",
         gap: "24px",
         paddingTop: "32px",
         paddingBottom: "28px",
       }}
-      className="max-[699px]:flex-col max-[699px]:items-start max-[699px]:gap-4"
+      className="flex min-w-0 flex-col items-start"
     >
-      <div>
+      <div className="min-w-0 max-w-full">
         <div
           style={{
             fontFamily: "'Archivo',sans-serif",
@@ -83,13 +81,13 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
         <div
           style={{
             fontFamily: "'Archivo',sans-serif",
-            fontSize: "64px",
+            fontSize: "clamp(32px, 6vw, 64px)",
+            overflowWrap: "anywhere",
             fontWeight: 800,
             color: "#1E4A85",
             letterSpacing: "-.045em",
             lineHeight: 1,
           }}
-          className="max-[699px]:text-[40px]"
         >
           ${formatMoney(readyTotal)}
         </div>
@@ -99,7 +97,7 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
             fontSize: "15px",
             color: "#535E72",
             marginTop: "10px",
-            whiteSpace: "nowrap",
+            overflowWrap: "anywhere",
           }}
         >
           {readyCount} lines ready · {reportBlockedCount} waiting on a report · {matchBlockedCount} match review · {customFeeCount} custom fee %
@@ -111,15 +109,11 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
         </div>
       </div>
 
-      <div className="max-[699px]:w-full" style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
+      <div className="grid w-full min-w-0 grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3 xl:grid-cols-5">
         <Stat label="Earned to date" value={`$${formatMoney(monthEarnedTotal)}`} sub={`${monthEarnedCount} lines · excl. scheduled`} />
-        <div style={{ width: "1px", height: "44px", backgroundColor: "#DDE3EC", margin: "0 20px" }} className="max-[699px]:mx-3" />
         <Stat label="Billed" value={`$${formatMoney(billedTotal)}`} sub={`${billedCount} lines`} />
-        <div style={{ width: "1px", height: "44px", backgroundColor: "#DDE3EC", margin: "0 20px" }} className="max-[699px]:mx-3" />
         <Stat label="Scheduled" value={`$${formatMoney(scheduledTotal)}`} sub={`${scheduledCount} lines`} />
-        <div style={{ width: "1px", height: "44px", backgroundColor: "#DDE3EC", margin: "0 20px" }} className="max-[699px]:mx-3" />
         <Stat label="Needs a report" value={String(reportBlockedCount)} sub="fix →" coral onClick={onFilterBlocked} />
-        <div style={{ width: "1px", height: "44px", backgroundColor: "#DDE3EC", margin: "0 20px" }} className="max-[699px]:mx-3" />
         <Stat label="Match review" value={String(matchBlockedCount)} sub="fix →" coral onClick={onFilterMatchBlocked} />
       </div>
     </div>

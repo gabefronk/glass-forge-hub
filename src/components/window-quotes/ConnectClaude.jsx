@@ -47,7 +47,7 @@ export default function ConnectClaude() {
           <p className="mt-2 text-xs leading-relaxed text-[#616D81]">After authorizing, ask Claude to confirm it can see the Window Quotes tools.</p>
         </div>
         <div>
-          <div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-[#131A26]">Start with this prompt</h3><button type="button" className={secondaryClass} onClick={() => copy(TAKEOFF_PROMPT, "prompt")}>{copied === "prompt" ? <Check size={14} /> : <Copy size={14} />}{copied === "prompt" ? "Copied" : "Copy prompt"}</button></div>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-semibold text-[#131A26]">Start with this prompt</h3><button type="button" className={secondaryClass} onClick={() => copy(TAKEOFF_PROMPT, "prompt")}>{copied === "prompt" ? <Check size={14} /> : <Copy size={14} />}{copied === "prompt" ? "Copied" : "Copy prompt"}</button></div>
           <textarea readOnly aria-label="Claude takeoff prompt" className={inputClass + " min-h-[175px] resize-y text-xs leading-relaxed"} value={TAKEOFF_PROMPT} onFocus={(event) => event.target.select()} />
         </div>
         <details className="rounded-lg border border-[#DDE3EC] p-3 text-xs text-[#616D81]">
@@ -61,3 +61,4 @@ export default function ConnectClaude() {
     </Dialog>
   </>;
 }
+

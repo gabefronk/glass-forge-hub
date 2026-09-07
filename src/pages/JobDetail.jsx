@@ -133,7 +133,7 @@ export default function JobDetail() {
         />
 
         {job.source_window_quote_id && (
-          <Link to={`/window-quotes?quote=${encodeURIComponent(job.source_window_quote_id)}`} className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#C3D4EE] bg-[#E7EEFA] p-4 text-sm text-[#1E4A85]">
+          <Link to={`/window-quotes?quote=${encodeURIComponent(job.source_window_quote_id)}`} className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#C3D4EE] bg-[#E7EEFA] p-4 text-sm text-[#1E4A85] break-words [&>div]:min-w-0">
             <div><div className="font-semibold">Accepted window package</div><div className="mt-1 text-xs">AMSCO {acceptedResult.native_quote_number || "—"} · Revision {job.accepted_quote_revision || acceptedSnapshot.revision || "—"}</div></div>
             <div className="flex flex-wrap items-center gap-5">
               <div><div className="text-[10px] font-medium uppercase tracking-wide">Accepted customer total</div><div className="mt-1 text-lg font-semibold">{acceptedPrice}</div></div>
@@ -143,22 +143,22 @@ export default function JobDetail() {
           </Link>
         )}
 
-        <div className="flex flex-col min-[700px]:flex-row gap-5 mt-5">
+        <div className="flex flex-col xl:flex-row gap-5 mt-5">
           {/* Left column */}
           <div className="flex-1 min-w-0 space-y-5">
             <Checklist checked={checkedItems} onToggle={toggleCheck} />
             {/* Site photos — mobile only (below checklist) */}
-            <div className="min-[700px]:hidden">
+            <div className="xl:hidden">
               <SitePhotos photos={photos} onAddPhoto={() => {}} onPhotoClick={setLightbox} />
             </div>
           </div>
 
           {/* Right column */}
-          <div className="min-[700px]:w-[300px] shrink-0 space-y-5">
+          <div className="min-w-0 xl:w-[340px] shrink-0 space-y-5">
             <StageTimeline currentStage={stage} />
             <LineItems rows={rows} />
             {/* Site photos — desktop only (right column) */}
-            <div className="hidden min-[700px]:block">
+            <div className="hidden xl:block">
               <SitePhotos photos={photos} onAddPhoto={() => {}} onPhotoClick={setLightbox} />
             </div>
             <NotesSection jobId={id} notes={notes} currentUser={currentUser} onChanged={loadAll} onPhotoClick={setLightbox} />

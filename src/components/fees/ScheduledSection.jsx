@@ -26,7 +26,7 @@ export default function ScheduledSection({ rows }) {
   return (
     <section className="px-4 sm:px-8 pt-4 pb-2">
       <div className="rounded-lg border border-border bg-white overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 bg-[#f9f9f9] border-b border-border">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-[#f9f9f9] border-b border-border">
           <CalendarClock className="h-4 w-4 text-accent" />
           <h2 className="font-heading text-xs font-bold uppercase tracking-wide text-foreground">
             Scheduled — not yet billable
@@ -42,17 +42,17 @@ export default function ScheduledSection({ rows }) {
         </div>
         <div className="divide-y divide-border">
           {billable.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm border-l-4 border-l-accent">
+            <div key={r.id} className="grid grid-cols-2 sm:grid-cols-[100px_minmax(0,1fr)_100px_100px] gap-3 px-4 py-2.5 text-sm border-l-4 border-l-accent">
               <span className="tabular-nums text-muted-foreground w-24 text-xs">{r.job_date}</span>
-              <span className="font-medium truncate flex-1">{r.job_name_norm}</span>
-              <span className="tabular-nums text-muted-foreground w-24 text-right">${formatMoney(r.labor_amt)}</span>
-              <span className="tabular-nums font-medium w-24 text-right text-accent">${formatMoney(r.fee_amt)}</span>
+              <span className="min-w-0 font-medium break-words">{r.job_name_norm}</span>
+              <span className="tabular-nums text-muted-foreground sm:text-right">${formatMoney(r.labor_amt)}</span>
+              <span className="tabular-nums font-medium text-right text-accent">${formatMoney(r.fee_amt)}</span>
             </div>
           ))}
         </div>
         {heldOut.length > 0 && (
           <>
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-[#f9f9f9] border-t border-border">
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-[#f9f9f9] border-t border-border">
               <AlertTriangle className="h-3.5 w-3.5 text-accent" />
               <span className="text-xs font-bold uppercase tracking-wide text-foreground">
                 Held out (needs review)
@@ -67,11 +67,11 @@ export default function ScheduledSection({ rows }) {
             </div>
             <div className="divide-y divide-border">
               {heldOut.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 px-4 py-2 text-sm border-l-4 border-l-accent/50">
+                <div key={r.id} className="grid grid-cols-2 sm:grid-cols-[100px_minmax(0,1fr)_100px_100px] gap-3 px-4 py-2 text-sm border-l-4 border-l-accent/50">
                   <span className="tabular-nums text-muted-foreground w-24 text-xs">{r.job_date}</span>
-                  <span className="font-medium truncate flex-1">{r.job_name_norm}</span>
-                  <span className="tabular-nums text-muted-foreground w-24 text-right">${formatMoney(r.labor_amt)}</span>
-                  <span className="tabular-nums font-medium w-24 text-right text-accent">${formatMoney(r.fee_amt)}</span>
+                  <span className="min-w-0 font-medium break-words">{r.job_name_norm}</span>
+                  <span className="tabular-nums text-muted-foreground sm:text-right">${formatMoney(r.labor_amt)}</span>
+                  <span className="tabular-nums font-medium text-right text-accent">${formatMoney(r.fee_amt)}</span>
                 </div>
               ))}
             </div>

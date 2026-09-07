@@ -40,7 +40,7 @@ export function EditableText({ value, onCommit, type = "text", className, alignR
           if (e.key === "Escape") { setV(value ?? ""); setEditing(false); }
         }}
         className={cn(
-          "w-full px-1.5 py-1 rounded border border-ring bg-background outline-none text-sm",
+          "w-full min-w-0 max-w-full px-1.5 py-1 rounded border border-ring bg-background outline-none text-sm",
           alignRight && "text-right",
           className
         )}
@@ -52,7 +52,7 @@ export function EditableText({ value, onCommit, type = "text", className, alignR
       type="button"
       onClick={() => setEditing(true)}
       className={cn(
-        "w-full text-left px-1.5 py-1 rounded hover:bg-accent/60 text-sm transition-colors",
+        "w-full min-w-0 max-w-full break-words text-left px-1.5 py-1 rounded hover:bg-accent/60 text-sm transition-colors",
         alignRight && "text-right tabular-nums",
         className
       )}

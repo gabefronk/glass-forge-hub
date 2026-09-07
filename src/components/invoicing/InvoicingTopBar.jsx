@@ -36,17 +36,15 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
   return (
     <div
       style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
+        position: "relative",
+        zIndex: 30,
         backgroundColor: "rgba(238,241,246,.96)",
         backdropFilter: "blur(14px)",
         borderBottom: "1px solid #DDE3EC",
       }}
     >
       <div
-        className="max-[699px]:px-[18px]"
-        style={{ maxWidth: "1180px", margin: "0 auto", padding: "0 40px", height: "68px", display: "flex", alignItems: "center", gap: "20px" }}
+        className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-3 px-4 py-4 sm:px-6 xl:px-10"
       >
         <div style={{ display: "flex", flexDirection: "column", gap: "1px", flexShrink: 0 }}>
           <span
@@ -74,15 +72,16 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
           </span>
         </div>
 
-        <div style={{ width: "1px", height: "32px", backgroundColor: "#DDE3EC", flexShrink: 0 }} />
+        <div className="hidden sm:block" style={{ width: "1px", height: "32px", backgroundColor: "#DDE3EC", flexShrink: 0 }} />
 
-        <div className="max-[699px]:hidden" style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             <button
               onClick={() => shift(-1)}
+              aria-label="Previous month"
               style={{
-                width: "28px",
-                height: "28px",
+                width: "40px",
+                height: "40px",
                 borderRadius: "10px",
                 backgroundColor: "#F6F8FC",
                 border: "1px solid #DDE3EC",
@@ -111,9 +110,10 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
             </span>
             <button
               onClick={() => shift(1)}
+              aria-label="Next month"
               style={{
-                width: "28px",
-                height: "28px",
+                width: "40px",
+                height: "40px",
                 borderRadius: "10px",
                 backgroundColor: "#F6F8FC",
                 border: "1px solid #DDE3EC",
@@ -149,11 +149,11 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
           )}
         </div>
 
-        <div style={{ flex: 1 }} />
+        <div className="hidden xl:block" style={{ flex: 1 }} />
 
         {probuildStatus && !probuildStatus.error && (
           <div
-            className="max-[699px]:hidden"
+            className="max-w-full"
             style={{
               display: "flex",
               alignItems: "center",
@@ -192,7 +192,7 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
         <button
           onClick={onExportPdf}
           disabled={exporting}
-          className="max-[699px]:hidden"
+          className="min-h-10"
           style={{
             height: "36px",
             borderRadius: "10px",
@@ -213,7 +213,7 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
 
         {monthClosed ? (
           <div
-            className="max-[699px]:hidden"
+            className="max-w-full"
             style={{
               display: "flex",
               alignItems: "center",
@@ -237,7 +237,7 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
           <button
             onClick={onCloseMonth}
             disabled={closing}
-            className="max-[699px]:hidden"
+            className="min-h-10"
             style={{
               height: "36px",
               borderRadius: "10px",
@@ -257,16 +257,18 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
           </button>
         )}
 
-        <div className="max-[699px]:hidden" style={{ position: "relative", display: "flex", alignItems: "center", flexShrink: 0 }}>
+        <div className="relative flex w-full min-w-0 items-center sm:w-auto sm:flex-1 sm:basis-[220px]">
           <Search style={{ position: "absolute", left: "12px", width: "14px", height: "14px", color: "#77839A", pointerEvents: "none" }} />
           <input
             ref={searchRef}
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search lines and jobs"
+            aria-label="Search lines and jobs"
             style={{
-              width: "250px",
-              height: "36px",
+              width: "100%",
+              minWidth: 0,
+              height: "40px",
               borderRadius: "10px",
               backgroundColor: "#FFFFFF",
               border: "1px solid #DDE3EC",
@@ -297,8 +299,9 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
 
         <button
           onClick={onSelectAllReady}
+          className="w-full sm:w-auto"
           style={{
-            height: "36px",
+            height: "40px",
             borderRadius: "10px",
             backgroundColor: "#2A5EA8",
             color: "#FFFFFF",

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { formatShort } from "@/lib/feeUI";
 import { formatMoney } from "@/lib/feeMath";
 
-export const COLS = "minmax(320px,1fr) 170px 80px 96px 120px 116px 150px 28px";
+export const COLS = "minmax(220px,1fr) 120px 45px 75px 100px 100px 110px 20px";
 
 const money = (n) => `$${formatMoney(n)}`;
 
@@ -28,7 +28,7 @@ export default function JobListRow({ job, stats }) {
       to={`/jobs/${job.id}`}
       style={{
         display: "grid", gridTemplateColumns: COLS, alignItems: "center",
-        gap: 16, padding: "14px 20px", minHeight: 60,
+        gap: 12, padding: "14px 16px", minHeight: 60,
         borderTop: "1px solid #E9EDF4", cursor: "pointer",
       }}
     >

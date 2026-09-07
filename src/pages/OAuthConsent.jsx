@@ -216,7 +216,7 @@ export default function OAuthConsent() {
         </ul>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <Button
           variant="outline"
           className="flex-1 h-12 font-medium"

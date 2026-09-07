@@ -35,16 +35,16 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
         <span className="font-mono text-[11px] truncate ml-auto" style={{ color: C.textSecondary }}>{note.author}</span>
         {isAuthor && (
           <div className="flex items-center gap-2 shrink-0">
-            <button type="button" onClick={() => setEditing(true)} style={{ color: C.textMuted }} className="hover:opacity-100 transition-opacity">
+            <button type="button" aria-label="Edit note" onClick={() => setEditing(true)} style={{ color: C.textMuted }} className="p-2 hover:opacity-100 transition-opacity">
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <button type="button" onClick={handleDelete} style={{ color: C.textMuted }} className="hover:opacity-100 transition-opacity">
+            <button type="button" aria-label="Delete note" onClick={handleDelete} style={{ color: C.textMuted }} className="p-2 hover:opacity-100 transition-opacity">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
       </div>
-      <p className="text-[13px] whitespace-pre-wrap" style={{ color: C.text }}>{note.body}</p>
+      <p className="text-[13px] whitespace-pre-wrap break-words" style={{ color: C.text }}>{note.body}</p>
       {note.attachments && note.attachments.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
           {note.attachments.map((url, i) => (

@@ -10,11 +10,11 @@ export default function NeedsReviewSection({ rows, jobs, onAccept, onAssignToJob
   const feeSub = rows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
   return (
     <section className="px-[26px] max-[699px]:px-[18px] pt-4">
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <AlertTriangle className="h-4 w-4" style={{ color: C.amber }} />
         <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: C.amber }}>Needs review</h2>
         <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>({rows.length})</span>
-        <span className="ml-auto flex items-center gap-1.5 text-[12px]">
+        <span className="w-full sm:ml-auto sm:w-auto flex flex-wrap items-center gap-1.5 text-[12px]">
           <span className="mono-label-sm mr-1">Held out</span>
           <span className="font-mono-num text-[13px]" style={{ color: C.text }}>${formatMoney(laborSub)}</span>
           <span className="text-[11px]" style={{ color: C.textMuted }}>labor ·</span>
@@ -45,19 +45,19 @@ function ReviewRow({ row, jobs, onAccept, onAssignToJob, onCreateJob }) {
 
   return (
     <div className="rounded-[14px] p-4" style={{ backgroundColor: C.card, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.amber}` }}>
-      <div className="flex flex-col gap-3 min-[700px]:flex-row min-[700px]:items-start min-[700px]:justify-between">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[13px] font-medium" style={{ color: C.text }}>{row.job_name_raw}</span>
+            <span className="text-[13px] font-medium break-words" style={{ color: C.text }}>{row.job_name_raw}</span>
             <span className="font-mono-num text-[11px]" style={{ color: C.textMuted }}>· {row.job_date}</span>
             <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.tagReview.bg, color: C.tagReview.text }}>{row.match_confidence}</span>
             <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{row.source}</span>
           </div>
-          {row.line_description && <div className="text-[12px]" style={{ color: C.textMuted }}>{row.line_description}</div>}
+          {row.line_description && <div className="text-[12px] break-words" style={{ color: C.textMuted }}>{row.line_description}</div>}
           <div className="text-[11px]" style={{ color: C.amber }}>{reasons.join(" · ")}</div>
           <div className="font-mono-num text-[11px]" style={{ color: C.textMuted }}>{feeMathString(row)}</div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           <button onClick={() => onAccept(row.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
             <Check className="h-3.5 w-3.5" /> Accept
           </button>

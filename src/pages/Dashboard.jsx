@@ -154,15 +154,15 @@ export default function Dashboard() {
       {/* Hero glow */}
       <div className="hero-glow px-[26px] pt-[26px] pb-4 max-[699px]:px-[18px] max-[699px]:pt-[18px]">
         {/* Header row */}
-        <div className="flex items-start justify-between gap-4 mb-6">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+          <div className="min-w-0 flex-1 basis-[300px]">
             <div className="mono-label mb-1.5">{dateHeader()}</div>
-            <h1 className="font-heading text-[28px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>
+            <h1 className="font-heading text-[24px] sm:text-[28px] font-semibold break-words" style={{ color: C.text, letterSpacing: "-0.03em" }}>
               {greeting()}, {userName}
             </h1>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button className="hidden min-[700px]:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <Download className="h-3.5 w-3.5" />
               Export statement
             </button>
@@ -174,7 +174,7 @@ export default function Dashboard() {
         </div>
 
         {/* KPI row */}
-        <div className="grid grid-cols-2 min-[700px]:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-4 gap-3">
           <KpiCard label="Profit YTD" value={`$${formatMoney(ytdProfit)}`} sub="+11.56% share" subColor={C.accent} />
           <KpiCard label="August" value={`$${formatMoney(monthProfit)}`} valueColor={C.accent} sub={`avg $${formatMoney(monthlyAvg)} / mo`} />
           <KpiCard label="Unbilled" value={`$${formatMoney(unbilled.total)}`} sub={`${unbilled.count} invoices past 30 days`} />
@@ -189,10 +189,10 @@ export default function Dashboard() {
           <ComplianceSettings value={complianceStartDate} onChanged={load} />
         )}
 
-        <div className="grid grid-cols-1 min-[700px]:grid-cols-[1.55fr_1fr] gap-5">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] gap-5">
           {/* Left: Run sheet */}
           <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-            <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
               <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Today's run sheet</h2>
               <span className="font-mono-num text-[12px]" style={{ color: C.textSecondary }}>
                 {doneCount} of {sortedToday.length} done
@@ -215,11 +215,11 @@ export default function Dashboard() {
                 return (
                   <div
                     key={ev.id}
-                    className="flex items-center gap-0 px-5 transition-colors"
+                    className="flex items-center gap-0 px-3 sm:px-5 py-3 transition-colors"
                     style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}`, opacity: isDone ? 0.4 : 1 }}
                   >
                     {/* Time gutter */}
-                    <div className="w-[58px] shrink-0 text-right pr-3">
+                    <div className="w-[48px] sm:w-[58px] shrink-0 text-right pr-2 sm:pr-3">
                       <span className="font-mono-num text-[13px]" style={{ color: C.textSecondary }}>
                         {ev.start_time || "—"}
                       </span>
@@ -227,9 +227,9 @@ export default function Dashboard() {
                     {/* Divider */}
                     <div className="w-px self-stretch shrink-0" style={{ backgroundColor: C.border }} />
                     {/* Content */}
-                    <div className="flex-1 min-w-0 px-4">
+                    <div className="flex-1 min-w-0 px-2 sm:px-4">
                       <div
-                        className="text-[14px] font-medium truncate"
+                        className="text-[14px] font-medium break-words"
                         style={{
                           color: C.text,
                           textDecoration: isDone ? "line-through" : "none",
@@ -237,13 +237,14 @@ export default function Dashboard() {
                       >
                         {ev.job_name || "(untitled)"}
                       </div>
-                      <div className="text-[12px] truncate" style={{ color: C.textMuted }}>
+                      <div className="text-[12px] break-words" style={{ color: C.textMuted }}>
                         {ev.address || ev.scope_notes?.slice(0, 80) || ""}
                       </div>
+                      <span className="mt-1 inline-flex sm:hidden text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: C.accent18, border: "1px solid #C3D4EE", color: C.accentText }}>{tag}</span>
                     </div>
                     {/* Tag */}
                     <span
-                      className="text-[9px] font-semibold tracking-[0.01em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
+                      className="hidden sm:inline-flex text-[9px] font-semibold tracking-[0.01em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
                       style={{ backgroundColor: C.accent18, border: "1px solid #C3D4EE", color: C.accentText }}
                     >
                       {tag}
@@ -251,7 +252,9 @@ export default function Dashboard() {
                     {/* Checkbox */}
                     <button
                       onClick={() => toggleCheck(ev.id)}
-                      className="ml-4 h-6 w-6 rounded-full shrink-0 flex items-center justify-center transition-all"
+                      aria-label={`Mark ${ev.job_name || "event"} ${isDone ? "incomplete" : "done"}`}
+                      aria-pressed={isDone}
+                      className="ml-1 sm:ml-3 h-10 w-10 rounded-full shrink-0 flex items-center justify-center transition-all"
                       style={{
                         border: isDone ? "none" : `1.5px solid #CBD4E1`,
                         backgroundColor: isDone ? C.accent : "transparent",
@@ -266,7 +269,7 @@ export default function Dashboard() {
           </div>
 
           {/* Right rail */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             {/* First-up card */}
             {firstUp && (
               <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.accent, color: "#FFFFFF" }}>
@@ -274,11 +277,11 @@ export default function Dashboard() {
                 <div className="font-mono-num-bold text-[32px] mb-1" style={{ letterSpacing: "-0.03em" }}>
                   {firstUp.start_time || "All day"}
                 </div>
-                <div className="text-[15px] font-semibold mb-1 truncate">{firstUp.job_name}</div>
+                <div className="text-[15px] font-semibold mb-1 break-words">{firstUp.job_name}</div>
                 <div className="text-[12px] mb-3" style={{ color: "rgba(255,255,255,.60)" }}>
                   {crewForEvent(firstUp) ? `Crew: ${crewForEvent(firstUp)}` : ""}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#FFFFFF", color: C.accent }}>
                     Open checklist
                   </button>
@@ -347,13 +350,13 @@ export default function Dashboard() {
 
 function KpiCard({ label, value, valueColor, sub, subColor }) {
   return (
-    <div className="rounded-[14px] p-4 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="min-w-0 rounded-[14px] p-3 sm:p-4 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="mono-label-sm mb-2">{label}</div>
-      <div className="font-mono-num-bold text-[24px] mb-1" style={{ color: valueColor || C.text, letterSpacing: "-0.025em" }}>
+      <div className="font-mono-num-bold text-[20px] sm:text-[24px] mb-1 [overflow-wrap:anywhere]" style={{ color: valueColor || C.text, letterSpacing: "-0.025em" }}>
         {value}
       </div>
       {sub && (
-        <div className="text-[11px] truncate" style={{ color: subColor || C.textMuted }}>
+        <div className="text-[11px] break-words" style={{ color: subColor || C.textMuted }}>
           {sub}
         </div>
       )}

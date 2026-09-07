@@ -88,12 +88,12 @@ export default function FieldReportActions({ event, user, onChanged }) {
 
       {uploading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setUploading(false)}>
-          <div className="rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-[14px] p-4 sm:p-5 max-w-md w-full max-h-[90dvh] overflow-y-auto overscroll-contain card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Upload field report</h3>
-            <p className="text-[12px] mb-3" style={{ color: C.textMuted }}>{event.job_name}</p>
+            <p className="break-words text-[12px] mb-3" style={{ color: C.textMuted }}>{event.job_name}</p>
             <input type="file" multiple accept="image/*" onChange={(e) => setUploadPhotos([...e.target.files])} className="mb-3 w-full text-[12px]" style={{ color: C.textSecondary }} />
             <textarea value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} placeholder="Notes..." className="w-full rounded-[10px] p-2.5 text-[13px] mb-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} rows={3} />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <button onClick={() => setUploading(false)} className="px-3 py-1.5 rounded-full text-[12px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Cancel</button>
               <button onClick={handleUpload} disabled={busy} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={{ backgroundColor: C.accent, color: C.accentDark }}>{busy ? "Uploading..." : "Upload"}</button>
             </div>
@@ -103,11 +103,11 @@ export default function FieldReportActions({ event, user, onChanged }) {
 
       {waiving && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setWaiving(false)}>
-          <div className="rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-[14px] p-4 sm:p-5 max-w-md w-full max-h-[90dvh] overflow-y-auto overscroll-contain card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Waive report requirement</h3>
-            <p className="text-[12px] mb-3" style={{ color: C.textMuted }}>{event.job_name}</p>
+            <p className="break-words text-[12px] mb-3" style={{ color: C.textMuted }}>{event.job_name}</p>
             <textarea value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} placeholder="Reason for waiving..." className="w-full rounded-[10px] p-2.5 text-[13px] mb-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} rows={3} />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <button onClick={() => setWaiving(false)} className="px-3 py-1.5 rounded-full text-[12px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Cancel</button>
               <button onClick={handleWaive} disabled={busy || !waiveReason.trim()} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={{ backgroundColor: C.amber, color: "#FFFFFF", opacity: busy || !waiveReason.trim() ? 0.5 : 1 }}>{busy ? "Waiving..." : "Waive"}</button>
             </div>

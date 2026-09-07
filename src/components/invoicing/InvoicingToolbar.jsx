@@ -9,14 +9,14 @@ const FILTERS = [
 export default function InvoicingToolbar({ view, onViewChange, filter, onFilterChange, filterCounts, sort, onSortChange, hideZeros, onHideZerosChange, lineCount }) {
   return (
     <div
-      className="inv-toolbar-scroll max-[699px]:overflow-x-auto"
+      className="min-w-0"
       style={{
         display: "flex",
         alignItems: "center",
         gap: "12px",
         paddingBottom: "12px",
         borderBottom: "1px solid #DDE3EC",
-        flexWrap: "nowrap",
+        flexWrap: "wrap",
       }}
     >
       {/* Lines / Jobs segmented toggle */}
@@ -46,7 +46,7 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
       </div>
 
       {/* Filter chips */}
-      <div className="inv-toolbar-scroll" style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+      <div className="flex w-full min-w-0 flex-wrap gap-2 xl:w-auto">
         {FILTERS.map((f) => {
           const active = filter === f.key;
           const isWarning = f.key === "needs_report";
@@ -124,6 +124,9 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
         <button
           onClick={onHideZerosChange}
+          role="switch"
+          aria-label="Hide zero dollar lines"
+          aria-checked={hideZeros}
           style={{
             width: "34px",
             height: "19px",
@@ -149,6 +152,7 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
             }}
           />
         </button>
+        <span style={{ fontSize: "12px", color: "#535E72", whiteSpace: "nowrap" }}>Hide $0</span>
         <span
           className="max-[699px]:hidden"
           style={{

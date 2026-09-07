@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { formatMoney, isFutureRow } from "@/lib/feeMath";
 import { C, statusTag, isZeroRow, noteTokens, formatDateGroup } from "@/lib/feeUI";
 import CheckBox from "@/components/fees/CheckBox";
-import { cn } from "@/lib/utils";
 
 export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleAll,
   hideZeros, onHideZerosChange, onEdit, onMarkAllBilled }) {
@@ -60,7 +59,7 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
   return (
     <section className="pt-4">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-3 px-1">
+      <div className="flex flex-wrap items-center gap-2 mb-3 px-1">
         <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Not yet billed</h2>
         <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>
           {totals.count} lines
@@ -81,17 +80,17 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
 
       {/* Panel */}
       <div className="rounded-[16px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-        <div style={{ maxHeight: "520px", overflowY: "auto" }} className="obsidian-scroll">
+        <div className="obsidian-scroll sm:max-h-[520px] sm:overflow-y-auto">
           {/* Column header */}
           <div
-            className="sticky top-0 z-10 grid grid-cols-[22px_minmax(0,1fr)_70px_70px_70px] gap-2 px-4 py-2.5 items-center"
+            className="sm:sticky top-0 z-10 grid grid-cols-[28px_minmax(0,1fr)] sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_80px] gap-2 px-4 py-2.5 items-center"
             style={{ backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }}
           >
             <div><CheckBox checked={allSelected} indeterminate={indeterminate} onChange={handleToggleAll} /></div>
             <div className="mono-label-sm">Line</div>
-            <div className="mono-label-sm text-right">Labor</div>
-            <div className="mono-label-sm text-right">Fee</div>
-            <div className="mono-label-sm text-center">Status</div>
+            <div className="hidden sm:block mono-label-sm text-right">Labor</div>
+            <div className="hidden sm:block mono-label-sm text-right">Fee</div>
+            <div className="hidden sm:block mono-label-sm text-center">Status</div>
           </div>
 
           {/* Scheduled group */}
@@ -116,8 +115,8 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
             const feeSub = groupRows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
             return (
               <div key={date}>
-                <div className="sticky z-[5] px-4 py-2.5 flex items-center gap-2.5" style={{ top: "35px", backgroundColor: C.cardAlt, borderTop: `1px solid ${C.borderStrong}`, borderBottom: `1px solid ${C.borderStrong}`, boxShadow: "0 4px 12px rgba(0,0,0,.35)" }}>
-                  <span className="font-mono text-[15px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap" style={{ color: "#4DA8FF" }}>
+                <div className="sm:sticky z-[5] px-4 py-2.5 flex flex-wrap items-center gap-2.5" style={{ top: "49px", backgroundColor: C.cardAlt, borderTop: `1px solid ${C.borderStrong}`, borderBottom: `1px solid ${C.borderStrong}`, boxShadow: "0 4px 12px rgba(0,0,0,.35)" }}>
+                  <span className="font-mono text-[13px] font-semibold uppercase tracking-[0.08em]" style={{ color: "#4DA8FF" }}>
                     {formatDateGroup(date)}
                   </span>
                   <span className="font-mono-num text-[13px] whitespace-nowrap" style={{ color: C.textSecondary }}>
@@ -134,7 +133,7 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
 
         {/* Footer — desktop */}
         <div
-          className="hidden min-[700px]:flex items-center justify-between px-4 py-3 gap-3"
+          className="flex flex-wrap items-center justify-between px-4 py-3 gap-3"
           style={{ borderTop: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}
         >
           <div className="min-w-0">
@@ -143,7 +142,7 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
               ${formatMoney(totals.labor)} labor · 10% fee
             </div>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: selectedIds.size > 0 ? C.accent : C.textMuted }}>
               {selectedIds.size} selected · ${formatMoney(selectedFee)}
             </span>
@@ -162,34 +161,6 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
         </div>
       </div>
 
-      {/* Mobile sticky bar */}
-      <div
-        className="min-[700px]:hidden fixed bottom-[78px] left-0 right-0 z-20 flex items-center justify-between px-[18px] py-3 gap-3"
-        style={{ borderTop: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}
-      >
-        <div className="min-w-0">
-          <div className="mono-label-sm">Unbilled total</div>
-          <div className="font-mono-num text-[11px] mt-0.5" style={{ color: C.textSecondary }}>
-            ${formatMoney(totals.labor)} labor · 10% fee
-          </div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="font-mono-num text-[11px] whitespace-nowrap" style={{ color: selectedIds.size > 0 ? C.accent : C.textMuted }}>
-            {selectedIds.size} sel · ${formatMoney(selectedFee)}
-          </span>
-          <button
-            onClick={onMarkAllBilled}
-            className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-3.5 py-2 rounded-full whitespace-nowrap transition-colors"
-            style={
-              selectedIds.size > 0
-                ? { backgroundColor: C.accent, color: C.accentDark }
-                : { backgroundColor: "rgba(255,255,255,.08)", color: C.textMuted }
-            }
-          >
-            Mark billed
-          </button>
-        </div>
-      </div>
     </section>
   );
 }
@@ -202,7 +173,7 @@ function UnbilledRow({ row, selected, onToggle, onEdit }) {
 
   return (
     <div
-      className="grid grid-cols-[22px_minmax(0,1fr)_70px_70px_70px] gap-2 px-4 items-center cursor-pointer transition-colors"
+      className="grid grid-cols-[28px_minmax(0,1fr)_auto] sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_80px] gap-2 px-4 py-3 items-center cursor-pointer transition-colors"
       style={{
         minHeight: "56px",
         borderTop: `1px solid ${C.rowBorder}`,
@@ -211,34 +182,36 @@ function UnbilledRow({ row, selected, onToggle, onEdit }) {
       onClick={() => onToggle(row.id)}
     >
       {/* Checkbox */}
-      <div onClick={(e) => e.stopPropagation()}>
+      <div className="col-start-1 row-start-1" onClick={(e) => e.stopPropagation()}>
         <CheckBox checked={selected} onChange={onToggle} />
       </div>
 
       {/* Line */}
-      <div className="min-w-0" style={{ opacity: zero ? 0.5 : 1 }}>
-        <div className="truncate text-[13px] font-medium" style={{ color: C.text }}>
+      <div className="col-start-2 col-span-2 row-start-1 sm:col-span-1 min-w-0" style={{ opacity: zero ? 0.5 : 1 }}>
+        <div className="break-words text-[13px] font-medium" style={{ color: C.text }}>
           {row.line_description || row.job_name_norm}
         </div>
         {tokens && (
-          <div className="truncate text-[11px]" style={{ color: C.textMuted }}>
+          <div className="break-words text-[11px]" style={{ color: C.textMuted }}>
             {tokens}
           </div>
         )}
       </div>
 
       {/* Labor */}
-      <div className="text-right font-mono-num text-[13px]" style={{ color: zero ? C.textMuted : C.text }}>
+      <div className="col-start-2 row-start-2 sm:col-start-3 sm:row-start-1 sm:text-right font-mono-num text-[13px]" style={{ color: zero ? C.textMuted : C.text }}>
+        <span className="mr-1 text-[11px] sm:hidden">Labor</span>
         {zero ? "—" : `$${formatMoney(isSplit ? 0 : row.labor_amt)}`}
       </div>
 
       {/* Fee */}
-      <div className="text-right font-mono-num-bold text-[13px]" style={{ color: zero ? C.textMuted : C.accent }}>
+      <div className="col-start-3 row-start-2 sm:col-start-4 sm:row-start-1 text-right font-mono-num-bold text-[13px]" style={{ color: zero ? C.textMuted : C.accent }}>
+        <span className="mr-1 text-[11px] sm:hidden">Fee</span>
         {zero ? "—" : `$${formatMoney(row.fee_amt)}`}
       </div>
 
       {/* Status */}
-      <div className="flex items-center justify-center">
+      <div className="col-start-2 col-span-2 row-start-3 sm:col-start-5 sm:col-span-1 sm:row-start-1 flex items-center sm:justify-center">
         <span
           className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-2 py-0.5 rounded-full whitespace-nowrap"
           style={{ backgroundColor: tag.bg, color: tag.text }}

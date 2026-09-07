@@ -48,8 +48,8 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
               onClick={() => setExpanded(isOpen ? null : key)}
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0,1fr) 120px 24px",
-                gap: "16px",
+                gridTemplateColumns: "minmax(0,1fr) auto 20px",
+                gap: "10px",
                 alignItems: "center",
                 width: "100%",
                 padding: "16px 12px",
@@ -67,9 +67,7 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
                     fontSize: "15px",
                     fontWeight: 700,
                     color: "#131A26",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    overflowWrap: "anywhere",
                   }}
                 >
                   {job.name}
@@ -113,9 +111,7 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
                         fontSize: "13px",
                         color: "#535E72",
                         minWidth: 0,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        overflowWrap: "anywhere",
                       }}
                     >
                       {line.line_description || line.job_name_raw}

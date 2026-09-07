@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Search, Upload, Plus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
-import { C, jobTotals, jobStatus, formatShort } from "@/lib/feeUI";
+import { C, jobTotals, jobStatus } from "@/lib/feeUI";
 import { formatMoney } from "@/lib/feeMath";
 import JobListRow, { COLS, refsLabel } from "@/components/jobs/JobListRow";
 
@@ -112,10 +112,10 @@ export default function JobsHub() {
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex flex-wrap items-center gap-3 mb-5">
           <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Jobs</h1>
           <span className="font-mono-num text-[14px]" style={{ color: C.textMuted }}>({jobs.length.toLocaleString()})</span>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
             <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <Upload className="h-3.5 w-3.5" />Import
             </button>
@@ -159,11 +159,13 @@ export default function JobsHub() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden min-[700px]:block rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+        <div className="hidden xl:block rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+          <div className="overflow-x-auto obsidian-scroll" role="region" aria-label="Jobs table" tabIndex={0}>
+          <div className="min-w-[1010px]">
           {/* Header */}
           <div style={{
             display: "grid", gridTemplateColumns: COLS, alignItems: "center",
-            gap: 16, padding: "12px 20px", background: C.headerBg,
+            gap: 12, padding: "12px 16px", background: C.headerBg,
             fontFamily: "'Archivo',sans-serif", fontSize: 10, fontWeight: 600,
             letterSpacing: ".01em", color: C.headerText, whiteSpace: "nowrap",
           }}>
@@ -185,6 +187,8 @@ export default function JobsHub() {
               <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No jobs match "{search}".</div>
             )}
           </div>
+          </div>
+          </div>
           {/* Footer */}
           {filtered.length > visibleCount && (
             <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}` }}>
@@ -195,19 +199,19 @@ export default function JobsHub() {
         </div>
 
         {/* Mobile cards */}
-        <div className="min-[700px]:hidden space-y-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
           {visibleJobs.map((job) => {
             const stats = jobStats[job.id];
             const isZero = stats?.labor === 0;
             const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
             return (
               <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-                <div className="text-[14px] font-semibold truncate" style={{ color: C.text }}>{job.canonical_name}</div>
-                <div className="text-[11px] truncate mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${job.builder} · ` : ""}{job.address || ""}</div>
+                <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{job.canonical_name}</div>
+                <div className="text-[11px] break-words mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${job.builder} · ` : ""}{job.address || ""}</div>
                 <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
                   <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, border: `1px solid ${stats?.status.border || C.border}`, color: stats?.status.text }}>{stats?.status.label}</span>
                   <span className="text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>{stats?.visits || 0} visits</span>
-                  {refs && <span className="text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>{refs}</span>}
+                  {refs && <span className="max-w-full break-all text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>{refs}</span>}
                 </div>
                 <div className="flex flex-col items-end mt-2.5">
                   <span className="font-mono-num-bold text-[16px]" style={{ color: isZero ? C.textMuted : C.accent, letterSpacing: "-0.02em" }}>{isZero ? "—" : `$${formatMoney(stats.fee)}`}</span>
@@ -217,10 +221,10 @@ export default function JobsHub() {
             );
           })}
           {!visibleJobs.length && (
-            <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No jobs match "{search}".</div>
+            <div className="col-span-full py-10 text-center text-[13px] break-words" style={{ color: C.textMuted }}>No jobs match "{search}".</div>
           )}
           {filtered.length > visibleCount && (
-            <div className="pt-2 text-center">
+            <div className="col-span-full pt-2 text-center">
               <button onClick={() => setVisibleCount(c => c + 20)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
             </div>
           )}

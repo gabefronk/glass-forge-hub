@@ -33,7 +33,8 @@ export default function ComplianceSettings({ value, onChanged }) {
               type="date"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              className="rounded-full px-3 py-1.5 text-[12px] font-mono"
+              aria-label="Compliance start date"
+              className="min-w-0 max-w-full rounded-full px-3 py-1.5 text-[12px] font-mono"
               style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }}
             />
             <button onClick={handleSave} disabled={saving || !draft} className="px-3 py-1.5 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark, opacity: saving || !draft ? 0.5 : 1 }}>

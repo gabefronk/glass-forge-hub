@@ -70,8 +70,8 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
       <div className="grid grid-cols-7" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
           <div key={i} className="px-2 py-2.5 text-center mono-label-sm">
-            <span className="min-[700px]:inline hidden">{d}</span>
-            <span className="min-[700px]:hidden">{d[0]}</span>
+            <span className="md:inline hidden">{d}</span>
+            <span className="md:hidden">{d[0]}</span>
           </div>
         ))}
       </div>
@@ -89,7 +89,7 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
               key={i}
               className={cn(
                 "align-top flex flex-col p-1 min-w-0",
-                "min-h-[104px] min-[700px]:min-h-[110px]",
+                "min-h-[84px] md:min-h-[110px]",
                 !day && "opacity-30",
               )}
               style={{
@@ -105,19 +105,17 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                     <button
                       type="button"
                       onClick={() => onSelectDay?.(dateStr)}
-                      className="font-mono-num text-[12px] flex items-center justify-center transition-colors"
-                      style={
-                        isToday
-                          ? { backgroundColor: C.accent, color: C.accentDark, borderRadius: "99px", height: "22px", width: "22px" }
-                          : { color: C.textSecondary, height: "22px", minWidth: "22px" }
-                      }
+                      className="font-mono-num text-[12px] flex min-h-11 w-full items-center justify-center rounded-full transition-colors md:min-h-8 md:w-8"
+                      style={isToday ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}
+                      aria-label={`${dateStr}, ${dayEvents.length} ${dayEvents.length === 1 ? "event" : "events"}`}
+                      aria-pressed={isSelected}
                     >
                       {day}
                     </button>
                     <button
                       type="button"
                       onClick={() => onCreateForDate?.(dateStr)}
-                      className="text-[14px] leading-none px-0.5 transition-colors"
+                      className="hidden h-8 w-8 items-center justify-center text-[14px] leading-none transition-colors md:inline-flex"
                       style={{ color: C.textFaint }}
                       aria-label={`Add event on ${dateStr}`}
                     >
@@ -125,21 +123,21 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                     </button>
                   </div>
 
-                  {/* Mobile: density dots */}
-                  <div className="flex flex-col gap-1 min-h-0 flex-1 min-[700px]:hidden">
+                  {/* Mobile: one day target opens the full event list below. */}
+                  <button type="button" onClick={() => onSelectDay?.(dateStr)} className="flex min-h-7 flex-1 flex-wrap content-start items-start justify-center gap-1 md:hidden" aria-label={`Show ${dayEvents.length} events on ${dateStr}`}>
                     {dayEvents.map((e) => {
                       const { text } = eventColors(e);
                       const flagged = isFlagged(e);
                       const rescheduled = e.report_status === "rescheduled";
                       const dotColor = flagged ? "#8A4038" : rescheduled ? "#CBD4E1" : text;
                       return (
-                        <button key={e.id} type="button" onClick={() => onSelect(e)} className="h-1.5 w-1.5 rounded-full shrink-0 self-start" style={{ backgroundColor: dotColor }} aria-label={e.job_name} />
+                        <span key={e.id} className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} aria-hidden="true" />
                       );
                     })}
-                  </div>
+                  </button>
 
                   {/* Desktop: full text blocks */}
-                  <div className="hidden min-[700px]:flex flex-col gap-0.5 min-h-0 flex-1">
+                  <div className="hidden md:flex flex-col gap-0.5 min-h-0 flex-1">
                     {dayEvents.map((e) => (
                       <DesktopEventBlock key={e.id} event={e} onClick={() => onSelect(e)} />
                     ))}

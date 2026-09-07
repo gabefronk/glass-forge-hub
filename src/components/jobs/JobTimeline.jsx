@@ -23,7 +23,7 @@ export default function JobTimeline({ jobId, rows, notes, currentUser, showNoteF
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Timeline</h2>
         <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textMuted }}>
           {reportCount} field report{reportCount === 1 ? "" : "s"} · {noteCount} note{noteCount === 1 ? "" : "s"}
@@ -92,10 +92,10 @@ function FeeEntryCard({ row, onPhotoClick }) {
   return (
     <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       {row.line_description && (
-        <p className="text-[13px] mb-2 truncate font-medium" style={{ color: C.text }}>{row.line_description}</p>
+        <p className="text-[13px] mb-2 break-words font-medium" style={{ color: C.text }}>{row.line_description}</p>
       )}
       {row.note_text && (
-        <div className="text-[13px] whitespace-pre-wrap mb-2 rounded p-2" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{row.note_text}</div>
+        <div className="text-[13px] whitespace-pre-wrap break-words mb-2 rounded p-2" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{row.note_text}</div>
       )}
       {row.photo_urls && row.photo_urls.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">

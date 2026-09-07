@@ -6,7 +6,6 @@ import { C, statusTag, noteTokens } from "@/lib/feeUI";
 import CheckBox from "@/components/fees/CheckBox";
 import ExpandedDetail from "@/components/fees/ExpandedDetail";
 import RowActions from "@/components/fees/RowActions";
-import { cn } from "@/lib/utils";
 
 export default function FeeTable({ rows, jobsById, onEdit, onDelete, stickyTop = 0, selectedIds, onToggleRow, onToggleAll }) {
   const groups = useMemo(() => groupByJob(rows, jobsById), [rows, jobsById]);
@@ -21,7 +20,7 @@ export default function FeeTable({ rows, jobsById, onEdit, onDelete, stickyTop =
       </div>
 
       {/* Desktop: right panel job list */}
-      <div className="hidden min-[700px]:block rounded-[16px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+      <div className="hidden md:block rounded-[16px] overflow-hidden" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
         {groups.length === 0 && (
           <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No fee lines this month.</div>
         )}
@@ -31,7 +30,7 @@ export default function FeeTable({ rows, jobsById, onEdit, onDelete, stickyTop =
       </div>
 
       {/* Mobile: expandable cards */}
-      <div className="min-[700px]:hidden space-y-2">
+      <div className="md:hidden space-y-2">
         {groups.map((g) => (
           <MobileJobGroup key={g.key} group={g} onEdit={onEdit} onDelete={onDelete} selectedIds={selectedIds} onToggleRow={onToggleRow} />
         ))}
@@ -83,7 +82,7 @@ function DesktopRow({ row, onEdit, onDelete, index, selected, onToggle }) {
   return (
     <div>
       <div
-        className="grid grid-cols-[22px_minmax(0,1fr)_70px_70px] gap-2 px-4 items-center cursor-pointer transition-colors"
+        className="grid grid-cols-[28px_minmax(0,1fr)_90px_90px] gap-2 px-4 py-2 items-center cursor-pointer transition-colors"
         style={{
           minHeight: "52px",
           borderTop: `1px solid ${C.rowBorder}`,
@@ -94,7 +93,7 @@ function DesktopRow({ row, onEdit, onDelete, index, selected, onToggle }) {
         <div onClick={(e) => e.stopPropagation()}><CheckBox checked={selected} onChange={onToggle} /></div>
         <div className="min-w-0">
           <div className="truncate text-[12px] font-medium" style={{ color: C.text }}>{row.line_description || row.job_name_norm}</div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {tokens && <span className="truncate text-[10px]" style={{ color: C.textMuted }}>{tokens}</span>}
             <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: tag.bg, color: tag.text }}>{tag.label}</span>
           </div>
@@ -167,17 +166,17 @@ function MobileRow({ row, onEdit, onDelete, selected, onToggle }) {
     <div className="px-4" style={{ borderTop: `1px solid ${C.rowBorder}` }}>
       <div className="flex items-center gap-2" style={{ minHeight: "56px" }}>
         <CheckBox checked={selected} onChange={onToggle} />
-        <div onClick={() => setExpanded((e) => !e)} className="w-full flex items-center justify-between gap-2 text-left">
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-medium" style={{ color: C.text }}>{row.line_description || row.job_name_norm}</div>
+        <div onClick={() => setExpanded((e) => !e)} className="min-w-0 flex-1 flex flex-wrap items-center justify-between gap-2 py-3 text-left">
+          <div className="min-w-0 basis-full">
+            <div className="break-words text-[13px] font-medium" style={{ color: C.text }}>{row.line_description || row.job_name_norm}</div>
             <div className="text-[11px] flex items-center flex-wrap gap-1.5" style={{ color: C.textMuted }}>
               <span className="font-mono-num">{row.job_date}</span>
               <span>·</span>
               <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: tag.bg, color: tag.text }}>{tag.label}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="text-right">
+          <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2">
+            <div className="text-left">
               <div className="font-mono-num-bold text-[14px]" style={{ color: C.accent }}>${formatMoney(row.fee_amt)}</div>
               <div className="font-mono-num text-[10px]" style={{ color: C.textMuted }}>{isSplit ? `profit $${formatMoney(computeProfit(row))}` : `labor $${formatMoney(row.labor_amt)}`}</div>
             </div>
@@ -191,6 +190,11 @@ function MobileRow({ row, onEdit, onDelete, selected, onToggle }) {
           <EditableField label="Labor $" value={row.labor_amt} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { labor_amt: v })} />
           <EditableField label="Fee $" value={row.fee_amt} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { fee_amt: v })} />
           <EditableField label="Fee %" value={Math.round((row.fee_pct || 0) * 100)} type="number" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+          {isSplit && <>
+            <EditableField label="Sale $" value={row.sale_price} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { sale_price: v })} />
+            <EditableField label="Cost $" value={row.cost} type="number" displayFormat="currency" onCommit={(v) => onEdit(row.id, { cost: v })} />
+            <EditableField label="Split %" value={Math.round((row.split_pct ?? 0.5) * 100)} type="number" onCommit={(v) => onEdit(row.id, { split_pct: v == null || v === "" ? null : Number(v) / 100 })} />
+          </>}
           <div className="flex items-center gap-2"><span className="text-xs" style={{ color: C.textMuted }}>Billable</span><EditableSwitch checked={row.billable} onCommit={(c) => onEdit(row.id, { billable: c })} /></div>
           <div className="flex items-center gap-2"><span className="text-xs" style={{ color: C.textMuted }}>Needs review</span><EditableSwitch checked={row.needs_review} onCommit={(c) => onEdit(row.id, { needs_review: c })} /></div>
           <div className="flex items-center gap-2"><span className="text-xs" style={{ color: C.textMuted }}>Billed to BFS</span><EditableSwitch checked={row.billed_to_bfs} onCommit={(c) => onEdit(row.id, { billed_to_bfs: c })} /></div>
@@ -200,7 +204,7 @@ function MobileRow({ row, onEdit, onDelete, selected, onToggle }) {
           {row.note_text && (
             <div>
               <div className="mono-label-sm mb-1">Note (verbatim)</div>
-              <div className="rounded p-2 text-sm whitespace-pre-wrap" style={{ border: `1px solid ${C.border}`, backgroundColor: C.mutedBg, color: C.text }}>{row.note_text}</div>
+              <div className="rounded p-2 text-sm whitespace-pre-wrap break-words" style={{ border: `1px solid ${C.border}`, backgroundColor: C.mutedBg, color: C.text }}>{row.note_text}</div>
             </div>
           )}
         </div>
@@ -212,8 +216,8 @@ function MobileRow({ row, onEdit, onDelete, selected, onToggle }) {
 function EditableField({ label, value, onCommit, type, displayFormat }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs w-20" style={{ color: C.textMuted }}>{label}</span>
-      <div className="flex-1"><EditableText value={value} type={type} displayFormat={displayFormat} onCommit={onCommit} /></div>
+      <span className="text-xs w-20 shrink-0" style={{ color: C.textMuted }}>{label}</span>
+      <div className="min-w-0 flex-1"><EditableText value={value} type={type} displayFormat={displayFormat} onCommit={onCommit} /></div>
     </div>
   );
 }

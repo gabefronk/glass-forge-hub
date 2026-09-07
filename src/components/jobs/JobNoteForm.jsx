@@ -53,13 +53,14 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
   return (
     <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="mono-label-sm">Date</label>
           <input
             type="date"
+            aria-label="Note date"
             value={noteDate}
             onChange={(e) => setNoteDate(e.target.value)}
-            className="text-sm rounded px-2 py-1 focus:outline-none"
+            className="min-w-0 max-w-full text-sm rounded px-2 py-1 focus:outline-none"
             style={{ border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.cardAlt }}
           />
           <span className="text-[11px] ml-auto whitespace-nowrap" style={{ color: C.textMuted }}>{editing ? "Edit note" : "New note"}</span>
@@ -92,12 +93,13 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {attachments.map((url, i) => (
-                <div key={i} className="relative h-12 w-12 rounded border overflow-hidden group" style={{ borderColor: C.border }}>
+                <div key={i} className="relative h-24 w-24 rounded border overflow-hidden group" style={{ borderColor: C.border }}>
                   <img src={url} alt="" className="h-full w-full object-cover" />
                   <button
                     type="button"
                     onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}
-                    className="absolute top-0 right-0 bg-[#131A26]/60 text-white rounded-bl p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label={`Remove attachment ${i + 1}`}
+                    className="absolute top-0 right-0 bg-[#131A26]/60 text-white rounded-bl p-1 opacity-100 transition-opacity"
                   >
                     <X className="h-3 w-3" />
                   </button>

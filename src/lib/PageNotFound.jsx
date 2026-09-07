@@ -21,7 +21,7 @@ export default function PageNotFound({}) {
     
     return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
-            <div className="max-w-md w-full">
+            <div className="max-w-md w-full min-w-0 break-words">
                 <div className="text-center space-y-6">
                     {/* 404 Error Code */}
                     <div className="space-y-2">

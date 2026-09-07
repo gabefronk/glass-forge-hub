@@ -5,6 +5,7 @@ export default function UnprocessedEventsBanner({ count, onRun, running }) {
     <div
       style={{
         display: "flex",
+        flexWrap: "wrap",
         alignItems: "center",
         gap: "12px",
         padding: "12px 16px",
@@ -15,7 +16,7 @@ export default function UnprocessedEventsBanner({ count, onRun, running }) {
       }}
     >
       <AlertCircle style={{ width: "18px", height: "18px", color: "#8A4038", flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: "1 1 180px", minWidth: 0 }}>
         <div style={{ fontFamily: "'Archivo',sans-serif", fontSize: "13px", fontWeight: 600, color: "#131A26" }}>
           {count} calendar {count === 1 ? "event has" : "events have"} no billing line
         </div>
@@ -25,6 +26,7 @@ export default function UnprocessedEventsBanner({ count, onRun, running }) {
       </div>
       <button
         onClick={onRun}
+        className="w-full justify-center sm:w-auto"
         disabled={running}
         style={{
           display: "flex",

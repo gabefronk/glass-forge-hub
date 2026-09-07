@@ -18,7 +18,7 @@ export default function Checklist({ checked, onToggle }) {
 
   return (
     <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-      <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
+      <div className="px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-2" style={{ borderBottom: `1px solid ${C.border}` }}>
         <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Delivery &amp; install checklist</h2>
         <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>{done} of {CHECKLIST_TOTAL}</span>
       </div>
@@ -32,7 +32,8 @@ export default function Checklist({ checked, onToggle }) {
             <button
               key={i}
               onClick={() => onToggle(i)}
-              className="w-full flex items-center gap-3 px-5 text-left transition-colors hover:bg-white/[0.02]"
+              aria-pressed={isDone}
+              className="w-full flex items-center gap-3 px-4 sm:px-5 py-3 text-left transition-colors hover:bg-white/[0.02]"
               style={{ minHeight: "56px", borderTop: i > 0 ? `1px solid ${C.rowBorder}` : "none" }}
             >
               <div
@@ -46,12 +47,12 @@ export default function Checklist({ checked, onToggle }) {
               </div>
               <div className="min-w-0 flex-1">
                 <div
-                  className="text-[13px] font-semibold truncate"
+                  className="text-[13px] font-semibold break-words"
                   style={{ color: C.text, textDecoration: isDone ? "line-through" : "none", opacity: isDone ? 0.5 : 1 }}
                 >
                   {item.label}
                 </div>
-                <div className="text-[11px] truncate" style={{ color: C.textMuted }}>{item.meta}</div>
+                <div className="text-[11px] break-words" style={{ color: C.textMuted }}>{item.meta}</div>
               </div>
             </button>
           );

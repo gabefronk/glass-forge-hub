@@ -9,23 +9,21 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
       style={{
         marginTop: "26px",
         marginBottom: "8px",
-        position: "sticky",
-        top: "68px",
-        zIndex: 20,
         backgroundColor: "#EEF1F6",
       }}
     >
       <div
         className="card-shadow"
         style={{
-          height: "46px",
+          minHeight: "46px",
+          flexWrap: "wrap",
           borderRadius: "14px",
           backgroundColor: "#FFFFFF",
           border: "1px solid #DDE3EC",
           boxShadow: "inset 3px 0 0 #2A5EA8, 0 1px 2px rgba(19,26,38,.05), 0 6px 16px -10px rgba(19,26,38,.14)",
           display: "flex",
           alignItems: "center",
-          padding: "0 16px",
+          padding: "10px 12px",
           gap: "12px",
         }}
       >

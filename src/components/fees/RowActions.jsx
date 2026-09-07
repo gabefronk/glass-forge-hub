@@ -11,7 +11,8 @@ export default function RowActions({ row, onDelete, onEdit }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
+          className="p-2 rounded hover:bg-white/10 transition-colors shrink-0"
+          aria-label="Fee line actions"
           onClick={(e) => e.stopPropagation()}
         >
           <MoreVertical className="h-4 w-4 text-muted-foreground" />

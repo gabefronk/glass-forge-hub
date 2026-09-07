@@ -14,11 +14,11 @@ export default function LineItems({ rows }) {
         {rows.map((row, i) => (
           <div
             key={row.id}
-            className="flex items-center justify-between gap-3 px-5"
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 sm:px-5 py-3"
             style={{ minHeight: "48px", borderTop: i > 0 ? `1px solid ${C.rowBorder}` : "none" }}
           >
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium truncate" style={{ color: C.text }}>{row.line_description || row.job_name_norm}</div>
+            <div className="min-w-0 flex-1 basis-[120px]">
+              <div className="text-[13px] font-medium break-words" style={{ color: C.text }}>{row.line_description || row.job_name_norm}</div>
               <div className="font-mono-num text-[11px]" style={{ color: C.textMuted }}>{row.job_date}</div>
             </div>
             <div className="text-right font-mono-num-bold text-[13px] whitespace-nowrap" style={{ color: C.accent }}>

@@ -59,14 +59,14 @@ export default function JobAssignPicker({ row, jobs, onAssign, onCreate }) {
           Assign to Job
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[420px] p-0" align="end">
+      <PopoverContent className="w-[420px] max-w-[calc(100vw-32px)] p-0" align="end">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search name, alias, address, PO, OE..."
             value={search}
             onValueChange={setSearch}
           />
-          <CommandList className="max-h-[320px]">
+          <CommandList className="max-h-[min(320px,60dvh)]">
             <CommandEmpty>No jobs found.</CommandEmpty>
             <CommandGroup>
               {filtered.slice(0, 50).map((job) => (
@@ -79,7 +79,7 @@ export default function JobAssignPicker({ row, jobs, onAssign, onCreate }) {
                     setSearch("");
                   }}
                 >
-                  <div className="flex flex-col py-0.5">
+                  <div className="min-w-0 flex flex-col break-words py-0.5">
                     <span className="font-medium text-sm">{job.canonical_name}</span>
                     {job.address && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">

@@ -16,23 +16,23 @@ export default function ExpandedDetail({ row, onEdit, onDelete }) {
 
   return (
     <div
-      className="px-6 pb-5 pt-4 border-t"
+      className="min-w-0 px-4 pb-5 pt-4 border-t"
       style={{ backgroundColor: C.cardAlt, borderColor: C.border }}
     >
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid min-w-0 grid-cols-1 gap-6">
         {/* LEFT */}
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <FeeMathDisplay row={row} />
           <div className="text-xs" style={{ color: C.textSecondary }}>Source: {sourceLabel}</div>
 
           {isSplit ? (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))" }}>
               <FieldCard label="Sale"><EditableText value={row.sale_price} type="number" displayFormat="currency" className="text-base font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { sale_price: v })} /></FieldCard>
               <FieldCard label="Cost"><EditableText value={row.cost} type="number" displayFormat="currency" className="text-base font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { cost: v })} /></FieldCard>
               <FieldCard label="Split %"><div className="flex items-baseline gap-1"><EditableText value={Math.round((row.split_pct || 0.5) * 100)} type="number" className="text-base font-bold tabular-nums w-10 px-0 py-0" onCommit={(v) => onEdit(row.id, { split_pct: v == null || v === "" ? null : Number(v) / 100 })} /><span className="text-base font-bold" style={{ color: C.textSecondary }}>%</span></div></FieldCard>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))" }}>
               <FieldCard label="Labor"><EditableText value={row.labor_amt} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { labor_amt: v })} /></FieldCard>
               <FieldCard label="Fee"><EditableText value={row.fee_amt} type="number" displayFormat="currency" className="text-xl font-bold tabular-nums px-0 py-0" onCommit={(v) => onEdit(row.id, { fee_amt: v })} /></FieldCard>
               <FieldCard label="Fee %"><div className="flex items-baseline gap-1"><EditableText value={Math.round((row.fee_pct || 0) * 100)} type="number" className="text-xl font-bold tabular-nums w-12 px-0 py-0" onCommit={(v) => onEdit(row.id, { fee_pct: v == null || v === "" ? null : Number(v) / 100 })} /><span className="text-xl font-bold" style={{ color: C.textSecondary }}>%</span></div></FieldCard>
@@ -50,7 +50,7 @@ export default function ExpandedDetail({ row, onEdit, onDelete }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold whitespace-nowrap" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", color: C.textSecondary }}>Paid date</span>
             <EditableText value={row.paid_date} type="date" onCommit={(v) => onEdit(row.id, { paid_date: v })} />
             {!row.paid_date && <span className="text-xs italic" style={{ color: C.text, opacity: 0.5 }}>not set</span>}
@@ -61,7 +61,7 @@ export default function ExpandedDetail({ row, onEdit, onDelete }) {
             <Detail label="Trip charges" value={row.trip_charges ?? "—"} />
             <Detail label="Cal creator" value={row.calendar_creator || "—"} />
             <Detail label="Cal organizer" value={row.calendar_organizer || "—"} />
-            <div>
+            <div className="min-w-0">
               <div className="font-semibold mb-0.5" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", color: C.textSecondary }}>Calendar event</div>
               <div className="inline-block max-w-full font-mono text-xs px-2 py-1 rounded truncate" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}` }}>{row.calendar_event_id || "—"}</div>
               {row.calendar_event_id && <div className="mt-1"><CopyButton text={row.calendar_event_id} label="Copy ID" /></div>}
@@ -83,14 +83,14 @@ export default function ExpandedDetail({ row, onEdit, onDelete }) {
         </div>
 
         {/* RIGHT */}
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           {row.note_text && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <div className="font-semibold" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", color: C.textSecondary }}>Note (verbatim)</div>
                 <CopyButton text={row.note_text} label="Copy" />
               </div>
-              <div className="rounded-[10px] p-4 whitespace-pre-wrap font-mono" style={{ borderColor: C.border, backgroundColor: C.mutedBg, fontSize: "12.5px", lineHeight: "1.85", color: C.textSecondary }}>
+              <div className="rounded-[10px] p-4 whitespace-pre-wrap break-words font-mono" style={{ borderColor: C.border, backgroundColor: C.mutedBg, fontSize: "12.5px", lineHeight: "1.85", color: C.textSecondary }}>
                 {row.note_text}
               </div>
             </div>
@@ -193,7 +193,7 @@ function CopyButton({ text, label = "Copy" }) {
 
 function FieldCard({ label, children }) {
   return (
-    <div className="rounded-[10px] px-3 py-2" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}` }}>
+    <div className="min-w-0 rounded-[10px] px-3 py-2" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}` }}>
       <div className="font-semibold mb-0.5" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", color: C.textSecondary }}>{label}</div>
       {children}
     </div>
@@ -202,7 +202,7 @@ function FieldCard({ label, children }) {
 
 function Detail({ label, value }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div className="font-semibold mb-0.5" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", color: C.textSecondary }}>{label}</div>
       <div className="text-sm break-words" style={{ color: C.text }}>{value}</div>
     </div>

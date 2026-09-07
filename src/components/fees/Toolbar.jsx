@@ -1,4 +1,3 @@
-import { Plus } from "lucide-react";
 import { C, workType, billingTier } from "@/lib/feeUI";
 
 const LEGEND_ITEMS = [
@@ -33,9 +32,9 @@ export default function Toolbar({ filter, onFilterChange, legendFilter, onLegend
   return (
     <div className="px-[26px] max-[699px]:px-[18px] pt-4">
       {/* Filter row */}
-      <div className="flex items-center gap-3 mb-3 overflow-x-auto obsidian-scroll" style={{ scrollbarWidth: "none" }}>
+      <div className="flex flex-wrap items-center gap-3 mb-3">
         {/* Main filters */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5">
           {["all", "unpaid", "uninvoiced"].map((f) => (
             <button
               key={f}
@@ -56,7 +55,7 @@ export default function Toolbar({ filter, onFilterChange, legendFilter, onLegend
         <div className="h-5 w-px shrink-0" style={{ backgroundColor: C.border }} />
 
         {/* Legend chips */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5">
           {counts.map((item) => {
             const active = legendFilter === item.key;
             return (

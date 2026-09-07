@@ -7,7 +7,7 @@ function StatCell({ label, children, mono, fee }) {
     <div className="min-w-0">
       <div className="mono-label-sm mb-1.5">{label}</div>
       <div
-        className={mono ? "font-mono-num truncate" : "truncate"}
+        className={mono ? "font-mono-num break-words" : "break-words"}
         style={fee ? { fontSize: "18px", fontWeight: 600, color: C.accent, letterSpacing: "-0.02em" } : { fontSize: "15px", fontWeight: 500, color: C.text }}
       >
         {children}
@@ -21,10 +21,10 @@ export default function JobDetailHeader({ job, status, totals, dates, stage, che
     <div className="rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       {/* Title row */}
       <div className="px-5 pt-5 pb-4">
-        <div className="mono-label-sm mb-1">GF-2026 · {job.builder || "—"}</div>
-        <h1 className="truncate font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{job.canonical_name}</h1>
+        <div className="mono-label-sm mb-1 break-words">GF-2026 · {job.builder || "—"}</div>
+        <h1 className="break-words font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{job.canonical_name}</h1>
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-          {job.address && <span className="text-[13px]" style={{ color: C.textMuted }}>{job.address}</span>}
+          {job.address && <span className="min-w-0 break-words text-[13px]" style={{ color: C.textMuted }}>{job.address}</span>}
           {dates.first && (
             <>
               <span className="text-[13px]" style={{ color: C.textMuted }}>·</span>
@@ -41,7 +41,7 @@ export default function JobDetailHeader({ job, status, totals, dates, stage, che
             <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em]">{status.label}</span>
           </span>
         </div>
-        <div className="flex items-center gap-2 mt-4">
+        <div className="flex flex-wrap items-center gap-2 mt-4">
           <button
             onClick={onAddPhoto}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-white/5"

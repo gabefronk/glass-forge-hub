@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { computeFeeAmt, formatMoney } from "@/lib/feeMath";
+import { computeFeeAmt } from "@/lib/feeMath";
 import DayHeader from "./DayHeader";
 import LineRow from "./LineRow";
 

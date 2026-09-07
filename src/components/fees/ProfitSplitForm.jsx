@@ -67,7 +67,7 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
             value={selectedJob ? selectedJob.canonical_name : jobQuery}
             onChange={(e) => { setJobQuery(e.target.value); setSelectedJob(null); }}
             placeholder="Search or type new job name..."
-            className="w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
+            className="w-full min-w-0 max-w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
             style={{ border: "1px solid rgba(255,255,255,.07)", backgroundColor: "#101312", color: "#FFFFFF" }}
           />
           {filteredJobs.length > 0 && !selectedJob && (
@@ -77,7 +77,7 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
                   key={j.id}
                   type="button"
                   onClick={() => { setSelectedJob(j); setJobQuery(""); }}
-                  className="w-full text-left px-2 py-1.5 text-sm hover:bg-white/5 transition-colors" style={{ color: "#FFFFFF" }}
+                  className="w-full break-words text-left px-2 py-1.5 text-sm hover:bg-white/5 transition-colors" style={{ color: "#FFFFFF" }}
                 >
                   {j.canonical_name}
                   {j.address && <span className="text-xs text-muted-foreground ml-2">· {j.address}</span>}
@@ -92,7 +92,7 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
+            className="w-full min-w-0 max-w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
             style={{ border: "1px solid rgba(255,255,255,.07)", backgroundColor: "#101312", color: "#FFFFFF" }}
           />
         </div>
@@ -104,7 +104,7 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
             value={salePrice}
             onChange={(e) => setSalePrice(e.target.value)}
             placeholder="0.00"
-            className="w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
+            className="w-full min-w-0 max-w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
             style={{ border: "1px solid rgba(255,255,255,.07)", backgroundColor: "#101312", color: "#FFFFFF" }}
           />
         </div>
@@ -116,20 +116,20 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
             value={cost}
             onChange={(e) => setCost(e.target.value)}
             placeholder="0.00"
-            className="w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
+            className="w-full min-w-0 max-w-full mt-1 text-sm rounded-[10px] px-2 py-1.5 focus:outline-none"
             style={{ border: "1px solid rgba(255,255,255,.07)", backgroundColor: "#101312", color: "#FFFFFF" }}
           />
         </div>
       </div>
       {salePrice && cost && (
-        <div className="mt-3 flex items-center gap-2 text-sm">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted-foreground">Profit:</span>
           <span className="font-semibold tabular-nums">${formatMoney(profit)}</span>
           <span className="text-muted-foreground">× 50% =</span>
           <span className="font-bold tabular-nums text-accent">${formatMoney(feeAmt)}</span>
         </div>
       )}
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={handleSubmit} disabled={saving || !date || !salePrice || !cost || (!selectedJob && !jobQuery.trim())}>
           {saving ? "Saving…" : "Add profit-split row"}
         </Button>

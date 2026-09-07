@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { Plus, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchAllPages } from "@/lib/pagination";
 import { C } from "@/lib/feeUI";
@@ -21,7 +21,7 @@ export default function CalendarPage() {
   const [jobs, setJobs] = useState([]);
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [view, setView] = useState(() => {
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 699px)").matches) return "list";
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) return "list";
     return "month";
   });
   const [creating, setCreating] = useState(null);
@@ -43,6 +43,12 @@ export default function CalendarPage() {
     if (me) setUser(me);
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const phone = window.matchMedia("(max-width: 767px)");
+    const adaptView = (event) => setView(event.matches ? "list" : "month");
+    phone.addEventListener("change", adaptView);
+    return () => phone.removeEventListener("change", adaptView);
+  }, []);
 
   const monthEvents = useMemo(() => {
     let filtered = events.filter((e) => (e.event_date || "").slice(0, 7) === month);
@@ -109,7 +115,7 @@ export default function CalendarPage() {
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3 mb-5">
           <div className="mono-label-sm">Installation schedule</div>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             <div className="flex rounded-full p-0.5" style={{ border: `1px solid ${C.border}` }}>
               <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "month" ? "" : "")} style={view === "month" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>Month</button>
               <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "list" ? "" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
@@ -124,8 +130,13 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mb-4">
-          <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-4">
+          <h1 className="font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
+          <div className="flex items-center gap-1" aria-label="Choose calendar month">
+            <button type="button" onClick={() => shiftMonth(-1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></button>
+            <button type="button" onClick={() => { const today = new Date(); const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`; setMonth(day.slice(0, 7)); setSelectedDay(day); }} className="min-h-11 rounded-full px-3 text-xs font-medium hover:bg-white" style={{ color: C.textSecondary }}>Today</button>
+            <button type="button" onClick={() => shiftMonth(1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Next month"><ChevronRight className="h-4 w-4" /></button>
+          </div>
           <div className="flex items-center gap-3 text-[11px]">
             <span className="inline-flex items-center gap-1.5" style={{ color: C.textSecondary }}>
               <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: INSTALL_COLOR }} />Install
@@ -157,7 +168,7 @@ export default function CalendarPage() {
             />
             {/* Selected day panel */}
             <div className="mt-4 rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <h3 className="font-heading text-[14px] font-semibold" style={{ color: C.text }}>{dayLabel(selectedDay)}</h3>
                 <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>{selectedDayEvents.length} {selectedDayEvents.length === 1 ? "event" : "events"}</span>
               </div>
@@ -199,7 +210,7 @@ export default function CalendarPage() {
                   key={e.id}
                   type="button"
                   onClick={() => setSelected(e)}
-                  className="w-full flex items-center gap-3 px-4 text-left transition-colors hover:bg-[#F8FAFD]"
+                  className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-[#F8FAFD]"
                   style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
                 >
                   <div className="flex flex-col items-center justify-center min-w-[42px] pr-1" style={{ borderRight: `1px solid ${C.border}` }}>
@@ -210,11 +221,11 @@ export default function CalendarPage() {
                       {e.event_date.slice(8)}
                     </span>
                   </div>
-                  <div className="flex-1 min-w-0 rounded-[4px] px-2.5 py-1.5" style={{ backgroundColor: bg, borderLeft: `2px solid ${color}` }}>
+                  <div className="flex-1 min-w-0 break-words rounded-[4px] px-2.5 py-1.5" style={{ backgroundColor: bg, borderLeft: `2px solid ${color}` }}>
                     {e.start_time && (
                       <span className="font-mono-num text-[12px] font-semibold mr-1.5" style={{ color }}>{e.start_time}</span>
                     )}
-                    <span className="text-[13px] font-medium truncate" style={{ color: C.text }}>{e.job_name}</span>
+                    <span className="break-words text-[13px] font-medium" style={{ color: C.text }}>{e.job_name}</span>
                   </div>
                 </button>
               );

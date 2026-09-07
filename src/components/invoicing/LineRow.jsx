@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, MoreHorizontal, ExternalLink, Trash2, Pencil, X } from "lucide-react";
+import { Check, MoreHorizontal, ExternalLink, Trash2, Pencil } from "lucide-react";
 import { computeFeeAmt, formatMoney } from "@/lib/feeMath";
 import { crewName, noteTokens } from "@/lib/feeUI";
 
@@ -66,7 +66,7 @@ function InlineEditor({ row, onSave, onCancel, onDelete }) {
         margin: "4px 0",
       }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }} className="max-[699px]:grid-cols-1">
+      <div className="mb-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label style={{ fontFamily: "'Archivo',sans-serif", fontSize: "9px", letterSpacing: ".01em", color: "#616D81", display: "block", marginBottom: "4px" }}>Description</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
@@ -84,12 +84,12 @@ function InlineEditor({ row, onSave, onCancel, onDelete }) {
           <input type="number" value={feePct} onChange={(e) => setFeePct(e.target.value)} style={inputStyle} />
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
         <div>
           <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "10px", letterSpacing: ".01em", color: "#616D81" }}>Fee </span>
           <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "17px", fontWeight: 700, color: "#1E4A85" }}>${formatMoney(liveFee)}</span>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
           <button onClick={() => onDelete(row.id)} style={{ padding: "7px 14px", borderRadius: "10px", border: "1px solid #EFD2CA", backgroundColor: "transparent", color: "#8A4038", fontFamily: "'Archivo',sans-serif", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Delete line</button>
           <button onClick={onCancel} style={{ padding: "7px 14px", borderRadius: "10px", border: "1px solid #DDE3EC", backgroundColor: "#FFFFFF", color: "#535E72", fontFamily: "'Archivo',sans-serif", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}>Cancel</button>
           <button onClick={() => onSave(row.id, { line_description: description, note_text: detail, labor_amt: Number(labor) || 0, fee_pct: (Number(feePct) || 0) / 100, manually_adjusted: true })} style={{ padding: "7px 16px", borderRadius: "10px", border: "1px solid #1E4A85", backgroundColor: "#2A5EA8", color: "#FFFFFF", fontFamily: "'Archivo',sans-serif", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Save</button>
@@ -144,7 +144,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
   return (
     <div
-      className="inv-line-grid"
+      className="grid min-w-0 grid-cols-[32px_minmax(0,1fr)_36px] items-center gap-x-2 gap-y-2 xl:grid-cols-[32px_minmax(0,1fr)_100px_108px_116px_36px] xl:gap-x-3"
       onClick={handleClick}
       style={{
         padding: "15px 12px",
@@ -161,9 +161,12 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
       {/* Checkbox */}
       <button
         onClick={(e) => { e.stopPropagation(); handleClick(e); }}
+        aria-label={`Select ${row.job_name_raw || row.job_name_norm || "invoice line"}`}
+        aria-pressed={selected}
+        className="col-start-1 row-start-1"
         style={{
-          width: "19px",
-          height: "19px",
+          width: "28px",
+          height: "28px",
           borderRadius: "99px",
           border: selected ? "none" : "1.5px solid #CBD4E1",
           backgroundColor: selected ? "#2A5EA8" : "transparent",
@@ -178,17 +181,15 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
       </button>
 
       {/* Title + subline + chip */}
-      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+      <div className="col-start-2 row-start-1" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", minWidth: 0 }}>
           <span
             style={{
               fontFamily: "'Archivo',sans-serif",
               fontSize: "15px",
               fontWeight: 600,
               color: "#131A26",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              overflowWrap: "anywhere",
               textDecoration: isBilled ? "line-through" : "none",
               opacity: textOpacity,
               minWidth: 0,
@@ -220,9 +221,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
             fontFamily: "'Archivo',sans-serif",
             fontSize: "12.5px",
             color: reportAttached ? "#1E4A85" : "#616D81",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            overflowWrap: "anywhere",
             opacity: textOpacity,
           }}
         >
@@ -232,9 +231,8 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
       {/* Labor */}
       <span
-        className="max-[699px]:hidden"
+        className="col-start-2 row-start-2 xl:col-start-3 xl:row-start-1 xl:text-right"
         style={{
-          textAlign: "right",
           fontFamily: "'Archivo',sans-serif",
           fontSize: "13.5px",
           fontWeight: 500,
@@ -243,13 +241,14 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           opacity: textOpacity,
         }}
       >
+        <span className="mr-1 text-xs xl:hidden">Labor</span>
         ${formatMoney(row.labor_amt)}
       </span>
 
       {/* Fee */}
       <span
+        className="col-start-2 row-start-3 xl:col-start-4 xl:row-start-1 xl:text-right"
         style={{
-          textAlign: "right",
           fontFamily: "'Archivo',sans-serif",
           fontSize: isBig ? "17px" : "13.5px",
           fontWeight: isBig ? 700 : 600,
@@ -258,11 +257,12 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           opacity: textOpacity,
         }}
       >
+        <span className="mr-1 text-xs xl:hidden">Fee</span>
         ${formatMoney(fee)}
       </span>
 
       {/* Status */}
-      <div className="max-[699px]:hidden" style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div className="col-start-2 row-start-4 flex flex-wrap gap-2 empty:hidden xl:col-start-5 xl:row-start-1 xl:justify-end">
         {blocked && (
           <button
             onClick={(e) => { e.stopPropagation(); onAddReport(row.id); }}
@@ -322,12 +322,14 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
       </div>
 
       {/* Menu */}
-      <div ref={menuRef} style={{ position: "relative", display: "flex", justifyContent: "flex-end" }}>
+      <div className="col-start-3 row-start-1 self-start xl:col-start-6 xl:self-center" ref={menuRef} style={{ position: "relative", display: "flex", justifyContent: "flex-end" }}>
         <button
           onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+          aria-label="Invoice line actions"
+          aria-expanded={menuOpen}
           style={{
-            width: "28px",
-            height: "28px",
+            width: "36px",
+            height: "36px",
             borderRadius: "6px",
             border: "none",
             backgroundColor: "transparent",

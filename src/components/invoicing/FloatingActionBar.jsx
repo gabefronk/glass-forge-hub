@@ -18,24 +18,21 @@ export default function FloatingActionBar({ selectedCount, selectedFee, onClear,
     <div
       style={{
         position: "fixed",
-        bottom: "28px",
-        left: "50%",
-        transform: "translateX(-50%)",
         zIndex: 55,
         backgroundColor: "#FFFFFF",
         border: "1px solid #DDE3EC",
-        borderRadius: "99px",
-        padding: "8px 8px 8px 16px",
+        borderRadius: "16px",
+        padding: "12px",
         display: "flex",
+        flexWrap: "wrap",
         alignItems: "center",
         gap: "8px",
         boxShadow: "0 1px 2px rgba(19,26,38,.05), 0 10px 24px -18px rgba(19,26,38,.22)",
-        maxWidth: "calc(100vw - 36px)",
       }}
-      className="max-[699px]:gap-1 max-[699px]:px-2"
+      className="bottom-[calc(88px+env(safe-area-inset-bottom))] left-4 right-4 mx-auto max-w-[820px] lg:bottom-4 lg:left-[232px]"
     >
       <span
-        className="max-[699px]:hidden"
+        className="w-full sm:w-auto"
         style={{
           fontFamily: "'Archivo',sans-serif",
           fontSize: "12.5px",
@@ -144,7 +141,6 @@ export default function FloatingActionBar({ selectedCount, selectedFee, onClear,
 
       <button
         onClick={onExport}
-        className="max-[699px]:hidden"
         style={{
           padding: "6px 12px",
           borderRadius: "10px",

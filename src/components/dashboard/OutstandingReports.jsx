@@ -105,7 +105,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
       {noSourceDates.length > 0 && (
         <div className="rounded-[14px] px-5 py-4 mb-5 flex items-start gap-3 card-shadow" style={{ backgroundColor: "#FBEDEA", border: `1px solid #EFD2CA` }}>
           <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#8A4038" }} />
-          <div>
+          <div className="min-w-0 break-words">
             <div className="text-[14px] font-semibold mb-1" style={{ color: "#8A4038" }}>Probuild sync incomplete</div>
             <div className="text-[12px]" style={{ color: C.textMuted }}>
               No field reports ingested for {noSourceDates.join(", ")} — flags suppressed. The Probuild pull may have failed; check the ingest logs.
@@ -115,7 +115,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
       )}
       {outstanding.length > 0 && (
       <div className="rounded-[14px] overflow-hidden mb-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-        <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
           <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Field reports outstanding</h2>
           <span className="font-mono-num-bold text-[20px]" style={{ color: C.amber }}>{outstanding.length}</span>
         </div>
@@ -123,12 +123,12 @@ export default function OutstandingReports({ events, user, onChanged, compliance
           {outstanding.map((event) => {
             const label = statusLabel(event);
             return (
-              <div key={event.id} className="px-5 py-3.5" style={{ borderTop: `1px solid ${C.rowBorder}` }}>
+              <div key={event.id} className="px-4 sm:px-5 py-3.5" style={{ borderTop: `1px solid ${C.rowBorder}` }}>
                 <div className="flex items-start gap-3">
                   <div className="w-1.5 h-1.5 rounded-full mt-2 shrink-0" style={{ backgroundColor: label.dot }} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-medium truncate" style={{ color: C.text }}>{event.job_name}</span>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="min-w-0 max-w-full text-[14px] font-medium break-words" style={{ color: C.text }}>{event.job_name}</span>
                       <span className="text-[10px] whitespace-nowrap shrink-0" style={{ color: C.textMuted }}>
                         {event.event_date ? formatDateGroup(event.event_date) : ""}
                       </span>
@@ -136,7 +136,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
                         {label.escalate && <AlertTriangle className="h-2.5 w-2.5" />}{label.text}
                       </span>
                     </div>
-                    <div className="text-[12px] mt-0.5" style={{ color: C.textMuted }}>{missingText(event)}</div>
+                    <div className="text-[12px] mt-0.5 break-words" style={{ color: C.textMuted }}>{missingText(event)}</div>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       {event.job_id && (
                         <Link to={`/jobs/${event.job_id}`} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Open job</Link>
@@ -160,9 +160,9 @@ export default function OutstandingReports({ events, user, onChanged, compliance
 
       {uploading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setUploading(null)}>
-          <div className="rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Upload field report</h3>
-            <p className="text-[12px] mb-3" style={{ color: C.textMuted }}>{uploading.job_name}</p>
+            <p className="text-[12px] mb-3 break-words" style={{ color: C.textMuted }}>{uploading.job_name}</p>
             <input type="file" multiple accept="image/*" onChange={(e) => setUploadPhotos([...e.target.files])} className="mb-3 w-full text-[12px]" style={{ color: C.textSecondary }} />
             <textarea value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} placeholder="Notes..." className="w-full rounded-[10px] p-2.5 text-[13px] mb-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} rows={3} />
             <div className="flex justify-end gap-2">
@@ -175,9 +175,9 @@ export default function OutstandingReports({ events, user, onChanged, compliance
 
       {waiving && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setWaiving(null)}>
-          <div className="rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Waive report requirement</h3>
-            <p className="text-[12px] mb-3" style={{ color: C.textMuted }}>{waiving.job_name}</p>
+            <p className="text-[12px] mb-3 break-words" style={{ color: C.textMuted }}>{waiving.job_name}</p>
             <textarea value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} placeholder="Reason for waiving..." className="w-full rounded-[10px] p-2.5 text-[13px] mb-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} rows={3} />
             <div className="flex justify-end gap-2">
               <button onClick={() => setWaiving(null)} className="px-3 py-1.5 rounded-full text-[12px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Cancel</button>

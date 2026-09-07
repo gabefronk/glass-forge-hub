@@ -60,6 +60,7 @@ const SelectContent = React.forwardRef(({ className, children, position = "poppe
         className
       )}
       position={position}
+      collisionPadding={16}
       {...props}>
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport

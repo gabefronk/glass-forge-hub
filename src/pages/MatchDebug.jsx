@@ -81,16 +81,23 @@ export default function MatchDebug() {
         <div className="flex flex-wrap items-center gap-3 mb-5">
           <Bug className="h-5 w-5" style={{ color: C.accent }} />
           <h1 className="font-heading text-[20px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Match Debug</h1>
-          <div className="flex items-center gap-2 ml-auto flex-wrap">
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded-full px-3 py-1.5 text-[12px] font-mono" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, color: C.text }} />
-            <span className="text-[12px]" style={{ color: C.textMuted }}>→</span>
-            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-full px-3 py-1.5 text-[12px] font-mono" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, color: C.text }} />
+          <div className="flex w-full min-w-0 items-center gap-2 flex-wrap xl:ml-auto xl:w-auto">
+            <label className="flex min-w-0 flex-1 basis-[180px] flex-col gap-1 text-[11px] xl:flex-none" style={{ color: C.textMuted }}>
+              Start date
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full min-w-0 rounded-full px-3 py-1.5 text-[12px] font-mono" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, color: C.text }} />
+            </label>
+            <label className="flex min-w-0 flex-1 basis-[180px] flex-col gap-1 text-[11px] xl:flex-none" style={{ color: C.textMuted }}>
+              End date
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full min-w-0 rounded-full px-3 py-1.5 text-[12px] font-mono" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, color: C.text }} />
+            </label>
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:self-end">
             <button onClick={load} disabled={loading} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <Search className="h-3.5 w-3.5" />{loading ? "Loading..." : "Load"}
             </button>
             <button onClick={rerunAudit} disabled={rerunLoading} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
               <RefreshCw className={`h-3.5 w-3.5 ${rerunLoading ? "animate-spin" : ""}`} />{rerunLoading ? "Re-running..." : "Re-run audit"}
             </button>
+            </div>
           </div>
         </div>
 
@@ -111,7 +118,7 @@ export default function MatchDebug() {
         {/* Summary row */}
         {data?.summary && (
           <>
-            <div className="grid grid-cols-2 min-[700px]:grid-cols-5 gap-3 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-5 gap-3 mb-4">
               <SummaryCard label="Events evaluated" value={data.summary.events_evaluated} />
               <SummaryCard label="Photos + notes" value={data.summary.matched_ok} valueColor={C.accent} />
               <SummaryCard label="Photos, no notes" value={data.summary.matched_missing_notes} valueColor="#8A4038" />
@@ -123,7 +130,7 @@ export default function MatchDebug() {
                 {data.summary.pre_compliance} pre-compliance event(s) in range — suppressed on Today tab, shown here for matcher tuning
               </div>
             )}
-            <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
               <ScanCard label="Offset -1 (day before)" value={data.offset_distribution['-1'] || 0} valueColor={C.amber} />
               <ScanCard label="Offset 0 (exact)" value={data.offset_distribution['0'] || 0} valueColor={C.accent} />
               <ScanCard label="Offset +1 (next day)" value={data.offset_distribution['1'] || 0} valueColor={C.accent} />
@@ -136,7 +143,7 @@ export default function MatchDebug() {
 
         {/* Project scan */}
         {data?.project_scan && !data.project_scan.error && (
-          <div className="grid grid-cols-4 gap-3 mb-5 mt-4">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5 mt-4">
             <ScanCard label="Projects total" value={data.project_scan.total} />
             <ScanCard label="Skipped (deleted)" value={data.project_scan.deleted} valueColor={data.project_scan.deleted > 0 ? C.textSecondary : undefined} />
             <ScanCard label="Skipped (modified)" value={data.project_scan.skipped_modified} valueColor={C.amber} />
@@ -146,7 +153,7 @@ export default function MatchDebug() {
         {data?.project_scan?.error && (
           <div className="rounded-[14px] px-4 py-3 mb-4 flex items-center gap-2" style={{ backgroundColor: "#FBEDEA", border: `1px solid #EFD2CA` }}>
             <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: "#8A4038" }} />
-            <span className="text-[12px]" style={{ color: "#8A4038" }}>Project scan failed: {data.project_scan.error}</span>
+            <span className="min-w-0 break-words text-[12px]" style={{ color: "#8A4038" }}>Project scan failed: {data.project_scan.error}</span>
           </div>
         )}
 
@@ -181,11 +188,11 @@ export default function MatchDebug() {
                               {OFFSET_LABELS[ev.report_date_offset]}
                             </span>
                           )}
-                          <span className="text-[13px] font-medium" style={{ color: C.text }}>{ev.job_name}</span>
+                          <span className="min-w-0 max-w-full break-words text-[13px] font-medium" style={{ color: C.text }}>{ev.job_name}</span>
                         </div>
                         <div className="flex items-center gap-4 mt-1 ml-1 flex-wrap">
-                          {ev.address && <span className="text-[11px]" style={{ color: C.textMuted }}>{ev.address}</span>}
-                          <span className="text-[10px]" style={{ color: C.textFaint }}>
+                          {ev.address && <span className="min-w-0 max-w-full break-words text-[11px]" style={{ color: C.textMuted }}>{ev.address}</span>}
+                          <span className="min-w-0 max-w-full break-words text-[10px]" style={{ color: C.textFaint }}>
                             {ev.match_method || "—"}{ev.match_confidence != null ? ` · ${(ev.match_confidence * 100).toFixed(0)}%` : ""}
                           </span>
                           {ev.matched_post_count > 0 && (
@@ -215,7 +222,7 @@ export default function MatchDebug() {
 
 function SummaryCard({ label, value, valueColor }) {
   return (
-    <div className="rounded-[14px] p-4 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="min-w-0 break-words rounded-[14px] p-3 sm:p-4 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="mono-label-sm mb-1.5">{label}</div>
       <div className="font-mono-num-bold text-[24px]" style={{ color: valueColor || C.text, letterSpacing: "-0.025em" }}>{value}</div>
     </div>
@@ -224,7 +231,7 @@ function SummaryCard({ label, value, valueColor }) {
 
 function ScanCard({ label, value, valueColor }) {
   return (
-    <div className="rounded-[14px] p-3 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+    <div className="min-w-0 break-words rounded-[14px] p-3 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="mono-label-sm mb-1">{label}</div>
       <div className="font-mono-num-bold text-[20px]" style={{ color: valueColor || C.text }}>{value}</div>
     </div>
