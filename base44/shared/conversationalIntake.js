@@ -255,7 +255,18 @@ function safeFailure(error, stage) {
   if (error instanceof IntakeValidationError) return { stage, code: 'validation_error', message: error.message };
   if (error?.message === 'Intake timed out') return { stage, code: 'timeout' };
   const status = Number(error?.response?.status ?? error?.status ?? error?.statusCode);
-  return { stage, code: Number.isInteger(status) && status >= 100 && status <= 599 ? 'http_' + status : 'unexpected_error' };
+  const data = error?.response?.data;
+  const reason = [data?.error?.message, data?.error?.error_message, data?.error, data?.detail, data?.message, data?.error_message, error?.message]
+    .find(value => typeof value === 'string' && value.trim() && value.length <= 2000);
+  const providerReason = reason?.replace(/(?:"?(?:prompt|messages|request_body)"?\s*[:=])[\s\S]*/gi, '[request content omitted]')
+    .replace(/\b(?:Bearer|Basic)\s+[^\s,;]+/gi, '[credentials redacted]')
+    .replace(/\b(?:sk-[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_.-]+)\b/g, '[credential redacted]')
+    .replace(/((?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|authorization|password|secret)\s*["']?\s*[:=]\s*["']?)[^\s,;"'}]+/gi, '$1[redacted]')
+    .replace(/https?:\/\/[^\s<>"']+/gi, '[URL omitted]')
+    .replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[identifier redacted]')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email redacted]')
+    .replace(/\s+/g, ' ').slice(0, 300);
+  return { stage, code: Number.isInteger(status) && status >= 100 && status <= 599 ? 'http_' + status : 'unexpected_error', ...(providerReason ? { provider_reason: providerReason } : {}) };
 }
 async function deadline(promise, milliseconds) {
   let timer;
