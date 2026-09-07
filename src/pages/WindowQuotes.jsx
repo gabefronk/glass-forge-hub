@@ -10,7 +10,7 @@ import ConnectClaude from "@/components/window-quotes/ConnectClaude";
 import WindowQuoteResults from "@/components/window-quotes/WindowQuoteResults";
 import { normalizeLines, validateLines } from "@/components/window-quotes/takeoff";
 
-import { normalizeEasyRequest, STANDARD_STUDIO_PROFILE } from "../../base44/shared/easyRequest.js";
+import { normalizeEasyRequest, STANDARD_STUDIO_PROFILE } from "@/lib/easyRequest";
 
 const primaryClass = "inline-flex items-center justify-center gap-2 rounded-lg bg-[#2A5EA8] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#234F8E] disabled:cursor-not-allowed disabled:opacity-50";
 const statusInfo = {
