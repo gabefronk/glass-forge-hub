@@ -5,7 +5,7 @@ export function createQuoteIntakeRouter({ scripted, config = {}, now = () => new
     provider: 'deterministic',
     afterInput: args => scripted.afterInput(args),
     async getStatus({ db }) {
-      const status = { configured: false, online: false, provider: 'deterministic', name: 'Window quoting', last_seen_at: null, browser_authenticated: null };
+      const status = { configured: false, online: false, provider: 'deterministic', name: 'Window quoting pilot', last_seen_at: null, browser_authenticated: null };
       if (!scripted.configured) return status;
       const workers = await db.QuoteWorkers.filter({ id: config.worker_id, enabled: true, token_hash: config.worker_key_hash }, undefined, 2);
       if (workers.length !== 1 || !(workers[0].allowed_dealers || []).includes('BFS')) return status;
