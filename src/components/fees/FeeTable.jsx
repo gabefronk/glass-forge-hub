@@ -213,7 +213,7 @@ function MobileRow({ row, onEdit, onDelete, selected, onToggle }) {
   );
 }
 
-function EditableField({ label, value, onCommit, type, displayFormat = undefined }) {
+function EditableField({ label, value, onCommit, type = "text", displayFormat = undefined }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs w-20 shrink-0" style={{ color: C.textMuted }}>{label}</span>
