@@ -29,7 +29,7 @@ test('exact saved Test and initial typo request resolve standard defaults and re
     let prompt;
     const result = await run(q, output(), { invokeLLM: async params => { prompt = params.prompt; return output(); } });
     assert.equal(result.ok, true, JSON.stringify(result));
-    assert.equal(result.intake_assessment.version, 8);
+    assert.equal(result.intake_assessment.version, 9);
     assert.deepEqual(result.questions, []);
     assert.deepEqual(result.quote.lines.map(line => [line.width, line.height, line.dimension_basis, line.qty]), [[36,60,'call',1],[48,48,'call',1]]);
     assert.equal(result.quote.settings.glass, 'CozE (LowE)');
@@ -68,6 +68,8 @@ test('written uncertainty and contrary instructions keep defaults unanswered', a
     ['Use Solarban glass.', 'glass'],
     ['I am unsure whether these are frame sizes.', 'basis'],
     ['These are rough openings.', 'basis'],
+    ['These dimensions are measured frame to frame.', 'basis'],
+    ['These dimensions are measured frame-to-frame.', 'basis'],
     ['I am not sure which fin to use.', 'fin'],
     ['Do not assume anything.', 'all']
   ]) {
@@ -133,18 +135,18 @@ test('explicit safety and texture uncertainty is not filled from the standard pi
 });
 
 test('global and trailing fin instructions cannot become a conflicting per-line nail-fin default', async () => {
-  for (const instruction of ['Both windows must use flush fin.', 'Use flush fin on all windows.', 'Place flush fin on these windows.', 'Flush fin.']) {
+  for (const instruction of ['Both windows must use flush fin.', 'Use flush fin on all windows.', 'Place flush fin on these windows.', 'Flush fin.', 'Both windows must use flush.', 'Use flush on all windows.', 'Flush.']) {
     const q = make(); q.lines = [];
     q.conversation[0].content = 'Please quote one 4040 XO slider in Kitchen and one 5050 XO slider in Bedroom. ' + instruction;
     const raw = output(); raw.questions = [];
     raw.lines = [
       { line_id: 'new-1', style: 'Studio XO Slider', width: 48, height: 48, qty: 1, options: { operation: 'XO' }, source_quotes: ['4040 XO slider in Kitchen'] },
-      { line_id: 'new-2', style: 'Studio XO Slider', width: 60, height: 60, qty: 1, options: { operation: 'XO', fin: 'flush fin' }, source_quotes: ['5050 XO slider in Bedroom', instruction] }
+      { line_id: 'new-2', style: 'Studio XO Slider', width: 60, height: 60, qty: 1, options: { operation: 'XO', fin: /fin/i.test(instruction) ? 'flush fin' : 'flush' }, source_quotes: ['5050 XO slider in Bedroom', instruction] }
     ];
     const result = await run(q, raw);
     assert.equal(result.ok, false, instruction);
     assert.equal(result.quote.lines[0].options.fin, undefined, instruction);
-    assert.equal(result.quote.lines[1].options.fin, 'flush fin', instruction);
+    assert.equal(result.quote.lines[1].options.fin, raw.lines[1].options.fin, instruction);
     assert.ok(result.questions.some(question => /installation style/.test(question)), instruction);
     assert.ok(!result.intake_assessment.assumptions.some(note => /standard nail fin/.test(note)), instruction);
   }
@@ -160,3 +162,14 @@ test('explicit current width correction may retain historical trade-code citatio
   assert.equal(result.quote.lines[0].width, 40);
   assert.equal(result.quote.lines[0].height, 60);
 });
+
+test('resolved standard sizes do not retain AI questions phrased as dimensions or measurements', async () => {
+  for (const question of ['Are these call dimensions or frame dimensions?', 'Are those call measurements or frame measurements?']) {
+    const raw = output(); raw.questions = [question];
+    const result = await run(make(), raw);
+    assert.equal(result.ok, true, question);
+    assert.deepEqual(result.questions, []);
+    assert.deepEqual(result.quote.lines.map(line => line.dimension_basis), ['call', 'call']);
+  }
+});
+
