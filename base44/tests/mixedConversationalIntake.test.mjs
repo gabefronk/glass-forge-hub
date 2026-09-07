@@ -246,3 +246,89 @@ test('alias tolerance still rejects actual specification changes with only histo
   }
 });
 
+function jordanCorrection() {
+  const quote = base('I need a quote for the following windows 5050 XO slider one with flush fin and one with just regular nail fin. Then can I get a quote for a 8 foot by 6 foot picture window tempered with standard obscure glass.');
+  quote.id = '6a9f0c29347a4d2e647fd380';
+  quote.title = 'Jordan bluff';
+  quote.input_revision = 2;
+  delete quote.settings.dealer;
+  quote.settings.yard = 'BFS-UTAH DESIGN(11)';
+  quote.source = { easy_request: { ...source.easy_request, dimension_basis: '' } };
+  quote.conversation.push({ role: 'user', revision: 2, content: 'Sorry no obscure glass needed just regular glass' });
+  const output = response({ summary: 'Two XO sliders and one tempered picture window, with the obscure texture removed.',
+    lines: [
+      { line_id: 'new-1', style: 'Studio XO Slider', width: 60, height: 60, qty: 1, options: { operation: 'XO', fin: 'Flush Fin' }, source_quotes: ['5050 XO slider one with flush fin'] },
+      { line_id: 'new-2', style: 'Studio XO Slider', width: 60, height: 60, qty: 1, options: { operation: 'XO', fin: 'Regular Nail Fin' }, source_quotes: ['one with just regular nail fin'] },
+      { line_id: 'new-3', style: 'Studio Picture', width: 96, height: 72, qty: 1, options: { tempered: true, patterned_glass: 'None' }, source_quotes: ['8 foot by 6 foot picture window tempered with standard obscure glass', 'Sorry no obscure glass needed just regular glass'] }
+    ],
+    resolved_requirements: [{ detail: 'The picture window requires Obscure glass.', source_quote: 'Sorry no obscure glass needed just regular glass' }]
+  });
+  return { quote, output };
+}
+
+test('Jordan correction can cancel historical obscure texture before a requirement ledger or lines exist', async () => {
+  const { quote, output } = jordanCorrection();
+  let prompt;
+  const result = await run(quote, output, {
+    invokeLLM: async params => { prompt = params.prompt; return output; },
+    normalizeStructured: value => normalizeConversationalSchedule(value, { getProductProfileForLine })
+  });
+  assert.notEqual(result.intake_assessment.status, 'unavailable', JSON.stringify(result.intake_assessment.failure_reason));
+  assert.equal(result.intake_assessment.version, 6);
+  assert.equal(result.quote.lines.length, 3);
+  assert.deepEqual(result.quote.lines.slice(0, 2).map(line => [line.style, line.options.operation, line.options.fin]), [
+    ['Studio XO Slider', 'XO', 'Flush Fin'], ['Studio XO Slider', 'XO', 'Regular Nail Fin']
+  ]);
+  assert.equal(result.quote.lines[2].width, 96);
+  assert.equal(result.quote.lines[2].height, 72);
+  assert.equal(result.quote.lines[2].options.tempered, true);
+  assert.equal(result.quote.lines[2].options.patterned_glass, 'None');
+  assert.equal(result.quote.lines[2].options.glass, undefined);
+  assert.equal(result.quote.settings.glass, 'CozE (LowE)');
+  assert.equal(result.quote.settings.dealer, 'BFS');
+  assert.equal(result.quote.lines[2].dimension_basis, undefined);
+  assert.deepEqual(result.intake_assessment.unresolved_requirements, []);
+  assert.match(prompt, /Regular glass.*does not mean 'no LowE' or 'not tempered'/);
+  assert.match(prompt, /"dealer":"BFS"/);
+  assert.equal(quote.settings.dealer, undefined);
+});
+
+test('unknown resolution entries cannot discard a different saved requirement', async () => {
+  const { quote, output } = jordanCorrection();
+  quote.intake_assessment = { unresolved_requirements: ['A safety restriction must be checked.'] };
+  output.resolved_requirements.push({ detail: 'A fabricated requirement that was never stored.', source_quote: 'Not a supplied customer quotation' });
+  const result = await run(quote, output);
+  assert.notEqual(result.intake_assessment.status, 'unavailable');
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.intake_assessment.unresolved_requirements, ['A safety restriction must be checked.']);
+  assert.equal(result.quote.lines[2].options.tempered, true);
+  assert.equal(result.quote.lines[2].options.patterned_glass, 'None');
+});
+
+test('only the exact selected known BFS yard with confirmed preferences supplies a missing dealer', async () => {
+  for (const yard of ['BFS-UTAH DESIGN(11)', 'BFS-UTAH DESIGN (11)']) {
+    const { quote, output } = jordanCorrection();
+    quote.settings.yard = yard;
+    // Repeating an already established account is harmless, even when its
+    // citation comes from the selected settings rather than a chat message.
+    output.settings_updates = [{ field: 'dealer', value: 'BFS', source_quote: yard }];
+    const result = await run(quote, output);
+    assert.notEqual(result.intake_assessment.status, 'unavailable');
+    assert.equal(result.quote.settings.dealer, 'BFS');
+    assert.ok(result.intake_assessment.assumptions.some(note => /BFS account identified/.test(note)));
+  }
+  for (const change of [
+    quote => { quote.settings.dealer = 'BTB'; },
+    quote => { quote.settings.yard = 'BFS-OTHER YARD (12)'; },
+    quote => { quote.settings.yard = 'BFS-UTAH DESIGN (99)'; },
+    quote => { quote.source.easy_request.confirmed = false; }
+  ]) {
+    const { quote, output } = jordanCorrection();
+    change(quote);
+    const result = await run(quote, output);
+    assert.equal(result.quote.settings.dealer, quote.settings.dealer);
+    assert.ok(!result.intake_assessment.assumptions.some(note => /BFS account identified/.test(note)));
+    assert.equal(result.ok, false);
+  }
+});
+
