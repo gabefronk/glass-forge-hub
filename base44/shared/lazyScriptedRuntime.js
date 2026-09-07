@@ -1,12 +1,14 @@
 import { createScriptedExecution } from './scriptedExecution.js';
 import { createQuoteIntakeRouter } from './windowQuoteIntakeRouter.js';
 import { loadScriptedRunnerConfig } from './scriptedRunnerConfig.js';
+import { createScriptedQueueExecution } from './scriptedQueueExecution.js';
 
-export function createLazyScriptedRuntime({ normalizeRequest, validateReady, loadConfig = loadScriptedRunnerConfig, hash, now, uuid } = {}) {
+export function createLazyScriptedRuntime({ normalizeRequest, normalizeIntake, validateReady, loadConfig = loadScriptedRunnerConfig, hash, now, uuid } = {}) {
   async function resolve({ db }) {
     const config = await loadConfig({ db });
-    const scripted = createScriptedExecution({ config, normalizeRequest, validateReady, ...(hash ? { hash } : {}), ...(now ? { now } : {}), ...(uuid ? { uuid } : {}) });
-    return { scripted, router: createQuoteIntakeRouter({ scripted, config, ...(now ? { now } : {}) }) };
+    const create = config.mode === 'queue' ? createScriptedQueueExecution : createScriptedExecution;
+    const scripted = create({ config, normalizeRequest, normalizeIntake, validateReady, ...(hash ? { hash } : {}), ...(now ? { now } : {}), ...(uuid ? { uuid } : {}) });
+    return { scripted, router: config.mode === 'queue' ? scripted : createQuoteIntakeRouter({ scripted, config, ...(now ? { now } : {}) }) };
   }
   return {
     // User core has a truthy execution object, retaining worker_* retirement.
