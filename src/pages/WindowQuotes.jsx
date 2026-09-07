@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, PanelsTopLeft, Search, ArrowLeft, ArrowUpRight, CheckCircle2, Clock3, AlertCircle, Loader2, Settings2, ListChecks, MessageSquare, BriefcaseBusiness, FileText, RefreshCw } from "lucide-react";
+import { Plus, Send, PanelsTopLeft, Search, ArrowLeft, ArrowUpRight, CheckCircle2, Clock3, AlertCircle, Loader2, Settings2, ListChecks, MessageSquare, BriefcaseBusiness, FileText, RefreshCw, Trash2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -228,6 +228,11 @@ export default function WindowQuotes() {
   const convert = (data) => operate(async () => {
     await api("convert_won", { quote_id: selectedID, ...data }); setWonOpen(false); setTab("result");
   });
+  const remove = () => operate(async () => {
+    if (!confirm("Delete this quote request? This cannot be undone.")) return;
+    await api("delete", { quote_id: selectedID });
+    setParams({});
+  });
   return <div className="min-h-screen px-[18px] py-5 min-[700px]:px-[26px]" style={{ background: C.pageBg }}>
     <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div><div className="mono-label-sm mb-1.5">Glass Forge · Sales</div><h1 className="font-heading text-[28px] font-semibold tracking-tight text-[#131A26]">Window Quotes</h1><p className="mt-1 text-sm text-[#616D81]">From window takeoff to verified AMSCO quote.</p></div>
@@ -253,7 +258,7 @@ export default function WindowQuotes() {
               if (quote.worker_status === "ready") {
                 setRevisionSeed({ title: quote.title, request_text: "", settings: quote.settings, lines: quote.lines, source: { ...quote.source, revision_of: quote.id } });setForm("new");
               } else setForm("edit");
-            }} disabled={locked || busy}><Settings2 size={14} /><span>{quote.worker_status === "ready" ? "Revise quote" : "Details"}</span></button>{!locked && !["ready", "failed"].includes(quote.worker_status) && <button className={primaryClass} onClick={queue} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{quote.worker_status === "needs_sign_in" ? "Retry after sign-in" : "Start quote"}</button>}</div></div>
+            }} disabled={locked || busy}><Settings2 size={14} /><span>{quote.worker_status === "ready" ? "Revise quote" : "Details"}</span></button>{!locked && !["ready", "failed"].includes(quote.worker_status) && <button className={primaryClass} onClick={queue} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{quote.worker_status === "needs_sign_in" ? "Retry after sign-in" : "Start quote"}</button>}<button className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[#EFD2CA] bg-white px-3 py-2.5 text-sm font-semibold text-[#8A4038] hover:bg-[#FBEDEA] disabled:cursor-not-allowed disabled:opacity-50" onClick={remove} disabled={locked || busy} title="Delete this quote request" aria-label="Delete this quote request"><Trash2 size={14} /></button></div></div>
             {quote.worker_status !== "ready" && <div className="mt-4 flex items-start gap-2 rounded-lg p-3 text-xs leading-relaxed" style={{ background: activeStatus.bg, color: activeStatus.color }}>{quote.worker_status === "ready" ? <CheckCircle2 size={15} className="shrink-0" /> : ["failed", "needs_sign_in", "needs_details"].includes(quote.worker_status) ? <AlertCircle size={15} className="shrink-0" /> : <Clock3 size={15} className="shrink-0" />}<span>{activeStatus.text}</span></div>}
             <div className="mt-4 flex gap-1 overflow-x-auto" role="tablist" aria-label="Quote sections">{[["conversation", "Conversation", MessageSquare], ["schedule", "Schedule", ListChecks], ["result", "Quote result", FileText]].map(([key, label, Icon]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${tab === key ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#616D81] hover:bg-[#F6F8FC]"}`}><Icon size={14} />{label}{key === "result" && quote.worker_status === "ready" && <span className="h-1.5 w-1.5 rounded-full bg-[#276449]" />}</button>)}</div>
           </div>

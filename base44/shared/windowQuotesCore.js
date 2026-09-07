@@ -1,5 +1,5 @@
 const LEASE_MS = 10 * 60 * 1000;
-const USER_ACTIONS = new Set(["list", "detail", "create", "message", "update", "queue", "convert_won"]);
+const USER_ACTIONS = new Set(["list", "detail", "create", "message", "update", "queue", "convert_won", "delete"]);
 const WORKER_ACTIONS = new Set(["worker_poll", "worker_update", "worker_heartbeat"]);
 const TERMINAL = new Set(["needs_details", "needs_sign_in", "failed", "ready"]);
 const PRODUCT_SETTINGS = new Set(["color", "glass", "series", "altitude", "screen", "spacer", "tempered", "options", "finish", "grid", "hardware"]);
@@ -425,6 +425,13 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           else await db.QuoteWorkers.updateMany({ id: worker.id, busy_token: lease }, { $set: { last_seen_at: at(), busy_until: q.lease_expires_at } });
           output = { quote: workerQuote(q) };
         }
+      } else if (action === "delete") {
+        const q = await getQuote(body.quote_id);
+        if (q.sales_status === "won" || q.job_id) fail(409, "This quote was accepted and linked to a job. Remove the job before deleting it.");
+        if (["queued", "running"].includes(q.worker_status)) fail(409, "Wait for the current quote run before deleting it");
+        await db.QuoteMessages.deleteMany({ quote_id: q.id });
+        await db.QuoteRequests.delete(q.id);
+        output = { deleted: true, id: q.id };
       } else if (action === "convert_won") {
         let q = await getQuote(body.quote_id);
         const jobDetails = { customer_name: textValue(body.customer_name, "customer name", 300), address: textValue(body.address, "address", 1000), builder: textValue(body.builder, "builder", 300) };
@@ -466,5 +473,3 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
     }
   };
 }
-
-
