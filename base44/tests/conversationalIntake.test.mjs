@@ -231,10 +231,10 @@ test('explicit user resolution can clear a prior requirement; vague permission a
   assert.deepEqual(invalid.intake_assessment.unresolved_requirements, ['Custom etched glass is required.']);
 });
 
-test('failure diagnostics contain only local validation descriptions or HTTP status', async () => {
-  const providerFailure = await run(base(), response(), { invokeLLM: async () => { throw { message: 'secret body', response: { status: 401, data: 'secret data', headers: { Authorization: 'secret token' } } }; } });
-  assert.deepEqual(providerFailure.intake_assessment.failure_reason, { stage: 'model_call', code: 'http_401' });
-  assert.doesNotMatch(JSON.stringify(providerFailure), /secret/);
+test('failure diagnostics redact provider credentials and expose only a bounded reason', async () => {
+  const providerFailure = await run(base(), response(), { invokeLLM: async () => { throw { message: 'Request failed', response: { status: 401, data: { message: 'Invalid model schema. api_key=private-key Bearer private-bearer', request: 'private request data' }, headers: { Authorization: 'private header token' } } }; } });
+  assert.deepEqual(providerFailure.intake_assessment.failure_reason, { stage: 'model_call', code: 'http_401', provider_reason: 'Invalid model schema. api_key=[redacted] [credentials redacted]' });
+  assert.doesNotMatch(JSON.stringify(providerFailure), /private/);
   const badCitation = await run(base(), response({ lines: [line({ source_quotes: ['not supplied'] })] }));
   assert.deepEqual(badCitation.intake_assessment.failure_reason, { stage: 'validation', code: 'validation_error', message: 'AI cited a fact that was not supplied' });
 });
@@ -267,4 +267,24 @@ test('an older Taupe chat correction cannot overwrite a newer White Details edit
   assert.equal(afterEdit.quote.lines[0].options.hardware_color, 'White');
   assert.equal(afterEdit.quote.lines[0].options.screen, 'White');
   assert.notEqual(afterEdit.quote.lines[0].options.color, 'Taupe');
+});
+
+test('missing dimension basis is prioritized without undefined product labels or duplicated capability requirements', async () => {
+  const q = base('Please quote one 5050 XO Slider.');
+  q.source = { easy_request: { ...source.easy_request, dimension_basis: '' } };
+  const output = response({ lines: [line({ style: 'XO Slider', width: 60, height: 60, dimension_basis: null, options: { operation: 'XO' }, source_quotes: ['one 5050 XO Slider'] })],
+    questions: ['Which room is this for?', 'Do you have a window mark?', 'Would you like to add more windows?'],
+    unresolved_requirements: [{ detail: 'XO Slider windows are not supported by the current automated Studio Single Hung planner.', source_quote: 'XO Slider' }] });
+  const result = await run(q, output);
+  assert.equal(result.intake_assessment.questions[0], 'Are the measurements call sizes, actual frame sizes, or rough openings?');
+  assert.equal(result.intake_assessment.product_review.length, 1);
+  assert.deepEqual(result.intake_assessment.unresolved_requirements, []);
+  assert.doesNotMatch(JSON.stringify(result.intake_assessment), /undefined/);
+  assert.equal(result.ok, false);
+  const lostSlider = await run(q, { ...output, lines: [line({ source_quotes: ['one 5050 XO Slider'] })], questions: [] });
+  assert.equal(lostSlider.ok, false);
+  assert.equal(lostSlider.intake_assessment.unresolved_requirements.length, 1);
+  const saved = { ...result.quote, intake_assessment: { ...result.intake_assessment, unresolved_requirements: [output.unresolved_requirements[0].detail, 'Custom etched glass is required.'] } };
+  const refreshed = await run(saved, { ...output, unresolved_requirements: [] });
+  assert.deepEqual(refreshed.intake_assessment.unresolved_requirements, ['Custom etched glass is required.']);
 });

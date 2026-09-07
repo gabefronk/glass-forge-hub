@@ -51,6 +51,9 @@ function quoteStatusInfo(quote) {
   if (quote?.worker_status === "needs_details" && currentIntakeAssessment(quote)?.status === "product_review") {
     return { ...info, label: "Needs product review", text: "Some requested products or options need review before quoting can continue. Check the review below and reply with any clarifications." };
   }
+  if (quote?.worker_status === "needs_details" && currentIntakeAssessment(quote)?.status === "unavailable") {
+    return { ...info, label: "Review unavailable", text: "Your request is saved. Use Send to quoting to retry the AI review." };
+  }
   return info;
 }
 function StatusBadge({ quote }) {

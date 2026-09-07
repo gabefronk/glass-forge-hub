@@ -40,7 +40,7 @@ export const CONVERSATIONAL_INTAKE_SCHEMA = {
       properties: { field: { type: 'string', enum: ['dealer', 'yard', 'gross_margin', 'color', 'glass'] }, value: { type: 'string' }, source_quote: { type: 'string' } }
     } },
     questions: { type: 'array', maxItems: 10, items: { type: 'string' } },
-    unresolved_requirements: { type: 'array', maxItems: 40, items: citation },
+    unresolved_requirements: { type: 'array', maxItems: 40, description: 'Customer specifications that cannot be represented in the schedule. Never execution-capability notices.', items: citation },
     resolved_requirements: { type: 'array', maxItems: 40, items: citation },
     assumptions: { type: 'array', maxItems: 20, items: citation }
   }
@@ -81,7 +81,7 @@ Read the full conversation and current schedule. A reply may answer the precedin
 If the latest user message has an older revision than the current revision, the customer has since edited Details. Current saved settings and existing lines are authoritative: do not replay old color, glass, quantity, dimension or account corrections over those edited values. Historical prose can still establish unresolved requirements, which remain in the requirement ledger.
 prior_unresolved_requirements MUST remain unresolved unless the latest user reply explicitly removes or replaces that requirement. To resolve one, return resolved_requirements with detail copied EXACTLY from that list and source_quote citing the latest explicit user correction. A title, margin, yard or profile edit, silence, or 'do your best' never resolves a product requirement. Prior line_provenance identifies recipe-derived defaults; those are not explicit custom choices and must be recalculated when frame color changes. Preserve explicit contrasting options and ask if a global correction conflicts with them.
 Return ALL current window lines with stable line_id values from current_lines. Use new-1, new-2, etc. for additions. Never drop an existing line: explicit deletions go in removed_lines with an exact quote from the latest user reply. Do not merge windows with different glass, operation, fin or other specifications.
-Preserve the actual requested products, including XO/XOX sliders, picture/fixed windows, flush fin, nail fin, tempered/obscure glass and any unusual requirement. Never convert them to Single Hung merely to pass automation. If a requirement does not fit options, include it in unresolved_requirements and explain it plainly. No silent omissions.
+Preserve the actual requested products, including XO/XOX sliders, picture/fixed windows, flush fin, nail fin, tempered/obscure glass and any unusual requirement. Never convert them to Single Hung merely to pass automation. If a CUSTOMER SPECIFICATION does not fit options, include it in unresolved_requirements and explain it plainly. No silent omissions. unresolved_requirements must NEVER contain execution-capability notices such as 'XO sliders are not supported by the automated planner'; the application's planner handles those notices itself. A slider or picture already represented as a schedule line is not an unrepresented requirement.
 Normalize explicit feet/inches arithmetic into inches (8 feet x 6 feet is 96 x 72). Four-digit trade codes such as 5050 mean 60 x 60 inches; describe that interpretation in assumptions. Physical size units are not dimension basis: omit dimension_basis unless the customer selected or stated call/frame/rough opening. Do not invent dimensions, quantity, opening direction, color, account, yard or margin.
 The selected Studio standard is a recipe only for Studio Single Hung. A generic 'do your best' does not permit replacing sliders, glass, safety requirements, or unknown dimensions. Use only confirmed profile defaults for compatible products. Do not fill defaults yourself; the planner applies confirmed defaults.
 Options must contain primitive values with correct types (tempered true/false, number_wide number). Omit unknown fields entirely; never use zero, false or another placeholder for unknowns. Cite exact short source_quotes from user-authored messages or current structured field values for each line. Assistant questions may establish context but cannot be cited as customer approval. Existing line changes/deletions must cite the latest user reply. Do not repeat or embellish quoted facts.
@@ -92,6 +92,10 @@ CUSTOMER DATA:
 ${serialized}`;
 }
 
+function representedCapabilityNotice(detail, lines) {
+  const notice = detail.match(/^(?:(?:xo|xox)\s+)?(slider|picture|fixed)(?:\s+windows?)?\s+(?:are|is)\s+not\s+supported\s+by\s+(?:the\s+)?(?:current\s+)?(?:automated|automatic|scripted)\b[^.]*\b(?:planner|runner|quoting)\.?$/i);
+  return !!notice && Array.isArray(lines) && lines.some(line => norm(line?.style).includes(norm(notice[1])));
+}
 function validateInterpretation(raw, q, context) {
   assert(JSON.stringify(raw).length <= LIMITS.output, 'AI response is too large');
   keys(raw, Object.keys(CONVERSATIONAL_INTAKE_SCHEMA.properties), 'AI response');
@@ -110,7 +114,9 @@ function validateInterpretation(raw, q, context) {
     keys(item, ['detail', 'source_quote'], field); cited(item.source_quote);
     return str(item.detail, field, 1000);
   });
-  const assumptions = details('assumptions'), proposedUnresolved = details('unresolved_requirements');
+  // Remove a duplicate notice only if the corresponding real product remains
+  // represented. Otherwise retain it as a blocker against a lost requirement.
+  const assumptions = details('assumptions'), proposedUnresolved = details('unresolved_requirements').filter(detail => !representedCapabilityNotice(detail, raw.lines));
   const priorUnresolved = previousRequirements(q), resolved = new Set();
   for (const entry of list(raw.resolved_requirements || [], 'resolved requirements', 40)) {
     keys(entry, ['detail', 'source_quote'], 'resolved requirement');
@@ -238,13 +244,13 @@ function previousRequirements(q) {
   const previous = q.intake_assessment || {};
   const values = Array.isArray(previous.unresolved_requirements) ? previous.unresolved_requirements :
     (previous.product_review || []).filter(value => typeof value === 'string' && !value.endsWith('needs a supported product configuration before automatic pricing.'));
-  return [...new Set(values.filter(value => typeof value === 'string' && value.trim()))];
+  return [...new Set(values.filter(value => typeof value === 'string' && value.trim() && !representedCapabilityNotice(value, q.lines)))];
 }
 function assessment(q, status, summary, assumptions, questions, productReview) {
   return { version: VERSION, input_revision: q.input_revision, status, summary, assumptions, questions, product_review: productReview };
 }
 function unavailable(q, failureReason) {
-  const message = 'Your request is saved. I could not finish understanding it right now. Please try Start quote again; your notes and window details are still here.';
+  const message = 'Your request is saved. I could not finish understanding it right now. Please try Send to quoting again; your notes and window details are still here.';
   return { ok: false, status: 'needs_details', routing: 'clarification', quote: clone(q), preview: clone(q.lines || []),
     issues: [{ code: 'intake_unavailable', path: 'conversation', message }], questions: [message], assistant_message: message,
     intake_assessment: { ...assessment(q, 'unavailable', 'Your request is saved; the AI review needs another attempt.', [], [], []),
@@ -292,7 +298,10 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
     // Only its settings and lines are accepted back; retain original history/identity.
     const normalizedQuote = { ...candidate, settings: normalized.quote?.settings || candidate.settings, lines: normalized.quote?.lines || candidate.lines };
     const plannerIssues = Array.isArray(normalized.issues) ? normalized.issues : [];
-    const unsupported = plannerIssues.filter(item => /unsupported|review|ambiguous_color/.test(item.code || ''));
+    const unsupported = plannerIssues.filter(item => {
+      const basis = item.path?.match(/^lines\[(\d+)\]\.dimension_basis$/);
+      return /unsupported|review|ambiguous_color/.test(item.code || '') && !(basis && !present(normalizedQuote.lines[Number(basis[1])]?.dimension_basis));
+    });
     const unsupportedLines = new Set(unsupported.map(item => item.path?.match(/^lines\[(\d+)\]/)?.[1]).filter(value => value !== undefined).map(Number));
     const productReview = [...new Set([...interpretation.unresolved, ...[...unsupportedLines].map(index => {
       const line = interpretation.lines[index] || normalizedQuote.lines[index];
@@ -301,7 +310,7 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
         const value = line.options?.[field];
         if (value === true) return field.replaceAll('_', ' ');
         if (present(value)) return String(value);
-        if (field === 'dimension_basis') return line.dimension_basis?.replaceAll('_', ' ') + ' dimensions';
+        if (field === 'dimension_basis') return line.dimension_basis ? line.dimension_basis.replaceAll('_', ' ') + ' dimensions' : '';
         return '';
       }).filter(Boolean);
       return (line.mark ? line.mark + ' — ' : '') + (line.style || 'Window ' + (index + 1)) + (variations.length ? ' (' + [...new Set(variations)].join(', ') + ')' : '') + ' needs a supported product configuration before automatic pricing.';
@@ -317,8 +326,17 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
       const missing = ['style', 'width', 'height', 'qty', 'dimension_basis'].filter(field => !present(line[field]));
       return missing.length ? 'For ' + (line.mark || line.style || 'window ' + (index + 1)) + ', please confirm ' + missing.map(field => ({ qty: 'quantity', dimension_basis: 'whether the measurements are call, frame or rough-opening sizes' })[field] || field).join(', ') + '.' : '';
     }).filter(Boolean);
-    const proposedQuestions = interpretation.questions.length ? interpretation.questions : [...interpretation.clarification, ...missingLines, ...missingPlanner];
-    const questions = [...new Set([...interpretation.conflicts, ...proposedQuestions])].slice(0, 3);
+    const needsBasis = normalizedQuote.lines.some(line => !present(line.dimension_basis));
+    const essentialQuestions = [
+      ...(needsBasis ? ['Are the measurements call sizes, actual frame sizes, or rough openings?'] : []),
+      ...normalizedQuote.lines.map((line, index) => {
+        const fields = ['width', 'height', 'qty'].filter(field => !present(line[field]));
+        return fields.length ? 'For ' + (line.mark || line.style || 'window ' + (index + 1)) + ', what are the ' + fields.map(field => field === 'qty' ? 'quantity' : field).join(', ') + '?' : '';
+      }).filter(Boolean)
+    ];
+    const proposedQuestions = (interpretation.questions.length ? interpretation.questions : [...interpretation.clarification, ...missingLines, ...missingPlanner])
+      .filter(question => !needsBasis || !/\b(?:call sizes?|frame sizes?|rough[ -]?openings?)\b/i.test(question));
+    const questions = [...new Set([...interpretation.conflicts, ...essentialQuestions, ...proposedQuestions])].slice(0, 3);
     const extraIssues = [...interpretation.unresolved.map(message => ({ code: 'intake_requirement_review', path: 'conversation', message })), ...interpretation.conflicts.map(message => ({ code: 'intake_conflict', path: 'conversation', message }))];
     const ok = normalized.ok === true && !productReview.length && !questions.length;
     const status = ok ? 'ready' : productReview.length ? 'product_review' : 'needs_details';

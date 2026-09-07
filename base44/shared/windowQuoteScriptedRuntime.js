@@ -5,7 +5,7 @@ import { createConversationalIntake } from './conversationalIntake.js';
 
 // AI interprets the customer's words. The checked planner still owns product
 // support and execution; no model-generated price or status can bypass it.
-async function invokeIntakeModel(params, { client }) {
+export async function invokeIntakeModel(params, { client }) {
   const invoke = input => client.asServiceRole.integrations.Core.InvokeLLM(input);
   try { return await invoke(params); }
   catch (error) {
