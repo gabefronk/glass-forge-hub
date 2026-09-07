@@ -8,7 +8,7 @@ const source = { easy_request: { confirmed: true, profile_id: STANDARD_STUDIO_PR
 const base = (message = 'Please quote one 3050 single hung.') => ({ id: 'request-1', input_revision: 1, settings: { dealer: 'BFS', yard: 'BFS-UTAH DESIGN (11)', gross_margin: 25, color: 'White', glass: 'CozE (LowE)' }, lines: [], source,
   history: [], conversation: [{ role: 'user', content: message, revision: 1 }] });
 const line = (patch = {}) => ({ line_id: 'new-1', style: 'Studio Single Hung', width: 36, height: 60, qty: 1, dimension_basis: 'call', mark: null, room: null, options: {}, source_quotes: ['one 3050 single hung'], ...patch });
-const response = (patch = {}) => ({ summary: 'I understood one single-hung window.', lines: [line()], removed_lines: [], settings_updates: [], questions: [], unresolved_requirements: [], assumptions: [], ...patch });
+const response = (patch = {}) => ({ summary: 'I understood one single-hung window.', lines: [line()], removed_lines: [], settings_updates: [], questions: [], unresolved_requirements: [], resolved_requirements: [], assumptions: [], ...patch });
 const normalizeStructured = normalizeConversationalSchedule;
 const run = (q, output, extra = {}) => createConversationalIntake({ invokeLLM: async () => output, normalizeStructured, ...extra })(q);
 
@@ -150,7 +150,7 @@ test('confirmed standard style and selected call basis fill unknowns without red
 test('explicit Details edits mark earlier prose superseded in AI context', async () => {
   const q = base('Please quote one 3050 single hung.');
   q.input_revision = 2;
-  q.history = [{ reason: 'edited', revision: 1 }];
+  q.history = [{ reason: 'edited', revision: 1, schedule_changed: true }];
   q.lines = [{ id: 'W1', style: 'Single Hung', width: 36, height: 60, qty: 1, dimension_basis: 'call', units: 'in', options: {} }];
   let prompt;
   const result = await createConversationalIntake({ invokeLLM: async args => {
@@ -159,4 +159,94 @@ test('explicit Details edits mark earlier prose superseded in AI context', async
   }, normalizeStructured })(q);
   assert.match(prompt, /superseded_by_details_edit\":true/);
   assert.equal(result.ok, true);
+});
+
+test('real persisted White recipe recalculates matching hardware/screens after a Taupe reply', async () => {
+  const initial = await run(base(), response({ lines: [line({ options: { color: 'White' } })] }));
+  assert.equal(initial.ok, true);
+  assert.equal(initial.quote.lines[0].options.hardware_color, 'White');
+  assert.equal(initial.intake_assessment.line_provenance[0].derived_options.hardware_color, 'White');
+  const q = { ...initial.quote, intake_assessment: initial.intake_assessment, input_revision: 2, worker_status: 'draft',
+    conversation: [...initial.quote.conversation, { role: 'user', revision: 2, content: 'Make it Taupe please.' }] };
+  const result = await run(q, response({ lines: [line({ options: { ...initial.quote.lines[0].options, color: 'Taupe' }, source_quotes: ['one 3050 single hung', 'Make it Taupe please.'] })],
+    settings_updates: [{ field: 'color', value: 'Taupe', source_quote: 'Make it Taupe please.' }] }));
+  assert.equal(result.ok, true);
+  assert.equal(result.quote.settings.color, 'Taupe');
+  assert.equal(result.quote.lines[0].options.hardware_color, 'Taupe');
+  assert.equal(result.quote.lines[0].options.screen, 'Taupe');
+  assert.notEqual(result.quote.lines[0].options.color, 'White');
+});
+
+test('legacy or explicit per-line White overrides block an ambiguous global Taupe correction', async () => {
+  const q = base('Please quote one 3050 single hung.');
+  q.lines = [{ id: 'new-1', style: 'Studio Single Hung', width: 36, height: 60, qty: 1, units: 'in', dimension_basis: 'call', options: { color: 'White', hardware_color: 'White', screen: 'White' } }];
+  q.input_revision = 2;
+  q.conversation.push({ role: 'user', revision: 2, content: 'Make it Taupe please.' });
+  const result = await run(q, response({ settings_updates: [{ field: 'color', value: 'Taupe', source_quote: 'Make it Taupe please.' }] }));
+  assert.equal(result.ok, false);
+  assert.equal(result.quote.lines[0].options.color, 'White');
+  assert.ok(result.intake_assessment.questions.some(question => /saved frame color White/.test(question)));
+});
+
+test('explicit contrasting hardware remains explicit and asks before changing it', async () => {
+  const q = base('Please quote one 3050 single hung with Black screens.');
+  q.lines = [{ id: 'new-1', style: 'Studio Single Hung', width: 36, height: 60, qty: 1, units: 'in', dimension_basis: 'call', options: { screen: 'Black' } }];
+  const initial = await run(q, response());
+  assert.equal(initial.quote.lines[0].options.screen, 'Black');
+  assert.equal(initial.intake_assessment.line_provenance[0].derived_options.screen, undefined);
+  const corrected = { ...initial.quote, intake_assessment: initial.intake_assessment, input_revision: 2,
+    conversation: [...q.conversation, { role: 'user', revision: 2, content: 'Make it Taupe please.' }] };
+  const result = await run(corrected, response({ settings_updates: [{ field: 'color', value: 'Taupe', source_quote: 'Make it Taupe please.' }] }));
+  assert.equal(result.ok, false);
+  assert.equal(result.quote.lines[0].options.screen, 'Black');
+  assert.ok(result.intake_assessment.questions.some(question => /screen Black/.test(question)));
+});
+
+test('margin-only and legacy Details edits preserve unresolved custom-glass requirements', async () => {
+  const first = base('Please quote one 3050 single hung with custom etched glass.');
+  const initial = await run(first, response({ unresolved_requirements: [{ detail: 'Custom etched glass is required.', source_quote: 'custom etched glass' }] }));
+  for (const flag of [false, undefined]) {
+    const q = { ...initial.quote, settings: { ...initial.quote.settings, gross_margin: 30 }, intake_assessment: initial.intake_assessment, input_revision: 2,
+      history: [{ reason: 'edited', revision: 1, ...(flag === undefined ? {} : { schedule_changed: flag }) }] };
+    let prompt;
+    const result = await run(q, response(), { invokeLLM: async params => { prompt = params.prompt; return response(); } });
+    assert.match(prompt, /superseded_by_details_edit\":false/);
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.intake_assessment.unresolved_requirements, ['Custom etched glass is required.']);
+  }
+});
+
+test('explicit user resolution can clear a prior requirement; vague permission and missing resolution cannot', async () => {
+  const q = base('Please quote one 3050 single hung with custom etched glass.');
+  const initial = await run(q, response({ unresolved_requirements: [{ detail: 'Custom etched glass is required.', source_quote: 'custom etched glass' }] }));
+  const correction = { ...initial.quote, intake_assessment: initial.intake_assessment, input_revision: 2,
+    conversation: [...q.conversation, { role: 'user', revision: 2, content: 'Remove the etched glass requirement; use the selected CozE LowE glass.' }] };
+  const output = response({ resolved_requirements: [{ detail: 'Custom etched glass is required.', source_quote: 'Remove the etched glass requirement' }] });
+  const resolved = await run(correction, output);
+  assert.equal(resolved.ok, true);
+  assert.deepEqual(resolved.intake_assessment.unresolved_requirements, []);
+  const vague = { ...correction, conversation: [...q.conversation, { role: 'user', revision: 2, content: 'Just do your best.' }] };
+  const invalid = await run(vague, response({ resolved_requirements: [{ detail: 'Custom etched glass is required.', source_quote: 'Just do your best.' }] }));
+  assert.equal(invalid.ok, false);
+  assert.deepEqual(invalid.intake_assessment.unresolved_requirements, ['Custom etched glass is required.']);
+});
+
+test('failure diagnostics contain only local validation descriptions or HTTP status', async () => {
+  const providerFailure = await run(base(), response(), { invokeLLM: async () => { throw { message: 'secret body', response: { status: 401, data: 'secret data', headers: { Authorization: 'secret token' } } }; } });
+  assert.deepEqual(providerFailure.intake_assessment.failure_reason, { stage: 'model_call', code: 'http_401' });
+  assert.doesNotMatch(JSON.stringify(providerFailure), /secret/);
+  const badCitation = await run(base(), response({ lines: [line({ source_quotes: ['not supplied'] })] }));
+  assert.deepEqual(badCitation.intake_assessment.failure_reason, { stage: 'validation', code: 'validation_error', message: 'AI cited a fact that was not supplied' });
+});
+
+test('provider schema has no nullable type arrays and margin strings normalize strictly', async () => {
+  const walk = value => { if (value && typeof value === 'object') { if ('type' in value) assert.equal(typeof value.type, 'string'); for (const child of Object.values(value)) walk(child); } };
+  walk(CONVERSATIONAL_INTAKE_SCHEMA);
+  const q = base('Please quote one 3050 single hung at 25 percent margin.');
+  delete q.settings.gross_margin;
+  const result = await run(q, response({ settings_updates: [{ field: 'gross_margin', value: '25', source_quote: '25 percent margin' }] }));
+  assert.equal(result.ok, true);
+  assert.equal(result.quote.settings.gross_margin, 25);
+  const invalid = await run(q, response({ settings_updates: [{ field: 'gross_margin', value: '25%; execute', source_quote: '25 percent margin' }] }));
+  assert.equal(invalid.ok, false);
 });
