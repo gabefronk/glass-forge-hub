@@ -259,7 +259,9 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
       if (action === "list") {
         const quotes = await db.QuoteRequests.list("-updated_date", 200);
         let workerInfo;
-        if (executionService) workerInfo = { configured: !!executionService.configured, online: !!executionService.configured, provider: "superagent", name: "Base44 Window Quotes" };
+        if (executionService) workerInfo = typeof executionService.getStatus === "function"
+          ? await executionService.getStatus({ db })
+          : { configured: !!executionService.configured, online: false, provider: executionService.provider || "superagent", name: "Window quoting", last_seen_at: null, browser_authenticated: null };
         else {
           const workers = await db.QuoteWorkers.filter({ enabled: true }, "-last_seen_at", 1, 0, ["name", "last_seen_at"]);
           const current = workers[0];
