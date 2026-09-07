@@ -213,7 +213,16 @@ export function normalizeEasyRequest(input, { preset = STANDARD_STUDIO_PROFILE }
   if (!checked.ok) issues.push(...checked.issues);
   const unique = [...new Map(issues.map(item => [item.code + ':' + item.path + ':' + item.message, item])).values()];
   const ok = unique.length === 0 && checked.ok;
-  const allQuestions = [...new Set(unique.map(item => item.message))];
+  // Confirmed matching hardware/screens depend on the missing frame color.
+  // Ask for that one choice without weakening the actual planner issues.
+  const questionIssues = unique.filter(item => {
+    const match = item.path.match(/^lines\[(\d+)\]\.options\.(hardware_color|screen)$/);
+    if (!confirmed || !profileApplied || !preset.match_interior_colors || item.code !== 'missing_option' || !match) return true;
+    const base = 'lines[' + match[1] + '].options';
+    const line = quote.lines[Number(match[1])];
+    return !unique.some(other => other.code === 'missing_option' && other.path === base + '.color') || Object.hasOwn(line?.options || {}, match[2]) || Object.hasOwn(settings, match[2]);
+  });
+  const allQuestions = [...new Set(questionIssues.map(item => confirmed && profileApplied && item.code === 'missing_option' && item.path.endsWith('.color') ? 'Which color should the windows with no color use: White or Taupe?' : item.message))];
   const questions = allQuestions.length > 30 ? [...allQuestions.slice(0, 29), 'Additional line-level issues are shown in the schedule preview; resolve them before quoting.'] : allQuestions;
   return {
     ok, status: ok ? 'ready_to_queue' : 'needs_details', routing: ok ? 'supported' : unique.some(item => /unsupported|unparsed|conflicting|review|unresolved/.test(item.code)) ? 'review' : 'clarification',

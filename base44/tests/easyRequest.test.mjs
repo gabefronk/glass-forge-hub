@@ -12,6 +12,16 @@ const request = () => ({
 });
 const hasIssue = (result, code) => result.issues.some(issue => issue.code === code);
 
+test('a confirmed matching-color profile asks only for missing frame color while retaining strict blockers', () => {
+  const input = request();delete input.settings.color;
+  const result = normalizeEasyRequest(input);
+  assert.equal(result.ok, false);assert.equal(result.plan, undefined);
+  assert.deepEqual(result.questions, ['Which color should the windows with no color use: White or Taupe?']);
+  assert.ok(result.issues.some(item => item.path.endsWith('.hardware_color')));
+  input.settings.screen = 'unsupported screen';
+  assert.ok(normalizeEasyRequest(input).questions.some(question => /screen/.test(question)));
+});
+
 test('confirmed standard request becomes a strict plan with explicit finance and no prices', () => {
   const input = request(), before = clone(input), result = normalizeEasyRequest(input);
   assert.equal(result.ok, true, JSON.stringify(result.issues));assert.equal(result.profile_applied, true);
