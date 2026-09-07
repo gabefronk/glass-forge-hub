@@ -1,12 +1,28 @@
 // Language understanding proposes inputs; the existing planner remains the
 // authority for product support, pricing, queueing and verified results.
-const VERSION = 3;
+const VERSION = 4;
 const LIMITS = { lines: 200, text: 70000, output: 160000 };
 const clone = value => structuredClone(value);
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
 const norm = value => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' ? norm(a) === norm(b) : JSON.stringify(a) === JSON.stringify(b);
 const present = value => value !== undefined && value !== null && value !== '';
+const broadPermission = /\b(?:do your best|best (?:of what|you think)|whatever you think|use your judgment)\b/i;
+function sameSpecification(field, a, b) {
+  if (same(a, b)) return true;
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const key = value => norm(value).replace(/[^a-z0-9]/g, '');
+  const aliases = field === 'style' ? [
+    ['singlehung', 'studiosinglehung'], ['xoslider', 'studioxoslider', 'xoslidingwindow'], ['picture', 'picturewindow', 'studiopicture']
+  ] : field === 'options.fin' ? [
+    ['flushfin', 'studioflushfin', 'flush'], ['nailfin', 'nailingfin', 'regularnailfin', 'standardnailfin']
+  ] : field === 'options.series' ? [
+    ['studioflushfin', 'flushfin'], ['studio138inchfinsetback', 'studio138finsetback', 'studio138infinsetback']
+  ] : field === 'options.glass' ? [
+    ['cozelowe', 'coze', 'lowe'], ['obscure', 'standardobscure', 'standardobscureglass']
+  ] : field === 'options.patterned_glass' ? [['obscure', 'standardobscure', 'standardobscureglass']] : [];
+  return aliases.some(group => group.includes(key(a)) && group.includes(key(b)));
+}
 const optionalString = { type: 'string' };
 const optionalNumber = { type: 'number' };
 const optionTypes = {
@@ -46,8 +62,10 @@ export const CONVERSATIONAL_INTAKE_SCHEMA = {
   }
 };
 
-class IntakeValidationError extends Error {}
-function assert(condition, message) { if (!condition) throw new IntakeValidationError(message); }
+class IntakeValidationError extends Error {
+  constructor(message, path) { super(message); if (path) this.path = path; }
+}
+function assert(condition, message, path) { if (!condition) throw new IntakeValidationError(message, path); }
 function keys(value, allowed, label) {
   assert(object(value), label + ' must be an object');
   assert(Object.keys(value).every(key => allowed.includes(key)), label + ' contains unexpected fields');
@@ -161,7 +179,7 @@ function validateInterpretation(raw, q, context) {
     const latestRevision = context.activeUser.at(-1)?.revision;
     assert(latestRevision === q.input_revision, 'Resolving a requirement needs a current user reply');
     // Broad permission cannot erase a particular product specification.
-    assert(!/\b(?:do your best|best (?:of what|you think)|whatever you think|use your judgment)\b/i.test(excerpt), 'A general instruction cannot resolve a product requirement');
+    assert(!broadPermission.test(excerpt), 'A general instruction cannot resolve a product requirement');
     resolved.add(detail);
   }
   const unresolved = [...new Set([...priorUnresolved.filter(detail => !resolved.has(detail)), ...proposedUnresolved])];
@@ -180,7 +198,10 @@ function validateInterpretation(raw, q, context) {
     const id = str(entry.line_id, 'line ID', 160);
     assert(/^[A-Za-z0-9_-]+$/.test(id) && !ids.has(id) && !removed.has(id), 'Invalid or duplicated line ID');
     ids.add(id);
-    const old = existing.get(id);
+    const old = existing.has(id) ? clone(existing.get(id)) : undefined;
+    // Compare against the same semantic representation used for new model
+    // output. Earlier versions stored privacy texture in the coating slot.
+    if (old) separateGlassPattern(old, assumptions, conflicts);
     const quotes = list(entry.source_quotes, 'source quotations', 20).map(value => cited(value));
     assert(quotes.length > 0, 'Each window must cite its source');
     const line = old ? clone(old) : { id };
@@ -194,7 +215,7 @@ function validateInterpretation(raw, q, context) {
       else if (field === 'dimension_basis') assert(['call', 'frame', 'rough_opening'].includes(value), 'Invalid dimension basis');
       else str(value, field, 500);
       if (old && !hasCurrentReply) continue; // Current Details values outrank older conversation.
-      if (old && present(old[field]) && !same(old[field], value)) changes.push(field);
+      if (old && present(old[field]) && !sameSpecification(field, old[field], value)) changes.push(field);
       line[field] = value;
     }
     keys(entry.options, Object.keys(optionTypes), 'window options');
@@ -220,10 +241,12 @@ function validateInterpretation(raw, q, context) {
       // new line. Keep that selection inherited so later global corrections
       // do not leave an accidental stale line override.
       if (['color', 'glass', 'patterned_glass'].includes(name) && !present(old?.options?.[name]) && same(value, q.settings?.[name])) continue;
-      if (old && present(old.options?.[name]) && !same(old.options[name], value)) changes.push('options.' + name);
+      const oldValue = old?.options?.[name] ?? (['color', 'glass', 'patterned_glass'].includes(name) ? q.settings?.[name] : undefined);
+      if (old && present(oldValue) && !sameSpecification('options.' + name, oldValue, value)) changes.push('options.' + name);
       line.options[name] = value;
     }
-    if (changes.length) assert(quotes.some(excerpt => latest.includes(norm(excerpt))), 'AI changed an existing window without a current instruction');
+    if (changes.length) assert(quotes.some(excerpt => latest.includes(norm(excerpt)) && !broadPermission.test(excerpt)),
+      'AI changed an existing window without a current instruction', 'lines[' + lines.length + '].' + changes[0]);
     line.units = 'in';
     if (!present(line.dimension_basis) && ['call', 'frame', 'rough_opening'].includes(q.source?.easy_request?.dimension_basis)) line.dimension_basis = q.source.easy_request.dimension_basis;
     line.source_reference = { ...(old?.source_reference || {}), intake_source_quotes: quotes };
@@ -306,7 +329,7 @@ function unavailable(q, failureReason) {
       ...(failureReason ? { failure_reason: failureReason } : {}) } };
 }
 function safeFailure(error, stage) {
-  if (error instanceof IntakeValidationError) return { stage, code: 'validation_error', message: error.message };
+  if (error instanceof IntakeValidationError) return { stage, code: 'validation_error', message: error.message, ...(error.path ? { path: error.path } : {}) };
   if (error?.message === 'Intake timed out') return { stage, code: 'timeout' };
   const status = Number(error?.response?.status ?? error?.status ?? error?.statusCode);
   const data = error?.response?.data;
