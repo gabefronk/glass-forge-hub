@@ -262,8 +262,8 @@ export default function WindowQuotes() {
     if (queue && isEditing) await api("queue", { quote_id: id });
   });
   const queue = () => operate(async () => {
-    const errors = validateLines(quote?.lines || []);
-    if (errors.length) { setForm("edit"); throw new Error(errors.join(" ")); }
+    // Partial AI schedules go back to the conversation for clarification.
+    // The server checks completeness before any AMSCO execution.
     await api("queue", { quote_id: selectedID });
   });
   const send = (event) => {
