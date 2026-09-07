@@ -192,3 +192,57 @@ test('conditional picture restriction keeps one shared measurement question and 
     'For Studio Picture, which installation style should I use: nail fin, flush fin, or another style?'
   ]);
 });
+
+function persistedBeaver() {
+  const message = 'I need a quote for the following windows 5050 XO slider one with flush fin and one with just regular nail fin. Then can I get a quote for a 8 foot by 6 foot picture window tempered with standard obscure glass.';
+  const quote = base(message);
+  quote.input_revision = 2;
+  quote.source = { easy_request: { ...source.easy_request, dimension_basis: '' } };
+  quote.conversation.push({ role: 'user', revision: 2, content: 'Just do your best of what you think I need' });
+  quote.lines = [
+    { id: 'new-1', style: 'XO Slider', width: 60, height: 60, qty: 1, units: 'in', options: { fin: 'flush fin' } },
+    { id: 'new-2', style: 'XO Slider', width: 60, height: 60, qty: 1, units: 'in', options: { fin: 'nail fin' } },
+    { id: 'new-3', style: 'Picture', width: 96, height: 72, qty: 1, units: 'in', options: { tempered: true, glass: 'standard obscure' } }
+  ];
+  const output = response({ summary: 'Two XO sliders with different fins and one tempered picture window with obscure glass.', lines: [
+    { line_id: 'new-1', style: 'Studio XO Slider', width: 60, height: 60, qty: 1, options: { operation: 'XO', fin: 'Flush Fin' }, source_quotes: ['5050 XO slider one with flush fin'] },
+    { line_id: 'new-2', style: 'Studio XO Slider', width: 60, height: 60, qty: 1, options: { operation: 'XO', fin: 'Regular Nail Fin' }, source_quotes: ['one with just regular nail fin'] },
+    { line_id: 'new-3', style: 'Studio Picture', width: 96, height: 72, qty: 1, options: { tempered: true, patterned_glass: 'Obscure', glass: 'CozE (LowE)' }, source_quotes: ['8 foot by 6 foot picture window tempered with standard obscure glass'] }
+  ] });
+  return { quote, output };
+}
+
+test('saved Beaver lines accept equivalent canonical spellings and privacy-field migration without a new instruction', async () => {
+  const { quote, output } = persistedBeaver();
+  const result = await run(quote, output, { normalizeStructured: value => normalizeConversationalSchedule(value, { getProductProfileForLine }) });
+  assert.equal(result.intake_assessment.status, 'product_review', JSON.stringify(result.intake_assessment.failure_reason));
+  assert.equal(result.intake_assessment.failure_reason, undefined);
+  assert.deepEqual(result.quote.lines.map(line => line.style), ['Studio XO Slider', 'Studio XO Slider', 'Studio Picture']);
+  assert.deepEqual(result.quote.lines.map(line => line.dimension_basis), [undefined, undefined, undefined]);
+  assert.equal(result.quote.lines[2].options.tempered, true);
+  assert.equal(result.quote.lines[2].options.patterned_glass, 'Obscure');
+  assert.equal(result.quote.lines[2].options.glass, undefined);
+  assert.equal(result.quote.settings.glass, 'CozE (LowE)');
+  assert.equal(quote.lines[2].options.glass, 'standard obscure');
+});
+
+test('alias tolerance still rejects actual specification changes with only historical or broad-permission evidence', async () => {
+  for (const edit of [
+    output => { output.lines[0].qty = 2; },
+    output => { output.lines[0].style = 'Studio Single Hung'; },
+    output => { output.lines[0].options.fin = 'Nail Fin'; },
+    output => { output.lines[2].options.tempered = false; },
+    output => { output.lines[2].options.patterned_glass = 'None'; },
+    output => { output.lines[2].options.glass = 'Clear'; }
+  ]) for (const evidence of ['historical', 'broad']) {
+    const { quote, output } = persistedBeaver();
+    edit(output);
+    if (evidence === 'broad') output.lines.forEach(line => line.source_quotes = ['Just do your best of what you think I need']);
+    const result = await run(quote, output);
+    assert.equal(result.intake_assessment.status, 'unavailable');
+    assert.match(result.intake_assessment.failure_reason.path, /^lines\[\d+\]\.(?:qty|style|options\.(?:fin|tempered|patterned_glass|glass))$/);
+    assert.equal(result.intake_assessment.failure_reason.message, 'AI changed an existing window without a current instruction');
+    assert.deepEqual(result.quote, quote);
+  }
+});
+
