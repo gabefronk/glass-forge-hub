@@ -428,13 +428,13 @@ test("injected update never invokes the service or starts an autosave",async()=>
   assert.equal((await f.call({action:"detail",quote_id:q.id})).status,200);assert.equal(calls,1);
 });
 
-test("injected list reports configured Superagent without querying local workers",async()=>{
+test("injected list never treats configuration as browser online and does not query local workers",async()=>{
   const service={configured:true,async afterInput({q}) {return q;}};
   const f=await fixture(service);
   f.entities.QuoteWorkers.filter=async()=>{throw new Error("local workers must not be read");};
   let response=await f.call({action:"list"});
   assert.equal(response.status,200);
-  assert.deepEqual(response.worker,{configured:true,online:true,provider:"superagent",name:"Base44 Window Quotes"});
+  assert.deepEqual(response.worker,{configured:true,online:false,provider:"superagent",name:"Window quoting",last_seen_at:null,browser_authenticated:null});
   service.configured=false;response=await f.call({action:"list"});
   assert.equal(response.status,200);assert.equal(response.worker.online,false);assert.equal(response.worker.configured,false);
 });
