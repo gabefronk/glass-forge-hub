@@ -70,7 +70,7 @@ export default function YaFeesSidebar() {
 
   return (
     <aside
-      className="hidden min-[700px]:flex fixed left-0 top-0 h-screen shrink-0 flex-col z-30"
+      className="hidden lg:flex fixed left-0 top-0 h-dvh shrink-0 flex-col z-30"
       style={{ width: "216px", backgroundColor: "#FFFFFF", borderRight: "1px solid #DDE3EC" }}
     >
       {/* Brand */}
@@ -82,14 +82,15 @@ export default function YaFeesSidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto obsidian-scroll">
+      <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-4 space-y-1 overflow-y-auto obsidian-scroll">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.to;
+          const active = pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"));
           return (
             <Link
               key={item.to}
               to={item.to}
+              aria-current={active ? "page" : undefined}
               className="flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium transition-colors whitespace-nowrap"
               style={{
                 borderRadius: "10px",
@@ -122,7 +123,7 @@ export default function YaFeesSidebar() {
       <div className="px-3 pb-3">
         <div className="rounded-[10px] px-3.5 py-3 card-shadow" style={{ backgroundColor: "#F6F8FC", border: "1px solid #DDE3EC" }}>
           <div className="mono-label-sm mb-1.5">Unbilled · {monthLabel(currentMonthStr())}</div>
-          <div className="flex items-baseline gap-1.5">
+          <div className="flex flex-wrap items-baseline gap-1.5 break-all">
             <span className="font-mono-num-bold text-[18px]" style={{ color: "#1E4A85", letterSpacing: "-0.02em" }}>
               ${formatMoney(unbilled.total)}
             </span>
@@ -151,6 +152,7 @@ export default function YaFeesSidebar() {
             onClick={handleSignOut}
             disabled={signingOut}
             title="Sign out"
+            aria-label="Sign out"
             className="shrink-0 flex items-center justify-center h-7 w-7 rounded-full transition-colors"
             style={{ color: "#77839A" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "#8A4038")}
