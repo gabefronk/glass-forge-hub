@@ -60,6 +60,10 @@
       },
       "default": []
     },
+    "intake_assessment": {
+      "type": "object",
+      "description": "Server-generated interpretation of this input revision, with understood requirements, assumptions, questions and product review items. This is not a verified quote."
+    },
     "result": {
       "type": "object"
     },

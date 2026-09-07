@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import { createScriptedQueueExecution } from '../shared/scriptedQueueExecution.js';
 import { createScriptedRunnerHandler } from '../shared/scriptedRunnerHandler.js';
-import { sha256, publicQuote } from '../shared/windowQuotesCore.js';
+import { sha256, publicQuote, publicMessages } from '../shared/windowQuotesCore.js';
 import { buildQuotePlan, verifyObservedQuote } from '../shared/amscoQuotePlan.js';
 import { normalizeEasyRequest } from '../shared/easyRequest.js';
 globalThis.crypto ??= webcrypto;
@@ -126,4 +126,32 @@ test('invalid partially parsed rows preserve original input and still return cla
 test('combined scope and parser questions are deduplicated and capped rather than failing intake',async()=>{
   const f=await fixture({normalizeIntake:quote=>({ok:false,quote,questions:Array.from({length:30},(_,i)=>'Clarify required field '+i+'.')})});
   f.q().settings.yard='OTHER (12)';await f.prepare();assert.equal(f.q().worker_status,'needs_details');assert.equal(f.q().missing_details.length,30);assert.match(f.q().missing_details[29],/complete schedule preview/);
+});
+
+test('conversational review persists interpreted lines and readable assessment without claiming the browser',async()=>{
+  const assessment={input_revision:1,status:'product_review',summary:'Two sliders with different fins and a tempered picture window.',assumptions:[],questions:['Are these call sizes?'],product_review:['Slider and picture configurations need AMSCO product support.']};
+  const f=await fixture({normalizeIntake:quote=>({ok:false,quote:{...quote,lines:[{qty:1,width:60,height:60,style:'XO Slider',units:'in',options:{fin:'Flush Fin'}}]},questions:[...assessment.questions,...assessment.product_review],intake_assessment:assessment,assistant_message:assessment.summary+'\n'+assessment.questions[0]})});
+  await f.prepare();assert.equal(f.q().worker_status,'needs_details');assert.equal(f.q().lines[0].style,'XO Slider');assert.deepEqual(publicQuote(f.q()).intake_assessment,assessment);assert.match(publicMessages(f.q())[0].content,/Two sliders/);assert.equal(f.rows.QuoteWorkers[1].busy_token,'');assert.equal(f.q().agent_run,undefined);
+});
+
+test('supported conversational intake records an interpretation then freezes the checked plan',async()=>{
+  const f=await fixture({normalizeIntake:quote=>({ok:true,quote,questions:[],intake_assessment:{input_revision:1,status:'ready',summary:'I understand the two single hung windows.',assumptions:[],questions:[],product_review:[]},assistant_message:'I understand the two single hung windows. Pricing will be checked in AMSCO.'})});
+  await f.prepare();assert.equal(f.q().worker_status,'queued');assert.equal(f.q().result,undefined);assert.equal(f.q().agent_run.plan.lines.length,2);assert.equal(publicMessages(f.q())[0].kind,'intake_summary');
+});
+
+test('slow AI result cannot overwrite a newer reply or manually edited revision',async()=>{
+  let finish;const pending=new Promise(resolve=>finish=resolve);let started;const began=new Promise(resolve=>started=resolve);
+  const f=await fixture({normalizeIntake:async quote=>{started();await pending;return{ok:false,quote:{...quote,lines:[{qty:5,width:60,height:60}]},questions:['Confirm the window style.'],intake_assessment:{input_revision:1,status:'needs_details',summary:'Old result',assumptions:[],questions:[],product_review:[]}};}});
+  const running=f.prepare();await began;f.q().input_revision=2;f.q().state_version++;const original=clone(f.q().lines);finish();await assert.rejects(running,e=>e.status===409);assert.deepEqual(f.q().lines,original);assert.equal(f.q().intake_assessment,undefined);assert.equal(f.q().agent_run,undefined);
+});
+
+test('AI outage keeps saved input and produces a retryable explanation without queuing',async()=>{
+  const f=await fixture({normalizeIntake:quote=>({ok:false,quote,questions:['The AI is temporarily unavailable. Your request is saved; use Start quote to try again.'],intake_assessment:{input_revision:1,status:'unavailable',summary:'Your request is saved.',assumptions:[],questions:[],product_review:[]},assistant_message:'Your request is saved. Use Start quote to retry.'})});
+  const original=clone(f.q().lines);await f.prepare();assert.deepEqual(f.q().lines,original);assert.equal(f.q().worker_status,'needs_details');assert.equal(f.q().agent_run,undefined);assert.equal(f.q().intake_assessment.status,'unavailable');
+});
+
+test('request client reaches AI intake only within authenticated user execution',async()=>{
+  const client={integrations:{Core:{}}};let received;
+  const f=await fixture({normalizeIntake:(quote,context)=>{received=context.client;return{ok:true,quote};}});
+  await f.execution.afterInput({db:f.db,q:clone(f.q()),user:f.user,action:'create',client});assert.equal(received,client);
 });

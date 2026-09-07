@@ -159,9 +159,9 @@ export function publicMessages(quote) {
       userCount++;
       visible.push(publicMessage({ ...m, kind: m.kind || (userCount === 1 ? "initial_request" : "clarification_reply") }, quote.id));
     } else if (m.role === "assistant" && (
-      m.kind === "clarification" || m.worker_status === "needs_details" ||
+      m.kind === "clarification" || m.kind === "intake_summary" || m.worker_status === "needs_details" ||
       (!m.kind && ((clarificationRevisions.has(String(m.revision)) && lastLegacyAssistant.get(String(m.revision)) === i) || legacyQuestions.has(i)))
-    )) visible.push(publicMessage({ ...m, kind: "clarification" }, quote.id));
+    )) visible.push(publicMessage({ ...m, kind: m.kind === "intake_summary" ? "intake_summary" : "clarification" }, quote.id));
   }
   const currentQuestion = visible.some(m => m.kind === "clarification" && String(m.revision) === String(quote.input_revision));
   if (quote.worker_status === "needs_details" && !currentQuestion && Array.isArray(quote.missing_details) && quote.missing_details.length) {
@@ -243,7 +243,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (selected.id !== q.id) fail(409, "This request already exists as " + selected.id);
         // The service owns queueing/dispatch and must dedupe retries for this request/revision.
         // Pass the full internal record, never publicQuote(), so recovery and history survive.
-        const latest = await executionService.afterInput({ db, q, user, action });
+        const latest = await executionService.afterInput({ db, q, user, action, client });
         if (!latest || typeof latest !== "object" || latest.id !== q.id) throw new Error("Execution service must return the latest quote");
         return latest;
       };

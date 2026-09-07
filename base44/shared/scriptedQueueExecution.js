@@ -61,7 +61,7 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     if (q.worker_status === 'queued') return (await prepared(q)).afterInput({ ...args, q });
     let intake;
     if (normalizeIntake) {
-      intake = await normalizeIntake(clone(q));
+      intake = await normalizeIntake(clone(q), { client: args.client, action: args.action });
       if (intake?.quote) {
         if (intake.quote.id !== q.id || intake.quote.input_revision !== q.input_revision) fail(400, 'Intake normalization changed request identity');
         let settings, lines;
@@ -69,8 +69,12 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
         catch (error) { if (intake.ok !== false || !(error instanceof HttpError)) throw error; }
         // Incomplete parsing may include invalid partial rows. Preserve the user's
         // saved input and return clarification instead of failing before questions.
-        if (settings && lines && (stable(settings) !== stable(q.settings) || stable(lines) !== stable(q.lines))) {
-          const patch = { settings, lines, state_version: (q.state_version || 0) + 1 };
+        const assessment = intake.intake_assessment;
+        if (assessment && (assessment.input_revision !== q.input_revision || !['ready', 'needs_details', 'product_review', 'unavailable'].includes(assessment.status))) fail(400, 'Intake assessment does not match this request');
+        const normalizedChanged = settings && lines && (stable(settings) !== stable(q.settings) || stable(lines) !== stable(q.lines));
+        const assessmentChanged = assessment && stable(assessment) !== stable(q.intake_assessment);
+        if (normalizedChanged || assessmentChanged) {
+          const patch = { ...(normalizedChanged ? { settings, lines } : {}), ...(assessment ? { intake_assessment: sanitizePublic(assessment) } : {}), state_version: (q.state_version || 0) + 1 };
           const changed = await args.db.QuoteRequests.updateMany({ id: q.id, state_version: q.state_version || 0, input_revision: q.input_revision, worker_status: q.worker_status }, { $set: patch });
           if (changed.updated !== 1) fail(409, 'The request changed during intake; reload before quoting');
           q = { ...q, ...patch };
@@ -86,10 +90,21 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
       const missing = questions.length <= 30 ? questions : [...questions.slice(0, 29), 'Additional issues remain in the original schedule. Review the complete schedule preview before quoting.'];
       const eventId = 'queue-intake:' + q.input_revision + ':' + await digest(missing);
       if (q.worker_status === 'needs_details' && (q.conversation || []).some(item => item.client_message_id === eventId)) return q;
-      const patch = { execution_provider: 'deterministic', worker_status: 'needs_details', missing_details: missing, state_version: (q.state_version || 0) + 1, conversation: [...(q.conversation || []), { role: 'assistant', content: missing.join('\n'), revision: q.input_revision, client_message_id: eventId, message_at: at(), author: 'Window Quotes', kind: 'clarification', worker_status: 'needs_details' }] };
+      const content = intake?.assistant_message ? sanitizePublic(text(intake.assistant_message, 'intake explanation', 18000)) + (scopeQuestions.length ? '\n\n' + scopeQuestions.join('\n') : '') : missing.join('\n');
+      const patch = { execution_provider: 'deterministic', worker_status: 'needs_details', missing_details: missing, state_version: (q.state_version || 0) + 1, conversation: [...(q.conversation || []), { role: 'assistant', content, revision: q.input_revision, client_message_id: eventId, message_at: at(), author: 'Window Quotes', kind: 'clarification', worker_status: 'needs_details' }] };
       const changed = await args.db.QuoteRequests.updateMany({ id: q.id, state_version: q.state_version || 0, input_revision: q.input_revision, worker_status: q.worker_status }, { $set: patch });
       if (changed.updated !== 1) fail(409, 'The request changed; reload before quoting');
       return { ...q, ...patch };
+    }
+    if (intake?.assistant_message) {
+      const content = sanitizePublic(text(intake.assistant_message, 'intake explanation', 18000));
+      const eventId = 'ai-intake:' + q.input_revision + ':' + await digest(content);
+      if (!(q.conversation || []).some(item => item.client_message_id === eventId)) {
+        const patch = { state_version: (q.state_version || 0) + 1, conversation: [...(q.conversation || []), { role: 'assistant', content, revision: q.input_revision, client_message_id: eventId, message_at: at(), author: 'Window Quotes', kind: 'intake_summary' }] };
+        const changed = await args.db.QuoteRequests.updateMany({ id: q.id, state_version: q.state_version || 0, input_revision: q.input_revision, worker_status: q.worker_status }, { $set: patch });
+        if (changed.updated !== 1) fail(409, 'The request changed during intake; reload before quoting');
+        q = { ...q, ...patch };
+      }
     }
     const normalized = await normalizeRequest(clone(q));
     const execution = await child(q, normalized?.ok === true ? await digest(normalized.plan) : ZERO_HASH);
