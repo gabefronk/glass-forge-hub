@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { buildQuotePlan, verifyObservedQuote, ROUNDING_POLICY } from '../shared/amscoQuotePlan.js';
+import { buildQuotePlan, verifyObservedQuote, ROUNDING_POLICY, roomMatchesRequest } from '../shared/amscoQuotePlan.js';
 
 const clone = value => structuredClone(value);
 const request = () => JSON.parse(fs.readFileSync(new URL('./fixtures/amsco-scripted-benchmark.json', import.meta.url), 'utf8'));
@@ -22,6 +22,16 @@ function rejectsObservation(change, code) {
   const result = verifyObservedQuote(p, sample);assert.equal(result.ok, false);
   if (code) assert.ok(result.issues.some(item => item.code === code), JSON.stringify(result));
 }
+
+test('native None Assigned is accepted only as observed evidence for an unspecified room',()=>{
+ assert.equal(roomMatchesRequest('None Assigned',''),true);
+ for(const actual of [undefined,null,'Kitchen','none assigned'])assert.equal(roomMatchesRequest(actual,''),false);
+ assert.equal(roomMatchesRequest('None Assigned','Kitchen'),false);
+ const p=plan();p.lines.forEach(line=>{line.room='';});
+ const sample=observed(p);sample.lines.forEach(line=>{line.room='None Assigned';});
+ const result=verifyObservedQuote(p,sample);assert.equal(result.ok,true);assert.equal(result.result.lines[0].room,'');
+ sample.lines[0].room='Kitchen';assert.equal(verifyObservedQuote(p,sample).ok,false);
+});
 
 test('explicit benchmark normalizes the supported product without changing the source or supplying finance', () => {
   const input = request(), before = clone(input), built = buildQuotePlan(input);

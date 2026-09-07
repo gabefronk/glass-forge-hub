@@ -147,6 +147,13 @@ function sameYard(a, b) {
 }
 function marginMatches(value, requested) { return finite(value) && Math.abs(value - requested) <= ROUNDING_POLICY.displayed_margin_tolerance_percentage_points + 1e-9; }
 
+// Live AMSCO evidence: an unassigned room is rendered as "None Assigned".
+// Keep the raw observation; accept this sentinel only for a blank request.
+export function roomMatchesRequest(actual, requested) {
+  return typeof actual === 'string' && typeof requested === 'string' &&
+    (actual.trim() === requested.trim() || requested.trim() === '' && actual.trim() === 'None Assigned');
+}
+
 export function verifyObservedQuote(plan, observed) {
   const issues = [];
   const invalid = (code, path, message) => issue(issues, code, path, message);
@@ -184,7 +191,7 @@ export function verifyObservedQuote(plan, observed) {
     if (line.units !== 'in' || line.dimension_basis !== 'call' || !closeDimension(line.width, expected.width) || !closeDimension(line.height, expected.height)) invalid('call_dimensions_mismatch', path, 'Saved call dimensions and units differ from the schedule.');
     if (!object(line.frame_dimensions) || line.frame_dimensions.units !== 'in' || !closeDimension(line.frame_dimensions.width, expected.frame_dimensions.width) || !closeDimension(line.frame_dimensions.height, expected.frame_dimensions.height)) invalid('frame_dimensions_mismatch', path + '.frame_dimensions', 'Observed frame dimensions do not match this supported call-size product.');
     if (choice(line.style, STYLE_CHOICES) !== SH_STYLE) invalid('style_mismatch', path + '.style', 'The observed product is not the supported Studio Single Hung.');
-    if (typeof line.room !== 'string' || line.room.trim() !== expected.room) invalid('room_mismatch', path + '.room', 'The saved room label is missing or differs from the schedule.');
+    if (!roomMatchesRequest(line.room, expected.room)) invalid('room_mismatch', path + '.room', 'The saved room label is missing or differs from the schedule.');
     const optionIssues = [], actualOptions = canonicalOptions(line.options, {}, optionIssues, path + '.options');
     if (optionIssues.length) issues.push(...optionIssues.map(item => ({ ...item, code: 'observed_' + item.code })));
     for (const [key, value] of Object.entries(expected.options)) if (actualOptions[key] !== value) invalid('option_mismatch', path + '.options.' + key, 'Saved ' + key.replaceAll('_', ' ') + ' differs from the requested option.');
