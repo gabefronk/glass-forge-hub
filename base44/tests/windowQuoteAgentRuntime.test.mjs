@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 globalThis.crypto ??= webcrypto;
 
-test('runtime needs exact flag plus selected request ID; all missing or nonexact settings remain off', async () => {
+test('retired runtime cannot dispatch even when old continuation settings are enabled', async () => {
   const oldDeno = globalThis.Deno, oldFetch = globalThis.fetch;
   let scenario = 0;
   try {
@@ -34,11 +34,11 @@ test('runtime needs exact flag plus selected request ID; all missing or nonexact
         }
       }]));
       const current = await execution.afterInput({ db, q: quote });
-      const expected = settings.WINDOW_QUOTES_CONTINUATIONS_ENABLED === 'true' && settings.WINDOW_QUOTES_CONTINUATION_QUOTE_ID === quote.id;
-      assert.equal(current.agent_run.continuation_enabled === true, expected);
-      assert.equal(current.agent_run.continuation_limit, expected ? 1 : undefined);
-      assert.equal(current.worker_status, 'running');assert.equal(requests.length, 1);
-      assert.equal(requests[0].body.content.includes('Automatic continuation is available'), expected);
+      assert.equal(execution.configured, false);
+      assert.equal(current.agent_run, undefined);
+      assert.equal(current.worker_status, 'failed');
+      assert.equal(requests.length, 0);
+      assert.equal(slot.busy_token, '');
     }
   } finally {
     globalThis.fetch = oldFetch;
