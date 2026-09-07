@@ -9,6 +9,8 @@ import TakeoffEditor, { inputClass, secondaryClass } from "@/components/window-q
 import ConnectClaude from "@/components/window-quotes/ConnectClaude";
 import WindowQuoteResults from "@/components/window-quotes/WindowQuoteResults";
 import { normalizeLines, validateLines } from "@/components/window-quotes/takeoff";
+import { useAuth } from "@/lib/AuthContext";
+import { initialQuoteFormValues, loadQuotePreferences, saveQuotePreferences } from "@/lib/windowQuotePreferences";
 
 import { normalizeEasyRequest, STANDARD_STUDIO_PROFILE } from "@/lib/easyRequest";
 
@@ -116,17 +118,18 @@ function ProductChoice({ label, value, choices, onChange, disabled }) {
     {savedCustom && <option value="__saved_selection__">{productLabel(value, choices)}</option>}
   </select></Field>;
 }
-function QuoteForm({ quote, seed, busy, onSave, onCancel }) {
+function QuoteForm({ quote, seed, preferenceUserId, busy, onSave, onCancel }) {
   const initial = quote || seed;
+  const [defaults] = useState(() => initialQuoteFormValues(initial, loadQuotePreferences(preferenceUserId)));
   const [title, setTitle] = useState(initial?.title || "");
   const [message, setMessage] = useState(initial?.request_text || "");
-  const [settings, setSettings] = useState({ dealer: "", yard: "", gross_margin: "", color: "", glass: "", ...initial?.settings });
+  const [settings, setSettings] = useState(defaults.settings);
   const [lines, setLines] = useState(initial?.lines || []);
   const [source, setSource] = useState(initial?.source || null);
   const [errors, setErrors] = useState([]);
   const requestID = useRef(uid());
-  const [useStandard, setUseStandard] = useState(initial?.source?.easy_request?.confirmed === true);
-  const [dimensionBasis, setDimensionBasis] = useState(initial?.source?.easy_request?.dimension_basis || "");
+  const [useStandard, setUseStandard] = useState(defaults.use_standard);
+  const [dimensionBasis, setDimensionBasis] = useState(defaults.dimension_basis);
   const requestSource = useMemo(() => ({ ...(source || {}), easy_request: {
     profile_id: STANDARD_STUDIO_PROFILE.id, profile_revision: STANDARD_STUDIO_PROFILE.revision,
     confirmed: useStandard, dimension_basis: dimensionBasis, units: "in"
@@ -156,14 +159,14 @@ function QuoteForm({ quote, seed, busy, onSave, onCancel }) {
         <option value="">Choose dimension basis…</option><option value="call">Call size — e.g. 3050 = 36 × 60 inches</option><option value="frame">Actual frame size — review required</option><option value="rough_opening">Rough opening — review required</option>
       </select></Field>
       <div className="rounded-lg border border-[#C3D4EE] bg-[#F6F8FC] p-3">
-        <label className="flex cursor-pointer items-start gap-2 text-sm font-medium text-[#131A26]"><input type="checkbox" className="mt-1 h-4 w-4 accent-[#2A5EA8]" checked={useStandard} onChange={(e) => setUseStandard(e.target.checked)} disabled={busy} /><span>Use my standard Studio preferences</span></label>
-        <p className="ml-6 mt-2 text-xs leading-relaxed text-[#616D81]">Keep my selected color, glass, account, yard and margin. Use compatible standard hardware, screen and glazing options when they have been checked for the requested window type.</p>
+        <label className="flex min-h-11 cursor-pointer items-start gap-2 py-2 text-sm font-medium text-[#131A26]"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[#2A5EA8]" checked={useStandard} onChange={(e) => setUseStandard(e.target.checked)} disabled={busy} /><span>Use standard Studio nail-fin preferences</span></label>
+        <p className="ml-7 mt-1 text-xs leading-relaxed text-[#616D81]">Start with the Studio 1⅜-inch fin setback and compatible standard options for each verified window type. Your written request and schedule can override these preferences. Uncheck for a fully custom request.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <ProductChoice label="Window color" value={settings.color} choices={colorChoices} onChange={(color) => setSettings({ ...settings, color })} disabled={busy} />
         <ProductChoice label="Low-E glass" value={settings.glass} choices={glassChoices} onChange={(glass) => setSettings({ ...settings, glass })} disabled={busy} />
       </div>
-      <p className="text-xs leading-relaxed text-[#616D81]">The AI keeps each window’s requested style, fin, glass and special options. It checks the configuration with AMSCO and asks about missing or incompatible choices before pricing. A window’s own specification takes priority.</p>
+      <p className="text-xs leading-relaxed text-[#616D81]">These are editable starting preferences. Each window’s own specification takes priority. Automatic pricing is available for verified configurations; other sizes, products or options may need review.</p>
     </div>
     <div className="rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#131A26]"><Settings2 size={15} />Quoting settings</div>
@@ -172,7 +175,7 @@ function QuoteForm({ quote, seed, busy, onSave, onCancel }) {
         <Field label="Shipping yard"><select className={inputClass} value={settings.yard} onChange={(e) => setSettings({ ...settings, yard: e.target.value })} disabled={busy}><option value="">Choose yard…</option><option value="BFS-UTAH DESIGN(11)">BFS — Utah Design (11)</option>{settings.yard && settings.yard !== "BFS-UTAH DESIGN(11)" && <option value={settings.yard}>{settings.yard}</option>}</select></Field>
         <Field label="Gross margin (%)"><input className={inputClass} type="number" min="0" max="99.9999" step="any" placeholder="Enter your margin" value={settings.gross_margin ?? ""} onChange={(e) => setSettings({ ...settings, gross_margin: e.target.value })} disabled={busy} /></Field>
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-[#616D81]">Dealer and yard determine cost; gross margin sets the selling price. Add what you know. The quoting agent will ask for any missing settings.</p>
+      <p className="mt-2 text-xs leading-relaxed text-[#616D81]">Dealer and yard determine cost; gross margin sets the selling price. Check these settings before sending. After you save, your chosen settings are remembered for new requests in this browser.</p>
     </div>
     <TakeoffEditor lines={lines} onChange={setLines} source={source} onSourceChange={setSource} disabled={busy} />
     {(message.trim() || lines.length > 0) && <div className="space-y-3 rounded-xl border border-[#DDE3EC] p-4" aria-label="Request preview">
@@ -216,6 +219,7 @@ function ScheduleView({ quote }) {
   </div>;
 }
 export default function WindowQuotes() {
+  const { user } = useAuth();
   const client = useQueryClient();
   const [params, setParams] = useSearchParams();
   const selectedID = params.get("quote");
@@ -257,6 +261,7 @@ export default function WindowQuotes() {
     const result = isEditing ? await api("update", { quote_id: selectedID, title: data.title, settings: data.settings, lines: data.lines, source: data.source }) : await api("create", { ...data, auto_start: queue });
     const id = result.quote?.id;
     if (!id) throw new Error("The request was not returned. Refresh before retrying.");
+    saveQuotePreferences(user?.id, { settings: data.settings, dimension_basis: data.source?.easy_request?.dimension_basis, use_standard: data.source?.easy_request?.confirmed });
     setForm(null); select(id);
     await refresh();
     if (queue && isEditing) await api("queue", { quote_id: id });
@@ -326,7 +331,8 @@ export default function WindowQuotes() {
         </> : <div className="p-10 text-center text-sm text-[#616D81]">This request is unavailable. Choose another request or refresh.</div>}
       </section>
     </div>
-    <Dialog open={!!form} onOpenChange={(open) => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>{form === "edit" ? "Request details" : revisionSeed ? "Revise window quote" : "New window quote"}</DialogTitle><DialogDescription>{form === "edit" ? "Changes create a new request revision. Previous verified results are kept in history." : revisionSeed ? "This creates a fresh request and AMSCO quote. The previous verified quote stays unchanged." : "Describe what you need in your own words and add any settings you know. The AI reviews your full request when you send it."}</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{form && <QuoteForm key={form === "edit" ? selectedID : "new"} quote={form === "edit" ? quote : null} seed={form === "new" ? revisionSeed : null} busy={busy} onSave={saveForm} onCancel={() => setForm(null)} />}</DialogContent></Dialog>
+    <Dialog open={!!form} onOpenChange={(open) => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>{form === "edit" ? "Request details" : revisionSeed ? "Revise window quote" : "New window quote"}</DialogTitle><DialogDescription>{form === "edit" ? "Changes create a new request revision. Previous verified results are kept in history." : revisionSeed ? "This creates a fresh request and AMSCO quote. The previous verified quote stays unchanged." : "Describe what you need in your own words and add any settings you know. The AI reviews your full request when you send it."}</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{form && <QuoteForm key={form === "edit" ? selectedID : "new"} quote={form === "edit" ? quote : null} seed={form === "new" ? revisionSeed : null} preferenceUserId={user?.id} busy={busy} onSave={saveForm} onCancel={() => setForm(null)} />}</DialogContent></Dialog>
     <Dialog open={wonOpen} onOpenChange={(open) => { if (!busy) setWonOpen(open); }}><DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>Accept quote & create job</DialogTitle><DialogDescription>Keep an accepted snapshot of this quote revision.</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{wonOpen && quote && <WonForm quote={quote} busy={busy} onSubmit={convert} onCancel={() => setWonOpen(false)} />}</DialogContent></Dialog>
   </div>;
 }
+
