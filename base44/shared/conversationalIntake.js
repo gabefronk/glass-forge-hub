@@ -1,6 +1,6 @@
 // Language understanding proposes inputs; the existing planner remains the
 // authority for product support, pricing, queueing and verified results.
-const VERSION = 6;
+const VERSION = 7;
 const LIMITS = { lines: 200, text: 70000, output: 160000 };
 const clone = value => structuredClone(value);
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -87,13 +87,13 @@ function sourceContext(q) {
   const existing = (q.lines || []).map((line, index) => ({ ...clone(line), line_id: line.id || 'existing-' + (index + 1) }));
   return { conversation, activeUser, existing, editedThrough };
 }
+const knownBfsYard = value => String(value || '').toLowerCase().replace(/\s+/g, '') === 'bfs-utahdesign(11)';
 function withKnownSelectedDealer(q) {
   const easy = q.source?.easy_request;
   if (present(q.settings?.dealer) || easy?.confirmed !== true || easy.profile_id !== 'studio-sh-standard' || easy.profile_revision !== 1) return q;
   // This exact yard/account relationship is already verified in the app's
   // configured quoting account. Never derive an account from a free-text prefix.
-  const yard = String(q.settings?.yard || '').toLowerCase().replace(/\s+/g, '');
-  if (yard !== 'bfs-utahdesign(11)') return q;
+  if (!knownBfsYard(q.settings?.yard)) return q;
   return { ...q, settings: { ...q.settings, dealer: 'BFS' } };
 }
 function promptFor(q, context) {
@@ -110,11 +110,12 @@ prior_unresolved_requirements MUST remain unresolved unless the latest user repl
 Return ALL current window lines with stable line_id values from current_lines. Use new-1, new-2, etc. for additions. Never drop an existing line: explicit deletions go in removed_lines with an exact quote from the latest user reply. Do not merge windows with different glass, operation, fin or other specifications.
 Preserve the actual requested products, including XO/XOX sliders, picture/fixed windows, flush fin, nail fin, tempered/obscure glass and any unusual requirement. Never convert them to Single Hung merely to pass automation. If a CUSTOMER SPECIFICATION does not fit options, include it in unresolved_requirements and explain it plainly. No silent omissions. unresolved_requirements must NEVER contain execution-capability notices such as 'XO sliders are not supported by the automated planner'; the application's planner handles those notices itself. A slider or picture already represented as a schedule line is not an unrepresented requirement.
 Use style 'Studio XO Slider' for an explicitly requested XO slider and 'Studio Picture' for a rectangular picture/fixed window. Preserve XO in options.operation and explicit fin choices in options.fin. Do not infer XO from a generic slider or silently change XOX/OX to XO. Glass coating and privacy texture are separate: options.glass stores CozE (LowE), Clear, or another explicitly requested coating; options.patterned_glass stores Obscure, None, or the requested pattern. 'Standard obscure glass' means patterned_glass: 'Obscure', not a replacement for the selected CozE (LowE) coating. Tempered is a separate boolean and must remain true when requested. Do not interpret 'standard' as permission to select an unrequested pattern, thickness, fin, or safety specification.
-A correction such as 'no obscure glass needed, just regular glass' removes the privacy texture: use patterned_glass: 'None'. Keep the separately selected CozE (LowE) coating and any tempered requirement unless the customer explicitly changes those too. 'Regular glass' in this correction does not mean 'no LowE' or 'not tempered'. Apply the correction to the affected window lines even when those lines have not been saved yet.
+A correction such as 'no obscure glass needed, just regular glass' removes the privacy texture: use patterned_glass: 'None'. Keep the separately selected CozE (LowE) coating and any tempered requirement unless the customer explicitly changes those too. 'Regular glass' in this correction does not mean 'no LowE' or 'not tempered'. Describe it as 'regular glass (no privacy texture), with the selected CozE LowE coating', not as 'clear glass', which can imply a different coating. Apply the correction to the affected window lines even when those lines have not been saved yet.
 Normalize explicit feet/inches arithmetic into inches (8 feet x 6 feet is 96 x 72). Four-digit trade codes such as 5050 mean 60 x 60 inches; describe that interpretation in assumptions. Physical size units and trade codes alone do not establish dimension basis: omit dimension_basis unless the customer selected or stated call/frame/rough opening. Preserve an explicit basis even when the size is written as a trade code. Do not invent dimensions, quantity, opening direction, color, account, yard or margin.
 The selected Studio standard and current account settings carry the customer's existing routine preferences. Product-specific defaults are applied by the application only after their compatibility has been verified for the requested window family. Do not copy Single Hung hardware, screens, thickness or glazing choices into sliders or picture windows yourself. A generic 'do your best' does not permit replacing requested products, glass, safety requirements, fin choices, or unknown dimensions. Do not fill defaults yourself.
 Options must contain primitive values with correct types (tempered true/false, number_wide number). Omit unknown fields entirely; never use zero, false or another placeholder for unknowns. Cite exact short source_quotes from user-authored messages or current structured field values for each line. Assistant questions may establish context but cannot be cited as customer approval. Existing line changes/deletions must cite the latest user reply. Do not repeat or embellish quoted facts.
 settings_updates is only for explicitly stated customer settings, each with an exact user source_quote. Encode value as a string, including numeric margin (for example "25"). Existing dealer, yard and margin are preserved by the application; ask about conflicts rather than overriding them. A clear latest color/glass/patterned_glass correction may update that selection. When the user clearly changes the color, coating or privacy texture for all windows, also update every affected line's corresponding option to the same choice and cite that latest correction; do not leave stale copies of the old global choice on individual lines. Global obscure/privacy-glass requests update patterned_glass, keeping the separately selected coating in glass. Preserve intentionally different exceptions and explicit contrasting hardware/screens, or ask if the intended scope is ambiguous. Do not infer dealer, yard or margin from a title or reference. Prefer per-line overrides when only one line changes.
+When current_settings identifies dealer BFS and yard BFS-UTAH DESIGN (11), the configured quoting account is already established. No separate BFS account number, account ID, or dealer account number is needed; do not ask for one. Still flag a genuine conflict if the customer explicitly requests a different dealer or yard.
 Ask at most 3 focused questions in normal language that actually move this request forward; group shared missing details. Never ask the user to reformat into CSV/JSON or quote parser syntax. summary should describe the actual windows and options you understood. Never put internal capability claims, planner/runner terminology, implementation limitations, or promises that pricing succeeded into summary, questions, assumptions or unresolved_requirements. The application checks availability and appends any relevant next steps separately. assumptions contains only transparent grounded interpretations, never invented specifications.
 CUSTOMER DATA:
 ${serialized}`;
@@ -124,7 +125,11 @@ function representedCapabilityNotice(detail, lines) {
   const notice = detail.match(/^(?:(?:xo|xox)\s+)?(slider|picture|fixed)(?:\s+windows?)?\s+(?:are|is)\s+not\s+supported\s+by\s+(?:the\s+)?(?:current\s+)?(?:automated|automatic|scripted)\b[^.]*\b(?:planner|runner|quoting)\.?$/i);
   return !!notice && Array.isArray(lines) && lines.some(line => norm(line?.style).includes(norm(notice[1])));
 }
-function customerSummary(summary, lines) {
+function customerSummary(summary, lines, settings) {
+  const allLowE = lines.length && lines.every(line => sameSpecification('options.glass', line.options?.glass ?? settings?.glass, 'CozE (LowE)'));
+  const regularTexture = lines.some(line => norm(line.options?.patterned_glass ?? settings?.patterned_glass) === 'none');
+  if (allLowE && regularTexture) summary = summary.replace(/\b(?:(?:regular|standard)\s+)?clear\s+glass\b/gi,
+    'regular glass (no privacy texture), with the selected CozE LowE coating');
   if (!/\b(?:planner|runner|scripted|execution\s+(?:path|capabilit)|supported\s+(?:product\s+configuration|quoting\s+path)|not supported|unsupported|only supports?)\b/i.test(summary)) return summary;
   if (!lines.length) return 'I saved your request and need a few details about the windows.';
   const descriptions = lines.slice(0, 4).map(line => {
@@ -322,7 +327,7 @@ function validateInterpretation(raw, q, context) {
     if (conflictsForLine.length) conflicts.push('For ' + (line.mark || line.style || line.id) + ', should the saved ' + conflictsForLine.join(' and ') + ' stay as specified, or change to match your new selection?');
   }
   if (!lines.length) clarification.push('Which windows do you need, and what are their sizes and quantities?');
-  return { summary: customerSummary(summary, lines), lines, settings, questions, assumptions, unresolved, clarification, conflicts };
+  return { summary: customerSummary(summary, lines, settings), lines, settings, questions, assumptions, unresolved, clarification, conflicts };
 }
 
 function previousRequirements(q) {
@@ -421,6 +426,9 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
     const basisQuestion = /\b(?:call sizes?|frame sizes?|rough[ -]?openings?|measurement basis|dimension basis)\b/i;
     const needsFin = normalizedQuote.lines.filter(line => /slider|picture|fixed/i.test(line.style || '') &&
       ![line.options?.fin, line.options?.series, normalizedQuote.settings?.fin, normalizedQuote.settings?.series].some(present));
+    const configuredBfsAccount = normalizedQuote.settings?.dealer === 'BFS' && knownBfsYard(normalizedQuote.settings?.yard);
+    const redundantAccountNumber = question => configuredBfsAccount && /\b(?:account|dealer)\s+(?:number|no\.?|id|identifier)\b|\baccount\s*#/i.test(question) &&
+      !/\b(?:BTB|different dealer|other dealer|instead|conflict)\b/i.test(question);
     const essentialQuestions = [
       ...nativeConstraints.map(item => item.customer_question).filter(value => typeof value === 'string' && value.trim() && value.length <= 1000 &&
         (!needsBasis || !basisQuestion.test(value))),
@@ -433,7 +441,7 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
     ];
     const proposedQuestions = (interpretation.questions.length ? interpretation.questions : [...interpretation.clarification, ...missingLines, ...missingPlanner])
       .filter(question => (!needsBasis || !basisQuestion.test(question)) &&
-        (!needsFin.length || !/\b(?:fin|installation style|installation series)\b/i.test(question)));
+        (!needsFin.length || !/\b(?:fin|installation style|installation series)\b/i.test(question)) && !redundantAccountNumber(question));
     const questions = [...new Set([...interpretation.conflicts, ...essentialQuestions, ...proposedQuestions])].slice(0, 3);
     const extraIssues = [...interpretation.unresolved.map(message => ({ code: 'intake_requirement_review', path: 'conversation', message })), ...interpretation.conflicts.map(message => ({ code: 'intake_conflict', path: 'conversation', message }))];
     const ok = normalized.ok === true && !productReview.length && !questions.length;
