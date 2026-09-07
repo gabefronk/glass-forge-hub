@@ -274,7 +274,7 @@ test('Jordan correction can cancel historical obscure texture before a requireme
     normalizeStructured: value => normalizeConversationalSchedule(value, { getProductProfileForLine })
   });
   assert.notEqual(result.intake_assessment.status, 'unavailable', JSON.stringify(result.intake_assessment.failure_reason));
-  assert.equal(result.intake_assessment.version, 6);
+  assert.equal(result.intake_assessment.version, 7);
   assert.equal(result.quote.lines.length, 3);
   assert.deepEqual(result.quote.lines.slice(0, 2).map(line => [line.style, line.options.operation, line.options.fin]), [
     ['Studio XO Slider', 'XO', 'Flush Fin'], ['Studio XO Slider', 'XO', 'Regular Nail Fin']
@@ -330,5 +330,49 @@ test('only the exact selected known BFS yard with confirmed preferences supplies
     assert.ok(!result.intake_assessment.assumptions.some(note => /BFS account identified/.test(note)));
     assert.equal(result.ok, false);
   }
+});
+
+test('configured BFS account needs no account-number question and corrected regular glass is described precisely', async () => {
+  const { quote, output } = jordanCorrection();
+  output.summary = 'Two XO sliders and a picture window with tempered, clear glass.';
+  output.questions = [
+    'Are these call sizes or actual frame sizes?',
+    'Which fin should the picture window use?',
+    'Could you confirm the BFS account number to associate with this quote?'
+  ];
+  const result = await run(quote, output, { normalizeStructured: value => normalizeConversationalSchedule(value, { getProductProfileForLine }) });
+  assert.deepEqual(result.intake_assessment.questions, [
+    'Are the measurements call sizes, actual frame sizes, or rough openings?',
+    'For Studio Picture, which installation style should I use: nail fin, flush fin, or another style?'
+  ]);
+  assert.match(result.intake_assessment.summary, /regular glass \(no privacy texture\), with the selected CozE LowE coating/);
+  assert.doesNotMatch(result.intake_assessment.summary, /\bclear glass\b/);
+  assert.equal(result.quote.settings.glass, 'CozE (LowE)');
+  assert.equal(result.quote.lines[2].options.tempered, true);
+});
+
+test('account question filtering never hides dealer conflicts or claims unknown accounts are configured', async () => {
+  const { quote, output } = jordanCorrection();
+  quote.settings.dealer = 'BTB';
+  output.questions = ['Could you confirm the BFS account number to associate with this quote?'];
+  const otherAccount = await run(quote, output);
+  assert.ok(otherAccount.intake_assessment.questions.some(question => /account number/.test(question)));
+  quote.settings.dealer = 'BFS';
+  quote.conversation.push({ role: 'user', revision: 3, content: 'Use BTB for this quote instead.' });
+  quote.input_revision = 3;
+  output.settings_updates = [{ field: 'dealer', value: 'BTB', source_quote: 'Use BTB for this quote instead.' }];
+  const conflict = await run(quote, output);
+  assert.equal(conflict.ok, false);
+  assert.equal(conflict.quote.settings.dealer, 'BFS');
+  assert.ok(conflict.intake_assessment.questions.some(question => /saved dealer is BFS; your notes specify BTB/.test(question)));
+});
+
+test('an explicitly requested clear coating remains clear in both schedule and summary', async () => {
+  const quote = base('One 8 foot by 6 foot tempered picture window, clear glass with no LowE.');
+  const output = response({ summary: 'One tempered picture window with clear glass.', lines: [picture({ options: { tempered: true, patterned_glass: 'None', glass: 'Clear' },
+    source_quotes: ['One 8 foot by 6 foot tempered picture window, clear glass with no LowE'] })] });
+  const result = await run(quote, output);
+  assert.equal(result.quote.lines[0].options.glass, 'Clear');
+  assert.equal(result.intake_assessment.summary, 'One tempered picture window with clear glass.');
 });
 
