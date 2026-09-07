@@ -25,7 +25,7 @@ test('standard obscure stays a privacy texture alongside selected CozE LowE and 
   assert.equal(CONVERSATIONAL_INTAKE_SCHEMA.properties.lines.items.properties.options.properties.patterned_glass.type, 'string');
 });
 
-test('earlier glass Obscure interpretations migrate texture without inventing coating', async () => {
+test('earlier Obscure migrates texture and uses the confirmed quoting coating when omitted', async () => {
   for (const glass of ['Obscure', 'standard obscure glass']) {
     const quote = base();
     const result = await run(quote, response({ lines: [picture({ options: { glass, tempered: true } })] }));
@@ -36,7 +36,7 @@ test('earlier glass Obscure interpretations migrate texture without inventing co
     assert.match(result.intake_assessment.assumptions.join(' '), /privacy texture/);
     delete quote.settings.glass;
     const unspecified = await run(quote, response({ lines: [picture({ options: { glass, tempered: true } })] }));
-    assert.equal(unspecified.quote.settings.glass, undefined);
+    assert.equal(unspecified.quote.settings.glass, 'CozE (LowE)');
     assert.equal(unspecified.quote.lines[0].options.glass, undefined);
   }
 });
@@ -67,14 +67,14 @@ test('conflicting pattern descriptions ask rather than discard either specificat
   assert.ok(result.intake_assessment.questions.some(question => /glass notes say Obscure/.test(question)));
 });
 
-test('trade-code interpretation is visible and never creates or overrides measurement basis', async () => {
+test('confirmed trade-code call assumption is visible and preserves explicit measurement basis', async () => {
   for (const basis of ['', 'call', 'frame', 'rough_opening']) {
     const quote = base('One 5050 XO slider.');
     quote.source = { easy_request: { ...source.easy_request, dimension_basis: basis } };
     const result = await run(quote, response({ lines: [picture({ line_id: 'slider-1', style: 'Studio XO Slider', width: 60, height: 60, options: { operation: 'XO' }, source_quotes: ['One 5050 XO slider'] })] }));
-    assert.equal(result.quote.lines[0].dimension_basis, basis || undefined);
+    assert.equal(result.quote.lines[0].dimension_basis, basis || 'call');
     assert.ok(result.intake_assessment.assumptions.some(note => note.includes('5050') && note.includes('60 × 60')));
-    if (!basis) assert.equal(result.intake_assessment.questions[0], 'Are the measurements call sizes, actual frame sizes, or rough openings?');
+    if (!basis) assert.ok(!result.intake_assessment.questions.some(question => /call sizes/.test(question)));
   }
 });
 
@@ -86,9 +86,10 @@ test('a stale model capability summary is replaced with the understood window sc
   assert.doesNotMatch(result.assistant_message, /supported quoting path|supported product configuration/);
 });
 
-test('missing installation choice is a plain question and explicit fins are retained', async () => {
+test('confirmed omitted installation uses nail fin while explicit fins are retained', async () => {
   const missing = await run(base(), response());
-  assert.ok(missing.intake_assessment.questions.some(question => /Studio Picture.*nail fin, flush fin/.test(question)));
+  assert.equal(missing.quote.lines[0].options.fin, 'nail fin');
+  assert.ok(!missing.intake_assessment.questions.some(question => /which installation style/.test(question)));
   const supplied = await run(base(), response({ lines: [picture({ options: { fin: 'Flush Fin', tempered: true, patterned_glass: 'Obscure' } })] }));
   assert.equal(supplied.quote.lines[0].options.fin, 'Flush Fin');
   assert.ok(!supplied.intake_assessment.questions.some(question => /which installation style/.test(question)));
@@ -178,7 +179,7 @@ test('real picture-size rejection is explained while compatible sliders retain t
   assert.doesNotMatch(result.assistant_message, /saved native validation|supported quoting path/);
 });
 
-test('conditional picture restriction keeps one shared measurement question and the installation question', async () => {
+test('conditional picture restriction keeps the necessary measurement question with standard nail fin', async () => {
   const quote = base();
   quote.source = { easy_request: { ...source.easy_request, dimension_basis: '' } };
   const result = await run(quote, response({ questions: ['Are these call sizes or frame sizes?'] }), {
@@ -188,8 +189,7 @@ test('conditional picture restriction keeps one shared measurement question and 
   assert.equal(result.quote.lines[0].dimension_basis, undefined);
   assert.ok(result.intake_assessment.product_review.some(message => message.startsWith('When treated as call sizes, AMSCO rejected')));
   assert.deepEqual(result.intake_assessment.questions, [
-    'Are the measurements call sizes, actual frame sizes, or rough openings?',
-    'For Studio Picture, which installation style should I use: nail fin, flush fin, or another style?'
+    'Are the measurements call sizes, actual frame sizes, or rough openings?'
   ]);
 });
 
@@ -218,7 +218,7 @@ test('saved Beaver lines accept equivalent canonical spellings and privacy-field
   assert.equal(result.intake_assessment.status, 'product_review', JSON.stringify(result.intake_assessment.failure_reason));
   assert.equal(result.intake_assessment.failure_reason, undefined);
   assert.deepEqual(result.quote.lines.map(line => line.style), ['Studio XO Slider', 'Studio XO Slider', 'Studio Picture']);
-  assert.deepEqual(result.quote.lines.map(line => line.dimension_basis), [undefined, undefined, undefined]);
+  assert.deepEqual(result.quote.lines.map(line => line.dimension_basis), ['call', 'call', undefined]);
   assert.equal(result.quote.lines[2].options.tempered, true);
   assert.equal(result.quote.lines[2].options.patterned_glass, 'Obscure');
   assert.equal(result.quote.lines[2].options.glass, undefined);
@@ -274,7 +274,7 @@ test('Jordan correction can cancel historical obscure texture before a requireme
     normalizeStructured: value => normalizeConversationalSchedule(value, { getProductProfileForLine })
   });
   assert.notEqual(result.intake_assessment.status, 'unavailable', JSON.stringify(result.intake_assessment.failure_reason));
-  assert.equal(result.intake_assessment.version, 7);
+  assert.equal(result.intake_assessment.version, 8);
   assert.equal(result.quote.lines.length, 3);
   assert.deepEqual(result.quote.lines.slice(0, 2).map(line => [line.style, line.options.operation, line.options.fin]), [
     ['Studio XO Slider', 'XO', 'Flush Fin'], ['Studio XO Slider', 'XO', 'Regular Nail Fin']
