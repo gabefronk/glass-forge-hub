@@ -1,5 +1,5 @@
 export const MAX_LINES = 200;
-export const CSV_TEMPLATE = 'mark,style,width,height,dimension_basis,units,qty,room,series,color,operation,glass\nW1,Single Vent,59.25,47.25,frame,in,1,BASEMENT,Studio Flush Fin,Taupe,XO,CozE (LowE)';
+export const CSV_TEMPLATE = 'mark,style,width,height,dimension_basis,units,qty,room,series,color,glass\nW1,Studio Single Hung,36,60,call,in,2,Bedroom,Studio 1 3/8 inch Fin Setback,White,CozE (LowE)';
 const aliases = {
   quantity: "qty", count: "qty", window_mark: "mark", label: "mark", type: "style",
   window_style: "style", width_in: "width", height_in: "height", basis: "dimension_basis",
