@@ -77,8 +77,9 @@ test("MCP prevents direct quote-table CRUD and exposes only guarded quote functi
   const config=JSON.parse(readFileSync(new URL("../mcp/config.json",import.meta.url),"utf8"));
   assert.equal(config.auth,"oauth");
   for(const entity of ["QuoteWorkers","QuoteRequests","QuoteMessages"]) assert.deepEqual(config.tools.entity_overrides[entity].operations,[]);
-  const tools=config.tools.functions.filter(t=>t.handler==="windowQuotes");
+  const tools=config.tools.functions.filter(t=>["windowQuotes","windowQuotesDraft"].includes(t.handler));
   assert.equal(tools.length,6);
+  assert.equal(tools.find(t=>t.name==="submit_window_takeoff").handler,"windowQuotesDraft");
   for(const tool of tools) {
     assert.ok(tool.input_schema.required.includes("action"));
     assert.equal(tool.input_schema.properties.action.enum.length,1);
