@@ -160,13 +160,13 @@ function QuoteForm({ quote, seed, preferenceUserId, busy, onSave, onCancel }) {
       </select></Field>
       <div className="rounded-lg border border-[#C3D4EE] bg-[#F6F8FC] p-3">
         <label className="flex min-h-11 cursor-pointer items-start gap-2 py-2 text-sm font-medium text-[#131A26]"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[#2A5EA8]" checked={useStandard} onChange={(e) => setUseStandard(e.target.checked)} disabled={busy} /><span>Use standard Studio nail-fin preferences</span></label>
-        <p className="ml-7 mt-1 text-xs leading-relaxed text-[#616D81]">Start with the Studio 1⅜-inch fin setback and compatible standard options for each verified window type. Your written request and schedule can override these preferences. Uncheck for a fully custom request.</p>
+        <p className="ml-7 mt-1 text-xs leading-relaxed text-[#616D81]">Start with the Studio 1⅜-inch fin setback and standard options for each window type. Your written request and schedule can override these preferences. Uncheck for a fully custom request.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <ProductChoice label="Window color" value={settings.color} choices={colorChoices} onChange={(color) => setSettings({ ...settings, color })} disabled={busy} />
         <ProductChoice label="Low-E glass" value={settings.glass} choices={glassChoices} onChange={(glass) => setSettings({ ...settings, glass })} disabled={busy} />
       </div>
-      <p className="text-xs leading-relaxed text-[#616D81]">These are editable starting preferences. Each window’s own specification takes priority. Automatic pricing is available for verified configurations; other sizes, products or options may need review.</p>
+      <p className="text-xs leading-relaxed text-[#616D81]">These are editable starting preferences. Each window’s own specification takes priority. AMSCO checks availability and pricing before a quote is marked Ready.</p>
     </div>
     <div className="rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#131A26]"><Settings2 size={15} />Quoting settings</div>
