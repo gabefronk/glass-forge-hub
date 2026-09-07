@@ -65,7 +65,7 @@ export function buildInvoicePdf(month, rows) {
   y += 96;
 
   const labels = ["INVOICE NUMBER", "INVOICE DATE", "SERVICE PERIOD", "PAYMENT TERMS", "DUE DATE"];
-  const values = [invoiceNum, invoiceDate, `${monthName} 1â€“${lastDay.getDate()}, ${year}`, "Net 30", dueDate];
+  const values = [invoiceNum, invoiceDate, `${monthName} 1–${lastDay.getDate()}, ${year}`, "Net 30", dueDate];
   const mw = width / 5;
   labels.forEach((label, i) => {
     const x = left + i * mw;
@@ -80,7 +80,7 @@ export function buildInvoicePdf(month, rows) {
   text("DESCRIPTION OF SERVICES", left + 6, y + 4, 9, true, NAVY);
   text(descriptionLines, left + 6, y + 17, 8.5);
   y += dh + 9;
-  text(`ITEMIZED JOB LOG â€“ ${monthName.toUpperCase()} ${year}`, left, y, 9, true, NAVY);
+  text(`ITEMIZED JOB LOG – ${monthName.toUpperCase()} ${year}`, left, y, 9, true, NAVY);
   y += 17;
   const header = () => {
     let x = left;
