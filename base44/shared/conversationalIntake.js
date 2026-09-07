@@ -45,7 +45,8 @@ export const CONVERSATIONAL_INTAKE_SCHEMA = {
   }
 };
 
-function assert(condition, message) { if (!condition) throw new Error(message); }
+class IntakeValidationError extends Error {}
+function assert(condition, message) { if (!condition) throw new IntakeValidationError(message); }
 function keys(value, allowed, label) {
   assert(object(value), label + ' must be an object');
   assert(Object.keys(value).every(key => allowed.includes(key)), label + ' contains unexpected fields');
@@ -175,11 +176,17 @@ function validateInterpretation(raw, q, context) {
 function assessment(q, status, summary, assumptions, questions, productReview) {
   return { version: VERSION, input_revision: q.input_revision, status, summary, assumptions, questions, product_review: productReview };
 }
-function unavailable(q) {
+function unavailable(q, failureReason) {
   const message = 'Your request is saved. I could not finish understanding it right now. Please try Start quote again; your notes and window details are still here.';
   return { ok: false, status: 'needs_details', routing: 'clarification', quote: clone(q), preview: clone(q.lines || []),
     issues: [{ code: 'intake_unavailable', path: 'conversation', message }], questions: [message], assistant_message: message,
-    intake_assessment: assessment(q, 'unavailable', 'Your request is saved; the AI review needs another attempt.', [], [], []) };
+    intake_assessment: { ...assessment(q, 'unavailable', 'Your request is saved; the AI review needs another attempt.', [], [], []), ...(failureReason ? { failure_reason: failureReason } : {}) } };
+}
+function safeFailure(error, stage) {
+  if (error instanceof IntakeValidationError) return { stage, code: 'validation_error', message: error.message };
+  if (error?.message === 'Intake timed out') return { stage, code: 'timeout' };
+  const status = Number(error?.response?.status ?? error?.status ?? error?.statusCode);
+  return { stage, code: Number.isInteger(status) && status >= 100 && status <= 599 ? 'http_' + status : 'unexpected_error' };
 }
 async function deadline(promise, milliseconds) {
   let timer;
@@ -190,13 +197,15 @@ async function deadline(promise, milliseconds) {
 export function createConversationalIntake({ invokeLLM, normalizeStructured, timeoutMs = 25000 } = {}) {
   assert(typeof invokeLLM === 'function' && typeof normalizeStructured === 'function', 'Conversational intake requires injected LLM and planner functions');
   return async function normalizeIntake(q, runtimeContext = {}) {
-    let interpretation;
+    let interpretation, stage = 'validation';
     try {
       const context = sourceContext(q);
       const prompt = promptFor(q, context);
+      stage = 'model_call';
       const raw = await deadline(Promise.resolve().then(() => invokeLLM({ prompt, response_json_schema: CONVERSATIONAL_INTAKE_SCHEMA, add_context_from_internet: false }, runtimeContext)), timeoutMs);
+      stage = 'validation';
       interpretation = validateInterpretation(raw, q, context);
-    } catch { return unavailable(q); }
+    } catch (error) { return unavailable(q, safeFailure(error, stage)); }
     const candidate = { ...clone(q), settings: interpretation.settings, lines: interpretation.lines };
     const normalized = await normalizeStructured(candidate);
     // A normalizer may deliberately hide prose while applying the existing profile.

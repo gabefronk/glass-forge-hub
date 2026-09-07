@@ -223,7 +223,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (["queued", "running"].includes(q.worker_status)) fail(409, "Wait for the current quote run before changing its inputs");
         if (q.conversion_token && q.conversion_expires_at > at()) fail(409, "The accepted quote is being linked to its job");
       };
-      const history = (q, reason) => [...(q.history || []), { revision: q.input_revision, recorded_at: at(), reason, settings: copy(q.settings), lines: copy(q.lines), result: copy(q.result), worker_status: q.worker_status }];
+      const history = (q, reason, details = {}) => [...(q.history || []), { revision: q.input_revision, recorded_at: at(), reason, settings: copy(q.settings), lines: copy(q.lines), result: copy(q.result), worker_status: q.worker_status, ...details }];
       const ensureMessage = async (q, message) => {
         // The embedded conversation is the atomic source of truth; this entity is a searchable projection.
         try {
@@ -320,7 +320,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (own(body, "lines")) patch.lines = validateLines(body.lines);
         if (own(body, "source")) patch.source = jsonValue(object(body.source, "source"), "source", 150000);
         if (!["title", "settings", "lines", "source"].some(k => own(body, k))) fail(400, "No changes supplied");
-        if (Object.entries(patch).some(([key, value]) => stable(value) !== stable(q[key]))) q = await cas(q, { ...patch, input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", history: history(q, "edited"), missing_details: [] });
+        if (Object.entries(patch).some(([key, value]) => stable(value) !== stable(q[key]))) q = await cas(q, { ...patch, input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", history: history(q, "edited", { schedule_changed: own(patch, "lines") && stable(patch.lines) !== stable(q.lines) }), missing_details: [] });
         output = { quote: publicQuote(q) };
       } else if (action === "queue") {
         let q = await getQuote(body.quote_id);
