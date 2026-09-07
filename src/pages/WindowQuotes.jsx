@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Send, PanelsTopLeft, Search, ArrowLeft, ArrowUpRight, CheckCircle2, Clock3, AlertCircle, Loader2, Settings2, ListChecks, MessageSquare, BriefcaseBusiness, FileText, RefreshCw } from "lucide-react";
@@ -10,6 +10,8 @@ import ConnectClaude from "@/components/window-quotes/ConnectClaude";
 import WindowQuoteResults from "@/components/window-quotes/WindowQuoteResults";
 import { normalizeLines, validateLines } from "@/components/window-quotes/takeoff";
 
+import { normalizeEasyRequest, STANDARD_STUDIO_PROFILE } from "../../base44/shared/easyRequest.js";
+
 const primaryClass = "inline-flex items-center justify-center gap-2 rounded-lg bg-[#2A5EA8] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#234F8E] disabled:cursor-not-allowed disabled:opacity-50";
 const statusInfo = {
   draft: { label: "Draft", color: "#616D81", bg: "#F6F8FC", text: "Send your request to the quoting agent when you’re ready. It will ask for any missing details." },
@@ -17,7 +19,7 @@ const statusInfo = {
   running: { label: "Quoting", color: "#1E4A85", bg: "#E7EEFA", text: "We’re building and checking your window quote." },
   needs_details: { label: "Needs details", color: "#8A5A10", bg: "#FCF5E9", text: "Reply to the questions below to continue, or update the schedule and send it back to quoting." },
   needs_sign_in: { label: "Needs sign-in", color: "#8A5A10", bg: "#FCF5E9", text: "Your request is saved. The account owner needs to reconnect the quoting browser before this quote can continue." },
-  failed: { label: "Needs attention", color: "#8A4038", bg: "#FBEDEA", text: "Your quote needs attention before it can be completed. Please retry or contact your quoting team." },
+  failed: { label: "Needs attention", color: "#8A4038", bg: "#FBEDEA", text: "Your quote needs attention before it can be completed. Your quoting team must check the saved work before continuing." },
   ready: { label: "Ready", color: "#276449", bg: "#EAF5EE", text: "Your quote is ready to be viewed." },
 };
 const uid = () => crypto.randomUUID();
@@ -65,14 +67,28 @@ function ProductChoice({ label, value, choices, onChange, disabled }) {
     {savedCustom && <option value="__saved_selection__">{productLabel(value, choices)}</option>}
   </select></Field>;
 }
-function QuoteForm({ quote, busy, onSave, onCancel }) {
-  const [title, setTitle] = useState(quote?.title || "");
-  const [message, setMessage] = useState(quote?.request_text || "");
-  const [settings, setSettings] = useState({ dealer: "", yard: "", gross_margin: "", color: "", glass: "", ...quote?.settings });
-  const [lines, setLines] = useState(quote?.lines || []);
-  const [source, setSource] = useState(quote?.source || null);
+function QuoteForm({ quote, seed, busy, onSave, onCancel }) {
+  const initial = quote || seed;
+  const [title, setTitle] = useState(initial?.title || "");
+  const [message, setMessage] = useState(initial?.request_text || "");
+  const [settings, setSettings] = useState({ dealer: "", yard: "", gross_margin: "", color: "", glass: "", ...initial?.settings });
+  const [lines, setLines] = useState(initial?.lines || []);
+  const [source, setSource] = useState(initial?.source || null);
   const [errors, setErrors] = useState([]);
   const requestID = useRef(uid());
+  const [useStandard, setUseStandard] = useState(initial?.source?.easy_request?.confirmed === true);
+  const [dimensionBasis, setDimensionBasis] = useState(initial?.source?.easy_request?.dimension_basis || "");
+  const requestSource = useMemo(() => ({ ...(source || {}), easy_request: {
+    profile_id: STANDARD_STUDIO_PROFILE.id, profile_revision: STANDARD_STUDIO_PROFILE.revision,
+    confirmed: useStandard, dimension_basis: dimensionBasis, units: "in"
+  } }), [source, useStandard, dimensionBasis]);
+  const normalizedSettings = useMemo(() => ({ ...settings, yard: String(settings.yard || "").trim(),
+    gross_margin: settings.gross_margin === "" || settings.gross_margin == null ? null : Number(settings.gross_margin)
+  }), [settings]);
+  const preview = useMemo(() => normalizeEasyRequest({
+    id: quote?.id || requestID.current, input_revision: quote?.input_revision || 1,
+    request_text: quote ? "" : message, settings: normalizedSettings, lines: normalizeLines(lines), source: requestSource
+  }), [quote?.id, quote?.input_revision, message, normalizedSettings, lines, requestSource]);
   const save = (queue) => {
     const issues = [...validateLines(lines)];
     const hasMargin = settings.gross_margin !== "" && settings.gross_margin !== null && settings.gross_margin !== undefined;
@@ -80,32 +96,44 @@ function QuoteForm({ quote, busy, onSave, onCancel }) {
     if (!quote && !message.trim() && !lines.length) issues.push("Describe your windows or add a window schedule.");
     if (issues.length) { setErrors(issues); return; }
     setErrors([]);
-    const normalizedSettings = { ...settings, yard: String(settings.yard || "").trim(), gross_margin: settings.gross_margin === "" || settings.gross_margin === null || settings.gross_margin === undefined ? null : Number(settings.gross_margin) };
-    onSave({ request_id: requestID.current, title: title.trim(), message: message.trim(), settings: normalizedSettings, lines: normalizeLines(lines), source }, queue);
+    onSave({ request_id: requestID.current, title: title.trim(), message: message.trim(), settings: normalizedSettings, lines: normalizeLines(lines), source: requestSource }, queue);
   };
   return <div className="space-y-5">
     <Field label="Request name (optional)"><input autoFocus className={inputClass} placeholder="e.g. Lakeview • Lot 216" maxLength={180} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} /></Field>
     <div className="space-y-4 rounded-xl border border-[#DDE3EC] p-4">
       <div className="flex items-center gap-2 text-sm font-semibold text-[#131A26]"><ListChecks size={16} />Quick request</div>
-      {!quote && <Field label="Notes — what would you like quoted?"><textarea className={inputClass + " min-h-28 resize-y"} placeholder="e.g. 4 single-hung windows, 36 × 60 inches. Add rooms, quantities, sizes and any special requirements." value={message} maxLength={18000} onChange={(e) => setMessage(e.target.value)} disabled={busy} /></Field>}
+      {!quote && <Field label="Notes — what would you like quoted?"><textarea className={inputClass + " min-h-28 resize-y"} placeholder="e.g. 2 3050 single hung and 1 3060 single hung" value={message} maxLength={18000} onChange={(e) => setMessage(e.target.value)} disabled={busy} /></Field>}
+      <Field label="Sizes in notes are"><select className={inputClass} value={dimensionBasis} onChange={(e) => setDimensionBasis(e.target.value)} disabled={busy}>
+        <option value="">Choose dimension basis…</option><option value="call">Call size — e.g. 3050 = 36 × 60 inches</option><option value="frame">Actual frame size — review required</option><option value="rough_opening">Rough opening — review required</option>
+      </select></Field>
+      <div className="rounded-lg border border-[#C3D4EE] bg-[#F6F8FC] p-3">
+        <label className="flex cursor-pointer items-start gap-2 text-sm font-medium text-[#131A26]"><input type="checkbox" className="mt-1 h-4 w-4 accent-[#2A5EA8]" checked={useStandard} onChange={(e) => setUseStandard(e.target.checked)} disabled={busy} /><span>Use the standard Studio Single Hung configuration</span></label>
+        <p className="ml-6 mt-2 text-xs leading-relaxed text-[#616D81]">{STANDARD_STUDIO_PROFILE.description}</p>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <ProductChoice label="Window color" value={settings.color} choices={colorChoices} onChange={(color) => setSettings({ ...settings, color })} disabled={busy} />
         <ProductChoice label="Low-E glass" value={settings.glass} choices={glassChoices} onChange={(glass) => setSettings({ ...settings, glass })} disabled={busy} />
       </div>
-      <p className="text-xs leading-relaxed text-[#616D81]">These choices apply to the package unless a window has its own specification. Describe any exceptions in your notes or schedule. Not sure? The quoting agent can help.</p>
+      <p className="text-xs leading-relaxed text-[#616D81]">White or Taupe, CozE Low-E and call sizes are supported for automatic Studio Single Hung quoting. Other products or special options stay here for review. A window’s own specification takes priority.</p>
     </div>
     <div className="rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#131A26]"><Settings2 size={15} />Quoting settings</div>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Dealer account"><select className={inputClass} value={settings.dealer} onChange={(e) => setSettings({ ...settings, dealer: e.target.value })} disabled={busy}><option value="">Choose account…</option><option value="BFS">BFS</option><option value="BTB">BTB / B2B</option></select></Field>
-        <Field label="Shipping yard"><input className={inputClass} placeholder="Exact AMSCO yard" value={settings.yard} onChange={(e) => setSettings({ ...settings, yard: e.target.value })} disabled={busy} /></Field>
+        <Field label="Shipping yard"><select className={inputClass} value={settings.yard} onChange={(e) => setSettings({ ...settings, yard: e.target.value })} disabled={busy}><option value="">Choose yard…</option><option value="BFS-UTAH DESIGN(11)">BFS — Utah Design (11)</option>{settings.yard && settings.yard !== "BFS-UTAH DESIGN(11)" && <option value={settings.yard}>{settings.yard}</option>}</select></Field>
         <Field label="Gross margin (%)"><input className={inputClass} type="number" min="0" max="99.9999" step="any" placeholder="Enter your margin" value={settings.gross_margin ?? ""} onChange={(e) => setSettings({ ...settings, gross_margin: e.target.value })} disabled={busy} /></Field>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-[#616D81]">Dealer and yard determine cost; gross margin sets the selling price. Add what you know. The quoting agent will ask for any missing settings.</p>
     </div>
     <TakeoffEditor lines={lines} onChange={setLines} source={source} onSourceChange={setSource} disabled={busy} />
+    {(message.trim() || lines.length > 0) && <div className="space-y-3 rounded-xl border border-[#DDE3EC] p-4" aria-label="Request preview">
+      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-[#131A26]">Check your windows</h3><span className="text-xs text-[#616D81]">{preview.preview.length} lines · {preview.preview.reduce((sum, line) => sum + (Number(line.qty) || 0), 0)} windows</span></div>
+      {preview.preview.map((line, index) => <div key={index} className="flex justify-between gap-3 rounded-lg bg-[#F6F8FC] p-3 text-sm"><div><span className="font-medium text-[#131A26]">{line.style || "Style needed"}</span><div className="mt-1 text-xs text-[#616D81]">{line.width} × {line.height} {line.units || "units needed"} · {line.dimension_basis?.replaceAll("_", " ") || "dimension basis needed"}{line.room ? " · " + line.room : ""}</div></div><span className="whitespace-nowrap font-semibold text-[#1E4A85]">Qty {line.qty}</span></div>)}
+      <p className={"text-xs leading-relaxed " + (preview.ok ? "text-[#276449]" : "text-[#8A5A10]")}>{preview.ok ? "Ready for automatic quoting when you send this request." : preview.routing === "review" ? "This request needs review before automatic quoting." : "You can send this request now. We’ll ask for the missing details."}</p>
+      {!preview.ok && <ul className="list-disc space-y-1 pl-4 text-xs text-[#616D81]">{preview.questions.slice(0, 6).map((question, index) => <li key={index}>{question}</li>)}</ul>}
+    </div>
     {errors.length > 0 && <div role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]"><ul className="list-disc space-y-1 pl-4">{errors.slice(0, 10).map((error) => <li key={error}>{error}</li>)}</ul></div>}
-    <div className="flex flex-wrap justify-end gap-2 border-t border-[#E9EDF4] pt-4"><button className={secondaryClass} onClick={onCancel} disabled={busy}>Cancel</button><button className={secondaryClass} onClick={() => save(false)} disabled={busy}>{quote ? "Save changes" : "Save draft"}</button><button className={primaryClass} onClick={() => save(true)} disabled={busy}>{busy ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}{quote ? "Save & start quote" : "Send to quoting agent"}</button></div>
+    <div className="flex flex-wrap justify-end gap-2 border-t border-[#E9EDF4] pt-4"><button className={secondaryClass} onClick={onCancel} disabled={busy}>Cancel</button><button className={secondaryClass} onClick={() => save(false)} disabled={busy}>{quote ? "Save changes" : "Save draft"}</button><button className={primaryClass} onClick={() => save(true)} disabled={busy}>{busy ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}{quote ? "Save & start quote" : "Send quote request"}</button></div>
   </div>;
 }
 function WonForm({ quote, busy, onSubmit, onCancel }) {
@@ -141,6 +169,7 @@ export default function WindowQuotes() {
   const client = useQueryClient();
   const [params, setParams] = useSearchParams();
   const selectedID = params.get("quote");
+  const [revisionSeed, setRevisionSeed] = useState(null);
   const [form, setForm] = useState(params.get("new") === "1" ? "new" : null);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("conversation");
@@ -157,6 +186,13 @@ export default function WindowQuotes() {
   const messages = detailQuery.data?.messages || [];
   const locked = ["queued", "running"].includes(quote?.worker_status) || quote?.sales_status === "won";
   const visible = quotes.filter((q) => `${q.title || ""} ${q.request_text || ""} ${q.result?.native_quote_number || ""}`.toLowerCase().includes(search.toLowerCase()));
+  const serviceStatus = listQuery.isPending ? "Checking service…" : listQuery.isError || worker?.configured === undefined ? "Status unavailable"
+    : !worker.configured ? "Not configured" : !worker.online ? "Quoting computer offline — requests stay queued"
+    : worker.runner_status === "running" ? "Building a quote"
+    : worker.runner_status === "attention" ? "Needs attention — pickup paused"
+    : worker.runner_status === "stopping" ? "Quoting computer stopping"
+    : worker.browser_state === "needs_sign_in" ? "Account owner needs to sign in"
+    : worker.browser_authenticated === true ? "Ready — automatic pickup is on" : "Checking quoting browser…";
   const activeStatus = statusInfo[quote?.worker_status] || statusInfo.draft;
   const refresh = async () => { await client.invalidateQueries({ queryKey: ["windowQuotes"] }); };
   useEffect(() => { setMessage(""); messageID.current = null; setError(""); }, [selectedID]);
@@ -195,10 +231,10 @@ export default function WindowQuotes() {
   return <div className="min-h-screen px-[18px] py-5 min-[700px]:px-[26px]" style={{ background: C.pageBg }}>
     <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div><div className="mono-label-sm mb-1.5">Glass Forge · Sales</div><h1 className="font-heading text-[28px] font-semibold tracking-tight text-[#131A26]">Window Quotes</h1><p className="mt-1 text-sm text-[#616D81]">From window takeoff to verified AMSCO quote.</p></div>
-      <div className="flex flex-wrap gap-2"><ConnectClaude /><button className={primaryClass} onClick={() => { setForm("new"); setError(""); }}><Plus size={16} />New request</button></div>
+      <div className="flex flex-wrap gap-2"><ConnectClaude /><button className={primaryClass} onClick={() => { setRevisionSeed(null); setForm("new"); setError(""); }}><Plus size={16} />New request</button></div>
     </header>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#DDE3EC] bg-white px-4 py-3">
-      <div className="flex min-w-0 items-center gap-2.5"><MessageSquare size={17} className="shrink-0 text-[#616D81]" /><div className="text-xs text-[#616D81]"><span className="font-semibold text-[#131A26]">{worker?.name || "Window quoting"}</span><span className="ml-2">{listQuery.isPending ? "Checking service…" : listQuery.isError || worker?.configured === undefined ? "Status unavailable" : !worker.configured ? "Not configured" : worker.online ? "Recent runner check-in" : "No recent runner check-in"}</span></div></div>
+      <div className="flex min-w-0 items-center gap-2.5"><MessageSquare size={17} className="shrink-0 text-[#616D81]" /><div className="text-xs text-[#616D81]"><span className="font-semibold text-[#131A26]">{worker?.name || "Window quoting"}</span><span className="ml-2">{serviceStatus}</span></div></div>
       <button className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[#1E4A85]" onClick={refresh} disabled={listQuery.isFetching}><RefreshCw size={13} className={listQuery.isFetching ? "animate-spin" : ""} />Refresh</button>
     </div>
     {(error || listQuery.isError || (selectedID && detailQuery.isError)) && <div role="alert" className="mb-4 rounded-xl border border-[#EFD2CA] bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error || errorText(detailQuery.error || listQuery.error)}</div>}
@@ -210,10 +246,14 @@ export default function WindowQuotes() {
         </div>
       </aside>
       <section className={`min-w-0 overflow-hidden rounded-2xl border border-[#DDE3EC] bg-white card-shadow ${!selectedID ? "hidden min-[1050px]:block" : ""}`}>
-        {!selectedID ? <div className="flex min-h-[510px] flex-col items-center justify-center px-6 py-12 text-center"><div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#C3D4EE] bg-[#E7EEFA]"><PanelsTopLeft size={28} className="text-[#2A5EA8]" /></div><h2 className="font-heading text-xl font-semibold text-[#131A26]">Your next window package starts here</h2><p className="mt-3 max-w-md text-sm leading-relaxed text-[#616D81]">Describe a package or upload a checked CSV / JSON takeoff. Send it to the quoting agent, which will ask for any missing details.</p><button className={primaryClass + " mt-6"} onClick={() => setForm("new")}><Plus size={15} />Start a request</button><p className="mt-4 text-xs text-[#77839A]">A job is created only when you mark a verified quote won.</p></div> : detailQuery.isPending ? <div className="flex min-h-[400px] items-center justify-center gap-2 text-sm text-[#616D81]"><Loader2 size={18} className="animate-spin" />Loading request…</div> : quote ? <>
+        {!selectedID ? <div className="flex min-h-[510px] flex-col items-center justify-center px-6 py-12 text-center"><div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#C3D4EE] bg-[#E7EEFA]"><PanelsTopLeft size={28} className="text-[#2A5EA8]" /></div><h2 className="font-heading text-xl font-semibold text-[#131A26]">Your next window package starts here</h2><p className="mt-3 max-w-md text-sm leading-relaxed text-[#616D81]">Describe a package or upload a checked CSV / JSON takeoff. Send it to the quoting agent, which will ask for any missing details.</p><button className={primaryClass + " mt-6"} onClick={() => { setRevisionSeed(null); setForm("new"); }}><Plus size={15} />Start a request</button><p className="mt-4 text-xs text-[#77839A]">A job is created only when you mark a verified quote won.</p></div> : detailQuery.isPending ? <div className="flex min-h-[400px] items-center justify-center gap-2 text-sm text-[#616D81]"><Loader2 size={18} className="animate-spin" />Loading request…</div> : quote ? <>
           <div className="border-b border-[#E9EDF4] px-4 py-4 sm:px-5">
             <button onClick={() => setParams({})} className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-[#1E4A85] min-[1050px]:hidden"><ArrowLeft size={13} />All requests</button>
-            <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="mb-2 flex flex-wrap items-center gap-2"><StatusBadge quote={quote} /><span className="text-[11px] text-[#77839A]">Revision {quote.input_revision || 1}</span></div><h2 className="break-words text-lg font-semibold text-[#131A26]">{quote.title || "Untitled window request"}</h2></div><div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => setForm("edit")} disabled={locked || busy}><Settings2 size={14} /><span>Details</span></button>{!locked && quote.worker_status !== "ready" && <button className={primaryClass} onClick={queue} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{["failed", "needs_sign_in"].includes(quote.worker_status) ? "Retry quote" : "Start quote"}</button>}</div></div>
+            <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="mb-2 flex flex-wrap items-center gap-2"><StatusBadge quote={quote} /><span className="text-[11px] text-[#77839A]">Revision {quote.input_revision || 1}</span></div><h2 className="break-words text-lg font-semibold text-[#131A26]">{quote.title || "Untitled window request"}</h2></div><div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => {
+              if (quote.worker_status === "ready") {
+                setRevisionSeed({ title: quote.title, request_text: "", settings: quote.settings, lines: quote.lines, source: { ...quote.source, revision_of: quote.id } });setForm("new");
+              } else setForm("edit");
+            }} disabled={locked || busy}><Settings2 size={14} /><span>{quote.worker_status === "ready" ? "Revise quote" : "Details"}</span></button>{!locked && !["ready", "failed"].includes(quote.worker_status) && <button className={primaryClass} onClick={queue} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{quote.worker_status === "needs_sign_in" ? "Retry after sign-in" : "Start quote"}</button>}</div></div>
             {quote.worker_status !== "ready" && <div className="mt-4 flex items-start gap-2 rounded-lg p-3 text-xs leading-relaxed" style={{ background: activeStatus.bg, color: activeStatus.color }}>{quote.worker_status === "ready" ? <CheckCircle2 size={15} className="shrink-0" /> : ["failed", "needs_sign_in", "needs_details"].includes(quote.worker_status) ? <AlertCircle size={15} className="shrink-0" /> : <Clock3 size={15} className="shrink-0" />}<span>{activeStatus.text}</span></div>}
             <div className="mt-4 flex gap-1 overflow-x-auto" role="tablist" aria-label="Quote sections">{[["conversation", "Conversation", MessageSquare], ["schedule", "Schedule", ListChecks], ["result", "Quote result", FileText]].map(([key, label, Icon]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${tab === key ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#616D81] hover:bg-[#F6F8FC]"}`}><Icon size={14} />{label}{key === "result" && quote.worker_status === "ready" && <span className="h-1.5 w-1.5 rounded-full bg-[#276449]" />}</button>)}</div>
           </div>
@@ -222,7 +262,7 @@ export default function WindowQuotes() {
               {!messages.length && <div className="rounded-xl bg-[#F6F8FC] p-4 text-sm leading-relaxed text-[#535E72]">{quote.request_text || "Your schedule is saved. Send it to the quoting agent to continue."}</div>}
               {messages.map((item) => <article key={item.id || item.client_message_id} className={`flex ${item.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[92%] rounded-2xl px-4 py-3 sm:max-w-[85%] ${item.role === "user" ? "rounded-br-md bg-[#E7EEFA]" : "rounded-bl-md border border-[#DDE3EC] bg-[#F6F8FC]"}`}><div className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-[#77839A]"><span>{item.role === "user" ? "You" : item.role === "system" ? "Quote update" : "Quoting assistant"}</span><span className="font-normal">{date(item.created_date)}</span></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#131A26]">{item.content}</p>{item.kind === "ready" && <button type="button" className={primaryClass + " mt-3"} onClick={() => setTab("result")}><FileText size={15} />View quote</button>}</div></article>)}
             </div>
-            {quote.sales_status !== "won" && <form onSubmit={send} className="border-t border-[#E9EDF4] bg-[#F6F8FC] p-4">
+            {!["ready", "failed"].includes(quote.worker_status) && quote.sales_status !== "won" && <form onSubmit={send} className="border-t border-[#E9EDF4] bg-[#F6F8FC] p-4">
               <label htmlFor="quote-message" className="sr-only">Reply to this quote request</label><div className="flex items-end gap-2"><textarea id="quote-message" className={inputClass + " min-h-[76px] resize-y"} value={message} maxLength={18000} onChange={(e) => { setMessage(e.target.value); messageID.current = null; }} placeholder={locked ? quote.sales_status === "won" ? "Accepted revision — start a new request for changes." : "The request is being quoted. Replies reopen when input is needed." : "Add details or answer a question…"} disabled={locked || busy} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(e); }} /><button type="submit" aria-label="Send message" className={primaryClass + " h-10 px-3"} disabled={!message.trim() || locked || busy}>{busy ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}</button></div><p className="mt-2 text-[11px] text-[#77839A]">{locked ? "We’ll let you know here if we need a detail or your quote is ready." : "Sending your reply submits the updated request to the quoting service."}</p>
             </form>}
           </> : <div className="p-4 sm:p-5">{tab === "schedule" ? <ScheduleView quote={quote} /> : <WindowQuoteResults quote={quote} onWon={() => setWonOpen(true)} busy={busy} />}</div>}
@@ -230,8 +270,7 @@ export default function WindowQuotes() {
         </> : <div className="p-10 text-center text-sm text-[#616D81]">This request is unavailable. Choose another request or refresh.</div>}
       </section>
     </div>
-    <Dialog open={!!form} onOpenChange={(open) => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>{form === "edit" ? "Request details" : "New window quote"}</DialogTitle><DialogDescription>{form === "edit" ? "Changes create a new request revision. Previous verified results are kept in history." : "Add your notes, choose color and Low-E glass, then save or send your request."}</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{form && <QuoteForm key={form === "edit" ? selectedID : "new"} quote={form === "edit" ? quote : null} busy={busy} onSave={saveForm} onCancel={() => setForm(null)} />}</DialogContent></Dialog>
+    <Dialog open={!!form} onOpenChange={(open) => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>{form === "edit" ? "Request details" : revisionSeed ? "Revise window quote" : "New window quote"}</DialogTitle><DialogDescription>{form === "edit" ? "Changes create a new request revision. Previous verified results are kept in history." : revisionSeed ? "This creates a fresh request and AMSCO quote. The previous verified quote stays unchanged." : "Add your notes, choose your options, then check the window preview and send."}</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{form && <QuoteForm key={form === "edit" ? selectedID : "new"} quote={form === "edit" ? quote : null} seed={form === "new" ? revisionSeed : null} busy={busy} onSave={saveForm} onCancel={() => setForm(null)} />}</DialogContent></Dialog>
     <Dialog open={wonOpen} onOpenChange={(open) => { if (!busy) setWonOpen(open); }}><DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>Accept quote & create job</DialogTitle><DialogDescription>Keep an accepted snapshot of this quote revision.</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{wonOpen && quote && <WonForm quote={quote} busy={busy} onSubmit={convert} onCancel={() => setWonOpen(false)} />}</DialogContent></Dialog>
   </div>;
 }
-
