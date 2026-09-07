@@ -1,0 +1,31 @@
+{
+  "id": "scripted-runner-benchmark-20260906",
+  "input_revision": 1,
+  "title": "SCRIPTED RUNNER TEST — Studio 3050 and 3060",
+  "settings": { "dealer": "BFS", "yard": "BFS-UTAH DESIGN(11)", "gross_margin": 29.71 },
+  "lines": [
+    {
+      "mark": "SCRIPTED-3050", "style": "Single Hung", "width": 36, "height": 60,
+      "dimension_basis": "call", "units": "in", "qty": 1, "room": "SCRIPTED TEST 3050",
+      "options": {
+        "series": "Studio 1 3/8 inch Fin Setback", "unit_type": "Complete Unit",
+        "color": "Taupe", "glass": "CozE (LowE)", "glass_thickness": "SS over SS",
+        "glazing_method": "3/4 inch Insulated Glass", "tempered": false, "argon": false,
+        "super_spacer": false, "capillary_tubes": false, "grilles": "None",
+        "hardware": "Cam Latch, Taupe", "screen": "Taupe", "elevation": "2501 to 6500", "number_wide": 1
+      }
+    },
+    {
+      "mark": "SCRIPTED-3060", "style": "Single Hung", "width": 36, "height": 72,
+      "dimension_basis": "call", "units": "in", "qty": 1, "room": "SCRIPTED TEST 3060",
+      "options": {
+        "series": "Studio 1 3/8 inch Fin Setback", "unit_type": "Complete Unit",
+        "color": "Taupe", "glass": "CozE (LowE)", "glass_thickness": "SS over SS",
+        "glazing_method": "3/4 inch Insulated Glass", "tempered": false, "argon": false,
+        "super_spacer": false, "capillary_tubes": false, "grilles": "None",
+        "hardware": "Cam Latch, Taupe", "screen": "Taupe", "elevation": "2501 to 6500", "number_wide": 1
+      }
+    }
+  ],
+  "conversation": [{ "role": "user", "content": "Authorized synthetic two-window benchmark. Use the explicit test specifications and margin above. Build a fresh native draft; do not copy an old quote, order, or mark won." }]
+}
