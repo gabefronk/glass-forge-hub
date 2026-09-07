@@ -2,71 +2,23 @@
   "name": "WindowQuoteRunnerConfig",
   "type": "object",
   "properties": {
-    "config_key": {
-      "type": "string",
-      "description": "Fixed private singleton key: amsco-scripted-pilot-v1."
-    },
-    "config_revision": {
-      "type": "integer",
-      "default": 1
-    },
-    "enabled": {
-      "type": "boolean",
-      "default": false
-    },
-    "allow": {
-      "type": "object",
-      "description": "Exactly one quote ID, request ID, input revision, requester, BFS dealer and shipping yard."
-    },
-    "worker_id": {
-      "type": "string"
-    },
-    "worker_key_hash": {
-      "type": "string",
-      "description": "SHA-256 lowercase hex of the separately protected pairing key; never a raw key."
-    },
-    "browser_slot_id": {
-      "type": "string"
-    },
-    "expected_plan_hash": {
-      "type": "string",
-      "description": "SHA-256 of the exact approved canonical normalized plan."
-    },
-    "lease_ms": {
-      "type": "integer",
-      "default": 600000
-    }
+    "config_key": { "type": "string", "description": "Fixed private singleton key: amsco-scripted-pilot-v1." },
+    "config_revision": { "type": "integer", "default": 1 },
+    "enabled": { "type": "boolean", "default": false },
+    "mode": { "type": "string", "enum": ["pilot", "queue"], "default": "pilot" },
+    "queue_allow": { "type": "object", "description": "Queue owner, BFS dealer, supported shipping yard and immutable creation-date cutover. Set explicitly for new-request rollout." },
+    "allow": { "type": "object", "description": "Exactly one quote ID, request ID, input revision, requester, BFS dealer and shipping yard." },
+    "worker_id": { "type": "string" },
+    "worker_key_hash": { "type": "string", "description": "SHA-256 lowercase hex of the separately protected pairing key; never a raw key." },
+    "browser_slot_id": { "type": "string" },
+    "expected_plan_hash": { "type": "string", "description": "SHA-256 of the exact approved canonical normalized plan." },
+    "lease_ms": { "type": "integer", "default": 600000 }
   },
-  "required": [
-    "config_key",
-    "config_revision",
-    "enabled",
-    "allow",
-    "worker_id",
-    "worker_key_hash",
-    "browser_slot_id",
-    "expected_plan_hash"
-  ],
+  "required": ["config_key", "config_revision", "enabled", "worker_id", "worker_key_hash", "browser_slot_id"],
   "rls": {
-    "create": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
-    "read": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
-    "update": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
-    "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
-    }
+    "create": { "user_condition": { "role": "admin" } },
+    "read": { "user_condition": { "role": "admin" } },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }

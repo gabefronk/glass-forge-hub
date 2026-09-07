@@ -41,6 +41,10 @@
     "active_quote_id": {
       "type": "string",
       "default": ""
+    },
+    "runner_presence": {
+      "type": "object",
+      "description": "Private authenticated runner check-in. Server timestamps, reported browser state and bounded attention identifiers; never credentials or URLs."
     }
   },
   "required": [
