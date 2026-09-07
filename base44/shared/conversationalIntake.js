@@ -1,6 +1,6 @@
 // Language understanding proposes inputs; the existing planner remains the
 // authority for product support, pricing, queueing and verified results.
-const VERSION = 7;
+const VERSION = 8;
 const LIMITS = { lines: 200, text: 70000, output: 160000 };
 const clone = value => structuredClone(value);
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -88,6 +88,78 @@ function sourceContext(q) {
   return { conversation, activeUser, existing, editedThrough };
 }
 const knownBfsYard = value => String(value || '').toLowerCase().replace(/\s+/g, '') === 'bfs-utahdesign(11)';
+const standardConfirmed = q => q.source?.easy_request?.confirmed === true && q.source.easy_request.profile_id === 'studio-sh-standard' && q.source.easy_request.profile_revision === 1;
+const tradePattern = /\b([1-9])([0-9])([1-9])([0-9])\b/g;
+const basisMention = /\b(?:call\s+(?:sizes?|dimensions)|frame\s+(?:sizes?|dimensions|measurements)|rough[ -]?openings?|actual\s+(?:frame\s+)?(?:sizes?|dimensions|measurements))\b/i;
+const uncertainty = /\b(?:not sure|unsure|uncertain|unknown|undecided|haven't decided|have not decided|don't know|do not know|confirm|check first|ask me|do not assume|don't assume)\b/i;
+const finMention = /\b(?:fins?|finless|retrofit|block\s+frame|installation\s+(?:style|series))\b/i;
+const coatingMention = /\b(?:coze|low[ -]?e|clear\s+(?:glass|coating)|glass\s+(?:coating|type|option|selection)|coating|tinted|tint|solarban|sungate|cardinal)\b/i;
+function lineFamilyPattern(line) {
+  return /single\s*hung/i.test(line.style || '') ? /\b(?:single[ -]?(?:hung|hoang)|sh)\b/i :
+    /picture|fixed/i.test(line.style || '') ? /\b(?:picture|fixed|direct[ -]?set)\b/i : /slider/i.test(line.style || '') ? /\b(?:slider|sliding|xo)\b/i : null;
+}
+function tradeSources(line, excerpts) {
+  const family = lineFamilyPattern(line);
+  const found = [];
+  for (const excerpt of excerpts) {
+    const matches = [...excerpt.matchAll(tradePattern)];
+    for (const [index, match] of matches.entries()) {
+      const segment = excerpt.slice(match.index, matches[index + 1]?.index ?? excerpt.length);
+      // Link a code to its own window clause, or a citation consisting of the
+      // size code alone. A different window elsewhere is not sizing evidence.
+      if (!(family?.test(segment) || norm(excerpt) === match[0])) continue;
+      found.push({ code: match[0], width: Number(match[1]) * 12 + Number(match[2]), height: Number(match[3]) * 12 + Number(match[4]), text: segment });
+    }
+  }
+  return [...new Map(found.map(item => [item.code + ':' + norm(item.text), item])).values()];
+}
+function applyStandardPreferences(interpretation, q, context) {
+  if (!standardConfirmed(q)) return;
+  const userText = context.activeUser.map(item => item.content).join('\n');
+  const requirements = interpretation.unresolved.join('\n');
+  const combined = userText + '\n' + requirements;
+  const defaults = [];
+  const lines = interpretation.lines, settings = interpretation.settings;
+  const uncertainTopic = pattern => combined.split(/[.!?\n]+/).some(part => uncertainty.test(part) && pattern.test(part));
+  const noAssumptions = /\b(?:do not|don't|never)\s+(?:assume|use defaults|guess)\b/i.test(combined);
+  const coatingSpecified = coatingMention.test(combined) || uncertainTopic(/\bglass\b/i);
+  // This is a quoting preference only. Explicit coatings and uncertainty remain
+  // untouched, including when a model failed to represent them in its output.
+  if (!present(settings.glass) && !coatingSpecified && !noAssumptions && lines.some(line => !present(line.options?.glass))) {
+    settings.glass = 'CozE (LowE)'; defaults.push('CozE LowE glass');
+  }
+  for (const line of lines) {
+    const excerpts = (line.source_reference?.intake_source_quotes || []).filter(value => typeof value === 'string' && norm(userText).includes(norm(value)));
+    const records = tradeSources(line, [...excerpts, ...context.activeUser.map(item => item.content)]);
+    const matched = records.filter(item => item.width === line.width && item.height === line.height);
+    const basisBlocked = basisMention.test(combined) || uncertainTopic(/\b(?:sizes?|measurements?|dimensions?|basis)\b/i) || /\b(?:not|no|aren't|are not)\s+call\b/i.test(combined);
+    if (!present(line.dimension_basis) && matched.length && !basisBlocked && !noAssumptions) {
+      line.dimension_basis = 'call'; defaults.push('call sizes for ' + [...new Set(matched.map(item => item.code))].join('/'));
+    }
+    if (!/slider|picture|fixed/i.test(line.style || '')) continue;
+    line.options ||= {};
+    // An unscoped fin note may apply to every window, even when the model cites
+    // only one line for it. Preserve the omission for clarification instead of
+    // letting a local clause silently override a shared installation request.
+    if (![line.options.fin, line.options.series, settings.fin, settings.series].some(present) &&
+      !finMention.test(combined) && !noAssumptions) {
+      line.options.fin = 'nail fin'; defaults.push('standard nail fin where omitted');
+    }
+    // These two selectors come from the confirmed standard recipe. The actual
+    // thickness, glazing and spacers still require a verified native profile.
+    if (!present(line.options.tempered) && !present(settings.tempered) && !/\b(?:temper(?:ed|ing)?|safety\s+glass)\b/i.test(combined) && !noAssumptions) {
+      line.options.tempered = false; defaults.push('non-tempered glass where omitted');
+    }
+    if (!present(line.options.patterned_glass) && !present(settings.patterned_glass) && !/\b(?:obscure|privacy|pattern(?:ed)?|frosted|sandblast|rain|reeded)\b/i.test(combined) && !noAssumptions) {
+      line.options.patterned_glass = 'None'; defaults.push('no privacy texture where omitted');
+    }
+  }
+  if (defaults.length) interpretation.assumptions.push('For this standard quote I used ' + [...new Set(defaults)].join('; ') + '. You can change these in Details.');
+  if (coatingSpecified && lines.some(line => !present(line.options?.glass) && !present(settings.glass))) {
+    interpretation.clarification.push('Which glass coating should I use? I kept your glass notes for confirmation.');
+  }
+  interpretation.summary = customerSummary(interpretation.summary, lines, settings);
+}
 function withKnownSelectedDealer(q) {
   const easy = q.source?.easy_request;
   if (present(q.settings?.dealer) || easy?.confirmed !== true || easy.profile_id !== 'studio-sh-standard' || easy.profile_revision !== 1) return q;
@@ -109,10 +181,10 @@ If the latest user message has an older revision than the current revision, the 
 prior_unresolved_requirements MUST remain unresolved unless the latest user reply explicitly removes or replaces that requirement. To resolve one, return resolved_requirements with detail copied EXACTLY from that list and source_quote citing the latest explicit user correction. If that list is empty, return resolved_requirements: []; apply the customer's correction to the proposed lines instead. A correction can be valid even when no requirement was previously stored in this list. A title, margin, yard or profile edit, silence, or 'do your best' never resolves a product requirement. Prior line_provenance identifies recipe-derived defaults; those are not explicit custom choices and must be recalculated when frame color changes. Preserve explicit contrasting options and ask if a global correction conflicts with them.
 Return ALL current window lines with stable line_id values from current_lines. Use new-1, new-2, etc. for additions. Never drop an existing line: explicit deletions go in removed_lines with an exact quote from the latest user reply. Do not merge windows with different glass, operation, fin or other specifications.
 Preserve the actual requested products, including XO/XOX sliders, picture/fixed windows, flush fin, nail fin, tempered/obscure glass and any unusual requirement. Never convert them to Single Hung merely to pass automation. If a CUSTOMER SPECIFICATION does not fit options, include it in unresolved_requirements and explain it plainly. No silent omissions. unresolved_requirements must NEVER contain execution-capability notices such as 'XO sliders are not supported by the automated planner'; the application's planner handles those notices itself. A slider or picture already represented as a schedule line is not an unrepresented requirement.
-Use style 'Studio XO Slider' for an explicitly requested XO slider and 'Studio Picture' for a rectangular picture/fixed window. Preserve XO in options.operation and explicit fin choices in options.fin. Do not infer XO from a generic slider or silently change XOX/OX to XO. Glass coating and privacy texture are separate: options.glass stores CozE (LowE), Clear, or another explicitly requested coating; options.patterned_glass stores Obscure, None, or the requested pattern. 'Standard obscure glass' means patterned_glass: 'Obscure', not a replacement for the selected CozE (LowE) coating. Tempered is a separate boolean and must remain true when requested. Do not interpret 'standard' as permission to select an unrequested pattern, thickness, fin, or safety specification.
+Use style 'Studio XO Slider' for an explicitly requested XO slider and 'Studio Picture' for a rectangular picture/fixed window. Preserve XO in options.operation and explicit fin choices in options.fin. Do not infer XO from a generic slider or silently change XOX/OX to XO. Glass coating and privacy texture are separate: options.glass stores CozE (LowE), Clear, or another explicitly requested coating; options.patterned_glass stores Obscure, None, or the requested pattern. 'Standard obscure glass' means patterned_glass: 'Obscure', not a replacement for the selected CozE (LowE) coating. Tempered is a separate boolean and must remain true when requested. Preserve explicit patterns, thickness, fin and safety specifications. Leave omitted routine options absent for the application's confirmed standard preferences.
 A correction such as 'no obscure glass needed, just regular glass' removes the privacy texture: use patterned_glass: 'None'. Keep the separately selected CozE (LowE) coating and any tempered requirement unless the customer explicitly changes those too. 'Regular glass' in this correction does not mean 'no LowE' or 'not tempered'. Describe it as 'regular glass (no privacy texture), with the selected CozE LowE coating', not as 'clear glass', which can imply a different coating. Apply the correction to the affected window lines even when those lines have not been saved yet.
-Normalize explicit feet/inches arithmetic into inches (8 feet x 6 feet is 96 x 72). Four-digit trade codes such as 5050 mean 60 x 60 inches; describe that interpretation in assumptions. Physical size units and trade codes alone do not establish dimension basis: omit dimension_basis unless the customer selected or stated call/frame/rough opening. Preserve an explicit basis even when the size is written as a trade code. Do not invent dimensions, quantity, opening direction, color, account, yard or margin.
-The selected Studio standard and current account settings carry the customer's existing routine preferences. Product-specific defaults are applied by the application only after their compatibility has been verified for the requested window family. Do not copy Single Hung hardware, screens, thickness or glazing choices into sliders or picture windows yourself. A generic 'do your best' does not permit replacing requested products, glass, safety requirements, fin choices, or unknown dimensions. Do not fill defaults yourself.
+Normalize explicit feet/inches arithmetic into inches (8 feet x 6 feet is 96 x 72). Four-digit trade codes such as 5050 mean 60 x 60 inches; describe that interpretation in assumptions. For the confirmed Studio standard flow, the application treats a trade code unambiguously linked to a window as an editable call-size quoting assumption when no basis or contrary instruction was supplied. Leave missing dimension_basis for the application to set; ordinary numeric dimensions alone still require a basis. Preserve an explicit basis even when the size is written as a trade code. Do not invent dimensions, quantity, opening direction, color, account, yard or margin.
+The selected Studio standard and current account settings carry the customer's existing routine preferences. Product-specific defaults are applied by the application only after their compatibility has been verified for the requested window family. Do not copy Single Hung hardware, screens, thickness or glazing choices into sliders or picture windows yourself. A generic 'do your best' does not permit replacing requested products, glass, safety requirements, fin choices, or unknown dimensions. Do not fill defaults yourself. When confirmed_profile is confirmed studio-sh-standard revision 1, the application supplies omitted nail fin, CozE LowE coating, and the recipe's omitted non-tempered/no-privacy selectors unless customer notes say otherwise or express uncertainty. Do not ask the customer to reconfirm these routine omissions. Their explicit settings and corrections always take precedence. Do not ask whether an unambiguously linked trade code is call size in that standard flow unless the customer gives a contrary instruction or expresses uncertainty.
 Options must contain primitive values with correct types (tempered true/false, number_wide number). Omit unknown fields entirely; never use zero, false or another placeholder for unknowns. Cite exact short source_quotes from user-authored messages or current structured field values for each line. Assistant questions may establish context but cannot be cited as customer approval. Existing line changes/deletions must cite the latest user reply. Do not repeat or embellish quoted facts.
 settings_updates is only for explicitly stated customer settings, each with an exact user source_quote. Encode value as a string, including numeric margin (for example "25"). Existing dealer, yard and margin are preserved by the application; ask about conflicts rather than overriding them. A clear latest color/glass/patterned_glass correction may update that selection. When the user clearly changes the color, coating or privacy texture for all windows, also update every affected line's corresponding option to the same choice and cite that latest correction; do not leave stale copies of the old global choice on individual lines. Global obscure/privacy-glass requests update patterned_glass, keeping the separately selected coating in glass. Preserve intentionally different exceptions and explicit contrasting hardware/screens, or ask if the intended scope is ambiguous. Do not infer dealer, yard or margin from a title or reference. Prefer per-line overrides when only one line changes.
 When current_settings identifies dealer BFS and yard BFS-UTAH DESIGN (11), the configured quoting account is already established. No separate BFS account number, account ID, or dealer account number is needed; do not ask for one. Still flag a genuine conflict if the customer explicitly requests a different dealer or yard.
@@ -269,6 +341,10 @@ function validateInterpretation(raw, q, context) {
     if (!present(line.dimension_basis) && ['call', 'frame', 'rough_opening'].includes(q.source?.easy_request?.dimension_basis)) line.dimension_basis = q.source.easy_request.dimension_basis;
     line.source_reference = { ...(old?.source_reference || {}), intake_source_quotes: quotes };
     separateGlassPattern(line, assumptions, conflicts);
+    const linkedCodes = tradeSources(line, quotes);
+    if (!old && new Set(linkedCodes.map(item => item.width + ':' + item.height)).size === 1 && present(line.width) && present(line.height)) {
+      assert(linkedCodes.some(item => item.width === line.width && item.height === line.height), 'AI dimensions disagree with the cited trade size', 'lines[' + lines.length + '].width');
+    }
     recordTradeSizeInterpretation(line, quotes, assumptions);
     lines.push(line);
   }
@@ -382,6 +458,7 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
       const raw = await deadline(Promise.resolve().then(() => invokeLLM({ prompt, response_json_schema: CONVERSATIONAL_INTAKE_SCHEMA, add_context_from_internet: false }, runtimeContext)), timeoutMs);
       stage = 'validation';
       interpretation = validateInterpretation(raw, input, context);
+      applyStandardPreferences(interpretation, input, context);
       if (input !== q) interpretation.assumptions.push('I used the BFS account identified by your selected BFS-UTAH DESIGN (11) yard.');
     } catch (error) { return unavailable(q, safeFailure(error, stage)); }
     const candidate = { ...clone(q), settings: interpretation.settings, lines: interpretation.lines };
@@ -429,6 +506,14 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
     const configuredBfsAccount = normalizedQuote.settings?.dealer === 'BFS' && knownBfsYard(normalizedQuote.settings?.yard);
     const redundantAccountNumber = question => configuredBfsAccount && /\b(?:account|dealer)\s+(?:number|no\.?|id|identifier)\b|\baccount\s*#/i.test(question) &&
       !/\b(?:BTB|different dealer|other dealer|instead|conflict)\b/i.test(question);
+    const needsCoating = normalizedQuote.lines.some(line => !present(line.options?.glass) && !present(normalizedQuote.settings?.glass));
+    const resolvedRoutineQuestion = question => {
+      if (/\b(?:conflict|contradict|different|instead|uncertain|unsure)\b/i.test(question)) return false;
+      const basis = basisQuestion.test(question), fin = /\b(?:fin|installation style|installation series)\b/i.test(question);
+      const coating = /\b(?:coze|low[ -]?e|coating|(?:which|what)(?:\s+type\s+of)?\s+glass|glass\s+(?:type|option|selection))\b/i.test(question);
+      if (!(basis || fin || coating) || /\b(?:tempered|safety|obscure|privacy|pattern|tint|quantity|color|width|height|room)\b/i.test(question)) return false;
+      return (!basis || !needsBasis) && (!fin || !needsFin.length) && (!coating || !needsCoating);
+    };
     const essentialQuestions = [
       ...nativeConstraints.map(item => item.customer_question).filter(value => typeof value === 'string' && value.trim() && value.length <= 1000 &&
         (!needsBasis || !basisQuestion.test(value))),
@@ -439,9 +524,9 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
       }).filter(Boolean),
       ...(needsFin.length ? ['For ' + [...new Set(needsFin.map(line => line.mark || line.style))].join(' and ') + ', which installation style should I use: nail fin, flush fin, or another style?'] : [])
     ];
-    const proposedQuestions = (interpretation.questions.length ? interpretation.questions : [...interpretation.clarification, ...missingLines, ...missingPlanner])
+    const proposedQuestions = (interpretation.questions.length ? [...interpretation.clarification, ...interpretation.questions] : [...interpretation.clarification, ...missingLines, ...missingPlanner])
       .filter(question => (!needsBasis || !basisQuestion.test(question)) &&
-        (!needsFin.length || !/\b(?:fin|installation style|installation series)\b/i.test(question)) && !redundantAccountNumber(question));
+        (!needsFin.length || !/\b(?:fin|installation style|installation series)\b/i.test(question)) && !redundantAccountNumber(question) && !resolvedRoutineQuestion(question));
     const questions = [...new Set([...interpretation.conflicts, ...essentialQuestions, ...proposedQuestions])].slice(0, 3);
     const extraIssues = [...interpretation.unresolved.map(message => ({ code: 'intake_requirement_review', path: 'conversation', message })), ...interpretation.conflicts.map(message => ({ code: 'intake_conflict', path: 'conversation', message }))];
     const ok = normalized.ok === true && !productReview.length && !questions.length;
