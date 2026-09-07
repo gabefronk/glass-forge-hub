@@ -14,8 +14,8 @@ function InfoRow({ icon: Icon, children, sub }) {
     <div className="flex items-start gap-3 py-1.5">
       <Icon className="h-4 w-4 shrink-0 mt-0.5" style={{ color: C.textMuted }} />
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] leading-snug" style={{ color: C.text }}>{children}</div>
-        {sub && <div className="text-[12px] leading-snug mt-0.5" style={{ color: C.textMuted }}>{sub}</div>}
+        <div className="break-words text-[13px] leading-snug" style={{ color: C.text }}>{children}</div>
+        {sub && <div className="break-words text-[12px] leading-snug mt-0.5" style={{ color: C.textMuted }}>{sub}</div>}
       </div>
     </div>
   );
@@ -33,10 +33,10 @@ export default function EventBubble({ event, jobs, onEdit, onDelete, onClose, sa
   if (editing && event.source === "app") {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={onClose}>
-        <div className="rounded-[14px] max-w-lg w-full max-h-[85vh] overflow-y-auto obsidian-scroll card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+        <div className="rounded-[14px] max-w-2xl w-full max-h-[90dvh] overflow-y-auto obsidian-scroll card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
             <span className="font-heading text-[14px] font-semibold" style={{ color: C.text }}>Edit event</span>
-            <button onClick={onClose} className="p-1 rounded-full transition-colors hover:bg-[#F8FAFD]"><X className="h-4 w-4" style={{ color: C.textMuted }} /></button>
+            <button onClick={onClose} aria-label="Close event" className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-[#F8FAFD]"><X className="h-4 w-4" style={{ color: C.textMuted }} /></button>
           </div>
           <div className="p-4">
             <EventForm initial={event} jobs={jobs} onSave={onEdit} onCancel={() => setEditing(false)} saving={saving} />
@@ -55,7 +55,7 @@ export default function EventBubble({ event, jobs, onEdit, onDelete, onClose, sa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={onClose}>
       <div
-        className="rounded-[14px] w-full max-w-[440px] max-h-[85vh] overflow-y-auto obsidian-scroll card-shadow-elevated"
+        className="rounded-[14px] w-full max-w-[440px] max-h-[90dvh] overflow-y-auto obsidian-scroll card-shadow-elevated"
         style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -63,15 +63,15 @@ export default function EventBubble({ event, jobs, onEdit, onDelete, onClose, sa
         <div className="flex items-center justify-end gap-1 px-3 pt-3">
           {!readOnly && (
             <>
-              <button onClick={() => setEditing(true)} className="p-2 rounded-full transition-colors hover:bg-[#F8FAFD]" title="Edit">
+              <button onClick={() => setEditing(true)} className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-[#F8FAFD]" title="Edit">
                 <Pencil className="h-4 w-4" style={{ color: C.textMuted }} />
               </button>
-              <button onClick={onDelete} className="p-2 rounded-full transition-colors hover:bg-[#F8FAFD]" title="Delete">
+              <button onClick={onDelete} className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-[#F8FAFD]" title="Delete">
                 <Trash2 className="h-4 w-4" style={{ color: C.textMuted }} />
               </button>
             </>
           )}
-          <button onClick={onClose} className="p-2 rounded-full transition-colors hover:bg-[#F8FAFD]" title="Close">
+          <button onClick={onClose} className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-[#F8FAFD]" title="Close">
             <X className="h-4 w-4" style={{ color: C.textMuted }} />
           </button>
         </div>
@@ -81,7 +81,7 @@ export default function EventBubble({ event, jobs, onEdit, onDelete, onClose, sa
           <div className="flex items-start gap-3">
             <span className="h-3.5 w-3.5 rounded-[3px] shrink-0 mt-1.5" style={{ backgroundColor: swatchColor }} />
             <div className="min-w-0">
-              <h2 className="font-heading text-[17px] font-semibold leading-tight" style={{ color: C.text }}>{event.job_name}</h2>
+              <h2 className="font-heading break-words text-[17px] font-semibold leading-tight" style={{ color: C.text }}>{event.job_name}</h2>
               <p className="text-[13px] mt-0.5" style={{ color: C.textMuted }}>{dateLabel}{timeLabel}</p>
             </div>
           </div>
