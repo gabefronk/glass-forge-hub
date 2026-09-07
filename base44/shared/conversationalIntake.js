@@ -1,6 +1,6 @@
 // Language understanding proposes inputs; the existing planner remains the
 // authority for product support, pricing, queueing and verified results.
-const VERSION = 9;
+const VERSION = 10;
 const LIMITS = { lines: 200, text: 70000, output: 160000 };
 const clone = value => structuredClone(value);
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -185,6 +185,7 @@ Use style 'Studio XO Slider' for an explicitly requested XO slider and 'Studio P
 A correction such as 'no obscure glass needed, just regular glass' removes the privacy texture: use patterned_glass: 'None'. Keep the separately selected CozE (LowE) coating and any tempered requirement unless the customer explicitly changes those too. 'Regular glass' in this correction does not mean 'no LowE' or 'not tempered'. Describe it as 'regular glass (no privacy texture), with the selected CozE LowE coating', not as 'clear glass', which can imply a different coating. Apply the correction to the affected window lines even when those lines have not been saved yet.
 Normalize explicit feet/inches arithmetic into inches (8 feet x 6 feet is 96 x 72). Four-digit trade codes such as 5050 mean 60 x 60 inches; describe that interpretation in assumptions. For the confirmed Studio standard flow, the application treats a trade code unambiguously linked to a window as an editable call-size quoting assumption when no basis or contrary instruction was supplied. Leave missing dimension_basis for the application to set; ordinary numeric dimensions alone still require a basis. Preserve an explicit basis even when the size is written as a trade code. Do not invent dimensions, quantity, opening direction, color, account, yard or margin.
 The selected Studio standard and current account settings carry the customer's existing routine preferences. Product-specific defaults are applied by the application only after their compatibility has been verified for the requested window family. Do not copy Single Hung hardware, screens, thickness or glazing choices into sliders or picture windows yourself. A generic 'do your best' does not permit replacing requested products, glass, safety requirements, fin choices, or unknown dimensions. Do not fill defaults yourself. When confirmed_profile is confirmed studio-sh-standard revision 1, the application supplies omitted nail fin, CozE LowE coating, and the recipe's omitted non-tempered/no-privacy selectors unless customer notes say otherwise or express uncertainty. Do not ask the customer to reconfirm these routine omissions. Their explicit settings and corrections always take precedence. Do not ask whether an unambiguously linked trade code is call size in that standard flow unless the customer gives a contrary instruction or expresses uncertainty.
+For confirmed standard requests, focus questions on missing or conflicting main choices: window style and operation, quantity, dimensions and measurement basis, fin, frame color, coating, privacy texture and tempering. Do not volunteer a questionnaire about screens, hardware, glass thickness or construction, glazing method, gas, spacers, capillary tubes, grilles, elevation or sash split when the saved standard configuration already supplies those options. Keep the native product's verified standard ancillary options. Ask about an ancillary option only when a customer explicitly requests a change, expresses uncertainty, or its actual required value is missing or conflicting. Do not invent new specifications to make these questions go away.
 Options must contain primitive values with correct types (tempered true/false, number_wide number). Omit unknown fields entirely; never use zero, false or another placeholder for unknowns. Cite exact short source_quotes from user-authored messages or current structured field values for each line. Assistant questions may establish context but cannot be cited as customer approval. Existing line changes/deletions must cite the latest user reply. Do not repeat or embellish quoted facts.
 settings_updates is only for explicitly stated customer settings, each with an exact user source_quote. Encode value as a string, including numeric margin (for example "25"). Existing dealer, yard and margin are preserved by the application; ask about conflicts rather than overriding them. A clear latest color/glass/patterned_glass correction may update that selection. When the user clearly changes the color, coating or privacy texture for all windows, also update every affected line's corresponding option to the same choice and cite that latest correction; do not leave stale copies of the old global choice on individual lines. Global obscure/privacy-glass requests update patterned_glass, keeping the separately selected coating in glass. Preserve intentionally different exceptions and explicit contrasting hardware/screens, or ask if the intended scope is ambiguous. Do not infer dealer, yard or margin from a title or reference. Prefer per-line overrides when only one line changes.
 When current_settings identifies dealer BFS and yard BFS-UTAH DESIGN (11), the configured quoting account is already established. No separate BFS account number, account ID, or dealer account number is needed; do not ask for one. Still flag a genuine conflict if the customer explicitly requests a different dealer or yard.
@@ -313,6 +314,8 @@ function validateInterpretation(raw, q, context) {
     const derivedBefore = provenance.get(id)?.derived_options || {};
     const explicitlyRestated = name => quotes.some(excerpt => {
       if (!latest.includes(norm(excerpt))) return false;
+      const previous = derivedBefore[name];
+      if (['glass_thickness', 'glazing_method'].includes(name) && typeof previous === 'string' && norm(excerpt).includes(norm(previous))) return true;
       const label = name === 'hardware_color' ? /\b(?:hardware|latch)\b/i : name === 'screen' ? /\bscreens?\b/i : new RegExp('\\b' + name.replaceAll('_', '[ -]') + '\\b', 'i');
       return label.test(excerpt);
     });
@@ -509,10 +512,40 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
     const needsCoating = normalizedQuote.lines.some(line => !present(line.options?.glass) && !present(normalizedQuote.settings?.glass));
     const resolvedRoutineQuestion = question => {
       if (/\b(?:conflict|contradict|different|instead|uncertain|unsure)\b/i.test(question)) return false;
+      if (ancillaryTopics.some(([pattern]) => pattern.test(question))) return false;
       const basis = basisQuestion.test(question), fin = /\b(?:fin|installation style|installation series)\b/i.test(question);
       const coating = /\b(?:coze|low[ -]?e|coating|(?:which|what)(?:\s+type\s+of)?\s+glass|glass\s+(?:type|option|selection))\b/i.test(question);
       if (!(basis || fin || coating) || /\b(?:tempered|safety|obscure|privacy|pattern|tint|quantity|color|width|height|room)\b/i.test(question)) return false;
       return (!basis || !needsBasis) && (!fin || !needsFin.length) && (!coating || !needsCoating);
+    };
+    const ancillaryTopics = [
+      [/\bscreens?\b/i, ['screen']],
+      [/\b(?:hardware|latches?|handles?|locks?)\b/i, ['hardware', 'hardware_color']],
+      [/\b(?:glass\s+(?:thickness|construction)|thickness\s+of\s+(?:the\s+)?glass)\b/i, ['glass_thickness']],
+      [/\b(?:glazing\s+(?:method|thickness|construction)|insulated\s+glass\s+(?:unit|thickness))\b/i, ['glazing_method']],
+      [/\b(?:argon|thermal\s+gas|gas\s+fill)\b/i, ['argon']],
+      [/\b(?:super\s+)?spacers?\b/i, ['super_spacer']],
+      [/\bcapillary\s+tubes?\b/i, ['capillary_tubes']],
+      [/\b(?:grilles?|grids?)\b/i, ['grilles']],
+      [/\belevation\b/i, ['elevation']],
+      [/\bsash\s+split\b/i, ['sash_split']],
+      [/\b(?:unit\s+type|complete\s+unit)\b/i, ['unit_type']],
+      [/\bnumber\s+wide\b/i, ['number_wide']]
+    ];
+    const customerOptionNotes = sourceContext(candidate).activeUser.map(item => item.content).join('\n') + '\n' + interpretation.unresolved.join('\n') + '\n' + interpretation.conflicts.join('\n');
+    const resolvedAncillaryQuestion = question => {
+      if (!standardConfirmed(candidate) || !normalizedQuote.lines.length) return false;
+      const topics = ancillaryTopics.filter(([pattern]) => pattern.test(question));
+      if (!topics.length) return false;
+      // A combined question must not lose an unanswered main choice. Screen or
+      // hardware finish is ancillary, while frame/window color stays a main choice.
+      const mainText = question.replace(/\b(?:screen|hardware|latch|handle)\s+(?:colou?r|finish)\b/gi, '');
+      if (basisQuestion.test(mainText) || /\b(?:tempered|safety|obscure|privacy|patterned|tint|coating|coze|low[ -]?e|quantity|qty|width|height|dimensions?|sizes?|styles?|colou?rs?|operation|opening\s+direction|fin|exterior|interior)\b/i.test(mainText)) return false;
+      if (topics.some(([pattern]) => pattern.test(customerOptionNotes))) return false;
+      const fields = [...new Set(topics.flatMap(([, names]) => names))];
+      return normalizedQuote.lines.every((line, index) => fields.every(field =>
+        (present(line.options?.[field] ?? normalizedQuote.settings?.[field]) || normalized.plan?.lines?.[index]?.native_default_fields?.includes(field)) &&
+        !plannerIssues.some(item => item.path === 'lines[' + index + '].options.' + field || item.path === 'settings.' + field)));
     };
     const essentialQuestions = [
       ...nativeConstraints.map(item => item.customer_question).filter(value => typeof value === 'string' && value.trim() && value.length <= 1000 &&
@@ -526,7 +559,7 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
     ];
     const proposedQuestions = (interpretation.questions.length ? [...interpretation.clarification, ...interpretation.questions] : [...interpretation.clarification, ...missingLines, ...missingPlanner])
       .filter(question => (!needsBasis || !basisQuestion.test(question)) &&
-        (!needsFin.length || !/\b(?:fin|installation style|installation series)\b/i.test(question)) && !redundantAccountNumber(question) && !resolvedRoutineQuestion(question));
+        (!needsFin.length || !/\b(?:fin|installation style|installation series)\b/i.test(question)) && !redundantAccountNumber(question) && !resolvedRoutineQuestion(question) && !resolvedAncillaryQuestion(question));
     const questions = [...new Set([...interpretation.conflicts, ...essentialQuestions, ...proposedQuestions])].slice(0, 3);
     const extraIssues = [...interpretation.unresolved.map(message => ({ code: 'intake_requirement_review', path: 'conversation', message })), ...interpretation.conflicts.map(message => ({ code: 'intake_conflict', path: 'conversation', message }))];
     const ok = normalized.ok === true && !productReview.length && !questions.length;
@@ -549,4 +582,3 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
       questions: ok ? [] : [...new Set([...questions, ...productReview])].slice(0, 30), assistant_message: assistantMessage, intake_assessment: intakeAssessment };
   };
 }
-
