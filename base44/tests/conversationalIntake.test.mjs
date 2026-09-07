@@ -250,3 +250,21 @@ test('provider schema has no nullable type arrays and margin strings normalize s
   const invalid = await run(q, response({ settings_updates: [{ field: 'gross_margin', value: '25%; execute', source_quote: '25 percent margin' }] }));
   assert.equal(invalid.ok, false);
 });
+
+test('an older Taupe chat correction cannot overwrite a newer White Details edit', async () => {
+  const first = await run(base(), response());
+  const secondInput = { ...first.quote, intake_assessment: first.intake_assessment, input_revision: 2,
+    conversation: [...first.quote.conversation, { role: 'user', revision: 2, content: 'Make everything Taupe please.' }] };
+  const taupeOutput = response({ lines: [line({ options: { color: 'Taupe' }, source_quotes: ['Make everything Taupe please.'] })],
+    settings_updates: [{ field: 'color', value: 'Taupe', source_quote: 'Make everything Taupe please.' }] });
+  const second = await run(secondInput, taupeOutput);
+  assert.equal(second.ok, true);
+  const edited = { ...second.quote, settings: { ...second.quote.settings, color: 'White' }, intake_assessment: second.intake_assessment,
+    input_revision: 3, history: [{ reason: 'edited', revision: 2, schedule_changed: false }] };
+  const afterEdit = await run(edited, taupeOutput);
+  assert.equal(afterEdit.ok, true);
+  assert.equal(afterEdit.quote.settings.color, 'White');
+  assert.equal(afterEdit.quote.lines[0].options.hardware_color, 'White');
+  assert.equal(afterEdit.quote.lines[0].options.screen, 'White');
+  assert.notEqual(afterEdit.quote.lines[0].options.color, 'Taupe');
+});
