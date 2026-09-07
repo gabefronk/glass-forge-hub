@@ -1,6 +1,6 @@
 // Language understanding proposes inputs; the existing planner remains the
 // authority for product support, pricing, queueing and verified results.
-const VERSION = 8;
+const VERSION = 9;
 const LIMITS = { lines: 200, text: 70000, output: 160000 };
 const clone = value => structuredClone(value);
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -90,9 +90,9 @@ function sourceContext(q) {
 const knownBfsYard = value => String(value || '').toLowerCase().replace(/\s+/g, '') === 'bfs-utahdesign(11)';
 const standardConfirmed = q => q.source?.easy_request?.confirmed === true && q.source.easy_request.profile_id === 'studio-sh-standard' && q.source.easy_request.profile_revision === 1;
 const tradePattern = /\b([1-9])([0-9])([1-9])([0-9])\b/g;
-const basisMention = /\b(?:call\s+(?:sizes?|dimensions)|frame\s+(?:sizes?|dimensions|measurements)|rough[ -]?openings?|actual\s+(?:frame\s+)?(?:sizes?|dimensions|measurements))\b/i;
+const basisMention = /\b(?:call\s+(?:sizes?|dimensions)|frame\s+(?:sizes?|dimensions|measurements)|frame[ -]to[ -]frame|rough[ -]?openings?|actual\s+(?:frame\s+)?(?:sizes?|dimensions|measurements))\b/i;
 const uncertainty = /\b(?:not sure|unsure|uncertain|unknown|undecided|haven't decided|have not decided|don't know|do not know|confirm|check first|ask me|do not assume|don't assume)\b/i;
-const finMention = /\b(?:fins?|finless|retrofit|block\s+frame|installation\s+(?:style|series))\b/i;
+const finMention = /\b(?:fins?|finless|flush(?:[ -]?mount)?|retrofit|block\s+frame|installation\s+(?:style|series))\b/i;
 const coatingMention = /\b(?:coze|low[ -]?e|clear\s+(?:glass|coating)|glass\s+(?:coating|type|option|selection)|coating|tinted|tint|solarban|sungate|cardinal)\b/i;
 function lineFamilyPattern(line) {
   return /single\s*hung/i.test(line.style || '') ? /\b(?:single[ -]?(?:hung|hoang)|sh)\b/i :
@@ -500,7 +500,7 @@ export function createConversationalIntake({ invokeLLM, normalizeStructured, tim
       return missing.length ? 'For ' + (line.mark || line.style || 'window ' + (index + 1)) + ', please confirm ' + missing.map(field => ({ qty: 'quantity', dimension_basis: 'whether the measurements are call, frame or rough-opening sizes' })[field] || field).join(', ') + '.' : '';
     }).filter(Boolean);
     const needsBasis = normalizedQuote.lines.some(line => !present(line.dimension_basis));
-    const basisQuestion = /\b(?:call sizes?|frame sizes?|rough[ -]?openings?|measurement basis|dimension basis)\b/i;
+    const basisQuestion = /\b(?:(?:call|frame)\s+(?:sizes?|dimensions?|measurements?)|frame[ -]to[ -]frame|rough[ -]?openings?|measurement basis|dimension basis)\b/i;
     const needsFin = normalizedQuote.lines.filter(line => /slider|picture|fixed/i.test(line.style || '') &&
       ![line.options?.fin, line.options?.series, normalizedQuote.settings?.fin, normalizedQuote.settings?.series].some(present));
     const configuredBfsAccount = normalizedQuote.settings?.dealer === 'BFS' && knownBfsYard(normalizedQuote.settings?.yard);
