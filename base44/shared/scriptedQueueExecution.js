@@ -158,6 +158,7 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
       status.runner_status = reported.runner_status;
       const browserAge = now().getTime() - Date.parse(reported.browser_reported_at);
       if (browserAge >= 0 && browserAge < 100000) { status.browser_state = reported.browser.state; status.browser_authenticated = reported.browser.state === 'authenticated'; }
+      if (reported.runner_status === 'stopping') status.online = false;
     }
     return status;
   }

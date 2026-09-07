@@ -37,9 +37,9 @@ test('dynamic runner handler resolves once per HTTP request before authenticatio
 });
 
 test('configuration schema restricts every operation to administrators and staged record is disabled', () => {
-  const schema = JSON.parse(fs.readFileSync(new URL('./assembly/WindowQuoteRunnerConfig.jsonc', import.meta.url), 'utf8'));
+  const schema = JSON.parse(fs.readFileSync(new URL('../entities/WindowQuoteRunnerConfig.jsonc', import.meta.url), 'utf8'));
   for (const operation of ['create','read','update','delete']) assert.deepEqual(schema.rls[operation], { user_condition: { role: 'admin' } });
-  const config = JSON.parse(fs.readFileSync(new URL('./assembly/runner-config.record.disabled.json', import.meta.url), 'utf8'));
+  const config = JSON.parse(fs.readFileSync(new URL('./fixtures/scripted-runner-config.disabled.json', import.meta.url), 'utf8'));
   assert.equal(config.enabled, false); assert.equal(config.config_key, SCRIPTED_CONFIG_KEY);
   assert.match(config.worker_key_hash, /^[a-f0-9]{64}$/); assert.match(config.expected_plan_hash, /^[a-f0-9]{64}$/);
   assert.equal(config.worker_id === config.browser_slot_id, false);
