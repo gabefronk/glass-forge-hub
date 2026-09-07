@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/feeMath";
 
 // Inline editable text/number cell. Save on blur or Enter.
-export function EditableText({ value, onCommit, type = "text", className, alignRight, displayFormat }) {
+export function EditableText({ value, onCommit, type = "text", className = "", alignRight = false, displayFormat = undefined }) {
   const [v, setV] = useState(value ?? "");
   const [editing, setEditing] = useState(false);
   const ref = useRef(null);
