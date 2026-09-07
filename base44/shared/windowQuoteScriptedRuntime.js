@@ -5,8 +5,21 @@ import { createConversationalIntake } from './conversationalIntake.js';
 
 // AI interprets the customer's words. The checked planner still owns product
 // support and execution; no model-generated price or status can bypass it.
+async function invokeIntakeModel(params, { client }) {
+  const invoke = input => client.asServiceRole.integrations.Core.InvokeLLM(input);
+  try { return await invoke(params); }
+  catch (error) {
+    if ((error?.status || error?.response?.status) !== 400) throw error;
+    // Some app model providers reject nested response schemas. The fallback
+    // changes transport only: the identical strict server validator still runs.
+    const { response_json_schema, ...request } = params;
+    const result = await invoke({ ...request, prompt: request.prompt + '\nReturn only JSON matching this schema. Omit unknown optional fields. No Markdown.\n' + JSON.stringify(response_json_schema) });
+    if (typeof result !== 'string') return result;
+    return JSON.parse(result.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
+  }
+}
 const normalizeIntake = createConversationalIntake({
-  invokeLLM: (params, { client }) => client.asServiceRole.integrations.Core.InvokeLLM(params),
+  invokeLLM: invokeIntakeModel,
   normalizeStructured: normalizeConversationalSchedule
 });
 // Private configuration is fetched once for each request, with no new env secret.
