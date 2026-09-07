@@ -42,7 +42,9 @@ test('Beaver package preserves sliders, different fins, picture size and tempere
   assert.equal(result.quote.lines[2].options.hardware, undefined);
   assert.equal(result.quote.lines[0].options.series, undefined);
   assert.equal(result.intake_assessment.questions.length, 2);
+  assert.equal(result.quote.lines[2].options.fin, undefined);
   assert.ok(result.intake_assessment.questions.some(question => /Picture.*installation style/.test(question)));
+  assert.ok(result.intake_assessment.questions.some(question => /call sizes/.test(question)));
   assert.equal(result.intake_assessment.product_review.length, 1);
 });
 
@@ -270,15 +272,16 @@ test('an older Taupe chat correction cannot overwrite a newer White Details edit
   assert.notEqual(afterEdit.quote.lines[0].options.color, 'Taupe');
 });
 
-test('missing dimension basis is prioritized without undefined product labels or duplicated capability requirements', async () => {
+test('standard trade basis resolves without undefined labels or duplicated capability requirements', async () => {
   const q = base('Please quote one 5050 XO Slider.');
   q.source = { easy_request: { ...source.easy_request, dimension_basis: '' } };
   const output = response({ lines: [line({ style: 'XO Slider', width: 60, height: 60, dimension_basis: null, options: { operation: 'XO' }, source_quotes: ['one 5050 XO Slider'] })],
     questions: ['Which room is this for?', 'Do you have a window mark?', 'Would you like to add more windows?'],
     unresolved_requirements: [{ detail: 'XO Slider windows are not supported by the current automated Studio Single Hung planner.', source_quote: 'XO Slider' }] });
   const result = await run(q, output);
-  assert.equal(result.intake_assessment.questions[0], 'Are the measurements call sizes, actual frame sizes, or rough openings?');
-  assert.equal(result.intake_assessment.product_review.length, 1);
+  assert.equal(result.quote.lines[0].dimension_basis, 'call');
+  assert.ok(!result.intake_assessment.questions.some(question => /call sizes/.test(question)));
+  assert.equal(result.intake_assessment.product_review.length, 0);
   assert.deepEqual(result.intake_assessment.unresolved_requirements, []);
   assert.doesNotMatch(JSON.stringify(result.intake_assessment), /undefined/);
   assert.equal(result.ok, false);
@@ -289,3 +292,4 @@ test('missing dimension basis is prioritized without undefined product labels or
   const refreshed = await run(saved, { ...output, unresolved_requirements: [] });
   assert.deepEqual(refreshed.intake_assessment.unresolved_requirements, ['Custom etched glass is required.']);
 });
+
