@@ -88,7 +88,7 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
     for (const [index, line] of lines.entries()) if (!line.style || !Number.isFinite(line.width) || !Number.isFinite(line.height) || !Number.isInteger(line.qty) || line.units !== 'in' || !line.dimension_basis || line.qty !== q.lines[index].qty || line.width !== q.lines[index].width || line.height !== q.lines[index].height || line.dimension_basis !== q.lines[index].dimension_basis) fail(400, 'The normalized plan changed or omitted an explicit window requirement');
     const planHash = await digest(plan);
     if (planHash !== config.expected_plan_hash) fail(403, 'The normalized plan differs from the exact approved pilot benchmark');
-    const run = { phase: 'prepared', input_revision: q.input_revision, input_hash: inputHash, plan_hash: planHash, plan, prepared_at: at() };
+    const run = { phase: 'prepared', input_revision: q.input_revision, input_hash: inputHash, plan_hash: planHash, plan, prepared_at: at(), ...(config.queue_scope_hash ? { queue_scope_hash: config.queue_scope_hash } : {}) };
     return cas(db, q, { execution_provider: SCRIPTED_PROVIDER, worker_status: 'queued', queued_at: at(), missing_details: [], agent_run: run });
   }
   const handoff = q => ({ quote_id: q.id, input_revision: q.input_revision, operation_id: q.agent_run.operation_id, execution_token: q.agent_run.execution_token, plan_hash: q.agent_run.plan_hash, lease_expires_at: q.agent_run.lease_expires_at, plan: clone(q.agent_run.plan), checkpoint: clone(q.checkpoint || {}) });
@@ -175,6 +175,7 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
     if (body.settings !== undefined || body.lines !== undefined || body.result !== undefined || body.request_continuation !== undefined) fail(400, 'The runner cannot replace inputs, inject a result or request agent continuation');
     const patch = { worker_status: status, agent_run: { ...run, phase: TERMINAL.has(status) ? 'completed' : 'running', event_receipts: [...(run.event_receipts || []), { id: eventId, hash: fingerprint }], last_report_at: at(), ...(TERMINAL.has(status) ? { terminal_status: status, completed_at: at() } : {}) } };
     if (body.checkpoint !== undefined) patch.checkpoint = validateCheckpoint(body.checkpoint, q);
+    if (status === 'needs_sign_in' && body.native_started === false && !q.checkpoint?.native_quote_id && !patch.checkpoint) patch.agent_run.native_started = false;
     if (body.action === 'checkpoint' && !patch.checkpoint) fail(400, 'A checkpoint event requires saved native state');
     if (status === 'needs_details') patch.missing_details = questions(body.missing_details);
     if (status === 'ready') {
