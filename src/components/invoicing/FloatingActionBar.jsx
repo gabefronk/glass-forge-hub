@@ -1,18 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { formatMoney } from "@/lib/feeMath";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 export default function FloatingActionBar({ selectedCount, selectedFee, onClear, onSetFeePct, onDelete, onExport, onMarkBilled }) {
   const [feeMenuOpen, setFeeMenuOpen] = useState(false);
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    if (!feeMenuOpen) return;
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setFeeMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [feeMenuOpen]);
 
   return (
     <div
@@ -62,9 +53,10 @@ export default function FloatingActionBar({ selectedCount, selectedFee, onClear,
         Clear
       </button>
 
-      <div ref={menuRef} style={{ position: "relative" }}>
+      <Popover open={feeMenuOpen} onOpenChange={setFeeMenuOpen}>
+        <PopoverTrigger asChild>
         <button
-          onClick={() => setFeeMenuOpen(!feeMenuOpen)}
+          type="button"
           style={{
             padding: "6px 12px",
             borderRadius: "10px",
@@ -80,13 +72,14 @@ export default function FloatingActionBar({ selectedCount, selectedFee, onClear,
         >
           Fee %
         </button>
-        {feeMenuOpen && (
-          <div
+        </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="start"
+            collisionPadding={16}
+            className="z-[70] w-24 overflow-y-auto overscroll-contain p-1"
             style={{
-              position: "absolute",
-              bottom: "100%",
-              right: "0",
-              marginBottom: "4px",
+              maxHeight: "min(240px, var(--radix-popover-content-available-height))",
               backgroundColor: "#FFFFFF",
               border: "1px solid #DDE3EC",
               borderRadius: "10px",
@@ -117,9 +110,8 @@ export default function FloatingActionBar({ selectedCount, selectedFee, onClear,
                 {pct}%
               </button>
             ))}
-          </div>
-        )}
-      </div>
+          </PopoverContent>
+      </Popover>
 
       <button
         onClick={onDelete}

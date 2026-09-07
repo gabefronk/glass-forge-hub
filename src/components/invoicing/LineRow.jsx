@@ -144,7 +144,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
   return (
     <div
-      className="grid min-w-0 grid-cols-[32px_minmax(0,1fr)_36px] items-center gap-x-2 gap-y-2 xl:grid-cols-[32px_minmax(0,1fr)_100px_108px_116px_36px] xl:gap-x-3"
+      className="grid min-w-0 grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-x-2 gap-y-2 xl:grid-cols-[44px_minmax(0,1fr)_100px_108px_116px_44px] xl:gap-x-3"
       onClick={handleClick}
       style={{
         padding: "15px 12px",
@@ -165,11 +165,11 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
         aria-pressed={selected}
         className="col-start-1 row-start-1"
         style={{
-          width: "28px",
-          height: "28px",
-          borderRadius: "99px",
-          border: selected ? "none" : "1.5px solid #CBD4E1",
-          backgroundColor: selected ? "#2A5EA8" : "transparent",
+          width: "44px",
+          height: "44px",
+          borderRadius: "8px",
+          border: "none",
+          backgroundColor: "transparent",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -177,7 +177,9 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           flexShrink: 0,
         }}
       >
-        {selected && <Check style={{ width: "12px", height: "12px", color: "#FFFFFF" }} strokeWidth={3} />}
+        <span aria-hidden="true" style={{ width: "28px", height: "28px", borderRadius: "99px", border: selected ? "none" : "1.5px solid #CBD4E1", backgroundColor: selected ? "#2A5EA8" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {selected && <Check style={{ width: "12px", height: "12px", color: "#FFFFFF" }} strokeWidth={3} />}
+        </span>
       </button>
 
       {/* Title + subline + chip */}
@@ -328,8 +330,8 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           aria-label="Invoice line actions"
           aria-expanded={menuOpen}
           style={{
-            width: "36px",
-            height: "36px",
+            width: "44px",
+            height: "44px",
             borderRadius: "6px",
             border: "none",
             backgroundColor: "transparent",

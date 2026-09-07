@@ -128,29 +128,31 @@ export default function InvoicingToolbar({ view, onViewChange, filter, onFilterC
           aria-label="Hide zero dollar lines"
           aria-checked={hideZeros}
           style={{
-            width: "34px",
-            height: "19px",
-            borderRadius: "99px",
+            width: "44px",
+            height: "44px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "8px",
             border: "none",
             cursor: "pointer",
-            backgroundColor: hideZeros ? "#2A5EA8" : "#DDE3EC",
-            position: "relative",
-            transition: "background-color .2s",
+            backgroundColor: "transparent",
             flexShrink: 0,
           }}
         >
           <span
+            aria-hidden="true"
             style={{
-              position: "absolute",
-              top: "2px",
-              left: hideZeros ? "17px" : "2px",
-              width: "15px",
-              height: "15px",
+              position: "relative",
+              width: "34px",
+              height: "19px",
               borderRadius: "99px",
-              backgroundColor: "#fff",
-              transition: "left .2s",
+              backgroundColor: hideZeros ? "#2A5EA8" : "#DDE3EC",
+              transition: "background-color .2s",
             }}
-          />
+          >
+            <span style={{ position: "absolute", top: "2px", left: hideZeros ? "17px" : "2px", width: "15px", height: "15px", borderRadius: "99px", backgroundColor: "#fff", transition: "left .2s" }} />
+          </span>
         </button>
         <span style={{ fontSize: "12px", color: "#535E72", whiteSpace: "nowrap" }}>Hide $0</span>
         <span

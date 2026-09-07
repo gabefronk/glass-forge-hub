@@ -82,7 +82,7 @@ function DesktopRow({ row, onEdit, onDelete, index, selected, onToggle }) {
   return (
     <div>
       <div
-        className="grid grid-cols-[28px_minmax(0,1fr)_90px_90px] gap-2 px-4 py-2 items-center cursor-pointer transition-colors"
+        className="grid grid-cols-[44px_minmax(0,1fr)_90px_90px] gap-2 px-4 py-2 items-center cursor-pointer transition-colors"
         style={{
           minHeight: "52px",
           borderTop: `1px solid ${C.rowBorder}`,
@@ -213,7 +213,7 @@ function MobileRow({ row, onEdit, onDelete, selected, onToggle }) {
   );
 }
 
-function EditableField({ label, value, onCommit, type, displayFormat }) {
+function EditableField({ label, value, onCommit, type, displayFormat = undefined }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs w-20 shrink-0" style={{ color: C.textMuted }}>{label}</span>

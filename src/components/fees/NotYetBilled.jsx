@@ -83,7 +83,7 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
         <div className="obsidian-scroll sm:max-h-[520px] sm:overflow-y-auto">
           {/* Column header */}
           <div
-            className="sm:sticky top-0 z-10 grid grid-cols-[28px_minmax(0,1fr)] sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_80px] gap-2 px-4 py-2.5 items-center"
+            className="sm:sticky top-0 z-10 grid grid-cols-[44px_minmax(0,1fr)] sm:grid-cols-[44px_minmax(0,1fr)_90px_90px_80px] gap-2 px-4 py-2.5 items-center"
             style={{ backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }}
           >
             <div><CheckBox checked={allSelected} indeterminate={indeterminate} onChange={handleToggleAll} /></div>
@@ -115,7 +115,7 @@ export default function NotYetBilled({ rows, selectedIds, onToggleRow, onToggleA
             const feeSub = groupRows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
             return (
               <div key={date}>
-                <div className="sm:sticky z-[5] px-4 py-2.5 flex flex-wrap items-center gap-2.5" style={{ top: "49px", backgroundColor: C.cardAlt, borderTop: `1px solid ${C.borderStrong}`, borderBottom: `1px solid ${C.borderStrong}`, boxShadow: "0 4px 12px rgba(0,0,0,.35)" }}>
+                <div className="sm:sticky z-[5] px-4 py-2.5 flex flex-wrap items-center gap-2.5" style={{ top: "65px", backgroundColor: C.cardAlt, borderTop: `1px solid ${C.borderStrong}`, borderBottom: `1px solid ${C.borderStrong}`, boxShadow: "0 4px 12px rgba(0,0,0,.35)" }}>
                   <span className="font-mono text-[13px] font-semibold uppercase tracking-[0.08em]" style={{ color: "#4DA8FF" }}>
                     {formatDateGroup(date)}
                   </span>
@@ -173,7 +173,7 @@ function UnbilledRow({ row, selected, onToggle, onEdit }) {
 
   return (
     <div
-      className="grid grid-cols-[28px_minmax(0,1fr)_auto] sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_80px] gap-2 px-4 py-3 items-center cursor-pointer transition-colors"
+      className="grid grid-cols-[44px_minmax(0,1fr)_auto] sm:grid-cols-[44px_minmax(0,1fr)_90px_90px_80px] gap-2 px-4 py-3 items-center cursor-pointer transition-colors"
       style={{
         minHeight: "56px",
         borderTop: `1px solid ${C.rowBorder}`,
