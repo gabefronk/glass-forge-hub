@@ -357,7 +357,15 @@ export default function Invoicing() {
     setExporting(true);
     try {
       const { exportInvoicePdf } = await import("@/lib/exportInvoicePdf");
-      const exportRows = monthRows.filter((r) => !isFutureRow(r) && !r.superseded_by && (Number(r.labor_amt) > 0 || r.fee_type === "profit_split"));
+      // Use the same eligibility and fee calculation as Ready to bill.
+      // Copy rows for export only; never rewrite saved financial records.
+      const exportRows = monthRows
+        .filter((r) => isReady(r, reportStatusMap, supersededSet))
+        .map((r) => ({
+          ...r,
+          labor_amt: computeLaborAmt(r),
+          fee_amt: computeFeeAmt(r),
+        }));
       await exportInvoicePdf(month, exportRows);
     } catch (e) {
       console.error("PDF export error:", e);
