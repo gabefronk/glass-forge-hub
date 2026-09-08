@@ -12,6 +12,7 @@ import { validateLines } from '../../shared/windowQuotesCore.js';
 //
 // Each run is time-boxed (BUDGET_MS) and checkpoints progress in PlanIntake, so a big
 // set just takes a few scheduled runs. Idempotent on drive_file_id and request_id.
+// Deploy v1.
 
 const DROP_FOLDER = '1sRaRX-ezKQRiHjoR0d215kCcqk3ajE8O';
 const PROCESSED_FOLDER = '1Ozz8F3tLwYS1JKFnZ7yAnBY7K1OanTbG';
