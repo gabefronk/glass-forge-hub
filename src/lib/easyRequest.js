@@ -11,7 +11,7 @@ const BASE_OPTIONS = Object.freeze({
 export const STANDARD_STUDIO_PROFILE = Object.freeze({
   id: 'studio-sh-standard', revision: 1, name: 'Studio Single Hung standard configuration',
   style: 'Studio Single Hung', options: BASE_OPTIONS, match_interior_colors: true,
-  description: 'Studio 1 3/8 inch Fin Setback; one-wide Complete Unit; SS over SS; 3/4 inch insulated; elevation 2501 to 6500; no tempered glass, argon, Super Spacer, capillary tubes or grilles; Cam Latch; hardware and screen match the White or Black interior. Color, CozE LowE, dimensions, account, yard and gross margin are chosen separately.'
+  description: 'Studio 1 3/8 inch Fin Setback; one-wide Complete Unit; SS over SS; 3/4 inch insulated; elevation 2501 to 6500; no tempered glass, argon, Super Spacer, capillary tubes or grilles; Cam Latch; hardware and screen match the selected White, Taupe, or Black interior. Color, CozE LowE, dimensions, account, yard and gross margin are chosen separately.'
 });
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
 const clone = value => JSON.parse(JSON.stringify(value));
