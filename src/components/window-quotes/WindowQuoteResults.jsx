@@ -163,12 +163,17 @@ export default function WindowQuoteResults({ quote, onWon, busy }) {
   const totals = result.totals || {};
   const currency = totals.currency || result.currency || "USD";
   const summaryRows = [["Subtotal", totals.subtotal], ["Labor", totals.labor], ["Delivery", totals.delivery], ["Freight", totals.freight], ["Tax", totals.tax]].filter(([, value]) => present(value));
+  const notices = Array.isArray(result.notices) ? result.notices.filter(present) : [];
   const revision = result.input_revision ?? quote.input_revision;
   return <div className="space-y-5">
     <section className="overflow-hidden rounded-2xl border border-[#DDE3EC] bg-white">
       <div className="flex flex-wrap items-start justify-between gap-4 p-5"><div><span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-[#EAF5EE] px-2.5 py-1 text-[11px] font-semibold text-[#276449]"><CheckCircle2 size={12} />Verified quote</span><h3 className="break-words font-heading text-xl font-semibold text-[#131A26]">{present(result.native_quote_number) ? `AMSCO quote ${result.native_quote_number}` : result.native_source === "desktop_native" ? "Saved AMSCO desktop quote" : "Window quote"}</h3><p className="mt-1 text-xs text-[#616D81]">{lines.length} {lines.length === 1 ? "line" : "lines"}{count !== null ? ` · ${count} ${count === 1 ? "window / assembly" : "windows / assemblies"}` : " · quantity not supplied"}{present(revision) ? ` · Revision ${revision}` : ""}</p></div><div className="sm:text-right"><p className="text-[10px] font-semibold uppercase tracking-wider text-[#77839A]">Customer total</p><p className="mt-1 break-all text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums text-[#1E4A85]">{money(totals.total ?? totals.customer_total, currency)}</p></div></div>
       <dl className="grid gap-3 border-t border-[#E9EDF4] bg-[#F6F8FC] px-5 py-4 sm:grid-cols-2"><Specification label="Dealer" value={result.dealer_name || result.dealer || quote.settings?.dealer} /><Specification label="Shipping yard" value={result.yard || quote.settings?.yard} /></dl>
     </section>
+    {notices.length > 0 && <section className="rounded-2xl border border-[#EEDAB4] bg-[#FCF5E9] p-4 text-[#8A5A10]">
+      <h4 className="text-sm font-semibold">Product notice</h4>
+      <ul className="mt-2 space-y-1 text-xs leading-relaxed">{notices.map((notice, index) => <li key={`${index}-${notice}`}>{notice}</li>)}</ul>
+    </section>}
     {lines.map((line, index) => <WindowSheet key={line.native_line_id || line.id || index} line={line} index={index} currency={currency} drawing={drawings[index]} scale={scale} />)}
     {!lines.length && <p className="rounded-xl border border-[#DDE3EC] p-5 text-sm text-[#616D81]">Line details were not supplied in this result.</p>}
     <section className="rounded-2xl border border-[#DDE3EC] bg-white p-5">
