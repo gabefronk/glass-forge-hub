@@ -30,7 +30,7 @@ function productDefaults(line, quote, getProductProfileForLine) {
   if (!present(supplied.glass)) delete options.glass;
   const source = [supplied.color, supplied.exterior_color, supplied.interior_color].some(present) ? supplied : settings;
   const color = normalize(source.interior_color || source.color);
-  const interior = { white: 'White', whitebothsides: 'White', taupe: 'Taupe', taupebothsides: 'Taupe' }[color];
+  const interior = { white: 'White', whitebothsides: 'White', taupe: 'Taupe', taupebothsides: 'Taupe', black: 'Black', blackbothsides: 'Black', blackblack: 'Black', blackoutsidewhiteinside: 'White', blackexteriorwhiteinterior: 'White', blackwhite: 'White' }[color];
   // A product may explicitly opt into matching colors for its native controls.
   // Picture profiles leave this empty and never acquire a latch or screen.
   for (const key of profile.match_interior_options || []) {
