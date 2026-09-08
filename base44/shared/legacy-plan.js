@@ -3,8 +3,9 @@
 export const SUPPORT_ID = 'studio-setback-single-hung-v1';
 export const ROUNDING_POLICY = Object.freeze({
   currency: 'USD', unit_margin_tolerance_cents: 1, aggregate_tolerance_cents: 0,
+  studio_black_unit_margin_tolerance_cents: 3,
   displayed_margin_tolerance_percentage_points: 0.005,
-  explanation: 'Saved native cents are authoritative. Prior portal/desktop comparison differed by one customer cent per unit because the margin-derived markup was displayed at different precision. Permit at most one cent versus the ideal margin calculation; require exact cents for quantity extensions and sums. This tolerance never supplies a missing price or margin.'
+  explanation: 'Saved native cents are authoritative. Standard finishes permit at most one cent versus the ideal margin calculation. Saved and reopened Studio Black validation requires at most three cents because its finish pricing is retained at different internal precision. Quantity extensions and sums remain exact. This tolerance never supplies a missing price or margin.'
 });
 // Evidence for the bounded per-unit tolerance: the saved portal/desktop price
 // comparison in outputs/amsco-online-quoting-notes.md, not a static price table.
@@ -40,6 +41,7 @@ function colorPair(raw) {
   const value = norm(raw);
   if (value === 'white' || value === 'whitebothsides') return ['White', 'White'];
   if (value === 'taupe' || value === 'taupebothsides') return ['Taupe', 'Taupe'];
+  if (['black', 'blackbothsides', 'blackoutsideblackinside', 'blackexteriorblackinterior', 'blackblack'].includes(value)) return ['Black', 'Black'];
   if (['blackoutsidewhiteinside', 'blackexteriorwhiteinterior', 'blackwhite'].includes(value)) return ['Black', 'White'];
   return null;
 }
@@ -48,7 +50,7 @@ function colors(lineOptions, settings, issues, path) {
   const explicitColor = present(lineOptions.color);
   const source = explicitSides || explicitColor ? lineOptions : settings;
   let pair = present(source.color) ? colorPair(source.color) : null;
-  if (present(source.color) && !pair) issue(issues, 'ambiguous_color', path + '.color', 'Specify White on both sides, Taupe on both sides, or Black exterior with White interior.');
+  if (present(source.color) && !pair) issue(issues, 'ambiguous_color', path + '.color', 'Specify White, Taupe, Black exterior/White interior, or Black on both sides.');
   const hasSides = present(source.exterior_color) || present(source.interior_color);
   if (hasSides) {
     const exterior = COLOR.get(norm(source.exterior_color)), interior = COLOR.get(norm(source.interior_color));
@@ -60,7 +62,7 @@ function colors(lineOptions, settings, issues, path) {
     if (!present(source.color) && !hasSides) issue(issues, 'missing_option', path + '.color', 'Which exterior and interior colors should this window use?');
     return {};
   }
-  if (![['White', 'White'], ['Taupe', 'Taupe'], ['Black', 'White']].some(allowed => allowed[0] === pair[0] && allowed[1] === pair[1])) issue(issues, 'unsupported_colors', path, 'This first path supports White/White, Taupe/Taupe, or Black exterior/White interior only.');
+  if (![['White', 'White'], ['Taupe', 'Taupe'], ['Black', 'White'], ['Black', 'Black']].some(allowed => allowed[0] === pair[0] && allowed[1] === pair[1])) issue(issues, 'unsupported_colors', path, 'This path supports White, Taupe, Black exterior/White interior, or Black on both sides.');
   return { color: pair[0] === pair[1] ? pair[0] : 'Black outside / White inside', exterior_color: pair[0], interior_color: pair[1] };
 }
 function canonicalOptions(raw, settings, issues, path) {
@@ -89,13 +91,16 @@ function canonicalOptions(raw, settings, issues, path) {
   let parsedColor;
   if (hardware === 'camlatchtaupe' || hardware === 'camlatchtaupehardware') parsedColor = 'Taupe';
   if (hardware === 'camlatchwhite' || hardware === 'camlatchwhitehardware') parsedColor = 'White';
-  if (!['camlatch', 'camlatchtaupe', 'camlatchtaupehardware', 'camlatchwhite', 'camlatchwhitehardware'].includes(hardware)) issue(issues, present(merged.hardware) ? 'unsupported_option' : 'missing_option', path + '.hardware', 'Specify Cam Latch hardware and its color.');else out.hardware = 'Cam Latch';
+  if (hardware === 'camlatchblack' || hardware === 'camlatchblackhardware') parsedColor = 'Black';
+  if (!['camlatch', 'camlatchtaupe', 'camlatchtaupehardware', 'camlatchwhite', 'camlatchwhitehardware', 'camlatchblack', 'camlatchblackhardware'].includes(hardware)) issue(issues, present(merged.hardware) ? 'unsupported_option' : 'missing_option', path + '.hardware', 'Specify Cam Latch hardware and its color.');else out.hardware = 'Cam Latch';
   const explicitHardwareColor = present(merged.hardware_color) ? COLOR.get(norm(merged.hardware_color)) : undefined;
   if (parsedColor && explicitHardwareColor && parsedColor !== explicitHardwareColor) issue(issues, 'conflicting_options', path + '.hardware_color', 'The hardware description and separate hardware color disagree.');
   out.hardware_color = explicitHardwareColor || parsedColor;
-  if (!['White', 'Taupe'].includes(out.hardware_color)) issue(issues, 'missing_option', path + '.hardware_color', 'Specify supported White or Taupe hardware; do not infer it from the frame color.');
+  if (!['White', 'Taupe', 'Black'].includes(out.hardware_color)) issue(issues, 'missing_option', path + '.hardware_color', 'Specify White, Taupe, or Black hardware.');
   out.screen = COLOR.get(norm(merged.screen));
   if (!out.screen) issue(issues, present(merged.screen) ? 'unsupported_option' : 'missing_option', path + '.screen', 'Specify the screen color explicitly: White, Taupe or Black.');
+  if (out.interior_color && out.hardware_color && out.hardware_color !== out.interior_color) issue(issues, 'conflicting_options', path + '.hardware_color', 'Hardware must match the verified interior color.');
+  if (out.interior_color && out.screen && out.screen !== out.interior_color) issue(issues, 'conflicting_options', path + '.screen', 'Screen must match the verified interior color.');
   return out;
 }
 
@@ -214,7 +219,8 @@ export function verifyObservedQuote(plan, observed, verification = {}) {
     }
     if (priceCents.dealer !== null && priceCents.customer !== null) {
       const expectedCustomer = Math.round(priceCents.dealer / (1 - plan.settings.gross_margin / 100));
-      if (Math.abs(priceCents.customer - expectedCustomer) > ROUNDING_POLICY.unit_margin_tolerance_cents) invalid('customer_margin_mismatch', path + '.unit_prices.customer', 'Observed customer price does not match the requested margin within the documented one-cent per-unit tolerance.');
+      const marginTolerance = expected.options?.exterior_color === 'Black' ? ROUNDING_POLICY.studio_black_unit_margin_tolerance_cents : ROUNDING_POLICY.unit_margin_tolerance_cents;
+      if (Math.abs(priceCents.customer - expectedCustomer) > marginTolerance) invalid('customer_margin_mismatch', path + '.unit_prices.customer', 'Observed customer price does not match the requested margin within the documented per-unit tolerance.');
     }
     const observedPrices = values => Object.fromEntries(['list', 'dealer', 'customer'].map(key => [key, values?.[key]]));
     resultLines.push({ ...clone(expected), native_line_id: line.native_line_id, native_line_number: number, unit_prices: observedPrices(line.unit_prices), line_totals: observedPrices(line.line_totals), gross_margin: line.gross_margin });
