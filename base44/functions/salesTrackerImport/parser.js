@@ -1,5 +1,6 @@
 export function normalize(value) { return String(value ?? "").trim().replace(/\s+/g," ").toLowerCase(); }
 export function parseTracker(XLSX, bytes) {
+ XLSX = XLSX.default || XLSX;
  const workbook = XLSX.read(bytes, {type:"array", cellDates:false});
  const sheet = workbook.Sheets["DAILY SALES"];
  if (!sheet) throw Error("Missing DAILY SALES worksheet.");
