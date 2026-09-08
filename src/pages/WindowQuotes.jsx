@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import TakeoffEditor, { inputClass, secondaryClass } from "@/components/window-quotes/TakeoffEditor";
 import ConnectClaude from "@/components/window-quotes/ConnectClaude";
 import WindowQuoteResults from "@/components/window-quotes/WindowQuoteResults";
+import WindowQuoteBuilder from "@/components/window-quotes/WindowQuoteBuilder";
 import { normalizeLines, validateLines } from "@/components/window-quotes/takeoff";
 import { useAuth } from "@/lib/AuthContext";
 import { initialQuoteFormValues, loadQuotePreferences, saveQuotePreferences } from "@/lib/windowQuotePreferences";
@@ -266,7 +267,7 @@ export default function WindowQuotes() {
   const activeStatus = quoteStatusInfo(quote);
   const refresh = async () => { await client.invalidateQueries({ queryKey: ["windowQuotes"] }); };
   useEffect(() => { setMessage(""); messageID.current = null; setError(""); }, [selectedID]);
-  const select = (id) => { setParams({ quote: id }); setTab("conversation"); };
+  const select = (id) => { setParams({ quote: id }); setTab("schedule"); };
   const operate = async (task) => {
     if (busy) return;
     setBusy(true); setError("");
@@ -279,6 +280,7 @@ export default function WindowQuotes() {
     if (!id) throw new Error("The request was not returned. Refresh before retrying.");
     saveQuotePreferences(user?.id, { settings: data.settings, dimension_basis: data.source?.easy_request?.dimension_basis, use_standard: data.source?.easy_request?.confirmed });
     setForm(null); select(id);
+    if (result.quote?.worker_status === "ready") setTab("result");
     await refresh();
     if (queue && isEditing) await api("queue", { quote_id: id });
   });
@@ -309,9 +311,10 @@ export default function WindowQuotes() {
     await api("delete", { quote_id: selectedID });
     setParams({});
   });
+  if (form === "new") return <div className="min-h-screen px-[18px] py-5 min-[700px]:px-[26px]" style={{ background: C.pageBg }}><WindowQuoteBuilder key={revisionSeed?.title || "new"} seed={revisionSeed} preferenceUserId={user?.id} busy={busy} saveError={error} onSave={saveForm} onCancel={() => setForm(null)} /></div>;
   return <div className="min-h-screen px-[18px] py-5 min-[700px]:px-[26px]" style={{ background: C.pageBg }}>
     <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div><div className="mono-label-sm mb-1.5">Glass Forge · Sales</div><h1 className="font-heading text-[28px] font-semibold tracking-tight text-[#131A26]">Window Quotes</h1><p className="mt-1 text-sm text-[#616D81]">Describe your windows in your own words.</p></div>
+      <div><div className="mono-label-sm mb-1.5">Glass Forge · Window Quote Pro</div><h1 className="font-heading text-[28px] font-semibold tracking-tight text-[#131A26]">Window Quotes</h1><p className="mt-1 text-sm text-[#616D81]">Build your windows, review the schedule, and get verified AMSCO pricing.</p></div>
       <div className="flex flex-wrap gap-2"><ConnectClaude /><button className={primaryClass} onClick={() => { setRevisionSeed(null); setForm("new"); setError(""); }}><Plus size={16} />New request</button></div>
     </header>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#DDE3EC] bg-white px-4 py-3">
