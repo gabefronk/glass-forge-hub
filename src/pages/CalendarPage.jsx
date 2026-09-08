@@ -66,7 +66,8 @@ export default function CalendarPage() {
     return () => phone.removeEventListener("change", adaptView);
   }, []);
 
-  const combined = useMemo(() => combineCalendarSources(events, snapshotEvents(outlook), showIsrael, showOutlook), [events, outlook, showIsrael, showOutlook]);
+  // Preserve raw Outlook entries; a separate Base44 reconciliation agent owns matching.
+  const combined = useMemo(() => ({ events: [...(showIsrael ? events : []), ...(showOutlook ? snapshotEvents(outlook) : [])], hidden: 0 }), [events, outlook, showIsrael, showOutlook]);
   const monthEvents = useMemo(() => {
     let filtered = combined.events.filter((e) => (e.event_date || "").slice(0, 7) === month);
     if (unreportedOnly) {
@@ -170,7 +171,7 @@ export default function CalendarPage() {
             <label style={{color:OUTLOOK_COLOR}}><input type="checkbox" checked={showOutlook} onChange={e=>setShowOutlook(e.target.checked)} /> Outlook installs</label>
             <button type="button" className="underline" onClick={load}>Reload imports</button>
           </div>
-          <p className="text-xs mt-2">{outlook ? `Outlook coverage: ${outlook.range_start} through ${outlook.range_end}. Captured ${new Date(outlook.captured_at).toLocaleString()}. ${outlook.event_count} source events; ${combined.hidden} confirmed overlaps hidden in favor of Israel.` : "No complete Outlook import yet."}</p>
+          <p className="text-xs mt-2">{outlook ? `Outlook coverage: ${outlook.range_start} through ${outlook.range_end}. Captured ${new Date(outlook.captured_at).toLocaleString()}. ${outlook.event_count} source events. Source entries are preserved; comparison is handled separately.` : "No complete Outlook import yet."}</p>
           {outlook && Date.now()-new Date(outlook.captured_at).getTime()>26*3600000 && <p className="text-xs text-amber-700">Outlook copy is over 26 hours old.</p>}
           {partialOutlook && <p role="status" className="text-xs text-amber-700">Latest collection is incomplete ({partialOutlook.event_count} events captured). It has not replaced the calendar overlay. {partialOutlook.collection_notes}</p>}
           {outlookError && <p role="alert">{outlookError}</p>}
