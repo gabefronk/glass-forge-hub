@@ -16,3 +16,13 @@ r=lookup({...base,query,source_status:{tracker:{available:true,stale:true}}});as
 r=lookup({...base,query,reports:[{post_id:"p",job_date:"2026-09-10",job_name:"Weekley Homes - 120 Rockwell Park",message:"A stored report"}]});assert.equal(r.reports[0].completion_inferred,false);
 r=lookup({...base,query,service:Array.from({length:9},(_,i)=>event("2026-09-10","120",{id:String(i)}))});assert.equal(r.counts.service_entries,9);assert.equal(r.services.length,6);assert.equal(r.items_truncated,true);
 console.log("Job knowledge tests passed: identity, wrong lot/order, repeat orders, source coverage, stale dates, distinct service, bounded output, no inferred completion or sending.");
+const aliasRows=[{...row("16","2026-08-18","79407612"),builder:"Y A Windows",subdivision:"Dimple Dell",source_row:2390},{...row("16","2026-09-09","79407647"),builder:"Y A Windows",subdivision:"Dimple Dell",source_row:2391}];
+const aliasCalendar={id:"6a81564ced5d6b05c9628f7e",source:"google",job_name:"Larco Dimple Del 16 - Deliver and Install",event_date:"2026-08-21",scope_notes:"Entry window delivery; finish installation requested."};
+const aliasReports=[{post_id:"recent",project_id:"-P-6T9PGHoSjHuz9oHY_",job_name:"Larco Dimple Del 16",job_date:"2026-08-21",message:"Window is onsite now."},{post_id:"old",project_id:"-P-6T9PGHoSjHuz9oHY_",job_name:"Larco Dimple Del 16",job_date:"2025-08-21",message:"Old note"}];
+r=lookup({...base,rows:aliasRows,calendar:[aliasCalendar],reports:aliasReports,query:{builder:"Larco",subdivision:"Dimple Del",lot:"16"}});
+assert.equal(r.status,"matched");assert.equal(r.tracker_rows.length,2);assert.equal(r.history.length,1);assert.equal(r.installations.length,0);assert.equal(r.reports.length,1);assert.equal(r.reports[0].message,"Window is onsite now.");assert.equal(r.reports[0].completion_inferred,false);assert.equal(r.history[0].completion_inferred,false);assert.equal(r.job.builder,"Y A Windows");
+assert.equal(lookup({...base,rows:aliasRows,query:{builder:"Larco",subdivision:"Dimple Del",lot:"17"}}).status,"not_found");
+r=lookup({...base,rows:aliasRows.map(r=>({...r,lot:"17"})),calendar:[aliasCalendar],reports:aliasReports,query:{builder:"Y A Windows",subdivision:"Dimple Dell",lot:"17"}});assert.equal(r.history.length,0);assert.equal(r.reports.length,0);
+r=lookup({...base,rows:aliasRows,calendar:[aliasCalendar],reports:aliasReports,query:{oe:"79407647"}});assert.equal(r.history.length,1);assert.equal(r.tracker_rows.length,1);
+console.log("Approved alias and 90-day historical evidence checks passed; no other lot inherits the alias and on-site notes do not become completion.");
+
