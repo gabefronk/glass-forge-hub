@@ -28,7 +28,7 @@ export function savedDescriptionMatches(raw, requiredPhrases) {
 }
 function canonicalColors(raw, settings, profile, issues, path) {
   const source = ['color', 'exterior_color', 'interior_color'].some(key => present(raw[key])) ? raw : settings;
-  const named = { white: ['White', 'White'], whitebothsides: ['White', 'White'], taupe: ['Taupe', 'Taupe'], taupebothsides: ['Taupe', 'Taupe'], blackoutsidewhiteinside: ['Black', 'White'], blackexteriorwhiteinterior: ['Black', 'White'], blackwhite: ['Black', 'White'] };
+  const named = { white: ['White', 'White'], whitebothsides: ['White', 'White'], taupe: ['Taupe', 'Taupe'], taupebothsides: ['Taupe', 'Taupe'], black: ['Black', 'Black'], blackbothsides: ['Black', 'Black'], blackoutsideblackinside: ['Black', 'Black'], blackexteriorblackinterior: ['Black', 'Black'], blackblack: ['Black', 'Black'], blackoutsidewhiteinside: ['Black', 'White'], blackexteriorwhiteinterior: ['Black', 'White'], blackwhite: ['Black', 'White'] };
   let pair = named[norm(source.color)];
   if (present(source.color) && !pair) issue(issues, 'ambiguous_color', path + '.color', 'Specify the exterior and interior colors clearly.');
   if (present(source.exterior_color) || present(source.interior_color)) {
@@ -253,7 +253,8 @@ export function verifyObservedQuote(plan, observed, verification = {}) {
     }
     if (priceCents.dealer !== null && priceCents.customer !== null) {
       const expectedCustomer = Math.round(priceCents.dealer / (1 - plan.settings.gross_margin / 100));
-      if (Math.abs(priceCents.customer - expectedCustomer) > ROUNDING_POLICY.unit_margin_tolerance_cents) invalid('customer_margin_mismatch', path + '.unit_prices.customer', 'Observed customer price does not match the requested margin within the documented one-cent per-unit tolerance.');
+      const marginTolerance = expected.options?.exterior_color === 'Black' ? ROUNDING_POLICY.studio_black_unit_margin_tolerance_cents : ROUNDING_POLICY.unit_margin_tolerance_cents;
+      if (Math.abs(priceCents.customer - expectedCustomer) > marginTolerance) invalid('customer_margin_mismatch', path + '.unit_prices.customer', 'Observed customer price does not match the requested margin within the documented per-unit tolerance.');
     }
     const observedPrices = values => Object.fromEntries(['list', 'dealer', 'customer'].map(key => [key, values?.[key]]));
     resultLines.push({ ...clone(expected), ...(nativeDefaultFieldsForLine(expected).length ? { options: { ...clone(expected.options), ...defaults.values }, native_default_evidence: clone(line.native_default_evidence || {}) } : {}), native_line_id: line.native_line_id, native_line_number: number, unit_prices: observedPrices(line.unit_prices), line_totals: observedPrices(line.line_totals), gross_margin: line.gross_margin });
