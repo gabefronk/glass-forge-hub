@@ -24,6 +24,28 @@
     },
     "functions": [
       {
+        "name": "run_plans_inbox",
+        "title": "Run plans inbox ingest",
+        "description": "Advances the Google Drive plans-inbox pipeline one step: discovers new PDFs in 'Glass Forge Plans Inbox / 1 - Drop Plans Here', splits pages, extracts window/door openings per page, merges with IRC R308.4 tempering rules, creates a Window Quotes DRAFT (never queued), moves the PDF to '2 - Processed' and writes a takeoff CSV. Time-boxed: call repeatedly (or let the 10-minute schedule run) until status is done. Optionally pass file_id to force a specific Drive file. Also runs automatically every 10 minutes.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "file_id": {
+              "type": "string",
+              "description": "Optional Google Drive file id to work on instead of the oldest pending intake"
+            }
+          }
+        },
+        "annotations": {
+          "read_only_hint": false,
+          "destructive_hint": false,
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "planInboxIngest",
+        "disabled": false
+      },
+      {
         "name": "sync_calendar_events",
         "title": "Sync calendar events",
         "description": "Syncs Google Calendar events from the CalendarEvents store into FeeLines for invoicing. Call when new calendar events need to be processed into fee lines. Pass start_date and end_date (YYYY-MM-DD) to scope, or omit for the trailing 14-day window.",
