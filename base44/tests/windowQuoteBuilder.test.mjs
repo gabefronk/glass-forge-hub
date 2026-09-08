@@ -42,6 +42,21 @@ test('authenticated review returns standard SH + picture schedule without model,
   assert.deepEqual(Object.keys(result.body).sort(), ['draft', 'review']);
   assert.deepEqual(Object.keys(result.body.review).sort(), ['assumptions', 'product_review', 'questions', 'ready', 'schedule_hash', 'unresolved_requirements']);
 });
+test('standard Studio black finish choices are ready and match moving-unit hardware to the interior', async () => {
+  for (const [color, interior] of [['Black exterior / White interior', 'White'], ['Black', 'Black']]) {
+    const value = draft(); value.settings.color = color;
+    const result = await review(value);
+    assert.equal(result.review.ready, true);
+    const planned = buildQuotePlan({ ...result.draft, id: 'black-finish-check', input_revision: 1 });
+    assert.equal(planned.ok, true);
+    for (const line of planned.plan.lines) {
+      assert.equal(line.options.exterior_color, 'Black');
+      assert.equal(line.options.interior_color, interior);
+    }
+    assert.equal(planned.plan.lines[0].options.hardware_color, interior);
+    assert.equal(planned.plan.lines[0].options.screen, interior);
+  }
+});
 test('fresh exact reviewed submission skips AI and retains identity, source and revision', async () => {
   const reviewed = await review(draft());
   assert.equal(reviewed.review.ready, true);
