@@ -23,6 +23,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState([]);
   const [outlook, setOutlook] = useState(null);
   const [outlookError, setOutlookError] = useState("");
+  const [partialOutlook, setPartialOutlook] = useState(null);
   const [showIsrael, setShowIsrael] = useState(true);
   const [showOutlook, setShowOutlook] = useState(true);
   const [jobs, setJobs] = useState([]);
@@ -52,6 +53,8 @@ export default function CalendarPage() {
       try {
         const snapshots = await base44.entities.OutlookCalendarSnapshot.filter({complete:true,calendar_name:"UT Window Install"}, "-captured_at", 1);
         setOutlook(snapshots[0] || null); setOutlookError("");
+        const recent = await base44.entities.OutlookCalendarSnapshot.filter({calendar_name:"UT Window Install"}, "-captured_at", 1);
+        setPartialOutlook(recent[0]?.complete === false ? recent[0] : null);
       } catch { setOutlookError("Outlook import could not be loaded."); }
     }
   };
@@ -169,6 +172,7 @@ export default function CalendarPage() {
           </div>
           <p className="text-xs mt-2">{outlook ? `Outlook coverage: ${outlook.range_start} through ${outlook.range_end}. Captured ${new Date(outlook.captured_at).toLocaleString()}. ${outlook.event_count} source events; ${combined.hidden} confirmed overlaps hidden in favor of Israel.` : "No complete Outlook import yet."}</p>
           {outlook && Date.now()-new Date(outlook.captured_at).getTime()>26*3600000 && <p className="text-xs text-amber-700">Outlook copy is over 26 hours old.</p>}
+          {partialOutlook && <p role="status" className="text-xs text-amber-700">Latest collection is incomplete ({partialOutlook.event_count} events captured). It has not replaced the calendar overlay. {partialOutlook.collection_notes}</p>}
           {outlookError && <p role="alert">{outlookError}</p>}
         </div>}
         {creating && (
