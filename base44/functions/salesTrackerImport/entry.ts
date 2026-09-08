@@ -20,11 +20,13 @@ Deno.serve(async(req)=>{
   if(latest && captured.getTime()<new Date(latest.source_captured_at).getTime()) throw Error("This snapshot is older than the current source. Current data was preserved.");
   const sha=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),b=>b.toString(16).padStart(2,"0")).join("");
   if(latest?.sha256===sha && latest.source_captured_at===captured.toISOString()) return Response.json({id:latest.id,row_count:latest.row_count,unchanged:true});
+  const {file_uri}=await client.integrations.Core.UploadPrivateFile({file:new File([bytes],body.filename,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})});
+  if(!file_uri) throw Error("Private file upload did not return a file reference.");
   // One immutable insert publishes the complete validated snapshot. Failed parses never replace current data.
   const saved=await entity.create({filename:body.filename,sha256:sha,
     imported_at:new Date().toISOString(),source_captured_at:captured.toISOString(),
     source_path:"Window Master / Window Folders / Outside Sales Reps / Gabe Customers / SALES TRACKER.xlsx",
-    status:"validated",rows:parsed.rows,row_count:parsed.rows.length,sheet_names:parsed.sheet_names,file_base64:body.file_base64});
+    status:"validated",row_count:parsed.rows.length,sheet_names:parsed.sheet_names,file_uri});
   return Response.json({id:saved.id,row_count:parsed.rows.length,sheet_names:parsed.sheet_names,sha256:sha});
  } catch(error) {return Response.json({error:error.message||"Import failed. Previous snapshot preserved."},{status:400});}
 });
