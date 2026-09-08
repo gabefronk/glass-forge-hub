@@ -15,4 +15,5 @@ r=run([], [{...e,job_name:"- Amsco Will Call -"}]);assert.equal(r.hidden.length,
 assert.equal(trackerMatches({...e,job_name:"Holmes Homes - 263-266 Deer Springs"},[{...row,lot:"266"}]).length,1);
 assert.equal(trackerMatches({...e,oe_number:"12345678-01"},[row]).length,1);
 r=run([{...e,oe_number:"",po_number:"",address:"123 Test St",scope_notes:"Finish install"}],[{...e,oe_number:"",po_number:"",address:"123 Test St",scope_notes:"Finish install"}]);assert.equal(r.counts.merged_duplicates,1);
+assert.equal(trackerMatches({...e,job_name:"YA - #1 (2 Techs) Holmes Homes - 263 Deer Springs"},[{...row,lot:"1"},{...row,lot:"2"}]).length,0);
 console.log("Calendar coordinator matching and source-preservation checks passed.");
