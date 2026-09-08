@@ -274,7 +274,7 @@ test('Jordan correction can cancel historical obscure texture before a requireme
     normalizeStructured: value => normalizeConversationalSchedule(value, { getProductProfileForLine })
   });
   assert.notEqual(result.intake_assessment.status, 'unavailable', JSON.stringify(result.intake_assessment.failure_reason));
-  assert.equal(result.intake_assessment.version, 9);
+  assert.equal(result.intake_assessment.version, 10);
   assert.equal(result.quote.lines.length, 3);
   assert.deepEqual(result.quote.lines.slice(0, 2).map(line => [line.style, line.options.operation, line.options.fin]), [
     ['Studio XO Slider', 'XO', 'Flush Fin'], ['Studio XO Slider', 'XO', 'Regular Nail Fin']
@@ -375,4 +375,3 @@ test('an explicitly requested clear coating remains clear in both schedule and s
   assert.equal(result.quote.lines[0].options.glass, 'Clear');
   assert.equal(result.intake_assessment.summary, 'One tempered picture window with clear glass.');
 });
-
