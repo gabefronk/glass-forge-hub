@@ -1,8 +1,8 @@
 // Staged capability contract. Native dropdown evidence is not release evidence.
 // Only this server/runner source registry may enable a product; requests cannot.
 export const MIXED_SUPPORT_ID = 'studio-mixed-products-v2';
-export const PROFILE_CONTRACT_VERSION = 1;
-export const PROFILE_CONTRACT_HASH = '9bc0fe9b87a481438a1ff2eb3c740138d2f2d588c2c0cb40249f9343cb9171ab';
+export const PROFILE_CONTRACT_VERSION = 2;
+export const PROFILE_CONTRACT_HASH = '26893e48e687fcd2f1de6fd23213afcfcb54a368749cde5e575d7f4abf77a8e6';
 const choice = (values, aliases = {}) => ({ type: 'choice', values, aliases });
 const boolean = values => ({ type: 'boolean', values });
 const common = {
@@ -18,6 +18,13 @@ const slider = {
 };
 const sliderDefaults = Object.fromEntries(Object.entries(slider).map(([key, rule]) => [key, rule.values[0]]));
 const sliderQuestionValues = { glazing_method: { '3/4 inch Insulated Glass': '3/4" Insulated' } };
+// Omitted ancillary choices follow the fresh native configurator. These are
+// typed observation limits, never a size-to-glass lookup or a replacement rule.
+const standardNativeDefaults = {
+  glazing_method: choice(['3/4 inch Insulated Glass', '1 inch Insulated Glass'], { '3/4" Insulated': '3/4 inch Insulated Glass', '1" Insulated': '1 inch Insulated Glass' }),
+  glass_thickness: choice(['SS over SS', 'DS over DS']),
+  super_spacer: boolean([false, true]), capillary_tubes: boolean([false, true])
+};
 const obscurePicture = {
   ...common, tempered: boolean([true]), patterned_glass: choice(['Obscure']),
   glazing_method: choice(['1 inch Insulated Glass'], { '1" Insulated': '1 inch Insulated Glass' }),
@@ -61,7 +68,7 @@ const profiles = [
   {
     id: 'studio-flush-fin-xo-v1', status: 'verified', style: 'Studio XO Slider', family: 'xo_slider',
     series: 'Studio Flush Fin', native: { series: 'Studio Flush Fin', style: 'Single Vent', summary_style: 'Studio Flush Fin Single Vent', operation: 'XO', question_values: sliderQuestionValues },
-    color_pairs: [['White', 'White']], option_rules: slider, defaults: sliderDefaults, match_interior_options: ['hardware_color', 'screen'], summary: sliderSummary,
+    color_pairs: [['White', 'White']], option_rules: slider, defaults: sliderDefaults, native_default_rules: standardNativeDefaults, match_interior_options: ['hardware_color', 'screen'], summary: sliderSummary,
     dimensions: { call: { widths: [24, 30, 36, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96], heights: [12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72], frame_width_offset: -0.5, frame_height_offset: -0.5,
       cases: [{ width: 60, height: 60, call_width: 60, call_height: 60, frame_width: 59.5, frame_height: 59.5 }] } },
     evidence: { configurator: 'work/amsco-validation/flush-slider-final-summary.json',
@@ -72,7 +79,7 @@ const profiles = [
   {
     id: 'studio-setback-xo-v1', status: 'verified', style: 'Studio XO Slider', family: 'xo_slider',
     series: 'Studio 1 3/8 inch Fin Setback', native: { series: 'Studio 1 3/8" Fin Setback', style: 'Single Vent', summary_style: 'Studio Single Vent', operation: 'XO', question_values: sliderQuestionValues },
-    color_pairs: [['White', 'White']], option_rules: slider, defaults: sliderDefaults, match_interior_options: ['hardware_color', 'screen'],
+    color_pairs: [['White', 'White']], option_rules: slider, defaults: sliderDefaults, native_default_rules: standardNativeDefaults, match_interior_options: ['hardware_color', 'screen'],
     summary: { ...sliderSummary, fixed_fields: { ...sliderSummary.fixed_fields, 'Remove Nailing Fin': 'No', 'Sloped Sill Adapter': 'No', 'Head Expander': 'No' } },
     dimensions: { call: { widths: [24, 30, 36, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96], heights: [12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72], frame_width_offset: -0.5, frame_height_offset: -0.5,
       cases: [{ width: 60, height: 60, call_width: 60, call_height: 60, frame_width: 59.5, frame_height: 59.5 }] } },
@@ -123,7 +130,7 @@ const profiles = [
     id: 'studio-setback-direct-set-regular-standard-v1', status: 'verified', style: 'Studio Picture', family: 'picture_direct_set',
     series: 'Studio 1 3/8 inch Fin Setback', selection: { tempered: false, patterned_glass: 'None' },
     native: { series: 'Studio 1 3/8" Fin Setback', style: 'Direct Set', summary_style: 'Studio Direct Set', question_values: sliderQuestionValues },
-    color_pairs: [['White', 'White']], option_rules: standardPicture,
+    color_pairs: [['White', 'White']], option_rules: standardPicture, native_default_rules: standardNativeDefaults,
     defaults: Object.fromEntries(Object.entries(standardPicture).map(([key, rule]) => [key, rule.values[0]])),
     summary: { option_labels: baseSummary.option_labels,
       fixed_fields: { ...baseSummary.fixed_fields, 'Remove Nailing Fin': 'No', 'Sloped Sill Adapter': 'No', 'Head Expander': 'No', 'Hide Bid Code In Description': 'No' },
@@ -131,8 +138,8 @@ const profiles = [
       informational_labels: [...commonInformationalLabels, 'Fixed Glass (w x h)'],
       absent_labels: ['Hardware Type', 'Hardware Finish', 'Screen', 'Operation / Venting', 'Sash Split'], screen: 'not_applicable' },
     // A native call-size selection is eligible for configuration, not a promise
-    // of product availability. SS-over-SS must remain valid in the native UI and
-    // match the Summary; larger sizes that need another glass recipe fail closed.
+    // of product availability. Native-selected ancillary values must pass the
+    // typed policy and remain identical before save, after save and on reopening.
     dimensions: { call: { widths: Array.from({ length: 19 }, (_, index) => 12 + index * 6), heights: Array.from({ length: 19 }, (_, index) => 12 + index * 6),
       frame_width_offset: -0.5, frame_height_offset: -0.5,
       cases: [{ width: 48, height: 48, call_width: 48, call_height: 48, frame_width: 47.5, frame_height: 47.5 }] } },
@@ -199,4 +206,3 @@ export function profileIsExecutable(profile) {
     Object.keys(profile.dimensions || {}).length > 0 && Object.keys(profile.option_rules || {}).length > 0 &&
     typeof profile.native?.summary_style === 'string' && profile.color_pairs?.length > 0;
 }
-
