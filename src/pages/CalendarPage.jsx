@@ -8,6 +8,7 @@ import MonthGrid from "@/components/calendar/MonthGrid";
 import EventForm from "@/components/calendar/EventForm";
 import EventBubble from "@/components/calendar/EventBubble";
 import OutlookEventDetails from "@/components/calendar/OutlookEventDetails";
+import CleanCalendar from "@/components/calendar/CleanCalendar";
 import { combineCalendarSources, snapshotEvents } from "@/lib/outlookCalendar";
 
 function formatMonth(m) {
@@ -21,6 +22,7 @@ const OUTLOOK_COLOR = "#7042A1";
 
 export default function CalendarPage() {
   const [events, setEvents] = useState([]);
+  const [cleanView,setCleanView] = useState(true);
   const [outlook, setOutlook] = useState(null);
   const [outlookError, setOutlookError] = useState("");
   const [partialOutlook, setPartialOutlook] = useState(null);
@@ -127,12 +129,14 @@ export default function CalendarPage() {
     return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   };
 
+  if(user?.role==="admin" && cleanView) return <div className="p-5" style={{backgroundColor:C.pageBg,minHeight:"100vh"}}><button className="mb-4 underline" onClick={()=>setCleanView(false)}>View original calendars</button><CleanCalendar /></div>;
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3 mb-5">
           <div className="mono-label-sm">Installation schedule</div>
+          {user?.role==="admin"&&<button className="underline" onClick={()=>setCleanView(true)}>My clean calendar</button>}
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             <div className="flex rounded-full p-0.5" style={{ border: `1px solid ${C.border}` }}>
               <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "month" ? "" : "")} style={view === "month" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>Month</button>
