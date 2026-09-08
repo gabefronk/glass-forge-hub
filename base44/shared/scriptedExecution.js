@@ -1,4 +1,5 @@
 import { HttpError, publicQuote, sanitizePublic, sha256, validateLines, validateSettings, validateResult } from './windowQuotesCore.js';
+import { reviewedRestartAllowsHistory } from './reviewedRestart.js';
 
 export const SCRIPTED_PROVIDER = 'deterministic';
 const LOCK_NAME = 'Base44 Window Quotes browser';
@@ -41,8 +42,9 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
     if (q.sales_status === 'won' || q.job_id || q.accepted_revision || q.result) fail(409, 'An existing result or accepted quote cannot enter this pilot');
   };
   const hasNative = value => value && typeof value === 'object' && Object.entries(value).some(([key, item]) => (/^native_quote_(id|number|url)$/.test(key) && !!item) || (item && typeof item === 'object' && hasNative(item)));
-  const fresh = q => {
-    if (q.checkpoint && Object.keys(q.checkpoint).length || hasNative(q.history)) fail(409, 'Historical native quotes are excluded from this pilot');
+  const fresh = async q => {
+    const reviewed = !!config.queue_scope_hash && q.reviewed_restart?.queue_scope_hash === config.queue_scope_hash && await reviewedRestartAllowsHistory(q, hash);
+    if (q.checkpoint && Object.keys(q.checkpoint).length || hasNative(q.history) && !reviewed) fail(409, 'Historical native quotes are excluded from this pilot');
     if (q.execution_provider && q.execution_provider !== SCRIPTED_PROVIDER || q.agent_run && q.agent_run.phase !== 'prepared') fail(409, 'An existing execution cannot be transferred into this pilot');
     if (!['draft', 'needs_details', 'queued'].includes(q.worker_status)) fail(409, 'Only a new unstarted request may enter this pilot');
   };
@@ -72,7 +74,7 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
     q = await get(db, q.id); scope(q);
     if (user?.role !== 'admin' || (user.email || user.id) !== allow.requester_email) fail(403, 'This administrator is not the pilot requester');
     if (q.execution_provider === SCRIPTED_PROVIDER && q.worker_status === 'running') return q;
-    fresh(q);
+    await fresh(q);
     const inputHash = await digest(inputSnapshot(q));
     if (q.worker_status === 'queued') { if (q.agent_run?.input_hash !== inputHash || q.agent_run?.input_revision !== q.input_revision || q.agent_run?.plan_hash !== config.expected_plan_hash || await digest(q.agent_run?.plan) !== config.expected_plan_hash) fail(409, 'Queued input no longer matches its prepared plan'); return q; }
     const normalized = await normalizeRequest(clone(q));
@@ -102,7 +104,7 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
       if (run?.worker_id !== worker.id || run.claim_id !== claimId || run.plan_hash !== config.expected_plan_hash || await digest(run.plan) !== config.expected_plan_hash || !Number.isFinite(Date.parse(run.lease_expires_at)) || run.lease_expires_at <= at()) fail(409, 'An active or expired execution cannot be claimed again');
       await ownsLock(db, run); return { ok: true, quote: handoff(q), replayed: true };
     }
-    fresh(q);
+    await fresh(q);
     if (q.worker_status !== 'queued' || q.agent_run?.phase !== 'prepared' || q.agent_run.input_revision !== q.input_revision || q.agent_run.input_hash !== await digest(inputSnapshot(q)) || q.agent_run.plan_hash !== config.expected_plan_hash || q.agent_run.plan_hash !== await digest(q.agent_run.plan)) fail(409, 'Only an unchanged prepared queued request may be claimed');
     const slot = await lock(db); if (slot.busy_token) fail(409, 'The shared browser is already owned; expiry never permits takeover');
     const run = { ...q.agent_run, phase: 'running', operation_id: uuid(), execution_token: uuid() + uuid(), claim_id: claimId, worker_id: worker.id, started_at: at(), lease_expires_at: expiry(), event_receipts: [] };
@@ -144,6 +146,7 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
     const value = bounded(raw, 'checkpoint', 120000);
     const id = text(value.native_quote_id, 'native quote ID', 100), number = text(String(value.native_quote_number ?? ''), 'native quote number', 100);
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) fail(400, 'The native quote checkpoint requires a valid GUID');
+    if ((q.history || []).some(item => item.reason === 'reviewed_failed_restart' && (item.checkpoint?.native_quote_id?.toLowerCase() === id.toLowerCase() || item.checkpoint?.native_quote_number === number))) fail(409, 'A reviewed retry must save a fresh native quote; previous drafts cannot be reused');
     let url; try { url = new URL(value.native_quote_url); } catch { fail(400, 'Invalid native quote checkpoint URL'); }
     if (id.toLowerCase() === EXCLUDED_NATIVE_ID || number === EXCLUDED_NATIVE_NUMBER || url.protocol !== 'https:' || url.hostname !== 'amsco.wtsparadigm.com' || url.username || url.password || url.search || url.hash || url.pathname.split('/')[1] !== 'quotes' || url.pathname.split('/')[2] !== id) fail(400, 'Use a newly saved native quote with its matching identity');
     for (const key of ['native_quote_id', 'native_quote_number', 'native_quote_url']) if (q.checkpoint?.[key] && q.checkpoint[key] !== ({ native_quote_id: id, native_quote_number: number, native_quote_url: url.href })[key]) fail(409, 'Native checkpoint identity cannot change');

@@ -1,5 +1,7 @@
+import { advanceReviewedRestart } from './reviewedRestart.js';
+
 const LEASE_MS = 10 * 60 * 1000;
-const USER_ACTIONS = new Set(["list", "detail", "create", "message", "update", "queue", "convert_won", "delete"]);
+const USER_ACTIONS = new Set(["list", "detail", "create", "message", "update", "queue", "retry_failed", "convert_won", "delete"]);
 const WORKER_ACTIONS = new Set(["worker_poll", "worker_update", "worker_heartbeat"]);
 const TERMINAL = new Set(["needs_details", "needs_sign_in", "failed", "ready"]);
 const PRODUCT_SETTINGS = new Set(["color", "glass", "series", "altitude", "screen", "spacer", "tempered", "options", "finish", "grid", "hardware"]);
@@ -82,7 +84,7 @@ const PRIVATE_PUBLIC_KEYS = new Set([
   "checkpoint", "checkpoints", "history", "conversation", "audit", "auditlog", "workertrace",
   "leasetoken", "leaserevision", "leaseexpiresat", "conversiontoken", "conversionexpiresat",
   "lastworkereventid", "lastworkerleasetoken", "workerid", "tokenhash", "accesstoken", "refreshtoken",
-  "agentrun", "agentconversationid", "agentoperationid", "agentdispatchtoken", "executiontoken"
+  "agentrun", "agentconversationid", "agentoperationid", "agentdispatchtoken", "executiontoken", "reviewedrestart"
 ]);
 const NATIVE_HOST_PATTERN = String.raw`(?:[a-z0-9-]+\.)*(?:wtsparadigm\.com|myparadigmcloud\.com)|webcp-prod-gs\.azurewebsites\.net`;
 const NATIVE_HOST = new RegExp("(?:^|[^a-z0-9.-])(?:" + NATIVE_HOST_PATTERN + ")(?=[^a-z0-9.-]|$)", "i");
@@ -128,7 +130,16 @@ function workerQuote(quote) {
   return safe;
 }
 export function publicQuote(quote) {
-  return sanitizePublic(workerQuote(quote));
+  const safe = workerQuote(quote);
+  if (!safe) return null;
+  delete safe.retry_review; delete safe.previous_attempts;
+  if (quote.worker_status === 'failed' && quote.execution_provider === 'deterministic' && quote.agent_run?.phase === 'completed' && quote.agent_run?.terminal_status === 'failed' && !quote.result && !quote.job_id && !quote.accepted_revision && quote.sales_status !== 'won') {
+    safe.retry_review = { expected_revision: quote.input_revision, expected_state_version: quote.state_version || 0,
+      native_quote_id: quote.checkpoint?.native_quote_id || null, native_quote_number: quote.checkpoint?.native_quote_number || null };
+  }
+  const previous = (quote.history || []).filter(item => item.reason === 'reviewed_failed_restart').map(item => ({ revision: item.revision, native_quote_number: item.checkpoint?.native_quote_number || null, reviewed_at: item.recorded_at }));
+  if (previous.length) safe.previous_attempts = previous;
+  return sanitizePublic(safe);
 }
 function workerMessage(m, quoteId) {
   return { id: m.id || m.client_message_id, quote_id: quoteId, role: m.role, content: m.content, client_message_id: m.client_message_id, revision: m.revision, created_date: m.message_at || m.created_date, ...(m.kind ? { kind: m.kind } : {}), ...(m.worker_status ? { worker_status: m.worker_status } : {}) };
@@ -221,6 +232,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
       };
       const editable = q => {
         if (["queued", "running"].includes(q.worker_status)) fail(409, "Wait for the current quote run before changing its inputs");
+        if (["message", "update"].includes(action) && q.worker_status === 'failed' && q.execution_provider === 'deterministic' && q.agent_run?.phase === 'completed' && q.agent_run?.terminal_status === 'failed') fail(409, 'Review and retry the failed attempt before changing its inputs');
         if (q.conversion_token && q.conversion_expires_at > at()) fail(409, "The accepted quote is being linked to its job");
       };
       const history = (q, reason, details = {}) => [...(q.history || []), { revision: q.input_revision, recorded_at: at(), reason, settings: copy(q.settings), lines: copy(q.lines), result: copy(q.result), worker_status: q.worker_status, ...details }];
@@ -243,7 +255,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (selected.id !== q.id) fail(409, "This request already exists as " + selected.id);
         // The service owns queueing/dispatch and must dedupe retries for this request/revision.
         // Pass the full internal record, never publicQuote(), so recovery and history survive.
-        const latest = await executionService.afterInput({ db, q, user, action, client });
+        const latest = await executionService.afterInput({ db, q, user, action, body, client });
         if (!latest || typeof latest !== "object" || latest.id !== q.id) throw new Error("Execution service must return the latest quote");
         return latest;
       };
@@ -307,7 +319,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         } else {
           editable(q);
           const msg = makeMessage(body.message, "user", q.input_revision + 1, clientId, user.email || user.id, q.worker_status === "needs_details" ? "clarification_reply" : "user_message");
-          q = await cas(q, { input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", conversation: [...(q.conversation || []), msg], history: history(q, "message"), missing_details: [] });
+          q = await cas(q, { ...await advanceReviewedRestart(q, q.input_revision + 1, sha256), input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", conversation: [...(q.conversation || []), msg], history: history(q, "message"), missing_details: [] });
           await ensureMessage(q, msg);
           output = { quote: publicQuote(await afterInput(q)), message: publicMessage(msg, q.id) };
         }
@@ -320,8 +332,12 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (own(body, "lines")) patch.lines = validateLines(body.lines);
         if (own(body, "source")) patch.source = jsonValue(object(body.source, "source"), "source", 150000);
         if (!["title", "settings", "lines", "source"].some(k => own(body, k))) fail(400, "No changes supplied");
-        if (Object.entries(patch).some(([key, value]) => stable(value) !== stable(q[key]))) q = await cas(q, { ...patch, input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", history: history(q, "edited", { schedule_changed: own(patch, "lines") && stable(patch.lines) !== stable(q.lines) }), missing_details: [] });
+        if (Object.entries(patch).some(([key, value]) => stable(value) !== stable(q[key]))) q = await cas(q, { ...patch, ...await advanceReviewedRestart(q, q.input_revision + 1, sha256), input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", history: history(q, "edited", { schedule_changed: own(patch, "lines") && stable(patch.lines) !== stable(q.lines) }), missing_details: [] });
         output = { quote: publicQuote(q) };
+      } else if (action === "retry_failed") {
+        if (!executionService || executionService.provider !== 'deterministic') fail(409, 'Reviewed retries are unavailable for this quoting service');
+        const q = await getQuote(body.quote_id);
+        output = { quote: publicQuote(await afterInput(q)) };
       } else if (action === "queue") {
         let q = await getQuote(body.quote_id);
         if (executionService) {

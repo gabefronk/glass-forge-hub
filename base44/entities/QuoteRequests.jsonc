@@ -140,6 +140,11 @@
     "agent_run": {
       "type": "object",
       "description": "Private Base44 operation capability, dispatch identity and recovery; never expose through public app/MCP responses."
+    },
+    "reviewed_restart": {
+      "type": "object",
+      "description": "Private server-generated authorization for an explicitly reviewed fresh attempt of a failed request. Scoped to its request, revision, attempt and archived history; never accept from ordinary input or expose in public responses.",
+      "rls": { "read": false, "write": false }
     }
   },
   "required": [
