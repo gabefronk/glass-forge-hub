@@ -217,7 +217,12 @@ async function moveToProcessed(token, fileId) {
 }
 
 async function moveTo(token, fileId, toFolder, fromFolder) {
-  return driveJson(token, `${DRIVE}/files/${fileId}?addParents=${toFolder}&removeParents=${fromFolder}&fields=id,parents`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  // Remove every current parent (not just the one we expect) so re-filing a moved file still works.
+  const meta = await driveJson(token, `${DRIVE}/files/${fileId}?fields=id,parents`);
+  const current = (meta.parents || []).filter(p => p !== toFolder);
+  if (!current.length && (meta.parents || []).includes(toFolder)) return meta;
+  const remove = current.length ? current.join(',') : fromFolder;
+  return driveJson(token, `${DRIVE}/files/${fileId}?addParents=${toFolder}&removeParents=${remove}&fields=id,parents`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' });
 }
 
 function cleanName(s, fallback) {
