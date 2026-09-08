@@ -13,7 +13,7 @@ Deno.serve(async(req)=>{
   const norm=v=>String(v??"").trim().replace(/\s+/g," ").toLowerCase();
   const keys=["builder","subdivision","lot","oe","po"].filter(k=>norm(query[k]));
   let rows=[];
-  if(keys.length){
+  if(keys.length || query.sheet){
    stage="create private download link";
    const {signed_url}=await client.asServiceRole.integrations.Core.CreateFileSignedUrl({file_uri:snapshot.file_uri,expires_in:300});
    stage="download private workbook";
@@ -25,6 +25,27 @@ Deno.serve(async(req)=>{
    const sha=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),b=>b.toString(16).padStart(2,"0")).join("");
    if(sha!==snapshot.sha256) throw Error("Workbook integrity check failed.");
    stage="parse workbook";
+   if(query.sheet){
+    if(!["DAILY SALES","JOB SCHEDULE"].includes(query.sheet)) throw Error("Unsupported sheet");
+    const lib=XLSX.default||XLSX;
+    const workbook=lib.read(bytes,{type:"array"});
+    const sheet=workbook.Sheets[query.sheet];
+    if(!sheet) throw Error("Worksheet missing");
+    const range=lib.utils.decode_range(sheet["!ref"]||"A1");
+    if(range.e.r>50000||range.e.c>300) throw Error("Worksheet too large");
+    const start=Math.max(0,Math.min(range.e.r,Math.floor(Number(query.start)||0)));
+    const end=Math.min(range.e.r+1,start+100);
+    const grid=[];
+    for(let r=start;r<end;r++){
+     const cells=[];
+     for(let c=0;c<=range.e.c;c++){
+      const cell=sheet[lib.utils.encode_cell({r,c})];
+      cells.push(cell ? String(cell.w??lib.utils.format_cell(cell)??"") : "");
+     }
+     grid.push({row:r+1,cells});
+    }
+    return Response.json({sheet:query.sheet,columns:Array.from({length:range.e.c+1},(_,c)=>lib.utils.encode_col(c)),grid,total_rows:range.e.r+1,start,end,source_captured_at:snapshot.source_captured_at});
+   }
    rows=parseTracker(XLSX,bytes).rows;
   }
   const matches=keys.length?rows.filter(r=>keys.every(k=>norm(r[k])===norm(query[k]))):[];
