@@ -73,6 +73,13 @@
       "type": "string",
       "description": "Drive id of the takeoff CSV written next to the processed plan"
     },
+    "job_folder_id": {
+      "type": "string",
+      "description": "Drive id of the Glass Forge Jobs/<Builder>/<Job> folder the plan was filed into"
+    },
+    "job_folder_path": {
+      "type": "string"
+    },
     "error": {
       "type": "string"
     },
