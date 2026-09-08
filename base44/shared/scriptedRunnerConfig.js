@@ -5,7 +5,7 @@ const FIELDS = ['enabled', 'mode', 'queue_allow', 'allow', 'worker_id', 'worker_
 export const NATIVE_ENGINE_POLICY = Object.freeze({
   enabled: true,
   version: 1,
-  contract_hash: 'c5e0e271caf3203fff50856e6683a7cec40753ef10cca56627c9b745d48e906b',
+  contract_hash: 'd97524eb98e459ff15bb0325d54412abdde706d8c451fbfcb5e08ac843daaaed',
   catalog_id: '361',
   context_fingerprint: '1edbe92e64fa350fd31edc93872355016a697d13320234ed7645ac529faa06de'
 });
