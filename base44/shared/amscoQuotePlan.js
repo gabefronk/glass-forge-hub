@@ -42,7 +42,7 @@ function canonicalColors(raw, settings, profile, issues, path) {
   if (!profile.color_pairs.some(allowed => allowed[0] === pair[0] && allowed[1] === pair[1])) issue(issues, 'unsupported_colors', path + '.color', 'This product and color combination needs a verified native configuration.');
   return { color: pair[0] === pair[1] ? pair[0] : 'Black outside / White inside', exterior_color: pair[0], interior_color: pair[1] };
 }
-export function canonicalProductOptions(raw, settings, profile, issues = [], path = 'options') {
+export function canonicalProductOptions(raw, settings, profile, issues = [], path = 'options', { observedDefaults = null } = {}) {
   if (!object(raw)) { issue(issues, 'invalid_options', path, 'Window options must be a structured object.'); raw = {}; }
   const allowed = new Set(['series', 'fin', 'color', 'exterior_color', 'interior_color', ...Object.keys(profile.option_rules)]);
   for (const key of Object.keys(raw)) if (!allowed.has(key)) issue(issues, 'unsupported_option', path + '.' + key, 'The supplied ' + key.replaceAll('_', ' ') + ' has no verified mapping for this product.');
@@ -53,12 +53,40 @@ export function canonicalProductOptions(raw, settings, profile, issues = [], pat
   const out = { series: profile.series, ...canonicalColors(raw, settings, profile, issues, path) };
   for (const [key, rule] of Object.entries(profile.option_rules)) {
     const supplied = present(raw[key]) ? raw[key] : settings[key];
-    const canonical = canonicalProductOption(rule, supplied);
+    if (observedDefaults === null && !present(supplied) && profile.native_default_rules?.[key]) continue;
+    const selectedRule = observedDefaults?.includes(key) ? profile.native_default_rules?.[key] : rule;
+    const canonical = canonicalProductOption(selectedRule, supplied);
     if (canonical === undefined) issue(issues, present(supplied) ? 'unsupported_option' : 'missing_option', path + '.' + key,
       (present(supplied) ? 'Review the requested ' : 'Specify ') + key.replaceAll('_', ' ') + ' for ' + profile.style + '.');
     else out[key] = canonical;
   }
   return out;
+}
+export function nativeDefaultFieldsForLine(line) {
+  const profile = getProductProfileById(line?.product_profile_id);
+  return Object.keys(profile?.native_default_rules || {}).filter(key => !present(line?.options?.[key])).sort();
+}
+export function validateNativeDefaultEvidence(expected, observed) {
+  const fields = nativeDefaultFieldsForLine(expected), issues = [], values = {};
+  const profile = getProductProfileById(expected?.product_profile_id), evidence = observed?.native_default_evidence;
+  const reject = message => issue(issues, 'native_default_evidence_invalid', 'native_default_evidence', message);
+  const exactKeys = (value, keys) => object(value) && Object.keys(value).sort().join('|') === [...keys].sort().join('|');
+  if (!fields.length) {
+    if (present(evidence)) reject('Unexpected native-default evidence for an explicitly configured line.');
+    return { ok: issues.length === 0, issues, values };
+  }
+  const stages = ['before_save', 'after_save', 'reopened'];
+  if (!exactKeys(evidence, stages)) reject('Native defaults require separate before-save, after-save and reopened observations.');
+  else {
+    for (const stage of stages) if (!exactKeys(evidence[stage], fields)) reject('Each native-default observation must contain exactly the planned ancillary fields.');
+    for (const key of fields) {
+      const rule = profile.native_default_rules[key], first = evidence.before_save?.[key];
+      if (canonicalProductOption(rule, first) !== first || first === undefined) { reject('A native-default observation has an unsupported value or type.'); continue; }
+      if (stages.some(stage => evidence[stage]?.[key] !== first) || observed?.options?.[key] !== first) reject('Native ancillary selections changed between configuration, saving and reopening.');
+      else values[key] = first;
+    }
+  }
+  return { ok: issues.length === 0, issues, values };
 }
 export function plannedDimensions(line, profile, issues = [], path = '') {
   const basis = profile.dimensions[line.dimension_basis];
@@ -124,9 +152,12 @@ export function buildQuotePlan(quote) {
     if (!Number.isSafeInteger(line.qty) || line.qty < 1 || line.qty > 1000) issue(issues, 'invalid_quantity', path + '.qty', 'Provide a whole-number quantity from 1 through 1000.');
     for (const key of ['components', 'mulls', 'shape']) if (present(line[key])) issue(issues, 'unsupported_assembly', path + '.' + key, 'This path supports a rectangular one-wide complete unit.');
     const options = canonicalProductOptions(line.options, settings, profile, issues, path + '.options');
+    const nativeDefaultFields = nativeDefaultFieldsForLine({ product_profile_id: profile.id, options });
+    if (Object.hasOwn(line, 'native_default_fields') && JSON.stringify(line.native_default_fields) !== JSON.stringify(nativeDefaultFields)) issue(issues, 'invalid_native_default_fields', path + '.native_default_fields', 'Native-default fields are derived from omitted options and the trusted product policy.');
     lines.push({ source_index: index, ...(present(line.mark) ? { mark: word(line.mark) } : {}), room: word(line.room), qty: line.qty,
       width: line.width, height: line.height, units: 'in', dimension_basis: line.dimension_basis, style: profile.style,
-      ...plannedDimensions(line, profile, issues, path), options, ...(object(line.source_reference) ? { source_reference: clone(line.source_reference) } : {}), product_profile_id: profile.id });
+      ...plannedDimensions(line, profile, issues, path), options, ...(object(line.source_reference) ? { source_reference: clone(line.source_reference) } : {}), product_profile_id: profile.id,
+      ...(nativeDefaultFields.length ? { native_default_fields: nativeDefaultFields } : {}) });
   });
   if (issues.length) return failed(issues);
   return { ok: true, plan: { schema_version: 2, support_id: MIXED_SUPPORT_ID, profile_contract_version: PROFILE_CONTRACT_VERSION,
@@ -198,9 +229,11 @@ export function verifyObservedQuote(plan, observed) {
       const checked = buildLegacyPlan({ id: plan.quote_id, input_revision: plan.input_revision, settings: plan.settings, lines: [line] });
       if (!checked.ok) optionIssues.push(...checked.issues.map(item => ({ ...item, path: item.path.replace(/^lines\[0\]/, path) })));
       actualOptions = checked.ok ? checked.plan.lines[0].options : {};
-    } else actualOptions = canonicalProductOptions(line.options, {}, profile, optionIssues, path + '.options');
+    } else actualOptions = canonicalProductOptions(line.options, {}, profile, optionIssues, path + '.options', { observedDefaults: nativeDefaultFieldsForLine(expected) });
     if (optionIssues.length) issues.push(...optionIssues.map(item => ({ ...item, code: 'observed_' + item.code })));
     for (const [key, value] of Object.entries(expected.options)) if (actualOptions[key] !== value) invalid('option_mismatch', path + '.options.' + key, 'Saved ' + key.replaceAll('_', ' ') + ' differs from the requested option.');
+    const defaults = validateNativeDefaultEvidence(expected, line);
+    issues.push(...defaults.issues.map(item => ({ ...item, path: path + '.' + item.path })));
     if (!marginMatches(line.gross_margin, plan.settings.gross_margin)) invalid('margin_mismatch', path + '.gross_margin', 'The saved line gross margin is missing or differs from the request.');
     const priceCents = {};
     for (const kind of ['list', 'dealer', 'customer']) {
@@ -217,7 +250,7 @@ export function verifyObservedQuote(plan, observed) {
       if (Math.abs(priceCents.customer - expectedCustomer) > ROUNDING_POLICY.unit_margin_tolerance_cents) invalid('customer_margin_mismatch', path + '.unit_prices.customer', 'Observed customer price does not match the requested margin within the documented one-cent per-unit tolerance.');
     }
     const observedPrices = values => Object.fromEntries(['list', 'dealer', 'customer'].map(key => [key, values?.[key]]));
-    resultLines.push({ ...clone(expected), native_line_id: line.native_line_id, native_line_number: number, unit_prices: observedPrices(line.unit_prices), line_totals: observedPrices(line.line_totals), gross_margin: line.gross_margin });
+    resultLines.push({ ...clone(expected), ...(nativeDefaultFieldsForLine(expected).length ? { options: { ...clone(expected.options), ...defaults.values }, native_default_evidence: clone(line.native_default_evidence || {}) } : {}), native_line_id: line.native_line_id, native_line_number: number, unit_prices: observedPrices(line.unit_prices), line_totals: observedPrices(line.line_totals), gross_margin: line.gross_margin });
   });
   const totals = observed.totals;
   if (!object(totals) || totals.currency !== 'USD') invalid('totals_missing', 'totals', 'Observed native USD totals are required.');
@@ -228,4 +261,3 @@ export function verifyObservedQuote(plan, observed) {
   const cleanTotals = Object.fromEntries(['list_total', 'dealer_cost', 'customer_total', 'currency', 'tax', 'freight', 'labor'].map(key => [key, totals[key]]));
   return { ok: true, result: { verified: true, quote_id: plan.quote_id, input_revision: plan.input_revision, native_quote_id: observed.native_quote_id, native_quote_number: observed.native_quote_number, native_quote_url: observed.native_quote_url, dealer: 'BFS', yard: word(observed.yard), pricing_scope: plan.pricing_scope, lines: resultLines, totals: { ...cleanTotals, gross_margin: plan.settings.gross_margin }, verification: { profile_contract_version: PROFILE_CONTRACT_VERSION, profile_contract_hash: PROFILE_CONTRACT_HASH, reopened: true, checked_at: observed.checked_at, rounding_policy: clone(ROUNDING_POLICY) } } };
 }
-
