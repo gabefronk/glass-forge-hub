@@ -1,3 +1,4 @@
+import { DESKTOP_NATIVE_SOURCE, desktopNativeIdentityIssues, desktopPersistenceIssues } from './nativeEngineObservation.js';
 import { advanceReviewedRestart } from './reviewedRestart.js';
 
 const LEASE_MS = 10 * 60 * 1000;
@@ -61,11 +62,17 @@ export function validateResult(raw) {
   const result = jsonValue(object(raw, "result"), "result", 400000);
   if (result.verified !== true) fail(400, "A ready quote requires verified AMSCO results");
   result.native_quote_id = textValue(result.native_quote_id, "AMSCO quote ID", 100, true);
+  if (result.native_source === DESKTOP_NATIVE_SOURCE) {
+    if (desktopNativeIdentityIssues(result).length || desktopPersistenceIssues(result.native_engine?.persistence).length ||
+      result.native_engine?.version !== 1 || result.native_engine?.engine !== 'amsco-navigator' || result.verification?.source !== DESKTOP_NATIVE_SOURCE ||
+      result.verification?.reopened !== true || result.verification?.persistence !== 'navigator_local') fail(400, 'A desktop result requires verified saved and reopened native evidence');
+  } else {
   result.native_quote_number = textValue(String(result.native_quote_number ?? ""), "AMSCO quote number", 100, true);
   const address = textValue(result.native_quote_url, "AMSCO quote URL", 1500, true);
   let url;
   try { url = new URL(address); } catch { fail(400, "Invalid AMSCO quote URL"); }
   if (url.protocol !== "https:" || url.hostname !== "amsco.wtsparadigm.com" || url.username || url.password || !/^\/quotes\//i.test(url.pathname) || !url.pathname.toLowerCase().includes(result.native_quote_id.toLowerCase())) fail(400, "Use the real AMSCO quote link with its matching quote ID");
+  }
   if (!Array.isArray(result.lines) || !result.lines.length) fail(400, "A verified result requires the actual quoted lines");
   object(result.totals, "result totals");
   const total = result.totals.customer_total ?? result.totals.total;
@@ -489,3 +496,4 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
     }
   };
 }
+
