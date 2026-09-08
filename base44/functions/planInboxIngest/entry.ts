@@ -109,6 +109,7 @@ Rules:
 - On ELEVATIONS: tags are usually printed twice per opening (outline + fill); count each physical opening once. Note which wall the elevation shows.
 - On WINDOW SCHEDULES: capture every row with qty, type, size and remarks.
 - Doors with glass (patio sliders, multi-slides, french doors, glass entry doors) are exterior_door. Garage doors are garage_door. Interior doors (2680, 3080 etc. inside the plan) are interior_door.
+- Tag convention on these plans: WINDOWS carry a letter suffix (FX, SH, DH, SC, CS, AW, RS, SL, PIC). A bare 4-digit tag with NO suffix (2480, 2680, 3080, 4080, 5080, 6080, 10080) is a DOOR — interior if it sits between rooms, exterior if it is on an exterior wall or opens to a patio/deck/porch. Never call a bare-number tag a window.
 - sill_height_in, distance_to_door_in, at_stairs_or_landing, wet_area must be null unless the drawing actually shows it. Never guess.
 - Also pull job name, builder, and any window spec notes (brand, material, color, glazing) if this page has them.
 Return only the JSON described by the schema.`;
@@ -118,7 +119,7 @@ const MERGE_PROMPT = `You are consolidating per-page extractions from one reside
 Input: a JSON array of pages, each with page_type, sheet_id, level and an openings list.
 Task:
 1. Build ONE line per physical opening group: same tag + same room/level = one line with qty. Floor plans are the source of truth for count and room; elevations only confirm wall and catch side-wall tags that floor-plan text missed. Elevation tags are printed twice per opening, so never let an elevation double a count.
-2. Drop interior_door entries entirely. Keep garage doors but mark kind garage_door.
+2. Drop interior_door entries entirely. Keep garage doors but mark kind garage_door. A bare-number tag with no letter suffix is a door, never a window; if it was labeled window on a page, reclassify it.
 3. Carry over sill_height_in, distance_to_door_in, adjacent_to_door, at_stairs_or_landing, wet_area, egress, tempered_called_out from whichever page showed them. Leave null when no page showed it. Do NOT infer tempering here; a separate rule engine decides that.
 4. style: expand the tag suffix — SH single hung, DH double hung, SL or RS slider, CS/SC casement, AW awning, FX/PIC fixed, PW picture; doors: patio slider, multi-slide, french, entry, garage. If unsure write the raw suffix.
 5. mark: sequential W1, W2 ... for windows, D1, D2 ... for doors, in floor-plan order (basement, main, second; rear, front, sides).
@@ -326,6 +327,7 @@ export default async function planInboxIngest(req) {
       for (const l of merged.lines || []) {
         if (!l || !l.tag) continue;
         idx++;
+        if (l.kind === 'window' && !/[A-Z]{2,}/i.test(String(l.tag).replace(/^\d+/, ''))) { l.kind = 'exterior_door'; l.notes = [l.notes, 'Bare-number tag with no window suffix; treated as a door - confirm'].filter(Boolean).join('; '); }
         const size = parseCallSize(l.tag);
         const width = size?.width ?? null;
         const height = size?.height ?? null;
