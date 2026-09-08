@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import TrackerWorksheet from "@/components/TrackerWorksheet";
 import { base44 } from "@/api/base44Client";
 const input="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm";
 const button="rounded-lg bg-[#2A5EA8] px-4 py-3 text-sm font-medium text-white disabled:opacity-50";
@@ -55,6 +56,7 @@ export default function SalesTracker(){
    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["Builder / subdivision","Lot","OE / PO","Order date","Estimated arrival","Source"].map(h=><th className="border-b p-2" key={h}>{h}</th>)}</tr></thead><tbody>{data?.matches?.map(r=><tr key={r.source_row}><td className="border-b p-2">{r.builder}<br/>{r.subdivision}</td><td className="border-b p-2">{r.lot}</td><td className="border-b p-2">{r.oe}<br/>{r.po}</td><td className="border-b p-2">{r.order_date||"—"}</td><td className="border-b p-2 font-medium">{r.arrival_date||"Not recorded"}</td><td className="border-b p-2">{r.source_sheet}<br/>{r.date_cell}</td></tr>)}</tbody></table></div>
    <p className="text-xs text-slate-600">Arrival estimates do not establish actual delivery or installation. Lots sharing an order can have different dates.</p>
   </section>
+  <TrackerWorksheet key={data?.sha256||"empty"}/>
   <section className="rounded-xl border bg-white p-5 space-y-3"><h2 className="font-semibold">Sales Tracker agent</h2><p className="text-sm text-slate-600">Optional conversational lookup. The search above does not use AI.</p>
    <div className="space-y-3">{messages.filter(m=>["user","assistant"].includes(m.role)&&typeof m.content==="string"&&m.content).map((m,i)=><div key={m.id||i} className="rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold">{m.role==="user"?"You":"Sales Tracker agent"}</p><p className="whitespace-pre-wrap text-sm">{m.content}</p></div>)}</div>
    <form onSubmit={ask} className="flex gap-2"><input aria-label="Question for Sales Tracker agent" className={input} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ask about an order, subdivision and lot"/><button className={button} disabled={busy||!question.trim()}>Ask</button></form>
