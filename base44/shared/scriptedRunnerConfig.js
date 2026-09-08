@@ -1,7 +1,7 @@
 import { HttpError } from './windowQuotesCore.js';
 
 export const SCRIPTED_CONFIG_KEY = 'amsco-scripted-pilot-v1';
-const FIELDS = ['enabled', 'mode', 'queue_allow', 'allow', 'worker_id', 'worker_key_hash', 'browser_slot_id', 'expected_plan_hash', 'lease_ms'];
+const FIELDS = ['enabled', 'mode', 'queue_allow', 'allow', 'worker_id', 'worker_key_hash', 'browser_slot_id', 'expected_plan_hash', 'lease_ms', 'native_engine'];
 
 // Fixed key, service-role-only call site. No cache, environment dependency or
 // user-supplied selector. Duplicate records fail closed rather than picking one.
@@ -14,3 +14,4 @@ export async function loadScriptedRunnerConfig({ db }) {
   if (row.mode !== undefined && !['pilot', 'queue'].includes(row.mode)) throw new HttpError(503, 'The scripted runner mode is invalid');
   return Object.fromEntries(FIELDS.filter(key => row[key] !== undefined).map(key => [key, structuredClone(row[key])]));
 }
+
