@@ -1,5 +1,6 @@
 import { normalizeEasyRequest, STANDARD_STUDIO_PROFILE } from './easyRequest.js';
 import { buildQuotePlan } from './amscoQuotePlan.js';
+import { resolveRequestedSeries } from './mixedProductProfiles.js';
 
 const singleHung = style => /^(studio)?singlehung$/.test(String(style || '').toLowerCase().replace(/[^a-z]/g, ''));
 const present = value => value !== undefined && value !== null && value !== '';
@@ -43,6 +44,21 @@ function productDefaults(line, quote, getProductProfileForLine) {
 // the old prose grammar, while retaining recipe consent and the real planner.
 export function normalizeConversationalSchedule(quote, { getProductProfileForLine } = {}) {
   const clean = { ...structuredClone(quote), message: '', request_text: '', conversation: [], history: [] };
+  for (const line of clean.lines || []) {
+    if (!singleHung(line.style)) continue;
+    const options = line.options || {};
+    // Some language providers repeat the product's own operation label. Single
+    // Hung already fixes that operation in the native contract; another real
+    // operation (XO/OX/double hung/etc.) remains an explicit unsupported choice.
+    if (normalize(options.operation) === 'singlehung') delete options.operation;
+    const selected = options.fin !== undefined || options.series !== undefined ? options : clean.settings || {};
+    const series = resolveRequestedSeries(line, clean.settings || {});
+    if (present(selected.fin) && series) {
+      options.series = series;
+      delete options.fin;
+    }
+    line.options = options;
+  }
   const normalized = normalizeEasyRequest(clean);
   const unsupported = (quote.lines || []).some(line => line.style && !singleHung(line.style));
   if (!unsupported) return normalized;

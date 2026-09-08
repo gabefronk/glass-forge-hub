@@ -302,3 +302,51 @@ test('actual queue persists stale builder review as needs_details without prepar
   assert.equal(api.rows.QuoteRequests[0].intake_assessment.input_revision, 1);
   assert.equal(api.models, 0);
 });
+const liveMessage = 'Can you quote me one 3050 single hung and one 4040 picture window, white with standard options?';
+const liveOutput = () => modelOutput({ lines: [
+  { line_id: 'new-1', style: 'Studio Single Hung', width: 36, height: 60, qty: 1, options: { operation: 'Single Hung' }, source_quotes: ['one 3050 single hung'] },
+  { line_id: 'new-2', style: 'Studio Picture', width: 48, height: 48, qty: 1, options: {}, source_quotes: ['one 4040 picture window'] }
+], questions: ['Do any of these windows require tempered glass?'] });
+test('actual builder AI preview alias and routine tempering question normalize to a ready mixed schedule', async () => {
+  const value = draft(); value.lines = []; delete value.source.easy_request.dimension_basis;
+  const api = harness({ normalizeAI: actualAI(liveOutput()) });
+  const result = await api.call({ action: 'assist', draft: value, conversation: [{ role: 'user', content: liveMessage }] });
+  assert.equal(result.status, 200, JSON.stringify(result.body));
+  assert.equal(result.body.review.ready, true, JSON.stringify(result.body.review));
+  assert.deepEqual(result.body.review.questions, []);
+  assert.deepEqual(result.body.review.product_review, []);
+  assert.equal(result.body.draft.lines[0].options.operation, undefined);
+  assert.equal(result.body.draft.lines[0].options.tempered, false);
+  assert.equal(result.body.draft.lines[1].options.tempered, false);
+  assert.equal(result.body.draft.lines[0].dimension_basis, 'call');
+  assert.equal(result.body.draft.lines[1].dimension_basis, 'call');
+  assert.equal((await review(result.body.draft)).review.ready, true);
+  assert.equal((await createBuilderAwareIntake(async () => { throw Error('No model'); })(fresh(result.body))).ok, true);
+});
+test('Single Hung operation aliases cannot hide a genuinely different operation or conflicting fin', async () => {
+  for (const options of [{ operation: 'Double Hung' }, { operation: 'XO' }, { operation: 'Single Hung', fin: 'flush fin' }, { operation: 'Single Hung', fin: 'flush fin', series: 'Studio 1 3/8 inch Fin Setback' }]) {
+    const value = draft(); value.lines = [];
+    const output = liveOutput(); output.lines[0].options = options;
+    const result = await harness({ normalizeAI: actualAI(output) }).call({ action: 'assist', draft: value, conversation: [{ role: 'user', content: liveMessage }] });
+    assert.equal(result.status, 200); assert.equal(result.body.review.ready, false);
+    if (options.operation !== 'Single Hung') assert.equal(result.body.draft.lines[0].options.operation, options.operation);
+  }
+});
+test('explicit tempering, uncertainty and safety/location notes retain their question and selections', async () => {
+  for (const suffix of ['The picture must be tempered.', 'I am not sure whether safety glass is needed.', 'Do not assume anything.', 'The picture is next to a door.']) {
+    const value = draft(); value.lines = [];
+    const output = liveOutput();
+    if (suffix.includes('must be tempered')) output.lines[1].options.tempered = true;
+    const result = await harness({ normalizeAI: actualAI(output) }).call({ action: 'assist', draft: value, conversation: [{ role: 'user', content: liveMessage + ' ' + suffix }] });
+    assert.equal(result.status, 200); assert.equal(result.body.review.ready, false);
+    assert.ok(result.body.review.questions.some(item => /tempered/.test(item)));
+    if (suffix.includes('must be tempered')) assert.equal(result.body.draft.lines[1].options.tempered, true);
+  }
+});
+test('a mixed tempering question cannot conceal another missing option', async () => {
+  const value = draft(); value.lines = [];
+  const output = liveOutput(); output.questions = ['Do you need tempered glass, and which color should I use?'];
+  const result = await harness({ normalizeAI: actualAI(output) }).call({ action: 'assist', draft: value, conversation: [{ role: 'user', content: liveMessage }] });
+  assert.equal(result.status, 200); assert.equal(result.body.review.ready, false);
+  assert.ok(result.body.review.questions.includes(output.questions[0]));
+});

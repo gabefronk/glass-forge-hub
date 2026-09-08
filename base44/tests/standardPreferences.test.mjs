@@ -29,7 +29,7 @@ test('exact saved Test and initial typo request resolve standard defaults and re
     let prompt;
     const result = await run(q, output(), { invokeLLM: async params => { prompt = params.prompt; return output(); } });
     assert.equal(result.ok, true, JSON.stringify(result));
-    assert.equal(result.intake_assessment.version, 10);
+    assert.equal(result.intake_assessment.version, 11);
     assert.deepEqual(result.questions, []);
     assert.deepEqual(result.quote.lines.map(line => [line.width, line.height, line.dimension_basis, line.qty]), [[36,60,'call',1],[48,48,'call',1]]);
     assert.equal(result.quote.settings.glass, 'CozE (LowE)');
