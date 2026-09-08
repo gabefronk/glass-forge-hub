@@ -7,7 +7,7 @@ export function trackerMatches(e,rows){
  return rows.filter(r=>{
   const lot=String(r.lot??"").trim();const lotOK=lot&&(/^\d+$/.test(lot)?ls.has(lot):words(title,lot));
   const identity=words(title,r.builder)&&words(title,r.subdivision)&&lotOK;
-  const family=v=>String(v||"").trim().replace(/-\\d{2}$/,"");
+  const family=v=>String(v||"").trim().replace(/-[0-9]{2}$/,"");
   const order=(o.oe&&family(o.oe)===family(r.oe))||(o.po&&o.po===String(r.po).trim());
   const conflict=(o.oe&&r.oe&&family(o.oe)!==family(r.oe))||(o.po&&r.po&&o.po!==String(r.po).trim());
   return !conflict&&((order&&lotOK)||identity);
