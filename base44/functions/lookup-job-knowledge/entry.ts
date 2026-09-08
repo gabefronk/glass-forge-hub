@@ -2,6 +2,7 @@ import {createClientFromRequest} from "npm:@base44/sdk";
 import * as XLSX from "npm:xlsx@0.18.5";
 import {parseTracker} from "./parser.js";
 import {lookup} from "./job-engine.js";
+// Refresh function bundle with the approved job aliases and 90-day historical context.
 let cache={key:"",rows:[]};
 async function all(entity){const rows=[];for(let skip=0;skip<50000;skip+=1000){const page=await entity.list("-created_date",1000,skip);rows.push(...page);if(page.length<1000)return rows;}throw Error("Source pagination limit reached");}
 const today=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"America/Denver",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
