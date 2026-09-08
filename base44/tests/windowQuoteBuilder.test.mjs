@@ -108,9 +108,36 @@ test('existing chats, Details edits, retries and unresolved records never receiv
   for (const mutate of cases) { const q = fresh(reviewed); mutate(q); const result = await run(q); assert.equal(result.legacy, true); assert.deepEqual(result.quote, q); }
   assert.equal(calls, cases.length);
 });
-test('omitted marker keeps old intake behavior', async () => {
+test('complete saved structured schedule skips AI even when an older client omitted the visual review marker', async () => {
   const q = fresh(await review(draft())); delete q.source.visual_builder;
-  assert.deepEqual(await createBuilderAwareIntake(async value => ({ old: value }))(q), { old: q });
+  let calls = 0;
+  const result = await createBuilderAwareIntake(async () => { calls++; throw Error('AI not needed'); })(q);
+  assert.equal(result.ok, true);
+  assert.equal(calls, 0);
+  assert.equal(buildQuotePlan(result.quote).ok, true);
+});
+test('AI review timeout recovers the unchanged structured schedule without another model call', async () => {
+  const q = fresh(await review(draft())); delete q.source.visual_builder;
+  q.worker_status = 'needs_details';
+  q.intake_assessment = { status: 'unavailable', unresolved_requirements: [] };
+  q.conversation = [{ role: 'assistant', content: 'The earlier automatic review did not complete.', revision: 1, kind: 'clarification' }];
+  let calls = 0;
+  const result = await createBuilderAwareIntake(async () => { calls++; throw Error('AI not needed'); })(q);
+  assert.equal(result.ok, true);
+  assert.equal(calls, 0);
+  assert.equal(result.quote.id, q.id);
+  assert.deepEqual(result.quote.conversation, q.conversation);
+  assert.equal(buildQuotePlan(result.quote).ok, true);
+});
+test('saved structured schedule still uses AI when customer text or unresolved requirements exist', async () => {
+  const q = fresh(await review(draft())); delete q.source.visual_builder;
+  q.worker_status = 'needs_details';
+  q.intake_assessment = { status: 'unavailable', unresolved_requirements: ['Confirm custom etched glass'] };
+  q.conversation = [{ role: 'assistant', content: 'Please confirm the custom glass.', revision: 1, kind: 'clarification' }];
+  let calls = 0;
+  const result = await createBuilderAwareIntake(async value => { calls++; return { fallback: true, quote: value }; })(q);
+  assert.equal(calls, 1);
+  assert.equal(result.fallback, true);
 });
 test('request/line/source/status/price/history fields cannot cross the draft boundary', async () => {
   const api = harness();
