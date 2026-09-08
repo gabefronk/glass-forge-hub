@@ -264,7 +264,7 @@ export default function WindowQuotes() {
     : worker.runner_status === "attention" ? "Needs attention — pickup paused"
     : worker.runner_status === "stopping" ? "Quoting computer stopping"
     : worker.browser_state === "needs_sign_in" ? "Account owner needs to sign in"
-    : worker.browser_authenticated === true || worker.native_engine_ready === true ? "Ready — automatic pickup is on" : "Checking quoting browser…";
+    : worker.browser_authenticated === true || worker.native_engine_ready === true || (worker.online && worker.runner_status === "idle") ? "Ready — automatic pickup is on" : "Checking quoting browser…";
   const activeStatus = quoteStatusInfo(quote);
   const refresh = async () => { await client.invalidateQueries({ queryKey: ["windowQuotes"] }); };
   useEffect(() => { setMessage(""); messageID.current = null; setError(""); }, [selectedID]);
