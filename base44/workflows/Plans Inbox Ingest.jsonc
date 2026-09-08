@@ -1,0 +1,44 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/10 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "plans_inbox_ingest",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "ingest_plans": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "planInboxIngest"
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Ingest plans from Drive inbox",
+            "description": "Every 10 minutes: pick up new PDFs from 'Glass Forge Plans Inbox / 1 - Drop Plans Here', extract the window takeoff with IRC R308.4 tempering flags, create a Window Quotes draft, move the PDF to '2 - Processed'. Time-boxed; big sets finish over several runs."
+          }
+        }
+      }
+    ]
+  },
+  "description": "Every 10 minutes, advances the Google Drive plans-inbox pipeline one step (split / extract / merge). Creates Window Quotes drafts only; never queues AMSCO quoting.",
+  "name": "Plans Inbox Ingest"
+}
