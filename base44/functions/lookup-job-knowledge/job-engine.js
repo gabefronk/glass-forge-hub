@@ -1,20 +1,31 @@
 import {norm, trackerMatches, reconcile} from "./calendar-engine.js";
+import {jobAliases} from "./job-aliases.js";
 const family=v=>norm(v).replace(/ [0-9]{2}$/,"");
 const identity=r=>[norm(r.builder),norm(r.subdivision),norm(r.lot)].join("|");
 const rowRef=r=>({source_sheet:r.source_sheet,source_row:r.source_row,date_cell:r.date_cell,builder:r.builder,subdivision:r.subdivision,lot:r.lot,oe:r.oe,po:r.po,arrival_date:r.arrival_date,order_date:r.order_date,notes:r.notes});
 export function lookup({query,rows,calendar,outlook,service,reports,start,end,source_status}){
  const q=Object.fromEntries(["builder","subdivision","lot","oe","po"].map(k=>[k,String(query[k]||"").trim()]));
  const warnings=[];
+ const alias=jobAliases.find(a=>norm(q.lot)===norm(a.canonical.lot)&&a.builders.some(b=>norm(b)===norm(q.builder))&&a.subdivisions.some(v=>norm(v)===norm(q.subdivision)));
+ if(alias)Object.assign(q,alias.canonical);
+ const historyStart=new Date(new Date(start+"T12:00:00Z").getTime()-90*86400000).toISOString().slice(0,10);
+ const historyEnd=new Date(new Date(start+"T12:00:00Z").getTime()-86400000).toISOString().slice(0,10);
  const base={generated_at:new Date().toISOString(),range_start:start,range_end:end,source_status,automatic_send_allowed:false};
  if(!(q.builder&&q.subdivision&&q.lot)&&!q.oe&&!q.po)return {...base,status:"needs_identity",question:"Which builder, community and lot, or order number is this for?",counts:{tracker_rows:0}};
  const found=rows.filter(r=>Object.entries(q).every(([k,v])=>!v||(k==="oe"?family(r[k])===family(v):norm(r[k])===norm(v))));
  if(!found.length)return {...base,status:"not_found",question:"No exact job match was found. Check the builder, community, lot or order number.",counts:{tracker_rows:0}};
  const identities=[...new Set(found.map(identity))];
  if(identities.length!==1)return {...base,status:"ambiguous",question:"This order matches multiple jobs or lots. Which lot do you mean?",candidates:[...new Map(found.map(r=>[identity(r),{builder:r.builder,subdivision:r.subdivision,lot:r.lot}])).values()].slice(0,15),counts:{tracker_rows:found.length,jobs:identities.length}};
+ const jobAlias=jobAliases.find(a=>identity(a.canonical)===identity(found[0]));
+ const explicitCalendar=e=>!!jobAlias?.calendar_ids.includes(e.id);
+ const sourceMatches=e=>trackerMatches(e,found).length>0||explicitCalendar(e);
+ const history=[...calendar.map(e=>({...e,source:e.source==="google"?"Israel calendar":"App calendar"})),...(outlook||[]).map(e=>({...e,source:"Outlook install"})),...(service||[]).map(e=>({...e,source:"Outlook service",kind:"service"}))].filter(e=>e.event_date>=historyStart&&e.event_date<start&&sourceMatches(e)).sort((a,b)=>b.event_date.localeCompare(a.event_date));
+ if(jobAlias)warnings.push("A verified job-specific name association connects Y A Windows / Dimple Dell lot 16 with Larco / Dimple Del lot 16. It does not apply to other jobs.");
+ if(history.length)warnings.push("Past calendar entries are historical instructions or schedules, not proof that the work was completed.");
  const result=reconcile({calendar,outlook,rows:found,reports,start,end});
  const svc=(service||[]).filter(e=>e.event_date>=start&&e.event_date<=end&&trackerMatches(e,found).length).map(e=>({...e,source:"Outlook service",kind:"service",tracker_rows:trackerMatches(e,found).map(rowRef)}));
- const directReports=reports.filter(r=>r.job_date>=start&&r.job_date<=end&&trackerMatches({job_name:r.job_name},found).length);
- const linkedReports=[...new Map([...result.events.flatMap(e=>e.reports),...directReports].map(r=>[r.post_id,r])).values()];
+ const directReports=reports.filter(r=>r.job_date>=historyStart&&r.job_date<=end&&(trackerMatches({job_name:r.job_name},found).length||jobAlias?.report_project_ids.includes(r.project_id)));
+ const linkedReports=[...new Map([...result.events.flatMap(e=>e.reports),...directReports].map(r=>[r.post_id,r])).values()].sort((a,b)=>(b.job_date||"").localeCompare(a.job_date||""));
  for(const [key,s] of Object.entries(source_status)){
   if(s.available===false)warnings.push(key+" source is unavailable.");
   if(s.stale)warnings.push(key+" source is over 26 hours old.");
@@ -34,6 +45,6 @@ export function lookup({query,rows,calendar,outlook,service,reports,start,end,so
  if(stale)draft+=" This is based on a saved copy that needs refreshing.";
  const brief=query.brief!==false,limit=brief?6:100;
  const compactEvent=e=>({source:e.source,source_occurrence_key:e.source_occurrence_key||e.id,event_date:e.event_date,start_time:e.start_time,end_time:e.end_time,job_name:e.job_name,kind:e.kind||"installation",sources:e.sources?.map(s=>({source:s.source,id:s.id})),source_details:e.sources?.map(s=>({source:s.source,scope_notes:brief?String(s.scope_notes||"").slice(0,180):s.scope_notes,notes_truncated:brief&&String(s.scope_notes||"").length>180})),oe_number:e.oe_number,po_number:e.po_number,source_start_date:e.source_start_date,source_end_date:e.source_end_date,scope_notes:brief?String(e.scope_notes||"").slice(0,180):e.scope_notes,notes_truncated:brief&&String(e.scope_notes||"").length>180});
- const counts={tracker_rows:found.length,installation_entries:result.events.length,service_entries:svc.length,report_entries:linkedReports.length,merged_install_duplicates:result.counts.merged_duplicates};
- return {...base,status:"matched",job,counts,warnings:[...new Set(warnings)],tracker_rows:found.slice(0,limit).map(r=>{const x=rowRef(r);if(brief){x.notes=String(x.notes||"").slice(0,160);}return x;}),installations:result.events.slice(0,limit).map(compactEvent),services:svc.slice(0,limit).map(compactEvent),reports:linkedReports.slice(0,limit).map(r=>({post_id:r.post_id,job_name:r.job_name,job_date:r.job_date,message:brief?String(r.message||"").slice(0,180):r.message,completion_inferred:false})),items_truncated:Object.values(counts).slice(0,4).some(n=>n>limit),draft_reply:draft,reply_status:"draft_needs_review",note:"Saved-source lookup; not a live Microsoft or ProBuild refresh. Full source notes remain in calendar detail views. No source records were changed and no message was sent."};
+ const counts={tracker_rows:found.length,installation_entries:result.events.length,service_entries:svc.length,report_entries:linkedReports.length,historical_calendar_entries:history.length,merged_install_duplicates:result.counts.merged_duplicates};
+ return {...base,status:"matched",job,counts,historical_range_start:historyStart,historical_range_end:historyEnd,job_alias_used:jobAlias?{canonical:jobAlias.canonical,other_name:"Larco / Dimple Del / lot 16",scope:"This job only"}:null,history:history.slice(0,limit).map(e=>({...compactEvent(e),historical:true,completion_inferred:false})),warnings:[...new Set(warnings)],tracker_rows:found.slice(0,limit).map(r=>{const x=rowRef(r);if(brief){x.notes=String(x.notes||"").slice(0,160);}return x;}),installations:result.events.slice(0,limit).map(compactEvent),services:svc.slice(0,limit).map(compactEvent),reports:linkedReports.slice(0,limit).map(r=>({post_id:r.post_id,job_name:r.job_name,job_date:r.job_date,message:brief?String(r.message||"").slice(0,180):r.message,completion_inferred:false})),items_truncated:Object.values(counts).slice(0,5).some(n=>n>limit),draft_reply:draft,reply_status:"draft_needs_review",note:"Saved-source lookup; not a live Microsoft or ProBuild refresh. Full source notes remain in calendar detail views. No source records were changed and no message was sent."};
 }
