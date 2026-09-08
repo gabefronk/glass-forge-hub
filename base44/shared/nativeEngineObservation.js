@@ -123,7 +123,8 @@ export async function verifyDesktopNativeQuote(plan, observed, context = {}) {
   if (!proof.ok) return { ...proof, status: 'failed' };
   const checked = verifyObservedQuote(plan, observed, { validateIdentity: desktopNativeIdentityIssues, validateDimensions: desktopDimensions });
   if (!checked.ok) return checked;
-  const result = { ...checked.result, native_source: DESKTOP_NATIVE_SOURCE, native_engine: structuredClone(observed.native_engine),
+  const blackFinish = checked.result.lines?.some(line => line.options?.exterior_color === 'Black');
+  const result = { ...checked.result, ...(blackFinish ? { notices: ['Studio Black adds two weeks of extended lead time.'] } : {}), native_source: DESKTOP_NATIVE_SOURCE, native_engine: structuredClone(observed.native_engine),
     verification: { ...checked.result.verification, source: DESKTOP_NATIVE_SOURCE, dimension_source: 'saved_native_frame', persistence: 'navigator_local' } };
   if (!present(observed.native_quote_number)) { delete result.native_quote_number; delete result.native_quote_url; }
   return { ok: true, result };
