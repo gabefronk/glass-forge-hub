@@ -1,4 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
+import * as XLSX from "npm:xlsx@0.18.5";
+import {parseTracker} from "./parser.js";
 Deno.serve(async(req)=>{
  const client=createClientFromRequest(req);
  const user=await client.auth.me().catch(()=>null);
@@ -9,7 +11,17 @@ Deno.serve(async(req)=>{
   if(!snapshot) return Response.json({status:"empty",matches:[],total:0});
   const norm=v=>String(v??"").trim().replace(/\s+/g," ").toLowerCase();
   const keys=["builder","subdivision","lot","oe","po"].filter(k=>norm(query[k]));
-  const matches=keys.length?snapshot.rows.filter(r=>keys.every(k=>norm(r[k])===norm(query[k]))):[];
+  let rows=[];
+  if(keys.length){
+   const {signed_url}=await client.integrations.Core.CreateFileSignedUrl({file_uri:snapshot.file_uri,expires_in:300});
+   const response=await fetch(signed_url);
+   if(!response.ok) throw Error("Private workbook unavailable.");
+   const bytes=new Uint8Array(await response.arrayBuffer());
+   const sha=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),b=>b.toString(16).padStart(2,"0")).join("");
+   if(sha!==snapshot.sha256) throw Error("Workbook integrity check failed.");
+   rows=parseTracker(XLSX,bytes).rows;
+  }
+  const matches=keys.length?rows.filter(r=>keys.every(k=>norm(r[k])===norm(query[k]))):[];
   const stale=Date.now()-new Date(snapshot.source_captured_at).getTime()>26*3600000;
   return Response.json({status:stale?"stale":"available",filename:snapshot.filename,
     source_captured_at:snapshot.source_captured_at,imported_at:snapshot.imported_at,
