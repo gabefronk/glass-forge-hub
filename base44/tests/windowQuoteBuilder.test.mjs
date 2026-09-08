@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
-import { BUILDER_LIMITS, builderReviewResponse, builderScheduleHash, createBuilderAwareIntake, createWindowQuoteBuilderHandler, normalizeManualBuilderDraft, validateBuilderDraft } from '../shared/windowQuoteBuilder.js';
+import { BUILDER_LIMITS, builderReviewResponse, builderScheduleHash, createBuilderAwareIntake, createWindowQuoteBuilderHandler, normalizeManualBuilderDraft, resolveRoutineBuilderFollowup, validateBuilderDraft } from '../shared/windowQuoteBuilder.js';
 import { createConversationalIntake } from '../shared/conversationalIntake.js';
 import { normalizeConversationalSchedule } from '../shared/structuredQuoteIntake.js';
 import { buildQuotePlan, getProductProfileForLine } from '../shared/amscoQuotePlan.js';
@@ -199,6 +199,26 @@ test('AI follow-up carries custom requirements despite a short Yes and a model t
   assert.equal(result.body.review.schedule_hash, null);
   assert.equal((await api.call({ action: 'review', draft: draft(), unresolved_requirements: ['Custom etched glass is required.'] })).status, 400);
 });
+test('explicit package-wide nail-fin follow-up updates the checked proposal without a second model call', async () => {
+  const api = harness({ normalizeAI: async () => { throw new Error('model should not run'); } });
+  const result = await api.call({ action: 'assist', draft: draft(), conversation: [
+    { role: 'user', content: 'One 3050 single hung and one 4040 picture.' },
+    { role: 'assistant', content: 'Which installation fin should I use?' },
+    { role: 'user', content: 'Yes, use standard nail fin for both.' }
+  ] });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.review.ready, true);
+  assert.equal(result.body.draft.lines[0].options.series, 'Studio 1 3/8 inch Fin Setback');
+  assert.equal(result.body.draft.lines[0].options.fin, undefined);
+  assert.equal(result.body.draft.lines[1].options.fin, 'nail fin');
+  assert.match(result.body.assistant_message, /applied standard nail fin/i);
+  assert.equal(api.models, 0);
+  assert.equal(api.writes, 0);
+  assert.equal(resolveRoutineBuilderFollowup(draft(), { messages: [
+    { role: 'user', content: 'Custom glass.' }, { role: 'assistant', content: 'Which fin?' }, { role: 'user', content: 'Use nail fin for both.' }
+  ] }, ['Custom etched glass is required.']), null);
+});
+
 test('carry-only ledger cannot inject an assessment or execution authority', async () => {
   const api = harness();
   for (const value of [{ status: 'ready' }, [{ status: 'ready' }], Array(41).fill('custom glass'), ['x'.repeat(1001)]]) {
