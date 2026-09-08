@@ -205,7 +205,7 @@ export async function builderReviewResponse(result) {
   const ready = result.ok === true && checked.ok === true && !questions.length && !productReview.length && !unresolved.length;
   const response = { draft, review: { ready, questions, product_review: productReview, unresolved_requirements: unresolved,
     assumptions: unique(assessment.assumptions), schedule_hash: ready ? await builderScheduleHash(draft) : null } };
-  if (typeof result.assistant_message === 'string') response.assistant_message = result.assistant_message.slice(0, 17500).replace('Your details are ready for automatic quoting.', 'Review these windows, then choose Get AMSCO price when you are ready.');
+  if (typeof result.assistant_message === 'string') response.assistant_message = result.assistant_message.slice(0, 17500).replace('Your details are ready for automatic quoting.', 'Review these windows, then choose Calculate verified price when you are ready.');
   return response;
 }
 
