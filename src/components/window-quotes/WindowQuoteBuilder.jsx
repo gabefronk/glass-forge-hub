@@ -69,8 +69,8 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
     invalidate(); setLines(current => editor.index < 0 ? [...current, saved] : current.map((item, index) => index === editor.index ? saved : item)); setEditor(null); setTradeCode("");
   };
   const useCode = () => { const parsed = parseTradeCode(tradeCode); if (!parsed.ok) { setError((parsed.issues || []).map(issueText).join(" ") || "Enter a four-digit call code, such as 3050 or 5050."); return; } changeEditor({ width: parsed.width, height: parsed.height, units: "in", dimension_basis: "call" }); };
-  const editorHasChanges = () => editor && (editor.line.style !== "Studio Single Hung" || Number(editor.line.qty) !== 1 || [editor.line.width, editor.line.height, editor.line.room, editor.line.mark].some(value => value !== "" && value !== null && value !== undefined) || Object.keys(editor.line.options || {}).length > 0 || editor.index >= 0);
-  const canReplaceSchedule = () => { if (editorHasChanges()) { setError("Add this window to the quote or cancel its edit first, so none of your changes are lost."); return false; } if (conversation.length || suggestion) { setError("Apply or discard the proposed AI changes before importing a schedule."); return false; } return true; };
+  const editorHasChanges = () => editor && (editor.line.style !== "Studio Single Hung" || editor.line.dimension_basis !== "call" || tradeCode.trim() || Number(editor.line.qty) !== 1 || [editor.line.width, editor.line.height, editor.line.room, editor.line.mark].some(value => value !== "" && value !== null && value !== undefined) || Object.keys(editor.line.options || {}).length > 0 || editor.index >= 0);
+  const canReplaceSchedule = () => { if (editorHasChanges()) { setError("Add this window to the quote or cancel its edit first, so none of your changes are lost."); return false; } if (conversation.length || suggestion || aiText.trim()) { setError("Apply or discard the proposed AI changes before importing a schedule."); return false; } return true; };
   const importSchedule = (value, filename = "") => { if (!canReplaceSchedule()) return; try { const parsed = parseTakeoff(value, filename); if (parsed.errors?.length) throw new Error(parsed.errors.join(" ")); invalidate(); setLines(parsed.lines); setSource(current => ({ ...current, ...parsed.source })); setEditor(null); setImportOpen(false); } catch (e) { setError(errorText(e)); } };
   const readFile = async event => { const file = event.target.files?.[0]; event.target.value = ""; if (!file || !canReplaceSchedule()) return; if (!/\.(csv|json)$/i.test(file.name) || file.size > 2000000) { setError("Choose a CSV or JSON schedule under 2 MB."); return; } setProcessing("import"); try { importSchedule(await file.text(), file.name); } catch (e) { setError(errorText(e)); } finally { setProcessing(""); } };
   const builderCall = async body => { const response = await base44.functions.invoke("windowQuoteBuilder", body); if (response.data?.error) throw new Error(response.data.error); return response.data; };
@@ -84,19 +84,19 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
     catch (e) { setError(errorText(e)); } finally { setProcessing(""); }
   };
   const applySuggestion = () => {
-    if (!suggestion?.review?.ready || suggestion.stale || editorHasChanges()) return;
+    if (!suggestion?.review?.ready || suggestion.stale || editorHasChanges()) return; if (aiText.trim()) { setError("Send or clear your new AI message before applying the earlier proposal."); return; }
     invalidate(); setLines(suggestion.draft.lines); setSettings(suggestion.draft.settings); setSource(suggestion.draft.source || {}); setEditor(null); setConversation([]); setSuggestion(null); setAiText(""); setAiOpen(false);
   };
   const review = async () => {
     if (disabled) return;
     if (editor) { setError("Add this window to the quote, or cancel its edit, before reviewing the package."); return; }
     if (!lines.length) { setError("Add at least one window first."); return; }
-    if (conversation.length || suggestion) { setAiOpen(true); setError("Apply the AI's proposed schedule or discard its proposed changes before reviewing."); return; }
+    if (conversation.length || suggestion || aiText.trim()) { setAiOpen(true); setError("Apply the AI's proposed schedule or discard its proposed changes before reviewing."); return; }
     setProcessing("review"); setError("");
     try { const result = await builderCall({ action: "review", draft: draft() }); setReviewed(result); setStep("review"); setConfirmed(false); }
     catch (e) { setError(errorText(e)); } finally { setProcessing(""); }
   };
-  const saveDraft = () => { if (editor) { setError("Add this window to the quote, or cancel its edit, before saving."); return; } if (conversation.length || suggestion) { setError("Apply or discard the proposed AI changes before saving the draft."); return; } if (!lines.length) { setError("Add a window before saving this draft."); return; } onSave({ request_id: requestId.current, ...draft(), message: "" }, false); };
+  const saveDraft = () => { if (editor) { setError("Add this window to the quote, or cancel its edit, before saving."); return; } if (conversation.length || suggestion || aiText.trim()) { setError("Apply or discard the proposed AI changes before saving the draft."); return; } if (!lines.length) { setError("Add a window before saving this draft."); return; } onSave({ request_id: requestId.current, ...draft(), message: "" }, false); };
   const price = () => {
     if (!reviewed?.review?.ready || !confirmed || disabled) return;
     const accepted = reviewed.draft;
