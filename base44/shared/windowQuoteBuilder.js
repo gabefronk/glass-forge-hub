@@ -163,6 +163,30 @@ export function normalizeManualBuilderDraft(raw) {
     quote: result.quote, questions, intake_assessment: { status: questions.length ? review.length ? 'product_review' : 'needs_details' : 'ready',
       questions, product_review: review, unresolved_requirements: [], assumptions } };
 }
+// Short, explicit builder corrections should not depend on a second model call.
+// This handles a main installation choice only when the customer's latest words
+// name the exact value and clearly apply it to the whole proposed package.
+export function resolveRoutineBuilderFollowup(draft, context, unresolved = []) {
+  if (unresolved.length || context.messages.length < 3) return null;
+  const latest = context.messages.at(-1), prior = context.messages.at(-2);
+  if (latest?.role !== 'user' || prior?.role !== 'assistant' || !/\b(?:fin|installation style|installation series)\b/i.test(prior.content)) return null;
+  const explicitNailFin = /\b(?:nail(?:ing)?|standard|regular)\s+fin\b/i.test(latest.content);
+  const wholePackage = draft.lines.length === 1 || /\b(?:both|all|every|each)\b/i.test(latest.content);
+  if (!explicitNailFin || !wholePackage) return null;
+  const changed = clone(draft);
+  for (const line of changed.lines) {
+    line.options ||= {};
+    line.options.fin = 'nail fin';
+    // An explicit package-wide correction replaces a prior conflicting series.
+    delete line.options.series;
+  }
+  const result = normalizeManualBuilderDraft(changed);
+  result.assistant_message = result.ok === true
+    ? 'I applied standard nail fin to the proposed windows. Review the schedule below before requesting pricing.'
+    : 'I applied standard nail fin to the proposed windows. The remaining highlighted choices still need review.';
+  return result;
+}
+
 function outputDraft(quote) {
   // Only the reviewed specifications cross this boundary. AI provenance and
   // execution/status data never become fields a caller can send back as facts.
@@ -213,7 +237,7 @@ export function createWindowQuoteBuilderHandler({ getClient, normalizeAI }) {
       } else {
         if (!context.messages.some(item => item.role === 'user')) fail('Describe the windows you need or ask the AI guide a question');
         if (typeof normalizeAI !== 'function') throw new Error('AI intake is not configured');
-        result = await normalizeAI({ ...draft, id: 'builder-preview', input_revision: context.revision, history: [], conversation: context.messages,
+        result = resolveRoutineBuilderFollowup(draft, context, unresolved) || await normalizeAI({ ...draft, id: 'builder-preview', input_revision: context.revision, history: [], conversation: context.messages,
           ...(unresolved.length ? { intake_assessment: { unresolved_requirements: unresolved } } : {}) }, { client, action: 'builder_assist' });
       }
       return new Response(JSON.stringify(await builderReviewResponse(result)), { status: 200, headers });
