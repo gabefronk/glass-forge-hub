@@ -16,6 +16,7 @@ import { validateLines } from '../../shared/windowQuotesCore.js';
 
 const DROP_FOLDER = '1sRaRX-ezKQRiHjoR0d215kCcqk3ajE8O';
 const PROCESSED_FOLDER = '1Ozz8F3tLwYS1JKFnZ7yAnBY7K1OanTbG';
+const JOBS_ROOT_FOLDER = '1F_PgUPEuvyvzCk92tdaFiwioLSack4iS'; // Glass Forge Jobs / <Builder> / <Job> — the per-home paper trail
 const OWNER_EMAIL = 'gabefronk@gmail.com'; // Window Quotes administrator that owns auto-created drafts
 const DRIVE = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
@@ -35,6 +36,8 @@ const PAGE_SCHEMA = {
     level: { type: ['string', 'null'], description: 'basement, main, second, etc. if the sheet is a floor plan' },
     job_name: { type: ['string', 'null'] },
     builder: { type: ['string', 'null'] },
+    customer: { type: ['string', 'null'], description: 'Homeowner / customer name if printed' },
+    lot_or_address: { type: ['string', 'null'], description: 'Lot number, subdivision, or street address if printed' },
     window_spec_notes: { type: ['string', 'null'], description: 'Brand, material, glazing, color notes found on this page' },
     openings: {
       type: 'array',
@@ -69,6 +72,8 @@ const MERGE_SCHEMA = {
   properties: {
     job_name: { type: ['string', 'null'] },
     builder: { type: ['string', 'null'] },
+    customer: { type: ['string', 'null'] },
+    lot_or_address: { type: ['string', 'null'] },
     window_spec: { type: ['string', 'null'] },
     lines: {
       type: 'array',
@@ -111,7 +116,7 @@ Rules:
 - Doors with glass (patio sliders, multi-slides, french doors, glass entry doors) are exterior_door. Garage doors are garage_door. Interior doors (2680, 3080 etc. inside the plan) are interior_door.
 - Tag convention on these plans: WINDOWS carry a letter suffix (FX, SH, DH, SC, CS, AW, RS, SL, PIC). A bare 4-digit tag with NO suffix (2480, 2680, 3080, 4080, 5080, 6080, 10080) is a DOOR — interior if it sits between rooms, exterior if it is on an exterior wall or opens to a patio/deck/porch. Never call a bare-number tag a window.
 - sill_height_in, distance_to_door_in, at_stairs_or_landing, wet_area must be null unless the drawing actually shows it. Never guess.
-- Also pull job name, builder, and any window spec notes (brand, material, color, glazing) if this page has them.
+- Also pull job name, builder, customer/homeowner name, lot number or address, and any window spec notes (brand, material, color, glazing) if this page has them.
 Return only the JSON described by the schema.`;
 
 const MERGE_PROMPT = `You are consolidating per-page extractions from one residential plan set into a single window/door takeoff.
@@ -124,6 +129,7 @@ Task:
 4. style: expand the tag suffix — SH single hung, DH double hung, SL or RS slider, CS/SC casement, AW awning, FX/PIC fixed, PW picture; doors: patio slider, multi-slide, french, entry, garage. If unsure write the raw suffix.
 5. mark: sequential W1, W2 ... for windows, D1, D2 ... for doors, in floor-plan order (basement, main, second; rear, front, sides).
 6. review_notes: anything a human should double check (count mismatches between plan and elevation, tags with no room, missing schedule).
+7. job_name, builder, customer, lot_or_address: take the most specific values any page showed (title block, cover sheet). Leave null if none.
 Return only the JSON described by the schema.`;
 
 function parseCallSize(tag) {
@@ -210,9 +216,36 @@ async function moveToProcessed(token, fileId) {
   return driveJson(token, `${DRIVE}/files/${fileId}?addParents=${PROCESSED_FOLDER}&removeParents=${DROP_FOLDER}&fields=id,parents`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' });
 }
 
-async function uploadCsv(token, name, csv) {
+async function moveTo(token, fileId, toFolder, fromFolder) {
+  return driveJson(token, `${DRIVE}/files/${fileId}?addParents=${toFolder}&removeParents=${fromFolder}&fields=id,parents`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+}
+
+function cleanName(s, fallback) {
+  const v = String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return v || fallback;
+}
+
+async function ensureFolder(token, name, parentId) {
+  const q = encodeURIComponent(`'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and name='${name.replace(/'/g, "\\'")}' and trashed=false`);
+  const found = await driveJson(token, `${DRIVE}/files?q=${q}&fields=files(id,name)&pageSize=5`);
+  if (found.files && found.files[0]) return found.files[0].id;
+  const made = await driveJson(token, `${DRIVE}/files?fields=id,name`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, parents: [parentId], mimeType: 'application/vnd.google-apps.folder' }) });
+  return made.id;
+}
+
+// Glass Forge Jobs / <Builder> / <Customer - Lot or Address - Plan> — returns folder id + display path
+async function ensureJobFolder(token, merged, fallbackName) {
+  const builder = cleanName(merged.builder, 'Unknown Builder');
+  const parts = [merged.customer, merged.lot_or_address, merged.job_name].map(v => cleanName(v, '')).filter(Boolean);
+  const jobName = parts.length ? [...new Set(parts)].join(' - ') : cleanName(fallbackName, 'Unnamed Job');
+  const builderId = await ensureFolder(token, builder, JOBS_ROOT_FOLDER);
+  const jobId = await ensureFolder(token, jobName, builderId);
+  return { id: jobId, path: `Glass Forge Jobs/${builder}/${jobName}`, builder, jobName };
+}
+
+async function uploadCsv(token, name, csv, parentId = PROCESSED_FOLDER) {
   const boundary = 'gfhub' + crypto.randomUUID();
-  const meta = JSON.stringify({ name, parents: [PROCESSED_FOLDER], mimeType: 'text/csv' });
+  const meta = JSON.stringify({ name, parents: [parentId], mimeType: 'text/csv' });
   const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: text/csv\r\n\r\n${csv}\r\n--${boundary}--`;
   return driveJson(token, `${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,name`, { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + boundary }, body });
 }
@@ -379,11 +412,18 @@ export default async function planInboxIngest(req) {
         });
       }
       let csvId = intake.csv_file_id || '';
-      try { await moveToProcessed(accessToken, intake.drive_file_id); } catch (e) { log.push('move failed: ' + String(e.message || e).slice(0, 200)); }
+      // File the plan set into the per-job trail folder; fall back to Processed if that fails.
+      let jobFolder = null;
+      try { jobFolder = await ensureJobFolder(accessToken, merged, intake.file_name.replace(/\.pdf$/i, '')); } catch (e) { log.push('job folder failed: ' + String(e.message || e).slice(0, 200)); }
+      const destFolder = jobFolder ? jobFolder.id : PROCESSED_FOLDER;
+      try { await moveTo(accessToken, intake.drive_file_id, destFolder, DROP_FOLDER); } catch (e) { log.push('move failed: ' + String(e.message || e).slice(0, 200)); }
       if (!csvId) {
-        try { const up = await uploadCsv(accessToken, intake.file_name.replace(/\.pdf$/i, '') + ' - takeoff.csv', toCsv(csvRows)); csvId = up.id || ''; } catch (e) { log.push('csv upload failed: ' + String(e.message || e).slice(0, 200)); }
+        try { const up = await uploadCsv(accessToken, intake.file_name.replace(/\.pdf$/i, '') + ' - takeoff.csv', toCsv(csvRows), destFolder); csvId = up.id || ''; } catch (e) { log.push('csv upload failed: ' + String(e.message || e).slice(0, 200)); }
       }
-      await logSave(`draft ${quote.id} created with ${safeLines.length} lines`, { status: 'done', job_name: jobName, builder: merged.builder || '', final_lines: csvRows, quote_id: quote.id, csv_file_id: csvId, finished_at: new Date().toISOString(), error: '' });
+      if (quote && jobFolder) {
+        try { await db.QuoteRequests.update(quote.id, { source: { ...(quote.source || {}), drive_job_folder_id: jobFolder.id, drive_job_folder_path: jobFolder.path, drive_csv_file_id: csvId } }); } catch { /* non-fatal */ }
+      }
+      await logSave(`draft ${quote.id} created with ${safeLines.length} lines; filed to ${jobFolder ? jobFolder.path : 'Processed'}`, { status: 'done', job_name: jobFolder ? jobFolder.jobName : jobName, builder: merged.builder || '', final_lines: csvRows, quote_id: quote.id, csv_file_id: csvId, job_folder_id: jobFolder ? jobFolder.id : '', job_folder_path: jobFolder ? jobFolder.path : '', finished_at: new Date().toISOString(), error: '' });
       out.status = 'done'; out.quote_id = quote.id; out.lines = safeLines.length;
       return Response.json(out);
     }
