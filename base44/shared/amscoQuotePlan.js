@@ -183,8 +183,8 @@ export function assertSupportedPlan(plan) {
   return rebuilt;
 }
 
-export function verifyObservedQuote(plan, observed) {
-  if (plan?.schema_version === 1 && plan.support_id === SUPPORT_ID) return verifyLegacyQuote(plan, observed);
+export function verifyObservedQuote(plan, observed, verification = {}) {
+  if (plan?.schema_version === 1 && plan.support_id === SUPPORT_ID) return verifyLegacyQuote(plan, observed, verification);
   const issues = [];
   const invalid = (code, path, message) => issue(issues, code, path, message);
   const rebuild = assertSupportedPlan(plan);
@@ -193,10 +193,13 @@ export function verifyObservedQuote(plan, observed) {
   if (!object(observed)) return { ok: false, status: 'failed', issues: [{ code: 'missing_observation', path: 'observed', message: 'A saved and reopened native quote observation is required.' }] };
   if (observed.reopened !== true) invalid('not_reopened', 'reopened', 'The native quote must be reopened before verification.');
   if (observed.quote_id !== plan.quote_id || observed.input_revision !== plan.input_revision) invalid('request_mismatch', 'quote_id', 'The observed quote must match this exact app request and revision.');
+  if (typeof verification.validateIdentity === 'function') issues.push(...verification.validateIdentity(observed));
+  else {
   if (!validNativeQuoteId(observed.native_quote_id) || !word(observed.native_quote_number)) invalid('native_identity_missing', 'native_quote_id', 'The saved native quote GUID and number must be observed.');
   let nativeUrl;
   try { nativeUrl = new URL(observed.native_quote_url); } catch { /* Invalid observation reported below. */ }
   if (!nativeUrl || nativeUrl.protocol !== 'https:' || nativeUrl.hostname !== 'amsco.wtsparadigm.com' || nativeUrl.username || nativeUrl.password || nativeUrl.pathname.split('/')[1] !== 'quotes' || nativeUrl.pathname.split('/')[2] !== observed.native_quote_id || nativeUrl.search || nativeUrl.hash) invalid('native_identity_mismatch', 'native_quote_url', 'The observed AMSCO quote link must identify the same saved native quote.');
+  }
   if (present(plan.native_quote_id) && observed.native_quote_id !== plan.native_quote_id) invalid('checkpoint_mismatch', 'native_quote_id', 'The native quote differs from the retained checkpoint.');
   if (observed.dealer !== 'BFS') invalid('dealer_mismatch', 'dealer', 'The reopened dealer must be BFS.');
   if (!sameYard(observed.yard, plan.settings.yard)) invalid('yard_mismatch', 'yard', 'The reopened shipping yard does not match the request.');
@@ -216,17 +219,20 @@ export function verifyObservedQuote(plan, observed) {
     if (!/^\d+$/.test(number) || Number(number) <= 0 || numbers.has(number)) invalid('line_number_invalid', path + '.native_line_number', 'Every saved line needs a distinct native line number.');
     numbers.add(number);
     if (line.qty !== expected.qty) invalid('quantity_mismatch', path + '.qty', 'Saved quantity differs from the schedule.');
+    if (typeof verification.validateDimensions === 'function') issues.push(...verification.validateDimensions(expected, line, path));
+    else {
     if (line.units !== 'in' || line.dimension_basis !== expected.dimension_basis || !closeDimension(line.width, expected.width) || !closeDimension(line.height, expected.height)) invalid('call_dimensions_mismatch', path, 'Saved call dimensions and units differ from the schedule.');
     if (!object(line.frame_dimensions) || line.frame_dimensions.units !== 'in' || !closeDimension(line.frame_dimensions.width, expected.frame_dimensions.width) || !closeDimension(line.frame_dimensions.height, expected.frame_dimensions.height)) invalid('frame_dimensions_mismatch', path + '.frame_dimensions', 'Observed frame dimensions do not match this supported call-size product.');
+    }
     if (line.style !== expected.style || (line.product_profile_id !== expected.product_profile_id && !(expected.product_profile_id === SUPPORT_ID && line.product_profile_id === undefined))) invalid('style_mismatch', path + '.style', 'The saved product does not match the exact planned profile.');
-    if (expected.call_dimensions && (!object(line.call_dimensions) || line.call_dimensions.units !== 'in' || !closeDimension(line.call_dimensions.width, expected.call_dimensions.width) || !closeDimension(line.call_dimensions.height, expected.call_dimensions.height))) invalid('call_dimensions_mismatch', path + '.call_dimensions', 'Observed native call dimensions do not match the planned product.');
+    if (!verification.validateDimensions && expected.call_dimensions && (!object(line.call_dimensions) || line.call_dimensions.units !== 'in' || !closeDimension(line.call_dimensions.width, expected.call_dimensions.width) || !closeDimension(line.call_dimensions.height, expected.call_dimensions.height))) invalid('call_dimensions_mismatch', path + '.call_dimensions', 'Observed native call dimensions do not match the planned product.');
     if (!roomMatchesRequest(line.room, expected.room)) invalid('room_mismatch', path + '.room', 'The saved room label is missing or differs from the schedule.');
     const optionIssues = [];
     const profile = getProductProfileById(expected.product_profile_id);
     if (!savedDescriptionMatches(line.saved_description, profile?.summary.saved_description_phrases)) invalid('saved_feature_missing', path + '.saved_description', 'The saved native description is missing a required verified product feature.');
     let actualOptions;
     if (expected.product_profile_id === SUPPORT_ID) {
-      const checked = buildLegacyPlan({ id: plan.quote_id, input_revision: plan.input_revision, settings: plan.settings, lines: [line] });
+      const checked = buildLegacyPlan({ id: plan.quote_id, input_revision: plan.input_revision, settings: plan.settings, lines: [{ ...line, ...(verification.validateDimensions ? { width: expected.width, height: expected.height, dimension_basis: expected.dimension_basis } : {}) }] });
       if (!checked.ok) optionIssues.push(...checked.issues.map(item => ({ ...item, path: item.path.replace(/^lines\[0\]/, path) })));
       actualOptions = checked.ok ? checked.plan.lines[0].options : {};
     } else actualOptions = canonicalProductOptions(line.options, {}, profile, optionIssues, path + '.options', { observedDefaults: nativeDefaultFieldsForLine(expected) });
@@ -261,3 +267,4 @@ export function verifyObservedQuote(plan, observed) {
   const cleanTotals = Object.fromEntries(['list_total', 'dealer_cost', 'customer_total', 'currency', 'tax', 'freight', 'labor'].map(key => [key, totals[key]]));
   return { ok: true, result: { verified: true, quote_id: plan.quote_id, input_revision: plan.input_revision, native_quote_id: observed.native_quote_id, native_quote_number: observed.native_quote_number, native_quote_url: observed.native_quote_url, dealer: 'BFS', yard: word(observed.yard), pricing_scope: plan.pricing_scope, lines: resultLines, totals: { ...cleanTotals, gross_margin: plan.settings.gross_margin }, verification: { profile_contract_version: PROFILE_CONTRACT_VERSION, profile_contract_hash: PROFILE_CONTRACT_HASH, reopened: true, checked_at: observed.checked_at, rounding_policy: clone(ROUNDING_POLICY) } } };
 }
+
