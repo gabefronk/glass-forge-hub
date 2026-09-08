@@ -1,0 +1,124 @@
+{
+  "name": "PlanIntake",
+  "type": "object",
+  "description": "One row per plan-set PDF picked up from the Google Drive 'Glass Forge Plans Inbox / 1 - Drop Plans Here' folder. Tracks the multi-run pipeline: split pages -> per-page LLM extraction -> merge + IRC R308.4 tempering rules -> Window Quotes draft -> move file to Processed.",
+  "properties": {
+    "drive_file_id": {
+      "type": "string",
+      "description": "Google Drive file id of the plan PDF"
+    },
+    "file_name": {
+      "type": "string"
+    },
+    "file_size": {
+      "type": "number"
+    },
+    "drive_created_time": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "new",
+        "pages_split",
+        "extracting",
+        "merging",
+        "done",
+        "error",
+        "skipped"
+      ],
+      "default": "new"
+    },
+    "page_count": {
+      "type": "integer"
+    },
+    "page_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Base44-hosted single-page PDF URLs, index = page number - 1"
+    },
+    "page_results": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "Per-page LLM extraction results; index = page number - 1; null until processed"
+    },
+    "pages_done": {
+      "type": "integer",
+      "default": 0
+    },
+    "job_name": {
+      "type": "string"
+    },
+    "builder": {
+      "type": "string"
+    },
+    "final_lines": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "quote_id": {
+      "type": "string",
+      "description": "QuoteRequests id created from this plan set"
+    },
+    "csv_file_id": {
+      "type": "string",
+      "description": "Drive id of the takeoff CSV written next to the processed plan"
+    },
+    "error": {
+      "type": "string"
+    },
+    "attempts": {
+      "type": "integer",
+      "default": 0
+    },
+    "log": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "finished_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "drive_file_id",
+    "file_name",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
