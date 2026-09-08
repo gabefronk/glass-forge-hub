@@ -1,8 +1,8 @@
 // Staged capability contract. Native dropdown evidence is not release evidence.
 // Only this server/runner source registry may enable a product; requests cannot.
 export const MIXED_SUPPORT_ID = 'studio-mixed-products-v2';
-export const PROFILE_CONTRACT_VERSION = 2;
-export const PROFILE_CONTRACT_HASH = '26893e48e687fcd2f1de6fd23213afcfcb54a368749cde5e575d7f4abf77a8e6';
+export const PROFILE_CONTRACT_VERSION = 3;
+export const PROFILE_CONTRACT_HASH = '3393ad10f3abba394743b3019a7d13107b6b4ff7a84291571585f108b930d18f';
 const choice = (values, aliases = {}) => ({ type: 'choice', values, aliases });
 const boolean = values => ({ type: 'boolean', values });
 const common = {
@@ -14,8 +14,9 @@ const common = {
 const slider = {
   ...common, operation: choice(['XO']), sash_split: choice(['Even']), tempered: boolean([false]),
   patterned_glass: choice(['None']), glass_thickness: choice(['SS over SS']),
-  hardware: choice(['Cam Latch']), hardware_color: choice(['White']), screen: choice(['White'])
+  hardware: choice(['Cam Latch']), hardware_color: choice(['White', 'Black']), screen: choice(['White', 'Black'])
 };
+const verifiedStandardColors = [['White', 'White'], ['Black', 'White'], ['Black', 'Black']];
 const sliderDefaults = Object.fromEntries(Object.entries(slider).map(([key, rule]) => [key, rule.values[0]]));
 const sliderQuestionValues = { glazing_method: { '3/4 inch Insulated Glass': '3/4" Insulated' } };
 // Omitted ancillary choices follow the fresh native configurator. These are
@@ -79,7 +80,7 @@ const profiles = [
   {
     id: 'studio-setback-xo-v1', status: 'verified', style: 'Studio XO Slider', family: 'xo_slider',
     series: 'Studio 1 3/8 inch Fin Setback', native: { series: 'Studio 1 3/8" Fin Setback', style: 'Single Vent', summary_style: 'Studio Single Vent', operation: 'XO', question_values: sliderQuestionValues },
-    color_pairs: [['White', 'White']], option_rules: slider, defaults: sliderDefaults, native_default_rules: standardNativeDefaults, match_interior_options: ['hardware_color', 'screen'],
+    color_pairs: verifiedStandardColors, option_rules: slider, defaults: sliderDefaults, native_default_rules: standardNativeDefaults, match_interior_options: ['hardware_color', 'screen'],
     summary: { ...sliderSummary, fixed_fields: { ...sliderSummary.fixed_fields, 'Remove Nailing Fin': 'No', 'Sloped Sill Adapter': 'No', 'Head Expander': 'No' } },
     dimensions: { call: { widths: [24, 30, 36, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96], heights: [12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72], frame_width_offset: -0.5, frame_height_offset: -0.5,
       cases: [{ width: 60, height: 60, call_width: 60, call_height: 60, frame_width: 59.5, frame_height: 59.5 }] } },
@@ -130,7 +131,7 @@ const profiles = [
     id: 'studio-setback-direct-set-regular-standard-v1', status: 'verified', style: 'Studio Picture', family: 'picture_direct_set',
     series: 'Studio 1 3/8 inch Fin Setback', selection: { tempered: false, patterned_glass: 'None' },
     native: { series: 'Studio 1 3/8" Fin Setback', style: 'Direct Set', summary_style: 'Studio Direct Set', question_values: sliderQuestionValues },
-    color_pairs: [['White', 'White']], option_rules: standardPicture, native_default_rules: standardNativeDefaults,
+    color_pairs: verifiedStandardColors, option_rules: standardPicture, native_default_rules: standardNativeDefaults,
     defaults: Object.fromEntries(Object.entries(standardPicture).map(([key, rule]) => [key, rule.values[0]])),
     summary: { option_labels: baseSummary.option_labels,
       fixed_fields: { ...baseSummary.fixed_fields, 'Remove Nailing Fin': 'No', 'Sloped Sill Adapter': 'No', 'Head Expander': 'No', 'Hide Bid Code In Description': 'No' },
