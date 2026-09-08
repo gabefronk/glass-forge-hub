@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import {reconcile,trackerMatches} from "../functions/reconcileInstallCalendar/engine.js";
+const row={builder:"Holmes Homes",subdivision:"Deer Springs",lot:"263",oe:"12345678",po:"4567890",arrival_date:"2026-09-09",source_row:1};
+const e={id:"a",source:"google",event_date:"2026-09-08",start_time:"08:00",end_time:"10:00",job_name:"Holmes Homes - 263 Deer Springs",oe_number:"12345678",po_number:"4567890"};
+const run=(calendar,outlook,rows=[row],reports=[])=>reconcile({calendar,outlook,rows,reports,start:"2026-09-08",end:"2026-09-11"});
+assert.equal(trackerMatches({...e,job_name:"Holmes Homes - 264 Deer Springs"},[row]).length,0);
+assert.equal(trackerMatches({...e,oe_number:"87654321",po_number:""},[row]).length,0);
+let r=run([e],[{...e,source:"outlook"}]);assert.equal(r.events.length,1);assert.equal(r.counts.merged_duplicates,1);assert.equal(r.events[0].event_date,"2026-09-08");assert.equal(r.arrivals[0].arrival_date,"2026-09-09");assert(r.events[0].warnings.length);
+r=run([e],[{...e,event_date:"2026-09-09"}]);assert.equal(r.events.length,2);
+r=run([e],[{...e,start_time:"12:00"}]);assert.equal(r.events.length,2);
+r=run([e],[{...e,oe_number:"87654321",po_number:""}]);assert.equal(r.review.length,1);
+r=run([], [{...e,job_name:"Other Builder - 263 Elsewhere",oe_number:"",po_number:""}]);assert.equal(r.events.length,0);assert.equal(r.review.length,1);
+r=run([e],[],[row],[{post_id:"p",job_date:e.event_date,job_name:e.job_name,message:"Some progress"}]);assert.equal(r.events[0].reports.length,1);assert.match(r.events[0].status,/completion not inferred/);
+r=run([], [{...e,job_name:"- Amsco Will Call -"}]);assert.equal(r.hidden.length,1);
+assert.equal(trackerMatches({...e,job_name:"Holmes Homes - 263-266 Deer Springs"},[{...row,lot:"266"}]).length,1);
+console.log("Calendar coordinator: 9 matching, scope and source-preservation checks passed.");
