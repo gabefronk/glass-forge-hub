@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import {lookup} from "../functions/lookup-job-knowledge/job-engine.js";
+const row=(lot,date="2026-09-09",oe="12345678")=>({builder:"Weekley Homes",subdivision:"Rockwell Park",lot,arrival_date:date,oe,source_row:Number(lot),source_sheet:"DAILY SALES",date_cell:"I"+lot});
+const event=(date,lot,extra={})=>({event_date:date,job_name:"Weekley Homes - "+lot+" Rockwell Park",start_time:"08:00",end_time:"12:00",...extra});
+const base={rows:[row("120"),row("121")],calendar:[],outlook:[event("2026-09-09","120")],service:[event("2026-09-10","120")],reports:[],start:"2026-09-08",end:"2026-09-21",source_status:{tracker:{available:true},outlook_installs:{available:true,range_start:"2026-09-08",range_end:"2026-09-11"}}};
+const query={builder:"Weekley Homes",subdivision:"Rockwell Park",lot:"120"};
+let r=lookup({...base,query});assert.equal(r.status,"matched");assert.equal(r.counts.installation_entries,1);assert.equal(r.counts.service_entries,1);assert.equal(r.automatic_send_allowed,false);assert.equal(r.reply_status,"draft_needs_review");assert.match(r.draft_reply,/estimated arrival/);assert.ok(r.warnings.some(w=>w.includes("coverage is limited")));
+assert.equal(lookup({...base,query:{lot:"120"}}).status,"needs_identity");
+assert.equal(lookup({...base,query:{...query,lot:"999"}}).status,"not_found");
+assert.equal(lookup({...base,query:{oe:"12345678"}}).status,"ambiguous");
+r=lookup({...base,query,rows:[row("120"),{...row("120","2026-09-16","87654321"),source_row:999}]});assert.equal(r.tracker_rows.length,2);assert.match(r.draft_reply,/multiple order lines/);
+r=lookup({...base,query,rows:[row("120","2026-08-25")]});assert.match(r.draft_reply,/date has passed/);
+r=lookup({...base,query,service:[event("2026-09-10","121")]});assert.equal(r.services.length,0);
+r=lookup({...base,query,service:[event("2026-09-10","120",{oe_number:"99999999"})]});assert.equal(r.services.length,0);
+r=lookup({...base,query,source_status:{tracker:{available:true,stale:true}}});assert.match(r.draft_reply,/needs refreshing/);
+r=lookup({...base,query,reports:[{post_id:"p",job_date:"2026-09-10",job_name:"Weekley Homes - 120 Rockwell Park",message:"A stored report"}]});assert.equal(r.reports[0].completion_inferred,false);
+r=lookup({...base,query,service:Array.from({length:9},(_,i)=>event("2026-09-10","120",{id:String(i)}))});assert.equal(r.counts.service_entries,9);assert.equal(r.services.length,6);assert.equal(r.items_truncated,true);
+console.log("Job knowledge tests passed: identity, wrong lot/order, repeat orders, source coverage, stale dates, distinct service, bounded output, no inferred completion or sending.");
