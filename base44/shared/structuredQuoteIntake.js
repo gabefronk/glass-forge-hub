@@ -17,7 +17,12 @@ function productDefaults(line, quote, getProductProfileForLine) {
   const supplied = object(line.options) ? line.options : {};
   const settings = quote.settings || {};
   const explicitSettings = Object.fromEntries(Object.keys(profile.defaults).filter(key => present(settings[key])).map(key => [key, settings[key]]));
-  const options = { ...structuredClone(profile.defaults), ...explicitSettings, ...structuredClone(supplied) };
+  const defaults = structuredClone(profile.defaults);
+  // These selections depend on the native configuration (including its size).
+  // Preserve explicit input, but let the planner's verified native-default
+  // contract handle an omitted value instead of freezing an old recipe value.
+  for (const key of Object.keys(profile.native_default_rules || {})) delete defaults[key];
+  const options = { ...defaults, ...explicitSettings, ...structuredClone(supplied) };
   // Keep the shared coating inherited so a later global correction has no
   // stale line override. Native defaults also cannot fill a coating intake
   // deliberately left unanswered because of contrary or uncertain notes.
@@ -52,4 +57,3 @@ export function normalizeConversationalSchedule(quote, { getProductProfileForLin
   return { ...normalized, ok: checked.ok, issues, questions: [...new Set(issues.map(issue => issue.message))],
     ...(checked.ok ? { plan: checked.plan } : {}), preview: structuredClone(normalized.quote.lines) };
 }
-
