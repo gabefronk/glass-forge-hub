@@ -74,18 +74,20 @@ test('every required optional-feature selection must be explicit, including fals
   }
 });
 
-test('allowed colors and explicit line overrides are supported without inferring missing sides or hardware', () => {
-  for (const color of ['White', 'Taupe', 'Black outside / White inside']) {
+test('allowed colors and explicit line overrides require matching moving-unit hardware and screens', () => {
+  for (const [color, interior] of [['White', 'White'], ['Taupe', 'Taupe'], ['Black outside / White inside', 'White'], ['Black', 'Black']]) {
     const input = request();input.lines[0].options.color = color;
+    input.lines[0].options.hardware = `Cam Latch, ${interior}`;input.lines[0].options.screen = interior;
     assert.equal(buildQuotePlan(input).ok, true, color);
   }
   const partial = request();delete partial.lines[0].options.color;partial.lines[0].options.exterior_color = 'Black';assert.equal(buildQuotePlan(partial).ok, false);
-  partial.lines[0].options.interior_color = 'White';assert.equal(buildQuotePlan(partial).ok, true);
+  partial.lines[0].options.interior_color = 'White';assert.equal(buildQuotePlan(partial).ok, false);
+  partial.lines[0].options.hardware = 'Cam Latch, White';partial.lines[0].options.screen = 'White';assert.equal(buildQuotePlan(partial).ok, true);
   partial.lines[0].options.color = 'Taupe';assert.equal(buildQuotePlan(partial).ok, false);
   const inherited = request();inherited.settings.color = 'White';assert.equal(buildQuotePlan(inherited).plan.lines[0].options.color, 'Taupe');
-  delete inherited.lines[0].options.color;assert.equal(buildQuotePlan(inherited).plan.lines[0].options.color, 'White');
+  delete inherited.lines[0].options.color;inherited.lines[0].options.hardware = 'Cam Latch, White';inherited.lines[0].options.screen = 'White';assert.equal(buildQuotePlan(inherited).plan.lines[0].options.color, 'White');
   const hardware = request();hardware.lines[0].options.hardware = 'Cam Latch';assert.equal(buildQuotePlan(hardware).ok, false);
-  hardware.lines[0].options.hardware_color = 'White';assert.equal(buildQuotePlan(hardware).ok, true);
+  hardware.lines[0].options.hardware_color = 'Taupe';assert.equal(buildQuotePlan(hardware).ok, true);
 });
 
 test('observed persisted benchmark passes exact field verification and returns native prices only', () => {
