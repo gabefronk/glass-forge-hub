@@ -11,7 +11,7 @@ const BASE_OPTIONS = Object.freeze({
 export const STANDARD_STUDIO_PROFILE = Object.freeze({
   id: 'studio-sh-standard', revision: 1, name: 'Studio Single Hung standard configuration',
   style: 'Studio Single Hung', options: BASE_OPTIONS, match_interior_colors: true,
-  description: 'Studio 1 3/8 inch Fin Setback; one-wide Complete Unit; SS over SS; 3/4 inch insulated; elevation 2501 to 6500; no tempered glass, argon, Super Spacer, capillary tubes or grilles; Cam Latch; hardware and screen match the White or Taupe interior. Color, CozE LowE, dimensions, account, yard and gross margin are chosen separately.'
+  description: 'Studio 1 3/8 inch Fin Setback; one-wide Complete Unit; SS over SS; 3/4 inch insulated; elevation 2501 to 6500; no tempered glass, argon, Super Spacer, capillary tubes or grilles; Cam Latch; hardware and screen match the White or Black interior. Color, CozE LowE, dimensions, account, yard and gross margin are chosen separately.'
 });
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -43,6 +43,7 @@ function modifiers(raw, path) {
   while (rest) {
     if (take(/^(?:studio\s+)?single[ -]?hung\b|^sh\b/i, () => assign(out, 'style', 'Studio Single Hung'))) continue;
     if (take(/^black\s+(?:exterior|outside)\s*(?:\/|and|with)?\s*white\s+(?:interior|inside)\b/i, () => assign(out.options, 'color', 'Black outside / White inside'))) continue;
+    if (take(/^black\s+(?:exterior|outside)\s*(?:\/|and|with)?\s*black\s+(?:interior|inside)\b/i, () => assign(out.options, 'color', 'Black'))) continue;
     if (take(/^(white|taupe|black)\b/i, match => assign(out.options, 'color', match[1][0].toUpperCase() + match[1].slice(1).toLowerCase()))) continue;
     if (take(/^(?:coze\s*\(\s*low[ -]?e\s*\)|coze(?:\s+low[ -]?e)?|low[ -]?e)(?=\s|$)/i, () => assign(out.options, 'glass', 'CozE (LowE)'))) continue;
     if (take(/^(?:no\s+low[ -]?e|clear\s+glass)\b/i, () => assign(out.options, 'glass', 'Clear'))) continue;
@@ -114,9 +115,11 @@ function selectedColors(options, settings) {
   if (has(source.exterior_color) || has(source.interior_color)) {
     if (norm(source.exterior_color) === 'white' && norm(source.interior_color) === 'white') return 'White';
     if (norm(source.exterior_color) === 'taupe' && norm(source.interior_color) === 'taupe') return 'Taupe';
+    if (norm(source.exterior_color) === 'black' && norm(source.interior_color) === 'white') return 'White';
+    if (norm(source.exterior_color) === 'black' && norm(source.interior_color) === 'black') return 'Black';
     return null;
   }
-  return { white: 'White', whitebothsides: 'White', taupe: 'Taupe', taupebothsides: 'Taupe' }[norm(source.color)] || null;
+  return { white: 'White', whitebothsides: 'White', taupe: 'Taupe', taupebothsides: 'Taupe', blackoutsidewhiteinside: 'White', blackexteriorwhiteinterior: 'White', blackwhite: 'White', black: 'Black', blackbothsides: 'Black', blackblack: 'Black' }[norm(source.color)] || null;
 }
 function normalizeLowE(settings, issues) {
   if (!Object.hasOwn(settings, 'low_e')) return;
@@ -197,7 +200,7 @@ export function normalizeEasyRequest(input, { preset = STANDARD_STUDIO_PROFILE }
         const options = { ...clone(preset.options), ...explicitSettings, ...supplied };
         const interior = selectedColors(supplied, settings);
         const hasAnyColor = [supplied.color, supplied.exterior_color, supplied.interior_color, settings.color, settings.exterior_color, settings.interior_color].some(has);
-        if (hasAnyColor && !interior) add(issues, 'profile_color_review', 'lines[' + index + '].options.color', 'The standard profile applies only to White/White or Taupe/Taupe. Black, mixed or custom configurations need complete explicit options and review.');
+        if (hasAnyColor && !interior) add(issues, 'profile_color_review', 'lines[' + index + '].options.color', 'Choose White, Taupe, Black exterior/White interior, or Black on both sides. Other mixed or custom finishes need review.');
         if (preset.match_interior_colors === true && interior) {
           if (!Object.hasOwn(supplied, 'hardware_color') && !has(settings.hardware_color)) options.hardware_color = interior;
           if (!Object.hasOwn(supplied, 'screen') && !has(settings.screen)) options.screen = interior;
@@ -222,7 +225,7 @@ export function normalizeEasyRequest(input, { preset = STANDARD_STUDIO_PROFILE }
     const line = quote.lines[Number(match[1])];
     return !unique.some(other => other.code === 'missing_option' && other.path === base + '.color') || Object.hasOwn(line?.options || {}, match[2]) || Object.hasOwn(settings, match[2]);
   });
-  const allQuestions = [...new Set(questionIssues.map(item => confirmed && profileApplied && item.code === 'missing_option' && item.path.endsWith('.color') ? 'Which color should the windows with no color use: White or Taupe?' : item.message))];
+  const allQuestions = [...new Set(questionIssues.map(item => confirmed && profileApplied && item.code === 'missing_option' && item.path.endsWith('.color') ? 'Which color should the windows use: White, Taupe, Black exterior/White interior, or Black on both sides?' : item.message))];
   const questions = allQuestions.length > 30 ? [...allQuestions.slice(0, 29), 'Additional line-level issues are shown in the schedule preview; resolve them before quoting.'] : allQuestions;
   return {
     ok, status: ok ? 'ready_to_queue' : 'needs_details', routing: ok ? 'supported' : unique.some(item => /unsupported|unparsed|conflicting|review|unresolved/.test(item.code)) ? 'review' : 'clarification',
