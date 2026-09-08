@@ -21,6 +21,7 @@ const SERVICE_BG = "#FBEDEA";
 const SERVICE_TEXT = "#8A4038";
 
 function eventColors(event) {
+  if (event.source === "outlook") return {bg:"#F0E9FA", text:"#7042A1"};
   const isInstall = event.source === "app";
   return isInstall
     ? { bg: INSTALL_BG, text: INSTALL_TEXT }
