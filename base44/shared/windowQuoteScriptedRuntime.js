@@ -2,6 +2,7 @@ import { createLazyScriptedRuntime } from './lazyScriptedRuntime.js';
 import { buildQuotePlan, verifyObservedQuote, getProductProfileForLine } from './amscoQuotePlan.js';
 import { normalizeConversationalSchedule } from './structuredQuoteIntake.js';
 import { createConversationalIntake } from './conversationalIntake.js';
+import { createBuilderAwareIntake } from './windowQuoteBuilder.js';
 
 // AI interprets the customer's words. The checked planner still owns product
 // support and execution; no model-generated price or status can bypass it.
@@ -18,10 +19,11 @@ export async function invokeIntakeModel(params, { client }) {
     return JSON.parse(result.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
   }
 }
-const normalizeIntake = createConversationalIntake({
+export const conversationalIntake = createConversationalIntake({
   invokeLLM: invokeIntakeModel,
   normalizeStructured: quote => normalizeConversationalSchedule(quote, { getProductProfileForLine })
 });
+const normalizeIntake = createBuilderAwareIntake(conversationalIntake);
 // Private configuration is fetched once for each request, with no new env secret.
 const runtime = createLazyScriptedRuntime({ normalizeRequest: buildQuotePlan, normalizeIntake, validateReady: verifyObservedQuote });
 export const execution = runtime.execution;
