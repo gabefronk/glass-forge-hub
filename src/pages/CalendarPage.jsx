@@ -7,6 +7,8 @@ import { C } from "@/lib/feeUI";
 import MonthGrid from "@/components/calendar/MonthGrid";
 import EventForm from "@/components/calendar/EventForm";
 import EventBubble from "@/components/calendar/EventBubble";
+import OutlookEventDetails from "@/components/calendar/OutlookEventDetails";
+import { combineCalendarSources, snapshotEvents } from "@/lib/outlookCalendar";
 
 function formatMonth(m) {
   const [y, mm] = m.split("-").map(Number);
@@ -15,9 +17,14 @@ function formatMonth(m) {
 
 const INSTALL_COLOR = "#2A5EA8";
 const SERVICE_COLOR = "#8A4038";
+const OUTLOOK_COLOR = "#7042A1";
 
 export default function CalendarPage() {
   const [events, setEvents] = useState([]);
+  const [outlook, setOutlook] = useState(null);
+  const [outlookError, setOutlookError] = useState("");
+  const [showIsrael, setShowIsrael] = useState(true);
+  const [showOutlook, setShowOutlook] = useState(true);
   const [jobs, setJobs] = useState([]);
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [view, setView] = useState(() => {
@@ -41,6 +48,12 @@ export default function CalendarPage() {
     setEvents(evs);
     setJobs(jobsArr);
     if (me) setUser(me);
+    if (me?.role === "admin") {
+      try {
+        const snapshots = await base44.entities.OutlookCalendarSnapshot.filter({complete:true,calendar_name:"UT Window Install"}, "-captured_at", 1);
+        setOutlook(snapshots[0] || null); setOutlookError("");
+      } catch { setOutlookError("Outlook import could not be loaded."); }
+    }
   };
   useEffect(() => { load(); }, []);
   useEffect(() => {
@@ -50,14 +63,15 @@ export default function CalendarPage() {
     return () => phone.removeEventListener("change", adaptView);
   }, []);
 
+  const combined = useMemo(() => combineCalendarSources(events, snapshotEvents(outlook), showIsrael, showOutlook), [events, outlook, showIsrael, showOutlook]);
   const monthEvents = useMemo(() => {
-    let filtered = events.filter((e) => (e.event_date || "").slice(0, 7) === month);
+    let filtered = combined.events.filter((e) => (e.event_date || "").slice(0, 7) === month);
     if (unreportedOnly) {
       filtered = filtered.filter((e) => e.report_required !== false &&
         ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"].includes(e.report_status));
     }
     return filtered;
-  }, [events, month, unreportedOnly]);
+  }, [combined, month, unreportedOnly]);
   const selectedDayEvents = useMemo(() => {
     return monthEvents.filter((e) => (e.event_date || "").slice(0, 10) === selectedDay).sort((a, b) => (a.start_time || "99").localeCompare(b.start_time || "99"));
   }, [monthEvents, selectedDay]);
@@ -147,12 +161,23 @@ export default function CalendarPage() {
           </div>
         </div>
 
+        {user?.role === "admin" && <div className="mb-4 rounded-xl border p-3 text-sm" style={{borderColor:C.border}}>
+          <div className="flex flex-wrap gap-4">
+            <label><input type="checkbox" checked={showIsrael} onChange={e=>setShowIsrael(e.target.checked)} /> Israel / existing calendar</label>
+            <label style={{color:OUTLOOK_COLOR}}><input type="checkbox" checked={showOutlook} onChange={e=>setShowOutlook(e.target.checked)} /> Outlook installs</label>
+            <button type="button" className="underline" onClick={load}>Reload imports</button>
+          </div>
+          <p className="text-xs mt-2">{outlook ? `Outlook coverage: ${outlook.range_start} through ${outlook.range_end}. Captured ${new Date(outlook.captured_at).toLocaleString()}. ${outlook.event_count} source events; ${combined.hidden} confirmed overlaps hidden in favor of Israel.` : "No complete Outlook import yet."}</p>
+          {outlook && Date.now()-new Date(outlook.captured_at).getTime()>26*3600000 && <p className="text-xs text-amber-700">Outlook copy is over 26 hours old.</p>}
+          {outlookError && <p role="alert">{outlookError}</p>}
+        </div>}
         {creating && (
           <div className="mb-4">
             <EventForm initial={creating} jobs={jobs} onSave={handleSave} onCancel={() => setCreating(null)} saving={saving} />
           </div>
         )}
-        {selected && (
+        {selected?.source === "outlook" && <OutlookEventDetails event={selected} onClose={() => setSelected(null)} />}
+        {selected && selected.source !== "outlook" && (
           <EventBubble event={selected} jobs={jobs} onEdit={handleSave} onDelete={handleDelete} onClose={() => setSelected(null)} saving={saving} user={user} onChanged={load} />
         )}
 
@@ -181,7 +206,7 @@ export default function CalendarPage() {
                 <div className="grid grid-cols-1 min-[700px]:grid-cols-2 gap-3">
                   {selectedDayEvents.map((e) => {
                     const isInstall = e.source === "app";
-                    const color = isInstall ? INSTALL_COLOR : SERVICE_COLOR;
+                    const color = e.source === "outlook" ? OUTLOOK_COLOR : isInstall ? INSTALL_COLOR : SERVICE_COLOR;
                     return (
                       <button key={e.id} type="button" onClick={() => setSelected(e)} className="flex items-center gap-3 rounded-[12px] p-3 text-left transition-colors hover:bg-white/[0.03]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
                         <div className="w-[2px] self-stretch shrink-0 rounded-full" style={{ backgroundColor: color }} />
@@ -190,7 +215,7 @@ export default function CalendarPage() {
                           <div className="text-[13px] font-medium truncate" style={{ color: C.text }}>{e.job_name}</div>
                           {e.address && <div className="text-[11px] truncate" style={{ color: C.textMuted }}>{e.address}</div>}
                         </div>
-                        <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "#E7EEFA" : "#FBEDEA", border: isInstall ? "1px solid #C3D4EE" : "1px solid #EFD2CA", color }}>{isInstall ? "Install" : "Service"}</span>
+                        <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "#E7EEFA" : "#FBEDEA", border: isInstall ? "1px solid #C3D4EE" : "1px solid #EFD2CA", color }}>{e.source === "outlook" ? "Outlook" : isInstall ? "Install" : "Service"}</span>
                       </button>
                     );
                   })}
@@ -203,8 +228,8 @@ export default function CalendarPage() {
             {monthEvents.length === 0 && <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No events this month.</div>}
             {monthEvents.sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "")).map((e) => {
               const isInstall = e.source === "app";
-              const color = isInstall ? INSTALL_COLOR : SERVICE_COLOR;
-              const bg = isInstall ? "#E7EEFA" : "#FBEDEA";
+              const color = e.source === "outlook" ? OUTLOOK_COLOR : isInstall ? INSTALL_COLOR : SERVICE_COLOR;
+              const bg = e.source === "outlook" ? "#F0E9FA" : isInstall ? "#E7EEFA" : "#FBEDEA";
               return (
                 <button
                   key={e.id}
