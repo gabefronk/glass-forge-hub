@@ -1,6 +1,7 @@
 import { HttpError, sha256, validateLines, validateSettings, sanitizePublic } from './windowQuotesCore.js';
 import { createScriptedExecution } from './scriptedExecution.js';
 import { reviewedRestartAllowsHistory } from './reviewedRestart.js';
+import { DESKTOP_NATIVE_SOURCE, nativeEnginePolicyReady, nativeEnginePresenceReady, validateDesktopCheckpoint } from './nativeEngineObservation.js';
 
 const clone = value => structuredClone(value);
 const stable = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
@@ -15,6 +16,7 @@ const sameYard = (a, b) => typeof a === 'string' && typeof b === 'string' && a.r
 // continue through the already-tested exact-request executor and its global lock.
 export function createScriptedQueueExecution({ config = {}, normalizeRequest, normalizeIntake, validateReady, hash = sha256, now = () => new Date(), uuid } = {}) {
   const enabled = config.enabled === true, allow = config.queue_allow || {};
+  if (config.native_engine?.enabled === true && !nativeEnginePolicyReady(config.native_engine)) fail(503, 'Invalid native desktop engine configuration');
   const at = () => now().toISOString();
   const digest = value => hash(stable(value));
   if (enabled && (config.mode !== 'queue' || allow.requester_email !== 'gabefronk@gmail.com' || allow.dealer !== 'BFS' || !sameYard(allow.yard, 'BFS-UTAH DESIGN (11)') || !Number.isFinite(Date.parse(allow.created_after)) || typeof normalizeRequest !== 'function' || typeof validateReady !== 'function')) fail(503, 'Invalid new-request queue configuration');
@@ -69,7 +71,9 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
       || q.conversion_token || q.lease_token && q.lease_expires_at > at()) fail(409, 'Only this unchanged, completed failed attempt may be retried');
     const oldCheckpoint = q.checkpoint || {}, nativeId = oldCheckpoint.native_quote_id || null;
     if (nativeId !== body.expected_native_quote_id) fail(409, 'The saved native quote changed; review it again');
-    if (nativeId && (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(nativeId) || !/^\d{1,30}$/.test(String(oldCheckpoint.native_quote_number || '')) || oldCheckpoint.input_revision !== q.input_revision)) fail(409, 'The previous native checkpoint needs review');
+    const desktop = oldCheckpoint.native_source === DESKTOP_NATIVE_SOURCE;
+    if (nativeId && (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(nativeId) || !desktop && !/^\d{1,30}$/.test(String(oldCheckpoint.native_quote_number || '')) || oldCheckpoint.input_revision !== q.input_revision)) fail(409, 'The previous native checkpoint needs review');
+    if (desktop && !(await validateDesktopCheckpoint(oldCheckpoint, run.plan, { policy: config.native_engine, operationId: run.operation_id, hash })).ok) fail(409, 'The saved desktop checkpoint needs review');
     const savedLines = nativeId ? oldCheckpoint.saved_lines : (oldCheckpoint.saved_lines ?? []);
     if (!Array.isArray(savedLines) || savedLines.length > 300 || savedLines.length > run.plan.lines.length || savedLines.some(line => !line || !Number.isInteger(line.source_index) || line.source_index < 0 || line.source_index >= run.plan.lines.length || !/^[A-Za-z0-9_-]{1,150}$/.test(line.native_line_id || '') || !/^\d{1,30}$/.test(String(line.native_line_number || '')) || Number(line.native_line_number) <= 0)
       || ['source_index', 'native_line_id', 'native_line_number'].some(key => new Set(savedLines.map(line => String(line[key]))).size !== savedLines.length)) fail(409, 'The previous saved-line checkpoint needs review');
@@ -78,7 +82,8 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     if (currentSlot.busy_token || currentSlot.active_quote_id) fail(409, 'The prior browser operation must be released before retrying');
     if ((q.history || []).filter(item => item.reason === 'reviewed_failed_restart').length >= 20) fail(409, 'This request has reached its reviewed retry limit');
     const nextRevision = q.input_revision + 1, attemptId = uuid ? uuid() : crypto.randomUUID();
-    const checkpoint = nativeId ? { native_quote_id: nativeId, native_quote_number: String(oldCheckpoint.native_quote_number), input_revision: q.input_revision,
+    const checkpoint = nativeId ? { native_quote_id: nativeId, ...(oldCheckpoint.native_quote_number ? { native_quote_number: String(oldCheckpoint.native_quote_number) } : {}),
+      ...(desktop ? { native_source: DESKTOP_NATIVE_SOURCE, native_engine: clone(oldCheckpoint.native_engine), ...(oldCheckpoint.native_quote_url ? { native_quote_url: oldCheckpoint.native_quote_url } : {}) } : {}), input_revision: q.input_revision,
       saved_lines: savedLines.map(line => ({ source_index: line.source_index, native_line_id: line.native_line_id, native_line_number: String(line.native_line_number) })) } : {};
     const priorOperation = Object.fromEntries(['operation_id', 'input_revision', 'plan_hash', 'worker_id', 'phase', 'terminal_status', 'started_at', 'completed_at'].filter(key => run[key] !== undefined).map(key => [key, clone(run[key])]));
     const archive = { revision: q.input_revision, next_revision: nextRevision, recorded_at: at(), reason: 'reviewed_failed_restart', worker_status: 'failed', retry_id: body.retry_id,
@@ -197,7 +202,15 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
       if (!/^[A-Za-z0-9_-]+$/.test(attention.quote_id)) fail(400, 'Invalid attention quote_id');
       if (!/^[a-z0-9_]+$/.test(attention.code)) fail(400, 'Invalid attention code');
     }
-    return { runner_id, runner_status, browser: clone(browser), browser_reported_at: at(), ...(attention ? { attention } : {}), last_seen_at: at() };
+    let nativeEngine;
+    if (body.native_engine !== undefined) {
+      nativeEngine = body.native_engine;
+      if (!nativeEngine || typeof nativeEngine !== 'object' || Array.isArray(nativeEngine) ||
+        Object.keys(nativeEngine).some(key => !['state', 'version', 'contract_hash', 'catalog_id', 'context_fingerprint'].includes(key)) ||
+        !['ready', 'needs_sign_in', 'unavailable'].includes(nativeEngine.state) ||
+        nativeEngine.state === 'ready' && !nativeEnginePresenceReady(nativeEngine, config.native_engine)) fail(400, 'Provide a truthful native engine state matching the enabled contract');
+    }
+    return { runner_id, runner_status, browser: clone(browser), browser_reported_at: at(), ...(nativeEngine ? { native_engine: clone(nativeEngine) } : {}), ...(attention ? { attention } : {}), last_seen_at: at() };
   }
   async function poll({ db, worker, body }) {
     requireEnabled(); workerScope(worker); const reported = presence(body);
@@ -207,7 +220,7 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     if (reported.runner_status !== 'idle') return response('blocked', reported.runner_status);
     const currentSlot = await slot(db);
     if (currentSlot.busy_token) return response('blocked', 'browser_operation_requires_completion_or_review');
-    if (reported.browser.state !== 'authenticated') return response('needs_sign_in', reported.browser.state);
+    if (reported.browser.state !== 'authenticated' && !nativeEnginePresenceReady(reported.native_engine, config.native_engine)) return response('needs_sign_in', reported.browser.state);
     const candidates = await db.QuoteRequests.filter({ worker_status: 'queued', execution_provider: 'deterministic', requester_email: allow.requester_email, 'agent_run.queue_scope_hash': await scopeHash(), created_date: { $gte: allow.created_after } }, 'queued_at', 20);
     for (const q of candidates) {
       try {
@@ -229,6 +242,8 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     if (status.online) {
       status.runner_status = reported.runner_status;
       const browserAge = now().getTime() - Date.parse(reported.browser_reported_at);
+      status.native_engine_state = browserAge >= 0 && browserAge < 100000 ? reported.native_engine?.state || 'unavailable' : 'unknown';
+      status.native_engine_ready = browserAge >= 0 && browserAge < 100000 && nativeEnginePresenceReady(reported.native_engine, config.native_engine);
       if (browserAge >= 0 && browserAge < 100000) { status.browser_state = reported.browser.state; status.browser_authenticated = reported.browser.state === 'authenticated'; }
       if (reported.runner_status === 'stopping') status.online = false;
     }
@@ -236,3 +251,4 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
   }
   return { configured: enabled, provider: 'deterministic', authenticate: auth.authenticate, afterInput, claim, poll, getStatus, heartbeat: forward('heartbeat'), checkpoint: forward('checkpoint'), report: forward('report') };
 }
+
