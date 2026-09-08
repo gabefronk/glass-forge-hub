@@ -1,0 +1,74 @@
+{
+  "name": "OutlookCalendarBatch",
+  "type": "object",
+  "properties": {
+    "calendar_name": {
+      "type": "string"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "range_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "range_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "event_count": {
+      "type": "integer"
+    },
+    "snapshot_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "daily_counts": {
+      "type": "object"
+    },
+    "collection_notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "calendar_name",
+    "captured_at",
+    "range_start",
+    "range_end",
+    "timezone",
+    "complete",
+    "event_count",
+    "snapshot_ids"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
