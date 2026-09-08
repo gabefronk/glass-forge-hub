@@ -54,5 +54,6 @@ export function reconcile({calendar,outlook,rows,reports,start,end}){
  const arrivals=rows.filter(r=>inRange(r.arrival_date)).map(rowRef);
  const used=new Set(events.flatMap(e=>e.reports.map(r=>r.post_id)));
  const reportReview=reports.filter(r=>inRange(r.job_date)&&!used.has(r.post_id)).map(r=>({post_id:r.post_id,job_date:r.job_date,job_name:r.job_name,message:r.message,reason:"Unlinked ProBuild report; not treated as another scheduled installation."}));
+ events.sort((a,b)=>a.event_date.localeCompare(b.event_date)||(a.start_time||"").localeCompare(b.start_time||"")||a.job_name.localeCompare(b.job_name));
  return {events,review,hidden,arrivals,report_review:reportReview,counts:{source_events:source.length,clean_events:events.length,merged_duplicates:matched.length-events.length,needs_review:review.length,hidden_reminders:hidden.length,arrival_estimates:arrivals.length,unlinked_reports:reportReview.length}};
 }
