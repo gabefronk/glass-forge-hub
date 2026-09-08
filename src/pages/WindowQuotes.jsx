@@ -17,10 +17,10 @@ import { normalizeEasyRequest, STANDARD_STUDIO_PROFILE } from "@/lib/easyRequest
 
 const primaryClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#2A5EA8] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#234F8E] disabled:cursor-not-allowed disabled:opacity-50";
 const statusInfo = {
-  draft: { label: "Draft", color: "#616D81", bg: "#F6F8FC", text: "Send your request to the quoting agent when you’re ready. It will ask for any missing details." },
+  draft: { label: "Draft", color: "#616D81", bg: "#F6F8FC", text: "Calculate the price when you’re ready. The app will ask for any missing details first." },
   queued: { label: "Calculating", color: "#1E4A85", bg: "#E7EEFA", text: "Your verified price calculation is in the queue. You can leave this page while it runs." },
-  running: { label: "Quoting", color: "#1E4A85", bg: "#E7EEFA", text: "We’re building and checking your window quote." },
-  needs_details: { label: "Needs details", color: "#8A5A10", bg: "#FCF5E9", text: "Reply to the questions below to continue, or update the schedule and send it back to quoting." },
+  running: { label: "Calculating", color: "#1E4A85", bg: "#E7EEFA", text: "The mapped pricing engine is building, saving, and checking your window quote." },
+  needs_details: { label: "Needs details", color: "#8A5A10", bg: "#FCF5E9", text: "Reply to the questions below to continue, or update the schedule and calculate again." },
   needs_sign_in: { label: "Needs sign-in", color: "#8A5A10", bg: "#FCF5E9", text: "Your request is saved. The account owner needs to reconnect the quoting browser before this quote can continue." },
   failed: { label: "Needs attention", color: "#8A4038", bg: "#FBEDEA", text: "Your quote needs attention before it can be completed. Your quoting team must check the saved work before continuing." },
   ready: { label: "Ready", color: "#276449", bg: "#EAF5EE", text: "Your quote is ready to be viewed." },
