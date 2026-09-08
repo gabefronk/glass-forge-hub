@@ -1,11 +1,13 @@
 import {useEffect,useState} from "react";
 import {base44} from "@/api/base44Client";
 export default function CleanCalendar(){
- const [data,setData]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+ const [data,setData]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false),[brief,setBrief]=useState(""),[agentBusy,setAgentBusy]=useState(false);
+ async function agentBrief(){setAgentBusy(true);setBrief("");try{const c=await base44.agents.createConversation({agent_name:"calendar_coordinator",metadata:{purpose:"single_run_calendar_brief"}});await base44.agents.addMessage(c,{role:"user",content:"Run the calendar comparison once for the latest available coverage. Give only counts, material conflicts and source limitations in at most five sentences, then stop."});for(let i=0;i<18;i++){await new Promise(r=>setTimeout(r,3000));const updated=await base44.agents.getConversation(c.id);const answers=(updated?.messages||[]).filter(m=>m.role==="assistant"&&typeof m.content==="string"&&m.content.trim());if(answers.length){setBrief(answers[answers.length-1].content);return;}}setBrief("The agent has not returned a final brief yet. The verified comparison below remains available.");}catch(e){setBrief(e.response?.data?.message||"The agent brief could not complete. The comparison below remains available.");}finally{setAgentBusy(false);}}
  async function load(){setBusy(true);setError("");try{const r=await base44.functions.invoke("reconcileInstallCalendar",{});setData(r.data);}catch(e){setError(e.response?.data?.error||"Calendar comparison is unavailable. Source calendars remain intact.");}finally{setBusy(false);}}
  useEffect(()=>{load();},[]);
  return <section className="space-y-4"><div className="flex justify-between gap-4"><h1 className="text-xl font-semibold">My installation calendar</h1><button disabled={busy} onClick={load} className="border rounded px-3 py-2">{busy?"Comparing sources…":"Refresh comparison"}</button></div>
  <p className="text-sm">Jobs found in your Sales Tracker, with calendar sources and ProBuild reports together. Original records are preserved.</p>
+ <button className="border rounded px-3 py-2" disabled={agentBusy||busy} onClick={agentBrief}>{agentBusy?"Agent preparing brief…":"Ask calendar agent for brief"}</button>{brief&&<p role="status" className="whitespace-pre-wrap border rounded p-3">{brief}</p>}
  {error&&<p role="alert">{error}</p>}
  {data&&<><p role="status">{data.range_start} through {data.range_end} · {data.counts.clean_events} calendar entries · {data.counts.merged_duplicates} confirmed duplicates combined · {data.counts.needs_review} need review</p>
  {(data.source_status.tracker_stale||data.source_status.outlook_stale)&&<p className="text-amber-700">A source is over 26 hours old. Refresh source data before relying on this comparison.</p>}
