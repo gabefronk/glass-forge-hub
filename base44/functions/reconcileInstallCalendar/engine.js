@@ -1,6 +1,6 @@
 export const norm=v=>String(v??"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ");
 const words=(hay,needle)=>!!norm(needle)&&(" "+norm(hay)+" ").includes(" "+norm(needle)+" ");
-function lots(title){const s=String(title??"").replace(/^(?:(?:YA|W|Wes|MDS|AP|BB|HP|SP)\\s*-\\s*)?(?:(?:#[1-9]\\s*)|(?:\\([^)]*\\)\\s*)){0,3}/i,"");const result=new Set(s.match(/\b\d+\b/g)||[]);for(const m of s.matchAll(/\b(\d+)\s*(?:-|through|to)\s*(\d+)\b/gi)){const a=+m[1],b=+m[2];if(b>=a&&b-a<=30)for(let x=a;x<=b;x++)result.add(String(x));}return result;}
+function lots(title){const s=String(title??"").replace(/^(?:(?:YA|W|Wes|MDS|AP|BB|HP|SP) *- *)?(?:(?:#[1-9] *)|(?:[(][^)]*[)] *)){0,3}/i,"");const result=new Set(s.match(/\b\d+\b/g)||[]);for(const m of s.matchAll(/\b(\d+)\s*(?:-|through|to)\s*(\d+)\b/gi)){const a=+m[1],b=+m[2];if(b>=a&&b-a<=30)for(let x=a;x<=b;x++)result.add(String(x));}return result;}
 const orders=e=>({oe:String(e.oe_number||"").trim(),po:String(e.po_number||"").trim()});
 export function trackerMatches(e,rows){
  const title=e.job_name||"",ls=lots(title),o=orders(e);
