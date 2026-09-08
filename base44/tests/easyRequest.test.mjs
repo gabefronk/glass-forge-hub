@@ -16,7 +16,7 @@ test('a confirmed matching-color profile asks only for missing frame color while
   const input = request();delete input.settings.color;
   const result = normalizeEasyRequest(input);
   assert.equal(result.ok, false);assert.equal(result.plan, undefined);
-  assert.deepEqual(result.questions, ['Which color should the windows with no color use: White or Taupe?']);
+  assert.deepEqual(result.questions, ['Which color should the windows use: White, Taupe, Black exterior/White interior, or Black on both sides?']);
   assert.ok(result.issues.some(item => item.path.endsWith('.hardware_color')));
   input.settings.screen = 'unsupported screen';
   assert.ok(normalizeEasyRequest(input).questions.some(question => /screen/.test(question)));
@@ -90,23 +90,31 @@ test('profile never replaces explicit unsupported global or per-line option sele
   const result = normalizeEasyRequest(input);assert.equal(result.ok, false);assert.equal(result.quote.lines[0].options.tempered, true);
 });
 
-test('explicit per-line colors, screens, hardware and room labels override global choices without being guessed', () => {
+test('explicit per-line colors, screens, hardware and room labels are preserved and checked', () => {
   const input = request();input.message = '';
   input.lines = [{ qty: 2, width: 36, height: 60, units: 'in', dimension_basis: 'call', room: 'North bedroom', options: { color: 'White', hardware_color: 'Taupe', screen: 'Black' } }];
-  const result = normalizeEasyRequest(input);assert.equal(result.ok, true, JSON.stringify(result.issues));
-  const line = result.plan.lines[0];assert.equal(line.options.color, 'White');assert.equal(line.options.hardware_color, 'Taupe');assert.equal(line.options.screen, 'Black');assert.equal(line.room, 'North bedroom');assert.equal(line.qty, 2);
+  let result = normalizeEasyRequest(input);assert.equal(result.ok, false);assert.equal(hasIssue(result, 'conflicting_options'), true);
+  assert.equal(result.quote.lines[0].options.hardware_color, 'Taupe');assert.equal(result.quote.lines[0].options.screen, 'Black');
+  input.lines[0].options.hardware_color = 'White';input.lines[0].options.screen = 'White';result = normalizeEasyRequest(input);
+  assert.equal(result.ok, true, JSON.stringify(result.issues));
+  const line = result.plan.lines[0];assert.equal(line.options.color, 'White');assert.equal(line.options.hardware_color, 'White');assert.equal(line.options.screen, 'White');assert.equal(line.room, 'North bedroom');assert.equal(line.qty, 2);
 });
 
-test('black or mixed colors cannot use the implicit standard profile', () => {
-  for (const color of ['Black', 'Black outside / White inside']) {
+test('verified black finishes use the standard profile while unsupported mixed colors remain review-only', () => {
+  for (const [color, interior] of [['Black', 'Black'], ['Black outside / White inside', 'White']]) {
     const input = request();input.settings.color = color;
-    const result = normalizeEasyRequest(input);assert.equal(result.ok, false);assert.equal(hasIssue(result, 'profile_color_review'), true);
+    const result = normalizeEasyRequest(input);assert.equal(result.ok, true, JSON.stringify(result.issues));
+    assert.equal(result.plan.lines[0].options.exterior_color, 'Black');assert.equal(result.plan.lines[0].options.interior_color, interior);
+    assert.equal(result.plan.lines[0].options.hardware_color, interior);assert.equal(result.plan.lines[0].options.screen, interior);
   }
+  const input = request();input.settings.color = 'Taupe outside / White inside';
+  const result = normalizeEasyRequest(input);assert.equal(result.ok, false);assert.equal(hasIssue(result, 'profile_color_review'), true);
 });
 
 test('complete explicit structured options bypass the profile and preserve historical prose without interpreting it', () => {
   const input = JSON.parse(fs.readFileSync(new URL('./fixtures/amsco-scripted-benchmark.json', import.meta.url), 'utf8'));
   input.lines[0].options.color = 'Black outside / White inside';
+  input.lines[0].options.hardware = 'Cam Latch, White';input.lines[0].options.screen = 'White';
   const result = normalizeEasyRequest(input);
   assert.equal(result.ok, true);assert.equal(result.profile_applied, false);assert.equal(result.message_interpreted, false);
   assert.equal(result.plan.lines[0].options.color, 'Black outside / White inside');
