@@ -28,20 +28,14 @@
     "row_count": {
       "type": "integer"
     },
-    "rows": {
-      "type": "array",
-      "items": {
-        "type": "object"
-      }
-    },
-    "file_base64": {
-      "type": "string"
-    },
     "status": {
       "type": "string",
       "enum": [
         "validated"
       ]
+    },
+    "file_uri": {
+      "type": "string"
     }
   },
   "required": [
@@ -49,10 +43,9 @@
     "sha256",
     "imported_at",
     "source_captured_at",
-    "rows",
     "row_count",
-    "file_base64",
-    "status"
+    "status",
+    "file_uri"
   ],
   "rls": {
     "read": {
