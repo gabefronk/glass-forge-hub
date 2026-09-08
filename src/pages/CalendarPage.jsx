@@ -10,6 +10,7 @@ import EventBubble from "@/components/calendar/EventBubble";
 import OutlookEventDetails from "@/components/calendar/OutlookEventDetails";
 import CleanCalendar from "@/components/calendar/CleanCalendar";
 import ServiceCalendar from "@/components/calendar/ServiceCalendar";
+import JobKnowledge from "@/components/calendar/JobKnowledge";
 import { combineCalendarSources, snapshotEvents } from "@/lib/outlookCalendar";
 
 function formatMonth(m) {
@@ -25,6 +26,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState([]);
   const [cleanView,setCleanView] = useState(true);
   const [serviceView,setServiceView]=useState(false);
+  const [knowledgeView,setKnowledgeView]=useState(false);
   const [outlook, setOutlook] = useState(null);
   const [outlookError, setOutlookError] = useState("");
   const [partialOutlook, setPartialOutlook] = useState(null);
@@ -131,8 +133,9 @@ export default function CalendarPage() {
     return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   };
 
+  if(user?.role==="admin" && knowledgeView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setKnowledgeView(false)}>Back to install calendar</button><JobKnowledge /></div>;
   if(user?.role==="admin" && serviceView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setServiceView(false)}>Back to install calendar</button><ServiceCalendar /></div>;
-  if(user?.role==="admin" && cleanView) return <div className="p-5" style={{backgroundColor:C.pageBg,minHeight:"100vh"}}><button className="mb-4 underline" onClick={()=>setCleanView(false)}>View original calendars</button><button className="mb-4 ml-4 underline" onClick={()=>setServiceView(true)}>Service calendar</button><CleanCalendar /></div>;
+  if(user?.role==="admin" && cleanView) return <div className="p-5" style={{backgroundColor:C.pageBg,minHeight:"100vh"}}><button className="mb-4 underline" onClick={()=>setCleanView(false)}>View original calendars</button><button className="mb-4 ml-4 underline" onClick={()=>setServiceView(true)}>Service calendar</button><button className="mb-4 ml-4 underline" onClick={()=>setKnowledgeView(true)}>Find job update</button><CleanCalendar /></div>;
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
