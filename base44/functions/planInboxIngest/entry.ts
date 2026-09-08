@@ -23,6 +23,9 @@ const BUDGET_MS = 48000;
 const PAGE_BATCH = 3;
 const MAX_ATTEMPTS = 6;
 
+const PENDING = () => ({ pending: true });
+const isDone = r => !!r && typeof r === 'object' && !r.pending;
+
 const PAGE_SCHEMA = {
   type: 'object',
   properties: {
@@ -277,9 +280,9 @@ export default async function planInboxIngest(req) {
         const file = new File([pageBytes], `plan-${intake.drive_file_id}-p${String(i + 1).padStart(2, '0')}.pdf`, { type: 'application/pdf' });
         const { file_url } = await core.UploadFile({ file });
         urls.push(file_url);
-        if (left() < 8000) { await logSave(`split ${urls.length}/${n} pages, out of time`, { page_count: n, page_urls: urls, page_results: new Array(n).fill(null) }); out.status = 'splitting'; return Response.json(out); }
+        if (left() < 8000) { await logSave(`split ${urls.length}/${n} pages, out of time`, { page_count: n, page_urls: urls, page_results: Array.from({ length: n }, PENDING) }); out.status = 'splitting'; return Response.json(out); }
       }
-      await logSave(`split ${n} pages`, { status: 'pages_split', page_count: n, page_urls: urls, page_results: new Array(n).fill(null), pages_done: 0 });
+      await logSave(`split ${n} pages`, { status: 'pages_split', page_count: n, page_urls: urls, page_results: Array.from({ length: n }, PENDING), pages_done: 0 });
     }
     // Resume a partial split (page_urls shorter than page_count).
     if (intake.status === 'new' && intake.page_count && (intake.page_urls || []).length < intake.page_count) {
@@ -292,7 +295,8 @@ export default async function planInboxIngest(req) {
     if (intake.status === 'pages_split' || intake.status === 'extracting') {
       const results = [...(intake.page_results || [])];
       const urls = intake.page_urls || [];
-      const todo = urls.map((u, i) => [u, i]).filter(([, i]) => !results[i]);
+      while (results.length < urls.length) results.push(PENDING());
+      const todo = urls.map((u, i) => [u, i]).filter(([, i]) => !isDone(results[i]));
       await save({ status: 'extracting' });
       for (let b = 0; b < todo.length; b += PAGE_BATCH) {
         if (left() < 15000) break;
@@ -303,17 +307,17 @@ export default async function planInboxIngest(req) {
           if (s.status === 'fulfilled' && s.value && typeof s.value === 'object') results[i] = { page: i + 1, ...s.value };
           else results[i] = { page: i + 1, page_type: 'other', openings: [], extraction_error: String(s.reason?.message || s.reason || 'unknown').slice(0, 300) };
         });
-        const done = results.filter(Boolean).length;
+        const done = results.filter(isDone).length;
         await logSave(`extracted ${done}/${urls.length}`, { page_results: results, pages_done: done });
       }
-      const done = results.filter(Boolean).length;
+      const done = results.filter(isDone).length;
       if (done < urls.length) { out.status = 'extracting'; return Response.json(out); }
       await logSave('all pages extracted', { status: 'merging' });
     }
 
     // 3c. merging -> consolidate, apply R308.4, create draft, move file, write CSV.
     if (intake.status === 'merging') {
-      const pages = (intake.page_results || []).map(p => ({ page: p.page, page_type: p.page_type, sheet_id: p.sheet_id, sheet_title: p.sheet_title, level: p.level, job_name: p.job_name, builder: p.builder, window_spec_notes: p.window_spec_notes, openings: (p.openings || []).filter(o => o && o.kind !== 'interior_door') }));
+      const pages = (intake.page_results || []).filter(isDone).map(p => ({ page: p.page, page_type: p.page_type, sheet_id: p.sheet_id, sheet_title: p.sheet_title, level: p.level, job_name: p.job_name, builder: p.builder, window_spec_notes: p.window_spec_notes, openings: (p.openings || []).filter(o => o && o.kind !== 'interior_door') }));
       const merged = await core.InvokeLLM({ prompt: MERGE_PROMPT + '\n\nPages:\n' + JSON.stringify(pages).slice(0, 180000), response_json_schema: MERGE_SCHEMA, add_context_from_internet: false });
       const jobName = merged.job_name || intake.file_name.replace(/\.pdf$/i, '');
       const lines = [];
