@@ -2,7 +2,7 @@
 // Only this server/runner source registry may enable a product; requests cannot.
 export const MIXED_SUPPORT_ID = 'studio-mixed-products-v2';
 export const PROFILE_CONTRACT_VERSION = 3;
-export const PROFILE_CONTRACT_HASH = '3393ad10f3abba394743b3019a7d13107b6b4ff7a84291571585f108b930d18f';
+export const PROFILE_CONTRACT_HASH = '82fdf5e4c6033f44de278ccd54b0845e880ce5f64e31211aa596257b10680d22';
 const choice = (values, aliases = {}) => ({ type: 'choice', values, aliases });
 const boolean = values => ({ type: 'boolean', values });
 const common = {
