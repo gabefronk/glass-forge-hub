@@ -7,8 +7,9 @@ export function trackerMatches(e,rows){
  return rows.filter(r=>{
   const lot=String(r.lot??"").trim();const lotOK=lot&&(/^\d+$/.test(lot)?ls.has(lot):words(title,lot));
   const identity=words(title,r.builder)&&words(title,r.subdivision)&&lotOK;
-  const order=(o.oe&&o.oe===String(r.oe).trim())||(o.po&&o.po===String(r.po).trim());
-  const conflict=(o.oe&&r.oe&&o.oe!==String(r.oe).trim())||(o.po&&r.po&&o.po!==String(r.po).trim());
+  const family=v=>String(v||"").trim().replace(/-\\d{2}$/,"");
+  const order=(o.oe&&family(o.oe)===family(r.oe))||(o.po&&o.po===String(r.po).trim());
+  const conflict=(o.oe&&r.oe&&family(o.oe)!==family(r.oe))||(o.po&&r.po&&o.po!==String(r.po).trim());
   return !conflict&&((order&&lotOK)||identity);
  });
 }
@@ -21,7 +22,8 @@ function sameVisit(a,b){
  const refs=a.tracker_rows.map(r=>r.source_row).sort().join(",");
  const sameRows=refs&&refs===b.tracker_rows.map(r=>r.source_row).sort().join(",");
  // Full identical job identity plus a common exact order; no fuzzy title-only merges.
- return !!(order&&sameRows&&norm(a.job_name)===norm(b.job_name));
+ const sameEvidence=norm(a.scope_notes)&&norm(a.scope_notes)===norm(b.scope_notes)&&norm(a.address)&&norm(a.address)===norm(b.address);
+ return !!((order||sameEvidence)&&sameRows&&norm(a.job_name)===norm(b.job_name));
 }
 export function reconcile({calendar,outlook,rows,reports,start,end}){
  const inRange=d=>d>=start&&d<=end;
