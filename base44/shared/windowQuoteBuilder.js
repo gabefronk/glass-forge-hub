@@ -252,8 +252,28 @@ function freshBuilder(q) {
     !present(q.message) && !present(q.request_text) && !q.intake_assessment && !q.agent_run && !q.reviewed_restart &&
     !q.result && !q.job_id && !q.accepted_revision && q.sales_status !== 'won' && !Object.keys(q.checkpoint || {}).length;
 }
+function recoverableStructuredSchedule(q) {
+  const noUserText = !present(q.message) && !present(q.request_text) && !(q.conversation || []).some(item => item?.role === 'user');
+  const noUnresolved = !(q.intake_assessment?.unresolved_requirements || []).length;
+  const freshDraft = q.input_revision === 1 && q.worker_status === 'draft' && !(q.history || []).length && !(q.conversation || []).length && !q.intake_assessment;
+  const unavailableRetry = q.worker_status === 'needs_details' && q.intake_assessment?.status === 'unavailable';
+  return !q.source?.visual_builder && q.source?.easy_request?.confirmed === true && Array.isArray(q.lines) && q.lines.length > 0 &&
+    noUserText && noUnresolved && (freshDraft || unavailableRetry) && !q.agent_run && !q.reviewed_restart && !q.result && !q.job_id &&
+    !q.accepted_revision && q.sales_status !== 'won' && !Object.keys(q.checkpoint || {}).length;
+}
+function normalizeSavedStructuredSchedule(q) {
+  const raw = { settings: q.settings || {}, lines: (q.lines || []).map(line => Object.fromEntries(Object.entries(line).filter(([key]) => lineKeys.includes(key)))),
+    source: { easy_request: clone(q.source.easy_request) } };
+  const result = normalizeManualBuilderDraft(raw);
+  return { ...result, quote: { ...clone(q), settings: result.quote.settings, lines: result.quote.lines },
+    intake_assessment: { ...result.intake_assessment, version: BUILDER_VERSION, input_revision: q.input_revision },
+    assistant_message: result.ok === true ? 'Your saved windows are ready for AMSCO pricing.' : 'Your saved schedule needs the listed product choices reviewed before pricing.' };
+}
 export function createBuilderAwareIntake(normalizeAI) {
   return async (q, context) => {
+    // A complete structured schedule does not depend on an AI call. This also
+    // recovers an earlier provider timeout while preserving every saved choice.
+    if (recoverableStructuredSchedule(q)) return normalizeSavedStructuredSchedule(q);
     // An existing chat/edit/retry can never opt out of its retained requirements.
     if (!q.source?.visual_builder || !freshBuilder(q)) return normalizeAI(q, context);
     try {
