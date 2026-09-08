@@ -1,7 +1,14 @@
 import { HttpError } from './windowQuotesCore.js';
 
 export const SCRIPTED_CONFIG_KEY = 'amsco-scripted-pilot-v1';
-const FIELDS = ['enabled', 'mode', 'queue_allow', 'allow', 'worker_id', 'worker_key_hash', 'browser_slot_id', 'expected_plan_hash', 'lease_ms', 'native_engine'];
+const FIELDS = ['enabled', 'mode', 'queue_allow', 'allow', 'worker_id', 'worker_key_hash', 'browser_slot_id', 'expected_plan_hash', 'lease_ms'];
+export const NATIVE_ENGINE_POLICY = Object.freeze({
+  enabled: true,
+  version: 1,
+  contract_hash: 'c5e0e271caf3203fff50856e6683a7cec40753ef10cca56627c9b745d48e906b',
+  catalog_id: '361',
+  context_fingerprint: '1edbe92e64fa350fd31edc93872355016a697d13320234ed7645ac529faa06de'
+});
 
 // Fixed key, service-role-only call site. No cache, environment dependency or
 // user-supplied selector. Duplicate records fail closed rather than picking one.
@@ -12,6 +19,10 @@ export async function loadScriptedRunnerConfig({ db }) {
   const row = rows[0];
   if (typeof row.enabled !== 'boolean') throw new HttpError(503, 'The scripted pilot configuration is invalid');
   if (row.mode !== undefined && !['pilot', 'queue'].includes(row.mode)) throw new HttpError(503, 'The scripted runner mode is invalid');
-  return Object.fromEntries(FIELDS.filter(key => row[key] !== undefined).map(key => [key, structuredClone(row[key])]));
+  const config = Object.fromEntries(FIELDS.filter(key => row[key] !== undefined).map(key => [key, structuredClone(row[key])]));
+  // The desktop engine may report results only when both sides match this
+  // reviewed build, AMSCO catalog and account context exactly.
+  if (config.enabled === true && config.mode === 'queue') config.native_engine = structuredClone(NATIVE_ENGINE_POLICY);
+  return config;
 }
 
