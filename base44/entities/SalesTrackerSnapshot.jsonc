@@ -1,0 +1,79 @@
+{
+  "name": "SalesTrackerSnapshot",
+  "type": "object",
+  "properties": {
+    "filename": {
+      "type": "string"
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "imported_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_path": {
+      "type": "string"
+    },
+    "sheet_names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "row_count": {
+      "type": "integer"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "file_base64": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "validated"
+      ]
+    }
+  },
+  "required": [
+    "filename",
+    "sha256",
+    "imported_at",
+    "source_captured_at",
+    "rows",
+    "row_count",
+    "file_base64",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

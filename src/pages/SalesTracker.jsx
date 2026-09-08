@@ -42,8 +42,8 @@ export default function SalesTracker(){
    <p className="text-sm text-slate-600">Requested refresh: daily at 1 a.m. Mountain time. Automatic refresh is not yet enabled.</p>
    <details className="pt-3"><summary className="cursor-pointer font-medium">Upload a full replacement workbook</summary>
     <div className="mt-3 grid gap-3 sm:grid-cols-2">
-     <label className="text-sm">Excel workbook<input className={input} type="file" accept=".xlsx" disabled={busy} onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
-     <label className="text-sm">Source downloaded at (your local time)<input className={input} type="datetime-local" value={captured} onChange={e=>setCaptured(e.target.value)}/></label>
+     <label className="text-sm">Excel workbook<input className={input} type="file" accept=".xlsx" disabled={busy} onChange={e=>setFile(e.target.files?.[0]||null)} onInput={e=>setFile(e.target.files?.[0]||null)}/>{file&&<span className="block mt-1">{file.name} · {file.size} bytes</span>}</label>
+     <label className="text-sm">Source downloaded at (your local time)<input className={input} type="text" placeholder="YYYY-MM-DDTHH:mm" value={captured} onChange={e=>setCaptured(e.target.value)}/></label>
     </div><button className={button+" mt-3"} disabled={busy||!file||!captured} onClick={upload}>Validate and import</button>
     <p className="mt-2 text-xs text-slate-600">Imports replace the tracker view only after validation. Prior snapshots are retained. Calendar events and invoices keep their own source data.</p>
    </details>
