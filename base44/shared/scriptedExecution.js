@@ -1,3 +1,4 @@
+import { DESKTOP_NATIVE_SOURCE, validateDesktopCheckpoint } from './nativeEngineObservation.js';
 import { HttpError, publicQuote, sanitizePublic, sha256, validateLines, validateSettings, validateResult } from './windowQuotesCore.js';
 import { reviewedRestartAllowsHistory } from './reviewedRestart.js';
 
@@ -142,14 +143,25 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
     if (changed.updated !== 1) fail(409, 'Browser ownership changed; stop native actions');
     return { ok: true, lease_expires_at: q.agent_run.lease_expires_at };
   }
-  function validateCheckpoint(raw, q) {
+  async function validateCheckpoint(raw, q) {
     const value = bounded(raw, 'checkpoint', 120000);
-    const id = text(value.native_quote_id, 'native quote ID', 100), number = text(String(value.native_quote_number ?? ''), 'native quote number', 100);
+    const desktop = value.native_source === DESKTOP_NATIVE_SOURCE;
+    if (value.native_source !== undefined && !desktop && value.native_source !== 'amsco_online') fail(400, 'Unknown native checkpoint source');
+    if (q.checkpoint?.native_quote_id && (q.checkpoint.native_source || 'amsco_online') !== (value.native_source || 'amsco_online')) fail(409, 'Native execution source cannot change after saving');
+    const id = text(value.native_quote_id, 'native quote ID', 100), number = desktop ? String(value.native_quote_number ?? '') : text(String(value.native_quote_number ?? ''), 'native quote number', 100);
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) fail(400, 'The native quote checkpoint requires a valid GUID');
     if ((q.history || []).some(item => item.reason === 'reviewed_failed_restart' && (item.checkpoint?.native_quote_id?.toLowerCase() === id.toLowerCase() || item.checkpoint?.native_quote_number === number))) fail(409, 'A reviewed retry must save a fresh native quote; previous drafts cannot be reused');
-    let url; try { url = new URL(value.native_quote_url); } catch { fail(400, 'Invalid native quote checkpoint URL'); }
-    if (id.toLowerCase() === EXCLUDED_NATIVE_ID || number === EXCLUDED_NATIVE_NUMBER || url.protocol !== 'https:' || url.hostname !== 'amsco.wtsparadigm.com' || url.username || url.password || url.search || url.hash || url.pathname.split('/')[1] !== 'quotes' || url.pathname.split('/')[2] !== id) fail(400, 'Use a newly saved native quote with its matching identity');
-    for (const key of ['native_quote_id', 'native_quote_number', 'native_quote_url']) if (q.checkpoint?.[key] && q.checkpoint[key] !== ({ native_quote_id: id, native_quote_number: number, native_quote_url: url.href })[key]) fail(409, 'Native checkpoint identity cannot change');
+    let url;
+    if (desktop) {
+      const checked = await validateDesktopCheckpoint(value, q.agent_run.plan, { policy: config.native_engine, operationId: q.agent_run.operation_id, hash });
+      if (!checked.ok) fail(400, 'The desktop checkpoint does not prove saved state for this exact operation');
+      if (value.native_quote_url) url = new URL(value.native_quote_url);
+    } else {
+      try { url = new URL(value.native_quote_url); } catch { fail(400, 'Invalid native quote checkpoint URL'); }
+      if (url.protocol !== 'https:' || url.hostname !== 'amsco.wtsparadigm.com' || url.username || url.password || url.search || url.hash || url.pathname.split('/')[1] !== 'quotes' || url.pathname.split('/')[2] !== id) fail(400, 'Use a newly saved native quote with its matching identity');
+    }
+    if (id.toLowerCase() === EXCLUDED_NATIVE_ID || number === EXCLUDED_NATIVE_NUMBER) fail(400, 'Use a newly saved native quote with its matching identity');
+    for (const key of ['native_quote_id', 'native_quote_number', 'native_quote_url']) if (q.checkpoint?.[key] && q.checkpoint[key] !== ({ native_quote_id: id, native_quote_number: number, native_quote_url: url?.href })[key]) fail(409, 'Native checkpoint identity cannot change');
     if (value.input_revision !== undefined && value.input_revision !== q.input_revision) fail(409, 'Checkpoint revision differs');
     if (!Array.isArray(value.saved_lines) || value.saved_lines.length > q.agent_run.plan.lines.length) fail(400, 'Supply the confirmed saved-line identities');
     const indices = new Set(), ids = new Set(), numbers = new Set();
@@ -160,7 +172,7 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
       indices.add(item.source_index); ids.add(lineId); numbers.add(lineNumber); return { source_index: item.source_index, native_line_id: lineId, native_line_number: lineNumber };
     });
     for (const previous of q.checkpoint?.saved_lines || []) if (!saved.some(item => stable(item) === stable(previous))) fail(409, 'A confirmed saved line cannot be removed or replaced');
-    return { native_quote_id: id, native_quote_number: number, native_quote_url: url.href, input_revision: q.input_revision, saved_lines: saved, updated_at: at() };
+    return { native_quote_id: id, ...(number ? { native_quote_number: number } : {}), ...(url ? { native_quote_url: url.href } : {}), ...(desktop ? { native_source: DESKTOP_NATIVE_SOURCE, native_engine: clone(value.native_engine) } : {}), input_revision: q.input_revision, saved_lines: saved, updated_at: at() };
   }
   async function report({ db, worker, body }) {
     let q = await checked(db, worker, body, true); const run = q.agent_run;
@@ -177,21 +189,22 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
     if (!TERMINAL.has(status) && !(body.action === 'checkpoint' && status === 'running')) fail(400, 'Invalid scripted runner status');
     if (body.settings !== undefined || body.lines !== undefined || body.result !== undefined || body.request_continuation !== undefined) fail(400, 'The runner cannot replace inputs, inject a result or request agent continuation');
     const patch = { worker_status: status, agent_run: { ...run, phase: TERMINAL.has(status) ? 'completed' : 'running', event_receipts: [...(run.event_receipts || []), { id: eventId, hash: fingerprint }], last_report_at: at(), ...(TERMINAL.has(status) ? { terminal_status: status, completed_at: at() } : {}) } };
-    if (body.checkpoint !== undefined) patch.checkpoint = validateCheckpoint(body.checkpoint, q);
+    if (body.checkpoint !== undefined) patch.checkpoint = await validateCheckpoint(body.checkpoint, q);
     if (status === 'needs_sign_in' && body.native_started === false && !q.checkpoint?.native_quote_id && !patch.checkpoint) patch.agent_run.native_started = false;
     if (body.action === 'checkpoint' && !patch.checkpoint) fail(400, 'A checkpoint event requires saved native state');
     if (status === 'needs_details') patch.missing_details = questions(body.missing_details);
     if (status === 'ready') {
       if (body.checkpoint !== undefined) fail(400, 'Persist the saved-line checkpoint before reporting Ready');
       const checkpoint = q.checkpoint, observed = bounded(body.observed, 'reopened observation');
-      if (!checkpoint?.native_quote_id || observed.native_quote_id !== checkpoint.native_quote_id || String(observed.native_quote_number) !== checkpoint.native_quote_number || observed.native_quote_url !== checkpoint.native_quote_url || observed.reopened !== true || !Number.isFinite(Date.parse(observed.checked_at)) || Date.parse(observed.checked_at) < Date.parse(run.started_at) || Date.parse(observed.checked_at) > now().getTime() + 60000 || checkpoint.saved_lines.length !== run.plan.lines.length) fail(400, 'Ready requires current reopened evidence for all checkpointed native lines');
-      const verified = await validateReady({ ...clone(run.plan), native_quote_id: checkpoint.native_quote_id }, observed);
+      if (!checkpoint?.native_quote_id || observed.native_quote_id !== checkpoint.native_quote_id || String(observed.native_quote_number ?? '') !== String(checkpoint.native_quote_number ?? '') || (observed.native_quote_url || '') !== (checkpoint.native_quote_url || '') || (observed.native_source || 'amsco_online') !== (checkpoint.native_source || 'amsco_online') || observed.reopened !== true || !Number.isFinite(Date.parse(observed.checked_at)) || Date.parse(observed.checked_at) < Date.parse(run.started_at) || Date.parse(observed.checked_at) > now().getTime() + 60000 || checkpoint.saved_lines.length !== run.plan.lines.length) fail(400, 'Ready requires current reopened evidence for all checkpointed native lines');
+      if (checkpoint.native_source === DESKTOP_NATIVE_SOURCE && (observed.native_engine?.persistence?.artifact_sha256 !== checkpoint.native_engine?.persistence?.artifact_sha256 || observed.native_engine?.persistence?.artifact_id !== checkpoint.native_engine?.persistence?.artifact_id)) fail(400, 'The reopened desktop artifact differs from the saved checkpoint');
+      const verified = await validateReady({ ...clone(run.plan), native_quote_id: checkpoint.native_quote_id }, observed, { policy: config.native_engine, operationId: run.operation_id, startedAt: run.started_at, now: now(), hash });
       if (verified?.ok !== true) fail(400, 'The reopened quote did not pass product, pricing and totals verification');
       const result = validateResult(verified.result);
       if (result.native_quote_id !== checkpoint.native_quote_id || result.lines.length !== run.plan.lines.length) fail(400, 'Verified result differs from the retained native checkpoint');
       for (const saved of checkpoint.saved_lines) { const line = result.lines[saved.source_index]; if (line.native_line_id !== saved.native_line_id || String(line.native_line_number) !== saved.native_line_number) fail(400, 'Verified result line identity differs from its checkpoint'); }
       patch.result = result; patch.missing_details = [];
-      patch.agent_run.verification = { reopened: true, checked_at: observed.checked_at, dealer: observed.dealer, yard: observed.yard, gross_margin: observed.gross_margin };
+      patch.agent_run.verification = { ...(observed.native_source ? { native_source: observed.native_source } : {}), reopened: true, checked_at: observed.checked_at, dealer: observed.dealer, yard: observed.yard, gross_margin: observed.gross_margin };
       patch.history = [...(q.history || []), { revision: q.input_revision, recorded_at: at(), reason: 'verified_by_scripted_runner', worker_status: 'ready', settings: clone(q.settings), lines: clone(run.plan.lines), result: clone(result) }];
     }
     const message = status === 'ready' ? 'Your quote is ready to be viewed.' : status === 'needs_details' ? patch.missing_details.join('\n') : body.message;
@@ -203,3 +216,4 @@ export function createScriptedExecution({ config = {}, hash = sha256, normalizeR
   const checkpoint = args => report({ ...args, body: { ...args.body, action: 'checkpoint' } });
   return { configured: enabled, provider: SCRIPTED_PROVIDER, afterInput, authenticate, claim, heartbeat, checkpoint, report };
 }
+
