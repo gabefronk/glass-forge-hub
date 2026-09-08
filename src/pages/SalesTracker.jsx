@@ -40,7 +40,7 @@ export default function SalesTracker(){
    <p>{data?.filename||"No workbook imported yet."}</p>
    {data?.source_captured_at&&<><p className="text-sm">Source downloaded: {new Date(data.source_captured_at).toLocaleString()}</p><p className="text-sm">{data.row_count} sales rows · {data.sheet_names?.join(" · ")}</p></>}
    {data?.status==="stale"&&<p role="status" className="font-medium text-amber-800">This copy is over 26 hours old. Verify the live source for current dates.</p>}
-   <p className="text-sm text-slate-600">Requested refresh: daily at 1 a.m. Mountain time. Automatic refresh is not yet enabled.</p>
+   <p className="text-sm text-slate-600">Refresh scheduled through the connected Mac: daily at 1 a.m. Mountain time. First overnight run is not yet verified. The Mac must be awake and the iPad connected and accessible.</p>
    <details className="pt-3"><summary className="cursor-pointer font-medium">Upload a full replacement workbook</summary>
     <div className="mt-3 grid gap-3 sm:grid-cols-2">
      <label className="text-sm">Excel workbook<input className={input} type="file" accept=".xlsx" disabled={busy} onChange={e=>setFile(e.target.files?.[0]||null)} onInput={e=>setFile(e.target.files?.[0]||null)}/>{file&&<span className="block mt-1">{file.name} · {file.size} bytes</span>}</label>
