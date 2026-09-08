@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import {confirmedOverlap,combineCalendarSources,snapshotEvents} from "../../src/lib/outlookCalendar.js";
+const a={event_date:"2026-09-08",job_name:"Homes Deer Springs Lot 263",oe_number:"00123"};
+assert.equal(confirmedOverlap(a,{...a}),true);
+assert.equal(confirmedOverlap(a,{...a,event_date:"2026-09-09"}),false);
+assert.equal(confirmedOverlap(a,{...a,job_name:"Homes Deer Springs Lot 264"}),false);
+assert.equal(confirmedOverlap(a,{...a,oe_number:"123"}),false);
+assert.equal(confirmedOverlap(a,{...a,oe_number:""}),false);
+assert.equal(confirmedOverlap({...a,po_number:"5"},{...a,po_number:"6"}),false);
+assert.equal(confirmedOverlap({event_date:a.event_date,job_name:"Same"},{event_date:a.event_date,job_name:"Same"}),false);
+const b={...a,job_name:"Different replacement",oe_number:"00234"};
+assert.deepEqual(combineCalendarSources([a],[a,b]).events,[a,b]);
+assert.equal(combineCalendarSources([a],[a,b],false,true).events.length,1);
+assert.equal(combineCalendarSources([a],[a,b],true,false).events.length,1);
+assert.equal(snapshotEvents({id:"s",events:[a],calendar_name:"UT Window Install"})[0].report_required,false);
+console.log("Outlook exact overlap, shared order lots, source toggles, and read-only mapping pass");
