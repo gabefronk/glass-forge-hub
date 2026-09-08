@@ -15,7 +15,7 @@ Deno.serve(async(req)=>{
   let rows=[];
   if(keys.length){
    stage="create private download link";
-   const {signed_url}=await client.integrations.Core.CreateFileSignedUrl({file_uri:snapshot.file_uri,expires_in:300});
+   const {signed_url}=await client.asServiceRole.integrations.Core.CreateFileSignedUrl({file_uri:snapshot.file_uri,expires_in:300});
    stage="download private workbook";
    if(!signed_url) throw Error("Missing signed URL");
    const response=await fetch(signed_url);
