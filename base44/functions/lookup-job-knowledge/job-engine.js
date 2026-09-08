@@ -22,7 +22,9 @@ export function lookup({query,rows,calendar,outlook,service,reports,start,end,so
  const history=[...calendar.map(e=>({...e,source:e.source==="google"?"Israel calendar":"App calendar"})),...(outlook||[]).map(e=>({...e,source:"Outlook install"})),...(service||[]).map(e=>({...e,source:"Outlook service",kind:"service"}))].filter(e=>e.event_date>=historyStart&&e.event_date<start&&sourceMatches(e)).sort((a,b)=>b.event_date.localeCompare(a.event_date));
  if(jobAlias)warnings.push("A verified job-specific name association connects Y A Windows / Dimple Dell lot 16 with Larco / Dimple Del lot 16. It does not apply to other jobs.");
  if(history.length)warnings.push("Past calendar entries are historical instructions or schedules, not proof that the work was completed.");
- const result=reconcile({calendar,outlook,rows:found,reports,start,end});
+ const calendarForMatch=calendar.map(e=>explicitCalendar(e)?{...e,source_job_name:e.job_name,job_name:jobAlias.canonical.builder+" - "+jobAlias.canonical.lot+" "+jobAlias.canonical.subdivision}:e);
+ const result=reconcile({calendar:calendarForMatch,outlook,rows:found,reports,start,end});
+ for(const e of result.events)if(e.source_job_name)e.job_name=e.source_job_name;
  const svc=(service||[]).filter(e=>e.event_date>=start&&e.event_date<=end&&trackerMatches(e,found).length).map(e=>({...e,source:"Outlook service",kind:"service",tracker_rows:trackerMatches(e,found).map(rowRef)}));
  const directReports=reports.filter(r=>r.job_date>=historyStart&&r.job_date<=end&&(trackerMatches({job_name:r.job_name},found).length||jobAlias?.report_project_ids.includes(r.project_id)));
  const linkedReports=[...new Map([...result.events.flatMap(e=>e.reports),...directReports].map(r=>[r.post_id,r])).values()].sort((a,b)=>(b.job_date||"").localeCompare(a.job_date||""));
