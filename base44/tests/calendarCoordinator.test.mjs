@@ -13,4 +13,6 @@ r=run([], [{...e,job_name:"Other Builder - 263 Elsewhere",oe_number:"",po_number
 r=run([e],[],[row],[{post_id:"p",job_date:e.event_date,job_name:e.job_name,message:"Some progress"}]);assert.equal(r.events[0].reports.length,1);assert.match(r.events[0].status,/completion not inferred/);
 r=run([], [{...e,job_name:"- Amsco Will Call -"}]);assert.equal(r.hidden.length,1);
 assert.equal(trackerMatches({...e,job_name:"Holmes Homes - 263-266 Deer Springs"},[{...row,lot:"266"}]).length,1);
-console.log("Calendar coordinator: 9 matching, scope and source-preservation checks passed.");
+assert.equal(trackerMatches({...e,oe_number:"12345678-01"},[row]).length,1);
+r=run([{...e,oe_number:"",po_number:"",address:"123 Test St",scope_notes:"Finish install"}],[{...e,oe_number:"",po_number:"",address:"123 Test St",scope_notes:"Finish install"}]);assert.equal(r.counts.merged_duplicates,1);
+console.log("Calendar coordinator matching and source-preservation checks passed.");
