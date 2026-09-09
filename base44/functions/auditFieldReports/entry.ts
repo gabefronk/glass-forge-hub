@@ -392,6 +392,38 @@ export default async function(req) {
       }
     }
 
+    // Retire only truly unverified reports after ten business days. The event
+    // remains in the audit history and source calendar; report_required=false
+    // removes it from the active Today/outstanding list without deleting it.
+    const businessDaysElapsed = (dateStr) => {
+      if (!dateStr) return 0;
+      const end = new Date(toDenverDateString(new Date()) + 'T00:00:00Z');
+      const cursor = new Date(dateStr + 'T00:00:00Z');
+      let days = 0;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+      while (cursor <= end) {
+        const weekday = cursor.getUTCDay();
+        if (weekday !== 0 && weekday !== 6) days++;
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+      return days;
+    };
+    for (const event of allEvents) {
+      if (event.report_required === false || event.report_status !== 'missing_all') continue;
+      if ((event.matched_post_ids || []).length > 0 || event.match_method !== 'none') continue;
+      if (businessDaysElapsed(event.event_date) < 10) continue;
+      toUpdate.push({
+        id: event.id,
+        report_status: 'missing_all',
+        report_required: false,
+        report_checked_at: ranAt,
+      });
+      audits.push({
+        audit_date: event.event_date, calendar_event_id: event.id, result: 'aged_out',
+        matched_post_ids: [], candidates_considered: 0, top_score: 0, ran_at: ranAt, run_id: runId,
+      });
+    }
+
     // Apply compliance suppression: events before complianceStartDate get pre_compliance.
     // The matcher's computed status is preserved in report_status_raw for tuning.
     const eventDateById = new Map();
