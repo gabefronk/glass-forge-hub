@@ -18,14 +18,15 @@ const styleDescription = style => /single.?hung/i.test(style) ? "Bottom sash ope
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
 const optionLabels = { series: "Series / frame", fin: "Installation fin", color: "Color", exterior_color: "Exterior color", interior_color: "Interior color", glass: "Glass coating", tempered: "Tempered", patterned_glass: "Privacy texture", screen: "Screen", hardware: "Hardware", hardware_color: "Hardware color", glass_thickness: "Glass thickness", glazing_method: "Glazing", elevation: "Installation elevation", argon: "Argon", super_spacer: "Super Spacer", capillary_tubes: "Capillary tubes", grilles: "Grilles", operation: "Operation", sash_split: "Sash split", number_wide: "Number wide", unit_type: "Unit type", viewing_direction: "Viewing direction" };
 const optionValue = value => typeof value === "boolean" ? value ? "Yes" : "No" : String(value);
+const money = value => Number.isFinite(Number(value)) ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value)) : "—";
 function Field({ label, children, note }) { return <label className="block min-w-0"><span className="mb-1.5 block text-xs font-semibold text-[#535E72]">{label}</span>{children}{note && <span className="mt-1.5 block text-xs leading-relaxed text-[#77839A]">{note}</span>}</label>; }
 function Issues({ items = [] }) { return items.length ? <ul className="list-disc space-y-1 pl-4 text-sm leading-relaxed">{items.map((item, i) => <li key={i}>{issueText(item)}</li>)}</ul> : null; }
 function MiniWindow({ line }) { const code = styleCode(line.style); return <div className="flex h-28 w-20 shrink-0 items-center justify-center rounded-xl bg-[#F6F8FC]" aria-label={`${line.style || "Window"} style illustration`}>{code ? <span aria-hidden="true"><ProWindowDiagram code={code} width={Number(line.width) || 36} height={Number(line.height) || 60} forQuoteThumbnail /></span> : <Plus size={24} className="text-[#77839A]" />}</div>; }
-function WindowCard({ line, index, settings, onEdit, onCopy, onRemove, disabled, compact = false }) {
+function WindowCard({ line, index, settings, price, onEdit, onCopy, onRemove, disabled, compact = false }) {
   const options = line.options || {}, code = formatTradeCode(Number(line.width), Number(line.height));
   const special = [options.fin, options.tempered === true || options.tempered === "true" ? "Tempered" : null, options.patterned_glass && options.patterned_glass !== "None" ? options.patterned_glass : null].filter(Boolean);
   return <article className="min-w-0 rounded-xl border border-[#DDE3EC] bg-white p-3 sm:p-4">
-    <div className="flex min-w-0 gap-3"><MiniWindow line={line} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><h3 className="min-w-0 max-w-full [overflow-wrap:anywhere] text-sm font-semibold text-[#131A26]">{line.mark || `Window ${index + 1}`} · {line.style}</h3><span className="rounded-md bg-[#E7EEFA] px-2 py-1 text-xs font-semibold text-[#1E4A85]">Qty {line.qty}</span></div><p className="mt-1 min-w-0 max-w-full [overflow-wrap:anywhere] text-base font-semibold text-[#131A26]">{line.width} × {line.height} in{code && line.dimension_basis === "call" ? <span className="ml-2 text-xs font-normal text-[#616D81]">{code}</span> : null}</p><p className="mt-1 min-w-0 max-w-full [overflow-wrap:anywhere] text-xs leading-relaxed text-[#616D81]">{line.dimension_basis === "call" ? "Call size" : line.dimension_basis === "frame" ? "Actual frame size" : "Rough opening"}{line.room ? ` · ${line.room}` : ""}</p><p className="mt-2 break-words text-xs leading-relaxed text-[#535E72]">{[options.color || settings.color || "Color to choose", options.glass || settings.glass || "Glass to choose", ...special].join(" · ")}</p></div></div>
+    <div className="flex min-w-0 gap-3"><MiniWindow line={line} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><h3 className="min-w-0 max-w-full [overflow-wrap:anywhere] text-sm font-semibold text-[#131A26]">{line.mark || `Window ${index + 1}`} · {line.style}</h3><span className="rounded-md bg-[#E7EEFA] px-2 py-1 text-xs font-semibold text-[#1E4A85]">Qty {line.qty}</span></div><p className="mt-1 min-w-0 max-w-full [overflow-wrap:anywhere] text-base font-semibold text-[#131A26]">{line.width} × {line.height} in{code && line.dimension_basis === "call" ? <span className="ml-2 text-xs font-normal text-[#616D81]">{code}</span> : null}</p><p className="mt-1 min-w-0 max-w-full [overflow-wrap:anywhere] text-xs leading-relaxed text-[#616D81]">{line.dimension_basis === "call" ? "Call size" : line.dimension_basis === "frame" ? "Actual frame size" : "Rough opening"}{line.room ? ` · ${line.room}` : ""}</p><p className="mt-2 break-words text-xs leading-relaxed text-[#535E72]">{[options.color || settings.color || "Color to choose", options.glass || settings.glass || "Glass to choose", ...special].join(" · ")}</p>{price?.status === "priced" ? <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg bg-[#EAF5EE] px-3 py-2 text-[#276449]"><strong className="text-lg">{money(price.unit_prices?.customer)}</strong><span className="text-xs">each · {money(price.line_totals?.customer)} line total</span></div> : price?.status === "amsco_lookup_needed" ? <div className="mt-3 rounded-lg bg-[#FCF5E9] px-3 py-2 text-xs font-medium text-[#8A5A10]">Price not mapped yet · AMSCO lookup will run when saved</div> : null}</div></div>
     {Object.keys(options).length > 0 && <details className="mt-3 border-t border-[#E9EDF4] pt-1"><summary className="min-h-11 cursor-pointer py-3 text-xs font-semibold text-[#535E72]">Configuration details</summary><dl className="grid gap-x-4 gap-y-2 pb-2 text-xs sm:grid-cols-2">{Object.entries(options).filter(([, value]) => value !== undefined && value !== null && value !== "").map(([key, value]) => <div key={key} className="min-w-0"><dt className="text-[#77839A]">{optionLabels[key] || key.replaceAll("_", " ")}</dt><dd className="mt-0.5 break-words font-medium text-[#535E72]">{optionValue(value)}</dd></div>)}</dl></details>}
     {!compact && <div className="mt-3 flex flex-wrap gap-2 border-t border-[#E9EDF4] pt-2"><button type="button" className={secondaryClass} disabled={disabled} onClick={onEdit} aria-label={`Edit window ${index + 1}`}><Pencil size={14} />Edit</button><button type="button" className={secondaryClass} disabled={disabled} onClick={onCopy} aria-label={`Duplicate window ${index + 1}`}><Copy size={14} />Duplicate</button><button type="button" className="ml-auto flex min-h-11 items-center gap-1.5 px-2 text-xs text-[#8A4038] disabled:opacity-50" disabled={disabled} onClick={onRemove} aria-label={`Remove window ${index + 1}`}><Trash2 size={14} />Remove</button></div>}
   </article>;
@@ -44,6 +45,8 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
   const [step, setStep] = useState("build");
   const [processing, setProcessing] = useState("");
   const [reviewed, setReviewed] = useState(null);
+  const [livePrice, setLivePrice] = useState({ status: "idle", lines: [], total: null, ready: false });
+  const priceRequest = useRef(0);
   const [confirmed, setConfirmed] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiText, setAiText] = useState("");
@@ -97,6 +100,32 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
   const importSchedule = (value, filename = "") => { if (!canReplaceSchedule()) return; try { const parsed = parseBuilderImport(value, filename); if (parsed.errors?.length) throw new Error(parsed.errors.join(" ")); invalidate(); setLines(parsed.lines); setSource(current => ({ ...current, ...parsed.source })); setEditor(null); setImportOpen(false); } catch (e) { setError(errorText(e)); } };
   const readFile = async event => { const file = event.target.files?.[0]; event.target.value = ""; if (!file || !canReplaceSchedule()) return; if (!/\.(csv|json)$/i.test(file.name) || file.size > 2000000) { setError("Choose a CSV or JSON schedule under 2 MB."); return; } setProcessing("import"); try { importSchedule(await file.text(), file.name); } catch (e) { setError(errorText(e)); } finally { setProcessing(""); } };
   const builderCall = async body => { const response = await base44.functions.invoke("windowQuoteBuilder", body); if (response.data?.error) throw new Error(response.data.error); return response.data; };
+  const pricingDraft = useMemo(() => {
+    let candidate = lines;
+    if (editor) {
+      const line = { ...editor.line, width: Number(editor.line.width), height: Number(editor.line.height), qty: Number(editor.line.qty), units: "in" };
+      candidate = editor.index < 0 ? [...lines, line] : lines.map((item, index) => index === editor.index ? line : item);
+    }
+    return { title: title.trim(), settings: normalizedSettings, lines: candidate.map(line => Object.fromEntries(Object.entries(line).filter(([key]) => key !== "source_reference"))), source: { easy_request: standardSource.easy_request } };
+  }, [editor, lines, normalizedSettings, standardSource.easy_request, title]);
+  const pricingValidation = useMemo(() => buildBuilderPreview(pricingDraft.settings, pricingDraft.lines, pricingDraft.source), [pricingDraft]);
+  useEffect(() => {
+    const sequence = ++priceRequest.current;
+    if (!pricingDraft.lines.length || !pricingValidation.ok) {
+      setLivePrice({ status: "idle", lines: [], total: null, ready: false });
+      return;
+    }
+    setLivePrice(current => ({ ...current, status: "loading" }));
+    const timer = setTimeout(async () => {
+      try {
+        const result = await builderCall({ action: "price_preview", draft: pricingDraft });
+        if (sequence === priceRequest.current) setLivePrice({ ...result, status: "ready" });
+      } catch {
+        if (sequence === priceRequest.current) setLivePrice({ status: "unavailable", lines: [], total: null, ready: false });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [pricingDraft, pricingValidation.ok]);
   const askAI = async event => {
     event?.preventDefault(); if (!aiText.trim() || disabled) return;
     if (editorHasChanges()) { setError("Add this window to the quote or cancel its edit before asking the AI guide, so it can see the complete schedule."); return; }
