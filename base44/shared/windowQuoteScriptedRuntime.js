@@ -4,6 +4,7 @@ import { verifyExecutionObservation } from './nativeEngineObservation.js';
 import { normalizeConversationalSchedule } from './structuredQuoteIntake.js';
 import { createConversationalIntake } from './conversationalIntake.js';
 import { createBuilderAwareIntake } from './windowQuoteBuilder.js';
+import { execution as onlineFallbackExecution } from './windowQuoteAgentRuntime.js';
 
 // AI interprets the customer's words. The checked planner still owns product
 // support and execution; no model-generated price or status can bypass it.
@@ -26,7 +27,7 @@ export const conversationalIntake = createConversationalIntake({
 });
 const normalizeIntake = createBuilderAwareIntake(conversationalIntake);
 // Private configuration is fetched once for each request, with no new env secret.
-const runtime = createLazyScriptedRuntime({ normalizeRequest: buildQuotePlan, normalizeIntake, validateReady: verifyExecutionObservation });
+const runtime = createLazyScriptedRuntime({ normalizeRequest: buildQuotePlan, normalizeIntake, validateReady: verifyExecutionObservation, fallbackExecution: onlineFallbackExecution });
 export const execution = runtime.execution;
 export const getExecution = runtime.getExecution;
 
