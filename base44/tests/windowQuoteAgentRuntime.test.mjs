@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 globalThis.crypto ??= webcrypto;
 
-test('retired runtime cannot dispatch even when old continuation settings are enabled', async () => {
+test('online fallback runtime dispatches once and ignores retired continuation environment settings', async () => {
   const oldDeno = globalThis.Deno, oldFetch = globalThis.fetch;
   let scenario = 0;
   try {
@@ -34,11 +34,13 @@ test('retired runtime cannot dispatch even when old continuation settings are en
         }
       }]));
       const current = await execution.afterInput({ db, q: quote });
-      assert.equal(execution.configured, false);
-      assert.equal(current.agent_run, undefined);
-      assert.equal(current.worker_status, 'failed');
-      assert.equal(requests.length, 0);
-      assert.equal(slot.busy_token, '');
+      assert.equal(execution.configured, true);
+      assert.equal(current.execution_provider, 'superagent');
+      assert.equal(current.worker_status, 'running');
+      assert.equal(current.agent_run.phase, 'sent');
+      assert.equal(current.agent_run.continuation_enabled, undefined);
+      assert.equal(requests.length, 1);
+      assert.equal(slot.busy_token, current.agent_run.operation_id);
     }
   } finally {
     globalThis.fetch = oldFetch;
