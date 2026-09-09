@@ -201,6 +201,41 @@
       "type": "string",
       "title": "Superseded By",
       "description": "ID of the FeeLine that supersedes this row. Set on Probuild rows that duplicate a calendar row for the same job on the same day. Superseded rows are excluded from all totals but remain visible as proof of work. Calendar wins when both have an amount."
+    },
+    "service_material": {
+      "type": "string",
+      "title": "Service Material",
+      "description": "Parsed material for a ProBuild service note."
+    },
+    "service_rate": {
+      "type": "number",
+      "title": "Service Hourly Rate"
+    },
+    "service_labor_amount": {
+      "type": "number",
+      "title": "Service Labor Amount"
+    },
+    "service_trip_amount": {
+      "type": "number",
+      "title": "Service Trip Amount"
+    },
+    "service_total": {
+      "type": "number",
+      "title": "Service Total"
+    },
+    "service_calculation_source": {
+      "type": "string",
+      "title": "Service Calculation Source"
+    },
+    "service_review_status": {
+      "type": "string",
+      "enum": [
+        "not_applicable",
+        "ready",
+        "review"
+      ],
+      "title": "Service Review Status",
+      "default": "not_applicable"
     }
   },
   "required": [
