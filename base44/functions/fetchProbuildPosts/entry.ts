@@ -3,6 +3,7 @@ import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMont
 import { countAttachments } from '../../shared/reportMatching.ts';
 import { toMs, getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject, filterProjectsByWindow } from '../../shared/probuildApi.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
+import { parseServiceBilling } from '../../shared/serviceBilling.ts';
 
 // Ingest Probuild posts into FeeLines + FieldReports. One row per post.
 // Auth: Firebase refresh-token exchange (rotated token persisted to ProbuildAuth).
@@ -174,6 +175,7 @@ ${JSON.stringify(promptInputs)}`;
       const ext = extractionMap.get(b.postId) || { needs_review: true };
       let jobId = m.job_id;
       if (m.autoCreate) jobId = jobByNorm.get(normName)?.id || null;
+      const service = parseServiceBilling(post.message || '', ext.man_hours, ext.trip_charges);
       const row = {
         job_id: jobId,
         job_date: b.jobDate,
@@ -194,6 +196,13 @@ ${JSON.stringify(promptInputs)}`;
         match_confidence: m.match_confidence,
         needs_review: !!(m.needs_review || ext.needs_review),
         manually_adjusted: false,
+        service_material: service.material || null,
+        service_rate: service.rate || null,
+        service_labor_amount: service.labor || null,
+        service_trip_amount: service.trip || null,
+        service_total: service.total || null,
+        service_calculation_source: service.source || service.reason || null,
+        service_review_status: service.review ? 'review' : 'ready',
       };
       row.labor_amt = computeLaborAmt(row);
       row.fee_amt = computeFeeAmt(row);
