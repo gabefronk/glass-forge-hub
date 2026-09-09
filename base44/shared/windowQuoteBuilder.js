@@ -269,7 +269,7 @@ export function createWindowQuoteBuilderHandler({ getClient, normalizeAI }) {
       if (!user) throw new HttpError(401, 'Sign in required');
       if (user.role !== 'admin') throw new HttpError(403, 'Window Quotes is currently available to administrators');
       const draft = validateBuilderDraft(body.draft);
-      if (body.action === 'price_preview') return new Response(JSON.stringify(await builderPricePreview(draft, client.entities)), { status: 200, headers });
+      if (body.action === 'price_preview') return new Response(JSON.stringify(await builderPricePreview(draft, client.asServiceRole.entities)), { status: 200, headers });
       const context = conversation(body.conversation);
       // This optional stateless ledger can only ADD blockers. It is never an
       // assessment/status object, prior approval, capability or skip flag.
