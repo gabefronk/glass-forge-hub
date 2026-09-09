@@ -194,7 +194,7 @@ ${JSON.stringify(promptInputs)}`;
         source: 'probuild',
         written_by: 'probuild',
         match_confidence: m.match_confidence,
-        needs_review: !!(m.needs_review || ext.needs_review),
+        needs_review: !!(m.needs_review || ext.needs_review || service.review),
         manually_adjusted: false,
         service_material: service.material || null,
         service_rate: service.rate || null,
