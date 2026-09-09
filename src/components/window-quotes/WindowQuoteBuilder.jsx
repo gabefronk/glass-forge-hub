@@ -132,7 +132,14 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
     if (editor) setEditor(null);
     const next = [...conversation, { role: "user", content: aiText.trim() }];
     setProcessing("assist"); setError("");
-    try { const result = await builderCall({ action: "assist", draft: suggestion?.stale ? draft() : suggestion?.draft || draft(), conversation: next, unresolved_requirements: suggestion?.review?.unresolved_requirements || [] }); setSuggestion(result); setConversation([...next, { role: "assistant", content: result.assistant_message || "Review the window details below." }]); setAiText(""); }
+    try {
+      const result = await builderCall({ action: "assist", draft: suggestion?.stale ? draft() : suggestion?.draft || draft(), conversation: next, unresolved_requirements: suggestion?.review?.unresolved_requirements || [] });
+      setSuggestion(result); setConversation([...next, { role: "assistant", content: result.assistant_message || "Review the window details below." }]); setAiText("");
+      if (result.auto_submit === true && result.review?.ready) {
+        const accepted = result.draft;
+        await onSave({ request_id: requestId.current, title: title.trim(), settings: accepted.settings, lines: accepted.lines, message: "", source: { ...accepted.source, visual_builder: { version: 1, confirmed: true, schedule_hash: result.review.schedule_hash } } }, true);
+      }
+    }
     catch (e) { setError(errorText(e)); } finally { setProcessing(""); }
   };
   const applySuggestion = () => {
