@@ -4,13 +4,18 @@ function lots(title){const s=String(title??"").replace(/^(?:(?:YA|W|Wes|MDS|AP|B
 const orders=e=>({oe:String(e.oe_number||"").trim(),po:String(e.po_number||"").trim()});
 export function trackerMatches(e,rows){
  const title=e.job_name||"",ls=lots(title),o=orders(e);
+ const family=v=>String(v||"").trim().replace(/-[0-9]{2}$/,"");
+ const hasOrder=Boolean(o.oe||o.po);
  return rows.filter(r=>{
-  const lot=String(r.lot??"").trim();const lotOK=lot&&(/^\d+$/.test(lot)?ls.has(lot):words(title,lot));
-  const identity=words(title,r.builder)&&words(title,r.subdivision)&&lotOK;
-  const family=v=>String(v||"").trim().replace(/-[0-9]{2}$/,"");
-  const order=(o.oe&&family(o.oe)===family(r.oe))||(o.po&&o.po===String(r.po).trim());
+  const oeMatch=Boolean(o.oe)&&family(o.oe)===family(r.oe);
+  const poMatch=Boolean(o.po)&&o.po===String(r.po||"").trim();
   const conflict=(o.oe&&r.oe&&family(o.oe)!==family(r.oe))||(o.po&&r.po&&o.po!==String(r.po).trim());
-  return !conflict&&((order&&lotOK)||identity);
+  // An OE or PO is the primary ownership key. Do not let a similar title,
+  // community, or lot override a supplied order number.
+  if(hasOrder)return !conflict&&(oeMatch||poMatch);
+  const lot=String(r.lot??"").trim();
+  const lotOK=lot&&(/^\d+$/.test(lot)?ls.has(lot):words(title,lot));
+  return words(title,r.builder)&&words(title,r.subdivision)&&lotOK;
  });
 }
 const rowRef=r=>({source_sheet:r.source_sheet,source_row:r.source_row,date_cell:r.date_cell,builder:r.builder,subdivision:r.subdivision,lot:r.lot,oe:r.oe,po:r.po,arrival_date:r.arrival_date,notes:r.notes});
@@ -32,7 +37,11 @@ export function reconcile({calendar,outlook,rows,reports,start,end}){
  for(const e of source){
   if(norm(e.job_name)==="amsco will call"){hidden.push({...e,reason:"General will-call reminder, without a customer job identity."});continue;}
   const matches=trackerMatches(e,rows);
-  if(!matches.length){review.push({...e,reason:"No exact builder/community/lot or order-plus-lot match in Sales Tracker. Customer ownership is unconfirmed."});continue;}
+  if(!matches.length){
+   const hasOrder=Boolean(orders(e).oe||orders(e).po);
+   review.push({...e,reason:hasOrder?"No matching OE or PO in Sales Tracker. Customer ownership is unconfirmed.":"No strict builder, community, and lot match in Sales Tracker. Customer ownership is unconfirmed."});
+   continue;
+  }
   const tracker_rows=matches.map(rowRef);
   const linked=reports.filter(r=>(e.matched_post_ids||[]).includes(r.post_id)||(e.resolved_project_id&&e.resolved_project_id===r.project_id&&r.job_date===e.event_date)||(norm(r.job_name)===norm(e.job_name)&&r.job_date===e.event_date));
   matched.push({...e,tracker_rows,reports:linked.map(r=>({post_id:r.post_id,project_id:r.project_id,job_date:r.job_date,job_name:r.job_name,message:r.message,attachment_count:r.attachment_count})),sources:[{source:e.source,id:e.id,event_date:e.event_date,scope_notes:e.scope_notes||""}]});
