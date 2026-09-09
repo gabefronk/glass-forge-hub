@@ -3,7 +3,8 @@ import {reconcile,trackerMatches} from "../functions/reconcileInstallCalendar/en
 const row={builder:"Holmes Homes",subdivision:"Deer Springs",lot:"263",oe:"12345678",po:"4567890",arrival_date:"2026-09-09",source_row:1};
 const e={id:"a",source:"google",event_date:"2026-09-08",start_time:"08:00",end_time:"10:00",job_name:"Holmes Homes - 263 Deer Springs",oe_number:"12345678",po_number:"4567890"};
 const run=(calendar,outlook,rows=[row],reports=[])=>reconcile({calendar,outlook,rows,reports,start:"2026-09-08",end:"2026-09-11"});
-assert.equal(trackerMatches({...e,job_name:"Holmes Homes - 264 Deer Springs"},[row]).length,0);
+assert.equal(trackerMatches({...e,job_name:"Holmes Homes - 264 Deer Springs"},[row]).length,1);
+assert.equal(trackerMatches({...e,job_name:"Holmes Homes - 264 Deer Springs",oe_number:"",po_number:""},[row]).length,0);
 assert.equal(trackerMatches({...e,oe_number:"87654321",po_number:""},[row]).length,0);
 let r=run([e],[{...e,source:"outlook"}]);assert.equal(r.events.length,1);assert.equal(r.counts.merged_duplicates,1);assert.equal(r.events[0].event_date,"2026-09-08");assert.equal(r.arrivals[0].arrival_date,"2026-09-09");assert(r.events[0].warnings.length);
 r=run([e],[{...e,event_date:"2026-09-09"}]);assert.equal(r.events.length,2);
@@ -14,6 +15,9 @@ r=run([e],[],[row],[{post_id:"p",job_date:e.event_date,job_name:e.job_name,messa
 r=run([], [{...e,job_name:"- Amsco Will Call -"}]);assert.equal(r.hidden.length,1);
 assert.equal(trackerMatches({...e,job_name:"Holmes Homes - 263-266 Deer Springs"},[{...row,lot:"266"}]).length,1);
 assert.equal(trackerMatches({...e,oe_number:"12345678-01"},[row]).length,1);
+assert.equal(trackerMatches({...e,job_name:"Edge Homes - 514 River Point",oe_number:"79437909-00",po_number:"7243161"},[row]).length,0);
+assert.equal(trackerMatches({...e,job_name:"Hamlet Homes - 6 Sage Hen",oe_number:"79434892-00",po_number:"6946052"},[row]).length,0);
+assert.equal(trackerMatches({...e,job_name:"GTM Builders - 135 Matthew Meadows",oe_number:"79074440-00",po_number:"6888727"},[row]).length,0);
 r=run([{...e,oe_number:"",po_number:"",address:"123 Test St",scope_notes:"Finish install"}],[{...e,oe_number:"",po_number:"",address:"123 Test St",scope_notes:"Finish install"}]);assert.equal(r.counts.merged_duplicates,1);
 assert.equal(trackerMatches({...e,job_name:"YA - #1 (2 Techs) Holmes Homes - 263 Deer Springs"},[{...row,lot:"1"},{...row,lot:"2"}]).length,0);
 console.log("Calendar coordinator matching and source-preservation checks passed.");
