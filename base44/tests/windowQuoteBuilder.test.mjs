@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
-import { BUILDER_LIMITS, builderReviewResponse, builderScheduleHash, createBuilderAwareIntake, createWindowQuoteBuilderHandler, normalizeManualBuilderDraft, resolveRoutineBuilderFollowup, validateBuilderDraft } from '../shared/windowQuoteBuilder.js';
+import { BUILDER_LIMITS, builderPricePreview, builderReviewResponse, builderScheduleHash, createBuilderAwareIntake, createWindowQuoteBuilderHandler, normalizeManualBuilderDraft, resolveRoutineBuilderFollowup, validateBuilderDraft } from '../shared/windowQuoteBuilder.js';
 import { createConversationalIntake } from '../shared/conversationalIntake.js';
 import { normalizeConversationalSchedule } from '../shared/structuredQuoteIntake.js';
 import { buildQuotePlan, getProductProfileForLine } from '../shared/amscoQuotePlan.js';
@@ -42,6 +42,29 @@ test('authenticated review returns standard SH + picture schedule without model,
   assert.deepEqual(Object.keys(result.body).sort(), ['draft', 'review']);
   assert.deepEqual(Object.keys(result.body.review).sort(), ['assumptions', 'product_review', 'questions', 'ready', 'schedule_hash', 'unresolved_requirements']);
 });
+test('live price preview reuses only exact verified lines and recalculates customer margin', async () => {
+  const value = draft();
+  const normalized = normalizeManualBuilderDraft(value);
+  const planned = buildQuotePlan({ ...normalized.quote, id: 'cached-quote', input_revision: 1 });
+  assert.equal(planned.ok, true);
+  const cached = {
+    id: 'cached-quote', worker_status: 'ready', updated_date: '2026-09-09T12:00:00Z',
+    settings: clone(normalized.quote.settings), lines: clone(normalized.quote.lines), source: clone(normalized.quote.source),
+    result: { verified: true, verification: { checked_at: '2026-09-09T12:00:00Z' }, lines: planned.plan.lines.map((line, index) => ({ ...clone(line), unit_prices: { dealer: 100 + index * 50, list: 200 + index * 50 } })) }
+  };
+  const db = { QuoteRequests: { list: async () => [cached] } };
+  const result = await builderPricePreview(value, db);
+  assert.equal(result.ready, true);
+  assert.equal(result.lines[0].unit_prices.customer, 142.86);
+  assert.equal(result.lines[1].unit_prices.customer, 214.29);
+  assert.equal(result.total, 357.15);
+  const changed = clone(value); changed.lines[0].width = 37;
+  const partial = await builderPricePreview(changed, db);
+  assert.equal(partial.ready, false);
+  assert.equal(partial.lines[0].status, 'amsco_lookup_needed');
+  assert.equal(partial.lines[1].status, 'priced');
+});
+
 test('standard Studio black finish choices are ready and match moving-unit hardware to the interior', async () => {
   for (const [color, interior] of [['Black exterior / White interior', 'White'], ['Black', 'Black']]) {
     const value = draft(); value.settings.color = color;
