@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
-import { BUILDER_LIMITS, builderPricePreview, builderReviewResponse, builderScheduleHash, createBuilderAwareIntake, createWindowQuoteBuilderHandler, normalizeManualBuilderDraft, resolveRoutineBuilderFollowup, validateBuilderDraft } from '../shared/windowQuoteBuilder.js';
+import { BUILDER_LIMITS, builderPricePreview, builderReviewResponse, builderScheduleHash, createBuilderAwareIntake, createWindowQuoteBuilderHandler, normalizeManualBuilderDraft, resolveApprovedBuilderFollowup, resolveRoutineBuilderFollowup, validateBuilderDraft } from '../shared/windowQuoteBuilder.js';
 import { createConversationalIntake } from '../shared/conversationalIntake.js';
 import { normalizeConversationalSchedule } from '../shared/structuredQuoteIntake.js';
 import { buildQuotePlan, getProductProfileForLine } from '../shared/amscoQuotePlan.js';
@@ -282,6 +282,30 @@ test('explicit package-wide nail-fin follow-up updates the checked proposal with
   assert.equal(resolveRoutineBuilderFollowup(draft(), { messages: [
     { role: 'user', content: 'Custom glass.' }, { role: 'assistant', content: 'Which fin?' }, { role: 'user', content: 'Use nail fin for both.' }
   ] }, ['Custom etched glass is required.']), null);
+});
+
+test('explicit approval submits the exact online-only schedule without another model call', async () => {
+  const value = draft();
+  for (const line of value.lines) line.options.grilles = '5/8 GBG 2W4H';
+  const api = harness({ normalizeAI: async () => { throw new Error('model should not run'); } });
+  const conversation = [
+    { role: 'user', content: 'Please quote these windows with 5/8 grid, two wide by four tall.' },
+    { role: 'assistant', content: 'The schedule is organized. The Andersen comparison and grid configuration need review.' },
+    { role: 'user', content: 'I like your setup of windows, so submit and close out the notes.' }
+  ];
+  const result = await api.call({ action: 'assist', draft: value, conversation, unresolved_requirements: ['Customer requested Andersen as a comparison.'] });
+  assert.equal(result.status, 200, JSON.stringify(result.body));
+  assert.equal(result.body.auto_submit, true);
+  assert.equal(result.body.review.ready, true);
+  assert.ok(result.body.review.schedule_hash);
+  assert.deepEqual(result.body.review.unresolved_requirements, []);
+  assert.equal(result.body.draft.lines[0].options.grilles, '5/8 GBG 2W4H');
+  assert.equal(api.models, 0);
+  const intake = await createBuilderAwareIntake(async () => { throw Error('AI not needed'); })(fresh(result.body));
+  assert.equal(intake.ok, false);
+  assert.deepEqual(intake.intake_assessment.questions, []);
+  assert.equal(buildQuotePlan(intake.quote).ok, false);
+  assert.equal(resolveApprovedBuilderFollowup(value, { messages: [conversation[0], conversation[1], { role: 'user', content: "Don't submit yet." }] }, []), null);
 });
 
 test('carry-only ledger cannot inject an assessment or execution authority', async () => {
