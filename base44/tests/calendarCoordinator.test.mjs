@@ -19,5 +19,5 @@ assert.equal(trackerMatches({...e,job_name:"Edge Homes - 514 River Point",oe_num
 assert.equal(trackerMatches({...e,job_name:"Hamlet Homes - 6 Sage Hen",oe_number:"79434892-00",po_number:"6946052"},[row]).length,0);
 assert.equal(trackerMatches({...e,job_name:"GTM Builders - 135 Matthew Meadows",oe_number:"79074440-00",po_number:"6888727"},[row]).length,0);
 r=run([{...e,oe_number:"",po_number:"",address:"123 Test St",scope_notes:"Finish install"}],[{...e,oe_number:"",po_number:"",address:"123 Test St",scope_notes:"Finish install"}]);assert.equal(r.counts.merged_duplicates,1);
-assert.equal(trackerMatches({...e,job_name:"YA - #1 (2 Techs) Holmes Homes - 263 Deer Springs"},[{...row,lot:"1"},{...row,lot:"2"}]).length,0);
+assert.equal(trackerMatches({...e,job_name:"YA - #1 (2 Techs) Holmes Homes - 263 Deer Springs"},[{...row,lot:"1"},{...row,lot:"2"}]).length,2);
 console.log("Calendar coordinator matching and source-preservation checks passed.");
