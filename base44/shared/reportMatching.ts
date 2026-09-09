@@ -214,22 +214,16 @@ export function isWithinGrace(eventDateStr) {
   return new Date().getTime() < new Date(dueAt).getTime();
 }
 
-// Evaluate a set of posts (for the same project group+date) and return the
-// aggregate report status. Uses attachment_count (or photo_urls as fallback).
+// Evaluate a set of posts for the same project group and date. A report is
+// complete when it has either substantive notes or one or more photos.
 export function evaluatePosts(posts) {
   if (!posts || posts.length === 0) return { result: "missing_all", post_ids: [] };
   const postIds = posts.map((p) => p.post_id);
-  // Aggregate: if ANY post has notes and ANY post has photos, the report is ok.
   const hasNotes = posts.some((p) => (p.message || "").trim().length >= 10);
   const hasPhotos = posts.some((p) => {
     const ac = Number(p.attachment_count) || 0;
     const pc = (p.photo_urls || []).length;
     return ac > 0 || pc > 0;
   });
-  let result;
-  if (hasNotes && hasPhotos) result = "ok";
-  else if (hasPhotos) result = "missing_notes";
-  else if (hasNotes) result = "missing_photos";
-  else result = "missing_all";
-  return { result, post_ids: postIds };
+  return { result: hasNotes || hasPhotos ? "ok" : "missing_all", post_ids: postIds };
 }
