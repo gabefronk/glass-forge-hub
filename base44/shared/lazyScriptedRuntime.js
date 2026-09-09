@@ -3,11 +3,11 @@ import { createQuoteIntakeRouter } from './windowQuoteIntakeRouter.js';
 import { loadScriptedRunnerConfig } from './scriptedRunnerConfig.js';
 import { createScriptedQueueExecution } from './scriptedQueueExecution.js';
 
-export function createLazyScriptedRuntime({ normalizeRequest, normalizeIntake, validateReady, loadConfig = loadScriptedRunnerConfig, hash, now, uuid } = {}) {
+export function createLazyScriptedRuntime({ normalizeRequest, normalizeIntake, validateReady, fallbackExecution = null, loadConfig = loadScriptedRunnerConfig, hash, now, uuid } = {}) {
   async function resolve({ db }) {
     const config = await loadConfig({ db });
     const create = config.mode === 'queue' ? createScriptedQueueExecution : createScriptedExecution;
-    const scripted = create({ config, normalizeRequest, normalizeIntake, validateReady, ...(hash ? { hash } : {}), ...(now ? { now } : {}), ...(uuid ? { uuid } : {}) });
+    const scripted = create({ config, normalizeRequest, normalizeIntake, validateReady, ...(config.mode === 'queue' && fallbackExecution ? { fallbackExecution } : {}), ...(hash ? { hash } : {}), ...(now ? { now } : {}), ...(uuid ? { uuid } : {}) });
     return { scripted, router: config.mode === 'queue' ? scripted : createQuoteIntakeRouter({ scripted, config, ...(now ? { now } : {}) }) };
   }
   return {
