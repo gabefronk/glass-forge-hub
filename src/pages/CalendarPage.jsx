@@ -11,7 +11,7 @@ import OutlookEventDetails from "@/components/calendar/OutlookEventDetails";
 import CleanCalendar from "@/components/calendar/CleanCalendar";
 import ServiceCalendar from "@/components/calendar/ServiceCalendar";
 import JobKnowledge from "@/components/calendar/JobKnowledge";
-import { snapshotEvents } from "@/lib/outlookCalendar";
+import { combineCalendarSources, snapshotEvents } from "@/lib/outlookCalendar";
 
 function formatMonth(m) {
   const [y, mm] = m.split("-").map(Number);
@@ -72,8 +72,11 @@ export default function CalendarPage() {
     return () => phone.removeEventListener("change", adaptView);
   }, []);
 
-  // Preserve raw Outlook entries; a separate Base44 reconciliation agent owns matching.
-  const combined = useMemo(() => ({ events: [...(showIsrael ? events : []), ...(showOutlook ? snapshotEvents(outlook) : [])], hidden: 0 }), [events, outlook, showIsrael, showOutlook]);
+  // Show each confirmed cross-calendar visit once. Distinct and recurring events remain separate.
+  const combined = useMemo(
+    () => combineCalendarSources(events, snapshotEvents(outlook), showIsrael, showOutlook),
+    [events, outlook, showIsrael, showOutlook],
+  );
   const monthEvents = useMemo(() => {
     let filtered = combined.events.filter((e) => (e.event_date || "").slice(0, 7) === month);
     if (unreportedOnly) {
