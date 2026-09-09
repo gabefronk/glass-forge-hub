@@ -107,6 +107,8 @@ function carriedRequirements(value = []) {
 }
 const isStandard = draft => draft.source?.easy_request?.confirmed === true && draft.source.easy_request.profile_id === STANDARD_STUDIO_PROFILE.id && draft.source.easy_request.profile_revision === STANDARD_STUDIO_PROFILE.revision;
 const unique = value => [...new Set((value || []).filter(item => typeof item === 'string' && item.trim()))];
+const ONLINE_REVIEW_CODES = new Set(['unsupported_product', 'unverified_product', 'unsupported_option', 'unsupported_colors', 'unsupported_dimensions', 'unsupported_assembly']);
+const onlineOnlyIssues = checked => checked?.ok === false && Array.isArray(checked.issues) && checked.issues.length > 0 && checked.issues.every(item => item && ONLINE_REVIEW_CODES.has(item.code));
 function fillManualPreferences(draft) {
   const quote = clone(draft), assumptions = [];
   // The native SH contract names installation through series. Translate only
@@ -187,6 +189,31 @@ export function resolveRoutineBuilderFollowup(draft, context, unresolved = []) {
   return result;
 }
 
+// Once the user explicitly accepts the visible proposal, reuse that exact
+// structured schedule. This avoids another model call and clears only the
+// comparison/review notes the user asked to close. Missing or malformed core
+// fields still block, while fully specified unmapped options route online.
+export function resolveApprovedBuilderFollowup(draft, context, unresolved = []) {
+  if (!draft.lines.length || context.messages.length < 3) return null;
+  const latest = context.messages.at(-1), prior = context.messages.at(-2);
+  if (latest?.role !== 'user' || prior?.role !== 'assistant') return null;
+  const words = latest.content;
+  if (/\b(?:do not|don't|dont|not ready to|wait to|hold off)\b[^.!?]{0,30}\b(?:submit|quote|proceed|start)\b/i.test(words)) return null;
+  const submit = /\b(?:submit|go ahead|proceed|start (?:the )?quote|get (?:it|this|them) quoted|quote (?:it|this|them)|send (?:it|this|them) (?:in|to AMSCO))\b/i.test(words);
+  const acceptsProposal = /\b(?:looks? good|like (?:the |your |this |that )?(?:setup|schedule|windows)|approved?|use (?:this|that|your) (?:setup|schedule|windows)|close out (?:the )?(?:notes?|questions?))\b/i.test(words);
+  if (!submit || !acceptsProposal) return null;
+  const result = normalizeManualBuilderDraft(draft);
+  const checked = buildQuotePlan({ ...result.quote, id: 'builder-preview', input_revision: 1 });
+  if (result.ok !== true && !onlineOnlyIssues(checked)) return null;
+  result.builder_approved = true;
+  result.intake_assessment = { ...result.intake_assessment, questions: [], product_review: [], unresolved_requirements: [] };
+  result.questions = [];
+  result.assistant_message = unresolved.length
+    ? 'I accepted your reviewed window schedule and closed the remaining comparison notes. Submitting it for AMSCO pricing now.'
+    : 'I accepted your reviewed window schedule. Submitting it for AMSCO pricing now.';
+  return result;
+}
+
 function outputDraft(quote) {
   // Only the reviewed specifications cross this boundary. AI provenance and
   // execution/status data never become fields a caller can send back as facts.
@@ -236,16 +263,18 @@ export async function builderPricePreview(draft, db) {
   return { ready, lines, total: ready ? roundMoney(lines.reduce((sum, line) => sum + line.line_totals.customer, 0)) : null, currency: 'USD', missing_count: lines.filter(line => line.status !== 'priced').length, questions: [] };
 }
 
-export async function builderReviewResponse(result) {
+export async function builderReviewResponse(result, { allowOnline = false } = {}) {
   const draft = outputDraft(result.quote);
   const assessment = result.intake_assessment || {};
-  const questions = unique([...(assessment.questions || []), ...(result.questions || [])]);
-  const productReview = unique(assessment.product_review);
-  const unresolved = unique(assessment.unresolved_requirements);
+  let questions = unique([...(assessment.questions || []), ...(result.questions || [])]);
+  let productReview = unique(assessment.product_review);
+  const unresolved = result.builder_approved === true ? [] : unique(assessment.unresolved_requirements);
   // Check the returned schedule again; a model's status is never sufficient.
   const checked = buildQuotePlan({ ...draft, id: 'builder-preview', input_revision: 1 });
-  if (!checked.ok && !questions.length && !productReview.length) questions.push(...unique((checked.issues || []).map(item => item.message)));
-  const ready = result.ok === true && checked.ok === true && !questions.length && !productReview.length && !unresolved.length;
+  const onlineReady = allowOnline && onlineOnlyIssues(checked);
+  if (onlineReady) { questions = []; productReview = []; }
+  else if (!checked.ok && !questions.length && !productReview.length) questions.push(...unique((checked.issues || []).map(item => item.message)));
+  const ready = ((result.ok === true && checked.ok === true) || onlineReady) && !questions.length && !productReview.length && !unresolved.length;
   const response = { draft, review: { ready, questions, product_review: productReview, unresolved_requirements: unresolved,
     assumptions: unique(assessment.assumptions), schedule_hash: ready ? await builderScheduleHash(draft) : null } };
   if (typeof result.assistant_message === 'string') response.assistant_message = result.assistant_message.slice(0, 17500).replace('Your details are ready for automatic quoting.', 'Review these windows, then choose Calculate verified price when you are ready.');
@@ -281,10 +310,12 @@ export function createWindowQuoteBuilderHandler({ getClient, normalizeAI }) {
       } else {
         if (!context.messages.some(item => item.role === 'user')) fail('Describe the windows you need or ask the AI guide a question');
         if (typeof normalizeAI !== 'function') throw new Error('AI intake is not configured');
-        result = resolveRoutineBuilderFollowup(draft, context, unresolved) || await normalizeAI({ ...draft, id: 'builder-preview', input_revision: context.revision, history: [], conversation: context.messages,
+        result = resolveApprovedBuilderFollowup(draft, context, unresolved) || resolveRoutineBuilderFollowup(draft, context, unresolved) || await normalizeAI({ ...draft, id: 'builder-preview', input_revision: context.revision, history: [], conversation: context.messages,
           ...(unresolved.length ? { intake_assessment: { unresolved_requirements: unresolved } } : {}) }, { client, action: 'builder_assist' });
       }
-      return new Response(JSON.stringify(await builderReviewResponse(result)), { status: 200, headers });
+      const response = await builderReviewResponse(result, { allowOnline: body.action === 'review' || result.builder_approved === true });
+      if (result.builder_approved === true && response.review.ready) response.auto_submit = true;
+      return new Response(JSON.stringify(response), { status: 200, headers });
     } catch (error) {
       return new Response(JSON.stringify({ error: error instanceof HttpError ? error.message : 'The window builder could not review this draft. Try again; no pricing request was created.' }), { status: error instanceof HttpError ? error.status : 500, headers });
     }
@@ -327,11 +358,13 @@ export function createBuilderAwareIntake(normalizeAI) {
       const draft = validateBuilderDraft({ settings: q.settings, lines: q.lines, source: q.source }, { submission: true });
       if (await builderScheduleHash(draft) !== marker.schedule_hash) fail('The windows changed after review. Review them again before requesting an AMSCO price');
       const result = normalizeManualBuilderDraft(draft);
-      const reviewed = await builderReviewResponse(result);
+      const reviewed = await builderReviewResponse(result, { allowOnline: true });
       if (!reviewed.review.ready || reviewed.review.schedule_hash !== marker.schedule_hash) fail('These windows need a new review before requesting an AMSCO price');
+      const onlineReady = onlineOnlyIssues(buildQuotePlan({ ...reviewed.draft, id: 'builder-preview', input_revision: 1 }));
       return { ...result, quote: { ...clone(q), settings: reviewed.draft.settings, lines: reviewed.draft.lines },
-        intake_assessment: { ...result.intake_assessment, version: BUILDER_VERSION, input_revision: q.input_revision },
-        assistant_message: 'Your reviewed windows are ready for AMSCO pricing.' };
+        intake_assessment: { ...result.intake_assessment, version: BUILDER_VERSION, input_revision: q.input_revision,
+          ...(onlineReady ? { status: 'product_review', questions: [], unresolved_requirements: [] } : {}) },
+        assistant_message: onlineReady ? 'Your reviewed windows are ready for an AMSCO online quote.' : 'Your reviewed windows are ready for AMSCO pricing.' };
     } catch (error) {
       const question = error instanceof HttpError ? error.message : 'Review the windows again before requesting an AMSCO price';
       return { ok: false, status: 'needs_details', routing: 'clarification', quote: clone(q), issues: [{ code: 'builder_review_required', path: 'source.visual_builder', message: question }],
