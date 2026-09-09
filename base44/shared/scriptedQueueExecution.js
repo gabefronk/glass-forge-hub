@@ -11,10 +11,16 @@ const hasNative = value => value && typeof value === 'object' && Object.entries(
 const LOCK_NAME = 'Base44 Window Quotes browser';
 const ZERO_HASH = '0'.repeat(64);
 const sameYard = (a, b) => typeof a === 'string' && typeof b === 'string' && a.replace(/\s/g, '').toUpperCase() === b.replace(/\s/g, '').toUpperCase();
+const ONLINE_QUOTE_ISSUES = new Set(['unsupported_product', 'unverified_product', 'unsupported_option', 'unsupported_colors', 'unsupported_dimensions', 'unsupported_assembly']);
+export function needsOnlineQuote(normalized, assessment) {
+  if (normalized?.ok !== false || !Array.isArray(normalized.issues) || normalized.issues.length === 0) return false;
+  if (Array.isArray(assessment?.questions) && assessment.questions.length > 0) return false;
+  return normalized.issues.every(item => item && ONLINE_QUOTE_ISSUES.has(item.code));
+}
 
 // Queue intake selects a fresh immutable plan; all native operation mutations
 // continue through the already-tested exact-request executor and its global lock.
-export function createScriptedQueueExecution({ config = {}, normalizeRequest, normalizeIntake, validateReady, hash = sha256, now = () => new Date(), uuid } = {}) {
+export function createScriptedQueueExecution({ config = {}, normalizeRequest, normalizeIntake, validateReady, fallbackExecution = null, hash = sha256, now = () => new Date(), uuid } = {}) {
   const enabled = config.enabled === true, allow = config.queue_allow || {};
   if (config.native_engine?.enabled === true && !nativeEnginePolicyReady(config.native_engine)) fail(503, 'Invalid native desktop engine configuration');
   const at = () => now().toISOString();
@@ -147,6 +153,8 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     if (q.settings?.dealer && q.settings.dealer !== allow.dealer) scopeQuestions.push('Automatic quoting currently supports the BFS account only. Please review this request.');
     if (q.settings?.yard && !sameYard(q.settings.yard, allow.yard)) scopeQuestions.push('Automatic quoting currently supports BFS-UTAH DESIGN (11) only. Please confirm that shipping yard or request manual review.');
     if (intake?.ok === false || scopeQuestions.length) {
+      const unsupportedPlan = !scopeQuestions.length && fallbackExecution?.configured ? await normalizeRequest(clone(q)) : null;
+      if (needsOnlineQuote(unsupportedPlan, intake?.intake_assessment)) return fallbackExecution.afterInput({ ...args, q });
       const questions = [...new Set([...scopeQuestions, ...(intake?.questions || [])].map(item => sanitizePublic(text(item, 'clarification question', 2000))))];
       if (!questions.length) fail(400, 'Intake requires complete clarification questions');
       const missing = questions.length <= 30 ? questions : [...questions.slice(0, 29), 'Additional issues remain in the original schedule. Review the complete schedule preview before quoting.'];
@@ -169,6 +177,7 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
       }
     }
     const normalized = await normalizeRequest(clone(q));
+    if (fallbackExecution?.configured && needsOnlineQuote(normalized, q.intake_assessment)) return fallbackExecution.afterInput({ ...args, q });
     const execution = await child(q, normalized?.ok === true ? await digest(normalized.plan) : ZERO_HASH);
     return execution.afterInput({ ...args, q });
   }
