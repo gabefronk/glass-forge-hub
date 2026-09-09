@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { webcrypto } from 'node:crypto';
-import { createScriptedQueueExecution } from '../shared/scriptedQueueExecution.js';
+import { createScriptedQueueExecution, needsOnlineQuote } from '../shared/scriptedQueueExecution.js';
 import { createScriptedRunnerHandler } from '../shared/scriptedRunnerHandler.js';
 import { sha256, publicQuote, publicMessages } from '../shared/windowQuotesCore.js';
 import { buildQuotePlan, verifyObservedQuote } from '../shared/amscoQuotePlan.js';
@@ -154,4 +154,20 @@ test('request client reaches AI intake only within authenticated user execution'
   const client={integrations:{Core:{}}};let received;
   const f=await fixture({normalizeIntake:(quote,context)=>{received=context.client;return{ok:true,quote};}});
   await f.execution.afterInput({db:f.db,q:clone(f.q()),user:f.user,action:'create',client});assert.equal(received,client);
+});
+
+test('online fallback accepts only complete requests whose remaining issues are unmapped product paths', async()=>{
+  assert.equal(needsOnlineQuote({ok:false,issues:[{code:'unsupported_product'},{code:'unsupported_colors'}]}, {questions:[]}), true);
+  assert.equal(needsOnlineQuote({ok:false,issues:[{code:'unsupported_product'},{code:'invalid_dimensions'}]}, {questions:[]}), false);
+  assert.equal(needsOnlineQuote({ok:false,issues:[{code:'unsupported_product'}]}, {questions:['Confirm the opening size.']}), false);
+  assert.equal(needsOnlineQuote({ok:true,plan:{}}, {questions:[]}), false);
+});
+
+test('a complete unmapped window goes to online quoting while missing core data stays in clarification', async()=>{
+  const calls=[];
+  const fallbackExecution={configured:true,afterInput:async args=>{calls.push(args.q.id);return{...args.q,execution_provider:'superagent',worker_status:'queued'};}};
+  const online=await fixture({fallbackExecution,normalizeRequest:()=>({ok:false,issues:[{code:'unsupported_product'}],questions:['This product is not in the fast price map.']})});
+  const routed=await online.prepare();assert.equal(routed.execution_provider,'superagent');assert.equal(routed.worker_status,'queued');assert.deepEqual(calls,['first']);assert.equal(online.q().worker_status,'draft');
+  const incomplete=await fixture({fallbackExecution,normalizeRequest:()=>({ok:false,issues:[{code:'invalid_dimensions'}],questions:['Line 1: Provide a positive numeric width in inches.']})});
+  await incomplete.prepare();assert.equal(incomplete.q().execution_provider,'deterministic');assert.equal(incomplete.q().worker_status,'needs_details');assert.deepEqual(calls,['first']);
 });
