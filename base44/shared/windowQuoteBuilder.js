@@ -193,6 +193,49 @@ function outputDraft(quote) {
   return validateBuilderDraft({ ...(quote.title !== undefined ? { title: quote.title } : {}), settings: quote.settings || {},
     lines: (quote.lines || []).map(line => Object.fromEntries(Object.entries(line).filter(([key]) => lineKeys.includes(key)))), source: source(quote.source || {}) });
 }
+const priceSignature = line => stable(Object.fromEntries(Object.entries(line || {}).filter(([key]) => !['source_index', 'mark', 'room', 'qty', 'source_reference'].includes(key))));
+const roundMoney = value => Math.round((value + Number.EPSILON) * 100) / 100;
+function plannedDraft(draft) {
+  const normalized = normalizeManualBuilderDraft(draft);
+  const checked = buildQuotePlan({ ...normalized.quote, id: 'builder-price-preview', input_revision: 1 });
+  return { normalized, checked };
+}
+export async function builderPricePreview(draft, db) {
+  const { normalized, checked } = plannedDraft(draft);
+  if (normalized.ok !== true || checked.ok !== true) return { ready: false, lines: [], total: null, questions: unique([...(normalized.questions || []), ...(checked.issues || []).map(item => item.message)]) };
+  const cache = new Map();
+  const quotes = await db.QuoteRequests.list('-updated_date', 200);
+  for (const quote of quotes) {
+    if (quote?.worker_status !== 'ready' || quote?.result?.verified !== true || !Array.isArray(quote.result.lines)) continue;
+    try {
+      const cachedDraft = {
+        settings: quote.settings || {},
+        lines: (quote.lines || []).map(line => Object.fromEntries(Object.entries(line).filter(([key]) => lineKeys.includes(key)))),
+        source: quote.source?.easy_request ? { easy_request: quote.source.easy_request } : {}
+      };
+      const cached = plannedDraft(cachedDraft);
+      if (cached.normalized.ok !== true || cached.checked.ok !== true) continue;
+      for (const [index, planned] of cached.checked.plan.lines.entries()) {
+        const observed = quote.result.lines[index];
+        const dealer = Number(observed?.unit_prices?.dealer), list = Number(observed?.unit_prices?.list);
+        if (!Number.isFinite(dealer) || dealer < 0) continue;
+        const key = stable({ dealer: cached.checked.plan.settings.dealer, yard: cached.checked.plan.settings.yard, line: priceSignature(planned) });
+        if (!cache.has(key)) cache.set(key, { dealer, ...(Number.isFinite(list) ? { list } : {}), checked_at: quote.result.verification?.checked_at || quote.updated_date || quote.created_date });
+      }
+    } catch { /* Older or incomplete results are not price sources. */ }
+  }
+  const margin = checked.plan.settings.gross_margin;
+  const lines = checked.plan.lines.map((line, index) => {
+    const key = stable({ dealer: checked.plan.settings.dealer, yard: checked.plan.settings.yard, line: priceSignature(line) });
+    const hit = cache.get(key);
+    if (!hit) return { index, id: draft.lines[index]?.id, status: 'amsco_lookup_needed' };
+    const customer = roundMoney(hit.dealer / (1 - margin / 100));
+    return { index, id: draft.lines[index]?.id, status: 'priced', unit_prices: { ...(hit.list !== undefined ? { list: hit.list } : {}), dealer: hit.dealer, customer }, line_totals: { ...(hit.list !== undefined ? { list: roundMoney(hit.list * line.qty) } : {}), dealer: roundMoney(hit.dealer * line.qty), customer: roundMoney(customer * line.qty) }, checked_at: hit.checked_at };
+  });
+  const ready = lines.length > 0 && lines.every(line => line.status === 'priced');
+  return { ready, lines, total: ready ? roundMoney(lines.reduce((sum, line) => sum + line.line_totals.customer, 0)) : null, currency: 'USD', missing_count: lines.filter(line => line.status !== 'priced').length, questions: [] };
+}
+
 export async function builderReviewResponse(result) {
   const draft = outputDraft(result.quote);
   const assessment = result.intake_assessment || {};
@@ -219,13 +262,14 @@ export function createWindowQuoteBuilderHandler({ getClient, normalizeAI }) {
       let body;
       try { body = JSON.parse(raw); } catch { fail('Invalid JSON'); }
       keys(body, ['action', 'draft', 'conversation', 'unresolved_requirements'], 'request');
-      if (!['assist', 'review'].includes(body.action)) fail('Unknown builder action');
+      if (!['assist', 'review', 'price_preview'].includes(body.action)) fail('Unknown builder action');
       const client = await getClient(req);
       let user;
       try { user = await client.auth.me(); } catch { throw new HttpError(401, 'Sign in required'); }
       if (!user) throw new HttpError(401, 'Sign in required');
       if (user.role !== 'admin') throw new HttpError(403, 'Window Quotes is currently available to administrators');
       const draft = validateBuilderDraft(body.draft);
+      if (body.action === 'price_preview') return new Response(JSON.stringify(await builderPricePreview(draft, client.entities)), { status: 200, headers });
       const context = conversation(body.conversation);
       // This optional stateless ledger can only ADD blockers. It is never an
       // assessment/status object, prior approval, capability or skip flag.
