@@ -11,7 +11,7 @@ import OutlookEventDetails from "@/components/calendar/OutlookEventDetails";
 import CleanCalendar from "@/components/calendar/CleanCalendar";
 import ServiceCalendar from "@/components/calendar/ServiceCalendar";
 import JobKnowledge from "@/components/calendar/JobKnowledge";
-import { combineCalendarSources, snapshotEvents } from "@/lib/outlookCalendar";
+import { snapshotEvents } from "@/lib/outlookCalendar";
 
 function formatMonth(m) {
   const [y, mm] = m.split("-").map(Number);
