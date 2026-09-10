@@ -13,7 +13,7 @@ const scope = Object.freeze({
   'catalog_270': { product:'Direct Set', series:'Studio', width:[8,120], height:[8,120], rows:[4761,4762,4763,4764] },
   'catalog_724': { product:'Casement', series:'Hampton', width:[17.5,36], height:[23.5,72], rows:[5059,5060,5061,5062] }
 });
-const keys = new Set(['series','color','exterior_color','interior_color','glass','tempered','grilles','operation','unit_type','number_wide','sash_split',
+const keys = new Set(['series','fin','color','exterior_color','interior_color','glass','tempered','grilles','operation','unit_type','number_wide','sash_split',
   'patterned_glass','argon','elevation','super_spacer','glazing_method','hardware','hardware_color','screen','capillary_tubes']);
 const decline = code => ({ok:false,code});
 export function sourcePricingEnabled(config) { return config?.native_engine?.source_pricing === true && config.native_engine.catalog_id === '361'; }
