@@ -20,7 +20,7 @@ const at=(row,key)=>key.split('.').reduce((v,k)=>v?.[k],row);
 const matches=(row,query)=>Object.entries(query).every(([key,want])=>{const got=at(row,key);return want&&typeof want==='object'?('$in'in want?want.$in.includes(got):'$nin'in want?!want.$nin.includes(got):'$gte'in want?got>=want.$gte:false):got===want;});
 function table(prefix,initial=[]){let count=0;const data=clone(initial);return{data,async filter(query={},sort,limit=100){const rows=data.filter(row=>matches(row,query));if(sort)rows.sort((a,b)=>String(a[sort]||'').localeCompare(String(b[sort]||'')));return clone(rows.slice(0,limit));},async create(value){const row={...clone(value),id:prefix+'-'+ ++count,created_date:'2026-09-10T12:00:00Z'};data.push(row);return clone(row);},async updateMany(query,patch){let updated=0;for(const row of data)if(matches(row,query)){Object.assign(row,clone(patch.$set));updated++;}return{updated};}};}
 
-async function harness({pending=false,onlineConfigured=true}={}){
+async function harness({pending=false,onlineConfigured=true,sourcePricing=false}={}){
  const now=()=>new Date('2026-09-10T12:00:00Z'),user={id:'other-administrator',role:'admin',email:'another-admin@example.test'};
  const settings={dealer:'BFS',yard:'BFS-UTAH DESIGN(11)',gross_margin:30,color:'White',glass:'CozE (LowE)'};
  const native={id:'native-window',style:'Hampton Casement',width:24,height:48,qty:2,room:'Bedroom',units:'in',dimension_basis:'frame',options:{series:'Hampton'}};
@@ -28,7 +28,7 @@ async function harness({pending=false,onlineConfigured=true}={}){
  const reviewed=await builderReviewResponse(normalizeManualBuilderDraft({settings,lines:[native,online],source:{amsco_configurator:{version:1}}}),{allowOnline:true});
  assert.equal(reviewed.review.ready,true,JSON.stringify(reviewed));
  const config={enabled:true,mode:'queue',worker_id:'runner',worker_key_hash:'a'.repeat(64),browser_slot_id:'shared-slot',queue_allow:{requester_email:'gabefronk@gmail.com',dealer:'BFS',yard:'BFS-UTAH DESIGN (11)',created_after:'2026-09-07T07:00:00Z'},
-  native_engine:{...fixture.context.policy,price_previews:true,configuration_quotes:true,configuration_packages:true}};
+  native_engine:{...fixture.context.policy,price_previews:true,configuration_quotes:true,configuration_packages:true,source_pricing:sourcePricing}};
  const verified=await verifyNativePricePreview(fixture.plan,fixture.observed,fixture.context);assert.equal(verified.ok,true);
  const record={id:fixture.plan.quote_id,version:1,owner_id:user.id,status:pending?'queued':'ready',contract_hash:config.native_engine.contract_hash,context_fingerprint:config.native_engine.context_fingerprint,catalog_id:'361',
   plan:clone(fixture.plan),plan_hash:fixture.observed.native_engine.plan_hash,operation_id:fixture.observed.native_engine.operation_id,result:pending?null:verified.result,expires_at:'2026-09-11T12:00:00Z',created_date:'2026-09-10T11:00:00Z'};
@@ -157,4 +157,20 @@ test('a current online browser owner is a routine wait; mismatched and uncertain
  child.agent_run.operation_id='different-operation';assert.equal((await h.poll()).status,'blocked');
  child.agent_run.operation_id=operation;child.agent_run.phase='uncertain';assert.equal((await h.poll()).status,'blocked');
  assert.equal(h.db.QuoteWorkers.data[1].busy_token,operation);
+});
+
+
+test('source-calculated lines complete beside online-only lines without a native worker or cached price',async()=>{
+ const h=await harness({sourcePricing:true});h.db.WindowQuotePricePreviews.data.length=0;
+ h.db.QuoteWorkers.data[0].runner_presence={runner_status:'attention'};
+ const created=await h.submit();assert.equal(created.status,200,JSON.stringify(created));
+ let q=h.db.QuoteRequests.data[0];assert.equal(q.pricing_progress.priced_subtotal,944.26);
+ assert.equal(h.db.WindowQuotePricePreviews.data.length,0);assert.equal(h.sends.length,1);
+ const child=h.db.WindowQuoteOnlineRequests.data[0];assert.deepEqual(child.lines,[q.lines[1]]);
+ assert.equal((await h.tools(h.report(child))).status,200);
+ q=h.db.QuoteRequests.data[0];assert.equal(q.worker_status,'ready');assert.equal(q.result.totals.customer_total,1229.98);
+ assert.equal(q.result.lines[0].pricing_evidence.source,'amsco_source_engine');
+ assert.equal(q.result.lines[1].pricing_evidence.source,'amsco_online');assert.equal(q.result.verification.reopened,false);
+ const inputHash=await sha256(stable(configurationInputSnapshot(q)));
+ assert.doesNotThrow(()=>validateResult(q.result,{allowConfigurationSet:true,quote:q,inputHash}));
 });
