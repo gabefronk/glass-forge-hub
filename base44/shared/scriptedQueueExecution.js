@@ -1,6 +1,7 @@
 import { createNativeConfigurationQuoteService } from './nativeConfigurationQuote.js';
 import { createConfigurationPackageServices } from './configurationPackageServices.js';
-import { createNativePricePreviewService } from './nativePricePreview.js';
+import { createNativePricePreviewService, previewPolicyKey } from './nativePricePreview.js';
+import { onlinePackageIsCurrent } from './configurationOnlineQueue.js';
 import { HttpError, sha256, validateLines, validateSettings, sanitizePublic } from './windowQuotesCore.js';
 import { createScriptedExecution } from './scriptedExecution.js';
 import { reviewedRestartAllowsHistory } from './reviewedRestart.js';
@@ -255,7 +256,24 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     if (reported.runner_status !== 'idle') return response('blocked', reported.runner_status);
     await packages.advance({ db });
     const currentSlot = await slot(db);
-    if (currentSlot.busy_token) return response('blocked', 'browser_operation_requires_completion_or_review');
+    if (currentSlot.busy_token) {
+      // A legitimate online quote owns the browser until it finishes. Waiting
+      // for it is routine; reporting "blocked" permanently pauses the runner.
+      const activeId = currentSlot.active_quote_id;
+      const ownsSlot = quote => quote?.worker_status === 'running' && quote.execution_provider === 'superagent' &&
+        quote.agent_run?.operation_id === currentSlot.busy_token && quote.agent_run.slot_id === currentSlot.id &&
+        quote.agent_run.input_revision === quote.input_revision && quote.agent_run.owner_email === quote.requester_email &&
+        ['creating', 'sending', 'sent', 'working'].includes(quote.agent_run.phase);
+      if (typeof activeId === 'string' && activeId) {
+        const publicRows = await db.QuoteRequests.filter({ id: activeId }, undefined, 1);
+        if (ownsSlot(publicRows[0])) return response('idle', 'amsco_online_quote_in_progress');
+        if (db.WindowQuoteOnlineRequests) {
+          const privateRows = await db.WindowQuoteOnlineRequests.filter({ id: activeId }, undefined, 1);
+          if (ownsSlot(privateRows[0]) && await onlinePackageIsCurrent(db, privateRows[0], hash, previewPolicyKey(config.native_engine))) return response('idle', 'amsco_online_quote_in_progress');
+        }
+      }
+      return response('blocked', 'browser_operation_requires_completion_or_review');
+    }
     if (reported.browser.state !== 'authenticated' && !nativeEnginePresenceReady(reported.native_engine, config.native_engine)) return response('needs_sign_in', reported.browser.state);
     const candidates = await db.QuoteRequests.filter({ worker_status: 'queued', execution_provider: 'deterministic', requester_email: allow.requester_email, 'agent_run.queue_scope_hash': await scopeHash(), created_date: { $gte: allow.created_after } }, 'queued_at', 20);
     for (const q of candidates) {

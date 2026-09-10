@@ -149,3 +149,12 @@ test('more than one page of stale private work cannot hide a current queued wind
  const found=await privateOnlineDatabase(h.db).QuoteRequests.filter({worker_status:'queued',execution_provider:'superagent'},'queued_at',1);
  assert.deepEqual(found.map(row=>row.id),[child.id]);
 });
+
+test('a current online browser owner is a routine wait; mismatched and uncertain ownership still require review',async()=>{
+ const h=await harness();await h.submit();
+ assert.equal((await h.poll()).status,'idle');assert.equal(h.sends.length,1);
+ const child=h.db.WindowQuoteOnlineRequests.data[0],operation=child.agent_run.operation_id;
+ child.agent_run.operation_id='different-operation';assert.equal((await h.poll()).status,'blocked');
+ child.agent_run.operation_id=operation;child.agent_run.phase='uncertain';assert.equal((await h.poll()).status,'blocked');
+ assert.equal(h.db.QuoteWorkers.data[1].busy_token,operation);
+});
