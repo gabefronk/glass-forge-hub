@@ -2,6 +2,7 @@ export const AGENT_CENTER_OWNER_EMAILS = new Set(['gabefronk@gmail.com','gabriel
 export const isAgentCenterOwner = user => user?.role === 'admin' && AGENT_CENTER_OWNER_EMAILS.has(String(user.email||'').trim().toLowerCase());
 const clean=(value,max=180)=>typeof value==='string'?value.slice(0,max):'';
 const iso=value=>Number.isFinite(Date.parse(value))?new Date(value).toISOString():null;
+const hasSecureSecret=name=>{try{return Boolean(name&&typeof Deno!=='undefined'&&Deno.env.get(name));}catch{return false;}};
 const ids=new Set(['manager_agent','sales_tracker_agent','calendar_coordinator','probuild_reporting','codex_development','mac_manager','external_claude_agents']);
 const visibleEntry=entry=>({id:entry.id,target_id:entry.target_id,kind:entry.kind,title:entry.title,body:entry.body,recorded_at:entry.recorded_at,actor_email:entry.actor_email,status:entry.status,request_key:entry.request_key});
 const visibleEscalation=row=>({id:row.id,agent_id:row.agent_id,department:row.department,title:row.title,context:row.context,status:row.status,created_at:row.created_at,resolved_at:row.resolved_at,resolution:row.resolution});
@@ -78,11 +79,18 @@ export function createAgentCenterHandler({getClient,now=()=>new Date()}={}) {
     const saved=prior?await api.AgentCenterConnection.update(prior.id,row):await api.AgentCenterConnection.create(row);
     return Response.json({connection:visibleConnection(saved),credential_flow:catalog.secret_name?'Paste the key only in Glass Forge Hub → Dashboard → Secrets → Add Secret, using '+catalog.secret_name+'. It is never accepted by this page.':'Use the provider’s normal OAuth or local-bridge authorization; this page stores no credentials.'});
    }
+   if(input.action==='connection_status'){
+    const provider=clean(input.provider_id,80),catalog=connectionCatalog.find(item=>item.provider_id===provider);
+    if(!catalog)throw Error('Choose a supported provider.');
+    if(!catalog.secret_name)return Response.json({provider_id:provider,configured:false,message:'This connection needs its normal OAuth or local-bridge authorization and remains planned.'});
+    const configured=hasSecureSecret(catalog.secret_name);
+    return Response.json({provider_id:provider,configured,message:configured?'Secure secret detected. No provider request was sent.':'No '+catalog.secret_name+' secret is configured yet. Add it in Glass Forge Hub → Dashboard → Secrets.'});
+   }
    if(input.action==='connection_test'){
     const provider=clean(input.provider_id,80),catalog=connectionCatalog.find(item=>item.provider_id===provider),row=(await api.AgentCenterConnection.filter({provider_id:provider},'-updated_at',1))[0];
     if(!catalog)throw Error('Choose a supported provider.');
     if(!catalog.secret_name)return Response.json({provider_id:provider,verified:false,message:'This connection needs its normal OAuth or local-bridge authorization and remains planned.'});
-    const key=typeof Deno!=='undefined'?Deno.env.get(catalog.secret_name):undefined;
+    const key=hasSecureSecret(catalog.secret_name)&&typeof Deno!=='undefined'?Deno.env.get(catalog.secret_name):undefined;
     if(!key)return Response.json({provider_id:provider,verified:false,message:'No '+catalog.secret_name+' secret is configured yet. Add it in Glass Forge Hub → Dashboard → Secrets, then test again.'});
     const test=catalog.provider_id==='anthropic_claude'?{url:'https://api.anthropic.com/v1/models',headers:{'x-api-key':key,'anthropic-version':'2023-06-01'}}:{url:'https://api.openai.com/v1/models',headers:{Authorization:'Bearer '+key}};
     let response;try{response=await fetch(test.url,{headers:test.headers});}catch{response=null;}
@@ -100,7 +108,11 @@ export function createAgentCenterHandler({getClient,now=()=>new Date()}={}) {
    const results=await Promise.allSettled([api.SalesTrackerSnapshot.filter({status:'validated'},'-source_captured_at',1),api.AgentCenterEntry.list('-recorded_at',101),api.AgentCenterEscalation.list('-created_at',101),api.AgentCenterEvent.list('-occurred_at',101),api.AgentCenterConnection.list('-updated_at',100)]);
    const [snapshot,entries,escalations,events,connectionRows]=[results[0].status==='fulfilled'?results[0].value[0]:null,results[1].status==='fulfilled'?results[1].value:[],results[2].status==='fulfilled'?results[2].value:[],results[3].status==='fulfilled'?results[3].value:[],results[4].status==='fulfilled'?results[4].value:[]];
    const connectionMap=new Map(connectionRows.map(row=>[row.provider_id,row]));
-   const connections=connectionCatalog.map(item=>visibleConnection(connectionMap.get(item.provider_id)||{...item,updated_at:null}));
+   const connections=connectionCatalog.map(item=>{
+    const row=connectionMap.get(item.provider_id)||{...item,updated_at:null};
+    if(item.secret_name&&hasSecureSecret(item.secret_name)&&row.connection_state!=='verified')return visibleConnection({...row,connection_state:'configured',secret_reference:item.secret_name,verification_message:'Secure secret detected. No provider request has been sent.'});
+    return visibleConnection(row);
+   });
    const warnings=results.map((r,i)=>r.status==='rejected'?['Tracker capture information is unavailable.','Private activity could not be loaded.','Escalations could not be loaded.','Agent events could not be loaded.','Connection profiles could not be loaded.'][i]:null).filter(Boolean);
    return Response.json({inventory:buildAgentInventory({snapshot,events,now:now()}),entries:entries.slice(0,100).map(visibleEntry),escalations:escalations.slice(0,100).map(visibleEscalation),connections,has_more_entries:entries.length>100,checked_at:at,warnings,dispatch_enabled:false,event_interface:{supported_event_types:['started','progress','needs_owner_decision','completed','failed'],connection_states:['connected','manual','planned'],authentication:'A future signed integration bridge is required; this page stores no secrets.'}});
   }catch(error){return Response.json({error:error.message||'Agent Center could not finish this action.'},{status:400});}
