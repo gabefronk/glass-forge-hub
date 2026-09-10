@@ -9,7 +9,7 @@ const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(v
 const present = value => value !== undefined && value !== null && value !== '';
 const fail = (status, message) => { throw new HttpError(status, message); };
 const INCOMPLETE = ['preparing', 'pending'];
-const ONLINE_CODES = new Set(['unsupported_product', 'unverified_product', 'unsupported_option', 'unsupported_colors', 'unsupported_dimensions', 'unsupported_assembly']);
+const ONLINE_CODES = new Set(['unsupported_product', 'unverified_product', 'unsupported_option', 'unsupported_colors', 'unsupported_dimensions', 'unsupported_assembly', 'unsupported_grilles']);
 
 // All work records are private. The public QuoteRequest only receives a bounded
 // progress projection; its complete reviewed schedule is never replaced by the
@@ -49,7 +49,23 @@ export function createConfigurationPackageCoordinator({ config, now = () => new 
     if (!enabled) return null;
     if (q?.pricing_progress?.package_id) {
       const work = await getPackage(db, q.pricing_progress.package_id);
-      if (work && work.owner_id === user?.id && user?.role === 'admin' && user.email === q.requester_email && await isCurrent(q, work)) return q;
+      if (work && work.owner_id === user?.id && user?.role === 'admin' && user.email === q.requester_email && await isCurrent(q, work)) {
+        if (q.worker_status === 'needs_details') fail(409, 'Revise the windows to resolve the reported product conflict, then review the new schedule before pricing');
+        if (['failed', 'needs_sign_in'].includes(q.worker_status)) {
+          if (work.lease_token && Date.parse(work.lease_until) > now().getTime()) fail(409, 'The prior pricing attempt is still finishing');
+          const patch = { worker_status: 'queued', missing_details: [], state_version: (q.state_version || 0) + 1,
+            pricing_progress: { ...q.pricing_progress, resume_count: (q.pricing_progress.resume_count || 0) + 1, updated_at: at() } };
+          const updated = await db.QuoteRequests.updateMany({ id: q.id, input_revision: q.input_revision, state_version: q.state_version || 0, worker_status: q.worker_status }, { $set: patch });
+          if (updated.updated !== 1) fail(409, 'The quote changed before its saved pricing attempt could resume');
+          q = { ...q, ...patch };
+        }
+        // Parent-first resume is recoverable after a lost acknowledgement. Keep
+        // every priced receipt and private child's native checkpoint in place.
+        if (q.worker_status === 'queued' && ['needs_attention', 'pending'].includes(work.status) && (q.pricing_progress.resume_count || 0) > (work.resume_count || 0)) {
+          await packages(db).updateMany({ id: work.id, state_version: work.state_version, status: work.status }, { $set: { status: 'pending', resume_count: q.pricing_progress.resume_count, updated_at: at() } });
+        }
+        return q;
+      }
       fail(409, 'The saved pricing package no longer matches this request');
     }
     const selected = await eligible(q, user); if (!selected) return null;
@@ -83,6 +99,10 @@ export function createConfigurationPackageCoordinator({ config, now = () => new 
     let q = await getQuote(db, work.quote_id);
     if (q?.worker_status === 'ready' && q.result?.verified === true && await isCurrent(q, work)) {
       await packages(db).updateMany({ id: work.id, state_version: work.state_version, status: work.status }, { $set: { status: 'ready', updated_at: at() } });
+      return q;
+    }
+    if (['failed', 'needs_sign_in', 'needs_details'].includes(q?.worker_status) && await isCurrent(q, work)) {
+      await packages(db).updateMany({ id: work.id, state_version: work.state_version, status: work.status }, { $set: { status: 'needs_attention', updated_at: at() } });
       return q;
     }
     if (!await isCurrent(q, work) || q.worker_status !== 'queued') {
@@ -146,7 +166,7 @@ export function createConfigurationPackageCoordinator({ config, now = () => new 
         if (typeof unit !== 'number' || !Number.isFinite(unit) || unit <= 0 || Math.abs(unit * 100 - Math.round(unit * 100)) > 0.000001) fail(502, 'A completed line has no valid verified unit price');
         return sum + Math.round(unit * 100) * work.snapshot.lines[item.index].qty;
       }, 0);
-      const progress = { version: 1, package_id: work.id, input_revision: q.input_revision, total_count: items.length, priced_count: priced.length,
+      const progress = { version: 1, package_id: work.id, input_revision: q.input_revision, resume_count: work.resume_count || 0, total_count: items.length, priced_count: priced.length,
         native_pending_count: items.filter(item => item.state === 'native_pending').length, online_pending_count: items.filter(item => item.state === 'online_pending').length,
         priced_subtotal: priced.length ? subtotalCents / 100 : null, total: null, currency: 'USD', updated_at: at(),
         lines: items.map(item => ({ index: item.index, status: item.state, ...(item.state === 'priced' ? { unit_price: item.verified.result.lines[0].unit_prices.customer, total: Math.round(item.verified.result.lines[0].unit_prices.customer * 100) * work.snapshot.lines[item.index].qty / 100 } : {}) })) };

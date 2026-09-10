@@ -7,13 +7,14 @@ const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(v
 const fail = (status, message) => { throw new HttpError(status, message); };
 const canonical = rows => [...rows].sort((a, b) => String(a.created_date || a.created_at || '').localeCompare(String(b.created_date || b.created_at || '')) || a.id.localeCompare(b.id))[0];
 
-export async function onlinePackageIsCurrent(db, child, hash = sha256) {
+export async function onlinePackageIsCurrent(db, child, hash = sha256, policy) {
   if (!id(child?.package_id) || !id(child.parent_quote_id)) return false;
   const [works, quotes] = await Promise.all([
     db.WindowQuoteConfigurationPackages.filter({ id: child.package_id }, undefined, 1),
     db.QuoteRequests.filter({ id: child.parent_quote_id }, undefined, 1)
   ]);
   const work = works[0], q = quotes[0];
+  if (policy !== undefined && stable(work?.policy) !== stable(policy)) return false;
   if (!work || !q || !['preparing', 'pending'].includes(work.status) || q.worker_status !== 'queued' || q.pricing_progress?.package_id !== work.id ||
       work.quote_id !== q.id || work.input_revision !== q.input_revision || work.owner_email !== q.requester_email ||
       child.package_input_hash !== work.input_hash || child.requester_email !== work.owner_email || child.input_revision !== 1) return false;
@@ -27,14 +28,14 @@ export async function onlinePackageIsCurrent(db, child, hash = sha256) {
 // The existing guarded online executor can work against this private collection
 // without adding its technical child requests to the customer's request list.
 // Its shared browser lock and operation/checkpoint fences remain unchanged.
-export function privateOnlineDatabase(db, { hash = sha256 } = {}) {
+export function privateOnlineDatabase(db, { hash = sha256, policy } = {}) {
   const rows = db.WindowQuoteOnlineRequests;
   const privateRows = new Proxy(rows, {
     get(target, name) {
       if (name === 'filter') return async (query, sort, limit) => {
         const found = await target.filter(query, sort, query?.worker_status === 'queued' ? Math.max(limit || 1, 50) : limit);
         if (query?.worker_status !== 'queued') return found;
-        const valid = await Promise.all(found.map(row => onlinePackageIsCurrent(db, row, hash)));
+        const valid = await Promise.all(found.map(row => onlinePackageIsCurrent(db, row, hash, policy)));
         return found.filter((_row, index) => valid[index]).slice(0, limit || found.length);
       };
       const value = Reflect.get(target, name); return typeof value === 'function' ? value.bind(target) : value;
@@ -43,7 +44,7 @@ export function privateOnlineDatabase(db, { hash = sha256 } = {}) {
   return new Proxy(db, { get(target, name) { return name === 'QuoteRequests' ? privateRows : Reflect.get(target, name); } });
 }
 
-export function createConfigurationOnlineService({ execution, verifyReady, now = () => new Date(), hash = sha256 } = {}) {
+export function createConfigurationOnlineService({ execution, verifyReady, now = () => new Date(), hash = sha256, policy } = {}) {
   const configured = execution?.configured === true && typeof verifyReady === 'function';
   const digest = value => hash(stable(value));
 
@@ -52,7 +53,7 @@ export function createConfigurationOnlineService({ execution, verifyReady, now =
     if (typeof allowDispatch !== 'boolean' || !id(work?.id) || !id(work.quote_id) || !Array.isArray(indices) || !indices.length || indices.length > 100 || indices.length !== lines?.length ||
         new Set(indices).size !== indices.length || stable(settings) !== stable(work.snapshot?.settings)) fail(400, 'Invalid unresolved window subset');
     for (const [position, index] of indices.entries()) if (!Number.isInteger(index) || index < 0 || !work.snapshot.lines[index] || stable(lines[position]) !== stable(work.snapshot.lines[index])) fail(400, 'The online subset differs from its reviewed package');
-    const rows = db.WindowQuoteOnlineRequests, privateDb = privateOnlineDatabase(db, { hash });
+    const rows = db.WindowQuoteOnlineRequests, privateDb = privateOnlineDatabase(db, { hash, policy });
     const children = [];
     for (const [position, index] of indices.entries()) {
       const selectionHash = await digest({ package_id: work.id, input_hash: work.input_hash, index, settings, line: lines[position] });
@@ -64,22 +65,30 @@ export function createConfigurationOnlineService({ execution, verifyReady, now =
           requester_email: work.owner_email, input_revision: 1, state_version: 0, worker_status: 'draft', sales_status: 'open', created_at: now().toISOString(),
           settings: clone(settings), lines: [clone(lines[position])], source: { reviewed_package: true, package_quote_id: work.quote_id, window_number: index + 1 },
           conversation: [], history: [], missing_details: [], checkpoint: {}, job_id: '', accepted_revision: 0 };
-        if (!await onlinePackageIsCurrent(db, candidate, hash)) fail(409, 'The parent package changed before online work was reserved');
+        if (!await onlinePackageIsCurrent(db, candidate, hash, policy)) fail(409, 'The parent package changed before online work was reserved');
         await rows.create(candidate);
         // Refetch after creation. A lost create reply is recovered on the next
         // call, and concurrent reservations must choose the same child record.
         matches = await rows.filter(query, 'created_date', 10);
       }
       const child = canonical(matches);
-      if (!child || child.selection_hash !== selectionHash || !await onlinePackageIsCurrent(db, child, hash)) fail(409, 'The saved online window differs from the current package');
+      if (!child || child.selection_hash !== selectionHash || !await onlinePackageIsCurrent(db, child, hash, policy)) fail(409, 'The saved online window differs from the current package');
       if (matches.some(other => other.id !== child.id && other.agent_run?.operation_id)) fail(409, 'Duplicate online operations require review before continuing');
       children.push(child);
     }
     // One request per online quote keeps each remaining product independently
     // recoverable. Only one new dispatch is attempted in this coordinator tick.
-    const next = children.find(child => child.worker_status === 'draft' || child.worker_status === 'queued' && !child.agent_run?.operation_id);
+    if (allowDispatch) for (const [position, child] of children.entries()) {
+      if (!['failed', 'needs_sign_in'].includes(child.worker_status) || (work.resume_count || 0) <= (child.resume_count || 0)) continue;
+      const patch = { worker_status: 'queued', resume_count: work.resume_count, state_version: (child.state_version || 0) + 1, missing_details: [] };
+      const changed = await rows.updateMany({ id: child.id, state_version: child.state_version || 0, worker_status: child.worker_status }, { $set: patch });
+      if (changed.updated !== 1) fail(409, 'The saved online attempt changed before resuming');
+      children[position] = { ...child, ...patch };
+    }
+    const next = children.find(child => child.worker_status === 'draft' || child.worker_status === 'queued' &&
+      (!child.agent_run?.operation_id || child.agent_run.phase === 'completed' && ['failed', 'needs_sign_in'].includes(child.agent_run.terminal_status)));
     if (next && allowDispatch) {
-      if (!await onlinePackageIsCurrent(db, next, hash)) fail(409, 'The parent package changed before online dispatch');
+      if (!await onlinePackageIsCurrent(db, next, hash, policy)) fail(409, 'The parent package changed before online dispatch');
       const updated = await execution.afterInput({ db: privateDb, q: next });
       children[children.findIndex(child => child.id === next.id)] = updated;
     }
@@ -105,7 +114,7 @@ export function createConfigurationOnlineService({ execution, verifyReady, now =
     const reporting = action === 'report' || action === 'tool' && body.action === 'report';
     const cleanup = reporting && ['failed', 'needs_details', 'needs_sign_in'].includes(body.status);
     const terminalReplay = reporting && child.agent_run?.phase === 'completed' && (child.agent_run.event_ids || []).includes(body.event_id);
-    if (!cleanup && !terminalReplay && !await onlinePackageIsCurrent(db, child, hash)) fail(409, 'The package changed. Stop native changes and report the saved attempt as failed.');
+    if (!cleanup && !terminalReplay && !await onlinePackageIsCurrent(db, child, hash, policy)) fail(409, 'The package changed. Stop native changes and report the saved attempt as failed.');
     if (body.settings && stable(body.settings) !== stable(child.settings) || body.lines && stable(body.lines) !== stable(child.lines)) fail(400, 'This reviewed window schedule is fixed; report native options in the result without rewriting the requested schedule');
     if (reporting && body.status === 'ready' && !terminalReplay) {
       const work = (await db.WindowQuoteConfigurationPackages.filter({ id: child.package_id }, undefined, 1))[0];
@@ -113,7 +122,7 @@ export function createConfigurationOnlineService({ execution, verifyReady, now =
       const verified = await verifyReady({ child: candidate, line: child.lines[0], settings: child.settings, work });
       if (verified?.ok !== true) fail(400, 'The observed AMSCO result must match this window’s size, quantity, finish and explicitly requested options');
     }
-    const result = await execution[action]({ db: privateOnlineDatabase(db, { hash }), body });
+    const result = await execution[action]({ db: privateOnlineDatabase(db, { hash, policy }), body });
     if (action === 'tool' && body.action === 'read') result.contract = { ...result.contract,
       request_scope: 'This is one already-reviewed window from a larger package. Quote only the supplied line. Other windows already have prices or separate work. Keep settings and lines unchanged; record observed native selections in result.lines[0].options. Use AMSCO standard construction where no option was requested. Do not ask the customer to reconfirm standard defaults.',
       result_requirements: 'Observed dimensions, quantity, exterior and interior finishes, glass and all explicitly requested options must match this exact line. Reopen the saved quote before reporting its prices. If a requested choice cannot be built, report the specific conflict without substituting a different window.' };

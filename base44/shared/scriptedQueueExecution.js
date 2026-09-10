@@ -1,4 +1,5 @@
 import { createNativeConfigurationQuoteService } from './nativeConfigurationQuote.js';
+import { createConfigurationPackageServices } from './configurationPackageServices.js';
 import { createNativePricePreviewService } from './nativePricePreview.js';
 import { HttpError, sha256, validateLines, validateSettings, sanitizePublic } from './windowQuotesCore.js';
 import { createScriptedExecution } from './scriptedExecution.js';
@@ -22,7 +23,7 @@ export function needsOnlineQuote(normalized, assessment) {
 
 // Queue intake selects a fresh immutable plan; all native operation mutations
 // continue through the already-tested exact-request executor and its global lock.
-export function createScriptedQueueExecution({ config = {}, normalizeRequest, normalizeIntake, validateReady, fallbackExecution = null, hash = sha256, now = () => new Date(), uuid } = {}) {
+export function createScriptedQueueExecution({ config = {}, normalizeRequest, normalizeIntake, validateReady, fallbackExecution = null, packageOnlineExecution = null, hash = sha256, now = () => new Date(), uuid } = {}) {
   const enabled = config.enabled === true, allow = config.queue_allow || {};
   if (config.native_engine?.enabled === true && !nativeEnginePolicyReady(config.native_engine)) fail(503, 'Invalid native desktop engine configuration');
   const at = () => now().toISOString();
@@ -30,7 +31,13 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
   if (enabled && (config.mode !== 'queue' || allow.requester_email !== 'gabefronk@gmail.com' || allow.dealer !== 'BFS' || !sameYard(allow.yard, 'BFS-UTAH DESIGN (11)') || !Number.isFinite(Date.parse(allow.created_after)) || typeof normalizeRequest !== 'function' || typeof validateReady !== 'function')) fail(503, 'Invalid new-request queue configuration');
   const previews = createNativePricePreviewService({ config, now, hash });
   const configurations = createNativeConfigurationQuoteService({ config, now, hash });
-  const previewAction = method => args => { requireEnabled(); workerScope(args.worker); return previews[method](args); };
+  const { coordinator: packages } = createConfigurationPackageServices({ config, onlineExecution: packageOnlineExecution, now, hash, uuid });
+  const previewAction = method => async args => {
+    requireEnabled(); workerScope(args.worker);
+    const output = await previews[method](args);
+    if (method === 'report') await packages.advance({ db: args.db });
+    return output;
+  };
   const scopeHash = () => digest({ version: 1, allow, worker_id: config.worker_id, browser_slot_id: config.browser_slot_id });
   const baseConfig = (q, expected) => ({ ...config, allow: { quote_id: q.id, request_id: q.request_id, input_revision: q.input_revision, requester_email: allow.requester_email, dealer: allow.dealer, yard: sameYard(q.settings?.yard, allow.yard) ? q.settings.yard : allow.yard }, expected_plan_hash: expected });
   // This neutral child is used only for its existing worker-key authentication.
@@ -123,7 +130,18 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
   }
   async function afterInput(args) {
     if (!enabled) return args.q;
-    let q = await get(args.db, args.q.id); scope(q);
+    let q = await get(args.db, args.q.id);
+    if (packages.enabled && q.source?.amsco_configurator?.version === 1) {
+      // Reviewed packages use the authenticated owner, independent of the older
+      // single-owner pilot. Neither AI intake nor a legacy plan may rewrite them.
+      if (!q.pricing_progress) {
+        const saved = await configurations.finalize({ ...args, q });
+        if (saved) return saved;
+      }
+      const selected = await packages.start({ ...args, q });
+      if (selected) return await packages.reconcile({ db: args.db, packageId: selected.pricing_progress?.package_id }) || selected;
+    }
+    scope(q);
     if (args.user?.role !== 'admin' || args.user.email !== allow.requester_email) fail(403, 'This administrator is not the configured requester');
     if (q.worker_status === 'ready' && q.result?.native_source === 'native_configurations') return q;
     if (args.action === 'retry_failed') {
@@ -235,6 +253,7 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     if (changed.updated !== 1) fail(401, 'Runner authentication changed');
     const response = (status, reason, quote = null) => ({ ok: true, status, ...(reason ? { reason } : {}), quote, retry_after_ms: 15000 });
     if (reported.runner_status !== 'idle') return response('blocked', reported.runner_status);
+    await packages.advance({ db });
     const currentSlot = await slot(db);
     if (currentSlot.busy_token) return response('blocked', 'browser_operation_requires_completion_or_review');
     if (reported.browser.state !== 'authenticated' && !nativeEnginePresenceReady(reported.native_engine, config.native_engine)) return response('needs_sign_in', reported.browser.state);
@@ -270,5 +289,4 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
   }
   return { configured: enabled, provider: 'deterministic', preview_claim: previewAction('claim'), preview_report: previewAction('report'), authenticate: auth.authenticate, afterInput, claim, poll, getStatus, heartbeat: forward('heartbeat'), checkpoint: forward('checkpoint'), report: forward('report') };
 }
-
 

@@ -115,7 +115,7 @@ function carriedRequirements(value = []) {
 }
 const isStandard = draft => draft.source?.easy_request?.confirmed === true && draft.source.easy_request.profile_id === STANDARD_STUDIO_PROFILE.id && draft.source.easy_request.profile_revision === STANDARD_STUDIO_PROFILE.revision;
 const unique = value => [...new Set((value || []).filter(item => typeof item === 'string' && item.trim()))];
-const ONLINE_REVIEW_CODES = new Set(['unsupported_product', 'unverified_product', 'unsupported_option', 'unsupported_colors', 'unsupported_dimensions', 'unsupported_assembly']);
+const ONLINE_REVIEW_CODES = new Set(['unsupported_product', 'unverified_product', 'unsupported_option', 'unsupported_colors', 'unsupported_dimensions', 'unsupported_assembly', 'unsupported_grilles']);
 const onlineOnlyIssues = checked => checked?.ok === false && Array.isArray(checked.issues) && checked.issues.length > 0 && checked.issues.every(item => item && ONLINE_REVIEW_CODES.has(item.code));
 function fillManualPreferences(draft) {
   const quote = clone(draft), assumptions = [];
@@ -428,4 +428,3 @@ export function createBuilderAwareIntake(normalizeAI) {
     }
   };
 }
-

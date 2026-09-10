@@ -67,6 +67,10 @@
     "result": {
       "type": "object"
     },
+    "pricing_progress": {
+      "type": "object",
+      "description": "Server-generated per-window progress for this reviewed package; subtotal is incomplete until every window is verified."
+    },
     "checkpoint": {
       "type": "object"
     },
