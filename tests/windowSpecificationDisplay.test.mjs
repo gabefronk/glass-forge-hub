@@ -43,3 +43,11 @@ test("existing source price responses still expose their applied defaults during
  assert.match(glassSpecification(line,settings,price),/Non-tempered glass.*3\/4″/);
  assert.equal(resolvedWindowOptions(line,settings,price).glass_thickness,undefined);
 });
+
+test("different lites display their full constructions without exposing raw metadata",()=>{
+ const price={status:"priced",resolved_options:{glass_thickness:"Differ",glass_panes:[{name:"Upper glass",glass_thickness:"SS over SS"},{name:"Lower glass",glass_thickness:"DS over DS"}]}};
+ const label=automaticOptionLabel("glass_thickness",line,settings,price);
+ assert.match(label,/Upper glass: Single-strength.*Lower glass: Double-strength/);
+ assert.match(glassSpecification(line,settings,price),/Upper glass: Single-strength.*Lower glass: Double-strength/);
+ assert.equal(specificationValue("glass_thickness","SS over DS"),"Single-strength over Double-strength");
+});
