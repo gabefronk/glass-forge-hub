@@ -2,8 +2,11 @@ import { CONFIGURATION_QUOTE_SOURCE, configurationInputSnapshot, configurationQu
 import { DESKTOP_NATIVE_SOURCE, desktopNativeIdentityIssues, desktopPersistenceIssues } from './nativeEngineObservation.js';
 import { advanceReviewedRestart } from './reviewedRestart.js';
 
+import { calculateInstall, validateInstallBudget, quoteInstallSummary } from './installBudget.js';
+const installInput = value => { try { return validateInstallBudget(value); } catch (error) { throw new HttpError(400, error.message); } };
+
 const LEASE_MS = 10 * 60 * 1000;
-const USER_ACTIONS = new Set(["list", "detail", "create", "message", "update", "queue", "retry_failed", "convert_won", "delete"]);
+const USER_ACTIONS = new Set(["list", "detail", "create", "message", "update", "queue", "retry_failed", "convert_won", "delete", "update_install", "install_list", "install_detail", "install_save"]);
 const WORKER_ACTIONS = new Set(["worker_poll", "worker_update", "worker_heartbeat"]);
 const TERMINAL = new Set(["needs_details", "needs_sign_in", "failed", "ready"]);
 const PRODUCT_SETTINGS = new Set(["color", "glass", "series", "altitude", "screen", "spacer", "tempered", "options", "finish", "grid", "hardware"]);
@@ -151,6 +154,7 @@ export function publicQuote(quote) {
   }
   const previous = (quote.history || []).filter(item => item.reason === 'reviewed_failed_restart').map(item => ({ revision: item.revision, native_quote_number: item.checkpoint?.native_quote_number || null, reviewed_at: item.recorded_at }));
   if (previous.length) safe.previous_attempts = previous;
+  safe.install_summary = quoteInstallSummary(quote);
   return sanitizePublic(safe);
 }
 function workerMessage(m, quoteId) {
@@ -281,7 +285,47 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (own(body, "input_revision") && body.input_revision !== q.lease_revision) fail(409, "Input revision changed; stop this run");
       };
       let output;
-      if (action === "list") {
+      if (action === "install_list") {
+        const budgets = await db.InstallBudgets.filter({}, "-updated_date", 200);
+        output = { budgets };
+      } else if (action === "install_detail") {
+        const rows = await db.InstallBudgets.filter({ id: textValue(body.budget_id, "budget_id", 150, true) }, undefined, 1);
+        if (!rows.length) fail(404, "Install budget not found");
+        output = { budget: rows[0] };
+      } else if (action === "install_save") {
+        const config = installInput(body.install_budget);
+        const lines = validateLines(body.lines);
+        const summary = calculateInstall(lines, config);
+        if (config.enabled && !summary.complete) fail(400, summary.issues.join(" "));
+        const title = textValue(body.title, "title", 200, true);
+        const requestId = textValue(body.request_id, "request_id", 150, true);
+        const requester = textValue(user.email || user.id, "requester", 320, true);
+        const payload = { title, lines, install_budget: config, summary };
+        let budget;
+        if (body.budget_id) {
+          const rows = await db.InstallBudgets.filter({ id: textValue(body.budget_id, "budget_id", 150, true) }, undefined, 1);
+          if (!rows.length) fail(404, "Install budget not found");
+          budget = rows[0];
+          if (body.expected_version !== (budget.version || 0)) fail(409, "This budget changed. Reopen it before saving.");
+          const result = await db.InstallBudgets.updateMany({ id: budget.id, version: budget.version || 0 }, { $set: { ...payload, version: (budget.version || 0) + 1 } });
+          if (result.updated !== 1) fail(409, "This budget changed. Reopen it before saving.");
+          budget = { ...budget, ...payload, version: (budget.version || 0) + 1 };
+        } else {
+          const existing = await db.InstallBudgets.filter({ request_id: requestId, requester_email: requester }, "created_date", 1);
+          budget = existing[0] || await db.InstallBudgets.create({ ...payload, request_id: requestId, requester_email: requester, version: 0 });
+        }
+        output = { budget };
+      } else if (action === "update_install") {
+        let q = await getQuote(body.quote_id);
+        if (q.sales_status === "won" || q.accepted_revision || q.job_id) fail(409, "The accepted installation budget is locked. Create a revised quote.");
+        if (q.conversion_token && q.conversion_expires_at > at()) fail(409, "This quote is being accepted. Retry after it finishes.");
+        if (body.expected_install_revision !== (q.install_revision || 0)) fail(409, "Installation was changed by another user. Reopen this quote before saving.");
+        const config = installInput(body.install_budget);
+        const summary = quoteInstallSummary({ ...q, install_budget: config });
+        if (config.enabled && !summary.complete) fail(400, summary.issues.join(" "));
+        q = await cas(q, { install_budget: config, install_revision: (q.install_revision || 0) + 1 });
+        output = { quote: publicQuote(q) };
+      } else if (action === "list") {
         const quotes = await db.QuoteRequests.list("-updated_date", 200);
         let workerInfo;
         if (executionService) workerInfo = typeof executionService.getStatus === "function"
@@ -314,6 +358,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
             request_id: requestId, title: textValue(body.title, "title", 200) || "Window quote",
             requester_email: requester, settings, lines, source: body.source ? jsonValue(object(body.source, "source"), "source", 150000) : {},
             input_revision: 1, state_version: 0, worker_status: "draft", sales_status: "open",
+            ...(own(body, "install_budget") ? { install_budget: installInput(body.install_budget), install_revision: 1 } : {}),
             missing_details: [], history: [], conversation: initial ? [initial] : [],
             job_id: "", accepted_revision: 0, lease_token: "", conversion_token: ""
           });
@@ -475,7 +520,9 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
             if (q.worker_status !== "ready") fail(409, "Complete and verify the AMSCO quote before marking it won");
             validateResult(q.result, { allowConfigurationSet: true, quote: q, inputHash: await sha256(stable(configurationInputSnapshot(q))) });
           }
-          const snapshot = hasAccepted ? q.accepted_snapshot : { quote_id: q.id, title: q.title, revision: q.input_revision, accepted_at: at(), settings: copy(q.settings), lines: copy(q.lines), result: copy(q.result), source: copy(q.source) };
+          const installSummary = quoteInstallSummary(q);
+          if (!hasAccepted && installSummary.enabled && !installSummary.complete) fail(409, "Complete the installation details before accepting this quote.");
+          const snapshot = hasAccepted ? q.accepted_snapshot : { ...(q.install_budget ? { install_budget: copy(q.install_budget), install_summary: copy(installSummary) } : {}), quote_id: q.id, title: q.title, revision: q.input_revision, accepted_at: at(), settings: copy(q.settings), lines: copy(q.lines), result: copy(q.result), source: copy(q.source) };
           const token = uuid();
           q = await cas(q, { conversion_token: token, conversion_expires_at: expiry(), accepted_revision: q.accepted_revision || q.input_revision, accepted_snapshot: snapshot, accepted_at: q.accepted_at || at() });
           // Reconcile again while owning the conversion lease. A retry after an uncertain create reuses this job.
