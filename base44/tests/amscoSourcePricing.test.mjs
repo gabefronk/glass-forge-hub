@@ -85,3 +85,22 @@ test('reviewed source package finalizes immediately and validates without invent
  const bad=structuredClone(saved.result);bad.lines[0].unit_prices.customer++;
  assert.ok(configurationQuoteResultIssues(bad,{quote:saved,inputHash}).length);
 });
+
+test('3070 and 4070 Studio nail-fin previews calculate directly without any runner or cached quote',async()=>{
+ for(const [width,list,dealer,customer] of [[36,431.9,196.77,281.1],[48,492.1,224.2,320.29]]) {
+  const singleHung={id:'hung-'+width,style:'Studio Single Hung',qty:1,width,height:84,units:'in',dimension_basis:'call',options:{argon:false,elevation:'2501 to 6500',fin:'Nail Fin'}};
+  const original=structuredClone(singleHung);
+  const result=await builderPricePreview({settings,lines:[singleHung],source:{amsco_configurator:{version:1}}},noDb,{config,user,now:now().getTime()});
+  assert.equal(result.ready,true);assert.equal(result.pending,false);
+  assert.equal(result.lines[0].price_source,'amsco_source_engine');
+  assert.deepEqual(result.lines[0].unit_prices,{list,dealer,customer});
+  const receipt=sourcePriceReceipt({line:singleHung,settings,checkedAt:now().toISOString()});
+  assert.deepEqual(sourcePriceEvidenceIssues({...receipt.source_evidence,source:receipt.source},receipt.result.lines[0],singleHung,settings),[]);
+  assert.deepEqual(singleHung,original);
+ }
+});
+test('accepting standard nail fin does not bypass size limits or conflicting series',()=>{
+ const hung={...line,style:'Studio Single Hung',dimension_basis:'call',width:36,height:84,options:{fin:'Nail Fin'}};
+ for(const patch of [{width:49},{height:97},{options:{series:'Studio Flush Fin',fin:'Nail Fin'}},{options:{fin:'Custom Fin'}}])
+  assert.equal(sourcePricePreview({line:{...hung,...patch},settings}),null,JSON.stringify(patch));
+});

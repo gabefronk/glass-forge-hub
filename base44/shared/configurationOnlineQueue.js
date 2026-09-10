@@ -20,7 +20,8 @@ export async function onlinePackageIsCurrent(db, child, hash = sha256, policy) {
       child.package_input_hash !== work.input_hash || child.requester_email !== work.owner_email || child.input_revision !== 1) return false;
   if (await hash(stable({ input: configurationInputSnapshot(q), source: q.source })) !== work.input_hash) return false;
   const index = child.source_index;
-  if (!Number.isInteger(index) || index < 0 || index >= q.lines.length || child.lines?.length !== 1 ||
+  if (!Number.isInteger(index) || index < 0 || index >= q.lines.length ||
+      (Array.isArray(work.items) && work.items[index]?.state === 'priced') || child.lines?.length !== 1 ||
       stable(child.lines[0]) !== stable(q.lines[index]) || stable(child.settings) !== stable(q.settings)) return false;
   return await hash(stable({ package_id: work.id, input_hash: work.input_hash, index, settings: q.settings, line: q.lines[index] })) === child.selection_hash;
 }

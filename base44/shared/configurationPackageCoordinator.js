@@ -2,6 +2,7 @@ import { HttpError, sha256 } from './windowQuotesCore.js';
 import { validateBuilderDraft, builderScheduleHash, BUILDER_VERSION } from './windowQuoteBuilder.js';
 import { createNativePricePreviewService, planNativePricePreview, previewPolicyKey } from './nativePricePreview.js';
 import { configurationInputSnapshot } from './nativeConfigurationResult.js';
+import { sourcePricingEnabled, sourcePriceReceipt } from './amscoSourcePricing.js';
 
 const clone = value => structuredClone(value);
 const stable = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
@@ -127,8 +128,15 @@ export function createConfigurationPackageCoordinator({ config, now = () => new 
       // already priced stays fixed in this private package, with its provenance.
       let requested = 0;
       for (const item of items) {
-        if (item.state !== 'native_pending') continue;
+        if (item.state === 'priced') continue;
         const line = work.snapshot.lines[item.index];
+        // A rule/mapping fix can qualify a window previously sent online.
+        // Recompute its exact frozen selection before retaining that fallback.
+        if (item.state === 'online_pending') {
+          const verified = sourcePricingEnabled(config) ? sourcePriceReceipt({ line, settings: work.snapshot.settings, checkedAt: at() }) : null;
+          if (verified) { item.state = 'priced'; item.source = verified.source; item.verified = verified; }
+          continue;
+        }
         const verified = await previews.resolveVerified({ db, user, line, settings: work.snapshot.settings });
         if (verified) { item.state = 'priced'; item.source = verified.source || 'desktop_native'; item.verified = verified; continue; }
         if (requested >= 3) continue;

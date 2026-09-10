@@ -94,3 +94,13 @@ test('online reservations do not take the shared browser while native prices are
   assert.equal(h.db.WindowQuoteOnlineRequests.data.length, 1); assert.equal(h.sends.length, 0); assert.equal(h.db.QuoteWorkers.data[0].busy_token, '');
   await h.progress([1]); assert.equal(h.sends.length, 1);
 });
+
+test('a source-priced item cannot continue an older online child while other items remain pending',async()=>{
+ const h=await harness();await h.progress([1]);
+ const child=h.db.WindowQuoteOnlineRequests.data[0];
+ h.db.WindowQuoteConfigurationPackages.data[0].items=[{state:'priced'},{state:'priced'},{state:'online_pending'}];
+ await assert.rejects(h.service.route({db:h.db,body:h.body(child,{action:'read'})},'tool'),error=>error.status===409);
+ const cleanup=h.body(child,{action:'report',status:'failed',event_id:'source-recovered-cleanup',message:'This selection was calculated from source rules.'});
+ assert.equal((await h.service.route({db:h.db,body:cleanup},'tool')).status,'failed');
+ assert.equal(h.db.QuoteWorkers.data[0].busy_token,'');
+});

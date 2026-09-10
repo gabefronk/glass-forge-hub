@@ -174,3 +174,44 @@ test('source-calculated lines complete beside online-only lines without a native
  const inputHash=await sha256(stable(configurationInputSnapshot(q)));
  assert.doesNotThrow(()=>validateResult(q.result,{allowConfigurationSet:true,quote:q,inputHash}));
 });
+
+test('HTTP submit immediately completes 3070 nail-fin pricing without desktop or online work',async()=>{
+ const h=await harness({sourcePricing:true});
+ const draft={settings:{dealer:'BFS',yard:'BFS-UTAH DESIGN(11)',gross_margin:30,color:'White',glass:'CozE (Low-E)'},
+  lines:[{id:'hung-3070',style:'Studio Single Hung',qty:1,width:36,height:84,units:'in',dimension_basis:'call',options:{fin:'Nail Fin',argon:false,elevation:'2501 to 6500'}}],
+  source:{amsco_configurator:{version:1}}};
+ const reviewed=await builderReviewResponse(normalizeManualBuilderDraft(draft),{allowOnline:true});
+ assert.equal(reviewed.review.ready,true);
+ const response=await h.call({action:'create',request_id:'fin-3070-submit',title:'Nail fin regression',...reviewed.draft,
+  source:{...reviewed.draft.source,visual_builder:{version:1,confirmed:true,schedule_hash:reviewed.review.schedule_hash}}});
+ assert.equal(response.status,200,JSON.stringify(response));
+ const q=h.db.QuoteRequests.data[0];assert.equal(q.worker_status,'ready');
+ assert.equal(q.result.totals.customer_total,281.1);assert.equal(q.result.lines[0].pricing_evidence.source,'amsco_source_engine');
+ assert.equal(h.sends.length,0);assert.equal(h.db.WindowQuoteOnlineRequests.data.length,0);
+ assert.equal(h.db.WindowQuotePricePreviews.data.length,1);
+});
+test('a saved online-pending nail-fin item recovers from source rules and preserves its priced neighbor',async()=>{
+ const h=await harness({sourcePricing:false});
+ const draft={settings:{dealer:'BFS',yard:'BFS-UTAH DESIGN(11)',gross_margin:30,color:'White',glass:'CozE (LowE)'},
+  lines:[{id:'hampton',style:'Hampton Casement',qty:1,width:24,height:48,units:'in',dimension_basis:'frame',options:{series:'Hampton'}},
+   {id:'hung-4070',style:'Studio Single Hung',qty:1,width:48,height:84,units:'in',dimension_basis:'call',options:{fin:'Nail Fin',argon:false,elevation:'2501 to 6500'}}],
+  source:{amsco_configurator:{version:1}}};
+ const reviewed=await builderReviewResponse(normalizeManualBuilderDraft(draft),{allowOnline:true});
+ const response=await h.call({action:'create',request_id:'fin-pending-submit',title:'Pending fin regression',...reviewed.draft,
+  source:{...reviewed.draft.source,visual_builder:{version:1,confirmed:true,schedule_hash:reviewed.review.schedule_hash}}});
+ assert.equal(response.status,200,JSON.stringify(response));
+ const q=h.db.QuoteRequests.data[0],work=h.db.WindowQuoteConfigurationPackages.data[0];
+ assert.equal(q.worker_status,'queued');assert.equal(work.items[0].state,'priced');
+ const retained=clone(work.items[0]);
+ // Reproduce a package stored by the former fin-rejecting router.
+ work.items[1].state='online_pending';
+ h.config.native_engine.source_pricing=true;
+ const recovered=await h.call({action:'queue',quote_id:q.id});
+ assert.equal(recovered.status,200,JSON.stringify(recovered));
+ assert.equal(q.worker_status,'ready');assert.equal(q.result.totals.customer_total,792.42);
+ assert.deepEqual(work.items[0],retained);
+ assert.equal(work.items[1].source,'amsco_source_engine');assert.deepEqual(q.lines,draft.lines);
+ assert.equal(h.sends.length,0);assert.equal(h.db.WindowQuoteOnlineRequests.data.length,0);
+ const hash=await sha256(stable(configurationInputSnapshot(q)));
+ assert.doesNotThrow(()=>validateResult(q.result,{allowConfigurationSet:true,quote:q,inputHash:hash}));
+});

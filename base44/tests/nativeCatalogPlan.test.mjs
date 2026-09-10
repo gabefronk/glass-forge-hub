@@ -64,3 +64,24 @@ test('series named in the product description cannot silently change installatio
   assert.equal(buildNativeCatalogPlan(quote({style:'Hampton Double Casement'})).ok,false);
   assert.equal(buildNativeCatalogPlan(quote({}, {yard:'PLEASE SELECT YARD'})).ok,false);
 });
+
+test('standard Studio nail-fin aliases preserve catalog selection and call-to-frame conversion', () => {
+  for (const fin of ['Nail Fin', 'nailing fin', 'standard nail fin', 'regular nail fin', '1 3/8 inch Fin Setback']) {
+    const input=quote({style:'Studio Single Hung',width:36,height:84,dimension_basis:'call',options:{fin}});
+    const before=structuredClone(input), result=buildNativeCatalogPlan(input);
+    assert.equal(result.ok,true,JSON.stringify(result.issues));
+    assert.equal(result.plan.lines[0].native_windowset_id,264);
+    assert.deepEqual(result.plan.lines[0].frame_dimensions,{width:35.5,height:83.5,units:'in'});
+    assert.equal(result.plan.lines[0].options.fin,undefined);
+    assert.equal(assertNativeCatalogPlan(result.plan).ok,true);
+    assert.deepEqual(input,before);
+  }
+});
+test('conflicting or unknown fin choices never silently become standard installation', () => {
+  for (const options of [{fin:'Custom Fin'}, {fin:'Flush Fin'}, {series:'Studio Flush Fin',fin:'Nail Fin'}]) {
+    assert.equal(buildNativeCatalogPlan(quote({style:'Studio Single Hung',options})).ok,false);
+  }
+  assert.equal(buildNativeCatalogPlan(quote({options:{series:'Hampton',fin:'Nail Fin'}})).ok,false);
+  assert.equal(buildNativeCatalogPlan(quote({style:'Studio Single Hung',options:{}},{fin:'Nail Fin'})).ok,true);
+  assert.equal(buildNativeCatalogPlan(quote({style:'Studio Single Hung',options:{}},{fin:'Custom Fin'})).ok,false);
+});
