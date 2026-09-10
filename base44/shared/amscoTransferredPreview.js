@@ -38,7 +38,7 @@ export function transferredPreviewComparison({ line, settings, observed }) {
   const calculated=calculateTransferredWindow({catalog_id:'361',price_book:1,configuration:{
     series:studio ? o.series.replace('Studio 1 3/8 inch Fin Setback','Studio').replace('Studio Stucco Key Windows','Studio SK') : o.series,
     product_type:product,unit_type:'Complete Unit',shape:'Rectangle',operation,tilted:false,width:p.frame_dimensions.width,height:p.frame_dimensions.height,dimension_basis:'frame',
-    exterior_color:o.exterior_color,interior_color:o.interior_color,glass:o.glass,tempered:o.tempered ?? false,preserve,grille_application_id:grille,quantity:p.qty
+    exterior_color:o.exterior_color,interior_color:o.interior_color,glass:o.glass==='CozE (Low-E)'?'CozE (LowE)':o.glass,tempered:o.tempered ?? false,preserve,grille_application_id:grille,quantity:p.qty
   }});
   if (calculated.status!=='calculated') return unavailable(calculated.code);
   const actual=observed?.unit_prices?.list;

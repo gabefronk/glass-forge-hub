@@ -10,6 +10,7 @@ test('the builder comparison matches Hampton pricing without changing the verifi
   const comparison=transferredPreviewComparison({line,settings,observed});
   assert.equal(comparison.status,'matches_verified_price');assert.equal(comparison.calculated_list,725.4);
   assert.equal(comparison.production_ready,false);assert.deepEqual(observed,original);
+  assert.equal(transferredPreviewComparison({line,settings:{...settings,glass:'CozE (Low-E)'},observed}).status,'matches_verified_price');
 });
 test('an unavailable or differing native price is not silently accepted',()=>{
   assert.equal(transferredPreviewComparison({line,settings,observed:{status:'calculating'}}).status,'awaiting_verified_price');
