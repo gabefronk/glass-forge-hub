@@ -1,4 +1,4 @@
-import { parseTracker, normalize } from '../functions/salesTrackerImport/parser.js';
+import { parseTracker, normalize } from './salesTrackerParser.js';
 import { TRACKER_HEADERS, planTrackerAppend, trackerViewSignature } from './salesTrackerAppend.js';
 import { readTrackerView, trackerSha } from './salesTrackerView.js';
 
