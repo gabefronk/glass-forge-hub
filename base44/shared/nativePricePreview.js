@@ -26,8 +26,7 @@ export const assertNativePricePreviewPlan=plan=>plan?.support_id===CATALOG_SUPPO
 export async function verifyNativePricePreview(plan,observed,context) {
  if(plan.support_id!==CATALOG_SUPPORT_ID)return verifyDesktopNativeQuote(plan,observed,context);
  const proof=await validateNativeEngineProof(plan,observed,context);if(!proof.ok)return proof;
- const identity=desktopNativeIdentityIssues(observed);if(identity.length)return {ok:false,issues:identity};
- const checked=verifyCatalogObservedQuote(plan,observed);if(!checked.ok)return checked;
+ const checked=verifyCatalogObservedQuote(plan,observed,{validateIdentity:desktopNativeIdentityIssues});if(!checked.ok)return checked;
  return {ok:true,result:{...checked.result,native_source:'desktop_native',native_engine:clone(observed.native_engine),verification:{...checked.result.verification,source:'desktop_native',dimension_source:'saved_native_frame',persistence:'navigator_local'}}};
 }
 
