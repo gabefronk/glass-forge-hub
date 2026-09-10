@@ -272,7 +272,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
     if (!item.line) return { ...base, status: item.status, questions: item.questions };
     const key = stable({ dealer: item.settings.dealer, yard: item.settings.yard, line: priceSignature(item.line) });
     const hit = cache.get(key);
-    if (!hit) return { ...base, status: 'amsco_lookup_needed' };
+    if (!hit) return { ...base, status: 'native_calculation_needed' };
     const customer = roundMoney(hit.dealer / (1 - item.settings.gross_margin / 100)), qty = item.line.qty;
     return { ...base, status: 'priced', price_source: 'verified_configuration',
       unit_prices: { ...(hit.list !== undefined ? { list: hit.list } : {}), dealer: hit.dealer, customer },
@@ -283,6 +283,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
   const subtotal = priced.length ? roundMoney(priced.reduce((sum, line) => sum + line.line_totals.customer, 0)) : null;
   return { ready, lines, total: ready ? subtotal : null, priced_subtotal: subtotal, currency: 'USD',
     missing_count: lines.filter(line => line.status === 'amsco_lookup_needed').length,
+    calculation_count: lines.filter(line => line.status === 'native_calculation_needed').length,
     needs_details_count: lines.filter(line => line.status === 'needs_details').length,
     questions: unique(lines.flatMap(line => line.questions || [])) };
 }
