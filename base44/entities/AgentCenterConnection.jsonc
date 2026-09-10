@@ -1,0 +1,67 @@
+{
+  "name": "AgentCenterConnection",
+  "type": "object",
+  "properties": {
+    "provider_id": {
+      "type": "string"
+    },
+    "provider_name": {
+      "type": "string"
+    },
+    "connection_state": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "configured",
+        "verified",
+        "error",
+        "disconnected"
+      ]
+    },
+    "scope_summary": {
+      "type": "string"
+    },
+    "last_verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verification_message": {
+      "type": "string"
+    },
+    "auth_method": {
+      "type": "string",
+      "enum": [
+        "api_key",
+        "oauth",
+        "webhook",
+        "local_bridge"
+      ]
+    },
+    "secret_reference": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "provider_id",
+    "provider_name",
+    "connection_state",
+    "scope_summary",
+    "auth_method",
+    "created_at",
+    "updated_at"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
