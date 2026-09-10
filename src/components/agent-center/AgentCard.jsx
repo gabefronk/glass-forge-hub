@@ -1,13 +1,11 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, ChevronDown, ArrowRight } from "lucide-react";
+import { ArrowUpRight, ArrowRight } from "lucide-react";
 import Portrait from "./Portrait";
 import { Pill } from "./shared";
-import { ROLE_DETAILS } from "@/lib/agentCenterRoles";
+import RoleDetails from "./RoleDetails";
+import DailyPlan from "./DailyPlan";
 
 export default function AgentCard({ node, crossLink, nodes }) {
-  const [open, setOpen] = useState(false);
-  const details = ROLE_DETAILS[node.id];
   const target = crossLink ? nodes.find(n => n.id === crossLink.to) : null;
   return (
     <article className="rounded-2xl border border-[#DDE3EC] bg-white p-5 shadow-sm">
@@ -33,23 +31,8 @@ export default function AgentCard({ node, crossLink, nodes }) {
           <span><span className="font-semibold">→ {target.name}:</span> {crossLink.label}</span>
         </div>
       )}
-      {details && (
-        <div className="mt-3 border-t border-[#E9EDF4] pt-3">
-          <button onClick={() => setOpen(o => !o)} className="flex min-h-11 w-full items-center justify-between text-xs font-semibold text-[#2A5EA8]" aria-expanded={open}>
-            <span>Role details</span>
-            <ChevronDown className={"h-4 w-4 transition-transform " + (open ? "rotate-180" : "")} />
-          </button>
-          {open && (
-            <dl className="mt-2 space-y-2 text-xs leading-relaxed text-slate-700">
-              <div><dt className="font-semibold text-slate-900">What it does</dt><dd className="mt-0.5">{details.does}</dd></div>
-              <div><dt className="font-semibold text-slate-900">What it pulls</dt><dd className="mt-0.5">{details.pulls}</dd></div>
-              <div><dt className="font-semibold text-slate-900">What it sends / updates</dt><dd className="mt-0.5">{details.sends}</dd></div>
-              <div><dt className="font-semibold text-slate-900">Reports to</dt><dd className="mt-0.5">{details.reportsTo}</dd></div>
-              <div><dt className="font-semibold text-slate-900">Next handoff</dt><dd className="mt-0.5">{details.nextHandoff}</dd></div>
-            </dl>
-          )}
-        </div>
-      )}
+      <RoleDetails id={node.id} />
+      <DailyPlan id={node.id} />
       <div className="mt-4 flex items-center justify-between border-t pt-3 text-xs text-slate-500">
         <span>{node.status}</span>
         {node.url && <Link to={node.url} className="flex items-center gap-1 text-[#2A5EA8]">Open <ArrowUpRight className="h-3.5 w-3.5" /></Link>}
