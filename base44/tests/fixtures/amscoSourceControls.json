@@ -1,0 +1,176 @@
+{
+  "color_rules": [
+    {
+      "key": [
+        "Studio",
+        "Single Hung",
+        "Black",
+        "White"
+      ],
+      "factor": 1.94,
+      "rule_id": "16200"
+    },
+    {
+      "key": [
+        "Hampton",
+        "Casement",
+        "Black",
+        "White"
+      ],
+      "factor": 1.45,
+      "rule_id": "23299"
+    }
+  ],
+  "configs": [
+    {
+      "n": 1,
+      "series": "Studio",
+      "ptype": "Single Hung",
+      "code": "Studio Single Hung Base",
+      "w": 35.5,
+      "h": 59.5,
+      "ext": "White",
+      "inte": "White",
+      "preserve": "None",
+      "gai": 0,
+      "grid": "none",
+      "target_list": 371.6,
+      "target_dealer": 169.3
+    },
+    {
+      "n": 2,
+      "series": "Hampton",
+      "ptype": "Casement",
+      "code": "Hampton Casement Base",
+      "w": 35.5,
+      "h": 59.5,
+      "ext": "White",
+      "inte": "White",
+      "preserve": "Both",
+      "gai": 0,
+      "grid": "none",
+      "target_list": 931.4,
+      "target_dealer": 424.35
+    },
+    {
+      "n": 3,
+      "series": "Studio",
+      "ptype": "Single Hung",
+      "code": "Studio Single Hung Base",
+      "w": 35.5,
+      "h": 71.5,
+      "ext": "White",
+      "inte": "White",
+      "preserve": "None",
+      "gai": 0,
+      "grid": "none",
+      "target_list": 395.8,
+      "target_dealer": 180.33
+    },
+    {
+      "n": 4,
+      "series": "Hampton",
+      "ptype": "Casement",
+      "code": "Hampton Casement Base",
+      "w": 35.5,
+      "h": 71.5,
+      "ext": "White",
+      "inte": "White",
+      "preserve": "Both",
+      "gai": 0,
+      "grid": "none",
+      "target_list": 1002.9,
+      "target_dealer": 456.92
+    },
+    {
+      "n": 5,
+      "series": "Studio",
+      "ptype": "Single Hung",
+      "code": "Studio Single Hung Base",
+      "w": 35.5,
+      "h": 71.5,
+      "ext": "White",
+      "inte": "White",
+      "preserve": "None",
+      "gai": 1,
+      "grid": "3W3H 5/8 flat rect White",
+      "target_list": 455.2,
+      "target_dealer": 207.39
+    },
+    {
+      "n": 6,
+      "series": "Hampton",
+      "ptype": "Casement",
+      "code": "Hampton Casement Base",
+      "w": 35.5,
+      "h": 71.5,
+      "ext": "White",
+      "inte": "White",
+      "preserve": "Both",
+      "gai": 1,
+      "grid": "3W3H 5/8 flat rect White",
+      "target_list": 1062.3,
+      "target_dealer": 483.98
+    },
+    {
+      "n": 7,
+      "series": "Studio",
+      "ptype": "Single Hung",
+      "code": "Studio Single Hung Base",
+      "w": 35.5,
+      "h": 71.5,
+      "ext": "Black",
+      "inte": "White",
+      "preserve": "None",
+      "gai": 0,
+      "grid": "none",
+      "target_list": 767.9,
+      "target_dealer": 349.86
+    },
+    {
+      "n": 8,
+      "series": "Hampton",
+      "ptype": "Casement",
+      "code": "Hampton Casement Base",
+      "w": 35.5,
+      "h": 71.5,
+      "ext": "Black",
+      "inte": "White",
+      "preserve": "Both",
+      "gai": 0,
+      "grid": "none",
+      "target_list": 1424.3,
+      "target_dealer": 648.91
+    },
+    {
+      "n": 9,
+      "series": "Hampton",
+      "ptype": "Casement",
+      "code": "Hampton Casement Base",
+      "w": 23.5,
+      "h": 59.5,
+      "ext": "Black",
+      "inte": "White",
+      "preserve": "Both",
+      "gai": 0,
+      "grid": "none",
+      "target_list": 1183.6,
+      "target_dealer": null
+    },
+    {
+      "n": 10,
+      "series": "Studio",
+      "ptype": "Single Hung",
+      "code": "Studio Single Hung Base",
+      "w": 23.5,
+      "h": 59.5,
+      "ext": "White",
+      "inte": "White",
+      "preserve": "None",
+      "gai": 1,
+      "grid": "3W3H 5/8 flat rect White",
+      "target_list": 342.3,
+      "target_dealer": null
+    }
+  ]
+}
