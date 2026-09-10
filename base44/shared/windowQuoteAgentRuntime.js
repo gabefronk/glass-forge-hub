@@ -7,6 +7,5 @@ const apiKey = globalThis.Deno?.env?.get('WINDOW_QUOTES_SUPERAGENT_API_KEY');
 export const transport = apiKey ? createSuperagentTransport({ apiKey }) : null;
 const options = { transport, browserSlotId: '6a9dac833d04a18f0fd555f0', conversationId: '6a9db2ed143f8b28d5fbd6b3' };
 const legacy = createAgentExecution({ ...options, continuationEnabled: false });
-export const packageOnlineExecution = createAgentExecution({ ...options, continuationEnabled: true });
+export const packageOnlineExecution = createAgentExecution({ ...options, continuationEnabled: !!transport });
 export const execution = createConfigurationAgentRouter({ legacy, onlineExecution: packageOnlineExecution });
-

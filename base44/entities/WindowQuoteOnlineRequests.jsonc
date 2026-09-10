@@ -2,34 +2,138 @@
   "name": "WindowQuoteOnlineRequests",
   "type": "object",
   "properties": {
-    "version": { "type": "integer" },
-    "parent_quote_id": { "type": "string" },
-    "package_id": { "type": "string" },
-    "package_input_hash": { "type": "string" },
-    "source_index": { "type": "integer" },
-    "selection_hash": { "type": "string" },
-    "request_id": { "type": "string" },
-    "requester_email": { "type": "string" },
-    "title": { "type": "string" },
-    "input_revision": { "type": "integer" },
-    "state_version": { "type": "integer" },
-    "settings": { "type": "object" },
-    "source": { "type": "object" },
-    "lines": { "type": "array", "items": { "type": "object" } },
-    "worker_status": { "type": "string", "enum": ["draft", "queued", "running", "needs_details", "needs_sign_in", "failed", "ready"] },
-    "sales_status": { "type": "string", "enum": ["open", "won", "lost"] },
-    "execution_provider": { "type": "string" },
-    "agent_run": { "type": "object" },
-    "checkpoint": { "type": "object" },
-    "result": { "type": "object" },
-    "history": { "type": "array", "items": { "type": "object" } },
-    "conversation": { "type": "array", "items": { "type": "object" } },
-    "missing_details": { "type": "array", "items": { "type": "string" } },
-    "created_at": { "type": "string" },
-    "queued_at": { "type": "string" },
-    "job_id": { "type": "string" },
-    "accepted_revision": { "type": "integer" }
+    "version": {
+      "type": "integer"
+    },
+    "parent_quote_id": {
+      "type": "string"
+    },
+    "package_id": {
+      "type": "string"
+    },
+    "package_input_hash": {
+      "type": "string"
+    },
+    "source_index": {
+      "type": "integer"
+    },
+    "selection_hash": {
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "requester_email": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "input_revision": {
+      "type": "integer"
+    },
+    "state_version": {
+      "type": "integer"
+    },
+    "settings": {
+      "type": "object"
+    },
+    "source": {
+      "type": "object"
+    },
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "worker_status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "queued",
+        "running",
+        "needs_details",
+        "needs_sign_in",
+        "failed",
+        "ready"
+      ]
+    },
+    "sales_status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "won",
+        "lost"
+      ]
+    },
+    "execution_provider": {
+      "type": "string"
+    },
+    "agent_run": {
+      "type": "object"
+    },
+    "checkpoint": {
+      "type": "object"
+    },
+    "result": {
+      "type": "object"
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "conversation": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "missing_details": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "queued_at": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "accepted_revision": {
+      "type": "integer"
+    },
+    "resume_count": {
+      "type": "integer",
+      "default": 0
+    }
   },
-  "required": ["version", "parent_quote_id", "package_id", "package_input_hash", "source_index", "selection_hash", "request_id", "requester_email", "title", "input_revision", "state_version", "settings", "lines", "worker_status"],
-  "rls": { "create": false, "read": false, "update": false, "delete": false }
+  "required": [
+    "version",
+    "parent_quote_id",
+    "package_id",
+    "package_input_hash",
+    "source_index",
+    "selection_hash",
+    "request_id",
+    "requester_email",
+    "title",
+    "input_revision",
+    "state_version",
+    "settings",
+    "lines",
+    "worker_status"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
 }
