@@ -1,0 +1,57 @@
+{
+  "name": "AgentCenterEntry",
+  "type": "object",
+  "properties": {
+    "request_key": {
+      "type": "string"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "request",
+        "note",
+        "result"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor_email": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "saved_for_manual_review",
+        "private_note",
+        "owner_recorded_result"
+      ]
+    }
+  },
+  "required": [
+    "request_key",
+    "target_id",
+    "kind",
+    "title",
+    "body",
+    "recorded_at",
+    "actor_email",
+    "status"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
