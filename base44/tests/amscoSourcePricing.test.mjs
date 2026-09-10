@@ -105,13 +105,14 @@ test('accepting standard nail fin does not bypass size limits or conflicting ser
   assert.equal(sourcePricePreview({line:{...hung,...patch},settings}),null,JSON.stringify(patch));
 });
 
-test('source previews expose applied construction without guessing pane thickness or changing receipts',()=>{
+test('source previews resolve manufacturer pane construction without changing requests or receipts',()=>{
  const original=structuredClone(line),receipt=sourcePriceReceipt({line,settings,checkedAt:now().toISOString()});
  const preview=sourcePricePreview({line,settings});
  assert.equal(preview.resolved_options.tempered,false);
  assert.equal(preview.resolved_options.glass,'CozE (LowE)');
  assert.equal(preview.resolved_options.glazing_method,'3/4" Insulated');
- assert.equal(preview.resolved_options.glass_thickness,undefined);
+ assert.equal(preview.resolved_options.glass_thickness,"SS over SS");
+ assert.equal(preview.glass_construction.version,"pk361-minimum-glass-v1");
  assert.equal(preview.resolved_options.grilles,'None');
  assert.equal(preview.resolved_options.operation,'Left');
  assert.equal(preview.resolved_options.super_spacer,undefined);
