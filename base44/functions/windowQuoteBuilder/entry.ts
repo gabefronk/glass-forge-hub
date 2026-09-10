@@ -3,3 +3,4 @@ import { createWindowQuoteBuilderHandler } from '../../shared/windowQuoteBuilder
 import { conversationalIntake } from '../../shared/windowQuoteScriptedRuntime.js';
 // Builder intake v13: AMSCO configurator with verified warm engine contract ce17adad + private native price previews and verified configuration package completion.
 export default createWindowQuoteBuilderHandler({ getClient: createClientFromRequest, normalizeAI: conversationalIntake });
+// Package pricing release 2026-09-10: retained native prices, private online fallback, resumable progress.

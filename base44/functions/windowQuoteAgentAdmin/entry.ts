@@ -14,3 +14,4 @@ export default async function(req: Request) {
  } catch(e) {return new Response(JSON.stringify({error:"Agent connection diagnostic failed",code:e?.code||"INTERNAL",operation:e?.operation,status:e?.status,diagnostic:e?.diagnostic}),{status:503,headers});}
 }
 // Dispatch v6: guarded saved-checkpoint continuations, default off; explicit result dimensions.
+// Package pricing release 2026-09-10: retained native prices, private online fallback, resumable progress.

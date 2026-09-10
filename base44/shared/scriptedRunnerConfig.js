@@ -8,6 +8,7 @@ export const NATIVE_ENGINE_POLICY = Object.freeze({
   contract_hash: 'ce17adadd395221f42eb5bf38b1cc9a1cb1a7ded914cdbf98e5331d049118c28',
   price_previews: true,
   configuration_quotes: true,
+  configuration_packages: true,
   catalog_id: '361',
   context_fingerprint: '1edbe92e64fa350fd31edc93872355016a697d13320234ed7645ac529faa06de'
 });
