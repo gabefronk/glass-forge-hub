@@ -1,5 +1,5 @@
 export const agentMascots = {
-  manager_agent: { src: "/agent-mascots/manager-operations-portrait.jpg", alt: "Professional operations manager portrait" },
+  manager_agent: { src: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/7c9804d80_glass-forge-manager-portrait.jpg", alt: "Glass Forge manager portrait" },
   construction_plan_quoting: { src: "/agent-mascots/construction-plan-quoting-portrait.jpg", alt: "Professional construction plan quoting portrait" },
   calendar_coordinator: { src: "/agent-mascots/calendar-field-reports-portrait.jpg", alt: "Professional calendar and field reports portrait" },
   probuild_reporting: { src: "/agent-mascots/calendar-field-reports-portrait.jpg", alt: "Professional field reports portrait" },
