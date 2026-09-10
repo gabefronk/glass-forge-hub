@@ -156,3 +156,29 @@ export function assertNativeCatalogPlan(plan) {
   if (!rebuilt.ok||catalogStableJson(rebuilt.plan)!==catalogStableJson(plan)) return fail([{code:'invalid_plan',path:'plan',message:'The native plan does not match its immutable requested options.'}]);
   return rebuilt;
 }
+
+export async function catalogPlanHash(plan) {
+  const hash=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(catalogStableJson(plan)));
+  return [...new Uint8Array(hash)].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+}
+const xmlValue=value=>{
+  const string=String(value);
+  if(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/u.test(string))throw Error('Unsupported XML control character.');
+  return string.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&apos;').replaceAll('\r','&#13;').replaceAll('\n','&#10;').replaceAll('\t','&#9;');
+};
+export async function buildCatalogWindowPackage(plan,{planHash}={}) {
+  const checked=assertNativeCatalogPlan(plan);
+  if(!checked.ok||await catalogPlanHash(plan)!==planHash)throw Error('The native catalog plan and hash must match.');
+  const attrs=values=>Object.entries(values).map(([key,value])=>key+'="'+xmlValue(value)+'"').join(' ');
+  const root={version:'1',requestId:plan.quote_id,inputRevision:plan.input_revision,planHash,brandID:'1',pkVersion:'361',
+    grossMargin:plan.settings.gross_margin,pricingScope:plan.pricing_scope,title:plan.title};
+  const lines=plan.lines.map((line,index)=>{
+    const attributes={id:'line-'+(index+1),sourceIndex:index,line:(index+1)*100,family:line.product_profile_id,
+      windowsetID:line.native_windowset_id,buildMode:'frame',width:line.frame_dimensions.width,height:line.frame_dimensions.height,
+      quantity:line.qty,room:line.room,dimensionBasis:'frame',requestedBasis:line.dimension_basis,requestedWidth:line.width,requestedHeight:line.height};
+    return {attributes,options:clone(line.native_questions)};
+  });
+  const xml='<WindowPackage '+attrs(root)+'>\n'+lines.map(line=>'  <WindowRequest '+attrs(line.attributes)+'>\n'+
+    line.options.map(option=>'    <Option '+attrs(option)+' />').join('\n')+'\n  </WindowRequest>').join('\n')+'\n</WindowPackage>\n';
+  return {xml,request:{attributes:root,lines},account_expectations:clone(plan.settings)};
+}
