@@ -1,0 +1,59 @@
+{
+  "name": "InstallBudgets",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "requester_email": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "default": 0
+    },
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "install_budget": {
+      "type": "object"
+    },
+    "summary": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "title",
+    "request_id",
+    "requester_email",
+    "version"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
