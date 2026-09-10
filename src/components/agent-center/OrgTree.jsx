@@ -24,7 +24,7 @@ export default function OrgTree({ manager, nodes }) {
                     {member.children?.length > 0 && (
                       <div className="mt-3 ml-4 space-y-3 border-l-2 border-[#B8CBE8] pl-4 sm:ml-8">
                         {member.childLink && (
-                          <p className="flex items-center gap-1.5 text-xs font-medium text-[#24538E]"><span className="text-[#2A5EA8]">↓</span>{member.childLink}</p>
+                          <p className="text-xs font-medium text-[#24538E]">{member.childLink}</p>
                         )}
                         {member.children.map(child => {
                           const childNode = byId.get(child.id);

@@ -64,7 +64,7 @@ export const ORG_TREE = [
     id: "operations",
     label: "Operations",
     members: [
-      { id: "calendar_coordinator", childLink: "Photos, notes & field-report evidence", children: [{ id: "probuild_reporting" }] },
+      { id: "calendar_coordinator", childLink: "ProBuild reporting → Calendar coordinator: Photos, notes & field-report evidence", children: [{ id: "probuild_reporting" }] },
       { id: "sales_tracker_agent", crossLink: { to: "calendar_coordinator", label: "Customer · order · OE/PO · ETA verification" } },
     ],
   },
