@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { changeSeries, colorParts, changeColor, parseGrilles, serializeGrilles, stylesForSeries } from '../src/components/window-quotes/amscoConfiguratorModel.js';
+import { changeSeries, colorParts, changeColor, parseGrilles, serializeGrilles, stylesForSeries, selectedSeries } from '../src/components/window-quotes/amscoConfiguratorModel.js';
 import { createBuilderLine } from '../src/components/window-quotes/windowBuilderModel.js';
 import { normalizeManualBuilderDraft, builderReviewResponse, validateBuilderDraft } from '../base44/shared/windowQuoteBuilder.js';
 import { webcrypto } from 'node:crypto';
@@ -16,6 +16,23 @@ test('changing series retains sizes, identifiers, tempering and explicit grids',
   assert.ok(stylesForSeries('Hampton').some(item => item.value === 'Hampton Casement'));
   assert.ok(stylesForSeries('Hampton').every(item => !item.value.startsWith('Studio')));
   assert.equal(changeSeries({ ...changed, style: 'Hampton Casement' }, 'Studio Flush Fin').style, '');
+});
+test('catalog family choices preserve the requested series through online fallback', async () => {
+  assert.equal(stylesForSeries('Serenity').length, 6);
+  assert.equal(stylesForSeries('V2K BW').length, 4);
+  for (const [series, style] of [['Serenity', 'Serenity Single Hung'], ['V2K BW', 'V2K BW Single Vent'], ['Studio SK3', 'Studio XO Slider']]) {
+    const line = createBuilderLine(style, { width: 36, height: 48, dimension_basis: 'frame', options: { series, tempered: true } });
+    assert.equal(selectedSeries(line), series);
+    const draft = { settings: { dealer: 'BFS', yard: 'BFS-UTAH DESIGN(11)', gross_margin: 30, color: 'White', glass: 'CozE (LowE)' }, lines: [line] };
+    const result = await builderReviewResponse(normalizeManualBuilderDraft(validateBuilderDraft(draft)), { allowOnline: true });
+    assert.equal(result.review.ready, true, series + ': ' + JSON.stringify(result.review));
+    assert.equal(result.draft.lines[0].options.series, series);
+    assert.equal(result.draft.lines[0].style, style);
+    assert.equal(result.draft.lines[0].options.tempered, true);
+  }
+  assert.equal(selectedSeries({ style: 'Serenity Single Hung' }), 'Serenity');
+  assert.equal(selectedSeries({ style: 'V2K BW Single Vent' }), 'V2K BW');
+  assert.equal(changeSeries({ style: 'Studio Single Hung', options: {} }, 'Serenity').style, 'Serenity Single Hung');
 });
 test('explicit color changes preserve the other side and remove conflicting imported color fields', () => {
   const options = { color: 'White', exterior_color: 'Black', interior_color: 'White', tempered: true };
