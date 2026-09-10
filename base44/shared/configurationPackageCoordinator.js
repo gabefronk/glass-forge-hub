@@ -124,7 +124,8 @@ export function createConfigurationPackageCoordinator({ config, now = () => new 
         await guard();
         // This immutable subset is the only input the online service receives.
         // Its own reservation and idempotency handle uncertain dispatch replies.
-        onlineState = await online.progress({ db, work, indices: onlineIndices, settings: clone(work.snapshot.settings), lines: onlineIndices.map(index => clone(work.snapshot.lines[index])) });
+        onlineState = await online.progress({ db, work, indices: onlineIndices, settings: clone(work.snapshot.settings), lines: onlineIndices.map(index => clone(work.snapshot.lines[index])),
+          allowDispatch: !items.some(item => item.state === 'native_pending') });
         if (onlineState?.completed) {
           if (!Array.isArray(onlineState.completed) || new Set(onlineState.completed.map(item => item.index)).size !== onlineState.completed.length) fail(502, 'The online service returned duplicate completed windows');
           for (const item of onlineState.completed) {
@@ -137,7 +138,7 @@ export function createConfigurationPackageCoordinator({ config, now = () => new 
           for (const [position, index] of onlineIndices.entries()) { items[index].state = 'priced'; items[index].source = 'amsco_online'; items[index].verified = onlineState.verified[position]; }
         }
       }
-      else if (onlineIndices.length) onlineState = { status: 'failed', questions: ['The remaining windows need AMSCO online pricing, but that connection is unavailable. Your completed window prices are saved.'] };
+      else if (onlineIndices.length && !items.some(item => item.state === 'native_pending')) onlineState = { status: 'failed', questions: ['The remaining windows need AMSCO online pricing, but that connection is unavailable. Your completed window prices are saved.'] };
       await guard();
       const priced = items.filter(item => item.state === 'priced'), allReady = priced.length === items.length;
       const subtotalCents = priced.reduce((sum, item) => {

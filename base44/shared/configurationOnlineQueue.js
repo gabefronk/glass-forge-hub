@@ -47,9 +47,9 @@ export function createConfigurationOnlineService({ execution, verifyReady, now =
   const configured = execution?.configured === true && typeof verifyReady === 'function';
   const digest = value => hash(stable(value));
 
-  async function progress({ db, work, indices, settings, lines }) {
+  async function progress({ db, work, indices, settings, lines, allowDispatch = true }) {
     if (!configured) return { status: 'failed', questions: ['AMSCO online pricing is unavailable.'] };
-    if (!id(work?.id) || !id(work.quote_id) || !Array.isArray(indices) || !indices.length || indices.length > 100 || indices.length !== lines?.length ||
+    if (typeof allowDispatch !== 'boolean' || !id(work?.id) || !id(work.quote_id) || !Array.isArray(indices) || !indices.length || indices.length > 100 || indices.length !== lines?.length ||
         new Set(indices).size !== indices.length || stable(settings) !== stable(work.snapshot?.settings)) fail(400, 'Invalid unresolved window subset');
     for (const [position, index] of indices.entries()) if (!Number.isInteger(index) || index < 0 || !work.snapshot.lines[index] || stable(lines[position]) !== stable(work.snapshot.lines[index])) fail(400, 'The online subset differs from its reviewed package');
     const rows = db.WindowQuoteOnlineRequests, privateDb = privateOnlineDatabase(db, { hash });
@@ -78,7 +78,7 @@ export function createConfigurationOnlineService({ execution, verifyReady, now =
     // One request per online quote keeps each remaining product independently
     // recoverable. Only one new dispatch is attempted in this coordinator tick.
     const next = children.find(child => child.worker_status === 'draft' || child.worker_status === 'queued' && !child.agent_run?.operation_id);
-    if (next) {
+    if (next && allowDispatch) {
       if (!await onlinePackageIsCurrent(db, next, hash)) fail(409, 'The parent package changed before online dispatch');
       const updated = await execution.afterInput({ db: privateDb, q: next });
       children[children.findIndex(child => child.id === next.id)] = updated;

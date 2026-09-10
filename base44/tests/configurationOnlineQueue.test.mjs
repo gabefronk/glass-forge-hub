@@ -88,3 +88,9 @@ test('private routing falls through for normal quote IDs and rejects invalid sub
   await assert.rejects(h.service.progress({ db: h.db, work: h.work, indices: [1, 1], settings: h.settings, lines: [h.lines[1], h.lines[1]] }), error => error.status === 400);
   assert.equal(h.db.WindowQuoteOnlineRequests.data.length, 0); assert.equal(h.sends.length, 0);
 });
+
+test('online reservations do not take the shared browser while native prices are still being calculated', async () => {
+  const h = await harness(); await h.service.progress({ db: h.db, work: h.work, indices: [1], settings: h.settings, lines: [h.lines[1]], allowDispatch: false });
+  assert.equal(h.db.WindowQuoteOnlineRequests.data.length, 1); assert.equal(h.sends.length, 0); assert.equal(h.db.QuoteWorkers.data[0].busy_token, '');
+  await h.progress([1]); assert.equal(h.sends.length, 1);
+});
