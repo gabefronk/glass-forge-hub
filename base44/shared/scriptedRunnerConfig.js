@@ -9,6 +9,7 @@ export const NATIVE_ENGINE_POLICY = Object.freeze({
   price_previews: true,
   configuration_quotes: true,
   configuration_packages: true,
+  source_pricing: true,
   catalog_id: '361',
   context_fingerprint: '1edbe92e64fa350fd31edc93872355016a697d13320234ed7645ac529faa06de'
 });
@@ -28,4 +29,3 @@ export async function loadScriptedRunnerConfig({ db }) {
   if (config.enabled === true && config.mode === 'queue') config.native_engine = structuredClone(NATIVE_ENGINE_POLICY);
   return config;
 }
-

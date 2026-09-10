@@ -15,6 +15,11 @@ const config={enabled:true,mode:'queue',native_engine:{...fixture.context.policy
 const line={id:'window-1',style:'Hampton Casement',width:24,height:48,qty:2,room:'Bedroom',units:'in',dimension_basis:'frame',options:{series:'Hampton'}};
 const noDb=new Proxy({}, {get(){throw Error('Immediate source pricing must not read or write database records');}});
 const now=()=>new Date('2026-09-10T14:00:00Z');
+test('all qualified product families match saved and reopened native controls with and without grids',async()=>{
+ const controls=JSON.parse(await readFile(new URL('./fixtures/source-release-controls.json',import.meta.url),'utf8'));
+ assert.equal(controls.length,8);
+ for(const control of controls){const p=priceSourceWindow({line:control.line,settings});assert.equal(p.ok,true,JSON.stringify(control));assert.equal(p.calculated.unit_prices.list,control.expected_list,JSON.stringify(control));}
+});
 test('source path calculates every price tier and exact quantity from current rules',()=>{
  const priced=sourcePricePreview({line,settings});
  assert.equal(priced.price_source,'amsco_source_engine');

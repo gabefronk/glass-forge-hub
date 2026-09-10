@@ -1,0 +1,146 @@
+[
+  {
+    "line": {
+      "style": "Hampton Casement",
+      "width": 24.0,
+      "height": 48.0,
+      "qty": 1,
+      "units": "in",
+      "dimension_basis": "frame",
+      "options": {}
+    },
+    "expected_list": 725.4,
+    "evidence": {
+      "job_id": "4115b66e403d0d59af3e30e76bbd67dc1c5dbe7adc8539f156fc2ab84b2f4ecd",
+      "windowset_id": "724",
+      "status": "saved_reopened_main_options_verified"
+    }
+  },
+  {
+    "line": {
+      "style": "Studio XO Slider",
+      "width": 60.0,
+      "height": 48.0,
+      "qty": 1,
+      "units": "in",
+      "dimension_basis": "frame",
+      "options": {}
+    },
+    "expected_list": 417.5,
+    "evidence": {
+      "job_id": "0b3805fb31d9b193d38385fdbf5398268df2835ded4cec06b1b5c02509660756",
+      "windowset_id": "262",
+      "status": "saved_reopened_main_options_verified"
+    }
+  },
+  {
+    "line": {
+      "style": "Studio Single Hung",
+      "width": 36.0,
+      "height": 60.0,
+      "qty": 1,
+      "units": "in",
+      "dimension_basis": "frame",
+      "options": {}
+    },
+    "expected_list": 371.6,
+    "evidence": {
+      "job_id": "0b3805fb31d9b193d38385fdbf5398268df2835ded4cec06b1b5c02509660756",
+      "windowset_id": "264",
+      "status": "saved_reopened_main_options_verified"
+    }
+  },
+  {
+    "line": {
+      "style": "Studio Picture",
+      "width": 48.0,
+      "height": 48.0,
+      "qty": 1,
+      "units": "in",
+      "dimension_basis": "frame",
+      "options": {}
+    },
+    "expected_list": 258.4,
+    "evidence": {
+      "job_id": "0b3805fb31d9b193d38385fdbf5398268df2835ded4cec06b1b5c02509660756",
+      "windowset_id": "270",
+      "status": "saved_reopened_main_options_verified"
+    }
+  },
+  {
+    "line": {
+      "style": "Hampton Casement",
+      "width": 24.0,
+      "height": 48.0,
+      "qty": 1,
+      "units": "in",
+      "dimension_basis": "frame",
+      "options": {
+        "grilles": "5/8\" Flat \u00b7 Rectangular \u00b7 2W4H per lite \u00b7 White"
+      }
+    },
+    "expected_list": 751.8,
+    "evidence": {
+      "job_id": "0ef372460bf09f928601f149b9b32cfa2e4654c554d0d00dac260ce494836cad",
+      "windowset_id": "724",
+      "status": "saved_reopened_main_options_verified"
+    }
+  },
+  {
+    "line": {
+      "style": "Studio XO Slider",
+      "width": 60.0,
+      "height": 48.0,
+      "qty": 1,
+      "units": "in",
+      "dimension_basis": "frame",
+      "options": {
+        "grilles": "5/8\" Flat \u00b7 Rectangular \u00b7 2W4H per lite \u00b7 White"
+      }
+    },
+    "expected_list": 483.5,
+    "evidence": {
+      "job_id": "80705cedafb355f6b81d9e0447ee4ba1867675febd8535bfb4175d258a65d008",
+      "windowset_id": "262",
+      "status": "saved_reopened_main_options_verified"
+    }
+  },
+  {
+    "line": {
+      "style": "Studio Single Hung",
+      "width": 36.0,
+      "height": 60.0,
+      "qty": 1,
+      "units": "in",
+      "dimension_basis": "frame",
+      "options": {
+        "grilles": "5/8\" Flat \u00b7 Rectangular \u00b7 2W4H per lite \u00b7 White"
+      }
+    },
+    "expected_list": 421.1,
+    "evidence": {
+      "job_id": "80705cedafb355f6b81d9e0447ee4ba1867675febd8535bfb4175d258a65d008",
+      "windowset_id": "264",
+      "status": "saved_reopened_main_options_verified"
+    }
+  },
+  {
+    "line": {
+      "style": "Studio Picture",
+      "width": 48.0,
+      "height": 48.0,
+      "qty": 1,
+      "units": "in",
+      "dimension_basis": "frame",
+      "options": {
+        "grilles": "5/8\" Flat \u00b7 Rectangular \u00b7 2W4H per lite \u00b7 White"
+      }
+    },
+    "expected_list": 311.2,
+    "evidence": {
+      "job_id": "80705cedafb355f6b81d9e0447ee4ba1867675febd8535bfb4175d258a65d008",
+      "windowset_id": "270",
+      "status": "saved_reopened_main_options_verified"
+    }
+  }
+]
