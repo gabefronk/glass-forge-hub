@@ -6,6 +6,8 @@ import {CONFIGURATION_QUOTE_SOURCE, configurationQuoteResultIssues, configuratio
 import {verifyNativePricePreview,previewPolicyKey} from '../shared/nativePricePreview.js';
 import {normalizeManualBuilderDraft,builderReviewResponse,builderScheduleHash} from '../shared/windowQuoteBuilder.js';
 import {sha256,validateResult,createQuoteHandler} from '../shared/windowQuotesCore.js';
+import {createScriptedQueueExecution} from '../shared/scriptedQueueExecution.js';
+import {buildQuotePlan,verifyObservedQuote} from '../shared/amscoQuotePlan.js';
 const fixture=JSON.parse(await readFile(new URL('./fixtures/saved-hampton-preview-proof.json',import.meta.url),'utf8'));
 const clone=x=>structuredClone(x),stable=x=>JSON.stringify(x,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
 const user={id:'configuration-owner',role:'admin',email:'gabefronk@gmail.com'};
@@ -68,3 +70,28 @@ test('conversion to a job retains the verified package and does not duplicate on
  const first=await call();assert.equal(first.status,200,await first.clone().text());const result=await first.json();assert.equal(result.job.accepted_quote_snapshot.result.totals.customer_total,1416.39);
  const again=await call();assert.equal(again.status,200);assert.equal(h.db.Jobs.creates,1);assert.equal((await again.json()).job.id,result.job.id);
 });
+
+test('the actual create request completes from saved configurations and an identical HTTP retry replays it',async()=>{
+ const h=await harness();
+ const configuration={...config,browser_slot_id:'shared-slot',queue_allow:{requester_email:user.email,dealer:'BFS',yard:'BFS-UTAH DESIGN (11)',created_after:'2026-09-07T07:00:00Z'}};
+ let intakeCalls=0,plannerCalls=0,fallbackCalls=0;
+ const execution=createScriptedQueueExecution({config:configuration,now:h.now,normalizeRequest:q=>{plannerCalls++;return buildQuotePlan(q);},normalizeIntake:()=>{intakeCalls++;throw new Error('An already priced schedule must not invoke AI intake');},validateReady:verifyObservedQuote,fallbackExecution:{afterInput:()=>{fallbackCalls++;throw new Error('An already priced schedule must not route online');}}});
+ h.db.QuoteRequests.data.length=0;
+ const create=h.db.QuoteRequests.create;
+ h.db.QuoteRequests.create=value=>create({...value,created_date:h.now().toISOString()});
+ const handler=createQuoteHandler({getClient:async()=>({auth:{me:async()=>user},asServiceRole:{entities:h.db}}),now:h.now,executionService:execution});
+ const payload={action:'create',request_id:'complete-reviewed-package',title:'Verified package test',settings:h.q.settings,lines:h.q.lines,source:h.q.source};
+ const call=()=>handler(new Request('https://test.invalid/windowQuotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}));
+ const first=await call();assert.equal(first.status,200,await first.clone().text());const saved=(await first.json()).quote;
+ assert.equal(saved.worker_status,'ready');assert.equal(saved.result.totals.customer_total,1416.39);
+ const again=await call();assert.equal(again.status,200,await again.clone().text());assert.equal((await again.json()).quote.id,saved.id);
+ assert.equal(h.db.QuoteRequests.creates,1);assert.equal(h.db.QuoteRequests.updates,1);assert.equal(h.db.WindowQuotePricePreviews.creates,0);
+ assert.deepEqual([intakeCalls,plannerCalls,fallbackCalls],[0,0,0]);
+});
+
+test('malformed package structures are rejected without throwing runtime errors',async()=>{
+ const h=await harness(),saved=await h.save(),inputHash=await sha256(stable(configurationInputSnapshot(saved)));
+ for(const bad of [null,{}, {...saved.result,lines:[null,null]}, {...saved.result,lines:[{},{}]}]) assert.ok(configurationQuoteResultIssues(bad,{quote:saved,inputHash}).length);
+ assert.ok(configurationQuoteResultIssues(saved.result).length);
+});
+
