@@ -241,7 +241,7 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
         return response('queued', undefined, { quote_id: q.id, input_revision: q.input_revision, plan_hash: q.agent_run.plan_hash, plan: clone(q.agent_run.plan) });
       } catch (error) { if (!(error instanceof HttpError)) throw error; return response('blocked', 'prepared_request_requires_review'); }
     }
-    const preview = await previews.poll({ db, worker, nativeReady: nativeEnginePresenceReady(reported.native_engine, config.native_engine) });
+    const preview = await previews.poll({ db, worker, nativeReady: nativeEnginePresenceReady(reported.native_engine, config.native_engine), excludedIds: body.excluded_preview_ids });
     if (preview) return response('queued', undefined, preview);
     return response('idle');
   }
