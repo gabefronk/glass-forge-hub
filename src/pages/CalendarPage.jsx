@@ -143,10 +143,15 @@ export default function CalendarPage() {
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
         {/* Header */}
-        <div className="flex flex-wrap items-center gap-3 mb-5">
-          <div className="mono-label-sm">Calendar</div>
-          {user?.role==="admin"&&<button className="underline" onClick={()=>setCleanView(true)}>Installation calendar</button>}
-          <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+        <div className="mb-6 rounded-[16px] border bg-white px-4 py-4 shadow-sm sm:px-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0">
+              <div className="mono-label-sm mb-1">Schedule</div>
+              <h1 className="font-heading text-[22px] font-semibold tracking-[-0.03em]" style={{ color: C.text }}>Calendar</h1>
+            </div>
+            {user?.role==="admin"&&<button className="ml-auto rounded-full border px-3 py-2 text-[12px] font-semibold" style={{borderColor:C.border,color:C.textSecondary}} onClick={()=>setCleanView(true)}>Installation calendar</button>}
+          </div>
+          <div className="mt-4 flex w-full flex-wrap items-center gap-2">
             <div className="flex rounded-full p-0.5" style={{ border: `1px solid ${C.border}` }}>
               <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "month" ? "" : "")} style={view === "month" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>Month</button>
               <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "list" ? "" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
