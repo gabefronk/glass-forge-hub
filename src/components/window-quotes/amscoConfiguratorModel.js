@@ -2,6 +2,7 @@
 export const AMSCO_SERIES = [
   ['Studio 1 3/8 inch Fin Setback', 'Studio 1 3/8" Fin Setback', 'Studio'],
   ['Studio Stucco Key Windows', 'Studio Stucco Key Windows', 'Studio'],
+  ['Studio SK3', 'Studio SK3', 'Studio'],
   ['Studio Flush Fin', 'Studio Flush Fin', 'Studio'],
   ['Heritage Patio Doors', 'Heritage Patio Doors', 'Heritage'],
   ['Hampton', 'Hampton', 'Hampton'], ['Hampton SK', 'Hampton SK', 'Hampton'],
@@ -23,16 +24,25 @@ const hampton = [
   ['Hampton Casement', 'Casement / Fixed Casement'], ['Hampton Awning', 'Awning / Fixed Awning'],
   ['Hampton Radius', 'Radius'], ['Hampton Polygon', 'Polygon']
 ];
+// Rectangular products confirmed in AMSCO PK361 and generated/saved/reopened
+// with native white/white CozE pricing. The pricing service decides each route.
+const serenity = ['Single Vent', 'Double Vent', 'Single Hung', 'Casement', 'Awning', 'Direct Set'].map(style => ['Serenity ' + style, style]);
+const v2k = ['Single Vent', 'Double Vent', 'Single Hung', 'Direct Set'].map(style => ['V2K BW ' + style, style]);
 export function selectedSeries(line = {}) {
   if (line.options?.series) return line.options.series;
+  if (/hampton.*flush/i.test(line.style || '')) return 'Hampton Flush Fin';
+  if (/hampton.*\bsk\b/i.test(line.style || '')) return 'Hampton SK';
   if (/hampton/i.test(line.style || '')) return 'Hampton';
+  if (/serenity/i.test(line.style || '')) return 'Serenity';
+  if (/v2k/i.test(line.style || '')) return 'V2K BW';
+  if (/studio.*sk3/i.test(line.style || '')) return 'Studio SK3';
   if (/flush/i.test(line.options?.fin || '')) return 'Studio Flush Fin';
   if (/studio|single hung|picture|slider/i.test(line.style || '')) return AMSCO_SERIES[0].value;
   return '';
 }
 export function stylesForSeries(series) {
   const family = AMSCO_SERIES.find(item => item.value === series)?.family;
-  return (family === 'Studio' ? studio : family === 'Hampton' ? hampton : []).map(([value, label]) => ({ value, label }));
+  return (family === 'Studio' ? studio : family === 'Hampton' ? hampton : family === 'Serenity' ? serenity : family === 'V2K' ? v2k : []).map(([value, label]) => ({ value, label }));
 }
 // A new series replaces only the series choice. Dimensions and explicit job options survive.
 // Retain a style shared by both series, otherwise require a new product selection.
