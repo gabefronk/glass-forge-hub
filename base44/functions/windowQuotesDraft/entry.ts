@@ -22,6 +22,6 @@ export default async function windowQuotesDraft(req) {
     body: JSON.stringify({ ...body, action: "create", auto_start: false }),
   }));
 }
-// Dispatch v6: guarded saved-checkpoint continuations, default off; explicit result dimensions.
+// Dispatch v7: guarded draft intake with verified warm engine contract fc3ed293.
 
 
