@@ -71,7 +71,7 @@ export function applyTransferredDiscount(list, category, clientId) {
   requireValue(Object.hasOwn(discountRates, category), 'discount_category_not_mapped', 'This product needs its own discount category.');
   return { dealer: roundCurrency(list * (1-discountRates[category])), category, discount: discountRates[category], factor: 1-discountRates[category], client_id: clientId };
 }
-const configKeys = ['series','product_type','unit_type','shape','operation','tilted','width','height','dimension_basis','exterior_color','interior_color','preserve','grille_application_id','glass','tempered','quantity'];
+const configKeys = ['series','product_type','unit_type','shape','operation','tilted','width','height','dimension_basis','exterior_color','interior_color','preserve','grille_application_id','glass','tempered','glazing_method','stock_glass','wildfire_glazing','quantity'];
 
 // This API calculates only its explicitly implemented rule scope. It does not
 // certify size/answer validity or silently promote historical rates to a live quote.
@@ -85,7 +85,12 @@ export function calculateTransferredWindow(input) {
     requireValue(c.dimension_basis === 'frame', 'measurement_conversion_not_implemented', 'This calculation requires resolved frame dimensions.');
     requireValue(finite(c.width) && finite(c.height) && c.width > 0 && c.height > 0, 'invalid_dimensions', 'Enter positive frame dimensions.');
     requireValue(Number.isSafeInteger(c.quantity) && c.quantity > 0 && c.quantity <= 1000, 'invalid_quantity', 'Enter a whole-number quantity from 1 to 1000.');
-    requireValue(c.glass === 'CozE (LowE)' && c.tempered === false, 'glass_rules_not_implemented', 'This glass choice requires additional pricing rules.');
+    requireValue(c.glass === 'CozE (LowE)' && typeof c.tempered === 'boolean', 'glass_rules_not_implemented', 'This glass choice requires additional pricing rules.');
+    requireValue(c.glazing_method === undefined || c.glazing_method === '3/4" Insulated', 'glazing_rules_not_implemented', 'This glazing method requires additional pricing rules.');
+    requireValue(c.stock_glass === undefined || c.stock_glass === false, 'stock_glass_rules_not_implemented', 'Stock-glass selection requires additional pricing rules.');
+    requireValue(c.wildfire_glazing === undefined || c.wildfire_glazing === 'None', 'wildfire_rules_not_implemented', 'Wildfire glazing requires additional pricing rules.');
+    if (c.tempered) requireValue(hampton.has(c.series) && c.product_type === 'Casement' && c.glazing_method === '3/4" Insulated' && c.stock_glass === false && c.wildfire_glazing === 'None'
+      && input.client_id === '00000000-0000-0000-1555-000000000000', 'tempered_context_required', 'Tempered pricing requires the mapped complete glazing and client context.');
     requireValue(known(c.preserve,['None','Both','Inside','Outside']), 'preserve_not_supported', 'Choose a supported protective-film option.');
     requireValue(Number.isInteger(c.grille_application_id) && known(c.grille_application_id,[0,1]), 'grille_rules_not_implemented', 'This grille application requires additional rules.');
     const colorPair = c.exterior_color + '/' + c.interior_color;
@@ -110,6 +115,10 @@ export function calculateTransferredWindow(input) {
       components[0] = { ...components[0], value: adjustedBase, rule_ids: [...components[0].rule_ids,...ruleIds], color_factor: factor, unadjusted_value: base.value,
         temporary_modifier: 'Base Price (Temp)', assignment: 'overwrite_from_uncolored_temporary_base' };
     }
+    if (c.tempered) {
+      const rate = numberedAttributeLookup(catalog,28,c.glazing_method,'Yes');
+      components.push({ name: 'Tempered Add-On', value: roundCurrency(roundUp(rate.value*area.value,.1)), quantity: area.value, rate: rate.value, rule_ids: [873,883], source: rate });
+    }
     if (c.preserve !== 'None') {
       const rate = attributeLookup(catalog,'Preserve',c.preserve);
       components.push({ name: 'Debris Protect', value: roundCurrency(roundUp(rate.value*area.value,.1)), quantity: area.value, rate: rate.value, rule_ids: [1560,1561], source: rate });
@@ -132,6 +141,6 @@ export function calculateTransferredWindow(input) {
 export function transferredEngineStatus() {
   return { engine: 'amsco_source_rules', version: 1, execution: 'Base44 backend; no browser or local runner required', production_ready: false,
     catalogs: Object.values(catalogs).map(c => ({ catalog_id: c.catalog_id, price_book: c.price_book, dimensional_rows: Object.values(c.dimensional_grids).reduce((n,r) => n+r.length,0), grid_keys: Object.keys(c.dimensional_grids).length, source: c.source })),
-    implemented: ['Studio non-tilt single hung, single vent, direct set base','Hampton operating/fixed casement base','White/white','Black/white','Black/black using original temporary base','table-banded frame area','Preserve','standard rectangular 5/8 flat grille arithmetic','client 1555 category discounts'],
+    implemented: ['Studio non-tilt single hung, single vent, direct set base','Hampton operating/fixed casement base','White/white','Black/white','Black/black using original temporary base','table-banded frame area','Preserve','standard rectangular 5/8 flat grille arithmetic','Hampton casement whole-window tempering with mapped standard glazing','client 1555 category discounts'],
     remaining: ['full configuration validity and defaults','additional product and option rules','current online comparison before live-price promotion'] };
 }

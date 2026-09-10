@@ -38,6 +38,17 @@ test('small dimensions use real bands; exact boundaries do not inflate areas',()
   assert.equal(Math.round(roundUp(3.7*18,.1)*100)/100,66.6);
   assert.equal(Math.round(roundUp(14.6*9,.1)*100)/100,131.4);
 });
+test('PK361 bathroom source calculation matches the saved online tempered price including decimal rounding',()=>{
+  const input=inputFor(controls.configs[1]);input.catalog_id='361';
+  Object.assign(input.configuration,{width:33,height:33,tempered:true,glazing_method:'3/4" Insulated',stock_glass:false,wildfire_glazing:'None',grille_application_id:1});
+  const result=calculateTransferredWindow(input);
+  assert.deepEqual(result.unit_prices,{list:898.5,dealer:409.36,customer:584.8});
+  assert.deepEqual(result.components.map(x=>x.value),[704.1,131.4,33.3,29.7]);
+  assert.equal(result.production_ready,false);
+  for(const change of [{stock_glass:true},{wildfire_glazing:'Yes'},{glazing_method:'1" Insulated'}]) {
+    assert.equal(calculateTransferredWindow({...input,configuration:{...input.configuration,...change}}).status,'needs_online');
+  }
+});
 test('unknown and out-of-range selections do not silently produce a free or partial window',()=>{
   for(const change of [{preserve:'Unknown'},{grille_application_id:99},{tempered:true},{glass:'unknown'},{screen:'No'},{width:Infinity},{height:20000},{quantity:0},{exterior_color:'Black',interior_color:'Black',grille_application_id:1},{dimension_basis:'call'},{shape:'Circle'}]) {
     const input=inputFor(controls.configs[0]);Object.assign(input.configuration,change);
