@@ -41,7 +41,10 @@ const OPTION_KEYS = new Set([...Object.keys(OPTION_NAMES),'series','fin','color'
 const FINANCE_KEYS = new Set(['dealer','yard','gross_margin','markup','markup_percent','flat_markup','customer_price_override','tax','labor','freight','delivery']);
 export function catalogRouteForLine(line,settings={}) {
   const style = norm(line?.style), given = line?.options?.series || settings.series;
-  let series = given ? CATALOG_ROUTES.find(r => norm(r.series) === norm(given))?.series : undefined;
+  const specialSeries = [...new Set(CATALOG_ROUTES.map(r=>r.series))].filter(s=>/Flush Fin|Stucco Key| SK|SK3/.test(s)).sort((a,b)=>b.length-a.length).find(s=>style.startsWith(norm(s)));
+  let series = given ? CATALOG_ROUTES.find(r => norm(r.series) === norm(given))?.series : specialSeries;
+  if (specialSeries && given && norm(given)!==norm(specialSeries)) return null;
+  if (/doublecasement|twincasement|triplecasement/.test(style)) return null;
   if (given && !series) return null;
   let brand = ['Hampton','Studio','Serenity','V2K BW'].find(b => style.startsWith(norm(b)));
   if (!brand && !['singlehung','sh','slider','xoslider','singlevent','doublevent','picture','directset'].includes(style)) return null;
@@ -119,7 +122,7 @@ export function buildNativeCatalogPlan(quote) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(quote?.id||'')) add(issues,'missing_identity','id','A saved request is required.');
   if (!Number.isSafeInteger(quote?.input_revision)||quote.input_revision<1) add(issues,'missing_revision','input_revision','A saved request revision is required.');
   if (settings.dealer !== 'BFS') add(issues,'unsupported_dealer','settings.dealer','This engine uses the BFS account.');
-  if (!text(settings.yard)) add(issues,'missing_finance','settings.yard','Choose a BFS shipping yard.');
+  if (!text(settings.yard)||/please\s*select|unassigned|not\s*sure/i.test(settings.yard)) add(issues,'missing_finance','settings.yard','Choose a BFS shipping yard.');
   if (!finite(settings.gross_margin)||settings.gross_margin<0||settings.gross_margin>=100) add(issues,'missing_finance','settings.gross_margin','Choose a valid gross margin.');
   for (const key of Object.keys(settings)) {
     if (!OPTION_KEYS.has(key)&&!FINANCE_KEYS.has(key)) add(issues,'unsupported_setting','settings.'+key,'The supplied setting needs AMSCO configuration.');
