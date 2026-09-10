@@ -1,0 +1,95 @@
+{
+  "name": "WindowQuotePricePreviews",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer"
+    },
+    "owner_id": {
+      "type": "string"
+    },
+    "request_key": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "preparing",
+        "queued",
+        "running",
+        "ready",
+        "unsupported",
+        "failed",
+        "superseded"
+      ]
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "line_key": {
+      "type": "string"
+    },
+    "contract_hash": {
+      "type": "string"
+    },
+    "context_fingerprint": {
+      "type": "string"
+    },
+    "catalog_id": {
+      "type": "string"
+    },
+    "plan": {
+      "type": "object"
+    },
+    "plan_hash": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "queued_at": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "worker_id": {
+      "type": "string"
+    },
+    "operation_id": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "lease_expires_at": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string"
+    },
+    "report_hash": {
+      "type": "string"
+    },
+    "result": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "owner_id",
+    "request_key",
+    "status",
+    "contract_hash",
+    "context_fingerprint",
+    "catalog_id",
+    "created_at",
+    "expires_at"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
