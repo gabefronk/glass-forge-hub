@@ -76,3 +76,5 @@ test('linked door panel count is explicitly confirmed separately from product sy
  const rows=[line({style:'Multislide Door',qty:1})]; assert.equal(calculateInstall(rows,config,{linked:true}).complete,false);
  config.selections.w1.billing_qty=4; const result=calculateInstall(rows,config,{linked:true}); assert.equal(result.sell,972);assert.equal(result.cost,680);assert.equal(rows[0].qty,1);
 });
+
+test('a stale door panel count cannot change a window quantity', () => { const config=newInstallBudget(true); config.selections.w1={billing_qty:4}; const result=calculateInstall([line({qty:1})],config); assert.equal(result.sell,52); assert.equal(result.quantity,1); });

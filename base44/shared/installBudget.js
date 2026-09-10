@@ -92,11 +92,13 @@ export function calculateInstall(lines = [], raw = INSTALL_DEFAULTS, context = {
     if (ids.has(s.key)) { out.issues.push('Window IDs must be unique for installation.'); continue; } ids.add(s.key);
     if (!s.enabled) { out.lines.push({ key: s.key, included: false }); continue; }
     const label = line.mark || line.label || `Opening ${index + 1}`;
-    const issues = [], qty = Number(s.billing_qty ?? line.qty), width = Number(line.width), height = Number(line.height);
+    const issues = [], width = Number(line.width), height = Number(line.height);
+    let qty = Number(line.qty);
     let sqft = width * height / 144;
     if (line.units === 'ft') sqft = width * height;
     else if (line.units && line.units !== 'in') issues.push(`${label}: unsupported measurement unit.`);
     const explicit = s.rate_id ? byId.get(s.rate_id) : null;
+    if (explicit?.kind === 'door' && s.billing_qty) qty = Number(s.billing_qty);
     if (context.linked && explicit?.unit === 'panel' && !s.billing_qty) issues.push(`${label}: confirm the total panel quantity to install.`);
     const door = explicit?.kind === 'door' || /door|bifold|multislide|pivot|lfg/i.test(line.style || line.label || '');
     const kind = door ? 'door' : 'window';
