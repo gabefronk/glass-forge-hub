@@ -119,7 +119,7 @@ function failed(issues) {
   }))] };
 }
 export function buildQuotePlan(quote) {
-  if (!Array.isArray(quote?.lines) || !quote.lines.some(line => ['xo_slider', 'picture_direct_set'].includes(productFamily(line?.style)))) return buildLegacyPlan(quote);
+  if (!Array.isArray(quote?.lines) || !quote.lines.length || quote.lines.every(line => productFamily(line?.style) === 'single_hung')) return buildLegacyPlan(quote);
   const issues = [], settings = object(quote.settings) ? quote.settings : {}, lines = [];
   if (!validId(quote.id)) issue(issues, 'missing_identity', 'id', 'A saved app request ID is required before quoting.');
   if (!Number.isSafeInteger(quote.input_revision) || quote.input_revision < 1) issue(issues, 'missing_revision', 'input_revision', 'A positive saved request revision is required before quoting.');
@@ -145,7 +145,17 @@ export function buildQuotePlan(quote) {
       return;
     }
     const profile = getProductProfileForLine(line, settings);
-    if (!profile) { issue(issues, 'unsupported_product', path + '.style', 'This style and installation series need a verified product mapping.'); return; }
+    if (!profile) {
+      // An unmapped product has no Studio recipe. Check its main inputs, then
+      // preserve the exact options for AMSCO online configuration.
+      if (!word(line.style) || norm(line.style) === 'custom') issue(issues, 'missing_style', path + '.style', 'Choose or describe the requested product.');
+      if (line.units !== 'in') issue(issues, 'unsupported_units', path + '.units', 'Supply dimensions in inches.');
+      for (const key of ['width', 'height']) if (!finite(line[key]) || line[key] <= 0 || line[key] > 1000) issue(issues, 'invalid_dimensions', path + '.' + key, 'Provide a positive numeric ' + key + ' in inches.');
+      if (!Number.isSafeInteger(line.qty) || line.qty < 1 || line.qty > 1000) issue(issues, 'invalid_quantity', path + '.qty', 'Provide a whole-number quantity from 1 through 1000.');
+      if (!['call', 'frame', 'rough_opening'].includes(line.dimension_basis)) issue(issues, 'missing_dimension_basis', path + '.dimension_basis', 'Choose call, frame or rough-opening measurements.');
+      issue(issues, 'unsupported_product', path + '.style', 'This style and installation series need a verified product mapping.');
+      return;
+    }
     if (!profileIsExecutable(profile)) { issue(issues, 'unverified_product', path + '.style', profile.style + ' in ' + profile.series + ' still needs saved native validation.'); return; }
     if (line.units !== 'in') issue(issues, 'unsupported_units', path + '.units', 'Supply dimensions in inches (units: in).');
     for (const key of ['width', 'height']) if (!finite(line[key]) || line[key] <= 0 || line[key] > 1000) issue(issues, 'invalid_dimensions', path + '.' + key, 'Provide a positive numeric ' + key + ' in inches.');
