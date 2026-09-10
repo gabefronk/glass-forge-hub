@@ -36,3 +36,10 @@ test("quote defaults, explicit overrides and fractional pane descriptions retain
  assert.match(specificationValue("glass_thickness","SS"),/pane construction unspecified/);
  assert.ok(GLASS_THICKNESS_CHOICES.every(choice=>choice.value!=="SS"&&choice.value!=="DS"));
 });
+
+test("existing source price responses still expose their applied defaults during an update",()=>{
+ const price={status:"priced",price_source:"amsco_source_engine",source_engine:{applied_defaults:{tempered:false,glazing_method:'3/4" Insulated'}}};
+ assert.equal(automaticOptionLabel("tempered",line,settings,price),"Non-tempered glass (automatic)");
+ assert.match(glassSpecification(line,settings,price),/Non-tempered glass.*3\/4″/);
+ assert.equal(resolvedWindowOptions(line,settings,price).glass_thickness,undefined);
+});

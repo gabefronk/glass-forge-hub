@@ -25,7 +25,10 @@ export function specificationValue(key,value) {
 export function resolvedWindowOptions(line = {},settings = {},price) {
   const inherited = pick(settings);
   if (!has(inherited.glass) && settings.low_e === true) inherited.glass = "CozE (LowE)";
-  return {...inherited,...pick(line.options),...(price?.status === "priced" ? pick(price.resolved_options) : {})};
+  return {...inherited,...pick(line.options),...(price?.status === "priced" ? {
+    ...(price.price_source === "amsco_source_engine" ? pick(price.source_engine?.applied_defaults) : {}),
+    ...pick(price.resolved_options)
+  } : {})};
 }
 export function automaticOptionLabel(key,line = {},settings = {},price,priceStatus) {
   // An explicit override's current result is not the default that resetting it
