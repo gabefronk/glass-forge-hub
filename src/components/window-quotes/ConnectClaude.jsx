@@ -55,7 +55,7 @@ export default function ConnectClaude() {
           <ul className="mt-2 space-y-1.5 break-all font-mono"><li>invoke_submit_window_takeoff · action: create</li><li>invoke_queue_window_quote · action: queue</li><li>invoke_get_window_quote_status · action: detail</li><li>invoke_list_window_quotes · action: list</li><li>invoke_reply_window_quote · action: message</li><li>invoke_update_window_takeoff · action: update</li></ul>
         </details>
         {error && <p role="alert" className="rounded-lg bg-[#FCF5E9] p-3 text-xs text-[#8A5A10]">{error}</p>}
-        <p className="text-xs leading-relaxed text-[#616D81]">Your dealer, yard and gross margin come from you. Missing specifications stay open for clarification. The quoting computer must be on and signed in for automatic pickup. A quote becomes a Job only when you mark it Won.</p>
+        <p className="text-xs leading-relaxed text-[#616D81]">Your dealer, yard and gross margin come from you. Missing specifications stay open for clarification. Supported windows calculate directly from the AMSCO pricebook. Selections that need the configurator use the quoting service; its computer must be on and signed in. A quote becomes a Job only when you mark it Won.</p>
         <a href="https://docs.base44.com/Integrations/app-mcp" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-[#1E4A85]">Base44 connection guide<ArrowUpRight size={12} /></a>
       </DialogContent>
     </Dialog>
