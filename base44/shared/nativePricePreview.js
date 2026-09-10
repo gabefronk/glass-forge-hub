@@ -66,7 +66,7 @@ export function createNativePricePreviewService({config, now=()=>new Date(), has
    if(result?.verified!==true||!nativeEnginePresenceReady({state:'ready',...result.native_engine},policy)||!line||line.qty!==1||result.input_revision!==1||result.native_source!=='desktop_native')return {status:'native_unavailable'};
    const unit=line.unit_prices;
    if(!['list','dealer','customer'].every(k=>typeof unit?.[k]==='number'&&Number.isFinite(unit[k])&&unit[k]>0))return {status:'native_unavailable'};
-   return {status:'priced',price_source:'native_live',unit_prices:clone(unit),line_totals:Object.fromEntries(['list','dealer','customer'].map(k=>[k,money(unit[k]*qty)])),checked_at:result.verification?.checked_at,preview_id:row.id};
+   return {status:'priced',price_source:'native_live',unit_prices:clone(unit),line_totals:Object.fromEntries(['list','dealer','customer'].map(k=>[k,money(unit[k]*qty)])),resolved_options:clone(line.options || {}),checked_at:result.verification?.checked_at,preview_id:row.id};
   }
   if(row.status==='unsupported')return {status:'amsco_lookup_needed',preview_id:row.id,questions:['These selections need AMSCO online configuration.']};
   if(row.status==='failed'||!live(row)||row.status==='running'&&Date.parse(row.lease_expires_at)<=stamp())return {status:'native_unavailable',preview_id:row.id};

@@ -91,3 +91,16 @@ test('disabled previews leave the normal quote runner untouched and do not acces
  assert.equal(await service.poll({db:{},worker,nativeReady:true}),null);assert.equal((await service.request({db:{},user,line:line(),settings})).status,'native_unavailable');
 });
 
+
+test('matched verified native previews return actual automatic construction, including false values',async()=>{
+ const h=harness();await h.request();const {offered}=await claim(h);
+ await h.service.report({db:h.db,worker,body:reportBody(offered)});
+ const row=h.db.WindowQuotePricePreviews.data[0];
+ row.result.lines[0].options={tempered:false,glass_thickness:'DS over DS',super_spacer:false};
+ const result=await h.request();
+ assert.deepEqual(result.resolved_options,row.result.lines[0].options);
+ result.resolved_options.glass_thickness='SS over SS';
+ assert.equal(row.result.lines[0].options.glass_thickness,'DS over DS');
+ const changed=await h.request({line:{...line(),width:26}});
+ assert.equal(changed.status,'calculating');assert.equal(changed.resolved_options,undefined);
+});

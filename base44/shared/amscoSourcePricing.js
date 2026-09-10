@@ -70,6 +70,10 @@ export function priceSourceWindow({line,settings}) {
 export function sourcePricePreview(args) {
   const priced=priceSourceWindow(args);if(!priced.ok)return null;
   return {status:'priced',price_source:'amsco_source_engine',unit_prices:clone(priced.calculated.unit_prices),line_totals:clone(priced.calculated.line_totals),
+    // Expose only options actually selected or applied by this calculation. The
+    // transferred pricing rules do not yet resolve size-dependent pane thickness.
+    resolved_options:clone({...priced.plan_line.options,...priced.defaults,glass:priced.input.configuration.glass,
+      unit_type:priced.input.configuration.unit_type,grilles:priced.plan_line.options.grilles || 'None'}),
     source_engine:{version:SOURCE_PRICE_VERSION,catalog_id:'361',price_book:1,status:'calculated',mode:'live',applied_defaults:priced.defaults},
     components:priced.calculated.components.map(c=>({name:c.name,value:c.value}))};
 }

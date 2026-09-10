@@ -104,3 +104,17 @@ test('accepting standard nail fin does not bypass size limits or conflicting ser
  for(const patch of [{width:49},{height:97},{options:{series:'Studio Flush Fin',fin:'Nail Fin'}},{options:{fin:'Custom Fin'}}])
   assert.equal(sourcePricePreview({line:{...hung,...patch},settings}),null,JSON.stringify(patch));
 });
+
+test('source previews expose applied construction without guessing pane thickness or changing receipts',()=>{
+ const original=structuredClone(line),receipt=sourcePriceReceipt({line,settings,checkedAt:now().toISOString()});
+ const preview=sourcePricePreview({line,settings});
+ assert.equal(preview.resolved_options.tempered,false);
+ assert.equal(preview.resolved_options.glass,'CozE (LowE)');
+ assert.equal(preview.resolved_options.glazing_method,'3/4" Insulated');
+ assert.equal(preview.resolved_options.glass_thickness,undefined);
+ assert.equal(preview.resolved_options.grilles,'None');
+ assert.equal(preview.resolved_options.operation,'Left');
+ assert.equal(preview.resolved_options.super_spacer,undefined);
+ assert.deepEqual(line,original);
+ assert.deepEqual(sourcePriceReceipt({line,settings,checkedAt:now().toISOString()}),receipt);
+});

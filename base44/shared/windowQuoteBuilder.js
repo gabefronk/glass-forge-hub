@@ -288,7 +288,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
         const line = cached.checked.plan.lines[0];
         const key = stable({ dealer: cached.checked.plan.settings.dealer, yard: cached.checked.plan.settings.yard, line: priceSignature(line) });
         if (!cache.has(key) || Date.parse(cache.get(key).checked_at) < Date.parse(checkedAt)) cache.set(key, { dealer,
-          ...(typeof list === 'number' && Number.isFinite(list) && list > 0 ? { list } : {}), checked_at: checkedAt });
+          ...(typeof list === 'number' && Number.isFinite(list) && list > 0 ? { list } : {}), checked_at: checkedAt, resolved_options: structuredClone(observed.options || {}) });
       } catch { /* Older or incomplete results are not price sources. */ }
     }
   }
@@ -308,7 +308,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
     lines.push({ ...base, status: 'priced', price_source: 'verified_configuration',
       unit_prices: { ...(hit.list !== undefined ? { list: hit.list } : {}), dealer: hit.dealer, customer },
       line_totals: { ...(hit.list !== undefined ? { list: roundMoney(hit.list * qty) } : {}), dealer: roundMoney(hit.dealer * qty), customer: roundMoney(customer * qty) },
-      checked_at: hit.checked_at });
+      checked_at: hit.checked_at, resolved_options: structuredClone(hit.resolved_options) });
   }
   if (config?.native_engine?.configuration_packages === true) {
     for (const item of planned) {
