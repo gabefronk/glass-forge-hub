@@ -5,10 +5,10 @@ const iso=value=>Number.isFinite(Date.parse(value))?new Date(value).toISOString(
 const ids=new Set(['manager_agent','sales_tracker_agent','calendar_coordinator','probuild_reporting','codex_development','mac_manager','external_claude_agents']);
 const visibleEntry=entry=>({id:entry.id,target_id:entry.target_id,kind:entry.kind,title:entry.title,body:entry.body,recorded_at:entry.recorded_at,actor_email:entry.actor_email,status:entry.status,request_key:entry.request_key});
 const visibleEscalation=row=>({id:row.id,agent_id:row.agent_id,department:row.department,title:row.title,context:row.context,status:row.status,created_at:row.created_at,resolved_at:row.resolved_at,resolution:row.resolution});
-const visibleConnection=row=>({id:row.id,provider_id:row.provider_id,provider_name:row.provider_name,connection_state:row.connection_state,scope_summary:row.scope_summary,last_verified_at:row.last_verified_at||null,verification_message:row.verification_message||'',auth_method:row.auth_method,updated_at:row.updated_at});
+const visibleConnection=row=>({id:row.id,provider_id:row.provider_id,provider_name:row.provider_name,connection_state:row.connection_state,scope_summary:row.scope_summary,last_verified_at:row.last_verified_at||null,verification_message:row.verification_message||'',auth_method:row.auth_method,secret_name:row.secret_reference||row.secret_name||null,updated_at:row.updated_at});
 const connectionCatalog=[
- {provider_id:'anthropic_claude',provider_name:'Anthropic Claude',connection_state:'planned',scope_summary:'Agent status and approved coordination only',auth_method:'api_key'},
- {provider_id:'openai_codex',provider_name:'OpenAI Codex',connection_state:'planned',scope_summary:'Agent task status and approved coordination only',auth_method:'api_key'},
+ {provider_id:'anthropic_claude',provider_name:'Anthropic Claude',connection_state:'planned',scope_summary:'Agent status and approved coordination only',auth_method:'api_key',secret_name:'ANTHROPIC_API_KEY'},
+ {provider_id:'openai_codex',provider_name:'OpenAI Codex',connection_state:'planned',scope_summary:'Agent task status and approved coordination only',auth_method:'api_key',secret_name:'OPENAI_API_KEY'},
  {provider_id:'probuild',provider_name:'ProBuild',connection_state:'planned',scope_summary:'Read-only job, post, photo, note, and status collection',auth_method:'oauth'},
  {provider_id:'bluebubbles_docker',provider_name:'BlueBubbles / Docker',connection_state:'planned',scope_summary:'Local bridge status events only',auth_method:'local_bridge'}
 ];
@@ -74,15 +74,21 @@ export function createAgentCenterHandler({getClient,now=()=>new Date()}={}) {
     const catalog=connectionCatalog.find(item=>item.provider_id===provider);
     if(!catalog||!scope||!['api_key','oauth','webhook','local_bridge'].includes(method))throw Error('Choose a supported provider, scope, and secure connection method.');
     const prior=(await api.AgentCenterConnection.filter({provider_id:provider},'-updated_at',1))[0];
-    const row={provider_id:provider,provider_name:catalog.provider_name,connection_state:'planned',scope_summary:scope,auth_method:method,verification_message:'Secure credential or OAuth authorization has not been configured.',created_at:prior?.created_at||at,updated_at:at};
+    const row={provider_id:provider,provider_name:catalog.provider_name,connection_state:'planned',scope_summary:scope,auth_method:method,secret_reference:catalog.secret_name||'',verification_message:catalog.secret_name?'Add or rotate this secret in Glass Forge Hub → Dashboard → Secrets, then use Test Connection.':'Complete the provider’s normal OAuth or local-bridge authorization before testing.',created_at:prior?.created_at||at,updated_at:at};
     const saved=prior?await api.AgentCenterConnection.update(prior.id,row):await api.AgentCenterConnection.create(row);
-    return Response.json({connection:visibleConnection(saved),credential_flow:'No credential was accepted or stored. Add the provider credential only through Base44 secure secret storage or its normal OAuth consent flow.'});
+    return Response.json({connection:visibleConnection(saved),credential_flow:catalog.secret_name?'Paste the key only in Glass Forge Hub → Dashboard → Secrets → Add Secret, using '+catalog.secret_name+'. It is never accepted by this page.':'Use the provider’s normal OAuth or local-bridge authorization; this page stores no credentials.'});
    }
    if(input.action==='connection_test'){
-    const provider=clean(input.provider_id,80),row=(await api.AgentCenterConnection.filter({provider_id:provider},'-updated_at',1))[0];
-    if(!connectionCatalog.some(item=>item.provider_id===provider))throw Error('Choose a supported provider.');
-    if(!row||row.connection_state!=='verified')return Response.json({provider_id:provider,verified:false,message:'No verified secure connection is configured. This connection remains planned.'});
-    return Response.json({provider_id:provider,verified:false,message:'Live verification requires the provider-specific secure backend bridge; no browser-side credential check is performed.'});
+    const provider=clean(input.provider_id,80),catalog=connectionCatalog.find(item=>item.provider_id===provider),row=(await api.AgentCenterConnection.filter({provider_id:provider},'-updated_at',1))[0];
+    if(!catalog)throw Error('Choose a supported provider.');
+    if(!catalog.secret_name)return Response.json({provider_id:provider,verified:false,message:'This connection needs its normal OAuth or local-bridge authorization and remains planned.'});
+    const key=typeof Deno!=='undefined'?Deno.env.get(catalog.secret_name):undefined;
+    if(!key)return Response.json({provider_id:provider,verified:false,message:'No '+catalog.secret_name+' secret is configured yet. Add it in Glass Forge Hub → Dashboard → Secrets, then test again.'});
+    const test=catalog.provider_id==='anthropic_claude'?{url:'https://api.anthropic.com/v1/models',headers:{'x-api-key':key,'anthropic-version':'2023-06-01'}}:{url:'https://api.openai.com/v1/models',headers:{Authorization:'Bearer '+key}};
+    let response;try{response=await fetch(test.url,{headers:test.headers});}catch{response=null;}
+    const update={connection_state:response?.ok?'verified':'error',last_verified_at:at,verification_message:response?.ok?'Secure backend verification succeeded. Key values are never returned.':'Provider verification failed. Check the key in Base44 Dashboard → Secrets and rotate it there if needed.',updated_at:at};
+    const saved=row?await api.AgentCenterConnection.update(row.id,update):await api.AgentCenterConnection.create({provider_id:provider,provider_name:catalog.provider_name,scope_summary:catalog.scope_summary,auth_method:catalog.auth_method,secret_reference:catalog.secret_name,created_at:at,...update});
+    return Response.json({provider_id:provider,verified:Boolean(response?.ok),connection:visibleConnection(saved),message:update.verification_message});
    }
    if(input.action==='connection_disconnect'){
     const provider=clean(input.provider_id,80),row=(await api.AgentCenterConnection.filter({provider_id:provider},'-updated_at',1))[0];
