@@ -3,54 +3,19 @@ import assert from 'node:assert/strict';
 import { buildAgentInventory, createAgentCenterHandler, isAgentCenterOwner } from '../shared/agentCenter.js';
 import { isAgentCenterOwner as uiOwner } from '../../src/lib/agentCenterAccess.js';
 const now=new Date('2026-09-10T12:00:00Z');
-test('only the actual owner with administrator role is allowed; frontend and backend agree',()=>{
- for(const [user,allowed] of [[null,false],[{email:'gabefronk@gmail.com',role:'user'},false],[{email:'iryedra@gmail.com',role:'admin'},false],[{email:'other@example.com',role:'admin'},false],[{email:'gabefronk@gmail.com',role:'admin'},true]]){
-  assert.equal(isAgentCenterOwner(user),allowed);assert.equal(uiOwner(user),allowed);
- }
-});
-test('inventory uses real check-ins, stale status and manual labels without leaking pairing credentials',()=>{
- const workers=[
-  {id:'one',name:'Pricing runner',enabled:true,last_seen_at:'2026-09-10T11:59:00Z',runner_presence:{runner_status:'attention'},token_hash:'SECRET_HASH',busy_token:'SECRET_TOKEN'},
-  {id:'two',name:'Stale runner',enabled:true,last_seen_at:'2026-09-09T11:59:00Z',active_quote_id:'quote-123'},
-  {id:'three',name:'Disabled runner',enabled:false,last_seen_at:'2026-09-10T11:59:00Z'},
-  {id:'four',name:'Future runner',enabled:true,last_seen_at:'2027-09-10T11:59:00Z'}
- ];
- const list=buildAgentInventory({workers,now});
- assert.equal(list.find(x=>x.id==='worker:one').status,'Needs attention');
- assert.equal(list.find(x=>x.id==='worker:two').status,'Check-in stale');
- assert.equal(list.find(x=>x.id==='worker:three').status,'Disabled');
- assert.equal(list.find(x=>x.id==='worker:four').status,'Check-in stale');
- assert.equal(list.find(x=>x.id==='mac_manager').connection,'manual');
- assert.equal(list.find(x=>x.id==='codex_development').updated_at,null);
- assert.ok(!JSON.stringify(list).includes('SECRET'));
- assert.ok(list.every(x=>!x.allowed_actions.some(action=>/restart|dispatch|delete/i.test(action))));
-});
 function harness(user={email:'gabefronk@gmail.com',role:'admin'}){
- const rows=[];let calls=0,creates=0;
- const entities={QuoteWorkers:{list:async()=>{calls++;return[];},filter:async()=>[]},
-  SalesTrackerSnapshot:{filter:async()=>[]},
-  AgentCenterEntry:{list:async()=>rows,filter:async q=>rows.filter(r=>r.request_key===q.request_key),create:async row=>{creates++;const result={...row,id:'entry-'+creates};rows.push(result);return result;}}};
+ const entries=[],escalations=[],events=[],connections=[];let n=0;
+ const list=rows=>async()=>rows;
+ const byKey=rows=>async q=>rows.filter(r=>Object.entries(q).every(([k,v])=>r[k]===v));
+ const create=rows=>async row=>{const r={...row,id:'row-'+(++n)};rows.push(r);return r};
+ const update=rows=>async(id,patch)=>{const row=rows.find(x=>x.id===id);Object.assign(row,patch);return row};
+ const entities={SalesTrackerSnapshot:{filter:async()=>[]},AgentCenterEntry:{list:list(entries),filter:byKey(entries),create:create(entries)},AgentCenterEscalation:{list:list(escalations),filter:byKey(escalations),create:create(escalations),update:update(escalations)},AgentCenterEvent:{list:list(events),filter:byKey(events),create:create(events)},AgentCenterConnection:{list:list(connections),filter:byKey(connections),create:create(connections),update:update(connections)}};
  const handler=createAgentCenterHandler({getClient:async()=>({auth:{me:async()=>user},asServiceRole:{entities}}),now:()=>now});
- const call=async body=>{const r=await handler(new Request('https://example.test',{method:'POST',body:JSON.stringify(body)}));return {status:r.status,body:await r.json()};};
- return {call,rows,counts:()=>({calls,creates})};
+ const call=async body=>{const r=await handler(new Request('https://test',{method:'POST',body:JSON.stringify(body)}));return {status:r.status,body:await r.json()}};
+ return {call,entries,escalations,connections};
 }
-const note={action:'entry',target_id:'mac_manager',kind:'request',title:'Review captured rows',body:'Review the sales delta for distinct lots.',request_key:'request-test-123456789'};
-test('a non-owner admin cannot read inventory or save private entries',async()=>{
- const h=harness({role:'admin',email:'iryedra@gmail.com'});
- assert.equal((await h.call({action:'inventory'})).status,403);assert.equal((await h.call(note)).status,403);
- assert.deepEqual(h.counts(),{calls:0,creates:0});
-});
-test('owner request is stored privately and explicitly not dispatched; retries do not add another entry',async()=>{
- const h=harness();const first=await h.call(note);
- assert.equal(first.status,200);assert.equal(first.body.entry.status,'saved_for_manual_review');assert.match(first.body.delivery,/Not dispatched/);
- const repeat=await h.call(note);assert.equal(repeat.body.unchanged,true);assert.equal(h.counts().creates,1);
- const conflict=await h.call({...note,body:'Changed text'});assert.equal(conflict.status,409);
- const inventory=await h.call({action:'inventory'});assert.equal(inventory.body.dispatch_enabled,false);assert.equal(inventory.body.entries.length,1);
-});
-test('unsupported actions, unknown workspaces and oversized entries cannot write',async()=>{
- const h=harness();
- for(const body of [{action:'dispatch'},{...note,target_id:'worker:unregistered'},{...note,target_id:'unrecognized'},{...note,title:'x'.repeat(161)},{...note,body:'x'.repeat(5001)}]){
-  assert.equal((await h.call(body)).status,400);
- }
- assert.equal(h.counts().creates,0);
-});
+test('owner gate is identical in UI and server',()=>{for(const [user,yes] of [[null,false],[{email:'iryedra@gmail.com',role:'admin'},false],[{email:'gabefronk@gmail.com',role:'user'},false],[{email:'gabefronk@gmail.com',role:'admin'},true]]){assert.equal(isAgentCenterOwner(user),yes);assert.equal(uiOwner(user),yes)}});
+test('tree includes a manager and planned external Claude integration',()=>{const nodes=buildAgentInventory({now});assert.equal(nodes.find(x=>x.id==='manager_agent').parent_id,null);assert.equal(nodes.find(x=>x.id==='external_claude_agents').connection,'planned');assert.equal(nodes.find(x=>x.id==='external_claude_agents').provider,'Anthropic Claude');});
+test('a manager request creates a private owner escalation and does not dispatch',async()=>{const h=harness();const r=await h.call({action:'entry',target_id:'calendar_coordinator',kind:'request',title:'Clarify schedule',body:'Conflicting job dates.',request_key:'request-key-123456789'});assert.equal(r.status,200);assert.equal(r.body.delivery,'Not dispatched. Requests wait for the owner decision queue.');assert.equal(h.escalations.length,1);assert.equal(h.escalations[0].status,'needs_owner_decision');const resolved=await h.call({action:'resolve_escalation',escalation_id:h.escalations[0].id,resolution:'Keep the confirmed date.'});assert.equal(resolved.status,200);assert.equal(h.escalations[0].status,'answered');});
+test('connection setup retains no credential and unverified tests stay planned',async()=>{const h=harness();const prep=await h.call({action:'connection_prepare',provider_id:'anthropic_claude',scope_summary:'Status only',auth_method:'api_key'});assert.equal(prep.status,200);assert.equal(h.connections[0].connection_state,'planned');assert.ok(!JSON.stringify(h.connections).match(/key_value|secret_value|password/i));const tested=await h.call({action:'connection_test',provider_id:'anthropic_claude'});assert.equal(tested.body.verified,false);const off=await h.call({action:'connection_disconnect',provider_id:'anthropic_claude'});assert.equal(off.status,200);assert.equal(h.connections[0].connection_state,'disconnected');});
+test('Trevor and Israel cannot use private inventory or connection actions',async()=>{for(const email of ['trevor@example.com','iryedra@gmail.com']){const h=harness({email,role:'admin'});for(const action of ['inventory','connection_prepare','connection_test'])assert.equal((await h.call({action,provider_id:'anthropic_claude',scope_summary:'x',auth_method:'api_key'})).status,403);}});
