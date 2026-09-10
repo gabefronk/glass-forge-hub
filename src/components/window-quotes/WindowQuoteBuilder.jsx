@@ -104,7 +104,8 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
   const pricingDraft = useMemo(() => {
     let candidate = lines;
     if (editor) {
-      const line = { ...editor.line, width: Number(editor.line.width), height: Number(editor.line.height), qty: Number(editor.line.qty), units: "in" };
+      const previewNumber = value => value !== "" && Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : undefined;
+      const line = { ...editor.line, width: previewNumber(editor.line.width), height: previewNumber(editor.line.height), qty: Number.isInteger(Number(editor.line.qty)) ? previewNumber(editor.line.qty) : undefined, units: "in" };
       candidate = editor.index < 0 ? [...lines, line] : lines.map((item, index) => index === editor.index ? line : item);
     }
     return { title: title.trim(), settings: normalizedSettings, lines: candidate.map(line => Object.fromEntries(Object.entries(line).filter(([key]) => key !== "source_reference"))), source: { easy_request: standardSource.easy_request } };
