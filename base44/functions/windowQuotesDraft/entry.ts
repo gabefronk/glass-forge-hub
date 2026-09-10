@@ -24,3 +24,4 @@ export default async function windowQuotesDraft(req) {
 }
 // Dispatch v7: guarded draft intake with verified warm engine contract ce17adad + private native price previews and verified configuration package completion.
 // Package pricing release 2026-09-10: retained native prices, private online fallback, resumable progress.
+// Source pricing release 2026-09-10: validate recomputed pricebook receipts in mixed configuration packages.

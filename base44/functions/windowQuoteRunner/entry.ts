@@ -5,3 +5,4 @@ import { getExecution } from "../../shared/windowQuoteScriptedRuntime.js";
 const handleWindowQuoteRunner = createScriptedRunnerHandler({ getClient: createClientFromRequest, getExecution });
 export default handleWindowQuoteRunner;
 // Package pricing release 2026-09-10: retained native prices, private online fallback, resumable progress.
+// Source pricing release 2026-09-10: validate recomputed pricebook receipts in mixed configuration packages.
