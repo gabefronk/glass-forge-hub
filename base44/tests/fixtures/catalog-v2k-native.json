@@ -1,0 +1,410 @@
+{
+  "quote_id": "catalog-integration-grid",
+  "input_revision": 1,
+  "native_quote_id": "3fae2568-2dd3-4a3e-b8d3-7d3c19a71e9b",
+  "native_source": "desktop_native",
+  "reopened": true,
+  "dealer": "BFS",
+  "yard": "BFS-UTAH DESIGN(11)",
+  "gross_margin": 30,
+  "checked_at": "2026-09-10T09:25:25.8053561Z",
+  "lines": [
+    {
+      "native_line_id": "797406a5-1f6a-4ee7-a4c8-429c7abbd08a",
+      "native_line_number": "100",
+      "qty": 1,
+      "room": "V2K BW Single Vent",
+      "style": "V2K BW Single Vent",
+      "product_profile_id": "catalog_493",
+      "units": "in",
+      "dimension_basis": "frame",
+      "width": 60,
+      "height": 48,
+      "frame_dimensions": {
+        "width": 60,
+        "height": 48,
+        "units": "in"
+      },
+      "options": {
+        "series": "V2K BW",
+        "exterior_color": "White",
+        "interior_color": "White",
+        "color": "White",
+        "unit_type": "Complete Unit",
+        "operation": "XO",
+        "glass": "CozE (LowE)",
+        "glazing_method": "3/4\" Insulated",
+        "patterned_glass": "None",
+        "glass_thickness": "SS over SS",
+        "elevation": "None",
+        "hardware": "Cam Latch",
+        "hardware_color": "White",
+        "tempered": false,
+        "super_spacer": false,
+        "capillary_tubes": false,
+        "argon": false,
+        "screen": "White",
+        "grilles": "5/8\" Flat · Rectangular · 2W4H per lite · White",
+        "native_answers": {
+          "Wet Glaze": "No",
+          "Unit Type": "Complete Unit",
+          "Operation / Venting": "XO",
+          "Exterior Color": "White",
+          "Interior Color": "White",
+          "Glazing Method": "3/4\" Insulated",
+          "Tempered": "No",
+          "Glass Type": "CozE (LowE)",
+          "Patterned Glass": "None",
+          "Glass Thickness": "SS over SS",
+          "Breather Tubes": "No",
+          "Thermal Gas Added": "None",
+          "Window Installation Elevation (Ft Above Sea Level)": "None",
+          "Super Spacer": "No",
+          "Hardware Type": "Cam Latch",
+          "Hardware Finish": "White",
+          "Screen": "Yes",
+          "Grille Color": "White",
+          "Grille Type": "5/8\" Flat",
+          "Grille Pattern": "Rectangular"
+        },
+        "native_grilles": [
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          }
+        ],
+        "native_geometry": {
+          "windowset_id": 493,
+          "number_wide": 1,
+          "sash_split": "Even"
+        }
+      },
+      "gross_margin": 29.999998599999973,
+      "unit_prices": {
+        "list": 640.2,
+        "dealer": 291.68,
+        "customer": 416.69
+      },
+      "line_totals": {
+        "list": 640.2,
+        "dealer": 291.68,
+        "customer": 416.69
+      },
+      "saved_description": " Wet Glaze No Unit Type Complete Unit Operation / Venting XO Exterior Color White Interior Color White Glazing Method 3/4\" Insulated Tempered No Glass Type CozE (LowE) Patterned Glass None Glass Thickness SS over SS Breather Tubes No Thermal Gas Added None Window Installation Elevation (Ft Above Sea Level) None Super Spacer No Hardware Type Cam Latch Hardware Finish White Screen Yes Grille Color White Grille Type 5/8\" Flat Grille Pattern Rectangular"
+    },
+    {
+      "native_line_id": "bd974ad7-4a6e-4691-ba70-dc8693444ed2",
+      "native_line_number": "200",
+      "qty": 1,
+      "room": "V2K BW Double Vent",
+      "style": "V2K BW Double Vent",
+      "product_profile_id": "catalog_494",
+      "units": "in",
+      "dimension_basis": "frame",
+      "width": 72,
+      "height": 48,
+      "frame_dimensions": {
+        "width": 72,
+        "height": 48,
+        "units": "in"
+      },
+      "options": {
+        "series": "V2K BW",
+        "exterior_color": "White",
+        "interior_color": "White",
+        "color": "White",
+        "unit_type": "Complete Unit",
+        "operation": "XOX",
+        "glass": "CozE (LowE)",
+        "glazing_method": "3/4\" Insulated",
+        "patterned_glass": "None",
+        "glass_thickness": "SS over SS",
+        "elevation": "None",
+        "hardware": "Cam Latch",
+        "hardware_color": "White",
+        "tempered": false,
+        "super_spacer": false,
+        "capillary_tubes": false,
+        "argon": false,
+        "screen": "White",
+        "grilles": "5/8\" Flat · Rectangular · 2W4H per lite · White",
+        "native_answers": {
+          "Wet Glaze": "No",
+          "Unit Type": "Complete Unit",
+          "Operation / Venting": "XOX",
+          "Exterior Color": "White",
+          "Interior Color": "White",
+          "Glazing Method": "3/4\" Insulated",
+          "Tempered": "No",
+          "Glass Type": "CozE (LowE)",
+          "Patterned Glass": "None",
+          "Glass Thickness": "SS over SS",
+          "Breather Tubes": "No",
+          "Thermal Gas Added": "None",
+          "Window Installation Elevation (Ft Above Sea Level)": "None",
+          "Super Spacer": "No",
+          "Hardware Type": "Cam Latch",
+          "Hardware Finish": "White",
+          "Screen": "Yes",
+          "Grille Color": "White",
+          "Grille Type": "5/8\" Flat",
+          "Grille Pattern": "Rectangular"
+        },
+        "native_grilles": [
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          }
+        ],
+        "native_geometry": {
+          "windowset_id": 494,
+          "number_wide": 1,
+          "sash_split": "1/4 - 1/2 - 1/4"
+        }
+      },
+      "gross_margin": 29.999998599999973,
+      "unit_prices": {
+        "list": 901.5,
+        "dealer": 410.72,
+        "customer": 586.74
+      },
+      "line_totals": {
+        "list": 901.5,
+        "dealer": 410.72,
+        "customer": 586.74
+      },
+      "saved_description": " Wet Glaze No Unit Type Complete Unit Operation / Venting XOX Exterior Color White Interior Color White Glazing Method 3/4\" Insulated Tempered No Glass Type CozE (LowE) Patterned Glass None Glass Thickness SS over SS Breather Tubes No Thermal Gas Added None Window Installation Elevation (Ft Above Sea Level) None Super Spacer No Hardware Type Cam Latch Hardware Finish White Screen Yes Grille Color White Grille Type 5/8\" Flat Grille Pattern Rectangular"
+    },
+    {
+      "native_line_id": "2ac049ac-60df-4f19-b672-119c271eb8c5",
+      "native_line_number": "300",
+      "qty": 1,
+      "room": "V2K BW Single Hung",
+      "style": "V2K BW Single Hung",
+      "product_profile_id": "catalog_495",
+      "units": "in",
+      "dimension_basis": "frame",
+      "width": 36,
+      "height": 60,
+      "frame_dimensions": {
+        "width": 36,
+        "height": 60,
+        "units": "in"
+      },
+      "options": {
+        "series": "V2K BW",
+        "exterior_color": "White",
+        "interior_color": "White",
+        "color": "White",
+        "unit_type": "Complete Unit",
+        "operation": "Single Hung",
+        "glass": "CozE (LowE)",
+        "glazing_method": "3/4\" Insulated",
+        "patterned_glass": "None",
+        "glass_thickness": "SS over SS",
+        "elevation": "None",
+        "hardware": "Cam Latch",
+        "hardware_color": "White",
+        "tempered": false,
+        "super_spacer": false,
+        "capillary_tubes": false,
+        "argon": false,
+        "screen": "White",
+        "grilles": "5/8\" Flat · Rectangular · 2W4H per lite · White",
+        "native_answers": {
+          "Wet Glaze": "No",
+          "Unit Type": "Complete Unit",
+          "Operation / Venting": "Single Hung",
+          "Exterior Color": "White",
+          "Interior Color": "White",
+          "Glazing Method": "3/4\" Insulated",
+          "Tempered": "No",
+          "Glass Type": "CozE (LowE)",
+          "Patterned Glass": "None",
+          "Glass Thickness": "SS over SS",
+          "Breather Tubes": "No",
+          "Thermal Gas Added": "None",
+          "Window Installation Elevation (Ft Above Sea Level)": "None",
+          "Super Spacer": "No",
+          "Hardware Type": "Cam Latch",
+          "Hardware Finish": "White",
+          "Screen": "Yes",
+          "Grille Color": "White",
+          "Grille Type": "5/8\" Flat",
+          "Grille Pattern": "Rectangular"
+        },
+        "native_grilles": [
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          }
+        ],
+        "native_geometry": {
+          "windowset_id": 495,
+          "number_wide": 1,
+          "sash_split": "Even"
+        }
+      },
+      "gross_margin": 29.999998599999973,
+      "unit_prices": {
+        "list": 553.8,
+        "dealer": 252.31,
+        "customer": 360.44
+      },
+      "line_totals": {
+        "list": 553.8,
+        "dealer": 252.31,
+        "customer": 360.44
+      },
+      "saved_description": " Wet Glaze No Unit Type Complete Unit Operation / Venting Single Hung Exterior Color White Interior Color White Glazing Method 3/4\" Insulated Tempered No Glass Type CozE (LowE) Patterned Glass None Glass Thickness SS over SS Breather Tubes No Thermal Gas Added None Window Installation Elevation (Ft Above Sea Level) None Super Spacer No Hardware Type Cam Latch Hardware Finish White Screen Yes Grille Color White Grille Type 5/8\" Flat Grille Pattern Rectangular"
+    },
+    {
+      "native_line_id": "f310ebef-7bc7-4079-bfeb-9a0db8237235",
+      "native_line_number": "400",
+      "qty": 1,
+      "room": "V2K BW Direct Set",
+      "style": "V2K BW Direct Set",
+      "product_profile_id": "catalog_496",
+      "units": "in",
+      "dimension_basis": "frame",
+      "width": 48,
+      "height": 48,
+      "frame_dimensions": {
+        "width": 48,
+        "height": 48,
+        "units": "in"
+      },
+      "options": {
+        "series": "V2K BW",
+        "exterior_color": "White",
+        "interior_color": "White",
+        "color": "White",
+        "unit_type": "Complete Unit",
+        "glass": "CozE (LowE)",
+        "glazing_method": "3/4\" Insulated",
+        "patterned_glass": "None",
+        "glass_thickness": "SS over SS",
+        "elevation": "None",
+        "tempered": false,
+        "super_spacer": false,
+        "capillary_tubes": false,
+        "argon": false,
+        "grilles": "5/8\" Flat · Rectangular · 2W4H per lite · White",
+        "native_answers": {
+          "Wet Glaze": "No",
+          "Unit Type": "Complete Unit",
+          "Exterior Color": "White",
+          "Interior Color": "White",
+          "Glazing Method": "3/4\" Insulated",
+          "Tempered": "No",
+          "Glass Type": "CozE (LowE)",
+          "Patterned Glass": "None",
+          "Glass Thickness": "SS over SS",
+          "Breather Tubes": "No",
+          "Thermal Gas Added": "None",
+          "Window Installation Elevation (Ft Above Sea Level)": "None",
+          "Super Spacer": "No",
+          "Grille Color": "White",
+          "Grille Type": "5/8\" Flat",
+          "Grille Pattern": "Rectangular"
+        },
+        "native_grilles": [
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          },
+          {
+            "Grille Division Type": "Custom",
+            "Number Wide": "2",
+            "Number High": "4"
+          }
+        ],
+        "native_geometry": {
+          "windowset_id": 496,
+          "number_wide": 1,
+          "sash_split": ""
+        }
+      },
+      "gross_margin": 29.999998599999973,
+      "unit_prices": {
+        "list": 447.6,
+        "dealer": 203.93,
+        "customer": 291.33
+      },
+      "line_totals": {
+        "list": 447.6,
+        "dealer": 203.93,
+        "customer": 291.33
+      },
+      "saved_description": " Wet Glaze No Unit Type Complete Unit Exterior Color White Interior Color White Glazing Method 3/4\" Insulated Tempered No Glass Type CozE (LowE) Patterned Glass None Glass Thickness SS over SS Breather Tubes No Thermal Gas Added None Window Installation Elevation (Ft Above Sea Level) None Super Spacer No Grille Color White Grille Type 5/8\" Flat Grille Pattern Rectangular"
+    }
+  ],
+  "totals": {
+    "currency": "USD",
+    "list_total": 2543.1,
+    "dealer_cost": 1158.64,
+    "customer_total": 1655.2,
+    "tax": 0,
+    "freight": 0,
+    "labor": 0
+  }
+}
