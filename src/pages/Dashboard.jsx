@@ -62,13 +62,16 @@ export default function Dashboard() {
 
   const load = async () => {
     try {
-      const [mp, allEvents, fl, me, settings] = await Promise.all([
+      const [mp, reconciliation, fl, me, settings] = await Promise.all([
         base44.entities.MonthlyProfit.list("-month", 500),
-        base44.entities.CalendarEvents.list("-event_date", 5000),
+        base44.functions.invoke("reconcileInstallCalendar", {}).catch(() => null),
         base44.entities.FeeLines.filter({ invoice_month: currentMonth }, "-job_date", 5000),
         base44.auth.me().catch(() => null),
         base44.entities.AppSettings.list("-created_date", 10).catch(() => []),
       ]);
+      // The run sheet is operational only: the reconciliation function returns
+      // sales-tracker-verified jobs and leaves unmatched source events in review.
+      const allEvents = Array.isArray(reconciliation?.data?.events) ? reconciliation.data.events : [];
       setProfits(Array.isArray(mp) ? mp : []);
       setAllCalendarEvents(Array.isArray(allEvents) ? allEvents : []);
       setTodayEvents((Array.isArray(allEvents) ? allEvents : []).filter((e) => (e.event_date || "").slice(0, 10) === today));
