@@ -22,7 +22,7 @@ test("native thickness follows the new result and stale or pending results canno
 });
 test("an unreturned thickness is identified as unresolved rather than guessed from size or from SS defaults",()=>{
  const source={status:"priced",resolved_options:{tempered:false,glazing_method:'3/4" Insulated'}};
- assert.equal(automaticOptionLabel("glass_thickness",line,settings,source),"Specification not yet resolved");
+ assert.equal(automaticOptionLabel("glass_thickness",line,settings,source),"Specification unavailable");
  assert.equal(automaticOptionLabel("glass_thickness",line,settings,undefined,"loading"),"Resolving specification…");
  assert.equal(automaticOptionLabel("glass_thickness",{...line,width:""},settings),"Enter size to resolve specification");
  assert.equal(resolvedWindowOptions(line,settings,source).glass_thickness,undefined);

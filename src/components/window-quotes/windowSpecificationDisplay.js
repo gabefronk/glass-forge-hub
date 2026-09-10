@@ -38,7 +38,7 @@ export function automaticOptionLabel(key,line = {},settings = {},price,priceStat
   if (has(value)) return specificationValue(key,value) + (has(settings[key]) ? " (quote default)" : " (automatic)");
   if (!Number(line.width) || !Number(line.height)) return "Enter size to resolve specification";
   if (priceStatus === "loading" || ["calculating","native_busy"].includes(price?.status)) return "Resolving specification…";
-  return "Specification not yet resolved";
+  return "Specification unavailable";
 }
 export function glassSpecification(line,settings,price) {
   const options = resolvedWindowOptions(line,settings,price);
