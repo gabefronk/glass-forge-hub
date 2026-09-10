@@ -1,5 +1,5 @@
-export const AGENT_CENTER_OWNER = 'gabefronk@gmail.com';
-export const isAgentCenterOwner = user => user?.role === 'admin' && String(user.email||'').trim().toLowerCase() === AGENT_CENTER_OWNER;
+export const AGENT_CENTER_OWNER_EMAILS = new Set(['gabefronk@gmail.com','gabriel.fronk.wd@gmail.com']);
+export const isAgentCenterOwner = user => user?.role === 'admin' && AGENT_CENTER_OWNER_EMAILS.has(String(user.email||'').trim().toLowerCase());
 const clean=(value,max=180)=>typeof value==='string'?value.slice(0,max):'';
 const iso=value=>Number.isFinite(Date.parse(value))?new Date(value).toISOString():null;
 const ids=new Set(['manager_agent','sales_tracker_agent','calendar_coordinator','probuild_reporting','codex_development','mac_manager','external_claude_agents']);
