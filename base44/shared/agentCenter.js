@@ -2,9 +2,10 @@ export const AGENT_CENTER_OWNER = 'gabefronk@gmail.com';
 export const isAgentCenterOwner = user => user?.role === 'admin' && String(user.email||'').trim().toLowerCase() === AGENT_CENTER_OWNER;
 const clean=(value,max=180)=>typeof value==='string'?value.slice(0,max):'';
 const iso=value=>Number.isFinite(Date.parse(value))?new Date(value).toISOString():null;
-const ids=new Set(['manager_agent','sales_tracker_agent','calendar_coordinator','probuild_reporting','codex_development','mac_manager']);
+const ids=new Set(['manager_agent','sales_tracker_agent','calendar_coordinator','probuild_reporting','codex_development','mac_manager','external_claude_agents']);
 const visibleEntry=entry=>({id:entry.id,target_id:entry.target_id,kind:entry.kind,title:entry.title,body:entry.body,recorded_at:entry.recorded_at,actor_email:entry.actor_email,status:entry.status,request_key:entry.request_key});
 const visibleEscalation=row=>({id:row.id,agent_id:row.agent_id,department:row.department,title:row.title,context:row.context,status:row.status,created_at:row.created_at,resolved_at:row.resolved_at,resolution:row.resolution});
+const visibleConnection=row=>({id:row.id,provider_id:row.provider_id,provider_name:row.provider_name,connection_state:row.connection_state,scope_summary:row.scope_summary,last_verified_at:row.last_verified_at||null,verification_message:row.verification_message||'',auth_method:row.auth_method,updated_at:row.updated_at});
 const connectionCatalog=[
  {provider_id:'anthropic_claude',provider_name:'Anthropic Claude',connection_state:'planned',scope_summary:'Agent status and approved coordination only',auth_method:'api_key'},
  {provider_id:'openai_codex',provider_name:'OpenAI Codex',connection_state:'planned',scope_summary:'Agent task status and approved coordination only',auth_method:'api_key'},
@@ -68,11 +69,34 @@ export function createAgentCenterHandler({getClient,now=()=>new Date()}={}) {
     const event=await api.AgentCenterEvent.create({event_key:eventKey,agent_id:agent,event_type:eventType,message,occurred_at:at,connection_state:node.connection,recorded_by:user.email});
     return Response.json({event,dispatch_enabled:false});
    }
+   if(input.action==='connection_prepare'){
+    const provider=clean(input.provider_id,80),scope=clean(input.scope_summary,501).trim(),method=clean(input.auth_method,80);
+    const catalog=connectionCatalog.find(item=>item.provider_id===provider);
+    if(!catalog||!scope||!['api_key','oauth','webhook','local_bridge'].includes(method))throw Error('Choose a supported provider, scope, and secure connection method.');
+    const prior=(await api.AgentCenterConnection.filter({provider_id:provider},'-updated_at',1))[0];
+    const row={provider_id:provider,provider_name:catalog.provider_name,connection_state:'planned',scope_summary:scope,auth_method:method,verification_message:'Secure credential or OAuth authorization has not been configured.',created_at:prior?.created_at||at,updated_at:at};
+    const saved=prior?await api.AgentCenterConnection.update(prior.id,row):await api.AgentCenterConnection.create(row);
+    return Response.json({connection:visibleConnection(saved),credential_flow:'No credential was accepted or stored. Add the provider credential only through Base44 secure secret storage or its normal OAuth consent flow.'});
+   }
+   if(input.action==='connection_test'){
+    const provider=clean(input.provider_id,80),row=(await api.AgentCenterConnection.filter({provider_id:provider},'-updated_at',1))[0];
+    if(!connectionCatalog.some(item=>item.provider_id===provider))throw Error('Choose a supported provider.');
+    if(!row||row.connection_state!=='verified')return Response.json({provider_id:provider,verified:false,message:'No verified secure connection is configured. This connection remains planned.'});
+    return Response.json({provider_id:provider,verified:false,message:'Live verification requires the provider-specific secure backend bridge; no browser-side credential check is performed.'});
+   }
+   if(input.action==='connection_disconnect'){
+    const provider=clean(input.provider_id,80),row=(await api.AgentCenterConnection.filter({provider_id:provider},'-updated_at',1))[0];
+    if(!row)return Response.json({unchanged:true,message:'No connection profile exists yet.'});
+    const saved=await api.AgentCenterConnection.update(row.id,{connection_state:'disconnected',last_verified_at:null,verification_message:'Disconnected in Agent Center. Remove any provider secret in Base44 secure secret storage before reconnecting.',updated_at:at});
+    return Response.json({connection:visibleConnection(saved),message:'Connection profile disconnected. No credentials are displayed or retained by the Agent Center.'});
+   }
    if(input.action!=='inventory')throw Error('Unsupported Agent Center action.');
-   const results=await Promise.allSettled([api.SalesTrackerSnapshot.filter({status:'validated'},'-source_captured_at',1),api.AgentCenterEntry.list('-recorded_at',101),api.AgentCenterEscalation.list('-created_at',101),api.AgentCenterEvent.list('-occurred_at',101)]);
-   const [snapshot,entries,escalations,events]=[results[0].status==='fulfilled'?results[0].value[0]:null,results[1].status==='fulfilled'?results[1].value:[],results[2].status==='fulfilled'?results[2].value:[],results[3].status==='fulfilled'?results[3].value:[]];
-   const warnings=results.map((r,i)=>r.status==='rejected'?['Tracker capture information is unavailable.','Private activity could not be loaded.','Escalations could not be loaded.','Agent events could not be loaded.'][i]:null).filter(Boolean);
-   return Response.json({inventory:buildAgentInventory({snapshot,events,now:now()}),entries:entries.slice(0,100).map(visibleEntry),escalations:escalations.slice(0,100).map(visibleEscalation),has_more_entries:entries.length>100,checked_at:at,warnings,dispatch_enabled:false,event_interface:{supported_event_types:['started','progress','needs_owner_decision','completed','failed'],connection_states:['connected','manual','planned'],authentication:'A future signed integration bridge is required; this page stores no secrets.'}});
+   const results=await Promise.allSettled([api.SalesTrackerSnapshot.filter({status:'validated'},'-source_captured_at',1),api.AgentCenterEntry.list('-recorded_at',101),api.AgentCenterEscalation.list('-created_at',101),api.AgentCenterEvent.list('-occurred_at',101),api.AgentCenterConnection.list('-updated_at',100)]);
+   const [snapshot,entries,escalations,events,connectionRows]=[results[0].status==='fulfilled'?results[0].value[0]:null,results[1].status==='fulfilled'?results[1].value:[],results[2].status==='fulfilled'?results[2].value:[],results[3].status==='fulfilled'?results[3].value:[],results[4].status==='fulfilled'?results[4].value:[]];
+   const connectionMap=new Map(connectionRows.map(row=>[row.provider_id,row]));
+   const connections=connectionCatalog.map(item=>visibleConnection(connectionMap.get(item.provider_id)||{...item,updated_at:null}));
+   const warnings=results.map((r,i)=>r.status==='rejected'?['Tracker capture information is unavailable.','Private activity could not be loaded.','Escalations could not be loaded.','Agent events could not be loaded.','Connection profiles could not be loaded.'][i]:null).filter(Boolean);
+   return Response.json({inventory:buildAgentInventory({snapshot,events,now:now()}),entries:entries.slice(0,100).map(visibleEntry),escalations:escalations.slice(0,100).map(visibleEscalation),connections,has_more_entries:entries.length>100,checked_at:at,warnings,dispatch_enabled:false,event_interface:{supported_event_types:['started','progress','needs_owner_decision','completed','failed'],connection_states:['connected','manual','planned'],authentication:'A future signed integration bridge is required; this page stores no secrets.'}});
   }catch(error){return Response.json({error:error.message||'Agent Center could not finish this action.'},{status:400});}
  };
 }
