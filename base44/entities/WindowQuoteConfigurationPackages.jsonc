@@ -1,0 +1,23 @@
+{
+  "name": "WindowQuoteConfigurationPackages",
+  "type": "object",
+  "properties": {
+    "version": { "type": "integer" },
+    "quote_id": { "type": "string" },
+    "input_revision": { "type": "integer" },
+    "owner_id": { "type": "string" },
+    "owner_email": { "type": "string" },
+    "input_hash": { "type": "string" },
+    "policy": { "type": "object" },
+    "snapshot": { "type": "object" },
+    "items": { "type": "array", "items": { "type": "object" } },
+    "status": { "type": "string", "enum": ["preparing", "pending", "ready", "needs_attention", "orphaned"] },
+    "state_version": { "type": "integer" },
+    "lease_token": { "type": "string" },
+    "lease_until": { "type": "string" },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" }
+  },
+  "required": ["version", "quote_id", "input_revision", "owner_id", "owner_email", "input_hash", "policy", "snapshot", "items", "status", "state_version", "created_at", "updated_at"],
+  "rls": { "create": false, "read": false, "update": false, "delete": false }
+}
