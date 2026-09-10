@@ -9,7 +9,7 @@ export function createScriptedRunnerHandler({ getClient, execution, getExecution
       const raw = await req.text();
       if (raw.length > 600000) throw new HttpError(413, 'Request too large');
       let body; try { body = JSON.parse(raw); } catch { throw new HttpError(400, 'Invalid JSON'); }
-      if (!body || typeof body !== 'object' || Array.isArray(body) || !['poll', 'claim', 'heartbeat', 'checkpoint', 'report'].includes(body.action)) throw new HttpError(400, 'Unknown scripted runner action');
+      if (!body || typeof body !== 'object' || Array.isArray(body) || !['poll', 'claim', 'heartbeat', 'checkpoint', 'report', 'preview_claim', 'preview_report'].includes(body.action)) throw new HttpError(400, 'Unknown scripted runner action');
       const client = await getClient(req), db = client.asServiceRole.entities;
       // Resolve once per HTTP request, then authenticate/execute against the same
       // config snapshot. Nothing from this private snapshot is returned directly.
@@ -23,4 +23,5 @@ export function createScriptedRunnerHandler({ getClient, execution, getExecution
     }
   };
 }
+
 
