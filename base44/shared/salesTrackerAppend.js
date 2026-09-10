@@ -1,4 +1,4 @@
-import { normalize } from '../functions/salesTrackerImport/parser.js';
+import { normalize } from './salesTrackerParser.js';
 
 export const TRACKER_FIELDS = ['month_paid','closed','order_date','po','oe','builder','subdivision','lot','arrival_date','sale_price','notes','order_folder_url'];
 export const TRACKER_HEADERS = ['Month PD','CLOSED','DATE','PO','OE','Builder','Subdivision','LOT #','Delivery/Arrival date','Total Sale Price','Notes','Order Folder URL'];
