@@ -1,3 +1,6 @@
+import { createNativePricePreviewService, planNativePricePreview } from './nativePricePreview.js';
+import { loadScriptedRunnerConfig } from './scriptedRunnerConfig.js';
+import { nativeEnginePresenceReady } from './nativeEngineObservation.js';
 import { HttpError, sha256, validateLines, validateSettings } from './windowQuotesCore.js';
 import { buildQuotePlan, getProductProfileForLine, PROFILE_CONTRACT_HASH } from './amscoQuotePlan.js';
 import { normalizeConversationalSchedule } from './structuredQuoteIntake.js';
@@ -227,13 +230,15 @@ function plannedDraft(draft) {
   const checked = buildQuotePlan({ ...normalized.quote, id: 'builder-price-preview', input_revision: 1 });
   return { normalized, checked };
 }
-export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeMs = 24 * 60 * 60 * 1000 } = {}) {
+export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeMs = 24 * 60 * 60 * 1000, user, config, sessionId } = {}) {
   // Price each requested row independently. A missing size or an unmapped
   // product must never discard exact prices available for neighboring rows.
   const planned = (draft.lines || []).map((line, index) => {
     try {
       const result = plannedDraft({ ...draft, lines: [line] });
-      if (result.normalized.ok === true && result.checked.ok === true) return { index, line: result.checked.plan.lines[0], settings: result.checked.plan.settings };
+      if (result.normalized.ok === true && result.checked.ok === true) return { index, line: result.checked.plan.lines[0], settings: result.checked.plan.settings, inputLine: result.normalized.quote.lines[0], inputSettings: result.normalized.quote.settings };
+      const catalog = planNativePricePreview({ id: 'builder-price-preview', input_revision: 1, settings: draft.settings, lines: [line] });
+      if (catalog.ok) return { index, line: catalog.plan.lines[0], settings: catalog.plan.settings, inputLine: line, inputSettings: draft.settings };
       const questions = unique([...(result.normalized.questions || []), ...(result.checked.issues || []).map(item => item.message)]);
       return { index, status: onlineOnlyIssues(result.checked) ? 'amsco_lookup_needed' : 'needs_details', questions };
     } catch {
@@ -245,6 +250,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
   for (const quote of quotes) {
     if (quote?.worker_status !== 'ready' || quote?.result?.verified !== true || !Array.isArray(quote.result.lines) ||
         quote.result.lines.length !== quote.lines?.length) continue;
+    if (config?.native_engine && !nativeEnginePresenceReady({ state: 'ready', ...quote.result.native_engine }, config.native_engine)) continue;
     const checkedAt = quote.result.verification?.checked_at;
     const age = now - Date.parse(checkedAt);
     if (!Number.isFinite(age) || age < -60000 || age > maxAgeMs) continue;
@@ -267,23 +273,30 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
       } catch { /* Older or incomplete results are not price sources. */ }
     }
   }
-  const lines = planned.map(item => {
+  const service = config ? createNativePricePreviewService({ config, now: () => new Date(now) }) : null;
+  const lines = [];
+  for (const item of planned) {
     const base = { index: item.index, id: draft.lines[item.index]?.id };
-    if (!item.line) return { ...base, status: item.status, questions: item.questions };
+    if (!item.line) { lines.push({ ...base, status: item.status, questions: item.questions }); continue; }
     const key = stable({ dealer: item.settings.dealer, yard: item.settings.yard, line: priceSignature(item.line) });
     const hit = cache.get(key);
-    if (!hit) return { ...base, status: 'native_calculation_needed' };
+    if (!hit) {
+      const calculation = service?.enabled && user ? await service.request({ db, user, line: item.inputLine, settings: item.inputSettings, sessionId }) : { status: 'native_calculation_needed' };
+      lines.push({ ...base, ...calculation }); continue;
+    }
     const customer = roundMoney(hit.dealer / (1 - item.settings.gross_margin / 100)), qty = item.line.qty;
-    return { ...base, status: 'priced', price_source: 'verified_configuration',
+    lines.push({ ...base, status: 'priced', price_source: 'verified_configuration',
       unit_prices: { ...(hit.list !== undefined ? { list: hit.list } : {}), dealer: hit.dealer, customer },
       line_totals: { ...(hit.list !== undefined ? { list: roundMoney(hit.list * qty) } : {}), dealer: roundMoney(hit.dealer * qty), customer: roundMoney(customer * qty) },
-      checked_at: hit.checked_at };
-  });
+      checked_at: hit.checked_at });
+  }
   const priced = lines.filter(line => line.status === 'priced'), ready = lines.length > 0 && priced.length === lines.length;
   const subtotal = priced.length ? roundMoney(priced.reduce((sum, line) => sum + line.line_totals.customer, 0)) : null;
   return { ready, lines, total: ready ? subtotal : null, priced_subtotal: subtotal, currency: 'USD',
     missing_count: lines.filter(line => line.status === 'amsco_lookup_needed').length,
-    calculation_count: lines.filter(line => line.status === 'native_calculation_needed').length,
+    calculation_count: lines.filter(line => ['native_calculation_needed', 'calculating', 'native_busy'].includes(line.status)).length,
+    pending: lines.some(line => ['calculating', 'native_busy'].includes(line.status)),
+    retry_after_ms: 2000,
     needs_details_count: lines.filter(line => line.status === 'needs_details').length,
     questions: unique(lines.flatMap(line => line.questions || [])) };
 }
@@ -315,7 +328,8 @@ export function createWindowQuoteBuilderHandler({ getClient, normalizeAI }) {
       if (raw.length > BUILDER_LIMITS.body) throw new HttpError(413, 'Request is too large');
       let body;
       try { body = JSON.parse(raw); } catch { fail('Invalid JSON'); }
-      keys(body, ['action', 'draft', 'conversation', 'unresolved_requirements'], 'request');
+      keys(body, ['action', 'draft', 'conversation', 'unresolved_requirements', 'preview_session_id'], 'request');
+      if (body.preview_session_id !== undefined && (body.action !== 'price_preview' || typeof body.preview_session_id !== 'string' || !/^[a-zA-Z0-9_-]{1,160}$/.test(body.preview_session_id))) fail('Invalid preview session');
       if (!['assist', 'review', 'price_preview'].includes(body.action)) fail('Unknown builder action');
       const client = await getClient(req);
       let user;
@@ -323,7 +337,10 @@ export function createWindowQuoteBuilderHandler({ getClient, normalizeAI }) {
       if (!user) throw new HttpError(401, 'Sign in required');
       if (user.role !== 'admin') throw new HttpError(403, 'Window Quotes is currently available to administrators');
       const draft = validateBuilderDraft(body.draft);
-      if (body.action === 'price_preview') return new Response(JSON.stringify(await builderPricePreview(draft, client.asServiceRole.entities)), { status: 200, headers });
+      if (body.action === 'price_preview') {
+        const db = client.asServiceRole.entities, config = await loadScriptedRunnerConfig({ db });
+        return new Response(JSON.stringify(await builderPricePreview(draft, db, { user, config, sessionId: body.preview_session_id })), { status: 200, headers });
+      }
       const context = conversation(body.conversation);
       // This optional stateless ledger can only ADD blockers. It is never an
       // assessment/status object, prior approval, capability or skip flag.
@@ -397,3 +414,4 @@ export function createBuilderAwareIntake(normalizeAI) {
     }
   };
 }
+
