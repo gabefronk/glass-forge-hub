@@ -1,0 +1,203 @@
+{
+  "plan": {
+    "schema_version": 3,
+    "support_id": "amsco-pk361-catalog-v1",
+    "catalog_id": "361",
+    "quote_id": "p-d5aea842-7820-46e0-8a70-c2bda207dfd4",
+    "input_revision": 1,
+    "title": "",
+    "pricing_scope": "windows_only_pretax",
+    "settings": {
+      "dealer": "BFS",
+      "yard": "BFS-UTAH DESIGN(11)",
+      "gross_margin": 30
+    },
+    "lines": [
+      {
+        "source_index": 0,
+        "room": "",
+        "qty": 1,
+        "width": 24,
+        "height": 48,
+        "units": "in",
+        "dimension_basis": "frame",
+        "style": "Hampton Casement",
+        "frame_dimensions": {
+          "width": 24,
+          "height": 48,
+          "units": "in"
+        },
+        "product_profile_id": "catalog_724",
+        "native_windowset_id": 724,
+        "options": {
+          "series": "Hampton",
+          "color": "White",
+          "exterior_color": "White",
+          "interior_color": "White",
+          "glass": "CozE (LowE)"
+        },
+        "native_questions": [
+          {
+            "name": "Exterior Color",
+            "value": "White"
+          },
+          {
+            "name": "Interior Color",
+            "value": "White"
+          },
+          {
+            "name": "Glass Type",
+            "value": "CozE (LowE)"
+          }
+        ]
+      }
+    ]
+  },
+  "observed": {
+    "quote_id": "p-d5aea842-7820-46e0-8a70-c2bda207dfd4",
+    "input_revision": 1,
+    "native_source": "desktop_native",
+    "native_quote_id": "0ad02146-22cb-4172-8682-6cc7641b6cea",
+    "dealer": "BFS",
+    "yard": "BFS-UTAH DESIGN(11)",
+    "gross_margin": 30,
+    "checked_at": "2026-09-10T10:38:15.4335334Z",
+    "reopened": true,
+    "lines": [
+      {
+        "native_line_id": "e585f1b6-8b31-4894-bc14-082a5c15a8c7",
+        "native_line_number": "100",
+        "qty": 1,
+        "units": "in",
+        "dimension_basis": "frame",
+        "width": 24,
+        "height": 48,
+        "frame_dimensions": {
+          "width": 24,
+          "height": 48,
+          "units": "in"
+        },
+        "style": "Hampton Casement",
+        "room": "",
+        "options": {
+          "series": "Hampton",
+          "exterior_color": "White",
+          "interior_color": "White",
+          "color": "White",
+          "unit_type": "Complete Unit",
+          "operation": "Left",
+          "glass": "CozE (LowE)",
+          "glazing_method": "3/4\" Insulated",
+          "patterned_glass": "None",
+          "glass_thickness": "SS over SS",
+          "elevation": "None",
+          "hardware": "Standard",
+          "hardware_color": "White",
+          "tempered": false,
+          "super_spacer": true,
+          "capillary_tubes": false,
+          "argon": false,
+          "screen": "White",
+          "grilles": "None",
+          "native_answers": {
+            "Wet Glaze": "No",
+            "Unit Type": "Complete Unit",
+            "Operation / Venting": "Left",
+            "Exterior Color": "White",
+            "Interior Color": "White",
+            "Glazing Method": "3/4\" Insulated",
+            "Tempered": "No",
+            "Glass Type": "CozE (LowE)",
+            "Patterned Glass": "None",
+            "Glass Thickness": "SS over SS",
+            "Breather Tubes": "No",
+            "Thermal Gas Added": "None",
+            "Window Installation Elevation (Ft Above Sea Level)": "None",
+            "Super Spacer": "Yes",
+            "Hardware Type": "Standard",
+            "Hardware Finish": "White",
+            "Screen": "Yes",
+            "Grille Type": "None",
+            "Grille Pattern": "None"
+          },
+          "native_grilles": [
+            {},
+            {}
+          ],
+          "native_geometry": {
+            "windowset_id": 724,
+            "number_wide": 1,
+            "sash_split": ""
+          }
+        },
+        "product_profile_id": "catalog_724",
+        "gross_margin": 29.999998599999973,
+        "unit_prices": {
+          "list": 725.4,
+          "dealer": 330.49,
+          "customer": 472.13
+        },
+        "line_totals": {
+          "list": 725.4,
+          "dealer": 330.49,
+          "customer": 472.13
+        },
+        "saved_description": "24 x 48 - Hampton Casement Left\nU-Value: 0.29  SHGC: 0.24  VT: 0.44  CR: 58 \\ STC: 29  OITC: 24  EWR: NR\nStructural: LC-PG50  Air: 0.02  Water: 7.5  Test Report: J8574.01-301-47\n\nComplete Unit, Left, White, 3/4\" Insulated, CozE (LowE), Debris Protect film on both glass surfaces, SS over SS, Super Spacer, Standard, White Hardware, Sash Limiter = No, White Screen, Egress = No, Sloped Sill Adapter = No\nCPD: AMS-A-80-02604-00001 (CA)\n*Estimated Overall Weight = 29 lbs.*"
+      }
+    ],
+    "totals": {
+      "currency": "USD",
+      "list_total": 725.4,
+      "dealer_cost": 330.49,
+      "customer_total": 472.13,
+      "tax": 0,
+      "freight": 0,
+      "labor": 0,
+      "total": 472.13
+    },
+    "native_engine": {
+      "version": 1,
+      "engine": "amsco-navigator",
+      "contract_hash": "eefefa8ab251aca1e29f41860ca20492a1828f08430f00afaff16c956df652cf",
+      "catalog_id": "361",
+      "context_fingerprint": "1edbe92e64fa350fd31edc93872355016a697d13320234ed7645ac529faa06de",
+      "plan_hash": "27ef8a894f768edb91e3ff130a2b8573bacc38def130b2cd2f9a11cac737833c",
+      "operation_id": "f4cb1d0c-f348-408e-a6af-f019412aa0b4",
+      "persistence": {
+        "kind": "navigator_local",
+        "artifact_id": "native-quote-0ad0214622cb417286826cc7641b6cea",
+        "artifact_sha256": "318e918a27c61cf4cc97ffb2d3f559313a9c84803ec91ba6e22cc78df055f31c",
+        "bytes": 57552
+      },
+      "stages": {
+        "before_save": {
+          "at": "2026-09-10T10:38:15.2372079Z",
+          "snapshot_sha256": "ab1d5b1924b1f3193b355cee74509b7cd3ae0d787efab52c8bfcf97b45dff68b"
+        },
+        "after_save": {
+          "at": "2026-09-10T10:38:15.3781508Z",
+          "snapshot_sha256": "ab1d5b1924b1f3193b355cee74509b7cd3ae0d787efab52c8bfcf97b45dff68b",
+          "artifact_sha256": "318e918a27c61cf4cc97ffb2d3f559313a9c84803ec91ba6e22cc78df055f31c"
+        },
+        "reopened": {
+          "at": "2026-09-10T10:38:15.4335334Z",
+          "snapshot_sha256": "ab1d5b1924b1f3193b355cee74509b7cd3ae0d787efab52c8bfcf97b45dff68b",
+          "artifact_sha256": "318e918a27c61cf4cc97ffb2d3f559313a9c84803ec91ba6e22cc78df055f31c"
+        }
+      }
+    }
+  },
+  "context": {
+    "policy": {
+      "enabled": true,
+      "version": 1,
+      "contract_hash": "eefefa8ab251aca1e29f41860ca20492a1828f08430f00afaff16c956df652cf",
+      "catalog_id": "361",
+      "context_fingerprint": "1edbe92e64fa350fd31edc93872355016a697d13320234ed7645ac529faa06de"
+    },
+    "operationId": "f4cb1d0c-f348-408e-a6af-f019412aa0b4",
+    "startedAt": "2026-09-10T10:38:06.042Z",
+    "now": "2026-09-10T10:38:16.958Z"
+  }
+}
+
