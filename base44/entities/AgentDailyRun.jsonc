@@ -1,0 +1,117 @@
+{
+  "name": "AgentDailyRun",
+  "type": "object",
+  "properties": {
+    "lead_id": {
+      "type": "string",
+      "title": "Lead Id"
+    },
+    "lead_name": {
+      "type": "string",
+      "title": "Lead Name"
+    },
+    "run_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Run Date"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "completed",
+        "blocked",
+        "skipped"
+      ],
+      "title": "State",
+      "default": "running"
+    },
+    "triggered_by": {
+      "type": "string",
+      "enum": [
+        "scheduler",
+        "manual"
+      ],
+      "title": "Triggered By",
+      "default": "scheduler"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Started At"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Completed At"
+    },
+    "summary": {
+      "type": "string",
+      "title": "Summary"
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Blockers",
+      "default": []
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Exceptions",
+      "default": []
+    },
+    "plan_snapshot": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "title": "Plan Snapshot",
+      "default": []
+    },
+    "escalated": {
+      "type": "boolean",
+      "title": "Escalated",
+      "default": false
+    },
+    "escalation_id": {
+      "type": "string",
+      "title": "Escalation Id"
+    }
+  },
+  "required": [
+    "lead_id",
+    "lead_name",
+    "run_date",
+    "state",
+    "triggered_by",
+    "started_at"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

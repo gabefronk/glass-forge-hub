@@ -1,0 +1,67 @@
+{
+  "name": "AgentOpsConfig",
+  "type": "object",
+  "properties": {
+    "config_key": {
+      "type": "string",
+      "title": "Config Key"
+    },
+    "autonomous_enabled": {
+      "type": "boolean",
+      "title": "Autonomous Enabled",
+      "default": true
+    },
+    "paused": {
+      "type": "boolean",
+      "title": "Paused",
+      "default": false
+    },
+    "lead_enablement": {
+      "type": "object",
+      "title": "Lead Enablement",
+      "default": {}
+    },
+    "scheduled_time": {
+      "type": "string",
+      "title": "Scheduled Time",
+      "default": "07:00"
+    },
+    "last_run_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Last Run At"
+    },
+    "next_run_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Next Run At"
+    }
+  },
+  "required": [
+    "config_key",
+    "autonomous_enabled",
+    "paused"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

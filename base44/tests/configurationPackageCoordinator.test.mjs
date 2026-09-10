@@ -110,3 +110,12 @@ test('stale review and foreign owner cannot start a package; disabled coordinati
   const off = createConfigurationPackageCoordinator({ ...other.options, config: { native_engine: { ...policy, configuration_packages: false } } });
   assert.equal(await off.start({ db: {}, q: other.q, user }), null); assert.equal(await off.advance({ db: {} }), null);
 });
+
+test('a lost final quote acknowledgement repairs work status without calculating or completing twice', async () => {
+  const h = await harness({ widths: [24], unsupported: [] }); await h.start();
+  const update = h.db.QuoteRequests.updateMany; let once = true;
+  h.db.QuoteRequests.updateMany = async (query, patch) => { const result = await update(query, patch); if (once && patch.$set.worker_status === 'ready') { once = false; throw new Error('Lost Ready acknowledgement'); } return result; };
+  await assert.rejects(h.reconcile(), /Lost Ready/); assert.equal(h.db.QuoteRequests.data[0].worker_status, 'ready');
+  await h.reconcile(); assert.equal(h.db.WindowQuoteConfigurationPackages.data[0].status, 'ready'); assert.equal(h.completions.length, 1); assert.equal(h.requests.length, 0);
+});
+

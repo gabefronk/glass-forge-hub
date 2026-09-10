@@ -1,8 +1,7 @@
 import { DAILY_PLANS, ORG_TREE, STATIC_NODES } from "./agentCenterRoles";
 
-const KEY = "glassforge_agent_daily_runs_v1";
-
-// Connector-backed actions each lead could one day perform. Disabled today — shown as planned.
+// Connector-backed routine actions each lead could perform once its connector
+// is configured. Disabled until the connector is actually available.
 export const PLANNED_ACTIONS = {
   calendar_ops_lead: ["Pull calendar event status (Google Calendar)", "Re-run field-report audit"],
   sales_order_lead: ["Pull sales tracker orders", "Verify OE/PO against open orders"],
@@ -16,25 +15,15 @@ export const SECTION_LEADS = ORG_TREE.sections.map(s => {
   return { id: s.leadId, label: s.label, name: node.name, department: node.department, plan: DAILY_PLANS[s.leadId] || [] };
 });
 
-export function loadRuns() {
-  try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; }
-}
-export function saveRuns(runs) {
-  try { localStorage.setItem(KEY, JSON.stringify(runs)); } catch { /* ignore */ }
-}
-export function newRun(leadId) {
-  const lead = SECTION_LEADS.find(l => l.id === leadId);
-  return {
-    id: crypto.randomUUID(),
-    leadId,
-    leadName: lead?.name || leadId,
-    state: "running",
-    startedAt: new Date().toISOString(),
-    completedAt: null,
-    summary: "",
-    blockers: [],
-    plan: lead?.plan || [],
-    actions: [],
-  };
-}
+export const DEFAULT_ENABLEMENT = Object.fromEntries(SECTION_LEADS.map(l => [l.id, true]));
+
 export const formatTime = iso => iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+
+export function nextRunDate(scheduledTime) {
+  const [h, m] = String(scheduledTime || "07:00").split(":").map(Number);
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(h || 7, m || 0, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  return next;
+}
