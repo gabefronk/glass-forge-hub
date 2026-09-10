@@ -38,12 +38,14 @@ export function verifyCatalogObservedQuote(plan,observed,{validateIdentity}={}) 
         }
       }else if(answers?.[wanted.name]!==wanted.value)reject('option_mismatch',path+'.'+wanted.name,'The saved native option differs: '+wanted.name+'.');
     }
-    const nativeBool=value=>value==='Yes'?true:value==='No'?false:undefined;
     // Public display values must be grounded in the same observed evidence used
     // for verification, rather than copied from the request.
-    if(actual.options?.exterior_color!==answers?.['Exterior Color']||actual.options?.interior_color!==answers?.['Interior Color']||
-      actual.options?.tempered!==nativeBool(answers?.Tempered))reject('display_option_mismatch',path+'.options','Displayed selections differ from native answers.');
-    if(!close(actual.gross_margin,plan.settings.gross_margin))reject('margin_mismatch',path,'The saved line margin differs.');
+    try {
+      const derived=catalogOptionsFromNative({windowset_id:actual.options?.native_geometry?.windowset_id,questions:answers,
+        grilles,number_wide:actual.options?.native_geometry?.number_wide,sash_split:actual.options?.native_geometry?.sash_split});
+      if(stable(derived)!==stable(actual.options))reject('display_option_mismatch',path+'.options','Displayed selections differ from native answers.');
+    } catch {reject('display_option_mismatch',path+'.options','Displayed selections lack valid native evidence.');}
+    if(!finite(actual.gross_margin)||Math.abs(actual.gross_margin-plan.settings.gross_margin)>0.0001)reject('margin_mismatch',path,'The saved line margin differs.');
     const unit={},extended={};
     for(const kind of ['list','dealer','customer']){
       unit[kind]=cents(actual.unit_prices?.[kind]);extended[kind]=cents(actual.line_totals?.[kind]);
