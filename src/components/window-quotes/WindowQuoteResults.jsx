@@ -150,6 +150,9 @@ function WindowSheet({ line, index, currency, drawing, scale }) {
   </article>;
 }
 
+import { InstallTotals } from './InstallBudgetEditor';
+import { quoteInstallSummary } from '../../../base44/shared/installBudget.js';
+
 export default function WindowQuoteResults({ quote, onWon, busy }) {
   const result = quote?.result;
   const verified = quote?.worker_status === "ready" && result?.verified === true;
@@ -162,11 +165,13 @@ export default function WindowQuoteResults({ quote, onWon, busy }) {
   const quantities = lines.map((line) => positive(line.qty ?? line.quantity));
   const count = quantities.length && quantities.every((qty) => qty !== null) ? quantities.reduce((sum, qty) => sum + qty, 0) : null;
   const totals = result.totals || {};
+  const installSummary = quote.install_summary || quoteInstallSummary(quote);
   const currency = totals.currency || result.currency || "USD";
   const summaryRows = [["Subtotal", totals.subtotal], ["Labor", totals.labor], ["Delivery", totals.delivery], ["Freight", totals.freight], ["Tax", totals.tax]].filter(([, value]) => present(value));
   const notices = Array.isArray(result.notices) ? result.notices.filter(present) : [];
   const revision = result.input_revision ?? quote.input_revision;
   return <div className="space-y-5">
+    {installSummary.enabled && <InstallTotals summary={installSummary} linked />}
     <section className="overflow-hidden rounded-2xl border border-[#DDE3EC] bg-white">
       <div className="flex flex-wrap items-start justify-between gap-4 p-5"><div><span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-[#EAF5EE] px-2.5 py-1 text-[11px] font-semibold text-[#276449]"><CheckCircle2 size={12} />Verified quote</span><h3 className="break-words font-heading text-xl font-semibold text-[#131A26]">{present(result.native_quote_number) ? `AMSCO quote ${result.native_quote_number}` : result.native_source === "desktop_native" ? "Saved AMSCO desktop quote" : result.native_source === "native_configurations" ? "Priced AMSCO window package" : "Window quote"}</h3><p className="mt-1 text-xs text-[#616D81]">{lines.length} {lines.length === 1 ? "line" : "lines"}{count !== null ? ` · ${count} ${count === 1 ? "window / assembly" : "windows / assemblies"}` : " · quantity not supplied"}{present(revision) ? ` · Revision ${revision}` : ""}</p></div><div className="sm:text-right"><p className="text-[10px] font-semibold uppercase tracking-wider text-[#77839A]">Customer total</p><p className="mt-1 break-all text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums text-[#1E4A85]">{money(totals.total ?? totals.customer_total, currency)}</p></div></div>
       <dl className="grid gap-3 border-t border-[#E9EDF4] bg-[#F6F8FC] px-5 py-4 sm:grid-cols-2"><Specification label="Dealer" value={result.dealer_name || result.dealer || quote.settings?.dealer} /><Specification label="Shipping yard" value={result.yard || quote.settings?.yard} /></dl>
@@ -183,6 +188,6 @@ export default function WindowQuoteResults({ quote, onWon, busy }) {
       {[totals.list_total, totals.dealer_total ?? totals.dealer_cost, totals.gross_margin].some(present) && <details className="mt-4 border-t border-[#E9EDF4] pt-3"><summary className="cursor-pointer text-xs font-medium text-[#616D81]">Package cost and margin</summary><dl className="mt-3 space-y-2 text-xs">{[["List total", totals.list_total], ["Dealer cost", totals.dealer_total ?? totals.dealer_cost]].filter(([, value]) => present(value)).map(([label, value]) => <div key={label} className="flex flex-wrap justify-between gap-x-4 gap-y-1"><dt className="text-[#616D81]">{label}</dt><dd className="break-all tabular-nums text-[#131A26]">{money(value, currency)}</dd></div>)}{present(totals.gross_margin) && <div className="flex flex-wrap justify-between gap-x-4 gap-y-1"><dt className="text-[#616D81]">Gross margin</dt><dd className="text-[#131A26]">{display(totals.gross_margin)}%</dd></div>}</dl></details>}
       <p className="mt-4 text-[11px] leading-relaxed text-[#77839A]">Prices are the saved quote values. Schematics show overall proportions and are not fabrication drawings.</p>
     </section>
-    {quote.job_id ? <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between rounded-xl border border-[#CADFCF] bg-[#EAF5EE] p-4 text-sm font-semibold text-[#276449]"><span className="flex items-center gap-2"><BriefcaseBusiness size={17} />Won · Open linked job</span><ArrowUpRight size={16} /></Link> : <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#DDE3EC] bg-white p-4"><div><h4 className="text-sm font-semibold text-[#131A26]">Won the sale?</h4><p className="mt-1 text-xs text-[#616D81]">Accept this revision and move it into Jobs.</p></div><button type="button" className={primaryClass} disabled={busy || quote.sales_status === "won"} onClick={onWon}><CheckCircle2 size={15} />Mark won</button></div>}
+    {quote.job_id ? <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between rounded-xl border border-[#CADFCF] bg-[#EAF5EE] p-4 text-sm font-semibold text-[#276449]"><span className="flex items-center gap-2"><BriefcaseBusiness size={17} />Won · Open linked job</span><ArrowUpRight size={16} /></Link> : <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#DDE3EC] bg-white p-4"><div><h4 className="text-sm font-semibold text-[#131A26]">Won the sale?</h4><p className="mt-1 text-xs text-[#616D81]">Accept this revision and move it into Jobs.</p></div><button type="button" className={primaryClass} disabled={busy || quote.sales_status === "won" || (installSummary.enabled && !installSummary.complete)} onClick={onWon}><CheckCircle2 size={15} />Mark won</button></div>}
   </div>;
 }

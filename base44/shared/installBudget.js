@@ -26,6 +26,7 @@ export function validateInstallBudget(value) {
       if (typeof s[key] !== 'string' || key === 'method' && s[key] !== 'standard' && byId.get(s[key])?.category !== 'method' || key === 'rate_id' && byId.get(s[key])?.category !== 'base') throw new Error('Choose a listed install rate.');
       clean[key] = s[key];
     }
+    if (present(s.billing_qty)) { if (!Number.isInteger(Number(s.billing_qty)) || Number(s.billing_qty) < 1 || Number(s.billing_qty) > 1000) throw new Error('Confirm a whole install billing quantity from 1 to 1000.'); clean.billing_qty = Number(s.billing_qty); }
     if (s.adders !== undefined) {
       if (!Array.isArray(s.adders) || s.adders.length > 30 || new Set(s.adders).size !== s.adders.length || s.adders.some(id => byId.get(id)?.category !== 'adder')) throw new Error('Invalid or duplicate install adders.');
       clean.adders = [...s.adders];
@@ -65,7 +66,7 @@ export function installLineKey(line, index) { return /^[a-zA-Z0-9_-]{1,160}$/.te
 export function automaticBaseRate(material, sqft) {
   if (!Number.isFinite(sqft) || sqft <= 0) return null;
   // Continuous square-foot bands: compare the unrounded measured area.
-  if (material === 'wood') return sqft >= 90 ? null : byId.get('wood-left-' + (sqft < 20 ? 11 : sqft < 40 ? 12 : sqft < 60 ? 13 : sqft < 80 ? 14 : 15));
+  if (material === 'wood') return sqft < 1 || sqft >= 90 ? null : byId.get('wood-left-' + (sqft < 20 ? 11 : sqft < 40 ? 12 : sqft < 60 ? 13 : sqft < 80 ? 14 : 15));
   if (!['vinyl', 'composite'].includes(material)) return null;
   return byId.get(`vf-${material}-` + (sqft < 30 ? 13 : sqft < 48 ? 14 : sqft <= 60 ? 15 : 16));
 }
@@ -90,11 +91,12 @@ export function calculateInstall(lines = [], raw = INSTALL_DEFAULTS, context = {
     if (ids.has(s.key)) { out.issues.push('Window IDs must be unique for installation.'); continue; } ids.add(s.key);
     if (!s.enabled) { out.lines.push({ key: s.key, included: false }); continue; }
     const label = line.mark || line.label || `Opening ${index + 1}`;
-    const issues = [], qty = Number(line.qty), width = Number(line.width), height = Number(line.height);
+    const issues = [], qty = Number(s.billing_qty ?? line.qty), width = Number(line.width), height = Number(line.height);
     let sqft = width * height / 144;
     if (line.units === 'ft') sqft = width * height;
     else if (line.units && line.units !== 'in') issues.push(`${label}: unsupported measurement unit.`);
     const explicit = s.rate_id ? byId.get(s.rate_id) : null;
+    if (context.linked && explicit?.unit === 'panel' && !s.billing_qty) issues.push(`${label}: confirm the total panel quantity to install.`);
     const door = explicit?.kind === 'door' || /door|bifold|multislide|pivot|lfg/i.test(line.style || line.label || '');
     const kind = door ? 'door' : 'window';
     if (!Number.isInteger(qty) || qty < 1 || qty > 1000) issues.push(`${label}: enter a whole quantity from 1 to 1000.`);

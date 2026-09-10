@@ -2,6 +2,8 @@
   "name": "QuoteRequests",
   "type": "object",
   "properties": {
+    "install_budget": { "type": "object", "description": "BFS install selections and material budget, separate from manufacturer pricing." },
+    "install_revision": { "type": "integer", "default": 0 },
     "request_id": {
       "type": "string"
     },
