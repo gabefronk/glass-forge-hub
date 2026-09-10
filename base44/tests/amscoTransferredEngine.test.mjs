@@ -39,7 +39,7 @@ test('small dimensions use real bands; exact boundaries do not inflate areas',()
   assert.equal(Math.round(roundUp(14.6*9,.1)*100)/100,131.4);
 });
 test('unknown and out-of-range selections do not silently produce a free or partial window',()=>{
-  for(const change of [{preserve:'Unknown'},{grille_application_id:99},{tempered:true},{glass:'unknown'},{screen:'No'},{width:Infinity},{height:20000},{quantity:0},{exterior_color:'Black',interior_color:'Black'},{dimension_basis:'call'},{shape:'Circle'}]) {
+  for(const change of [{preserve:'Unknown'},{grille_application_id:99},{tempered:true},{glass:'unknown'},{screen:'No'},{width:Infinity},{height:20000},{quantity:0},{exterior_color:'Black',interior_color:'Black',grille_application_id:1},{dimension_basis:'call'},{shape:'Circle'}]) {
     const input=inputFor(controls.configs[0]);Object.assign(input.configuration,change);
     const r=calculateTransferredWindow(input);assert.equal(r.status,'needs_online',JSON.stringify(change));assert.equal(r.unit_prices,null);assert.equal(r.line_totals,null);
   }
@@ -47,6 +47,15 @@ test('unknown and out-of-range selections do not silently produce a free or part
   assert.throws(()=>attributeLookup(getTransferredCatalog('361'),'Preserve','Mystery'),/no unique/);
   assert.throws(()=>numberedAttributeLookup(getTransferredCatalog('361'),5,100),/no unique/);
 });
+for (const [exterior,interior,list,dealer,customer] of [['White','White',454.3,206.98,295.69],['Black','White',881.4,401.57,573.67],['Black','Black',1135.8,517.47,739.24]]) {
+  test('PK361 Studio 72x48 '+exterior+'/'+interior+' matches saved current native calculation',()=>{
+    const input=inputFor(controls.configs[0]);input.catalog_id='361';
+    Object.assign(input.configuration,{product_type:'Single Vent',operation:'XO',width:72,height:48,exterior_color:exterior,interior_color:interior});
+    const result=calculateTransferredWindow(input);
+    assert.deepEqual(result.unit_prices,{list,dealer,customer});
+    if(interior==='Black')assert.equal(result.components[0].assignment,'overwrite_from_uncolored_temporary_base');
+  });
+}
 test('fixed and operating casements use different rule identities',()=>{
   const operating=inputFor(controls.configs[1]).configuration;
   assert.equal(selectTransferredBase(operating).rule_id,24154);

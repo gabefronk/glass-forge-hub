@@ -59,6 +59,8 @@ export function selectTransferredBase(configuration) {
   requireValue(c.unit_type === 'Complete Unit' && !componentTypes.includes(c.unit_type), 'unit_type_not_implemented', 'Component-only pricing requires additional rules.');
   requireValue(c.shape === 'Rectangle', 'shape_not_implemented', 'This shape requires additional configuration rules.');
   if (studio.has(c.series) && c.product_type === 'Single Hung' && c.tilted === false) return { price_code: 'Studio Single Hung Base', rule_id: 778, category: 'VMULT' };
+  if (studio.has(c.series) && c.product_type === 'Single Vent' && known(c.operation,['XO','OX'])) return { price_code: 'Studio Single Vent Base', rule_id: 776, category: 'VMULT' };
+  if (studio.has(c.series) && c.product_type === 'Direct Set' && c.operation === 'Fixed') return { price_code: 'Studio Direct Set PW Base', rule_id: 782, category: 'VMULT' };
   if (hampton.has(c.series) && c.product_type === 'Casement' && known(c.operation, ['Left','Right'])) return { price_code: 'Hampton Casement Base', rule_id: 24154, category: 'VMULT' };
   if (hampton.has(c.series) && c.product_type === 'Fixed Casement' && c.operation === 'Fixed') return { price_code: 'Hampton Fixed Casement Base', rule_id: 24156, category: 'VMULT' };
   throw new CatalogCoverageError('product_rules_not_implemented', 'This product needs additional rule integration.');
@@ -87,18 +89,26 @@ export function calculateTransferredWindow(input) {
     requireValue(known(c.preserve,['None','Both','Inside','Outside']), 'preserve_not_supported', 'Choose a supported protective-film option.');
     requireValue(Number.isInteger(c.grille_application_id) && known(c.grille_application_id,[0,1]), 'grille_rules_not_implemented', 'This grille application requires additional rules.');
     const colorPair = c.exterior_color + '/' + c.interior_color;
-    requireValue(known(colorPair,['White/White','Black/White']), 'color_rules_not_implemented', 'This finish requires additional color rules.');
-    requireValue(!input.gross_margin || finite(input.gross_margin), 'invalid_margin', 'Enter a numeric gross margin.');
+    requireValue(known(colorPair,['White/White','Black/White','Black/Black']), 'color_rules_not_implemented', 'This finish requires additional color rules.');
+    requireValue(colorPair !== 'Black/Black' || c.grille_application_id === 0, 'grille_color_rules_not_implemented', 'Black interior grille pricing requires its color rules.');
     if (input.gross_margin !== undefined) requireValue(finite(input.gross_margin) && input.gross_margin >= 0 && input.gross_margin < 100, 'invalid_margin', 'Gross margin must be from zero to less than 100 percent.');
     const base = dimensionLookup(catalog,baseSelection.price_code,c.width,c.height);
     const area = frameArea(catalog,c.width,c.height);
     const components = [{ name: 'Base Price', value: base.value, rule_ids: [baseSelection.rule_id], source: base }];
     let adjustedBase = base.value;
     if (colorPair === 'Black/White') {
-      requireValue(c.product_type !== 'Fixed Casement', 'color_rules_not_implemented', 'The fixed casement color rule needs separate verification.');
       const factor = studio.has(c.series) ? 1.94 : 1.45, rule = studio.has(c.series) ? 16200 : 23299;
       adjustedBase = roundCurrency(roundUp(base.value*factor,.1));
       components[0] = { ...components[0], value: adjustedBase, rule_ids: [...components[0].rule_ids,rule], color_factor: factor, unadjusted_value: base.value };
+    }
+    if (colorPair === 'Black/Black') {
+      // PB1 copies the uncolored base to a temporary modifier, scales that copy,
+      // then overwrites Base Price. Never compound the exterior-only multiplier.
+      const factor = studio.has(c.series) ? 2.5 : 1.8;
+      const ruleIds = studio.has(c.series) ? [23360,22131,22178] : [23360,37758,37756];
+      adjustedBase = roundCurrency(roundUp(base.value*factor,.1));
+      components[0] = { ...components[0], value: adjustedBase, rule_ids: [...components[0].rule_ids,...ruleIds], color_factor: factor, unadjusted_value: base.value,
+        temporary_modifier: 'Base Price (Temp)', assignment: 'overwrite_from_uncolored_temporary_base' };
     }
     if (c.preserve !== 'None') {
       const rate = attributeLookup(catalog,'Preserve',c.preserve);
@@ -122,6 +132,6 @@ export function calculateTransferredWindow(input) {
 export function transferredEngineStatus() {
   return { engine: 'amsco_source_rules', version: 1, execution: 'Base44 backend; no browser or local runner required', production_ready: false,
     catalogs: Object.values(catalogs).map(c => ({ catalog_id: c.catalog_id, price_book: c.price_book, dimensional_rows: Object.values(c.dimensional_grids).reduce((n,r) => n+r.length,0), grid_keys: Object.keys(c.dimensional_grids).length, source: c.source })),
-    implemented: ['Studio non-tilt single hung base','Hampton operating/fixed casement base','White/white','Black/white operating casement and single hung','table-banded frame area','Preserve','standard rectangular 5/8 flat grille arithmetic','client 1555 category discounts'],
+    implemented: ['Studio non-tilt single hung, single vent, direct set base','Hampton operating/fixed casement base','White/white','Black/white','Black/black using original temporary base','table-banded frame area','Preserve','standard rectangular 5/8 flat grille arithmetic','client 1555 category discounts'],
     remaining: ['full configuration validity and defaults','additional product and option rules','current online comparison before live-price promotion'] };
 }
