@@ -37,7 +37,7 @@ test('null, empty, old, future, revision-mismatched and reordered evidence canno
   for (const mutate of mutations) {
     const source = cached(); mutate(source);
     const result = await preview(fresh(), source);
-    assert.equal(result.lines[0].status, 'amsco_lookup_needed');
+    assert.equal(result.lines[0].status, 'native_calculation_needed');
     assert.equal(result.total, null);
   }
 });
