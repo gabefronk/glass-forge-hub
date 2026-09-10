@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { INSTALL_CATALOG, calculateInstall, installLineKey, installOptions, resolveInstallSelection } from '../../../base44/shared/installBudget.js';
+import { INSTALL_CATALOG, calculateInstall, installOptions, resolveInstallSelection } from '../../../base44/shared/installBudget.js';
 import { inputClass, secondaryClass } from './TakeoffEditor';
 
 export const installMoney = value => value == null || !Number.isFinite(value) ? '—' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
@@ -21,7 +21,7 @@ export function InstallTotals({ summary, linked = false }) {
   </section>;
 }
 
-export default function InstallBudgetEditor({ lines = [], config, onChange, onLinesChange, context = {}, disabled = false, standalone = false }) {
+export default function InstallBudgetEditor({ lines = [], config, onChange, onLinesChange = undefined, context = /** @type {{linked?: boolean, settings?: any, product_cost?: number, product_sell?: number}} */ ({}), disabled = false, standalone = false }) {
   const summary = useMemo(() => calculateInstall(lines, config, context), [lines, config, context]);
   const update = patch => onChange({ ...config, ...patch });
   const select = (key, patch) => update({ selections: { ...config.selections, [key]: { ...(config.selections?.[key] || {}), ...patch } } });

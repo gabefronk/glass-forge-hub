@@ -11,6 +11,7 @@ test('source window size bands including unrounded boundaries', () => {
   for (const [sqft, vinyl, composite, wood] of [[19.99,52,66,114],[20,52,66,214],[29.999,52,66,214],[30,66,87,214],[39.99,66,87,214],[40,66,87,429],[47.999,66,87,429],[48,132,246,429],[59.999,132,246,429],[60,132,246,643],[60.001,300,415,643],[80,300,415,929],[89.999,300,415,929]]) {
     assert.equal(automaticBaseRate('vinyl',sqft).sell,vinyl);assert.equal(automaticBaseRate('composite',sqft).sell,composite);assert.equal(automaticBaseRate('wood',sqft).sell,wood);
   }
+  assert.equal(automaticBaseRate('wood',0.9),null);
   assert.equal(automaticBaseRate('wood',90),null); assert.equal(automaticBaseRate('vinyl',0),null);
 });
 test('three 5x5 vinyl windows use listed sale and sub-pay without charging flashing twice', () => {
@@ -68,4 +69,10 @@ test('margin pricing is optional and blank vs zero remains explicit', () => {
   assert.equal(calculateInstall([line({})],config).budget,undefined);
   assert.throws(()=>validateInstallBudget({...config,finance:{material_margin:100}}));
   assert.throws(()=>validateInstallBudget({...config,extras:[{rate_id:'bad',qty:1}]}));
+});
+
+test('linked door panel count is explicitly confirmed separately from product systems', () => {
+ const config=newInstallBudget(true); config.material='wood'; config.selections.w1={rate_id:'wood-right-11'};
+ const rows=[line({style:'Multislide Door',qty:1})]; assert.equal(calculateInstall(rows,config,{linked:true}).complete,false);
+ config.selections.w1.billing_qty=4; const result=calculateInstall(rows,config,{linked:true}); assert.equal(result.sell,972);assert.equal(result.cost,680);assert.equal(rows[0].qty,1);
 });

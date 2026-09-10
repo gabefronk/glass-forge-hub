@@ -79,6 +79,7 @@ export function resolveInstallSelection(line, index, config) {
   const material = selection.material || line.material || config.material || 'vinyl';
   return { ...selection, key, material, enabled: selection.enabled !== false, method: selection.method || config.method || 'standard', rate_id: selection.rate_id || line.rate_id || '', adders: selection.adders || [] };
 }
+/** @param {any[]} [lines] @param {Record<string, any>} [raw] @param {Record<string, any>} [context] */
 export function calculateInstall(lines = [], raw = INSTALL_DEFAULTS, context = {}) {
   let config;
   try { config = validateInstallBudget(raw); } catch (error) { return { enabled: raw?.enabled === true, complete: false, issues: [error.message], lines: [], cost: null, sell: null, version: INSTALL_CATALOG.version }; }
