@@ -24,7 +24,8 @@ export default function TrackerAppendImport({onImported}) {
   setBusy(true);setError("");
   try {
    const r=await base44.functions.invoke("salesTrackerAppend",{...payload,action:"append",review_token:review.review_token});
-   setReview(r.data);setPayload(null);await onImported?.();
+   setReview(r.data);setPayload(null);
+   try { await onImported?.(); } catch { setError("The import was saved, but the tracker view could not refresh. Reload the page to see the saved rows."); }
   }catch(e){
    if(e.response?.status===409){setReview(null);setPayload(null);}
    setError(e.response?.data?.error||"The response was interrupted. Review this file again to check whether it was already imported.");
