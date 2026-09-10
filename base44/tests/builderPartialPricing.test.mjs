@@ -43,5 +43,5 @@ test('null, empty, old, future, revision-mismatched and reordered evidence canno
 });
 test('color and account differences are not eligible for an exact configuration price', async () => {
   const draft = fresh(); draft.lines[0].options.color = 'Black';
-  assert.equal((await preview(draft, cached())).lines[0].status, 'amsco_lookup_needed');
+  assert.equal((await preview(draft, cached())).lines[0].status, 'native_calculation_needed');
 });
