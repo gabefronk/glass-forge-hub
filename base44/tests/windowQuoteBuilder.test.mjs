@@ -50,7 +50,7 @@ test('live price preview reuses only exact verified lines and recalculates custo
   const cached = {
     id: 'cached-quote', worker_status: 'ready', updated_date: '2026-09-09T12:00:00Z',
     settings: clone(normalized.quote.settings), lines: clone(normalized.quote.lines), source: clone(normalized.quote.source),
-    result: { verified: true, verification: { checked_at: '2026-09-09T12:00:00Z' }, lines: planned.plan.lines.map((line, index) => ({ ...clone(line), unit_prices: { dealer: 100 + index * 50, list: 200 + index * 50 } })) }
+    result: { verified: true, verification: { checked_at: new Date().toISOString() }, lines: planned.plan.lines.map((line, index) => ({ ...clone(line), unit_prices: { dealer: 100 + index * 50, list: 200 + index * 50 } })) }
   };
   const db = { QuoteRequests: { list: async () => [cached] } };
   const result = await builderPricePreview(value, db);
