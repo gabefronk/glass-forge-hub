@@ -1,0 +1,55 @@
+{
+  "name": "AgentCenterEvent",
+  "type": "object",
+  "properties": {
+    "event_key": {
+      "type": "string"
+    },
+    "agent_id": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "started",
+        "progress",
+        "needs_owner_decision",
+        "completed",
+        "failed"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "connection_state": {
+      "type": "string",
+      "enum": [
+        "connected",
+        "manual",
+        "planned"
+      ]
+    },
+    "recorded_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_key",
+    "agent_id",
+    "event_type",
+    "message",
+    "occurred_at",
+    "connection_state",
+    "recorded_by"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
