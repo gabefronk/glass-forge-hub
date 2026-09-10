@@ -1,0 +1,75 @@
+{
+  "name": "SalesTrackerAppendBatch",
+  "type": "object",
+  "properties": {
+    "import_key": {
+      "type": "string"
+    },
+    "base_snapshot_id": {
+      "type": "string"
+    },
+    "base_sha256": {
+      "type": "string"
+    },
+    "filename": {
+      "type": "string"
+    },
+    "file_sha256": {
+      "type": "string"
+    },
+    "file_uri": {
+      "type": "string"
+    },
+    "source_captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "imported_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "imported_by": {
+      "type": "string"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "report": {
+      "type": "object"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "committed"
+      ]
+    }
+  },
+  "required": [
+    "import_key",
+    "base_snapshot_id",
+    "filename",
+    "file_sha256",
+    "source_captured_at",
+    "imported_at",
+    "rows",
+    "report",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": false,
+    "delete": false
+  }
+}
