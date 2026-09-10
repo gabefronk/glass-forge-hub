@@ -9,7 +9,7 @@ const line=()=>({id:'line-1',style:'Hampton Casement',width:24,height:48,units:'
 function table(records=[]){
  const data=clone(records);let serial=0;
  const match=(row,q)=>Object.entries(q).every(([key,wanted])=>{
-  const actual=row[key];if(wanted&&typeof wanted==='object'&&!Array.isArray(wanted))return Object.entries(wanted).every(([op,value])=>op==='$in'?value.includes(actual):op==='$gt'?actual>value:op==='$ne'?actual!==value:false);
+  const actual=row[key];if(wanted&&typeof wanted==='object'&&!Array.isArray(wanted))return Object.entries(wanted).every(([op,value])=>op==='$in'?value.includes(actual):op==='$nin'?!value.includes(actual):op==='$gt'?actual>value:op==='$ne'?actual!==value:false);
   return actual===wanted;
  });
  return {data,async filter(q={},sort,limit=500){const found=data.filter(r=>match(r,q));if(sort){const key=sort.replace(/^-/,'');found.sort((a,b)=>String(a[key]||'').localeCompare(String(b[key]||''))*(sort.startsWith('-')?-1:1));}return clone(found.slice(0,limit));},async create(value){const row={...clone(value),id:'preview-'+(++serial),created_date:new Date(1789035000000+serial).toISOString()};data.push(row);return clone(row);},async updateMany(q,change){let updated=0;for(const row of data)if(match(row,q)){Object.assign(row,clone(change.$set));updated++;}return {updated};}};
@@ -69,6 +69,12 @@ test('preview records and callbacks require authenticated owners and the configu
  const h=harness();await assert.rejects(h.request({user:{...user,role:'user'}}),e=>e.status===403);await h.request();
  await assert.rejects(h.service.poll({db:h.db,worker:{...worker,id:'other'},nativeReady:true}),e=>e.status===401);
  const other=await h.request({user:{...user,id:'admin-2'}});assert.notEqual(other.preview_id,h.db.WindowQuotePricePreviews.data[0].id);
+});
+test('a locally consumed preview is excluded without blocking another queued window',async()=>{
+ const h=harness();const first=await h.request();const second=await h.request({line:{...line(),id:'other-line',width:25}});
+ const offered=await h.service.poll({db:h.db,worker,nativeReady:true,excludedIds:[first.preview_id]});
+ assert.equal(offered.quote_id,second.preview_id);assert.notEqual(offered.quote_id,first.preview_id);
+ await assert.rejects(h.service.poll({db:h.db,worker,nativeReady:true,excludedIds:['invalid/id']}),e=>e.status===400);
 });
 test('disabled previews leave the normal quote runner untouched and do not access the preview entity',async()=>{
  const service=createNativePricePreviewService({config:{...config,native_engine:{...policy,price_previews:false}}});
