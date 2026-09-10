@@ -76,7 +76,12 @@ function colors(raw,settings,issues,path) {
 function optionPlan(line,settings,route,issues,path) {
   const raw = object(line.options) ? line.options : {}, options = {series:route.series,...colors(raw,settings,issues,path)}, questions=[];
   for (const key of Object.keys(raw)) if (!OPTION_KEYS.has(key)) add(issues,'unsupported_option',path+'.'+key,'The requested '+key+' needs AMSCO configuration.');
-  if (has(raw,'fin')) add(issues,'unsupported_option',path+'.fin','Choose the installation series instead of an additional fin instruction.');
+  // Legacy/imported schedules express standard Studio installation as a fin.
+  // Accept only an exact compatible alias; never discard a conflicting choice.
+  const fin = has(raw,'fin') ? raw.fin : has(raw,'series') ? undefined : settings.fin;
+  const standardStudioFin = route.series === 'Studio 1 3/8 inch Fin Setback' &&
+    ['nailfin','nailingfin','regularnailfin','standardnailfin','138finsetback','138inchfinsetback'].includes(norm(fin));
+  if (present(fin) && !standardStudioFin) add(issues,'unsupported_option',path+'.fin','Choose a compatible installation series for the requested fin.');
   if (has(raw,'number_wide') && raw.number_wide !== 1) add(issues,'unsupported_assembly',path+'.number_wide','This assembly needs AMSCO configuration.');
   if (has(raw,'sash_split') && raw.sash_split !== 'Even') add(issues,'unsupported_option',path+'.sash_split','This sash split needs AMSCO configuration.');
   // Do not inject a Studio recipe into another product. Only explicit choices
