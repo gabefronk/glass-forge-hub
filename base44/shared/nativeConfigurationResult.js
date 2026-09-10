@@ -1,5 +1,6 @@
 import { desktopNativeIdentityIssues, desktopPersistenceIssues, nativeEnginePolicyReady, nativeEnginePresenceReady } from './nativeEngineObservation.js';
 import { onlineSelectionIssues } from './onlineSelection.js';
+import { SOURCE_PRICE_VERSION, sourcePriceEvidenceIssues } from './amscoSourcePricing.js';
 
 export const CONFIGURATION_QUOTE_SOURCE = 'native_configurations';
 export const configurationInputSnapshot = q => ({ quote_id: q.id, input_revision: q.input_revision, settings: q.settings, lines: q.lines });
@@ -27,12 +28,14 @@ function onlineEvidenceIssues(evidence, line, requested, quote, verification) {
 // must never claim that one of their quote IDs identifies the whole package.
 export function configurationQuoteResultIssues(result, { quote, inputHash } = {}) {
   const issues = [], reject = message => issues.push(message), verification = result?.verification;
+  const hasSource = Array.isArray(result?.lines) && result.lines.some(line=>line?.pricing_evidence?.source==='amsco_source_engine');
   if (!result || typeof result !== 'object' || !quote || !quote.settings || !Array.isArray(quote.lines)) return ['The verified package requires a saved request and structured pricing result.'];
   if (result?.native_source !== CONFIGURATION_QUOTE_SOURCE || result.verified !== true || result.schema_version !== 1 ||
       !quote || result.quote_id !== quote.id || result.input_revision !== quote.input_revision || !sha(inputHash) || result.input_snapshot_sha256 !== inputHash) reject('The verified package must match this exact saved request revision.');
   if (result?.native_quote_id || result?.native_quote_number || result?.native_quote_url) reject('A configuration package has no single native quote identity.');
-  if (verification?.version !== 1 || verification.source !== CONFIGURATION_QUOTE_SOURCE || verification.reopened !== true ||
-      verification.dimension_source !== 'saved_native_frame' || !Number.isFinite(Date.parse(verification.checked_at)) || !nativeEnginePolicyReady(verification.policy)) reject('The package requires a verified native pricing policy and reopened configurations.');
+  if (verification?.version !== 1 || verification.source !== CONFIGURATION_QUOTE_SOURCE ||
+      (hasSource ? verification.reopened !== false || verification.dimension_source !== 'source_or_saved_frame' || verification.source_price_version !== SOURCE_PRICE_VERSION : verification.reopened !== true || verification.dimension_source !== 'saved_native_frame') ||
+      !Number.isFinite(Date.parse(verification.checked_at)) || !nativeEnginePolicyReady(verification.policy)) reject('The package requires matching source or saved-configuration verification.');
   if (!Array.isArray(result?.lines) || !result.lines.length || result.lines.length !== quote?.lines?.length || result.lines.length > 100 || verification?.configuration_count !== result.lines.length) { reject('Every requested line needs a verified configuration.'); return issues; }
   if (result.dealer !== quote.settings?.dealer || result.yard !== quote.settings?.yard || result.gross_margin !== quote.settings?.gross_margin || !finite(result.gross_margin) || result.gross_margin < 0 || result.gross_margin >= 100) reject('The pricing account and margin must match the saved request.');
   const sums = { list: 0, dealer: 0, customer: 0 };
@@ -43,6 +46,10 @@ export function configurationQuoteResultIssues(result, { quote, inputHash } = {}
         line.width !== requested.width || line.height !== requested.height || line.units !== requested.units || line.dimension_basis !== requested.dimension_basis || line.room !== (requested.room || '') || line.mark !== requested.mark) reject('A package line differs from the requested size, quantity, room or mark.');
     if (!line?.style || line.gross_margin !== result.gross_margin || !line.frame_dimensions || ![line.frame_dimensions.width, line.frame_dimensions.height].every(v => finite(v) && v > 0) || line.frame_dimensions.units !== 'in') reject('A package line lacks verified dimensions or margin.');
     if (evidence?.source === 'amsco_online') issues.push(...onlineEvidenceIssues(evidence, line, requested, quote, verification));
+    else if (evidence?.source === 'amsco_source_engine') {
+      issues.push(...sourcePriceEvidenceIssues(evidence,line,requested,quote.settings));
+      if(Date.parse(evidence.checked_at)>Date.parse(verification?.checked_at)) reject('The source calculation must precede package completion.');
+    }
     else {
     if (!evidence || evidence.source && evidence.source !== 'desktop_native' || evidence.version !== 1 || !id(evidence.preview_id) || !sha(evidence.plan_hash) || !id(evidence.native_line_id) || !/^[1-9]\d*$/.test(String(evidence.native_line_number)) ||
         desktopNativeIdentityIssues({ native_source: 'desktop_native', native_quote_id: evidence.native_quote_id }).length ||

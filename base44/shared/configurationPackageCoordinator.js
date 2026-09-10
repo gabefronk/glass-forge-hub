@@ -130,7 +130,7 @@ export function createConfigurationPackageCoordinator({ config, now = () => new 
         if (item.state !== 'native_pending') continue;
         const line = work.snapshot.lines[item.index];
         const verified = await previews.resolveVerified({ db, user, line, settings: work.snapshot.settings });
-        if (verified) { item.state = 'priced'; item.source = 'desktop_native'; item.verified = verified; continue; }
+        if (verified) { item.state = 'priced'; item.source = verified.source || 'desktop_native'; item.verified = verified; continue; }
         if (requested >= 3) continue;
         await guard();
         const status = await previews.request({ db, user, line, settings: work.snapshot.settings, sessionId: work.id }); requested++;

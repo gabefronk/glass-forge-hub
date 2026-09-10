@@ -1,5 +1,6 @@
 import { createNativePricePreviewService, planNativePricePreview } from './nativePricePreview.js';
 import { transferredPreviewComparison } from './amscoTransferredPreview.js';
+import { sourcePricingEnabled, sourcePricePreview } from './amscoSourcePricing.js';
 import { loadScriptedRunnerConfig } from './scriptedRunnerConfig.js';
 import { nativeEnginePresenceReady } from './nativeEngineObservation.js';
 import { HttpError, sha256, validateLines, validateSettings } from './windowQuotesCore.js';
@@ -261,7 +262,10 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
     }
   });
   const cache = new Map();
-  const quotes = planned.some(item => item.line) ? await db.QuoteRequests.list('-updated_date', 200) : [];
+  if (sourcePricingEnabled(config)) for (const item of planned) {
+    item.sourcePrice = sourcePricePreview({line:draft.lines[item.index],settings:draft.settings});
+  }
+  const quotes = planned.some(item => item.line && !item.sourcePrice) ? await db.QuoteRequests.list('-updated_date', 200) : [];
   for (const quote of quotes) {
     if (quote?.worker_status !== 'ready' || quote?.result?.verified !== true || !Array.isArray(quote.result.lines) ||
         quote.result.lines.length !== quote.lines?.length) continue;
@@ -292,6 +296,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
   const lines = [];
   for (const item of planned) {
     const base = { index: item.index, id: draft.lines[item.index]?.id };
+    if (item.sourcePrice) { lines.push({...base,...item.sourcePrice}); continue; }
     if (!item.line) { lines.push({ ...base, status: item.status, questions: item.questions }); continue; }
     const key = stable({ dealer: item.settings.dealer, yard: item.settings.yard, line: priceSignature(item.line) });
     const hit = cache.get(key);
@@ -308,7 +313,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
   if (config?.native_engine?.configuration_packages === true) {
     for (const item of planned) {
       const output = lines.find(line => line.index === item.index);
-      if (output && item.inputLine) output.source_engine = transferredPreviewComparison({ line: item.inputLine, settings: item.inputSettings, observed: output });
+      if (output && output.price_source !== 'amsco_source_engine' && item.inputLine) output.source_engine = transferredPreviewComparison({ line: item.inputLine, settings: item.inputSettings, observed: output });
     }
   }
   const priced = lines.filter(line => line.status === 'priced'), ready = lines.length > 0 && priced.length === lines.length;

@@ -3,6 +3,7 @@ import { buildQuotePlan, assertSupportedPlan } from './amscoQuotePlan.js';
 import { nativeEnginePolicyReady, nativeEnginePresenceReady, verifyDesktopNativeQuote, validateNativeEngineProof, desktopNativeIdentityIssues } from './nativeEngineObservation.js';
 import { CATALOG_SUPPORT_ID, buildNativeCatalogPlan, assertNativeCatalogPlan } from './nativeCatalogPlan.js';
 import { verifyCatalogObservedQuote } from './nativeCatalogObservation.js';
+import { sourcePricingEnabled, sourcePricePreview, sourcePriceReceipt } from './amscoSourcePricing.js';
 
 const stable = value => JSON.stringify(value, (_key,item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key,item[key]])) : item);
 const clone = value => structuredClone(value);
@@ -74,6 +75,10 @@ export function createNativePricePreviewService({config, now=()=>new Date(), has
  async function resolveVerified({db,user,line,settings}){
   if(user?.role!=='admin'||!id(user.id))fail(403,'An authenticated administrator is required');
   if(!enabled)return null;
+  if(sourcePricingEnabled(config)) {
+   const calculated=sourcePriceReceipt({line,settings,checkedAt:at()});
+   if(calculated)return calculated;
+  }
   const input={settings:clone(settings),lines:[{...clone(line),qty:1,room:''}]};
   delete input.lines[0].id;delete input.lines[0].mark;delete input.lines[0].source_reference;
   const built=normalize({...input,id:'price-preview',input_revision:1});if(!built.ok)return null;
@@ -93,6 +98,10 @@ export function createNativePricePreviewService({config, now=()=>new Date(), has
   if(user?.role!=='admin'||!id(user.id))fail(403,'An authenticated administrator is required');
   if(!enabled)return {status:'native_unavailable'};
   if(sessionId!==undefined&&!id(sessionId))fail(400,'Invalid preview session');
+  if(sourcePricingEnabled(config)) {
+   const calculated=sourcePricePreview({line,settings});
+   if(calculated)return {...calculated,checked_at:at()};
+  }
   const input={settings:clone(settings),lines:[{...clone(line),qty:1,room:''}]};
   delete input.lines[0].id;delete input.lines[0].mark;delete input.lines[0].source_reference;
   const built=normalize({...input,id:'price-preview',input_revision:1});
@@ -158,4 +167,3 @@ export function createNativePricePreviewService({config, now=()=>new Date(), has
  }
  return {enabled,request,poll,claim,report,resolveVerified};
 }
-
