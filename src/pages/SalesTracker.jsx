@@ -6,7 +6,7 @@ const input="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm";
 const button="rounded-lg bg-[#2A5EA8] px-4 py-3 text-sm font-medium text-white disabled:opacity-50";
 export default function SalesTracker(){
  const [data,setData]=useState(null),[query,setQuery]=useState({builder:"",subdivision:"",lot:"",oe:"",po:""});
- const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ const [busy,setBusy]=useState(false),[error,setError]=useState("");
  const [conversation,setConversation]=useState(null),[messages,setMessages]=useState([]),[question,setQuestion]=useState("");
  async function lookup(q={}) { const r=await base44.functions.invoke("salesTrackerLookup",q);setData(r.data); }
  useEffect(()=>{lookup().catch(e=>setError(e.response?.data?.error||"Tracker unavailable."));},[]);
@@ -24,7 +24,6 @@ export default function SalesTracker(){
  return <div className="mx-auto max-w-6xl space-y-5 p-5 pb-32 text-[#131A26]">
   <header><h1 className="text-2xl font-semibold">Sales Tracker</h1><p className="mt-2 text-sm text-slate-600">Look up the latest imported order and lot information.</p></header>
   {error&&<div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-4">{error}</div>}
-  {notice&&<div role="status" className="rounded-xl border border-green-300 bg-green-50 p-4">{notice}</div>}
   <section className="rounded-xl border bg-white p-5 space-y-2">
    <h2 className="font-semibold">Current workbook</h2>
    <p>{data?.filename||"No workbook imported yet."}</p>{data?.appended_count>0&&<p className="text-sm text-green-800">{data.appended_count} incremental rows added · original workbook preserved</p>}{data?.append_conflict_count>0&&<p role="status" className="text-sm text-amber-800">{data.append_conflict_count} appended rows conflict with newer source data and need review.</p>}
