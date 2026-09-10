@@ -243,6 +243,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         return { ...q, ...patch, state_version: version + 1 };
       };
       const editable = q => {
+        if (["message", "update"].includes(action) && q.pricing_progress?.package_id) fail(409, "Use Revise windows to review a new schedule. The existing package keeps its saved prices and AMSCO work.");
         if (["queued", "running"].includes(q.worker_status)) fail(409, "Wait for the current quote run before changing its inputs");
         if (["message", "update"].includes(action) && q.worker_status === 'failed' && q.execution_provider === 'deterministic' && q.agent_run?.phase === 'completed' && q.agent_run?.terminal_status === 'failed') fail(409, 'Review and retry the failed attempt before changing its inputs');
         if (q.conversion_token && q.conversion_expires_at > at()) fail(409, "The accepted quote is being linked to its job");
@@ -501,4 +502,3 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
     }
   };
 }
-

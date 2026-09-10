@@ -9,6 +9,8 @@ import TakeoffEditor, { inputClass, secondaryClass } from "@/components/window-q
 import ConnectClaude from "@/components/window-quotes/ConnectClaude";
 import WindowQuoteResults from "@/components/window-quotes/WindowQuoteResults";
 import WindowQuoteBuilder from "@/components/window-quotes/WindowQuoteBuilder";
+import WindowPackageProgress from "@/components/window-quotes/WindowPackageProgress";
+import { packageProgress, packageStatus } from "@/components/window-quotes/packageProgress";
 import { normalizeLines, validateLines } from "@/components/window-quotes/takeoff";
 import { useAuth } from "@/lib/AuthContext";
 import { initialQuoteFormValues, loadQuotePreferences, saveQuotePreferences } from "@/lib/windowQuotePreferences";
@@ -51,6 +53,8 @@ function currentIntakeAssessment(quote) {
 }
 function quoteStatusInfo(quote) {
   const info = statusInfo[quote?.worker_status] || statusInfo.draft;
+  const progressStatus = packageStatus(quote);
+  if (progressStatus) return { ...info, ...progressStatus };
   if (quote?.worker_status === "needs_details" && currentIntakeAssessment(quote)?.status === "product_review") {
     return { ...info, label: "Needs product review", text: "Some requested products or options need review before quoting can continue. Check the review below and reply with any clarifications." };
   }
@@ -257,6 +261,7 @@ export default function WindowQuotes() {
   const messages = detailQuery.data?.messages || [];
   const locked = ["queued", "running"].includes(quote?.worker_status) || quote?.sales_status === "won";
   const needsRetryReview = !!quote?.retry_review;
+  const progress = packageProgress(quote);
   const visible = quotes.filter((q) => `${q.title || ""} ${q.request_text || ""} ${q.result?.native_quote_number || ""}`.toLowerCase().includes(search.toLowerCase()));
   const serviceStatus = listQuery.isPending ? "Checking service…" : listQuery.isError || worker?.configured === undefined ? "Status unavailable"
     : !worker.configured ? "Not configured" : !worker.online ? "Quoting computer offline — requests stay queued"
@@ -292,7 +297,7 @@ export default function WindowQuotes() {
   });
   const send = (event) => {
     event.preventDefault();
-    if (!message.trim() || locked || needsRetryReview || busy) return;
+    if (!message.trim() || locked || needsRetryReview || progress || busy) return;
     if (!messageID.current) messageID.current = uid();
     operate(async () => {
       await api("message", { quote_id: selectedID, message: message.trim(), client_message_id: messageID.current });
@@ -335,22 +340,22 @@ export default function WindowQuotes() {
           <div className="border-b border-[#E9EDF4] px-4 py-4 sm:px-5">
             <button onClick={() => setParams({})} className="mb-3 inline-flex min-h-11 items-center gap-1 text-xs font-medium text-[#1E4A85] xl:hidden"><ArrowLeft size={13} />All requests</button>
             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0 sm:flex-1"><div className="mb-2 flex flex-wrap items-center gap-2"><StatusBadge quote={quote} /><span className="text-[11px] text-[#77839A]">Revision {quote.input_revision || 1}</span></div><h2 className="break-words text-lg font-semibold text-[#131A26]">{quote.title || "Untitled window request"}</h2></div><div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => {
-              if (quote.worker_status === "ready") {
+              if (quote.worker_status === "ready" || progress) {
                 setRevisionSeed({ title: quote.title, request_text: "", settings: quote.settings, lines: quote.lines, source: { ...quote.source, revision_of: quote.id } });setForm("new");
               } else setForm("edit");
-            }} disabled={locked || needsRetryReview || busy}><Settings2 size={14} /><span>{quote.worker_status === "ready" ? "Revise quote" : "Details"}</span></button>{!locked && !["ready", "failed"].includes(quote.worker_status) && <button className={primaryClass} onClick={queue} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{quote.worker_status === "needs_sign_in" ? "Retry after sign-in" : "Calculate price"}</button>}<button className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[#EFD2CA] bg-white px-3 py-2.5 text-sm font-semibold text-[#8A4038] hover:bg-[#FBEDEA] disabled:cursor-not-allowed disabled:opacity-50" onClick={remove} disabled={locked || busy} title="Delete this quote request" aria-label="Delete this quote request"><Trash2 size={14} /></button></div></div>
+            }} disabled={locked || needsRetryReview || busy}><Settings2 size={14} /><span>{progress ? "Revise windows" : quote.worker_status === "ready" ? "Revise quote" : "Details"}</span></button>{!locked && (progress ? progress.canResume : !["ready", "failed"].includes(quote.worker_status)) && <button className={primaryClass} onClick={queue} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{quote.worker_status === "needs_sign_in" ? "Retry after sign-in" : progress ? "Retry pricing" : "Calculate price"}</button>}<button className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[#EFD2CA] bg-white px-3 py-2.5 text-sm font-semibold text-[#8A4038] hover:bg-[#FBEDEA] disabled:cursor-not-allowed disabled:opacity-50" onClick={remove} disabled={locked || busy} title="Delete this quote request" aria-label="Delete this quote request"><Trash2 size={14} /></button></div></div>
             {quote.worker_status !== "ready" && <div className="mt-4 flex items-start gap-2 rounded-lg p-3 text-xs leading-relaxed" style={{ background: activeStatus.bg, color: activeStatus.color }}>{quote.worker_status === "ready" ? <CheckCircle2 size={15} className="shrink-0" /> : ["failed", "needs_sign_in", "needs_details"].includes(quote.worker_status) ? <AlertCircle size={15} className="shrink-0" /> : <Clock3 size={15} className="shrink-0" />}<span>{activeStatus.text}</span></div>}
-            <IntakeAssessment quote={quote} />
+            {progress ? <WindowPackageProgress quote={quote} /> : <IntakeAssessment quote={quote} />}
             {quote.worker_status === "failed" && quote.retry_review && !locked && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-3"><p className="min-w-0 flex-1 text-sm leading-relaxed text-[#535E72]">After reviewing the previous attempt, you can retry this request with a fresh quote.</p><button className={primaryClass} disabled={busy} onClick={() => { setError(""); setRetryReview(quote); }}><RefreshCw size={15} />Review & retry</button></div>}
             {quote.previous_attempts?.length > 0 && <details className="mt-3 text-xs text-[#616D81]"><summary className="min-h-11 cursor-pointer py-3 font-medium">Previous drafts retained ({quote.previous_attempts.length})</summary><ul className="list-disc space-y-1 pl-4">{quote.previous_attempts.map((attempt) => <li key={attempt.revision}>Revision {attempt.revision}{attempt.native_quote_number ? ` · AMSCO ${attempt.native_quote_number}` : ' · No saved quote'} · retained for review</li>)}</ul></details>}
             <div className="mt-4 grid grid-cols-3 gap-1 sm:flex" role="tablist" aria-label="Quote sections">{[["conversation", "Conversation", MessageSquare], ["schedule", "Schedule", ListChecks], ["result", "Quote result", FileText]].map(([key, label, Icon]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`inline-flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold sm:min-h-11 sm:shrink-0 sm:flex-row sm:gap-1.5 sm:px-3 sm:text-xs ${tab === key ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#616D81] hover:bg-[#F6F8FC]"}`}><Icon size={14} />{label}{key === "result" && quote.worker_status === "ready" && <span className="h-1.5 w-1.5 rounded-full bg-[#276449]" />}</button>)}</div>
           </div>
           {tab === "conversation" ? <>
             <div className="space-y-4 px-4 py-5 sm:px-5">
-              {!messages.length && <div className="rounded-xl bg-[#F6F8FC] p-4 break-words text-sm leading-relaxed text-[#535E72]">{quote.request_text || "Your schedule is saved. Send it to the quoting agent to continue."}</div>}
+              {!messages.length && <div className="rounded-xl bg-[#F6F8FC] p-4 break-words text-sm leading-relaxed text-[#535E72]">{quote.request_text || (progress ? "Your reviewed schedule is saved. Follow pricing progress above. Use Revise windows to make changes with the AI guide." : "Your schedule is saved. Send it to the quoting agent to continue.")}</div>}
               {messages.map((item) => <article key={item.id || item.client_message_id} className={`flex ${item.role === "user" ? "justify-end" : "justify-start"}`}><div className={`min-w-0 max-w-full rounded-2xl px-4 py-3 sm:max-w-[85%] ${item.role === "user" ? "rounded-br-md bg-[#E7EEFA]" : "rounded-bl-md border border-[#DDE3EC] bg-[#F6F8FC]"}`}><div className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-[#77839A]"><span>{item.role === "user" ? "You" : item.role === "system" ? "Quote update" : "Quoting assistant"}</span><span className="font-normal">{date(item.created_date)}</span></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#131A26]">{item.content}</p>{item.kind === "ready" && <button type="button" className={primaryClass + " mt-3"} onClick={() => setTab("result")}><FileText size={15} />View quote</button>}</div></article>)}
             </div>
-            {!["ready", "failed"].includes(quote.worker_status) && quote.sales_status !== "won" && <form onSubmit={send} className="border-t border-[#E9EDF4] bg-[#F6F8FC] p-4">
+            {!progress && !["ready", "failed"].includes(quote.worker_status) && quote.sales_status !== "won" && <form onSubmit={send} className="border-t border-[#E9EDF4] bg-[#F6F8FC] p-4">
               <label htmlFor="quote-message" className="sr-only">Reply to this quote request</label><div className="flex items-end gap-2"><textarea id="quote-message" className={inputClass + " min-h-[76px] resize-y"} value={message} maxLength={18000} onChange={(e) => { setMessage(e.target.value); messageID.current = null; }} placeholder={needsRetryReview ? "Review and retry the previous attempt to continue this request." : locked ? quote.sales_status === "won" ? "Accepted revision — start a new request for changes." : "The request is being quoted. Replies reopen when input is needed." : "Reply in your own words — add details or tell us what to change…"} disabled={locked || needsRetryReview || busy} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(e); }} /><button type="submit" aria-label="Send message" className={primaryClass + " min-h-11 shrink-0 px-3"} disabled={!message.trim() || locked || needsRetryReview || busy}>{busy ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}</button></div><p className="mt-2 text-[11px] text-[#77839A]">{locked ? "We’ll let you know here if we need a detail or your quote is ready." : "The AI reviews your reply with the rest of this request, then checks whether quoting can continue."}</p>
             </form>}
           </> : <div className="p-4 sm:p-5">{tab === "schedule" ? <ScheduleView quote={quote} /> : <WindowQuoteResults quote={quote} onWon={() => setWonOpen(true)} busy={busy} />}</div>}

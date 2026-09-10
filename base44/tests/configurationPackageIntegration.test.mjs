@@ -12,6 +12,7 @@ import {builderReviewResponse,normalizeManualBuilderDraft} from '../shared/windo
 import {verifyNativePricePreview,previewPolicyKey} from '../shared/nativePricePreview.js';
 import {buildQuotePlan,verifyObservedQuote} from '../shared/amscoQuotePlan.js';
 import {configurationInputSnapshot} from '../shared/nativeConfigurationResult.js';
+import {privateOnlineDatabase} from '../shared/configurationOnlineQueue.js';
 
 const fixture=JSON.parse(await readFile(new URL('./fixtures/saved-hampton-preview-proof.json',import.meta.url),'utf8'));
 const clone=value=>structuredClone(value),stable=value=>JSON.stringify(value,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
@@ -116,4 +117,20 @@ test('a signed webhook resolves the exact private child through the real provide
  assert.equal((await send('sha256='+'0'.repeat(64))).status,401);assert.equal(reads,0);
  const signature='sha256='+createHmac('sha256',secret).update(raw).digest('hex'),response=await send(signature);assert.equal(response.status,200,await response.clone().text());assert.ok(reads>0);assert.equal(h.db.QuoteRequests.data[0].worker_status,'ready');
  assert.equal((await send(signature)).status,200);assert.equal(h.sends.length,1);
+});
+
+test('a requested edit or chat cannot mutate a frozen package before its revision is checked',async()=>{
+ const h=await harness();await h.submit();const child=h.db.WindowQuoteOnlineRequests.data[0];await h.tools(h.report(child,'needs_sign_in'));
+ const before=clone(h.db.QuoteRequests.data[0]);
+ for(const body of [{action:'update',title:'Changed'},{action:'message',message:'Make it black',client_message_id:'edit-frozen'}]){
+  const response=await h.call({...body,quote_id:before.id});assert.equal(response.status,409);assert.match(response.body.error,/Revise windows/);assert.deepEqual(h.db.QuoteRequests.data[0],before);
+ }
+});
+
+test('more than one page of stale private work cannot hide a current queued window',async()=>{
+ const h=await harness();await h.submit();const child=clone(h.db.WindowQuoteOnlineRequests.data[0]);child.worker_status='queued';child.queued_at='2026-09-10T12:00:00Z';
+ const old=Array.from({length:60},(_,index)=>({...clone(child),id:'old-'+index,parent_quote_id:'missing-parent',queued_at:'2026-09-10T11:00:00Z'}));
+ h.db.WindowQuoteOnlineRequests.data.splice(0,1,...old,child);
+ const found=await privateOnlineDatabase(h.db).QuoteRequests.filter({worker_status:'queued',execution_provider:'superagent'},'queued_at',1);
+ assert.deepEqual(found.map(row=>row.id),[child.id]);
 });

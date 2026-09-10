@@ -33,10 +33,19 @@ export function privateOnlineDatabase(db, { hash = sha256, policy } = {}) {
   const privateRows = new Proxy(rows, {
     get(target, name) {
       if (name === 'filter') return async (query, sort, limit) => {
-        const found = await target.filter(query, sort, query?.worker_status === 'queued' ? Math.max(limit || 1, 50) : limit);
-        if (query?.worker_status !== 'queued') return found;
-        const valid = await Promise.all(found.map(row => onlinePackageIsCurrent(db, row, hash, policy)));
-        return found.filter((_row, index) => valid[index]).slice(0, limit || found.length);
+        if (query?.worker_status !== 'queued') return target.filter(query, sort, limit);
+        const selected = [], skipped = [], wanted = limit || 100, batchSize = Math.max(50, wanted);
+        // Old private requests must not hide an eligible window behind a fixed
+        // first-page limit. Exclusions also preserve ordering across equal dates.
+        while (selected.length < wanted) {
+          const found = await target.filter({ ...query, ...(skipped.length ? { id: { $nin: skipped } } : {}) }, sort, batchSize);
+          if (!found.length) break;
+          const valid = await Promise.all(found.map(row => onlinePackageIsCurrent(db, row, hash, policy)));
+          selected.push(...found.filter((_row, index) => valid[index]));
+          skipped.push(...found.map(row => row.id));
+          if (found.length < batchSize || query.id !== undefined) break;
+        }
+        return selected.slice(0, wanted);
       };
       const value = Reflect.get(target, name); return typeof value === 'function' ? value.bind(target) : value;
     }
