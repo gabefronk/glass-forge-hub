@@ -125,6 +125,13 @@ export function createConfigurationPackageCoordinator({ config, now = () => new 
         // This immutable subset is the only input the online service receives.
         // Its own reservation and idempotency handle uncertain dispatch replies.
         onlineState = await online.progress({ db, work, indices: onlineIndices, settings: clone(work.snapshot.settings), lines: onlineIndices.map(index => clone(work.snapshot.lines[index])) });
+        if (onlineState?.completed) {
+          if (!Array.isArray(onlineState.completed) || new Set(onlineState.completed.map(item => item.index)).size !== onlineState.completed.length) fail(502, 'The online service returned duplicate completed windows');
+          for (const item of onlineState.completed) {
+            if (!onlineIndices.includes(item.index) || !item.verified) fail(502, 'The online service returned a window outside its requested subset');
+            items[item.index].state = 'priced'; items[item.index].source = 'amsco_online'; items[item.index].verified = item.verified;
+          }
+        }
         if (onlineState?.status === 'ready') {
           if (!Array.isArray(onlineState.verified) || onlineState.verified.length !== onlineIndices.length) fail(502, 'The online result does not cover its complete requested subset');
           for (const [position, index] of onlineIndices.entries()) { items[index].state = 'priced'; items[index].source = 'amsco_online'; items[index].verified = onlineState.verified[position]; }
