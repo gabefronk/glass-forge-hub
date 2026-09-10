@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createNativePricePreviewService,planNativePricePreview} from '../shared/nativePricePreview.js';
+import {readFile} from 'node:fs/promises';
+import {createNativePricePreviewService,planNativePricePreview,verifyNativePricePreview} from '../shared/nativePricePreview.js';
 const clone=x=>structuredClone(x), policy={enabled:true,version:1,contract_hash:'c'.repeat(64),catalog_id:'361',context_fingerprint:'d'.repeat(64),price_previews:true};
 const user={id:'admin-1',role:'admin'},worker={id:'worker-1',enabled:true,token_hash:'a'.repeat(64),allowed_dealers:['BFS']};
 const config={enabled:true,mode:'queue',worker_id:worker.id,worker_key_hash:worker.token_hash,native_engine:policy};
@@ -22,6 +23,15 @@ function harness({realVerify=false}={}){
 }
 async function claim(h){const offered=await h.service.poll({db:h.db,worker,nativeReady:true});assert.equal(offered.kind,'price_preview');const body={action:'preview_claim',preview_id:offered.quote_id,operation_id:'op-1',plan_hash:offered.plan_hash};await h.service.claim({db:h.db,worker,body});return {offered,body};}
 const reportBody=(offer,status='ready')=>({action:'preview_report',preview_id:offer.quote_id,operation_id:'op-1',plan_hash:offer.plan_hash,status,...(status==='ready'?{observed:{quote_id:offer.quote_id}}:{})});
+test('a real saved and reopened Hampton price passes the service verifier and tampering fails',async()=>{
+ const fixture=JSON.parse(await readFile(new URL('./fixtures/saved-hampton-preview-proof.json',import.meta.url),'utf8'));
+ const checked=await verifyNativePricePreview(fixture.plan,fixture.observed,fixture.context);
+ assert.equal(checked.ok,true,JSON.stringify(checked.issues));assert.equal(checked.result.totals.customer_total,472.13);
+ const changed=clone(fixture.observed);changed.lines[0].unit_prices.customer+=1;
+ assert.equal((await verifyNativePricePreview(fixture.plan,changed,fixture.context)).ok,false);
+ const badIdentity=clone(fixture.observed);badIdentity.native_quote_id='wrong';
+ assert.equal((await verifyNativePricePreview(fixture.plan,badIdentity,fixture.context)).ok,false);
+});
 test('preview plans support Hampton without adding a frozen Studio glass or hardware recipe',()=>{
  const built=planNativePricePreview({id:'preview',input_revision:1,settings,lines:[line()]});assert.equal(built.ok,true);assert.equal(built.plan.schema_version,3);
  assert.equal(built.plan.lines[0].options.glass_thickness,undefined);assert.equal(built.plan.lines[0].options.hardware,undefined);
