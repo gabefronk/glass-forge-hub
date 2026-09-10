@@ -1,3 +1,4 @@
+import { createNativePricePreviewService } from './nativePricePreview.js';
 import { HttpError, sha256, validateLines, validateSettings, sanitizePublic } from './windowQuotesCore.js';
 import { createScriptedExecution } from './scriptedExecution.js';
 import { reviewedRestartAllowsHistory } from './reviewedRestart.js';
@@ -26,6 +27,8 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
   const at = () => now().toISOString();
   const digest = value => hash(stable(value));
   if (enabled && (config.mode !== 'queue' || allow.requester_email !== 'gabefronk@gmail.com' || allow.dealer !== 'BFS' || !sameYard(allow.yard, 'BFS-UTAH DESIGN (11)') || !Number.isFinite(Date.parse(allow.created_after)) || typeof normalizeRequest !== 'function' || typeof validateReady !== 'function')) fail(503, 'Invalid new-request queue configuration');
+  const previews = createNativePricePreviewService({ config, now, hash });
+  const previewAction = method => args => { requireEnabled(); workerScope(args.worker); return previews[method](args); };
   const scopeHash = () => digest({ version: 1, allow, worker_id: config.worker_id, browser_slot_id: config.browser_slot_id });
   const baseConfig = (q, expected) => ({ ...config, allow: { quote_id: q.id, request_id: q.request_id, input_revision: q.input_revision, requester_email: allow.requester_email, dealer: allow.dealer, yard: sameYard(q.settings?.yard, allow.yard) ? q.settings.yard : allow.yard }, expected_plan_hash: expected });
   // This neutral child is used only for its existing worker-key authentication.
@@ -238,6 +241,8 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
         return response('queued', undefined, { quote_id: q.id, input_revision: q.input_revision, plan_hash: q.agent_run.plan_hash, plan: clone(q.agent_run.plan) });
       } catch (error) { if (!(error instanceof HttpError)) throw error; return response('blocked', 'prepared_request_requires_review'); }
     }
+    const preview = await previews.poll({ db, worker, nativeReady: nativeEnginePresenceReady(reported.native_engine, config.native_engine) });
+    if (preview) return response('queued', undefined, preview);
     return response('idle');
   }
   async function getStatus({ db }) {
@@ -258,6 +263,7 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     }
     return status;
   }
-  return { configured: enabled, provider: 'deterministic', authenticate: auth.authenticate, afterInput, claim, poll, getStatus, heartbeat: forward('heartbeat'), checkpoint: forward('checkpoint'), report: forward('report') };
+  return { configured: enabled, provider: 'deterministic', preview_claim: previewAction('claim'), preview_report: previewAction('report'), authenticate: auth.authenticate, afterInput, claim, poll, getStatus, heartbeat: forward('heartbeat'), checkpoint: forward('checkpoint'), report: forward('report') };
 }
+
 
