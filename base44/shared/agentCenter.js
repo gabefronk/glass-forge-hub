@@ -5,6 +5,12 @@ const iso=value=>Number.isFinite(Date.parse(value))?new Date(value).toISOString(
 const ids=new Set(['manager_agent','sales_tracker_agent','calendar_coordinator','probuild_reporting','codex_development','mac_manager']);
 const visibleEntry=entry=>({id:entry.id,target_id:entry.target_id,kind:entry.kind,title:entry.title,body:entry.body,recorded_at:entry.recorded_at,actor_email:entry.actor_email,status:entry.status,request_key:entry.request_key});
 const visibleEscalation=row=>({id:row.id,agent_id:row.agent_id,department:row.department,title:row.title,context:row.context,status:row.status,created_at:row.created_at,resolved_at:row.resolved_at,resolution:row.resolution});
+const connectionCatalog=[
+ {provider_id:'anthropic_claude',provider_name:'Anthropic Claude',connection_state:'planned',scope_summary:'Agent status and approved coordination only',auth_method:'api_key'},
+ {provider_id:'openai_codex',provider_name:'OpenAI Codex',connection_state:'planned',scope_summary:'Agent task status and approved coordination only',auth_method:'api_key'},
+ {provider_id:'probuild',provider_name:'ProBuild',connection_state:'planned',scope_summary:'Read-only job, post, photo, note, and status collection',auth_method:'oauth'},
+ {provider_id:'bluebubbles_docker',provider_name:'BlueBubbles / Docker',connection_state:'planned',scope_summary:'Local bridge status events only',auth_method:'local_bridge'}
+];
 const baseNodes=[
  {id:'manager_agent',name:'Glass Forge manager',department:'Operations leadership',parent_id:null,provider:'Base44 policy layer',host:'Glass Forge cloud',connection:'planned',status:'Escalates unknown decisions',assignment:'Coordinates only documented routing and record-keeping policies. It does not send, purchase, schedule, import, or control external systems.',capabilities:['Route approved work','Record status','Create owner escalations'],handoffs:['All departments'],url:null},
  {id:'sales_tracker_agent',name:'Sales Tracker agent',department:'Sales data',parent_id:'manager_agent',provider:'Base44',host:'Glass Forge cloud',connection:'connected',status:'On demand',assignment:'Looks up exact orders and lot-specific arrival estimates.',capabilities:['Read Sales Tracker','Record findings'],handoffs:['Calendar coordinator','Glass Forge manager'],url:'/sales-tracker'},
