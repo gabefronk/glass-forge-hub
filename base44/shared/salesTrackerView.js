@@ -1,4 +1,4 @@
-import { parseTracker } from '../functions/salesTrackerImport/parser.js';
+import { parseTracker } from './salesTrackerParser.js';
 import { applyTrackerAppends } from './salesTrackerAppend.js';
 export const trackerSha = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
 export async function readTrackerView(client, XLSX, fetchFile = fetch) {
