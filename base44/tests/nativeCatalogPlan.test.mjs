@@ -56,3 +56,11 @@ test('native XML is escaped and bound to the exact canonical plan hash',async()=
   await assert.rejects(buildCatalogWindowPackage(plan,{planHash:'0'.repeat(64)}));
   plan.lines[0].native_questions[0].value='Black';await assert.rejects(buildCatalogWindowPackage(plan,{planHash:await catalogPlanHash(plan)}));
 });
+
+test('series named in the product description cannot silently change installation or assembly',()=>{
+  const flush=buildNativeCatalogPlan(quote({style:'Hampton Flush Fin Casement',options:{}}));
+  assert.equal(flush.ok,true);assert.equal(flush.plan.lines[0].native_windowset_id,748);
+  assert.equal(buildNativeCatalogPlan(quote({style:'Hampton Flush Fin Casement',options:{series:'Hampton'}})).ok,false);
+  assert.equal(buildNativeCatalogPlan(quote({style:'Hampton Double Casement'})).ok,false);
+  assert.equal(buildNativeCatalogPlan(quote({}, {yard:'PLEASE SELECT YARD'})).ok,false);
+});
