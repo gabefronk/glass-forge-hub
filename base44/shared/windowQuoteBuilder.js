@@ -227,40 +227,64 @@ function plannedDraft(draft) {
   const checked = buildQuotePlan({ ...normalized.quote, id: 'builder-price-preview', input_revision: 1 });
   return { normalized, checked };
 }
-export async function builderPricePreview(draft, db) {
-  const { normalized, checked } = plannedDraft(draft);
-  if (normalized.ok !== true || checked.ok !== true) return { ready: false, lines: [], total: null, questions: unique([...(normalized.questions || []), ...(checked.issues || []).map(item => item.message)]) };
-  const cache = new Map();
-  const quotes = await db.QuoteRequests.list('-updated_date', 200);
-  for (const quote of quotes) {
-    if (quote?.worker_status !== 'ready' || quote?.result?.verified !== true || !Array.isArray(quote.result.lines)) continue;
+export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeMs = 24 * 60 * 60 * 1000 } = {}) {
+  // Price each requested row independently. A missing size or an unmapped
+  // product must never discard exact prices available for neighboring rows.
+  const planned = (draft.lines || []).map((line, index) => {
     try {
-      const cachedDraft = {
-        settings: quote.settings || {},
-        lines: (quote.lines || []).map(line => Object.fromEntries(Object.entries(line).filter(([key]) => lineKeys.includes(key)))),
-        source: quote.source?.easy_request ? { easy_request: quote.source.easy_request } : {}
-      };
-      const cached = plannedDraft(cachedDraft);
-      if (cached.normalized.ok !== true || cached.checked.ok !== true) continue;
-      for (const [index, planned] of cached.checked.plan.lines.entries()) {
-        const observed = quote.result.lines[index];
-        const dealer = Number(observed?.unit_prices?.dealer), list = Number(observed?.unit_prices?.list);
-        if (!Number.isFinite(dealer) || dealer < 0) continue;
-        const key = stable({ dealer: cached.checked.plan.settings.dealer, yard: cached.checked.plan.settings.yard, line: priceSignature(planned) });
-        if (!cache.has(key)) cache.set(key, { dealer, ...(Number.isFinite(list) ? { list } : {}), checked_at: quote.result.verification?.checked_at || quote.updated_date || quote.created_date });
-      }
-    } catch { /* Older or incomplete results are not price sources. */ }
-  }
-  const margin = checked.plan.settings.gross_margin;
-  const lines = checked.plan.lines.map((line, index) => {
-    const key = stable({ dealer: checked.plan.settings.dealer, yard: checked.plan.settings.yard, line: priceSignature(line) });
-    const hit = cache.get(key);
-    if (!hit) return { index, id: draft.lines[index]?.id, status: 'amsco_lookup_needed' };
-    const customer = roundMoney(hit.dealer / (1 - margin / 100));
-    return { index, id: draft.lines[index]?.id, status: 'priced', unit_prices: { ...(hit.list !== undefined ? { list: hit.list } : {}), dealer: hit.dealer, customer }, line_totals: { ...(hit.list !== undefined ? { list: roundMoney(hit.list * line.qty) } : {}), dealer: roundMoney(hit.dealer * line.qty), customer: roundMoney(customer * line.qty) }, checked_at: hit.checked_at };
+      const result = plannedDraft({ ...draft, lines: [line] });
+      if (result.normalized.ok === true && result.checked.ok === true) return { index, line: result.checked.plan.lines[0], settings: result.checked.plan.settings };
+      const questions = unique([...(result.normalized.questions || []), ...(result.checked.issues || []).map(item => item.message)]);
+      return { index, status: onlineOnlyIssues(result.checked) ? 'amsco_lookup_needed' : 'needs_details', questions };
+    } catch {
+      return { index, status: 'needs_details', questions: ['Enter this window’s product, positive dimensions and whole-number quantity.'] };
+    }
   });
-  const ready = lines.length > 0 && lines.every(line => line.status === 'priced');
-  return { ready, lines, total: ready ? roundMoney(lines.reduce((sum, line) => sum + line.line_totals.customer, 0)) : null, currency: 'USD', missing_count: lines.filter(line => line.status !== 'priced').length, questions: [] };
+  const cache = new Map();
+  const quotes = planned.some(item => item.line) ? await db.QuoteRequests.list('-updated_date', 200) : [];
+  for (const quote of quotes) {
+    if (quote?.worker_status !== 'ready' || quote?.result?.verified !== true || !Array.isArray(quote.result.lines) ||
+        quote.result.lines.length !== quote.lines?.length) continue;
+    const checkedAt = quote.result.verification?.checked_at;
+    const age = now - Date.parse(checkedAt);
+    if (!Number.isFinite(age) || age < -60000 || age > maxAgeMs) continue;
+    if (quote.result.input_revision !== undefined && quote.input_revision !== undefined && quote.result.input_revision !== quote.input_revision) continue;
+    for (const [index, original] of quote.lines.entries()) {
+      try {
+        const cached = plannedDraft({ settings: quote.settings || {},
+          lines: [Object.fromEntries(Object.entries(original).filter(([key]) => lineKeys.includes(key)))],
+          source: quote.source?.easy_request ? { easy_request: quote.source.easy_request } : {} });
+        if (cached.normalized.ok !== true || cached.checked.ok !== true) continue;
+        const observed = quote.result.lines[index];
+        if (observed?.source_index !== undefined && observed.source_index !== index) continue;
+        const dealer = observed?.unit_prices?.dealer, list = observed?.unit_prices?.list;
+        // Null, empty or absent prices must not turn into a free window.
+        if (typeof dealer !== 'number' || !Number.isFinite(dealer) || dealer <= 0) continue;
+        const line = cached.checked.plan.lines[0];
+        const key = stable({ dealer: cached.checked.plan.settings.dealer, yard: cached.checked.plan.settings.yard, line: priceSignature(line) });
+        if (!cache.has(key) || Date.parse(cache.get(key).checked_at) < Date.parse(checkedAt)) cache.set(key, { dealer,
+          ...(typeof list === 'number' && Number.isFinite(list) && list > 0 ? { list } : {}), checked_at: checkedAt });
+      } catch { /* Older or incomplete results are not price sources. */ }
+    }
+  }
+  const lines = planned.map(item => {
+    const base = { index: item.index, id: draft.lines[item.index]?.id };
+    if (!item.line) return { ...base, status: item.status, questions: item.questions };
+    const key = stable({ dealer: item.settings.dealer, yard: item.settings.yard, line: priceSignature(item.line) });
+    const hit = cache.get(key);
+    if (!hit) return { ...base, status: 'amsco_lookup_needed' };
+    const customer = roundMoney(hit.dealer / (1 - item.settings.gross_margin / 100)), qty = item.line.qty;
+    return { ...base, status: 'priced', price_source: 'verified_configuration',
+      unit_prices: { ...(hit.list !== undefined ? { list: hit.list } : {}), dealer: hit.dealer, customer },
+      line_totals: { ...(hit.list !== undefined ? { list: roundMoney(hit.list * qty) } : {}), dealer: roundMoney(hit.dealer * qty), customer: roundMoney(customer * qty) },
+      checked_at: hit.checked_at };
+  });
+  const priced = lines.filter(line => line.status === 'priced'), ready = lines.length > 0 && priced.length === lines.length;
+  const subtotal = priced.length ? roundMoney(priced.reduce((sum, line) => sum + line.line_totals.customer, 0)) : null;
+  return { ready, lines, total: ready ? subtotal : null, priced_subtotal: subtotal, currency: 'USD',
+    missing_count: lines.filter(line => line.status === 'amsco_lookup_needed').length,
+    needs_details_count: lines.filter(line => line.status === 'needs_details').length,
+    questions: unique(lines.flatMap(line => line.questions || [])) };
 }
 
 export async function builderReviewResponse(result, { allowOnline = false } = {}) {
