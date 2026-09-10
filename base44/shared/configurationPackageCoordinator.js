@@ -41,7 +41,8 @@ export function createConfigurationPackageCoordinator({ config, now = () => new 
     if (await builderScheduleHash(draft) !== marker.schedule_hash) fail(409, 'The schedule changed after review. Review it again before pricing');
     const routes = draft.lines.map(line => plan({ id: 'package-route', input_revision: 1, settings: draft.settings, lines: [line] }));
     if (routes.some(route => !route.ok && (!route.issues?.length || route.issues.some(issue => !ONLINE_CODES.has(issue.code))))) return null;
-    if (routes.some(route => !route.ok) && !online?.configured) return null;
+    // A temporarily unavailable online connection must not send the whole
+    // reviewed schedule back through AI intake or discard its native prices.
     return { draft, routes };
   }
 

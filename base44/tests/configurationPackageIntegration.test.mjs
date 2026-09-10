@@ -20,7 +20,7 @@ const at=(row,key)=>key.split('.').reduce((v,k)=>v?.[k],row);
 const matches=(row,query)=>Object.entries(query).every(([key,want])=>{const got=at(row,key);return want&&typeof want==='object'?('$in'in want?want.$in.includes(got):'$nin'in want?!want.$nin.includes(got):'$gte'in want?got>=want.$gte:false):got===want;});
 function table(prefix,initial=[]){let count=0;const data=clone(initial);return{data,async filter(query={},sort,limit=100){const rows=data.filter(row=>matches(row,query));if(sort)rows.sort((a,b)=>String(a[sort]||'').localeCompare(String(b[sort]||'')));return clone(rows.slice(0,limit));},async create(value){const row={...clone(value),id:prefix+'-'+ ++count,created_date:'2026-09-10T12:00:00Z'};data.push(row);return clone(row);},async updateMany(query,patch){let updated=0;for(const row of data)if(matches(row,query)){Object.assign(row,clone(patch.$set));updated++;}return{updated};}};}
 
-async function harness({pending=false}={}){
+async function harness({pending=false,onlineConfigured=true}={}){
  const now=()=>new Date('2026-09-10T12:00:00Z'),user={id:'other-administrator',role:'admin',email:'another-admin@example.test'};
  const settings={dealer:'BFS',yard:'BFS-UTAH DESIGN(11)',gross_margin:30,color:'White',glass:'CozE (LowE)'};
  const native={id:'native-window',style:'Hampton Casement',width:24,height:48,qty:2,room:'Bedroom',units:'in',dimension_basis:'frame',options:{series:'Hampton'}};
@@ -37,7 +37,7 @@ async function harness({pending=false}={}){
  const db={QuoteRequests:table('parent'),WindowQuotePricePreviews:table('preview',[record]),WindowQuoteConfigurationPackages:table('package'),WindowQuoteOnlineRequests:table('online'),Jobs:table('job'),
   QuoteWorkers:table('worker',[worker,{id:'shared-slot',name:'Base44 Window Quotes browser',busy_token:'',active_quote_id:'',poll_generation:0}])};
  const sends=[];let sequence=0;
- const raw=createAgentExecution({transport:{sendMessage:async value=>sends.push(value)},browserSlotId:'shared-slot',conversationId:'private-online-conversation',now,uuid:()=> 'online-operation-'+ ++sequence});
+ const raw=createAgentExecution({transport:onlineConfigured?{sendMessage:async value=>sends.push(value)}:null,browserSlotId:'shared-slot',conversationId:'private-online-conversation',now,uuid:()=> 'online-operation-'+ ++sequence});
  const routed=createConfigurationAgentRouter({legacy:{configured:true,tool(){throw Error('Unexpected legacy tool');},report(){throw Error('Unexpected legacy report');}},onlineExecution:raw,loadConfig:async()=>config,now});
  const execution=createScriptedQueueExecution({config,now,normalizeRequest:buildQuotePlan,validateReady:verifyObservedQuote,packageOnlineExecution:raw,
   normalizeIntake(){throw Error('Reviewed windows must not run AI intake');},fallbackExecution:{configured:true,afterInput(){throw Error('The complete package must not be delegated');}}});
@@ -87,6 +87,21 @@ test('sign-in retry preserves the native checkpoint and all previously verified 
  child=h.db.WindowQuoteOnlineRequests.data[0];assert.equal(h.db.WindowQuoteOnlineRequests.data.length,1);assert.equal(child.checkpoint.native_quote_id,failure.checkpoint.native_quote_id);assert.notEqual(child.agent_run.operation_id,oldOperation);assert.equal(h.sends.length,2);
  assert.equal((await h.call({action:'queue',quote_id:q.id})).status,200);assert.equal(h.sends.length,2);assert.equal((await h.tools(failure)).status,403);
  assert.equal((await h.tools(h.report(child))).status,200);assert.equal(h.db.QuoteRequests.data[0].result.totals.customer_total,1229.98);
+});
+
+test('an unavailable online connection retains a mixed reviewed schedule and finishes native work without AI intake',async()=>{
+ for(const pending of [false,true]){
+  const h=await harness({pending,onlineConfigured:false}),created=await h.submit();
+  assert.equal(created.status,200,JSON.stringify(created));
+  if(pending){assert.equal(h.db.QuoteRequests.data[0].worker_status,'queued');h.makeNativeReady();await h.poll();}
+  const q=h.db.QuoteRequests.data[0];
+  assert.equal(q.worker_status,'failed');assert.equal(q.lines.length,2);assert.equal(q.input_revision,1);
+  assert.equal(q.pricing_progress.priced_subtotal,944.26);assert.equal(q.pricing_progress.total,null);
+  assert.equal(q.pricing_progress.online_pending_count,1);assert.equal(q.result,undefined);
+  assert.match(q.missing_details.join(' '),/connection is unavailable/);
+  assert.equal(h.db.WindowQuoteConfigurationPackages.data[0].status,'needs_attention');
+  assert.equal(h.db.WindowQuoteOnlineRequests.data.length,0);assert.equal(h.sends.length,0);
+ }
 });
 
 test('changed selection, invalid capability, wrong observed option and rolled policy cannot complete a package',async()=>{
