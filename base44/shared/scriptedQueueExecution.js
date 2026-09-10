@@ -270,7 +270,7 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     return response('idle');
   }
   async function getStatus({ db }) {
-    const status = { configured: false, online: false, provider: 'deterministic', name: 'Automatic window quoting', last_seen_at: null, browser_authenticated: null, browser_state: 'unknown', browser_state_source: 'runner_report', runner_status: 'offline' };
+    const status = { configured: false, online: false, provider: 'deterministic', name: packages.enabled ? 'Automatic per-window pricing' : 'Automatic window quoting', pricing_mode: packages.enabled ? 'per_window' : 'legacy', last_seen_at: null, browser_authenticated: null, browser_state: 'unknown', browser_state_source: 'runner_report', runner_status: 'offline' };
     if (!enabled) return status;
     const workers = await db.QuoteWorkers.filter({ id: config.worker_id, enabled: true, token_hash: config.worker_key_hash }, undefined, 2);
     if (workers.length !== 1 || !(workers[0].allowed_dealers || []).includes('BFS')) return status;
@@ -289,4 +289,3 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
   }
   return { configured: enabled, provider: 'deterministic', preview_claim: previewAction('claim'), preview_report: previewAction('report'), authenticate: auth.authenticate, afterInput, claim, poll, getStatus, heartbeat: forward('heartbeat'), checkpoint: forward('checkpoint'), report: forward('report') };
 }
-
