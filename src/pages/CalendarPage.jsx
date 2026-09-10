@@ -136,15 +136,15 @@ export default function CalendarPage() {
     return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   };
 
-  if(user?.role==="admin" && knowledgeView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setKnowledgeView(false)}>Back to install calendar</button><JobKnowledge /></div>;
-  if(user?.role==="admin" && serviceView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setServiceView(false)}>Back to install calendar</button><ServiceCalendar /></div>;
+  if(user?.role==="admin" && knowledgeView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setKnowledgeView(false)}>Back to calendar</button><JobKnowledge /></div>;
+  if(user?.role==="admin" && serviceView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setServiceView(false)}>Back to calendar</button><ServiceCalendar /></div>;
   if(user?.role==="admin" && cleanView) return <div className="p-5" style={{backgroundColor:C.pageBg,minHeight:"100vh"}}><button className="mb-4 underline" onClick={()=>setCleanView(false)}>Back to calendar</button><button className="mb-4 ml-4 underline" onClick={()=>setServiceView(true)}>Service calendar</button><button className="mb-4 ml-4 underline" onClick={()=>setKnowledgeView(true)}>Find job update</button><CleanCalendar /></div>;
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3 mb-5">
-          <div className="mono-label-sm">Installation schedule</div>
+          <div className="mono-label-sm">Calendar</div>
           {user?.role==="admin"&&<button className="underline" onClick={()=>setCleanView(true)}>Installation calendar</button>}
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             <div className="flex rounded-full p-0.5" style={{ border: `1px solid ${C.border}` }}>
