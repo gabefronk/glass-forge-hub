@@ -1,0 +1,58 @@
+{
+  "name": "AgentCenterEscalation",
+  "type": "object",
+  "properties": {
+    "escalation_key": {
+      "type": "string"
+    },
+    "source_entry_id": {
+      "type": "string"
+    },
+    "agent_id": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "context": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "needs_owner_decision",
+        "answered",
+        "dismissed"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolution": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "escalation_key",
+    "agent_id",
+    "department",
+    "title",
+    "context",
+    "status",
+    "created_at"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
