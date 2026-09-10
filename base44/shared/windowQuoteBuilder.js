@@ -1,4 +1,5 @@
 import { createNativePricePreviewService, planNativePricePreview } from './nativePricePreview.js';
+import { transferredPreviewComparison } from './amscoTransferredPreview.js';
 import { loadScriptedRunnerConfig } from './scriptedRunnerConfig.js';
 import { nativeEnginePresenceReady } from './nativeEngineObservation.js';
 import { HttpError, sha256, validateLines, validateSettings } from './windowQuotesCore.js';
@@ -303,6 +304,12 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
       unit_prices: { ...(hit.list !== undefined ? { list: hit.list } : {}), dealer: hit.dealer, customer },
       line_totals: { ...(hit.list !== undefined ? { list: roundMoney(hit.list * qty) } : {}), dealer: roundMoney(hit.dealer * qty), customer: roundMoney(customer * qty) },
       checked_at: hit.checked_at });
+  }
+  if (config?.native_engine?.configuration_packages === true) {
+    for (const item of planned) {
+      const output = lines.find(line => line.index === item.index);
+      if (output && item.inputLine) output.source_engine = transferredPreviewComparison({ line: item.inputLine, settings: item.inputSettings, observed: output });
+    }
   }
   const priced = lines.filter(line => line.status === 'priced'), ready = lines.length > 0 && priced.length === lines.length;
   const subtotal = priced.length ? roundMoney(priced.reduce((sum, line) => sum + line.line_totals.customer, 0)) : null;
