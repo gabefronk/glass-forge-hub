@@ -61,7 +61,7 @@ test('live price preview reuses only exact verified lines and recalculates custo
   const changed = clone(value); changed.lines[0].width = 37;
   const partial = await builderPricePreview(changed, db);
   assert.equal(partial.ready, false);
-  assert.equal(partial.lines[0].status, 'amsco_lookup_needed');
+  assert.equal(partial.lines[0].status, 'native_calculation_needed');
   assert.equal(partial.lines[1].status, 'priced');
 });
 
