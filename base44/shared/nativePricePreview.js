@@ -71,6 +71,24 @@ export function createNativePricePreviewService({config, now=()=>new Date(), has
   if(row.status==='failed'||!live(row)||row.status==='running'&&Date.parse(row.lease_expires_at)<=stamp())return {status:'native_unavailable',preview_id:row.id};
   return {status:'calculating',preview_id:row.id,retry_after_ms:2000};
  }
+ async function resolveVerified({db,user,line,settings}){
+  if(user?.role!=='admin'||!id(user.id))fail(403,'An authenticated administrator is required');
+  if(!enabled)return null;
+  const input={settings:clone(settings),lines:[{...clone(line),qty:1,room:''}]};
+  delete input.lines[0].id;delete input.lines[0].mark;delete input.lines[0].source_reference;
+  const built=normalize({...input,id:'price-preview',input_revision:1});if(!built.ok)return null;
+  const requestKey=await digest({version:PREVIEW_VERSION,owner:user.id,context:context(),plan:{...built.plan,quote_id:'price-preview',title:''}});
+  const candidates=await rows(db).filter({request_key:requestKey,owner_id:user.id,status:'ready'},'-created_date',10);
+  for(const row of candidates){
+   if(!live(row)||publicResult(row,line.qty).status!=='priced')continue;
+   try{await planFor(row);}catch{continue;}
+   if(await digest({version:PREVIEW_VERSION,owner:user.id,context:context(),plan:{...row.plan,quote_id:'price-preview',title:''}})!==requestKey)continue;
+   const result=row.result,proof=result.native_engine;
+   if(result.quote_id!==row.id||result.input_revision!==1||result.lines?.length!==1||proof.plan_hash!==row.plan_hash||proof.operation_id!==row.operation_id)continue;
+   return clone(row);
+  }
+  return null;
+ }
  async function request({db,user,line,settings,sessionId}){
   if(user?.role!=='admin'||!id(user.id))fail(403,'An authenticated administrator is required');
   if(!enabled)return {status:'native_unavailable'};
@@ -138,6 +156,6 @@ export function createNativePricePreviewService({config, now=()=>new Date(), has
   if(changed.updated!==1){const concurrent=await get(db,row.id);if(concurrent.report_hash!==reportHash)fail(409,'Price preview changed during reporting');}
   return {ok:true,status:body.status,preview_id:row.id};
  }
- return {enabled,request,poll,claim,report};
+ return {enabled,request,poll,claim,report,resolveVerified};
 }
 

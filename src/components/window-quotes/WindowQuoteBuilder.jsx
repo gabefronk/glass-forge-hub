@@ -84,7 +84,7 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
   const normalizedSettings = useMemo(() => ({ ...settings, gross_margin: settings.gross_margin === "" || settings.gross_margin == null ? null : Number(settings.gross_margin) }), [settings]);
   const preview = useMemo(() => buildBuilderPreview(normalizedSettings, lines, standardSource), [normalizedSettings, lines, standardSource]);
   const count = lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0);
-  const draft = () => ({ title: title.trim(), settings: normalizedSettings, lines: lines.map(line => Object.fromEntries(Object.entries(line).filter(([key]) => key !== "source_reference"))), source: { easy_request: standardSource.easy_request } });
+  const draft = () => ({ title: title.trim(), settings: normalizedSettings, lines: lines.map(line => Object.fromEntries(Object.entries(line).filter(([key]) => key !== "source_reference"))), source: { easy_request: standardSource.easy_request, amsco_configurator: { version: 1 } } });
   const invalidate = () => { setReviewed(null); setConfirmed(false); setSuggestion(current => current ? { ...current, stale: true } : null); setError(""); };
   const changeSettings = patch => { invalidate(); setSettings(current => ({ ...current, ...patch })); };
   const changeEditor = patch => { invalidate(); setEditor(current => ({ ...current, line: { ...current.line, ...patch } })); };
@@ -109,7 +109,7 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
       const line = { ...editor.line, width: previewNumber(editor.line.width), height: previewNumber(editor.line.height), qty: Number.isInteger(Number(editor.line.qty)) ? previewNumber(editor.line.qty) : undefined, units: "in" };
       candidate = editor.index < 0 ? [...lines, line] : lines.map((item, index) => index === editor.index ? line : item);
     }
-    return { title: title.trim(), settings: normalizedSettings, lines: candidate.map(line => Object.fromEntries(Object.entries(line).filter(([key]) => key !== "source_reference"))), source: { easy_request: standardSource.easy_request } };
+    return { title: title.trim(), settings: normalizedSettings, lines: candidate.map(line => Object.fromEntries(Object.entries(line).filter(([key]) => key !== "source_reference"))), source: { easy_request: standardSource.easy_request, amsco_configurator: { version: 1 } } };
   }, [editor, lines, normalizedSettings, standardSource.easy_request, title]);
   useEffect(() => {
     const sequence = ++priceRequest.current;

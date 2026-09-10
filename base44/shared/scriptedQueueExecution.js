@@ -1,3 +1,4 @@
+import { createNativeConfigurationQuoteService } from './nativeConfigurationQuote.js';
 import { createNativePricePreviewService } from './nativePricePreview.js';
 import { HttpError, sha256, validateLines, validateSettings, sanitizePublic } from './windowQuotesCore.js';
 import { createScriptedExecution } from './scriptedExecution.js';
@@ -28,6 +29,7 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
   const digest = value => hash(stable(value));
   if (enabled && (config.mode !== 'queue' || allow.requester_email !== 'gabefronk@gmail.com' || allow.dealer !== 'BFS' || !sameYard(allow.yard, 'BFS-UTAH DESIGN (11)') || !Number.isFinite(Date.parse(allow.created_after)) || typeof normalizeRequest !== 'function' || typeof validateReady !== 'function')) fail(503, 'Invalid new-request queue configuration');
   const previews = createNativePricePreviewService({ config, now, hash });
+  const configurations = createNativeConfigurationQuoteService({ config, now, hash });
   const previewAction = method => args => { requireEnabled(); workerScope(args.worker); return previews[method](args); };
   const scopeHash = () => digest({ version: 1, allow, worker_id: config.worker_id, browser_slot_id: config.browser_slot_id });
   const baseConfig = (q, expected) => ({ ...config, allow: { quote_id: q.id, request_id: q.request_id, input_revision: q.input_revision, requester_email: allow.requester_email, dealer: allow.dealer, yard: sameYard(q.settings?.yard, allow.yard) ? q.settings.yard : allow.yard }, expected_plan_hash: expected });
@@ -123,12 +125,15 @@ export function createScriptedQueueExecution({ config = {}, normalizeRequest, no
     if (!enabled) return args.q;
     let q = await get(args.db, args.q.id); scope(q);
     if (args.user?.role !== 'admin' || args.user.email !== allow.requester_email) fail(403, 'This administrator is not the configured requester');
+    if (q.worker_status === 'ready' && q.result?.native_source === 'native_configurations') return q;
     if (args.action === 'retry_failed') {
       const restarted = await retryFailed({ ...args, q }); q = restarted.quote;
       if (restarted.replayed) return q;
     }
     if (q.worker_status === 'running') { await prepared(q); return q; }
     q = await retrySignIn({ ...args, q }); await fresh(q);
+    const completed = await configurations.finalize({ ...args, q });
+    if (completed) return completed;
     if (q.worker_status === 'queued') return (await prepared(q)).afterInput({ ...args, q });
     let intake;
     if (normalizeIntake) {

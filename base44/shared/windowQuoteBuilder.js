@@ -38,8 +38,13 @@ function options(value = {}, path = 'options') {
   return clean;
 }
 function source(value = {}, { submission = false } = {}) {
-  keys(value, submission ? ['easy_request', 'visual_builder'] : ['easy_request'], 'draft.source');
+  keys(value, submission ? ['easy_request', 'visual_builder', 'amsco_configurator'] : ['easy_request', 'amsco_configurator'], 'draft.source');
   const clean = {};
+  if (value.amsco_configurator !== undefined) {
+    keys(value.amsco_configurator, ['version'], 'draft.source.amsco_configurator');
+    if (value.amsco_configurator.version !== 1) fail('Review the current AMSCO configurator');
+    clean.amsco_configurator = { version: 1 };
+  }
   if (value.easy_request !== undefined) {
     const easy = value.easy_request;
     keys(easy, easyKeys, 'draft.source.easy_request');
@@ -153,8 +158,17 @@ function fillManualPreferences(draft) {
 export async function builderScheduleHash(draft) {
   return sha256(stable({ version: BUILDER_VERSION, profile_contract_hash: PROFILE_CONTRACT_HASH, settings: draft.settings, lines: draft.lines, source: draft.source }));
 }
+const checkedBuilderPlan = quote => quote.source?.amsco_configurator?.version === 1 ? planNativePricePreview(quote) : buildQuotePlan(quote);
 export function normalizeManualBuilderDraft(raw) {
   const draft = validateBuilderDraft(raw);
+  if (draft.source?.amsco_configurator?.version === 1) {
+    const quote = { ...clone(draft), id: 'builder-preview', input_revision: 1, history: [], conversation: [] };
+    if (!present(quote.settings.glass) && !Object.hasOwn(quote.settings, 'low_e') && isStandard(draft)) quote.settings.glass = 'CozE (LowE)';
+    const checked = checkedBuilderPlan(quote), issues = checked.issues || [];
+    const questions = unique(issues.map(item => item.message));
+    return { ok: checked.ok, quote, issues, questions, intake_assessment: { status: checked.ok ? 'ready' : 'product_review', questions,
+      product_review: questions, unresolved_requirements: [], assumptions: [] } };
+  }
   const { quote: prepared, assumptions } = fillManualPreferences(draft);
   const q = { ...prepared, id: 'builder-preview', input_revision: 1, history: [], conversation: [] };
   const result = normalizeConversationalSchedule(q, { getProductProfileForLine });
@@ -227,7 +241,7 @@ const priceSignature = line => stable(Object.fromEntries(Object.entries(line || 
 const roundMoney = value => Math.round((value + Number.EPSILON) * 100) / 100;
 function plannedDraft(draft) {
   const normalized = normalizeManualBuilderDraft(draft);
-  const checked = buildQuotePlan({ ...normalized.quote, id: 'builder-price-preview', input_revision: 1 });
+  const checked = checkedBuilderPlan({ ...normalized.quote, id: 'builder-price-preview', input_revision: 1 });
   return { normalized, checked };
 }
 export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeMs = 24 * 60 * 60 * 1000, user, config, sessionId } = {}) {
@@ -308,7 +322,7 @@ export async function builderReviewResponse(result, { allowOnline = false } = {}
   let productReview = unique(assessment.product_review);
   const unresolved = result.builder_approved === true ? [] : unique(assessment.unresolved_requirements);
   // Check the returned schedule again; a model's status is never sufficient.
-  const checked = buildQuotePlan({ ...draft, id: 'builder-preview', input_revision: 1 });
+  const checked = checkedBuilderPlan({ ...draft, id: 'builder-preview', input_revision: 1 });
   const onlineReady = allowOnline && onlineOnlyIssues(checked);
   if (onlineReady) { questions = []; productReview = []; }
   else if (!checked.ok && !questions.length && !productReview.length) questions.push(...unique((checked.issues || []).map(item => item.message)));
@@ -402,7 +416,7 @@ export function createBuilderAwareIntake(normalizeAI) {
       const result = normalizeManualBuilderDraft(draft);
       const reviewed = await builderReviewResponse(result, { allowOnline: true });
       if (!reviewed.review.ready || reviewed.review.schedule_hash !== marker.schedule_hash) fail('These windows need a new review before requesting an AMSCO price');
-      const onlineReady = onlineOnlyIssues(buildQuotePlan({ ...reviewed.draft, id: 'builder-preview', input_revision: 1 }));
+      const onlineReady = onlineOnlyIssues(checkedBuilderPlan({ ...reviewed.draft, id: 'builder-preview', input_revision: 1 }));
       return { ...result, quote: { ...clone(q), settings: reviewed.draft.settings, lines: reviewed.draft.lines },
         intake_assessment: { ...result.intake_assessment, version: BUILDER_VERSION, input_revision: q.input_revision,
           ...(onlineReady ? { status: 'product_review', questions: [], unresolved_requirements: [] } : {}) },

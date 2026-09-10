@@ -1,3 +1,4 @@
+import { CONFIGURATION_QUOTE_SOURCE, configurationInputSnapshot, configurationQuoteResultIssues } from './nativeConfigurationResult.js';
 import { DESKTOP_NATIVE_SOURCE, desktopNativeIdentityIssues, desktopPersistenceIssues } from './nativeEngineObservation.js';
 import { advanceReviewedRestart } from './reviewedRestart.js';
 
@@ -58,9 +59,13 @@ export function validateLines(value = []) {
     return line;
   });
 }
-export function validateResult(raw) {
+export function validateResult(raw, { allowConfigurationSet = false, quote, inputHash } = {}) {
   const result = jsonValue(object(raw, "result"), "result", 400000);
   if (result.verified !== true) fail(400, "A ready quote requires verified AMSCO results");
+  if (result.native_source === CONFIGURATION_QUOTE_SOURCE) {
+    if (!allowConfigurationSet || configurationQuoteResultIssues(result, { quote, inputHash }).length) fail(400, 'The window package requires verified configurations matching this saved request');
+    return result;
+  }
   result.native_quote_id = textValue(result.native_quote_id, "AMSCO quote ID", 100, true);
   if (result.native_source === DESKTOP_NATIVE_SOURCE) {
     if (desktopNativeIdentityIssues(result).length || desktopPersistenceIssues(result.native_engine?.persistence).length ||
@@ -467,7 +472,7 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
           const hasAccepted = q.accepted_revision > 0 && q.accepted_snapshot?.result?.verified === true;
           if (!hasAccepted) {
             if (q.worker_status !== "ready") fail(409, "Complete and verify the AMSCO quote before marking it won");
-            validateResult(q.result);
+            validateResult(q.result, { allowConfigurationSet: true, quote: q, inputHash: await sha256(stable(configurationInputSnapshot(q))) });
           }
           const snapshot = hasAccepted ? q.accepted_snapshot : { quote_id: q.id, title: q.title, revision: q.input_revision, accepted_at: at(), settings: copy(q.settings), lines: copy(q.lines), result: copy(q.result), source: copy(q.source) };
           const token = uuid();
