@@ -96,9 +96,10 @@ export function createNativePricePreviewService({config, now=()=>new Date(), has
   const changed=await rows(db).updateMany({id:row.id,status:'preparing'},{$set:patch});if(changed.updated!==1)fail(409,'Price preview changed');
   row={...row,...patch};return publicResult(row,line.qty);
  }
- async function poll({db,worker,nativeReady}){
+ async function poll({db,worker,nativeReady,excludedIds=[]}){
   if(!enabled)return null;workerGuard(worker);if(!nativeReady)return null;
-  const candidates=await rows(db).filter({status:'queued',contract_hash:policy.contract_hash,context_fingerprint:policy.context_fingerprint,expires_at:{$gt:at()}},'queued_at',10);
+  if(!Array.isArray(excludedIds)||excludedIds.length>100||excludedIds.some(value=>!id(value)))fail(400,'Invalid completed-preview list');
+  const candidates=await rows(db).filter({status:'queued',contract_hash:policy.contract_hash,context_fingerprint:policy.context_fingerprint,expires_at:{$gt:at()},...(excludedIds.length?{id:{$nin:excludedIds}}:{})},'queued_at',10);
   for(const row of candidates){
    const plan=await planFor(row);
    return {kind:'price_preview',quote_id:row.id,input_revision:1,plan_hash:row.plan_hash,plan:clone(plan)};
