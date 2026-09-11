@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug, LogOut, PanelsTopLeft, Library } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
@@ -108,20 +108,6 @@ export default function YaFeesSidebar() {
           );
         })}
         {isAgentCenterOwner(user) && <Link to="/admin/agents" aria-current={pathname === "/admin/agents" ? "page" : undefined} className={"flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium "+(pathname === "/admin/agents" ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#535E72]")}><Bot className="h-4 w-4 shrink-0"/>Agent Center</Link>}
-        {user?.role === "admin" && (
-          <Link
-            to="/match-debug"
-            className="flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium transition-colors whitespace-nowrap"
-            style={{
-              borderRadius: "10px",
-              backgroundColor: pathname === "/match-debug" ? "#E7EEFA" : "transparent",
-              color: pathname === "/match-debug" ? "#1E4A85" : "#535E72",
-            }}
-          >
-            <Bug className="h-4 w-4 shrink-0" />
-            Match Debug
-          </Link>
-        )}
       </nav>
 
       {/* Unbilled mini card */}
