@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, Search } from "lucide-react";
+import { Download, Loader2, Search, Upload } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ImportedAmscoQuote from "./ImportedAmscoQuote";
@@ -41,6 +41,20 @@ export default function ImportAmscoQuote({onImported}) {
     catch(e){setError(e?.response?.data?.error||e.message);}
     finally{setBusy(false);}
   };
+  const upload=async event=>{
+    const file=event.target.files?.[0];event.target.value="";
+    if(!file||busy)return;
+    if(!/\\.xml$/i.test(file.name)||file.size>12000000||file.size===0){setError("Choose an AMSCO XML export up to 12 MB.");return;}
+    setBusy(true);setError("");
+    try{
+      if(lookup?.status==="queued")await invoke({action:"cancel_waiting",import_id:lookup.id});
+      setLookup(null);
+      const {file_uri}=await base44.integrations.Core.UploadPrivateFile({file});
+      const result=await invoke({action:"xml_preview",file_uri,filename:file.name,request_id:crypto.randomUUID(),quote_number:number.trim()||undefined});
+      setNumber(result.quote_number);setLookup(result);
+    }catch(e){setError(e?.response?.data?.error||e.message||"The XML could not be imported.");}
+    finally{setBusy(false);}
+  };
   const save=async()=>{
     if(busy)return;
     setBusy(true);setError("");
@@ -54,11 +68,15 @@ export default function ImportAmscoQuote({onImported}) {
   return <>
     <button type="button" className={button} onClick={()=>setOpen(true)}><Download size={16}/>Import from AMSCO</button>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[94dvh] w-[calc(100%-24px)] max-w-6xl overflow-y-auto rounded-xl bg-white p-4 sm:p-6">
-      <DialogHeader><DialogTitle>Import from AMSCO</DialogTitle><DialogDescription>Find a saved quote by number, review its line items and prices, then add it to My Quotes.</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>Import from AMSCO</DialogTitle><DialogDescription>Search a saved quote number or upload its AMSCO XML export, then review and import the complete quote.</DialogDescription></DialogHeader>
       <form onSubmit={search} className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <label className="min-w-0 flex-1 text-sm text-[#305367]">AMSCO quote number<input autoFocus inputMode="numeric" type="text" pattern="[0-9]*" maxLength={20} value={number} onChange={e=>{setNumber(e.target.value);if(!pending(lookup?.status))reset();}} disabled={busy||pending(lookup?.status)} placeholder="e.g. 3517014" className="mt-2 min-h-12 w-full rounded border border-[#AAB2BE] bg-white px-3 text-base" /></label>
         <button className={primary} disabled={busy||!number.trim()||pending(lookup?.status)}>{busy?<Loader2 size={17} className="animate-spin"/>:<Search size={17}/>}Search AMSCO</button>
       </form>
+      <div className="rounded-lg border border-[#CAD5E3] bg-[#F7FAFD] p-4">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold text-[#305367]">Have an exported quote?</p><p className="mt-1 text-xs leading-relaxed text-[#6D7D90]">In AMSCO, choose Actions → Export with Default Quote XML. Select that file here.</p></div>
+        <label className={button+" cursor-pointer shrink-0 "+(busy?"pointer-events-none opacity-50":"")}><Upload size={16}/>{busy?"Reading quote…":"Choose XML file"}<input className="sr-only" type="file" accept=".xml,application/xml,text/xml" aria-label="Choose AMSCO XML file" disabled={busy} onChange={upload}/></label></div>
+      </div>
       <p className="text-xs leading-relaxed text-[#6D7D90]">Uses the AMSCO account signed in on your connected quoting computer. Searches can take a few minutes.</p>
       <button className="min-h-11 self-start text-xs text-[#254D77] underline" onClick={async()=>{try{const r=await base44.functions.invoke("amscoQuoteImport",{action:"connection"});setConnection(r.data.connection);}catch{setError("Connection check did not complete.");}}}>Check AMSCO connection</button>
       {connection&&<p className="rounded border border-[#CAD5E3] p-3 text-xs text-[#526B7B]">{connection.reachable?"Online connection is available.":"Online connection needs attention."} {connection.browser_busy?("The quoting browser is busy"+(connection.active_status?" ("+connection.active_status+(connection.active_phase?" / "+connection.active_phase:"")+")":"")+"."):"The quoting browser is available."}</p>}

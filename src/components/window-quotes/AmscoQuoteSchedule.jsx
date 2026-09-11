@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Copy, Minus, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import WindowDrawing from "./AmscoWindowDrawing";
+import ImportedAmscoDrawing from "./ImportedAmscoDrawing";
 import { colorParts, parseGrilles, selectedSeries } from "./amscoConfiguratorModel";
 import { resolvedWindowOptions, specificationValue } from "./windowSpecificationDisplay";
 import "./amscoQuoteSchedule.css";
@@ -34,7 +35,7 @@ function WindowLine({line,index,settings,price,disabled,condensed,onEdit,onCopy,
     </header>
     <div className="amsco-line-body">
       <div className="amsco-line-drawing">
-        {line.imported ? (line.image_path && !imageFailed ? <img src={"https://amsco.wtsparadigm.com"+line.image_path} alt={`AMSCO drawing for line ${lineNumber}`} className="mx-auto max-h-64 max-w-full object-contain" loading="lazy" referrerPolicy="no-referrer" onError={()=>setImageFailed(true)}/> : <div className="flex min-h-24 items-center justify-center text-center text-xs text-[#687D8B]">{line.kind === "service" ? "Service / delivery" : "Drawing not available"}</div>) : <WindowDrawing line={drawingLine} settings={settings} grille={parseGrilles(options.grilles)} />}
+        {line.imported ? (line.drawing ? <ImportedAmscoDrawing drawing={line.drawing} label={"AMSCO drawing for line "+lineNumber}/> : line.image_path && !imageFailed ? <img src={"https://amsco.wtsparadigm.com"+line.image_path} alt={`AMSCO drawing for line ${lineNumber}`} className="mx-auto max-h-64 max-w-full object-contain" loading="lazy" referrerPolicy="no-referrer" onError={()=>setImageFailed(true)}/> : <div className="flex min-h-24 items-center justify-center text-center text-xs text-[#687D8B]">{line.kind === "service" ? "Service / delivery" : "Drawing not available"}</div>) : <WindowDrawing line={drawingLine} settings={settings} grille={parseGrilles(options.grilles)} />}
         {!condensed && <button className="inline-flex min-h-11 items-center gap-1 text-sm text-[#20386E] underline underline-offset-2" onClick={()=>setExpanded(value=>!value)} aria-expanded={details} aria-label={`${details?"Hide":"Show"} details for line ${lineNumber}`}>{details?"Hide details":"Show details"}{details?<ChevronUp size={15}/>:<ChevronDown size={15}/>}</button>}
       </div>
       <div className="min-w-0">
@@ -51,6 +52,8 @@ function WindowLine({line,index,settings,price,disabled,condensed,onEdit,onCopy,
           <p className="break-words text-sm leading-7 text-[#526B7B]">{entries.map(([key,value])=>`${optionLabels[key]}: ${specificationValue(key,value,options)}`).join(" · ")}</p>
           {line.imported && <p className="whitespace-pre-wrap break-words text-sm leading-7 text-[#526B7B]">{line.description}</p>}
           {(line.notes || (!line.imported && line.description)) && <div className="border-l-2 border-[#D8E2EA] pl-3"><p className="mb-1 text-xs font-semibold text-[#526B7B]">Notes</p><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#526B7B]">{line.notes||line.description}</p></div>}
+          {line.imported && line.specifications?.length>0 && <details><summary className="min-h-11 cursor-pointer py-3 text-sm text-[#20386E]">All saved specifications ({line.specifications.length})</summary><dl className="grid gap-3 text-xs sm:grid-cols-2">{line.specifications.map((spec,i)=><div key={i} className="min-w-0"><dt className="text-[#7A8B97]">{spec.label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-[#526B7B]">{spec.value}</dd></div>)}</dl></details>}
+          {line.imported && line.components?.length>1 && <details><summary className="min-h-11 cursor-pointer py-3 text-sm text-[#20386E]">Component prices ({line.components.length})</summary><div className="space-y-3">{line.components.map(component=><div key={component.native_line_id} className="rounded border border-[#D8E2EA] p-3 text-xs text-[#526B7B]"><p className="font-semibold">{component.native_line_number} · {component.style}</p><p className="mt-2">Qty {component.qty} · Customer {money(component.unit_prices.customer)} each · {money(component.line_totals.customer)} extended</p>{component.notes&&<p className="mt-2 whitespace-pre-wrap">{component.notes}</p>}</div>)}</div></details>}
           {additional.length > 0 && <details><summary className="min-h-11 cursor-pointer py-3 text-xs text-[#526B7B]">Additional specifications</summary><dl className="grid gap-3 text-xs sm:grid-cols-2">{additional.map(([label,value])=><div key={label} className="min-w-0"><dt className="capitalize text-[#7A8B97]">{label}</dt><dd className="mt-1 break-words text-[#526B7B]">{value}</dd></div>)}</dl></details>}
           {price?.pricing_evidence?.source === "amsco_source_engine" && <details><summary className="min-h-11 cursor-pointer py-3 text-xs text-[#526B7B]">Pricebook breakdown</summary><dl className="space-y-2 text-xs">{(price.pricing_evidence.components||[]).map((component,i)=><div key={i} className="flex justify-between gap-3"><dt>{component.name}</dt><dd>{money(component.value,currency)}</dd></div>)}</dl></details>}
         </div>}
