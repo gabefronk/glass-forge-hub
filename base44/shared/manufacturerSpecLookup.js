@@ -35,8 +35,14 @@ const SEED_URLS = {
 const MAX_USES = 3;
 const MAX_CONTENT_TOKENS = 18000;
 const RESEARCH_MAX_TOKENS = 4096;
-const DEFAULT_DEADLINE_MS = 22000;
+const DEFAULT_DEADLINE_MS = 40000;
 const FETCH_FLOOR_MS = 3000;
+// Official product-specific seed URLs verified from the manufacturer index. Used
+// only for an exact series+product match so a live fetch is not wasted locating
+// the document. General seed URLs remain the fallback for other requests.
+const PRODUCT_SEED_URLS = {
+  Pella: { 'impervia casement': 'https://media.pella.com/professional/adm/Fiberglass/Pella-Impervia_Casement.pdf' }
+};
 const MANUFACTURERS = new Set(['Pella', 'AMSCO']);
 // Anthropic returns web_fetch_tool_result_error for failed fetches; some legacy
 // payloads use web_fetch_tool_error. Treat both as "no evidence".
