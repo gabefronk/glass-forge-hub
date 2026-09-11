@@ -31,6 +31,7 @@ export default function AgentCard({ node, crossLink, nodes }) {
           <span><span className="font-semibold">→ {target.name}:</span> {crossLink.label}</span>
         </div>
       )}
+      {node.design_only && <details className="mt-4 rounded-xl border border-amber-200 bg-amber-50/40 p-3 text-sm"><summary className="cursor-pointer font-medium">Capture and email design · disabled</summary><p className="mt-3 font-medium">Device control, email sending and scheduling are off.</p><dl className="mt-3 space-y-3">{Object.entries(node.design || {}).map(([key,value])=><div key={key}><dt className="font-medium capitalize">{key.replaceAll("_"," ")}</dt><dd className="mt-1 text-xs leading-relaxed text-slate-600">{value}</dd></div>)}</dl></details>}
       <RoleDetails id={node.id} />
       <DailyPlan id={node.id} />
       <div className="mt-4 flex items-center justify-between border-t pt-3 text-xs text-slate-500">
