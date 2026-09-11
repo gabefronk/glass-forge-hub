@@ -44,7 +44,7 @@ export default function ImportAmscoQuote({onImported}) {
   const upload=async event=>{
     const file=event.target.files?.[0];event.target.value="";
     if(!file||busy)return;
-    if(!/\\.xml$/i.test(file.name)||file.size>12000000||file.size===0){setError("Choose an AMSCO XML export up to 12 MB.");return;}
+    if(!/\.xml$/i.test(file.name)||file.size>12000000||file.size===0){setError("Choose an AMSCO XML export up to 12 MB.");return;}
     setBusy(true);setError("");
     try{
       if(lookup?.status==="queued")await invoke({action:"cancel_waiting",import_id:lookup.id});
