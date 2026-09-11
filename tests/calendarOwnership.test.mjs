@@ -4,11 +4,13 @@ import {createOwnershipMatcher,filterOwnedCalendar} from "../base44/functions/ow
 import {createOwnedCalendarHandler} from "../base44/functions/ownedCalendar/handler.js";
 const row={builder:"Holmes Homes",subdivision:"Deer Springs",lot:"214",oe:"79570526-01",po:"1234567"};
 const event={id:"one",source:"google",job_name:"Holmes Homes - 214 Deer Springs",event_date:"2026-09-09",oe_number:row.oe,po_number:row.po,start_time:"08:00",end_time:"11:00",scope_notes:"Install five windows",address:"1 Main St"};
-test("OE and PO are primary exact ownership keys",()=>{
+test("OE order families and exact PO are primary ownership keys",()=>{
  const match=createOwnershipMatcher([row]);
  assert.equal(match({...event,job_name:"Different calendar abbreviation"}).method,"oe");
  assert.equal(match({...event,oe_number:"",job_name:"Different calendar abbreviation"}).method,"po");
- assert.equal(match({...event,oe_number:"79570526-02"}),null);
+ assert.equal(match({...event,oe_number:"79570526-02"}).method,"oe");
+ assert.equal(match({...event,oe_number:"79570526"}).method,"oe");
+ assert.equal(match({...event,oe_number:"79570527-01"}),null);
  assert.equal(match({...event,po_number:"7654321"}),null);
  assert.equal(match({...event,oe_number:"missing",po_number:""}),null);
 });

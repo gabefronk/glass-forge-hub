@@ -1,5 +1,6 @@
 const norm = value => String(value ?? "").normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 const order = value => String(value ?? "").trim().toUpperCase().replace(/\s+/g, "");
+const oeOrder = value => order(value).replace(/^(\d{8})-\d{2}$/, "$1");
 const phrase = (text, value) => !!norm(value) && (" " + norm(text) + " ").includes(" " + norm(value) + " ");
 const rowKey = row => [row.builder, row.subdivision, row.lot].every(v => norm(v)) ? [row.builder, row.subdivision, row.lot].map(norm).join("|") : ["order", order(row.oe), order(row.po)].join("|");
 function titleLots(title, row) {
@@ -26,16 +27,16 @@ function fullIdentity(event, row) {
 export function createOwnershipMatcher(rows) {
   const oeIndex = new Map(), poIndex = new Map();
   for (const row of rows) for (const [key, index] of [["oe", oeIndex], ["po", poIndex]]) {
-    const value = order(row[key]);
+    const value = key === "oe" ? oeOrder(row[key]) : order(row[key]);
     if (value) index.set(value, [...(index.get(value) || []), row]);
   }
   return event => {
-    const oe = order(event.oe_number), po = order(event.po_number);
+    const oe = oeOrder(event.oe_number), po = order(event.po_number);
     let matches, method;
     if (oe || po) {
       const candidates = [...new Set([...(oeIndex.get(oe) || []), ...(poIndex.get(po) || [])])];
-      matches = candidates.filter(row => !(oe && order(row.oe) && oe !== order(row.oe)) && !(po && order(row.po) && po !== order(row.po)));
-      method = matches.some(row => oe && oe === order(row.oe)) ? "oe" : "po";
+      matches = candidates.filter(row => !(oe && oeOrder(row.oe) && oe !== oeOrder(row.oe)) && !(po && order(row.po) && po !== order(row.po)));
+      method = matches.some(row => oe && oe === oeOrder(row.oe)) ? "oe" : "po";
       // A supplied unmatched or conflicting order cannot fall back to a similar name.
     } else {
       matches = rows.filter(row => fullIdentity(event, row));
