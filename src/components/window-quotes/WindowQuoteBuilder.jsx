@@ -155,14 +155,22 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
     );
   }, [pricingDraft, pricingInputKey]);
   const askAI = async event => {
-    event?.preventDefault(); if (!aiText.trim() || disabled) return;
-    if (editorHasChanges()) { setError("Add this window to the quote or cancel its edit before asking the AI guide, so it can see the complete schedule."); return; }
+    event?.preventDefault(); if ((!aiText.trim() && !aiFiles.length) || disabled) return;
+    if (editorHasChanges()) { setError("Add this window to the quote or cancel its edit before asking the AMSCO specialist, so it can see the complete schedule."); return; }
     if (editor) setEditor(null);
-    const next = [...conversation, { role: "user", content: aiText.trim() }];
     setProcessing("assist"); setError("");
     try {
-      const result = await builderCall({ action: "assist", draft: suggestion?.stale ? draft() : suggestion?.draft || draft(), conversation: next, unresolved_requirements: suggestion?.review?.unresolved_requirements || [] });
-      setSuggestion(result); setConversation([...next, { role: "assistant", content: result.assistant_message || "Review the window details below." }]); setAiText("");
+      const file_attachments = await Promise.all(aiFiles.map(async file => {
+        const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
+        const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({ file_uri, expires_in: 3600 });
+        return { url: signed_url, name: file.name, type: assistantFileType(file), size: file.size };
+      }));
+      const request = aiText.trim() || "Read the attached file and build the window schedule from it.";
+      const attachmentNote = aiFiles.length ? `\n\nAttached: ${aiFiles.map(file => file.name).join(", ")}` : "";
+      const next = [...conversation, { role: "user", content: request + attachmentNote }];
+      const result = await builderCall({ action: "assist", draft: suggestion?.stale ? draft() : suggestion?.draft || draft(), conversation: next, unresolved_requirements: suggestion?.review?.unresolved_requirements || [], file_attachments });
+      if (result.assistant_provider) setAssistantInfo(result.assistant_provider);
+      setSuggestion(result); setConversation([...next, { role: "assistant", content: result.assistant_message || "Review the window details below." }]); setAiText(""); setAiFiles([]);
       if (result.auto_submit === true && result.review?.ready) {
         const accepted = result.draft;
         await saveWithInstall({ request_id: requestId.current, title: title.trim(), settings: accepted.settings, lines: accepted.lines, message: "", source: { ...accepted.source, visual_builder: { version: 1, confirmed: true, schedule_hash: result.review.schedule_hash } } }, true);
@@ -171,14 +179,14 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
     catch (e) { setError(errorText(e)); } finally { setProcessing(""); }
   };
   const applySuggestion = () => {
-    if (!suggestion?.review?.ready || suggestion.stale || editorHasChanges()) return; if (aiText.trim()) { setError("Send or clear your new AI message before applying the earlier proposal."); return; }
-    invalidate(); setLines(suggestion.draft.lines); setSettings(suggestion.draft.settings); setSource(suggestion.draft.source || {}); setEditor(null); setConversation([]); setSuggestion(null); setAiText(""); setAiOpen(false);
+    if (!suggestion?.review?.ready || suggestion.stale || editorHasChanges()) return; if (aiText.trim() || aiFiles.length) { setError("Send or clear your new specialist message and attachments before applying the earlier proposal."); return; }
+    invalidate(); setLines(suggestion.draft.lines); setSettings(suggestion.draft.settings); setSource(suggestion.draft.source || {}); setEditor(null); setConversation([]); setSuggestion(null); setAiText(""); setAiFiles([]); setAiOpen(false);
   };
   const review = async () => {
     if (disabled) return;
     if (editor) { setError("Add this window to the quote, or cancel its edit, before reviewing the package."); return; }
     if (!lines.length) { setError("Add at least one window first."); return; }
-    if (conversation.length || suggestion || aiText.trim()) { setAiOpen(true); setError("Apply the AI's proposed schedule or discard its proposed changes before reviewing."); return; }
+    if (conversation.length || suggestion || aiText.trim() || aiFiles.length) { setAiOpen(true); setError("Apply the specialist's proposed schedule or discard its proposed changes before reviewing."); return; }
     setProcessing("review"); setError("");
     try {
       const result = await builderCall({ action: "review", draft: draft() });
@@ -188,7 +196,7 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
     }
     catch (e) { setError(errorText(e)); } finally { setProcessing(""); }
   };
-  const saveDraft = () => { if (editor) { setError("Add this window to the quote, or cancel its edit, before saving."); return; } if (conversation.length || suggestion || aiText.trim()) { setError("Apply or discard the proposed AI changes before saving the draft."); return; } if (!lines.length) { setError("Add a window before saving this draft."); return; } saveWithInstall({ request_id: requestId.current, ...draft(), message: "" }, false); };
+  const saveDraft = () => { if (editor) { setError("Add this window to the quote, or cancel its edit, before saving."); return; } if (conversation.length || suggestion || aiText.trim() || aiFiles.length) { setError("Apply or discard the proposed specialist changes before saving the draft."); return; } if (!lines.length) { setError("Add a window before saving this draft."); return; } saveWithInstall({ request_id: requestId.current, ...draft(), message: "" }, false); };
   const price = () => {
     if (!reviewed?.review?.ready || !confirmed || disabled) return;
     const accepted = reviewed.draft;
