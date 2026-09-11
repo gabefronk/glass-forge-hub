@@ -4,7 +4,7 @@ import YaFeesSidebar from "@/components/YaFeesSidebar";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { Bot } from "lucide-react";
-import { Receipt, Calendar, Briefcase, BarChart3, Bug, PanelsTopLeft, Diamond, LogOut } from "lucide-react";
+import { Receipt, Calendar, Briefcase, BarChart3, Bug, PanelsTopLeft, Diamond, LogOut, Library } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { label: "Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },
+  { label: "Brands", ariaLabel: "Product Brands & Specifications", to: "/brands-specs", icon: Library },
 ];
 
 export default function Layout() {
