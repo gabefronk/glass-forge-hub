@@ -333,11 +333,7 @@ export async function lookupManufacturerSpecs(input, {
   const answer = extractAnswer(allContent, docs);
 
   if (!sources.length) {
-    return { ...unavailable('No cited manufacturer document was available. Ask the customer for the specification or confirm the series/product.'), diagnostics: { revision: 'lookup-probe-3',
-      blocks: allContent.map(b => ({ type: b.type, server_call: b.type === 'server_tool_use' ? JSON.stringify(b).slice(0, 2000) : undefined, attempted_url: typeof b.input?.url === 'string' ? b.input.url.slice(0, 500) : undefined, result_type: b.content?.type, error_code: b.content?.error_code, result_keys: b.content && !Array.isArray(b.content) ? Object.keys(b.content) : [], citations: (b.citations || []).map(c => ({ type: c.type, document_index: c.document_index, keys: Object.keys(c) })) })),
-      documents: docs.map(d => ({ index: d.index, url: d.url, success: d.success, retrieved_at: d.retrieved_at, title: d.title }))
-    } };
-
+    return unavailable('No cited manufacturer document was available. Ask the customer for the specification or confirm the series/product.');
   }
   const retrievedAt = sources.map(s => s.retrieved_at).filter(Boolean).sort().at(-1) || '';
   return {
