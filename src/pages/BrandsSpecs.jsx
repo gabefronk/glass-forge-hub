@@ -1,109 +1,56 @@
-import { ExternalLink, Smartphone, Globe, Library, Info } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
-const PELLA_LINKS = [
-  {
-    label: "Pella ADM — App Store",
-    href: "https://apps.apple.com/us/app/pella-adm/id937901511",
-    icon: Smartphone,
-    note: "Opens the App Store listing. Install or open Pella ADM from there when supported on your device.",
-  },
-  {
-    label: "Pella ADM — Web resources",
-    href: "https://www.pella.com/professionals/downloads/",
-    icon: Globe,
-    note: "Official manufacturer-maintained fallback for technical specifications, sizing, and drawings.",
-  },
-];
-
-const AMSCO_LINKS = [
-  {
-    label: "AMSCO SpecFinder",
-    href: "https://apps.amscowindows.com/",
-    icon: Globe,
-    note: "Official AMSCO specification finder tool.",
-  },
-  {
-    label: "AMSCO Architects & professionals",
-    href: "https://www.amscowindows.com/architects/",
-    icon: Library,
-    note: "Professional resources, specifications, and drawings.",
-  },
-];
-
-function LinkCard({ link }) {
-  const Icon = link.icon;
-  return (
-    <a
-      href={link.href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group flex min-w-0 items-start gap-3 rounded-xl border border-[#DDE3EC] bg-white p-4 transition-colors hover:border-[#2A5EA8]/40 hover:bg-[#F6F8FC]"
-    >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: "#E7EEFA", color: "#1E4A85" }}>
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: "#131A26" }}>
-          {link.label}
-          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#616D81]" />
-        </span>
-        <span className="mt-1 block text-xs leading-relaxed" style={{ color: "#616D81" }}>
-          {link.note}
-        </span>
-      </span>
-    </a>
-  );
-}
-
-function BrandSection({ name, tagline, links, notice }) {
-  return (
-    <section className="rounded-2xl border border-[#DDE3EC] bg-white p-5 sm:p-6 card-shadow">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-lg font-semibold" style={{ color: "#131A26" }}>{name}</h2>
-        <span className="text-xs" style={{ color: "#616D81" }}>{tagline}</span>
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {links.map((l) => <LinkCard key={l.href} link={l} />)}
-      </div>
-      {notice && (
-        <p className="mt-4 flex items-start gap-2 rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-3 text-xs leading-relaxed" style={{ color: "#535E72" }}>
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#2A5EA8]" />
-          <span>{notice}</span>
-        </p>
-      )}
-    </section>
-  );
-}
+const PELLA_LOGO_URL =
+  "https://images.contentstack.io/v3/assets/bltf589e66bcaecd79c/blt5d51af0d3a33260d/63615b77ff7b405f6b3f58e9/pella-logo-black-spot.png";
+const PELLA_APP_STORE_URL = "https://apps.apple.com/us/app/pella-adm/id937901511";
+const AMSCO_URL = "https://apps.amscowindows.com/";
 
 export default function BrandsSpecs() {
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 pb-32 sm:px-6 lg:pb-10">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold sm:text-3xl" style={{ color: "#131A26" }}>Product Brands & Specifications</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed" style={{ color: "#535E72" }}>
-          Shortcuts to each manufacturer's official specification tools and professional resources. Documents stay with the
-          manufacturer — Glass Forge does not copy, store, or re-host spec sheets, drawings, or PDFs.
-        </p>
-      </header>
+    <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 lg:pb-12">
+      <h1 className="mb-8 text-xl font-semibold sm:text-2xl" style={{ color: "#131A26" }}>
+        Product Brands & Specifications
+      </h1>
 
-      <div className="space-y-5">
-        <BrandSection
-          name="Pella"
-          tagline="Architectural Design Manual (ADM)"
-          links={PELLA_LINKS}
-          notice="The App Store link opens the Pella ADM listing. Install or open the app there when supported by your device, or use Web resources to browse Pella's technical documents."
-        />
-        <BrandSection
-          name="AMSCO"
-          tagline="SpecFinder · Architects & professionals"
-          links={AMSCO_LINKS}
-        />
-      </div>
+      <ul role="list" className="divide-y" style={{ borderColor: "#DDE3EC" }}>
+        <li role="listitem">
+          <a
+            href={PELLA_APP_STORE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Pella ADM — App Store listing (opens in a new tab)"
+            className="flex w-full items-center gap-5 py-6 pr-2 text-left transition-colors hover:bg-[#F6F8FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2A5EA8]"
+          >
+            <img
+              src={PELLA_LOGO_URL}
+              alt="Pella logo"
+              width={144}
+              style={{ width: 144, height: "auto", objectFit: "contain" }}
+              className="shrink-0"
+              loading="lazy"
+            />
+            <span className="flex items-center gap-1.5 text-base font-semibold" style={{ color: "#131A26" }}>
+              Pella ADM
+              <ExternalLink className="h-4 w-4 shrink-0" style={{ color: "#616D81" }} aria-hidden="true" />
+            </span>
+          </a>
+        </li>
 
-      <p className="mt-6 text-xs leading-relaxed" style={{ color: "#616D81" }}>
-        External destinations are maintained by their respective manufacturers. Glass Forge links to them for convenience and
-        does not control their content or availability.
-      </p>
+        <li role="listitem">
+          <a
+            href={AMSCO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="AMSCO SpecFinder (opens in a new tab)"
+            className="flex w-full items-center gap-5 py-6 pr-2 text-left transition-colors hover:bg-[#F6F8FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2A5EA8]"
+          >
+            <span className="text-base font-semibold" style={{ color: "#131A26" }}>
+              AMSCO
+            </span>
+            <ExternalLink className="h-4 w-4 shrink-0" style={{ color: "#616D81" }} aria-hidden="true" />
+          </a>
+        </li>
+      </ul>
     </div>
   );
 }
