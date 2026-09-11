@@ -89,9 +89,9 @@ export default function BrandsSpecs() {
       <div className="space-y-5">
         <BrandSection
           name="Pella"
-          tagline="Architectural Design Manager (ADM)"
+          tagline="Architectural Design Manual (ADM)"
           links={PELLA_LINKS}
-          notice="No documented Pella ADM native URL scheme or universal link has been verified. The App Store shortcut opens the listing page; from there you can install or open the installed Pella ADM app when your device supports it. Use the Web resources link for technical specifications, sizing, and drawings."
+          notice="The App Store link opens the Pella ADM listing. Install or open the app there when supported by your device, or use Web resources to browse Pella's technical documents."
         />
         <BrandSection
           name="AMSCO"
