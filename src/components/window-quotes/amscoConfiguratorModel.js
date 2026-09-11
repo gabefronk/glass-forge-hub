@@ -86,6 +86,7 @@ export function serializeGrilles(value) {
 }
 export function diagramPanels(line) {
   if (/single hung/i.test(line.style || '')) return { columns: 1, rows: 2, kind: 'hung' };
+  if (/picture|direct set|\bPW\b|sash set|radius|polygon/i.test(line.style || '')) return { columns: 1, rows: 1, kind: 'fixed' };
   if (/double vent/i.test(line.style || '')) return { columns: 3, rows: 1, kind: 'slider' };
   if (/slider|single vent/i.test(line.style || '')) return { columns: 2, rows: 1, kind: 'slider' };
   if (/casement/i.test(line.style || '')) return { columns: Math.min(4, Math.max(1, Number(line.options?.number_wide) || 1)), rows: 1, kind: 'casement' };

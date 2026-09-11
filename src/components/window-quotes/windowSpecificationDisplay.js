@@ -33,7 +33,7 @@ export function resolvedWindowOptions(line = {},settings = {},price) {
     ...pick(price.resolved_options)
   } : {})};
 }
-export function automaticOptionLabel(key,line = {},settings = {},price,priceStatus) {
+export function automaticOptionLabel(key,line = {},settings = {},price,_priceStatus) {
   // Resolve defaults without waiting for a successful price. In particular,
   // changing a grille or an offline native runner must not blank the fields.
   const automaticLine = {...line,options:{...line.options}};

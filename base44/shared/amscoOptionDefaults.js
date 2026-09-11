@@ -6,8 +6,25 @@ import { sourceGlassConstruction } from './amscoGlassConstruction.js';
 // Studio/V2K recipes: saved native controls. Hampton: saved preview proof.
 // Serenity spacer/glazing/capillary defaults: Navigator, 2026-09-11.
 const present = value => value !== undefined && value !== null && value !== '';
+
+// Additional operation branches visible in Navigator. These share the family's
+// basic selections, but their shaped/mulled glass stays native-resolved.
+function displayRoute(line, settings) {
+  const route = catalogRouteForLine(line,settings);
+  if (route) return {...route,rectangular:true};
+  const series = line.options?.series || settings.series || (/^Hampton /.test(line.style || '') ? 'Hampton' : /^Studio /.test(line.style || '') ? 'Studio 1 3/8 inch Fin Setback' : '');
+  const brand = /^Hampton(?: SK| Flush Fin)?$/.test(series) ? 'Hampton'
+    : /^Studio (?:1 3\/8 inch Fin Setback|Stucco Key Windows|SK3|Flush Fin)$/.test(series) ? 'Studio' : null;
+  if (!brand || !String(line.style || '').startsWith(brand+' ')) return null;
+  const label = line.style.slice(brand.length+1);
+  if (label === 'Single Hung Geometrics') return {series,brand,kind:'single_hung',label,rectangular:false};
+  if (['Slider PW (Standalone)','Equal Lite PW','PW Only Direct Set Continuous Frame','Equal Lite Direct Set','Sash Set Slider Frame','Radius','Polygon'].includes(label))
+    return {series,brand,kind:'direct_set',label,rectangular:false};
+  return null;
+}
+
 export function catalogOptionDefaults(line = {}, settings = {}) {
-  const route = catalogRouteForLine(line, settings);
+  const route = displayRoute(line, settings);
   if (!route) return {};
   const raw = {...settings, ...line.options};
   const color = raw.color || 'White';
@@ -31,7 +48,7 @@ export function catalogOptionDefaults(line = {}, settings = {}) {
   if (present(raw.elevation) && raw.elevation !== defaults.elevation) delete defaults.capillary_tubes;
   const selected = {...defaults,...Object.fromEntries(Object.entries(raw).filter(([,v])=>present(v)))};
   const frame = catalogFrameSize(line, route);
-  const construction = frame && Number(selected.number_wide) === 1 && !line.shape && !line.components && !line.mulls
+  const construction = frame && route.rectangular && Number(selected.number_wide) === 1 && !line.shape && !line.components && !line.mulls
     ? sourceGlassConstruction({series:route.brand,product_type:route.label,shape:'Rectangle',
         unit_type:selected.unit_type,dimension_basis:'frame',...frame,operation:selected.operation === 'Operating' && route.kind === 'single_hung' ? 'Single Hung' : selected.operation,
         glass:String(selected.glass).replace('Low-E','LowE'),tempered:selected.tempered,tilted:false,
