@@ -9,6 +9,7 @@ export const STATIC_NODES = {
 };
 
 export const ROLE_DETAILS = {
+  probuild_ipad_capture: {does:"Design only: collect prior-day ProBuild notes and photos from a verified iPad.",pulls:"Planned verified iPad surface; source event links, notes and photos.",sends:"Planned single dated review email; recipient unverified and sending disabled.",reportsTo:"Field Reporting Lead",nextHandoff:"Owner verification of iPad and Gmail recipient"},
   operations_director: {
     does: "Executive oversight. Receives daily section summaries, blockers, and decision requests only.",
     pulls: "Exception-only combined summary from the Glass Forge manager.",
@@ -111,6 +112,12 @@ export const ROLE_DETAILS = {
 
 // Four-phase daily operating plan per role: Review → Reconcile/produce → Record → Escalate.
 export const DAILY_PLANS = {
+  probuild_ipad_capture: [
+    {phase:"Review — disabled",task:"Verify iPad, ProBuild account and exact Gmail recipient before enabling any run. Use the prior local calendar day cutoff."},
+    {phase:"Collect / draft — planned",task:"Collect complete notes and all photos; deduplicate event/asset identities; assemble one dated job-by-job review email."},
+    {phase:"Record — planned",task:"Persist source links, counts, failures, draft/send states and unique run identity. Reconcile uncertain sends before retrying."},
+    {phase:"Escalate — planned",task:"Queue missing data, unavailable device, unverified recipient and uncertain sends. No scheduler or device automation is enabled."}
+  ],
   operations_director: [
     { phase: "Review", task: "Receive the exception-only combined summary from the Glass Forge manager." },
     { phase: "Reconcile / produce", task: "Identify blockers and decision requests across all sections." },
@@ -205,7 +212,7 @@ export const ORG_TREE = {
   sections: [
     { leadId: "calendar_ops_lead", label: "Calendar Operations", leadToManagerLabel: "Daily section summary", members: [{ id: "calendar_coordinator" }] },
     { leadId: "sales_order_lead", label: "Sales & Order", leadToManagerLabel: "Daily section summary", members: [{ id: "sales_tracker_agent", crossLink: { to: "calendar_coordinator", label: "Customer · order · OE/PO · ETA verification" } }] },
-    { leadId: "field_reporting_lead", label: "Field Reporting", leadToManagerLabel: "Daily section summary", members: [{ id: "probuild_reporting", crossLink: { to: "calendar_coordinator", label: "Photos, notes & field-report evidence" } }] },
+    { leadId: "field_reporting_lead", label: "Field Reporting", leadToManagerLabel: "Daily section summary", members: [{ id: "probuild_reporting", crossLink: { to: "calendar_coordinator", label: "Photos, notes & field-report evidence" } }, { id: "probuild_ipad_capture", crossLink: { to: "manager_agent", label: "Planned review email and exception queue · disabled" } }] },
     { leadId: "quoting_lead", label: "Quoting", leadToManagerLabel: "Daily section summary", members: [
       { id: "construction_plan_quoting", crossLink: { to: "manager_agent", label: "Escalations & approved results" } },
       { id: "external_claude_agents", crossLink: { to: "manager_agent", label: "Escalations & approved results" } },
