@@ -3,8 +3,6 @@ import {XMLParser} from "npm:fast-xml-parser@5.11.1";
 import {unzipSync} from "npm:fflate@0.8.3";
 import {createAmscoXmlParser} from "../../shared/amscoQuoteXml.js";
 import {createImportHandler,importRuntime} from "../../shared/amscoQuoteImportService.js";
-export default createImportHandler({getClient:createClientFromRequest,service:importRuntime({parseXml:createAmscoXmlParser({XMLParser,unzipSync})}),agent:false});
-
-// XML geometry and serialized import commits.
-
-// Inspect provider lifecycle metadata without message content.
+const service=importRuntime({parseXml:createAmscoXmlParser({XMLParser,unzipSync})});
+const handler=createImportHandler({getClient:createClientFromRequest,service});
+export default async function amscoImport(req){const response=await handler(req);response.headers.set("X-AMSCO-Import-Version","xml-1");return response;}
