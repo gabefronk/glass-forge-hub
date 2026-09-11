@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug, LogOut, PanelsTopLeft } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, Bug, LogOut, PanelsTopLeft, Library } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { label: "Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },
+  { label: "Brands & Specs", to: "/brands-specs", icon: Library },
 ];
 
 function currentMonthStr() {

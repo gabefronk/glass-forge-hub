@@ -23,6 +23,7 @@ import ResetPassword from '@/pages/ResetPassword';
 import OAuthConsent from '@/pages/OAuthConsent';
 import SalesTracker from '@/pages/SalesTracker';
 import AdminAgentCenter from "@/pages/AdminAgentCenter";
+import BrandsSpecs from "@/pages/BrandsSpecs";
 // Add page imports here
 
 const AuthenticatedApp = () => {
@@ -67,6 +68,7 @@ const AuthenticatedApp = () => {
           <Route path="/jobs" element={<JobsHub />} />
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/match-debug" element={<MatchDebug />} />
+          <Route path="/brands-specs" element={<BrandsSpecs />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
