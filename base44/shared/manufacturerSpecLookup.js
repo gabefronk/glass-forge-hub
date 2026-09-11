@@ -187,13 +187,16 @@ export async function fetchJsonWithin(fetchImpl, url, options, deadlineAt) {
   const readRemaining = deadlineAt - Date.now();
   if (readRemaining <= 0) throw new Error('Timed out');
   let body = null;
+  let readTimer;
   try {
     body = await Promise.race([
       response.json(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out')), readRemaining))
+      new Promise((_, reject) => { readTimer = setTimeout(() => reject(new Error('Timed out')), readRemaining); })
     ]);
   } catch {
     body = null;
+  } finally {
+    clearTimeout(readTimer);
   }
   return { response, body };
 }

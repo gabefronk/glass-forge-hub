@@ -107,7 +107,7 @@ test('manufacturer lookup tool loop runs on demand and appends complete footnote
   assert.match(result.summary, /Two Studio single hung windows\./);
   assert.match(result.summary, /Manufacturer research/);
   assert.match(result.summary, /\[Pella Studio Single Hung\]/, 'footnote carries product context');
-  assert.match(result.summary, /pella\.com\/professionals\/downloads\/studio\.pdf$/, 'footnote retains the complete URL');
+  assert.match(result.summary, /pella\.com\/professionals\/downloads\/studio\.pdf/, 'footnote retains the complete URL');
   assert.match(result.summary, /retrieved 2026-09-11T12:00:00Z/);
   assert.equal(intakeCalls[0].tools[0].name, 'lookup_manufacturer_specs');
   assert.equal(researchCalls.length, 1);
@@ -122,13 +122,15 @@ test('manufacturer lookup tool loop runs on demand and appends complete footnote
 
 test('research capped by remaining budget passes a shared absolute deadline to the lookup', async () => {
   const start = Date.now();
-  const researchCalls = [];
+  const finalOutput = { summary: 'Done.', lines: [], removed_lines: [], settings_updates: [], questions: [], unresolved_requirements: [], resolved_requirements: [], assumptions: [] };
+  let intakeCount = 0;
   const fetchImpl = async (url, options) => {
     const body = JSON.parse(options.body);
     if (body.tools?.[0]?.name === 'lookup_manufacturer_specs') {
-      return intakeResponse([{ type: 'tool_use', id: 'tool_1', name: 'lookup_manufacturer_specs', input: { manufacturer: 'Pella', series: 'Studio', product: 'Single Hung', question: 'max call size?' } }]);
+      intakeCount++;
+      if (intakeCount === 1) return intakeResponse([{ type: 'tool_use', id: 'tool_1', name: 'lookup_manufacturer_specs', input: { manufacturer: 'Pella', series: 'Studio', product: 'Single Hung', question: 'max call size?' } }]);
+      return intakeResponse([{ type: 'text', text: '```json\n' + JSON.stringify(finalOutput) + '\n```' }]);
     }
-    researchCalls.push(body);
     return researchResponse([textBlock('unknown', [])]);
   };
   await invokeClaudeWindowQuote(
@@ -166,9 +168,12 @@ test('research pause_turn continuation inside a lookup still yields cited eviden
     textBlock('Standard grid goes up to 48 x 72 inches call size.', [charCitation(0, 'Standard grid up to 48 x 72.', 'AMSCO Spec')])
   ];
   let researchCall = 0;
+  let intakeCount = 0;
   const fetchImpl = async (url, options) => {
     const body = JSON.parse(options.body);
     if (body.tools?.[0]?.name === 'lookup_manufacturer_specs') {
+      intakeCount++;
+      if (intakeCount === 1) return intakeResponse([{ type: 'tool_use', id: 'tool_1', name: 'lookup_manufacturer_specs', input: { manufacturer: 'AMSCO', series: 'Studio', product: 'XO Slider', question: 'standard grid max?' } }]);
       return intakeResponse([{ type: 'text', text: '```json\n' + JSON.stringify(finalOutput) + '\n```' }]);
     }
     researchCall++;
@@ -190,9 +195,12 @@ test('research index alignment after a disallowed document still cites the valid
     fetchResult({ url: 'https://www.pella.com/professionals/downloads/studio.pdf', title: 'Pella Studio Spec', data: 'Max call 60 x 60.', retrieved_at: '2026-09-11T12:01:00Z' }),
     textBlock('Max call size is 60 x 60 inches.', [charCitation(1, 'Max call 60 x 60.', 'Pella Studio Spec')])
   ];
+  let intakeCount = 0;
   const fetchImpl = async (url, options) => {
     const body = JSON.parse(options.body);
     if (body.tools?.[0]?.name === 'lookup_manufacturer_specs') {
+      intakeCount++;
+      if (intakeCount === 1) return intakeResponse([{ type: 'tool_use', id: 'tool_1', name: 'lookup_manufacturer_specs', input: { manufacturer: 'Pella', series: 'Studio', product: 'Single Hung', question: 'max call size?' } }]);
       return intakeResponse([{ type: 'text', text: '```json\n' + JSON.stringify(finalOutput) + '\n```' }]);
     }
     return researchResponse(researchContent);

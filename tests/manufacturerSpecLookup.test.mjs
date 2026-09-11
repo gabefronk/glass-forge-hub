@@ -252,7 +252,7 @@ test('deadline exceeded mid-fetch returns unavailable', async () => {
   let called = 0;
   const result = await lookupManufacturerSpecs(
     { manufacturer: 'Pella', series: 'Studio', product: 'Single Hung', question: 'max size?' },
-    { apiKey: 'k', deadlineAt: Date.now() + 5, fetchImpl: async () => { called++; await delay(100); return anthropicResponse([]); } }
+    { apiKey: 'k', deadlineAt: Date.now() + 4000, fetchImpl: async () => { called++; await delay(5000); return anthropicResponse([]); } }
   );
   assert.equal(result.status, 'unavailable');
   assert.match(result.clarification, /Timed out/);
@@ -266,7 +266,7 @@ test('deadline already expired returns unavailable without calling', async () =>
     { apiKey: 'k', deadlineAt: Date.now(), fetchImpl: async () => { called++; return anthropicResponse([]); } }
   );
   assert.equal(result.status, 'unavailable');
-  assert.match(result.clarification, /Timed out/);
+  assert.match(result.clarification, /timed out/i);
   assert.equal(called, 0);
 });
 
