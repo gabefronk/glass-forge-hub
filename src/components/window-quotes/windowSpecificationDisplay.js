@@ -1,3 +1,5 @@
+import { AMSCO_SERIES, selectedSeries } from "./amscoConfiguratorModel.js";
+
 // Display values only. Never write resolved defaults into the requested options:
 // an omitted thickness must stay automatic when dimensions change.
 const has = value => value !== undefined && value !== null && value !== "";
@@ -32,14 +34,23 @@ export function resolvedWindowOptions(line = {},settings = {},price) {
   } : {})};
 }
 export function automaticOptionLabel(key,line = {},settings = {},price,priceStatus) {
-  // An explicit override's current result is not the default that resetting it
-  // will select. Let the next calculation resolve the reset instead.
-  if (has(line.options?.[key])) return has(settings[key]) ? specificationValue(key,settings[key]) + " (quote default)" : "Recalculate automatic selection";
-  const resolved = resolvedWindowOptions(line,settings,price), value = resolved[key];
-  if (has(value)) return specificationValue(key,value,resolved) + (has(settings[key]) ? " (quote default)" : " (automatic)");
-  if (!Number(line.width) || !Number(line.height)) return "Enter size to resolve specification";
-  if (priceStatus === "loading" || ["calculating","native_busy"].includes(price?.status)) return "Resolving specification…";
-  return "Specification unavailable";
+  // Display fallbacks confirmed for the user's Studio Single Hung setup.
+  // Keep them out of requested options and price evidence; fresh AMSCO values win.
+  const defaults = line.style === "Studio Single Hung" && selectedSeries(line) === AMSCO_SERIES[0].value
+    ? { elevation: "2501 to 6500", super_spacer: false, hardware: "Cam Latch" } : {};
+  const explicit = has(line.options?.[key]);
+  // An explicit override's result cannot describe the value selected by reset.
+  const resolved = explicit ? resolvedWindowOptions({},settings,undefined) : resolvedWindowOptions(line,settings,price);
+  const value = has(resolved[key]) ? resolved[key] : defaults[key];
+  if (has(value)) {
+    if (key === "tempered") return value === true || value === "true" ? "Yes" : value === false || value === "false" ? "No" : String(value);
+    if (key === "argon" && (value === false || value === "false")) return "None";
+    return specificationValue(key,value,resolved);
+  }
+  if (explicit) return "Recalculate automatic selection";
+  if (!Number(line.width) || !Number(line.height)) return "— Select —";
+  if (priceStatus === "loading" || ["calculating","native_busy"].includes(price?.status)) return "Loading…";
+  return "— Select —";
 }
 export function glassSpecification(line,settings,price) {
   const options = resolvedWindowOptions(line,settings,price);
