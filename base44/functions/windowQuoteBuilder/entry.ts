@@ -5,3 +5,5 @@ import { conversationalIntake, quoteAssistantStatus } from '../../shared/windowQ
 export default createWindowQuoteBuilderHandler({ getClient: createClientFromRequest, normalizeAI: conversationalIntake, assistantStatus: quoteAssistantStatus });
 // Package pricing release 2026-09-10: retained native prices, private online fallback, resumable progress.
 // Pricing worker recovery 2026-09-11: refresh published function resource after missing-worker response.
+
+// Pricing v2: reviewed large Studio Picture glass, compatible receipts, and specialist price feedback.

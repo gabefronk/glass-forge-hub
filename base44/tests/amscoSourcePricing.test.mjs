@@ -112,7 +112,7 @@ test('source previews resolve manufacturer pane construction without changing re
  assert.equal(preview.resolved_options.glass,'CozE (LowE)');
  assert.equal(preview.resolved_options.glazing_method,'3/4" Insulated');
  assert.equal(preview.resolved_options.glass_thickness,"SS over SS");
- assert.equal(preview.glass_construction.version,"pk361-minimum-glass-v1");
+ assert.equal(preview.glass_construction.version,"pk361-minimum-glass-v2");
  assert.equal(preview.resolved_options.grilles,'None');
  assert.equal(preview.resolved_options.operation,'Left');
  assert.equal(preview.resolved_options.super_spacer,true);

@@ -3,7 +3,8 @@ import { sourceGlassConstruction } from './amscoGlassConstruction.js';
 import { catalogOptionDefaults } from './amscoOptionDefaults.js';
 import { buildNativeCatalogPlan, catalogStableJson } from './nativeCatalogPlan.js';
 
-export const SOURCE_PRICE_VERSION = 'pk361-standard-2026-09-10-v1';
+export const SOURCE_PRICE_VERSION = 'pk361-standard-2026-09-11-v2';
+const PREVIOUS_SOURCE_PRICE_VERSION = 'pk361-standard-2026-09-10-v1';
 const clientId = '00000000-0000-0000-1555-000000000000';
 const same = (a,b) => catalogStableJson(a) === catalogStableJson(b);
 const clone = value => structuredClone(value);
@@ -35,9 +36,11 @@ export function priceSourceWindow({line,settings}) {
   if (!selected || Object.keys(o).some(key=>!keys.has(key))) return decline('product_or_option_rules_required');
   const {width,height}=p.frame_dimensions;
   if (width<selected.width[0] || width>selected.width[1] || height<selected.height[0] || height>selected.height[1]) return decline('outside_catalog_size_limits');
-  // Extra-large glass and custom sash geometry require the remaining glazing
-  // rules. 36 ft² is a release-coverage boundary, not a manufacturer size limit.
-  if (width*height>36*144) return decline('large_glass_rules_required');
+  // The reviewed Direct Set minimum-glass rules cover panes through 48 ft².
+  // Other product families retain their existing release coverage. See
+  // docs/amsco-large-picture-pricing.md for the native rule evidence.
+  if (width*height>36*144 && (selected.product!=='Direct Set' || o.exterior_color!=='White' || o.interior_color!=='White' ||
+      (o.grilles && o.grilles!=='None'))) return decline('large_glass_rules_required');
   const standard={unit_type:'Complete Unit',number_wide:1,sash_split:'Even',patterned_glass:'None',argon:false,elevation:'2501 to 6500',
     super_spacer:selected.series==='Hampton',capillary_tubes:false,hardware:selected.product==='Casement'?'Standard':'Cam Latch',hardware_color:o.interior_color,screen:o.interior_color};
   for(const [key,value] of Object.entries(standard)) if(o[key]!==undefined && o[key]!==value) return decline('nonstandard_'+key);
@@ -49,6 +52,8 @@ export function priceSourceWindow({line,settings}) {
   let operation=o.operation || (selected.product==='Casement'?'Left':selected.product==='Single Vent'?'XO':selected.product==='Single Hung'?'Single Hung':'Fixed');
   if(selected.product==='Casement' && !['Left','Right'].includes(operation)) return decline('fixed_or_assembly_rules_required');
   if(selected.product==='Single Hung' && !['Single Hung','Operating'].includes(operation)) return decline('operation_rules_required');
+  if(selected.product==='Single Vent' && !['XO','OX'].includes(operation)) return decline('operation_rules_required');
+  if(selected.product==='Direct Set' && operation!=='Fixed') return decline('operation_rules_required');
   if(selected.product==='Single Hung') operation='Single Hung';
   let grille=0;
   if(o.grilles && o.grilles!=='None') {
@@ -65,6 +70,7 @@ export function priceSourceWindow({line,settings}) {
   // An explicitly selected construction can use the base rate only when it
   // matches the exact automatic pane construction. Never ignore an upgrade.
   const construction=sourceGlassConstruction(configuration);
+  if(!construction) return decline('large_glass_rules_required');
   if(o.glass_thickness!==undefined && (!construction || String(o.glass_thickness).replaceAll(' inch','"')!==construction.glass_thickness))
     return decline('glass_construction_override',{automatic_glass:construction?.glass_thickness});
   const input={catalog_id:'361',price_book:1,client_id:clientId,gross_margin:settings.gross_margin,configuration};
@@ -100,9 +106,13 @@ export function sourcePriceReceipt({line,settings,checkedAt}) {
 // Source receipts never pretend to be saved/reopened AMSCO online quotes.
 export function sourcePriceEvidenceIssues(evidence,observed,requested,settings) {
   try {
-    if(evidence?.source!=='amsco_source_engine' || evidence.version!==SOURCE_PRICE_VERSION || !same(evidence.selection,{line:requested,settings}) ||
+    if(evidence?.source!=='amsco_source_engine' || ![SOURCE_PRICE_VERSION,PREVIOUS_SOURCE_PRICE_VERSION].includes(evidence.version) || !same(evidence.selection,{line:requested,settings}) ||
       !Number.isFinite(Date.parse(evidence.checked_at))) return ['Source pricing must match the exact requested selection.'];
     const p=priceSourceWindow({line:requested,settings});
+    // Existing receipts keep their exact recomputation checks. The old release
+    // could not issue a price beyond its 36 ft² frame-area coverage.
+    if(evidence.version===PREVIOUS_SOURCE_PRICE_VERSION && (!p.ok || p.input.configuration.width*p.input.configuration.height>36*144))
+      return ['Source pricing is outside the recorded release coverage.'];
     if(!p.ok || evidence.catalog_id!=='361' || evidence.price_book!==1 || !same(evidence.input,p.input) || !same(evidence.rate_source,p.calculated.source) ||
       !same(evidence.components,p.calculated.components) || !same(evidence.limitation_rows,p.limitation_rows) || !same(evidence.defaults,p.defaults) ||
       !same(observed.unit_prices,p.calculated.unit_prices) || !same(observed.options,p.plan_line.options) || !same(observed.frame_dimensions,p.plan_line.frame_dimensions) ||

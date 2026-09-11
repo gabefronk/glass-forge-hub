@@ -7,3 +7,5 @@ export default createTransferredEngineHandler({
   getUser: async (request: Request) => createClientFromRequest(request).auth.me()
 });
 // Pricing worker recovery 2026-09-11: refresh published function resource after missing-worker response.
+
+// Pricing v2: reviewed large Studio Picture glass, compatible receipts, and specialist price feedback.

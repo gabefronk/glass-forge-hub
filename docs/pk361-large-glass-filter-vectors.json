@@ -1,0 +1,169 @@
+{
+  "scope": "Independent IL interpreter of native PK361 R1473 and R413 only. Full configuration validity and unrelated answer filtering are outside this fixture. No app JavaScript imported. Float comparisons mirror DLL single precision fields.",
+  "source_dll": "C:\\Users\\Owner\\Documents\\Codex\\2026-09-10\\realtime-voice-chat\\work\\transfer_stage\\AMSCO_Base44_Engine_Transfer_2026-09-10\\06_Vendor_Offline_Reference\\AmscoNavigator\\Configurators\\PP\\PP1\\pk361\\Navigator20Template\\library\\Navigator20Template.PK105.361.dll",
+  "sha256": "b878d9170311a0e5ec0f0fb55cf3d54b380043921bc435f8c6006561dc1fad8b",
+  "vectors": [
+    {
+      "label": "reported_60x96_call",
+      "glass_width": 57.8125,
+      "glass_height": 93.8125,
+      "glass_area_sqft": 37.66343858506944,
+      "window_R1473": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      },
+      "pane_R413": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      }
+    },
+    {
+      "label": "pane_36sqft",
+      "glass_width": 72,
+      "glass_height": 72,
+      "glass_area_sqft": 36.0,
+      "window_R1473": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      },
+      "pane_R413": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      }
+    },
+    {
+      "label": "pane_just_over_36sqft",
+      "glass_width": 72.001,
+      "glass_height": 72,
+      "glass_area_sqft": 36.0005,
+      "window_R1473": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      },
+      "pane_R413": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      }
+    },
+    {
+      "label": "pane_48sqft",
+      "glass_width": 72,
+      "glass_height": 96,
+      "glass_area_sqft": 48.0,
+      "window_R1473": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      },
+      "pane_R413": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      }
+    },
+    {
+      "label": "pane_just_over_48sqft",
+      "glass_width": 72.001,
+      "glass_height": 96,
+      "glass_area_sqft": 48.00066666666667,
+      "window_R1473": {
+        "3/16_visible": false,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "1/4\" over 1/4\""
+      },
+      "pane_R413": {
+        "3/16_visible": false,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "1/4\" over 1/4\""
+      }
+    },
+    {
+      "label": "pane_max_dimension_120",
+      "glass_width": 57.6,
+      "glass_height": 120,
+      "glass_area_sqft": 48.0,
+      "window_R1473": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      },
+      "pane_R413": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      }
+    },
+    {
+      "label": "pane_over_max_dimension_120",
+      "glass_width": 57.6,
+      "glass_height": 120.001,
+      "glass_area_sqft": 48.0004,
+      "window_R1473": {
+        "3/16_visible": false,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "1/4\" over 1/4\""
+      },
+      "pane_R413": {
+        "3/16_visible": false,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "1/4\" over 1/4\""
+      }
+    },
+    {
+      "label": "DS_boundary_25sqft",
+      "glass_width": 60,
+      "glass_height": 60,
+      "glass_area_sqft": 25.0,
+      "window_R1473": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": true,
+        "first_surviving_answer": "DS over DS"
+      },
+      "pane_R413": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": true,
+        "first_surviving_answer": "DS over DS"
+      }
+    },
+    {
+      "label": "past_DS_boundary_25sqft",
+      "glass_width": 60.001,
+      "glass_height": 60,
+      "glass_area_sqft": 25.000416666666666,
+      "window_R1473": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      },
+      "pane_R413": {
+        "3/16_visible": true,
+        "SS_visible": false,
+        "DS_visible": false,
+        "first_surviving_answer": "3/16\" over 3/16\""
+      }
+    }
+  ]
+}

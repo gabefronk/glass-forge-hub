@@ -9,6 +9,7 @@ import { normalizeConversationalSchedule } from './structuredQuoteIntake.js';
 import { STANDARD_STUDIO_PROFILE } from './easyRequest.js';
 import { productFamily, resolveRequestedSeries } from './mixedProductProfiles.js';
 import { CONVERSATIONAL_INTAKE_SCHEMA } from './conversationalIntake.js';
+import { builderPricingIssue, builderSourcePricingPreview, builderPricingFeedback } from './builderPricingFeedback.js';
 
 export const BUILDER_VERSION = 1;
 export const BUILDER_LIMITS = Object.freeze({ body: 300000, lines: 200, messages: 40, message: 18000, conversation: 70000 });
@@ -280,11 +281,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
   const cache = new Map();
   if (sourcePricingEnabled(config)) for (const item of planned) {
     item.sourcePrice = sourcePricePreview({line:draft.lines[item.index],settings:draft.settings,onDecline:failure=>{
-      item.pricingIssue = {code:failure.code,
-        message:failure.code==='glass_construction_override'
-          ? 'The selected glass thickness needs an AMSCO price check.'+(failure.automatic_glass ? ' Automatic construction for this size is '+failure.automatic_glass+'.' : '')
-          : 'This combination needs an AMSCO price check.',
-        ...(failure.automatic_glass ? {automatic_glass:failure.automatic_glass} : {})};
+      item.pricingIssue = builderPricingIssue(failure);
     }});
   }
   const quotes = planned.some(item => item.line && !item.sourcePrice) ? await db.QuoteRequests.list('-updated_date', 200) : [];
@@ -341,7 +338,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
   const priced = lines.filter(line => line.status === 'priced'), ready = lines.length > 0 && priced.length === lines.length;
   const subtotal = priced.length ? roundMoney(priced.reduce((sum, line) => sum + line.line_totals.customer, 0)) : null;
   return { ready, lines, total: ready ? subtotal : null, priced_subtotal: subtotal, currency: 'USD',
-    missing_count: lines.filter(line => line.status === 'amsco_lookup_needed').length,
+    missing_count: lines.filter(line => line.status !== 'priced' && (line.pricing_issue || ['amsco_lookup_needed', 'native_unavailable'].includes(line.status))).length,
     calculation_count: lines.filter(line => ['native_calculation_needed', 'calculating', 'native_busy'].includes(line.status)).length,
     pending: lines.some(line => ['calculating', 'native_busy'].includes(line.status)),
     retry_after_ms: 2000,
@@ -363,7 +360,7 @@ export async function builderReviewResponse(result, { allowOnline = false } = {}
   const ready = ((result.ok === true && checked.ok === true) || onlineReady) && !questions.length && !productReview.length && !unresolved.length;
   const response = { draft, review: { ready, questions, product_review: productReview, unresolved_requirements: unresolved,
     assumptions: unique(assessment.assumptions), schedule_hash: ready ? await builderScheduleHash(draft) : null } };
-  if (typeof result.assistant_message === 'string') response.assistant_message = result.assistant_message.slice(0, 17500).replace('Your details are ready for automatic quoting.', 'Review these windows, then choose Calculate verified price when you are ready.');
+  if (typeof result.assistant_message === 'string') response.assistant_message = result.assistant_message.slice(0, 17500).replace('Your details are ready for automatic quoting.', 'Apply these windows to the quote when you are ready.');
   return response;
 }
 
@@ -396,18 +393,33 @@ export function createWindowQuoteBuilderHandler({ getClient, normalizeAI, assist
       // This optional stateless ledger can only ADD blockers. It is never an
       // assessment/status object, prior approval, capability or skip flag.
       const unresolved = carriedRequirements(body.unresolved_requirements);
-      let result;
+      let result, pricingConfig;
       if (body.action === 'review') {
         if (context.messages.length || unresolved.length) fail('Apply a fully resolved AI suggestion before reviewing a structured schedule');
         result = normalizeManualBuilderDraft(draft);
       } else {
         if (!context.messages.some(item => item.role === 'user')) fail('Describe the windows you need or ask the AI guide a question');
         if (typeof normalizeAI !== 'function') throw new Error('AI intake is not configured');
+        // Pricing context is calculated here, after authentication and strict
+        // input validation. Missing pricing configuration must not disable the
+        // specialist or be mistaken for a zero-dollar price.
+        try { pricingConfig = await loadScriptedRunnerConfig({ db: client.asServiceRole.entities }); } catch { pricingConfig = null; }
+        const pricingPreview = builderSourcePricingPreview(draft, pricingConfig);
         result = (!attachments.length && (resolveApprovedBuilderFollowup(draft, context, unresolved) || resolveRoutineBuilderFollowup(draft, context, unresolved))) || await normalizeAI({ ...draft, id: 'builder-preview', input_revision: context.revision, history: [], conversation: context.messages,
-          ...(unresolved.length ? { intake_assessment: { unresolved_requirements: unresolved } } : {}) }, { client, action: 'builder_assist', attachments });
+          ...(unresolved.length ? { intake_assessment: { unresolved_requirements: unresolved } } : {}) }, { client, action: 'builder_assist', attachments, pricingPreview });
       }
       const response = await builderReviewResponse(result, { allowOnline: body.action === 'review' || result.builder_approved === true });
-      if (body.action === 'assist') response.assistant_provider = assistantStatus();
+      if (body.action === 'assist') {
+        response.assistant_provider = assistantStatus();
+        response.pricing_preview = builderSourcePricingPreview(response.draft, pricingConfig);
+        const feedback = builderPricingFeedback(response.pricing_preview);
+        if (feedback) {
+          // Leave room for the authoritative price check so this answer can
+          // also fit within the next conversation request's message limit.
+          const summary = (response.assistant_message || '').slice(0, Math.max(0, BUILDER_LIMITS.message - feedback.length - 2));
+          response.assistant_message = [summary, feedback].filter(Boolean).join('\n\n');
+        }
+      }
       if (result.builder_approved === true && response.review.ready) response.auto_submit = true;
       return new Response(JSON.stringify(response), { status: 200, headers });
     } catch (error) {

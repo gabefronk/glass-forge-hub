@@ -17,7 +17,12 @@ const draft = () => ({ title: 'New visual quote', settings: { dealer: 'BFS', yar
 function harness({ normalizeAI, role = 'admin' } = {}) {
   let writes = 0, models = 0;
   const client = { auth: { me: async () => role ? { role, email: 'builder@example.test' } : null }, asServiceRole: {
-    get entities() { writes++; throw new Error('Preview must not access entities'); }
+    entities: new Proxy({}, { get(_target, name) {
+      // The specialist can read price-engine configuration, but must still
+      // never persist a quote or invoke the native calculation queue.
+      if (name === 'WindowQuoteRunnerConfig') return { filter: async () => [] };
+      writes++; throw new Error('Preview must not access quote or queue entities');
+    } })
   } };
   const handler = createWindowQuoteBuilderHandler({ getClient: async () => client, normalizeAI: async (...args) => { models++; return normalizeAI?.(...args); } });
   return { async call(body, method = 'POST') { const response = await handler(new Request('https://example.test/windowQuoteBuilder', { method, ...(method === 'POST' ? { body: JSON.stringify(body) } : {}) })); return { status: response.status, body: await response.json() }; }, get writes() { return writes; }, get models() { return models; } };
