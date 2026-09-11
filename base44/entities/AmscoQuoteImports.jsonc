@@ -1,0 +1,60 @@
+{
+  "name": "AmscoQuoteImports",
+  "type": "object",
+  "properties": {
+    "request_id": {
+      "type": "string"
+    },
+    "owner_email": {
+      "type": "string"
+    },
+    "quote_number": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "searching",
+        "preview",
+        "importing",
+        "imported",
+        "not_found",
+        "needs_sign_in",
+        "failed"
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "default": 0
+    },
+    "run": {
+      "type": "object"
+    },
+    "snapshot": {
+      "type": "object"
+    },
+    "message": {
+      "type": "string"
+    },
+    "imported_quote_id": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "owner_email",
+    "quote_number",
+    "status",
+    "version"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

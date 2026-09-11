@@ -132,8 +132,10 @@ function collectDocuments(content, brand, into) {
 
 // Validate a single native citation. Only char_location/page_location citations
 // that resolve to a successfully fetched, brand-allowed document are evidence.
-// The excerpt comes from the citation's cited_text or the document's own source
-// data — never from slicing the model's generated answer. No URL fallback.
+// Citation ranges are validated: char start >= 0 and end > start; PDF page
+// start >= 1 and end >= start. The excerpt comes from the citation's cited_text
+// or the document's own source data — never from slicing the model's generated
+// answer — and must be nonempty. No URL fallback.
 function validCitation(cite, docs) {
   if (!cite || typeof cite !== 'object') return null;
   if (cite.type !== 'char_location' && cite.type !== 'page_location') return null;
@@ -142,12 +144,25 @@ function validCitation(cite, docs) {
   const doc = docs[idx];
   if (!doc || !doc.success) return null;
   let excerpt = '';
-  if (typeof cite.cited_text === 'string' && cite.cited_text.trim()) {
-    excerpt = cite.cited_text;
-  } else if (cite.type === 'char_location' && Number.isInteger(cite.start_char_index) && Number.isInteger(cite.end_char_index) && cite.end_char_index >= cite.start_char_index) {
-    excerpt = doc.sourceData.slice(cite.start_char_index, cite.end_char_index);
+  let page = null;
+  if (cite.type === 'char_location') {
+    const start = cite.start_char_index;
+    const end = cite.end_char_index;
+    if (Number.isInteger(start) && Number.isInteger(end)) {
+      if (start < 0 || end <= start) return null;
+      excerpt = (typeof cite.cited_text === 'string' && cite.cited_text.trim()) ? cite.cited_text : doc.sourceData.slice(start, end);
+    } else if (typeof cite.cited_text === 'string' && cite.cited_text.trim()) {
+      excerpt = cite.cited_text;
+    }
+  } else {
+    const start = cite.start_page_number;
+    const end = cite.end_page_number;
+    if (!Number.isInteger(start) || start < 1) return null;
+    if (end !== undefined && end !== null && (!Number.isInteger(end) || end < start)) return null;
+    page = start;
+    if (typeof cite.cited_text === 'string' && cite.cited_text.trim()) excerpt = cite.cited_text;
   }
-  const page = cite.type === 'page_location' && Number.isInteger(cite.start_page_number) ? cite.start_page_number : null;
+  if (!excerpt || !excerpt.trim()) return null;
   return { doc, excerpt: excerpt.slice(0, BOUNDS.excerpt), page };
 }
 
@@ -193,36 +208,26 @@ function extractAnswer(content, docs) {
 // Single absolute deadline covers the fetch AND the response-body read, so one
 // research step cannot overrun its share of the caller's total budget.
 export async function fetchJsonWithin(fetchImpl, url, options, deadlineAt) {
-  const fetchRemaining = deadlineAt - Date.now();
-  if (fetchRemaining <= 0) throw new Error('Timed out');
+  const remaining = deadlineAt - Date.now();
+  if (remaining <= 0) throw new Error('Timed out');
   const controller = new AbortController();
-  const fetchTimer = setTimeout(() => controller.abort(), fetchRemaining);
-  let response;
+  let timer;
   try {
-    response = await fetchImpl(url, { ...options, signal: options.signal || controller.signal });
-  } finally {
-    clearTimeout(fetchTimer);
-  }
-  if (!response.ok) {
-    let errorText = '';
-    try { errorText = await response.text(); } catch { errorText = ''; }
-    return { response, body: null, errorText };
-  }
-  const readRemaining = deadlineAt - Date.now();
-  if (readRemaining <= 0) throw new Error('Timed out');
-  let body = null;
-  let readTimer;
-  try {
-    body = await Promise.race([
-      response.json(),
-      new Promise((_, reject) => { readTimer = setTimeout(() => reject(new Error('Timed out')), readRemaining); })
+    return await Promise.race([
+      (async () => {
+        const response = await fetchImpl(url, { ...options, signal: options.signal || controller.signal });
+        if (!response.ok) {
+          let errorText = '';
+          try { errorText = await response.text(); } catch {}
+          return { response, body: null, errorText };
+        }
+        let body = null;
+        try { body = await response.json(); } catch {}
+        return { response, body };
+      })(),
+      new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Timed out')); }, remaining); })
     ]);
-  } catch {
-    body = null;
-  } finally {
-    clearTimeout(readTimer);
-  }
-  return { response, body };
+  } finally { clearTimeout(timer); }
 }
 
 // Redact credentials, URLs and long identifiers from a provider error before
@@ -328,7 +333,11 @@ export async function lookupManufacturerSpecs(input, {
   const answer = extractAnswer(allContent, docs);
 
   if (!sources.length) {
-    return unavailable('No cited manufacturer document was available. Ask the customer for the specification or confirm the series/product.');
+    return { ...unavailable('No cited manufacturer document was available. Ask the customer for the specification or confirm the series/product.'), diagnostics: {
+      blocks: allContent.map(b => ({ type: b.type, result_type: b.content?.type, error_code: b.content?.error_code, result_keys: b.content && !Array.isArray(b.content) ? Object.keys(b.content) : [], citations: (b.citations || []).map(c => ({ type: c.type, document_index: c.document_index, keys: Object.keys(c) })) })),
+      documents: docs.map(d => ({ index: d.index, url: d.url, success: d.success, retrieved_at: d.retrieved_at, title: d.title }))
+    } };
+
   }
   const retrievedAt = sources.map(s => s.retrieved_at).filter(Boolean).sort().at(-1) || '';
   return {
