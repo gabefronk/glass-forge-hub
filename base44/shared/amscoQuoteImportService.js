@@ -61,12 +61,25 @@ export function createImportService({transport,parseXml,readExport=readPrivateAm
   async function release(db,row) {
     if (row.run?.operation_id) await db.QuoteWorkers.updateMany({id:SLOT_ID,busy_token:row.run.operation_id},{$set:{busy_token:"",active_quote_id:"",last_seen_at:at()}});
   }
+  async function releaseCommit(db,row) {
+    await db.QuoteWorkers.updateMany({id:SLOT_ID,import_commit_token:row.id},{$set:{import_commit_token:""}});
+  }
+  async function claimCommit(db,row) {
+    const lock=(await db.QuoteWorkers.filter({id:SLOT_ID},undefined,1))[0];
+    if(!lock)fail(503,"The import service is not configured.");
+    if(lock.import_commit_token)fail(409,"Another quote import is saving. Refresh its status before importing again.");
+    const query={id:SLOT_ID,poll_generation:lock.poll_generation||0};
+    if(lock.import_commit_token!==undefined)query.import_commit_token=lock.import_commit_token;
+    const won=await db.QuoteWorkers.updateMany(query,{$set:{import_commit_token:row.id,poll_generation:(lock.poll_generation||0)+1}});
+    if(won.updated!==1)fail(409,"The import service is busy. Please try again.");
+  }
   async function existingQuote(db,nativeId) {
     const rows = await db.QuoteRequests.filter({request_id:"amsco-import:"+nativeId},"created_date",1);
     return rows[0] || null;
   }
   async function start(db,row) {
     if (row.status !== "queued") return row;
+    if(row.expires_at&&row.expires_at<=at())return cas(db,row,{status:"failed",message:"The AMSCO browser did not become available. Upload the XML export or search again."});
     if (!transport) return cas(db,row,{status:"needs_sign_in",message:errorMessages.needs_sign_in});
     const locks = await db.QuoteWorkers.filter({id:SLOT_ID,name:LOCK_NAME},undefined,1);
     const lock = locks[0];
@@ -151,31 +164,47 @@ export function createImportService({transport,parseXml,readExport=readPrivateAm
       if (row.status === "queued") row = await start(db,row);
       if (row.status === "importing") {
         const q = row.snapshot && await existingQuote(db,row.snapshot.quote_id);
-        if (q) row = await cas(db,row,{status:"imported",imported_quote_id:q.id,message:"Quote imported."});
+        if (q) {row = await cas(db,row,{status:"imported",imported_quote_id:q.id,message:"Quote imported."});await releaseCommit(db,row);}
       }
       return {import:publicImport(row)};
     }
     if (body.action === "commit") {
       if (row.status === "imported") return {import:publicImport(row)};
       if (row.status !== "preview") fail(409,"Wait for a complete AMSCO quote preview.");
-      // The browser report is stored privately. The client cannot submit prices or substitute a snapshot.
-      const snapshot = validateImportedSnapshot(row.snapshot,row.quote_number);
-      const duplicate = await existingQuote(db,snapshot.quote_id);
-      if (duplicate) {
-        row = await cas(db,row,{status:"imported",imported_quote_id:duplicate.id,message:"This AMSCO quote is already in My Quotes. Open the existing import."});
+      // Both browser and XML previews are validated and stored server-side.
+      const snapshot=validateImportedSnapshot(row.snapshot,row.quote_number);
+      await claimCommit(db,row);
+      let created=null,createStarted=false;
+      try{
+        const duplicate=await existingQuote(db,snapshot.quote_id);
+        if(duplicate){
+          row=await cas(db,row,{status:"imported",imported_quote_id:duplicate.id,message:"This AMSCO quote is already in My Quotes. Open the existing import."});
+          return {import:publicImport(row)};
+        }
+        row=await cas(db,row,{status:"importing",message:"Saving the complete quote…"});
+        createStarted=true;
+        created=await db.QuoteRequests.create(importedQuoteRecord(snapshot,owner,at(),row.id));
+        row=await cas(db,row,{status:"imported",imported_quote_id:created.id,message:"Quote imported."});
         return {import:publicImport(row)};
+      }catch(e){
+        const status=e?.response?.status||e?.status;
+        if(createStarted&&!created&&[400,401,403,404,422].includes(status)){
+          row=await cas(db,row,{status:"preview",message:"The save was rejected. Please try again."});
+          createStarted=false;
+        }
+        throw e;
+      }finally{
+        // An uncertain database create retains this separate commit lock until status finds its canonical record.
+        // It never blocks or changes the AMSCO browser lease.
+        if(!createStarted||created)await releaseCommit(db,row);
       }
-      row = await cas(db,row,{status:"importing",message:"Saving the complete quote…"});
-      const q = await db.QuoteRequests.create(importedQuoteRecord(snapshot,owner,at(),row.id));
-      row = await cas(db,row,{status:"imported",imported_quote_id:q.id,message:"Quote imported."});
-      return {import:publicImport(row)};
     }
     fail(400,"Unknown import action.");
   }
   async function agentAction({db,body}) {
     let row = await dbGet(db,body.import_id);
     if (typeof body.execution_token !== "string" || body.execution_token.length < 60 || row.run?.execution_token !== body.execution_token) fail(403,"Invalid import capability.");
-    if (row.expires_at <= at()) fail(409,"This lookup has expired.");
+    if (row.expires_at <= at() && body.action === "read") fail(409,"This lookup has expired. Stop browser work and report failed with browser_released:true.");
     if (row.status !== "searching") fail(409,"This lookup is no longer active.");
     const locks = await db.QuoteWorkers.filter({id:SLOT_ID,busy_token:row.run.operation_id},undefined,1);
     if (!locks.length) fail(409,"This lookup no longer owns the browser.");
