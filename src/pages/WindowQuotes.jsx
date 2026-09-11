@@ -10,6 +10,8 @@ import ConnectClaude from "@/components/window-quotes/ConnectClaude";
 import WindowQuoteResults from "@/components/window-quotes/WindowQuoteResults";
 import WindowQuoteBuilder from "@/components/window-quotes/WindowQuoteBuilder";
 import WindowQuoteList from "@/components/window-quotes/WindowQuoteList";
+import AmscoQuoteSchedule from "@/components/window-quotes/AmscoQuoteSchedule";
+import { savedScheduleData } from "@/components/window-quotes/quoteScheduleModel";
 import InstallBudgetWorkspace, { QuoteInstallPanel } from "@/components/window-quotes/InstallBudgetWorkspace";
 import WindowPackageProgress from "@/components/window-quotes/WindowPackageProgress";
 import { packageProgress, packageStatus } from "@/components/window-quotes/packageProgress";
@@ -226,18 +228,11 @@ function WonForm({ quote, busy, onSubmit, onCancel }) {
   </form>;
 }
 function ScheduleView({ quote }) {
-  const lines = quote.lines || [];
+  const schedule = savedScheduleData(quote);
   return <div className="space-y-4">
-    <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2 sm:grid-cols-3">
-      {[["Color", productLabel(quote.settings?.color, colorChoices)], ["Low-E glass", productLabel(quote.settings?.glass, glassChoices)], ["Dealer", quote.settings?.dealer || "Not set"], ["Yard", quote.settings?.yard || "Not set"], ["Gross margin", quote.settings?.gross_margin !== null && quote.settings?.gross_margin !== undefined ? `${quote.settings.gross_margin}%` : "Not set"]].map(([label, value]) => <div key={label} className="rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-3"><div className="text-[10px] font-semibold uppercase tracking-wider text-[#77839A]">{label}</div><div className="mt-1 break-words text-sm font-medium text-[#131A26]">{value}</div></div>)}
-    </div>
-    <div><h3 className="text-sm font-semibold text-[#131A26]">Requested windows</h3><p className="mt-1 text-xs text-[#616D81]">{lines.length ? `${lines.length} lines · ${lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0)} windows / assemblies` : "The quoting agent will review your written request and ask for any missing details."}</p></div>
-    {lines.map((line, index) => <div key={index} className="rounded-xl border border-[#DDE3EC] p-4">
-      <div className="flex items-start justify-between gap-2"><div className="min-w-0 break-words text-sm font-semibold text-[#131A26]">{line.mark ? `${line.mark} · ` : `${index + 1}. `}{line.style}</div><span className="whitespace-nowrap rounded bg-[#E7EEFA] px-2 py-1 text-xs font-semibold text-[#1E4A85]">Qty {line.qty}</span></div>
-      <p className="mt-1 break-words text-sm text-[#535E72]">{line.width} × {line.height} {line.units} · {(line.dimension_basis || "").replaceAll("_", " ")}{line.room ? ` · ${line.room}` : ""}</p>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">{Object.entries(line.options || {}).filter(([, value]) => value !== "" && value !== null && typeof value !== "object").map(([key, value]) => <span key={key} className="text-xs text-[#616D81]">{key.replaceAll("_", " ")}: <span className="text-[#131A26]">{String(value)}</span></span>)}</div>
-    </div>)}
-    {quote.source?.filename && <p className="break-all text-xs text-[#616D81]">Takeoff source: {quote.source.filename}</p>}
+    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-base font-semibold text-[#203B64]">Line Items</h3><span className="text-sm text-[#687385]">{schedule.lines.length} lines · {schedule.lines.reduce((sum,line)=>sum+(Number(line.qty)||0),0)} units</span></div>
+    <AmscoQuoteSchedule {...schedule} />
+    {quote.source?.filename && <p className="break-all text-xs text-[#687385]">Takeoff source: {quote.source.filename}</p>}
   </div>;
 }
 export default function WindowQuotes() {
@@ -339,7 +334,7 @@ export default function WindowQuotes() {
             {progress ? <WindowPackageProgress quote={quote} /> : <IntakeAssessment quote={quote} />}
             {quote.worker_status === "failed" && quote.retry_review && !locked && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#DDE3EC] bg-[#F6F8FC] p-3"><p className="min-w-0 flex-1 text-sm leading-relaxed text-[#535E72]">After reviewing the previous attempt, you can retry this request with a fresh quote.</p><button className={primaryClass} disabled={busy} onClick={() => { setError(""); setRetryReview(quote); }}><RefreshCw size={15} />Review & retry</button></div>}
             {quote.previous_attempts?.length > 0 && <details className="mt-3 text-xs text-[#616D81]"><summary className="min-h-11 cursor-pointer py-3 font-medium">Previous drafts retained ({quote.previous_attempts.length})</summary><ul className="list-disc space-y-1 pl-4">{quote.previous_attempts.map((attempt) => <li key={attempt.revision}>Revision {attempt.revision}{attempt.native_quote_number ? ` · AMSCO ${attempt.native_quote_number}` : ' · No saved quote'} · retained for review</li>)}</ul></details>}
-            <div className="mt-4 grid grid-cols-2 gap-1 sm:flex" role="tablist" aria-label="Quote sections">{[["conversation", "Conversation", MessageSquare], ["schedule", "Schedule", ListChecks], ["result", "Quote result", FileText], ["install", "Install budget", BriefcaseBusiness]].map(([key, label, Icon]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`inline-flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold sm:min-h-11 sm:shrink-0 sm:flex-row sm:gap-1.5 sm:px-3 sm:text-xs ${tab === key ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#616D81] hover:bg-[#F6F8FC]"}`}><Icon size={14} />{label}{key === "result" && quote.worker_status === "ready" && <span className="h-1.5 w-1.5 rounded-full bg-[#276449]" />}</button>)}</div>
+            <div className="mt-4 grid grid-cols-2 gap-1 sm:flex" role="tablist" aria-label="Quote sections">{[["conversation", "Conversation", MessageSquare], ["schedule", "Line Items", ListChecks], ["result", "Quote result", FileText], ["install", "Install budget", BriefcaseBusiness]].map(([key, label, Icon]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`inline-flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold sm:min-h-11 sm:shrink-0 sm:flex-row sm:gap-1.5 sm:px-3 sm:text-xs ${tab === key ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#616D81] hover:bg-[#F6F8FC]"}`}><Icon size={14} />{label}{key === "result" && quote.worker_status === "ready" && <span className="h-1.5 w-1.5 rounded-full bg-[#276449]" />}</button>)}</div>
           </div>
           {tab === "install" ? <div className="p-4 sm:p-5"><QuoteInstallPanel key={quote.id} quote={quote} onSaved={refresh} /></div> : tab === "conversation" ? <>
             <div className="space-y-4 px-4 py-5 sm:px-5">
