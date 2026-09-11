@@ -145,3 +145,19 @@ test("expired queued searches finish without taking a browser lock",async()=>{
  const result=await service.userAction({db,user:admin,body:{action:"status",import_id:first.import.id}});
  assert.equal(result.import.status,"failed");assert.equal(db.QuoteWorkers.rows[0].busy_token,"other");
 });
+
+
+test("an uncertain dispatch can be confirmed without resending or losing its browser lease",async()=>{
+ const db=database();let sends=0;let conversation={};
+ const service=createImportService({transport:{
+  getConversation:async()=>conversation,
+  sendMessage:async()=>{sends++;throw Object.assign(new Error("timeout"),{uncertain:true});}
+ }});
+ const first=await service.userAction({db,user:admin,body:{action:"lookup",request_id:"confirmed-send",quote_number:"3517014"}});
+ const row=db.AmscoQuoteImports.rows[0];
+ conversation={id:"6a9db2ed143f8b28d5fbd6b3",app_id:"6a9da9c1b336da0cae1bb8f5",metadata:{},messages:[{role:"user",content:"[WindowQuote operation="+encodeURIComponent(row.run.operation_id)+" quote="+row.id+" revision=1]\nRead saved quote"}]};
+ const result=await service.userAction({db,user:admin,body:{action:"status",import_id:first.import.id}});
+ assert.equal(result.import.status,"searching");assert.equal(row.run.phase,"sent");assert.equal(sends,1);
+ assert.equal(db.QuoteWorkers.rows[0].busy_token,row.run.operation_id);
+ assert.match(result.import.message,/Reading saved AMSCO/);
+});

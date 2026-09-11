@@ -1,6 +1,6 @@
 import { ImportError, quoteNumber, validateImportedSnapshot, importedQuoteRecord } from "./amscoQuoteImportModel.js";
 import { readPrivateAmscoExport } from "./amscoQuoteXml.js";
-import { createSuperagentTransport } from "./superagentTransport.js";
+import { createSuperagentTransport, findDispatchedMessage, DEFAULT_AGENT_ID } from "./superagentTransport.js";
 
 const SLOT_ID = "6a9dac833d04a18f0fd555f0";
 const CONVERSATION_ID = "6a9db2ed143f8b28d5fbd6b3";
@@ -164,6 +164,21 @@ export function createImportService({transport,parseXml,readExport=readPrivateAm
     if (row.owner_email !== owner) fail(403,"This import belongs to another user.");
     if (body.action === "status") {
       if (row.status === "queued") row = await start(db,row);
+      if(row.status==="searching" && row.run?.phase==="uncertain" && transport){
+        try {
+          const conversation=await transport.getConversation(CONVERSATION_ID);
+          const sent=findDispatchedMessage(conversation,{quote_id:row.id,input_revision:1,operation_id:row.run.operation_id},{conversationId:CONVERSATION_ID,agentId:DEFAULT_AGENT_ID});
+          if(sent.state==="accepted"){
+            const fresh=await dbGet(db,row.id);
+            if(fresh.status==="searching" && fresh.run?.phase==="uncertain")row=await cas(db,fresh,{run:{...fresh.run,phase:"sent"},message:"Reading saved AMSCO quote "+row.quote_number+"…"});
+            else row=fresh;
+          }
+        } catch { /* Keep the original dispatch and browser ownership if confirmation is unavailable. */ }
+        if(row.run?.phase==="uncertain" && now().getTime()-new Date(row.run.started_at).getTime()>120000){
+          const message="The AMSCO connection has not confirmed this search yet. You can import the XML export while this search waits.";
+          if(row.message!==message)row=await cas(db,row,{message});
+        }
+      }
       if (row.status === "importing") {
         const q = row.snapshot && await existingQuote(db,row.snapshot.quote_id);
         if (q) {row = await cas(db,row,{status:"imported",imported_quote_id:q.id,message:"Quote imported."});await releaseCommit(db,row);}
