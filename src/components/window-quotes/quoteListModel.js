@@ -12,14 +12,15 @@ export function quoteListRow(quote, statusLabel) {
   const lines = accepted?.lines || quote.lines || [];
   const settings = accepted?.settings || quote.settings || {};
   const rawTotal = result?.totals?.total;
-  const canShowTotal = result?.verified === true && (quote.worker_status === "ready" || quote.sales_status === "won");
+  const imported = result?.native_source === "amsco_saved_import";
+  const canShowTotal = (result?.verified === true || imported) && (quote.worker_status === "ready" || quote.sales_status === "won");
   return {
     quote,
     id: quote.id,
     created: quoteCreatedAt(quote.created_date),
     number: String(result?.native_quote_number || ""),
     name: quote.title || "Untitled quote",
-    client: [settings.dealer, settings.yard].filter(Boolean).join(" · "),
+    client: imported ? (result.snapshot?.customer?.Name || result.snapshot?.details?.Client || "") : [settings.dealer, settings.yard].filter(Boolean).join(" · "),
     status: quote.sales_status === "won" ? "Won" : statusLabel,
     lines: lines.length,
     units: lines.reduce((sum, line) => {

@@ -10,6 +10,8 @@ import ConnectClaude from "@/components/window-quotes/ConnectClaude";
 import WindowQuoteResults from "@/components/window-quotes/WindowQuoteResults";
 import WindowQuoteBuilder from "@/components/window-quotes/WindowQuoteBuilder";
 import WindowQuoteList from "@/components/window-quotes/WindowQuoteList";
+import ImportAmscoQuote from "@/components/window-quotes/ImportAmscoQuote";
+import ImportedAmscoQuote from "@/components/window-quotes/ImportedAmscoQuote";
 import AmscoQuoteSchedule from "@/components/window-quotes/AmscoQuoteSchedule";
 import { savedScheduleData } from "@/components/window-quotes/quoteScheduleModel";
 import InstallBudgetWorkspace, { QuoteInstallPanel } from "@/components/window-quotes/InstallBudgetWorkspace";
@@ -56,6 +58,7 @@ function currentIntakeAssessment(quote) {
   return assessment?.input_revision != null && quote?.input_revision != null && assessment.input_revision === quote.input_revision ? assessment : null;
 }
 function quoteStatusInfo(quote) {
+  if (quote?.result?.native_source === "amsco_saved_import") return {label:"Imported",color:"#276449",bg:"#EAF5EE",text:"Saved quote imported from AMSCO."};
   const info = statusInfo[quote?.worker_status] || statusInfo.draft;
   const progressStatus = packageStatus(quote);
   if (progressStatus) return { ...info, ...progressStatus };
@@ -317,12 +320,12 @@ export default function WindowQuotes() {
   return <div className="min-h-screen px-[18px] py-5 min-[700px]:px-[26px]" style={{ background: C.pageBg }}>
     <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div><div className="mb-2 text-xs text-[#77839A]">Glass Forge / Window Quotes</div><h1 className="font-heading text-[34px] font-semibold tracking-tight text-[#25334B]">{selectedID ? "Window Quote" : "My Quotes"}</h1></div>
-      <div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => setParams({ view: "install" })}><BriefcaseBusiness size={16} />Install Budget</button><ConnectClaude />{selectedID && <button className={primaryClass} onClick={() => { setRevisionSeed(null); setForm("new"); setError(""); }}><Plus size={16} />New quote</button>}</div>
+      <div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => setParams({ view: "install" })}><BriefcaseBusiness size={16} />Install Budget</button><ConnectClaude /><ImportAmscoQuote onImported={id=>{select(id);refresh();}} />{selectedID && <button className={primaryClass} onClick={() => { setRevisionSeed(null); setForm("new"); setError(""); }}><Plus size={16} />New quote</button>}</div>
     </header>
     {(error || listQuery.isError || (selectedID && detailQuery.isError)) && <div role="alert" className="mb-4 rounded-xl border border-[#EFD2CA] bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error || errorText(detailQuery.error || listQuery.error)}</div>}
     {!selectedID ? <WindowQuoteList quotes={quotes} loading={listQuery.isPending} failed={listQuery.isError} onOpen={select} onNew={() => { setRevisionSeed(null); setForm("new"); setError(""); }} statusLabel={q => quoteStatusInfo(q).label} renderStatus={q => <StatusBadge quote={q} />} /> : <>
       <button onClick={() => setParams({})} className="mb-3 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[#1E4A85]"><ArrowLeft size={15} />All quotes</button>
-      <section className="min-w-0 overflow-hidden rounded-xl border border-[#DDE3EC] bg-white">
+      {quote?.result?.native_source === "amsco_saved_import" ? <ImportedAmscoQuote snapshot={quote.result.snapshot} importedAt={quote.source?.imported_at}/> : <section className="min-w-0 overflow-hidden rounded-xl border border-[#DDE3EC] bg-white">
         {detailQuery.isPending ? <div className="flex min-h-[400px] items-center justify-center gap-2 text-sm text-[#616D81]"><Loader2 size={18} className="animate-spin" />Loading request…</div> : quote ? <>
           <div className="border-b border-[#E9EDF4] px-4 py-4 sm:px-5">
             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0 sm:flex-1"><div className="mb-2 flex flex-wrap items-center gap-2"><StatusBadge quote={quote} /><span className="text-[11px] text-[#77839A]">Revision {quote.input_revision || 1}</span></div><h2 className="break-words text-lg font-semibold text-[#131A26]">{quote.title || "Untitled window request"}</h2></div><div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => {
@@ -347,7 +350,7 @@ export default function WindowQuotes() {
           </> : <div className="p-4 sm:p-5">{tab === "schedule" ? <ScheduleView quote={quote} /> : <WindowQuoteResults quote={quote} onWon={() => setWonOpen(true)} busy={busy} />}</div>}
           {quote.job_id && tab !== "result" && <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between border-t border-[#E9EDF4] p-4 text-sm font-semibold text-[#1E4A85]"><span className="flex items-center gap-2"><BriefcaseBusiness size={16} />Open linked job</span><ArrowUpRight size={15} /></Link>}
         </> : <div className="p-10 text-center text-sm text-[#616D81]">This request is unavailable. Choose another request or refresh.</div>}
-      </section>
+      </section>}
     </>}
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 py-3">
       <div className="flex min-w-0 items-center gap-2.5"><MessageSquare size={17} className="shrink-0 text-[#616D81]" /><div className="text-xs text-[#616D81]"><span className="font-semibold text-[#131A26]">AMSCO pricebook</span><span className="ml-2">Supported windows calculate directly.</span><span className="mt-1 block">Configurator fallback: {serviceStatus}</span></div></div>

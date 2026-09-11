@@ -9,11 +9,12 @@ import { additionalLineSpecifications } from "./quoteScheduleModel";
 const money = (value, currency = "USD") => value != null && value !== "" && Number.isFinite(Number(value)) ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(value)) : "—";
 const action = "inline-flex min-h-11 items-center justify-center gap-1.5 rounded border border-[#AAB2BE] bg-white px-3 text-sm text-[#305367] hover:bg-[#EDF3FA] disabled:opacity-40";
 const optionLabels = {fin:"Fin",glass:"Glass",tempered:"Tempered",patterned_glass:"Patterned glass",screen:"Screen",hardware:"Hardware",hardware_color:"Hardware finish",glass_thickness:"Glass thickness",glazing_method:"Glazing",elevation:"Installation elevation",argon:"Thermal gas",super_spacer:"Super Spacer",capillary_tubes:"Capillary tubes",grilles:"Grilles",operation:"Operation",sash_split:"Sash split",number_wide:"Number wide",unit_type:"Unit type"};
-const priceLabel = price => price?.status === "priced" ? "Priced" : price?.pricing_issue?.message ? price.pricing_issue.message : price?.status === "amsco_lookup_needed" ? "AMSCO quote needed" : price?.status === "native_unavailable" ? "Pricing unavailable" : ["calculating","native_busy"].includes(price?.status) ? "Calculating…" : "Not priced";
+const priceLabel = price => price?.status === "imported" ? "Saved AMSCO price" : price?.status === "priced" ? "Priced" : price?.pricing_issue?.message ? price.pricing_issue.message : price?.status === "amsco_lookup_needed" ? "AMSCO quote needed" : price?.status === "native_unavailable" ? "Pricing unavailable" : ["calculating","native_busy"].includes(price?.status) ? "Calculating…" : "Not priced";
 
 function WindowLine({line,index,settings,price,disabled,condensed,onEdit,onCopy,onRemove,onUpdate,currency}) {
   const [expanded,setExpanded] = useState(true);
-  const options = resolvedWindowOptions(line,settings,price);
+  const options = line.imported ? (line.options || {}) : resolvedWindowOptions(line,settings,price);
+  const [imageFailed,setImageFailed] = useState(false);
   const colors = colorParts(options,settings);
   const details = !condensed && expanded;
   const entries = Object.entries(options).filter(([key,value]) => optionLabels[key] && value !== undefined && value !== null && value !== "");
@@ -33,7 +34,7 @@ function WindowLine({line,index,settings,price,disabled,condensed,onEdit,onCopy,
     </header>
     <div className="amsco-line-body">
       <div className="amsco-line-drawing">
-        <WindowDrawing line={drawingLine} settings={settings} grille={parseGrilles(options.grilles)} />
+        {line.imported ? (line.image_path && !imageFailed ? <img src={"https://amsco.wtsparadigm.com"+line.image_path} alt={`AMSCO drawing for line ${lineNumber}`} className="mx-auto max-h-64 max-w-full object-contain" loading="lazy" referrerPolicy="no-referrer" onError={()=>setImageFailed(true)}/> : <div className="flex min-h-24 items-center justify-center text-center text-xs text-[#687D8B]">{line.kind === "service" ? "Service / delivery" : "Drawing not available"}</div>) : <WindowDrawing line={drawingLine} settings={settings} grille={parseGrilles(options.grilles)} />}
         {!condensed && <button className="inline-flex min-h-11 items-center gap-1 text-sm text-[#20386E] underline underline-offset-2" onClick={()=>setExpanded(value=>!value)} aria-expanded={details} aria-label={`${details?"Hide":"Show"} details for line ${lineNumber}`}>{details?"Hide details":"Show details"}{details?<ChevronUp size={15}/>:<ChevronDown size={15}/>}</button>}
       </div>
       <div className="min-w-0">
@@ -42,13 +43,14 @@ function WindowLine({line,index,settings,price,disabled,condensed,onEdit,onCopy,
           {onUpdate ? <input aria-label={`Room for line ${lineNumber}`} className="min-h-11 min-w-0 flex-1 rounded border border-[#AAB2BE] px-3 text-base sm:text-sm" value={line.room||""} maxLength={250} placeholder="None assigned" disabled={disabled} onChange={event=>onUpdate(index,{room:event.target.value})}/> : <span className="break-words">{line.room||"None assigned"}</span>}
         </div>
         <h3 className="mt-4 break-words text-base font-medium leading-relaxed text-[#305367]">{line.style||"Window"}</h3>
-        <p className="mt-1 text-sm leading-relaxed text-[#526B7B]">{line.width} × {line.height} {line.units||"in"} · {line.dimension_basis === "frame" ? "Frame size" : line.dimension_basis === "rough_opening" ? "Rough opening" : "Call size"}</p>
-        <p className="mt-1 break-words text-sm leading-relaxed text-[#526B7B]">{selectedSeries(line)}</p>
+        {line.width && line.height && <p className="mt-1 text-sm leading-relaxed text-[#526B7B]">{line.width} × {line.height} {line.units||"in"} · {line.dimension_basis === "frame" ? "Frame size" : line.dimension_basis === "rough_opening" ? "Rough opening" : "Call size"}</p>}
+        {!line.imported && <p className="mt-1 break-words text-sm leading-relaxed text-[#526B7B]">{selectedSeries(line)}</p>}
         {frame?.width && frame?.height && <p className="mt-1 text-sm text-[#526B7B]">Frame: {frame.width} × {frame.height} {frame.units||line.units||"in"}</p>}
-        <p className="mt-3 break-words text-sm leading-relaxed text-[#526B7B]">{colors.exterior} exterior / {colors.interior} interior</p>
+        {!line.imported && <p className="mt-3 break-words text-sm leading-relaxed text-[#526B7B]">{colors.exterior} exterior / {colors.interior} interior</p>}
         {details && <div className="mt-3 space-y-3">
           <p className="break-words text-sm leading-7 text-[#526B7B]">{entries.map(([key,value])=>`${optionLabels[key]}: ${specificationValue(key,value,options)}`).join(" · ")}</p>
-          {(line.notes || line.description) && <div className="border-l-2 border-[#D8E2EA] pl-3"><p className="mb-1 text-xs font-semibold text-[#526B7B]">Notes</p><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#526B7B]">{line.notes||line.description}</p></div>}
+          {line.imported && <p className="whitespace-pre-wrap break-words text-sm leading-7 text-[#526B7B]">{line.description}</p>}
+          {(line.notes || (!line.imported && line.description)) && <div className="border-l-2 border-[#D8E2EA] pl-3"><p className="mb-1 text-xs font-semibold text-[#526B7B]">Notes</p><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#526B7B]">{line.notes||line.description}</p></div>}
           {additional.length > 0 && <details><summary className="min-h-11 cursor-pointer py-3 text-xs text-[#526B7B]">Additional specifications</summary><dl className="grid gap-3 text-xs sm:grid-cols-2">{additional.map(([label,value])=><div key={label} className="min-w-0"><dt className="capitalize text-[#7A8B97]">{label}</dt><dd className="mt-1 break-words text-[#526B7B]">{value}</dd></div>)}</dl></details>}
           {price?.pricing_evidence?.source === "amsco_source_engine" && <details><summary className="min-h-11 cursor-pointer py-3 text-xs text-[#526B7B]">Pricebook breakdown</summary><dl className="space-y-2 text-xs">{(price.pricing_evidence.components||[]).map((component,i)=><div key={i} className="flex justify-between gap-3"><dt>{component.name}</dt><dd>{money(component.value,currency)}</dd></div>)}</dl></details>}
         </div>}
@@ -83,6 +85,6 @@ export default function AmscoQuoteSchedule({lines,settings={},prices=[],disabled
     </div>
     <div className="space-y-3">{rows.map(({line,index,price})=><WindowLine key={line.id||line.native_line_id||index} line={line} index={index} settings={settings} price={price} disabled={disabled} condensed={condensed} onEdit={onEdit} onCopy={onCopy} onRemove={onRemove} onUpdate={onUpdate} currency={currency}/>)}</div>
     {!rows.length&&<p className="rounded border border-[#CCD2D9] bg-white px-4 py-8 text-center text-sm text-[#687D8B]">{lines.length?"No line items match your filter.":"Add a window to build this quote."}</p>}
-    {!!rows.length&&<p className="mt-3 text-xs leading-relaxed text-[#7A8B97]">Window illustrations show the selected configuration. Final construction and ratings come from AMSCO.</p>}
+    {!!rows.length&&<p className="mt-3 text-xs leading-relaxed text-[#7A8B97]">{lines.some(line=>line.imported) ? "Original AMSCO descriptions, drawings and saved prices." : "Window illustrations show the selected configuration. Final construction and ratings come from AMSCO."}</p>}
   </div>;
 }
