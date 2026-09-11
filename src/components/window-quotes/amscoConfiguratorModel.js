@@ -105,7 +105,7 @@ export function applyConfiguratorSelections(line, settings = {}) {
     const { interior } = colorParts(options, settings);
     options.hardware_color = interior;
     if (!/^none$/i.test(String(options.screen ?? ''))) options.screen = interior;
-    if (/^cam latch(?:,\\s*|\\s+)(?:white|taupe|black)(?:\\s+hardware)?$/i.test(options.hardware || '')) options.hardware = 'Cam Latch';
+    if (/^cam latch(?:,\s*|\s+)(?:white|taupe|black)(?:\s+hardware)?$/i.test(options.hardware || '')) options.hardware = 'Cam Latch';
   }
   return { ...line, options };
 }
