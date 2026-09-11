@@ -16,7 +16,10 @@ function Row({ label, children, note = "", required = false }) {
 function SelectRow({ label, value, choices, onChange, note = "", disabled = false, required = false }) {
   const all = choices.map(choice => typeof choice === "object" ? choice : { value: choice, label: String(choice) });
   if (value !== undefined && value !== "" && !all.some(choice => String(choice.value) === String(value))) all.push({ value, label: String(value) + " (saved selection)" });
-  return <Row label={label} note={note} required={required && !value}>{id => <select id={id} className={input} value={value ?? ""} disabled={disabled} aria-required={required} onChange={event => onChange(event.target.value)}>{all.map(choice => <option key={String(choice.value)} value={choice.value}>{choice.label}</option>)}</select>}</Row>;
+  // When the inherited value has the same label as a selectable value, show it
+  // once and retain the currently selected value so saved overrides stay intact.
+  const unique = [...new Set(all.map(choice => choice.label))].map(label => all.find(choice => choice.label === label && String(choice.value) === String(value ?? "")) || all.find(choice => choice.label === label));
+  return <Row label={label} note={note} required={required && !value}>{id => <select id={id} className={input} value={value ?? ""} disabled={disabled} aria-required={required} onChange={event => onChange(event.target.value)}>{unique.map(choice => <option key={String(choice.value)} value={choice.value}>{choice.label}</option>)}</select>}</Row>;
 }
 function TextRow({ label, value, onChange, note = "", ...rest }) { return <Row label={label} note={note}>{id => <input id={id} className={input} value={value ?? ""} onChange={event => onChange(event.target.value)} {...rest} />}</Row>; }
 function ReadRow({ label, value, note = "" }) { return <Row label={label} note={note}>{id => <output id={id} className="amsco-readout">{value === "" || value == null ? "Awaiting AMSCO configuration" : String(value)}</output>}</Row>; }
