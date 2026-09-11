@@ -39,7 +39,7 @@ function BrandSquare({ href, title, iconUrl, iconAlt, label, bg, textColor }) {
         rel="noopener noreferrer"
         title={title}
         aria-label={`${label} — opens in a new tab`}
-        className="group flex h-52 w-52 flex-col items-center rounded-2xl motion-safe:transition-transform motion-safe:duration-150 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2A5EA8] focus-visible:outline-offset-8 sm:h-56 sm:w-56"
+        className="group flex h-52 w-52 flex-col items-center overflow-hidden rounded-[44px] motion-safe:transition-transform motion-safe:duration-150 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2A5EA8] focus-visible:outline-offset-8 sm:h-56 sm:w-56 sm:rounded-[48px]"
         style={{ backgroundColor: bg }}
       >
         <img
