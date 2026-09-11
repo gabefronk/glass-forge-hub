@@ -5,8 +5,4 @@ import {createAmscoXmlParser} from "../../shared/amscoQuoteXml.js";
 import {createImportHandler,importRuntime} from "../../shared/amscoQuoteImportService.js";
 const service=importRuntime({parseXml:createAmscoXmlParser({XMLParser,unzipSync})});
 const handler=createImportHandler({getClient:createClientFromRequest,service});
-Deno.serve(async (req: Request) => {
-  const response = await handler(req);
-  response.headers.set("X-AMSCO-Import-Version", "xml-5");
-  return response;
-});
+export default handler;
