@@ -60,8 +60,17 @@ function isAllowedHost(url, brand) {
 
 function researchPrompt(input) {
   const seed = SEED_URLS[input.manufacturer].map(u => '- ' + u).join('\n');
+  const productKey = `${input.series} ${input.product}`.toLowerCase().trim();
+  const productSeed = (PRODUCT_SEED_URLS[input.manufacturer] || {})[productKey];
+  const productLine = productSeed
+    ? `\nOfficial ${input.manufacturer} ${input.series} ${input.product} document (fetch this first): ${productSeed}\n`
+    : '';
+  const startInstruction = productSeed
+    ? `Start with the official document URL below, then fetch other relevant pages as needed.`
+    : `Start from the seed URLs below, then fetch relevant document pages discovered in those sources.`;
   return `You are researching public manufacturer specifications for ${input.manufacturer} ${input.series} ${input.product}.
-Use the web_fetch tool to retrieve official ${input.manufacturer} documents from the allowed domains only. Start from the seed URLs below, then fetch relevant document pages discovered in those sources. Do not treat an app-store listing or a bare search-result link as a specification document.
+Use the web_fetch tool to retrieve official ${input.manufacturer} documents from the allowed domains only. ${startInstruction} Do not treat an app-store listing or a bare search-result link as a specification document.
+${productLine}
 Seed URLs:
 ${seed}
 
