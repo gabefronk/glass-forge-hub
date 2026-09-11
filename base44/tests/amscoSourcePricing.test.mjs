@@ -115,7 +115,38 @@ test('source previews resolve manufacturer pane construction without changing re
  assert.equal(preview.glass_construction.version,"pk361-minimum-glass-v1");
  assert.equal(preview.resolved_options.grilles,'None');
  assert.equal(preview.resolved_options.operation,'Left');
- assert.equal(preview.resolved_options.super_spacer,undefined);
+ assert.equal(preview.resolved_options.super_spacer,true);
  assert.deepEqual(line,original);
  assert.deepEqual(sourcePriceReceipt({line,settings,checkedAt:now().toISOString()}),receipt);
+});
+
+test('60 x 66 Studio picture with explicit ordinary choices and grilles prices immediately',async()=>{
+ const picture={id:'picture-6066',style:'Studio Picture',qty:1,width:60,height:66,units:'in',dimension_basis:'call',options:{
+  series:'Studio 1 3/8 inch Fin Setback',unit_type:'Complete Unit',number_wide:1,elevation:'2501 to 6500',
+  super_spacer:false,patterned_glass:'None',argon:false,glazing_method:'3/4" Insulated',capillary_tubes:false,
+  grilles:'5/8" Flat · Rectangular · 2W4H per lite · White',fin:'Nail Fin'}};
+ const result=await builderPricePreview({settings,lines:[picture],source:{amsco_configurator:{version:1}}},noDb,{config,user,now:now().getTime()});
+ assert.equal(result.ready,true);assert.equal(result.pending,false);
+ assert.deepEqual(result.lines[0].unit_prices,{list:685.4,dealer:312.27,customer:446.1});
+ assert.equal(result.lines[0].resolved_options.glass_thickness,'3/16" over 3/16"');
+ assert.equal(result.lines[0].resolved_options.super_spacer,false);
+ assert.equal(result.lines[0].resolved_options.capillary_tubes,false);
+ const explicit={...picture,options:{...picture.options,glass_thickness:'3/16" over 3/16"'}};
+ assert.deepEqual(sourcePricePreview({line:explicit,settings}).unit_prices,result.lines[0].unit_prices);
+ const wrong={...picture,options:{...picture.options,glass_thickness:'SS over SS'}};
+ const rejected=priceSourceWindow({line:wrong,settings});
+ assert.equal(rejected.code,'glass_construction_override');
+ assert.equal(rejected.automatic_glass,'3/16" over 3/16"');
+ assert.equal(sourcePricePreview({line:wrong,settings}),null);
+ assert.equal(wrong.options.glass_thickness,'SS over SS');
+ const receipt=sourcePriceReceipt({line:explicit,settings,checkedAt:now().toISOString()});
+ assert.deepEqual(sourcePriceEvidenceIssues({...receipt.source_evidence,source:receipt.source},receipt.result.lines[0],explicit,settings),[]);
+});
+test('Studio spacer No is accepted for each source-priced operation; a spacer upgrade and fixed hardware remain separate requests',()=>{
+ for(const style of ['Studio Picture','Studio Single Hung','Studio XO Slider']){
+  const item={...line,qty:1,style,width:36,height:60,dimension_basis:'call',options:{super_spacer:false,capillary_tubes:false}};
+  assert.equal(priceSourceWindow({line:item,settings}).ok,true,style);
+  assert.equal(priceSourceWindow({line:{...item,options:{...item.options,super_spacer:true}},settings}).ok,false);
+ }
+ assert.equal(priceSourceWindow({line:{...line,style:'Studio Picture',options:{hardware:'Cam Latch'}},settings}).code,'fixed_construction_override');
 });

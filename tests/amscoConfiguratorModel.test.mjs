@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { changeSeries, colorParts, changeColor, parseGrilles, serializeGrilles, stylesForSeries, selectedSeries } from '../src/components/window-quotes/amscoConfiguratorModel.js';
+import { applyConfiguratorSelections, changeSeries, colorParts, changeColor, parseGrilles, serializeGrilles, stylesForSeries, selectedSeries } from '../src/components/window-quotes/amscoConfiguratorModel.js';
 import { createBuilderLine } from '../src/components/window-quotes/windowBuilderModel.js';
 import { normalizeManualBuilderDraft, builderReviewResponse, validateBuilderDraft } from '../base44/shared/windowQuoteBuilder.js';
 import { webcrypto } from 'node:crypto';
@@ -59,4 +59,33 @@ test('Hampton casement UI selections pass the strict builder contract and can ro
   assert.equal(result.review.ready, true);
   assert.equal(result.draft.lines[0].style, 'Hampton Casement');
   assert.deepEqual(result.draft.lines[0].options, draft.lines[0].options);
+});
+
+
+test('unit selections and accessories follow current colors through pricing and saved draft validation', () => {
+  const settings = { dealer:'BFS', yard:'BFS-UTAH DESIGN(11)', gross_margin:30, color:'White', glass:'CozE (LowE)' };
+  const original = createBuilderLine('Studio Single Hung', { width:36, height:66, options:{sash_split:'Uneven',unit_type:'Sash Only',hardware_color:'Black',screen:'Black',hardware:'Cam Latch, Black'} });
+  for (const [color,expected] of [['White','White'],['Black exterior / White interior','White'],['Black','Black'],['Taupe','Taupe']]) {
+    const selected = applyConfiguratorSelections(original, {...settings,color});
+    assert.equal(selected.options.sash_split,'Even');
+    assert.equal(selected.options.unit_type,'Complete Unit');
+    assert.equal(selected.options.hardware_color,expected);
+    assert.equal(selected.options.screen,expected);
+    assert.equal(selected.options.hardware,'Cam Latch');
+    const validated = validateBuilderDraft({settings:{...settings,color},lines:[selected]});
+    assert.equal(validated.lines[0].options.hardware_color,expected);
+    assert.equal(validated.lines[0].options.screen,expected);
+  }
+  const split = applyConfiguratorSelections({...original,options:{color:'Black exterior / White interior'}},settings);
+  assert.equal(split.options.hardware_color,'White');
+  const changed = applyConfiguratorSelections({...split,options:changeColor(split.options,settings,'interior','Black')},settings);
+  assert.equal(changed.options.hardware_color,'Black');
+  assert.equal(changed.options.screen,'Black');
+  const withoutScreen = applyConfiguratorSelections({...changed,options:{...changed.options,screen:'None'}},settings);
+  assert.equal(withoutScreen.options.screen,'None');
+  const fixed = applyConfiguratorSelections(createBuilderLine('Studio Picture'),settings);
+  assert.equal(fixed.options.hardware_color,undefined);
+  assert.equal(fixed.options.screen,undefined);
+  assert.equal(original.options.hardware_color,'Black');
+  assert.equal(original.options.unit_type,'Sash Only');
 });

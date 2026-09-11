@@ -1,5 +1,6 @@
 import { calculateTransferredWindow } from './amscoTransferredEngine.js';
 import { sourceGlassConstruction } from './amscoGlassConstruction.js';
+import { catalogOptionDefaults } from './amscoOptionDefaults.js';
 import { buildNativeCatalogPlan, catalogStableJson } from './nativeCatalogPlan.js';
 
 export const SOURCE_PRICE_VERSION = 'pk361-standard-2026-09-10-v1';
@@ -15,8 +16,8 @@ const scope = Object.freeze({
   'catalog_724': { product:'Casement', series:'Hampton', width:[17.5,36], height:[23.5,72], rows:[5059,5060,5061,5062] }
 });
 const keys = new Set(['series','fin','color','exterior_color','interior_color','glass','tempered','grilles','operation','unit_type','number_wide','sash_split',
-  'patterned_glass','argon','elevation','super_spacer','glazing_method','hardware','hardware_color','screen','capillary_tubes']);
-const decline = code => ({ok:false,code});
+  'patterned_glass','argon','elevation','super_spacer','glazing_method','hardware','hardware_color','screen','capillary_tubes','glass_thickness']);
+const decline = (code, details = {}) => ({ok:false,code,...details});
 export function sourcePricingEnabled(config) { return config?.native_engine?.source_pricing === true && config.native_engine.catalog_id === '361'; }
 
 // Computes fresh prices from imported rates. No observed-price matrix, browser,
@@ -38,10 +39,10 @@ export function priceSourceWindow({line,settings}) {
   // rules. 36 ft² is a release-coverage boundary, not a manufacturer size limit.
   if (width*height>36*144) return decline('large_glass_rules_required');
   const standard={unit_type:'Complete Unit',number_wide:1,sash_split:'Even',patterned_glass:'None',argon:false,elevation:'2501 to 6500',
-    super_spacer:true,capillary_tubes:false,hardware:selected.product==='Casement'?'Standard':'Cam Latch',hardware_color:o.interior_color,screen:o.interior_color};
+    super_spacer:selected.series==='Hampton',capillary_tubes:false,hardware:selected.product==='Casement'?'Standard':'Cam Latch',hardware_color:o.interior_color,screen:o.interior_color};
   for(const [key,value] of Object.entries(standard)) if(o[key]!==undefined && o[key]!==value) return decline('nonstandard_'+key);
   // A direct-set window does not inherit operating-window hardware overrides.
-  if(selected.product==='Direct Set' && ['hardware','hardware_color','screen','super_spacer'].some(key=>o[key]!==undefined)) return decline('fixed_construction_override');
+  if(selected.product==='Direct Set' && ['hardware','hardware_color','screen'].some(key=>o[key]!==undefined)) return decline('fixed_construction_override');
   if(o.glazing_method!==undefined && !['3/4" Insulated','3/4 Insulated'].includes(o.glazing_method)) return decline('glazing_rules_required');
   const glass=o.glass==='CozE (Low-E)'?'CozE (LowE)':o.glass;
   if(glass!=='CozE (LowE)') return decline('glass_rules_required');
@@ -61,6 +62,11 @@ export function priceSourceWindow({line,settings}) {
   const configuration={series:selected.series,product_type:selected.product,unit_type:'Complete Unit',shape:'Rectangle',operation,tilted:false,
     width,height,dimension_basis:'frame',exterior_color:o.exterior_color,interior_color:o.interior_color,preserve:selected.series==='Hampton'?'Both':'None',
     grille_application_id:grille,glass,tempered,glazing_method:'3/4" Insulated',stock_glass:false,wildfire_glazing:'None',quantity:p.qty};
+  // An explicitly selected construction can use the base rate only when it
+  // matches the exact automatic pane construction. Never ignore an upgrade.
+  const construction=sourceGlassConstruction(configuration);
+  if(o.glass_thickness!==undefined && (!construction || String(o.glass_thickness).replaceAll(' inch','"')!==construction.glass_thickness))
+    return decline('glass_construction_override',{automatic_glass:construction?.glass_thickness});
   const input={catalog_id:'361',price_book:1,client_id:clientId,gross_margin:settings.gross_margin,configuration};
   const calculated=calculateTransferredWindow(input);
   if(calculated.status!=='calculated') return decline(calculated.code);
@@ -69,12 +75,12 @@ export function priceSourceWindow({line,settings}) {
 }
 
 export function sourcePricePreview(args) {
-  const priced=priceSourceWindow(args);if(!priced.ok)return null;
+  const priced=priceSourceWindow(args);if(!priced.ok){args.onDecline?.(priced);return null;}
   const construction=sourceGlassConstruction(priced.input.configuration);
   return {status:'priced',price_source:'amsco_source_engine',unit_prices:clone(priced.calculated.unit_prices),line_totals:clone(priced.calculated.line_totals),
     // Recompute automatic pane construction for these exact dimensions. Keep
     // it separate from receipt defaults and explicit, billable glass upgrades.
-    resolved_options:clone({...priced.plan_line.options,...priced.defaults,glass:priced.input.configuration.glass,
+    resolved_options:clone({...catalogOptionDefaults(args.line,args.settings),...priced.plan_line.options,...priced.defaults,glass:priced.input.configuration.glass,
       ...(construction ? {glass_thickness:construction.glass_thickness,glass_panes:construction.panes} : {}),
       patterned_glass:'None',argon:false,unit_type:priced.input.configuration.unit_type,grilles:priced.plan_line.options.grilles || 'None'}),
     ...(construction ? {glass_construction:clone(construction)} : {}),

@@ -45,6 +45,10 @@
     "runner_presence": {
       "type": "object",
       "description": "Private authenticated runner check-in. Server timestamps, reported browser state and bounded attention identifiers; never credentials or URLs."
+    },
+    "import_commit_token": {
+      "type": "string",
+      "default": ""
     }
   },
   "required": [

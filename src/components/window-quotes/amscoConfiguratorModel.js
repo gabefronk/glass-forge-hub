@@ -86,10 +86,26 @@ export function serializeGrilles(value) {
 }
 export function diagramPanels(line) {
   if (/single hung/i.test(line.style || '')) return { columns: 1, rows: 2, kind: 'hung' };
+  if (/picture|direct set|\bPW\b|sash set|radius|polygon/i.test(line.style || '')) return { columns: 1, rows: 1, kind: 'fixed' };
   if (/double vent/i.test(line.style || '')) return { columns: 3, rows: 1, kind: 'slider' };
   if (/slider|single vent/i.test(line.style || '')) return { columns: 2, rows: 1, kind: 'slider' };
   if (/casement/i.test(line.style || '')) return { columns: Math.min(4, Math.max(1, Number(line.options?.number_wide) || 1)), rows: 1, kind: 'casement' };
   if (/awning/i.test(line.style || '')) return { columns: 1, rows: 1, kind: 'awning' };
-  if (/picture|direct set/i.test(line.style || '')) return { columns: 1, rows: 1, kind: 'fixed' };
   return { columns: 1, rows: 1, kind: 'custom' };
+}
+
+// Configurator selections shared by display, pricing, and saved quote payloads.
+// Accessory colors follow the interior finish, including two-tone windows.
+export function applyConfiguratorSelections(line, settings = {}) {
+  if (!line?.style?.trim()) return line;
+  const options = { ...line.options, unit_type: 'Complete Unit' };
+  const { kind } = diagramPanels(line);
+  if (kind === 'hung') options.sash_split = 'Even';
+  if (['hung', 'slider', 'casement', 'awning'].includes(kind)) {
+    const { interior } = colorParts(options, settings);
+    options.hardware_color = interior;
+    if (!/^none$/i.test(String(options.screen ?? ''))) options.screen = interior;
+    if (/^cam latch(?:,\s*|\s+)(?:white|taupe|black)(?:\s+hardware)?$/i.test(options.hardware || '')) options.hardware = 'Cam Latch';
+  }
+  return { ...line, options };
 }

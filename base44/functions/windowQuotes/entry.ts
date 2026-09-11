@@ -5,3 +5,4 @@ import { execution } from "../../shared/windowQuoteScriptedRuntime.js";
 const handleWindowQuotes = createQuoteHandler({ getClient: createClientFromRequest, executionService: execution });
 export default handleWindowQuotes;
 // Package pricing release 2026-09-10: retained native prices, private online fallback, resumable progress.
+// Pricing worker recovery 2026-09-11: refresh published function resource after missing-worker response.

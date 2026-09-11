@@ -1,0 +1,8 @@
+.amsco-line-item { min-width:0; overflow:hidden; border:1px solid #ccd2d9; border-radius:6px; background:#fff; }
+.amsco-line-body { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:20px; padding:20px 16px; }
+.amsco-line-drawing { text-align:center; min-width:0; }
+.amsco-line-drawing svg { max-width:210px; max-height:230px; }
+.amsco-line-prices { min-width:0; }
+@media(min-width:640px) { .amsco-line-body { grid-template-columns:160px minmax(0,1fr); padding:22px; } .amsco-line-prices { grid-column:1/-1; } }
+@media(min-width:1280px) { .amsco-line-body { grid-template-columns:160px minmax(0,1fr) 240px; gap:26px; } .amsco-line-prices { grid-column:auto; } }
+@media print { .amsco-line-item { break-inside:avoid; } }

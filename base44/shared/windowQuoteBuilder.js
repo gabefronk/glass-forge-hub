@@ -279,7 +279,13 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
   });
   const cache = new Map();
   if (sourcePricingEnabled(config)) for (const item of planned) {
-    item.sourcePrice = sourcePricePreview({line:draft.lines[item.index],settings:draft.settings});
+    item.sourcePrice = sourcePricePreview({line:draft.lines[item.index],settings:draft.settings,onDecline:failure=>{
+      item.pricingIssue = {code:failure.code,
+        message:failure.code==='glass_construction_override'
+          ? 'The selected glass thickness needs an AMSCO price check.'+(failure.automatic_glass ? ' Automatic construction for this size is '+failure.automatic_glass+'.' : '')
+          : 'This combination needs an AMSCO price check.',
+        ...(failure.automatic_glass ? {automatic_glass:failure.automatic_glass} : {})};
+    }});
   }
   const quotes = planned.some(item => item.line && !item.sourcePrice) ? await db.QuoteRequests.list('-updated_date', 200) : [];
   for (const quote of quotes) {
@@ -311,7 +317,7 @@ export async function builderPricePreview(draft, db, { now = Date.now(), maxAgeM
   const service = config ? createNativePricePreviewService({ config, now: () => new Date(now) }) : null;
   const lines = [];
   for (const item of planned) {
-    const base = { index: item.index, id: draft.lines[item.index]?.id };
+    const base = { index: item.index, id: draft.lines[item.index]?.id, ...(item.pricingIssue ? {pricing_issue:item.pricingIssue} : {}) };
     if (item.sourcePrice) { lines.push({...base,...item.sourcePrice}); continue; }
     if (!item.line) { lines.push({ ...base, status: item.status, questions: item.questions }); continue; }
     const key = stable({ dealer: item.settings.dealer, yard: item.settings.yard, line: priceSignature(item.line) });

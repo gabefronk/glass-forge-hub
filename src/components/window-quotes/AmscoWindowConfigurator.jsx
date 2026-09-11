@@ -1,6 +1,7 @@
+import WindowDrawing from "./AmscoWindowDrawing";
 import { useId, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, Copy, List, Loader2, Plus, RotateCcw, X, ZoomIn } from "lucide-react";
-import { GLASS_THICKNESS_CHOICES, automaticOptionLabel, glassSpecification, resolvedWindowOptions, specificationValue } from "./windowSpecificationDisplay";
+import { GLASS_THICKNESS_CHOICES, automaticOptionLabel, glassThicknessCorrection, glassSpecification, resolvedWindowOptions, specificationValue } from "./windowSpecificationDisplay";
 import { AMSCO_SERIES, GRILLE_TYPES, selectedSeries, stylesForSeries, colorParts, changeColor, parseGrilles, serializeGrilles, diagramPanels } from "./amscoConfiguratorModel";
 import { CONFIGURATOR_PAGES, COZE_CHOICES, newConfiguratorLine, numberWideChoices, changeProduct, changeConfiguratorSeries, changeNumberWide, callSizeMenu, chooseCallWidth, configurationReadiness, frameSize } from "./amscoConfiguratorFlow";
 import "./amscoConfigurator.css";
@@ -16,42 +17,14 @@ function Row({ label, children, note = "", required = false }) {
 function SelectRow({ label, value, choices, onChange, note = "", disabled = false, required = false }) {
   const all = choices.map(choice => typeof choice === "object" ? choice : { value: choice, label: String(choice) });
   if (value !== undefined && value !== "" && !all.some(choice => String(choice.value) === String(value))) all.push({ value, label: String(value) + " (saved selection)" });
-  return <Row label={label} note={note} required={required && !value}>{id => <select id={id} className={input} value={value ?? ""} disabled={disabled} aria-required={required} onChange={event => onChange(event.target.value)}>{all.map(choice => <option key={String(choice.value)} value={choice.value}>{choice.label}</option>)}</select>}</Row>;
+  // When the inherited value has the same label as a selectable value, show it
+  // once and retain the currently selected value so saved overrides stay intact.
+  const unique = [...new Set(all.map(choice => choice.label))].map(label => all.find(choice => choice.label === label && String(choice.value) === String(value ?? "")) || all.find(choice => choice.label === label));
+  return <Row label={label} note={note} required={required && !value}>{id => <select id={id} className={input} value={value ?? ""} disabled={disabled} aria-required={required} onChange={event => onChange(event.target.value)}>{unique.map(choice => <option key={String(choice.value)} value={choice.value}>{choice.label}</option>)}</select>}</Row>;
 }
 function TextRow({ label, value, onChange, note = "", ...rest }) { return <Row label={label} note={note}>{id => <input id={id} className={input} value={value ?? ""} onChange={event => onChange(event.target.value)} {...rest} />}</Row>; }
 function ReadRow({ label, value, note = "" }) { return <Row label={label} note={note}>{id => <output id={id} className="amsco-readout">{value === "" || value == null ? "Awaiting AMSCO configuration" : String(value)}</output>}</Row>; }
 function Note({ children }) { return <p className="mx-4 mb-4 text-sm leading-relaxed text-[#75838c]">{children}</p>; }
-function WindowDrawing({ line, settings, grille }) {
-  const { rows, kind, columns: baseColumns } = diagramPanels(line);
-  const columns = kind === "hung" ? Math.min(6, Number(line.options?.number_wide) || 1) : baseColumns;
-  const gradient = useId();
-  const ratio = Math.min(2.6, Math.max(.35, (Number(line.width) || 36) / (Number(line.height) || 60)));
-  const width = Math.min(236, 220 * ratio), height = width / ratio, x = (300 - width) / 2, y = 40;
-  const pair = colorParts(line.options, settings), frame = /black/i.test(pair.exterior) ? "#272B2E" : /taupe/i.test(pair.exterior) ? "#AD9F8E" : "#FFF";
-  const panels = Array.from({ length: columns * rows }, (_, index) => ({ x: x + 9 + index % columns * (width - 18) / columns, y: y + 9 + Math.floor(index / columns) * (height - 18) / rows, w: (width - 18) / columns, h: (height - 18) / rows, index }));
-  return <svg role="img" aria-label={(line.style || "Window") + " illustration"} viewBox={"0 0 300 " + (height + 88)} className="mx-auto max-h-[460px] w-full max-w-[420px]" fill="none">
-    <defs><linearGradient id={gradient} x1="0" y1="1" x2="1" y2="0"><stop offset="0" stopColor="#b8e1e8" /><stop offset=".6" stopColor="#f9fcff" /><stop offset="1" stopColor="#c9e6ed" /></linearGradient></defs>
-    <rect x={x} y={y} width={width} height={height} fill={frame} stroke="#607786" strokeWidth="1.4" />
-    {kind === "custom" ? <text x="150" y={y + height / 2} textAnchor="middle" fill="#526E7E" fontSize="12">Illustration pending</text> : panels.map(panel => {
-      const grilleWide = grille.mode === "rectangular" ? Math.min(12, Number(grille.wide)) : 1;
-      const grilleHigh = grille.mode === "rectangular" && grille.scope === "lite" ? Math.min(12, Number(grille.high)) : 1;
-      const fixed = /fixed/i.test(line.options?.operation || "");
-      const right = /^right|^rh$/i.test(line.options?.operation || "") || /left\s*\/\s*right/i.test(line.options?.operation || "") && panel.index % 2 === 1;
-      return <g key={panel.index}>
-        <rect x={panel.x + 3} y={panel.y + 3} width={panel.w - 6} height={panel.h - 6} fill={"url(#" + gradient + ")"} stroke="#627E8F" />
-        {Array.from({ length: grilleWide - 1 }, (_, index) => <line key={"v" + index} x1={panel.x + panel.w * (index + 1) / grilleWide} x2={panel.x + panel.w * (index + 1) / grilleWide} y1={panel.y + 3} y2={panel.y + panel.h - 3} stroke={frame} strokeWidth="3" />)}
-        {Array.from({ length: grilleHigh - 1 }, (_, index) => <line key={"h" + index} x1={panel.x + 3} x2={panel.x + panel.w - 3} y1={panel.y + panel.h * (index + 1) / grilleHigh} y2={panel.y + panel.h * (index + 1) / grilleHigh} stroke={frame} strokeWidth="3" />)}
-        {kind === "casement" && !fixed && <polyline points={right ? [panel.x + 7, panel.y + 7, panel.x + panel.w - 7, panel.y + panel.h / 2, panel.x + 7, panel.y + panel.h - 7].join(" ") : [panel.x + panel.w - 7, panel.y + 7, panel.x + 7, panel.y + panel.h / 2, panel.x + panel.w - 7, panel.y + panel.h - 7].join(" ")} stroke="#6C8999" strokeDasharray="5 3" />}
-        {kind === "awning" && !fixed && <polyline points={[panel.x + 7, panel.y + panel.h - 7, panel.x + panel.w / 2, panel.y + 7, panel.x + panel.w - 7, panel.y + panel.h - 7].join(" ")} stroke="#6C8999" strokeDasharray="5 3" />}
-        {kind === "hung" && panel.index >= columns && <text x={panel.x + panel.w / 2} y={panel.y + panel.h / 2} fill="#526E7E" textAnchor="middle">↑</text>}
-        {kind === "slider" && panel.index === (/^ox$/i.test(line.options?.operation || "") ? columns - 1 : 0) && <text x={panel.x + panel.w / 2} y={panel.y + panel.h / 2} fill="#526E7E" textAnchor="middle">{/^ox$/i.test(line.options?.operation || "") ? "←" : "→"}</text>}
-      </g>;
-    })}
-    <line x1={x} x2={x + width} y1="24" y2="24" stroke="#91A4B0" />
-    <text x="150" y="18" fill="#486475" fontSize="12" textAnchor="middle">{line.width || "—"} in</text>
-    <text x="150" y={height + 66} fill="#486475" fontSize="12" textAnchor="middle">{line.width || "—"} × {line.height || "—"} in · {line.dimension_basis || "call"}</text>
-  </svg>;
-}
 
 export default function AmscoWindowConfigurator({ line, index, settings, disabled, tradeCode, onTradeCode, onApplyTradeCode, onChange, onOption, onCancel, onSave, price, priceStatus }) {
   const [step, setStep] = useState(0), [visited, setVisited] = useState([0]), [summary, setSummary] = useState(false), [zoom, setZoom] = useState(false);
@@ -69,6 +42,7 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
   const seriesLabel = AMSCO_SERIES.find(item => item.value === series)?.label || series || "Choose a series";
   const specifications = resolvedWindowOptions(line, settings, ready.size ? price : undefined);
   const glassSummary = glassSpecification(line, settings, ready.size ? price : undefined);
+  const automaticGlass = glassThicknessCorrection(line, settings);
   const canVisit = target => target === 0 || target === 1 && ready.product || target > 1 && ready.size;
   const chooseStep = target => {
     if (!canVisit(target)) return;
@@ -113,7 +87,12 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
         {!ready.product ? <div className="flex min-h-44 items-center justify-center rounded border border-[#efefef] p-6 text-center text-sm text-[#607788]">Keep making selections to see an image!</div> :
           <><div className={"py-3 " + (zoom ? "scale-110 my-6" : "")}><WindowDrawing line={line} settings={settings} grille={grilles} /></div><div className="mb-5 flex justify-center"><button type="button" className={button} onClick={() => setZoom(value => !value)}><ZoomIn size={14} />{zoom ? "Zoom Out" : "Zoom In"}</button></div></>}
         {summary && review}
-        {ready.product && <div className="mx-2 mt-4 border-t border-[#e4e8ec] pt-4 text-sm" aria-live="polite"><p className="text-xs text-[#7e8b96]">Customer price · each</p>{ready.size && price?.status === "priced" ? <><p className="mt-1 text-2xl font-semibold text-[#276449]">{money(price.unit_prices?.customer)}</p><p className="mt-1 text-xs">{money(price.line_totals?.customer)} for this quantity</p></> : ready.size && (priceStatus === "loading" || ["calculating", "native_busy"].includes(price?.status)) ? <p className="mt-2 flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Checking AMSCO price…</p> : <p className="mt-2 text-xs leading-relaxed">{ready.size ? "This configuration will be checked for AMSCO pricing." : "Choose width and height to see pricing."}</p>}<p className="mt-4 text-[11px] text-[#8a98a2]">Illustration only. Final construction and ratings come from AMSCO.</p></div>}
+        {ready.size && automaticGlass && <div className="mx-2 mt-4 rounded border border-[#d4dce6] bg-[#f5f8fc] p-3 text-sm">
+          <p>Automatic glass for this size: {specificationValue("glass_thickness", automaticGlass)}.</p>
+          <p className="mt-2 text-xs">The manual thickness selection needs a separate AMSCO price check.</p>
+          <button type="button" className={button + " mt-3 min-h-11"} disabled={disabled} onClick={() => onOption("glass_thickness", "")}>Use automatic glass</button>
+        </div>}
+        {ready.product && <div className="mx-2 mt-4 border-t border-[#e4e8ec] pt-4 text-sm" aria-live="polite"><p className="text-xs text-[#7e8b96]">Customer price · each</p>{ready.size && price?.status === "priced" ? <><p className="mt-1 text-2xl font-semibold text-[#276449]">{money(price.unit_prices?.customer)}</p><p className="mt-1 text-xs">{money(price.line_totals?.customer)} for this quantity</p></> : ready.size && (priceStatus === "loading" || ["calculating", "native_busy"].includes(price?.status)) ? <p className="mt-2 flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Checking AMSCO price…</p> : <p className="mt-2 text-xs leading-relaxed">{ready.size ? price?.pricing_issue?.message || "This combination needs an AMSCO price check." : "Choose width and height to see pricing."}</p>}<p className="mt-4 text-[11px] text-[#8a98a2]">Illustration only. Final construction and ratings come from AMSCO.</p></div>}
       </aside>
       <div className="min-w-0" role="tabpanel" id={uid + "-panel"} aria-labelledby={uid + "-tab-" + step}>
         <h3 ref={heading} tabIndex={-1} className="sr-only">{CONFIGURATOR_PAGES[step]}</h3>
@@ -141,8 +120,8 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
               {!menu && <Note>Enter the overall assembly dimensions. AMSCO will confirm sizes for this product and number wide.</Note>}
             </>}
             {line.dimension_basis === "call" && <details className="mx-4 mb-4"><summary className="min-h-10 cursor-pointer py-2 text-xs">Enter a four-digit call code</summary><Row label="Quick Call Code" note="3050 = 36 × 60 inches.">{id => <div className="flex gap-2"><input id={id} className={input} value={tradeCode} inputMode="numeric" maxLength={4} placeholder="3050" onChange={event => onTradeCode(event.target.value)} /><button type="button" className={button} disabled={!tradeCode.trim()} onClick={onApplyTradeCode}>Use</button></div>}</Row></details>}
-            {panel.kind === "hung" && optionRow("Sash Split", "sash_split", ["Even"])}
-            {optionRow("Unit Type", "unit_type", ["Complete Unit"])}
+            {panel.kind === "hung" && <SelectRow label="Sash Split" value="Even" choices={["Even"]} onChange={() => {}} />}
+            <SelectRow label="Unit Type" value="Complete Unit" choices={["Complete Unit"]} onChange={() => {}} />
             {["casement", "awning"].includes(panel.kind) ? optionRow("Operation / Venting", "operation", Number(options.number_wide) === 2 ? ["Left / Right", "Fixed / Fixed"] : ["Left", "Right", "Fixed"]) : panel.kind === "slider" ? optionRow("Operation / Venting", "operation", /double vent/i.test(line.style) ? ["XOX"] : ["XO", "OX"]) : <ReadRow label="Operation / Venting" value={productLabel} />}
             <ReadRow label="Frame Width" value={frame?.width || ""} /><ReadRow label="Frame Height" value={frame?.height || ""} />
           </>}
@@ -161,8 +140,8 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
             {optionRow("Glazing Method", "glazing_method", [{ value: "3/4 Insulated", label: '3/4" Insulated' }])}
             {optionRow("Glass Thickness", "glass_thickness", GLASS_THICKNESS_CHOICES)}
             {boolRow("Capillary Tubes", "capillary_tubes")}
-            {panel.kind !== "fixed" && optionRow("Hardware Finish", "hardware_color", ["White", "Taupe", "Black"])}
-            {panel.kind !== "fixed" && optionRow("Screen", "screen", ["White", "Taupe", "Black", "None"])}
+            {panel.kind !== "fixed" && <SelectRow label="Hardware Finish" value={colors.interior} choices={[colors.interior]} onChange={() => {}} note="Matches the interior color." />}
+            {panel.kind !== "fixed" && <SelectRow label="Screen" value={/^none$/i.test(String(options.screen ?? "")) ? "None" : colors.interior} choices={[colors.interior, "None"]} onChange={value => onOption("screen", value)} note="Screen finish matches the interior color." />}
             <Note>Automatic glass construction updates with the window size. Explicit changes stay with this line.</Note>
           </>}
           {step === 4 && <>

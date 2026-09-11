@@ -1,4 +1,5 @@
-import { AMSCO_SERIES, selectedSeries } from "./amscoConfiguratorModel.js";
+import { catalogFrameSize } from "../../../base44/shared/amscoOptionDefaults.js";
+import { AMSCO_SERIES, selectedSeries, diagramPanels } from "./amscoConfiguratorModel.js";
 import { standardSizeGrid } from "./amscoStandardSizes.js";
 import { createBuilderLine } from "./windowBuilderModel.js";
 
@@ -27,7 +28,9 @@ export function numberWideChoices(line) {
 }
 export function changeProduct(line, style, series = selectedSeries(line)) {
   const options = { ...line.options, series };
-  for (const key of ["number_wide", "operation", "sash_split", "unit_type"]) delete options[key];
+  for (const key of ["number_wide", "operation", "sash_split", "unit_type", "hardware", "hardware_color"]) delete options[key];
+  // Hardware belongs to the new operation; fixed units have no screen.
+  if (options.screen !== "None" || !style || diagramPanels({style}).kind === "fixed") delete options.screen;
   return { ...line, style, width: "", height: "", dimension_basis: "call", options };
 }
 export function changeConfiguratorSeries(line, series) {
@@ -68,9 +71,6 @@ export function configurationReadiness(line, { legacy = false } = {}) {
 export function frameSize(line, price) {
   const frame = price?.status === "priced" ? price.frame_dimensions : null;
   if (frame && [frame.width, frame.height].every(value => Number.isFinite(Number(value)) && Number(value) > 0)) return frame;
-  if (line.dimension_basis === "frame") return { width: line.width, height: line.height };
-  if (selectedSeries(line) === AMSCO_SERIES[0].value && line.style === "Studio Single Hung" && Number(line.options?.number_wide || 1) === 1 && line.dimension_basis === "call") {
-    return { width: Number(line.width) > .5 ? Number(line.width) - .5 : "", height: Number(line.height) > .5 ? Number(line.height) - .5 : "" };
-  }
-  return null;
+  if (line.dimension_basis === "frame" && [line.width,line.height].every(value => Number(value) > 0)) return {width:line.width,height:line.height};
+  return catalogFrameSize(line);
 }

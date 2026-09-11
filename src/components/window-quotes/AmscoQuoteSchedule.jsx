@@ -1,18 +1,93 @@
-import {useState} from 'react';
-import {Copy, Pencil, Search, Trash2} from 'lucide-react';
-import {colorParts, selectedSeries} from './amscoConfiguratorModel';
-const money=value=>typeof value==='number'&&Number.isFinite(value)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value):'—';
-const action='inline-flex min-h-11 min-w-11 items-center justify-center rounded px-2 text-[#305367] hover:bg-[#e6eef3] disabled:opacity-40';
-const label=price=>price?.status==='priced'?(price.price_source==='amsco_source_engine'?'Pricebook calculated':'AMSCO verified'):price?.status==='amsco_lookup_needed'?'AMSCO lookup':price?.status==='native_unavailable'?'Pricing unavailable':['calculating','native_busy'].includes(price?.status)?'Calculating…':'Not priced';
-export default function AmscoQuoteSchedule({lines,settings,prices=[],disabled,onEdit,onCopy,onRemove}) {
-  const [search,setSearch]=useState(''),[condensed,setCondensed]=useState(true);
-  const rows=lines.map((line,index)=>({line,index,price:prices[index]})).filter(({line})=>[line.style,line.room,line.mark,line.width+' x '+line.height].join(' ').toLowerCase().includes(search.toLowerCase()));
-  const buttons=(line,index)=><div className="flex justify-end"><button type="button" className={action} disabled={disabled} onClick={()=>onEdit(line,index)} aria-label={'Edit window '+(index+1)} title="Edit"><Pencil size={16}/></button><button type="button" className={action} disabled={disabled} onClick={()=>onCopy(line)} aria-label={'Duplicate window '+(index+1)} title="Duplicate"><Copy size={16}/></button><button type="button" className={action+' text-[#914438]'} disabled={disabled} onClick={()=>onRemove(index)} aria-label={'Remove window '+(index+1)} title="Remove"><Trash2 size={16}/></button></div>;
-  const details=line=>{const color=colorParts(line.options,settings);return [selectedSeries(line),color.exterior+' exterior / '+color.interior+' interior',line.options?.glass||settings.glass,line.options?.tempered?'Tempered':null,line.options?.grilles].filter(Boolean).join(' · ');};
-  return <div className="overflow-hidden rounded-lg border border-[#bdcbd4] bg-white">
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#cad5dd] bg-[#edf2f5] px-3 py-2"><label className="flex min-h-11 items-center gap-2 text-xs text-[#3e5d6f]"><input type="checkbox" checked={condensed} onChange={e=>setCondensed(e.target.checked)} className="h-4 w-4 accent-[#196c86]"/>Condensed view</label><label className="flex min-h-11 min-w-0 items-center gap-2 rounded border border-[#bccbd4] bg-white px-3"><Search size={15} className="text-[#6d8390]"/><input aria-label="Filter quote line items" type="search" placeholder="Filter line items" value={search} onChange={e=>setSearch(e.target.value)} className="w-40 min-w-0 bg-transparent text-base outline-none sm:text-sm"/></label></div>
-    <div className="hidden overflow-x-auto md:block"><table className="w-full text-left text-xs"><thead className="border-b border-[#cad5dd] bg-[#f8fafb] text-[#60798a]"><tr>{['Line / product','Room','Qty','List','Dealer','Customer','Extended',''].map((heading,i)=><th key={i} className={'px-3 py-3 font-semibold '+(i>1?'text-right':'')}>{heading}</th>)}</tr></thead><tbody>{rows.map(({line,index,price})=><tr key={line.id||index} className="border-b border-[#e2e9ee] align-top last:border-0 hover:bg-[#f8fafb]"><td className="min-w-40 px-3 py-3"><div className="text-[10px] font-semibold text-[#748a97]">{(index+1)*100}{line.mark?' · '+line.mark:''}</div><button type="button" disabled={disabled} onClick={()=>onEdit(line,index)} className="mt-1 text-left font-semibold text-[#196c86] hover:underline disabled:opacity-60">{line.style}</button><p className="mt-1 text-[#466475]">{line.width} × {line.height} in · {line.dimension_basis==='frame'?'Frame':line.dimension_basis==='call'?'Call':'Rough opening'}</p><p className={'mt-2 text-[10px] '+(price?.status==='priced'?'text-[#287358]':'text-[#976819]')}>{label(price)}</p>{!condensed&&<p className="mt-2 max-w-sm leading-relaxed text-[#6a8190]">{details(line)}</p>}</td><td className="max-w-32 break-words px-3 py-4 text-[#466475]">{line.room||'—'}</td><td className="px-3 py-4 text-right tabular-nums">{line.qty}</td>{['list','dealer','customer'].map(kind=><td key={kind} className="whitespace-nowrap px-3 py-4 text-right tabular-nums">{money(price?.unit_prices?.[kind])}</td>)}<td className="whitespace-nowrap px-3 py-4 text-right font-semibold tabular-nums text-[#215d48]">{money(price?.line_totals?.customer)}</td><td className="px-1 py-2">{buttons(line,index)}</td></tr>)}</tbody></table></div>
-    <div className="divide-y divide-[#dbe4eb] md:hidden">{rows.map(({line,index,price})=><article key={line.id||index} className="p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-semibold text-[#748a97]">LINE {(index+1)*100}{line.mark?' · '+line.mark:''}</p><button type="button" onClick={()=>onEdit(line,index)} disabled={disabled} className="mt-1 min-h-11 text-left text-sm font-semibold text-[#196c86]">{line.style}</button><p className="text-sm text-[#466475]">{line.width} × {line.height} in · {line.dimension_basis}</p><p className="mt-1 text-xs text-[#6a8190]">{line.room||'Location not set'}</p></div><span className="shrink-0 rounded bg-[#e8f0f5] px-2 py-1 text-xs text-[#466475]">Qty {line.qty}</span></div>{!condensed&&<p className="mt-3 text-xs leading-relaxed text-[#6a8190]">{details(line)}</p>}<dl className="mt-3 grid grid-cols-3 gap-2 border-y border-[#e2e9ee] py-3 text-xs">{[['List',price?.unit_prices?.list],['Dealer',price?.unit_prices?.dealer],['Customer',price?.unit_prices?.customer]].map(([name,value])=><div key={name}><dt className="text-[10px] text-[#718996]">{name} / each</dt><dd className="mt-1 font-semibold tabular-nums text-[#305367]">{money(value)}</dd></div>)}</dl><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-[#60798a]">{label(price)}<strong className="mt-1 block text-base text-[#215d48]">{money(price?.line_totals?.customer)} total</strong></p>{buttons(line,index)}</div></article>)}</div>
-    {!rows.length&&<p className="px-4 py-8 text-center text-sm text-[#718996]">{lines.length?'No line items match your filter.':'Add a window or use the AI guide to build this quote.'}</p>}
+import { useState } from "react";
+import { ChevronDown, ChevronUp, Copy, Minus, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import WindowDrawing from "./AmscoWindowDrawing";
+import ImportedAmscoDrawing from "./ImportedAmscoDrawing";
+import { colorParts, parseGrilles, selectedSeries } from "./amscoConfiguratorModel";
+import { resolvedWindowOptions, specificationValue } from "./windowSpecificationDisplay";
+import "./amscoQuoteSchedule.css";
+import { additionalLineSpecifications } from "./quoteScheduleModel";
+
+const money = (value, currency = "USD") => value != null && value !== "" && Number.isFinite(Number(value)) ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(value)) : "—";
+const action = "inline-flex min-h-11 items-center justify-center gap-1.5 rounded border border-[#AAB2BE] bg-white px-3 text-sm text-[#305367] hover:bg-[#EDF3FA] disabled:opacity-40";
+const optionLabels = {fin:"Fin",glass:"Glass",tempered:"Tempered",patterned_glass:"Patterned glass",screen:"Screen",hardware:"Hardware",hardware_color:"Hardware finish",glass_thickness:"Glass thickness",glazing_method:"Glazing",elevation:"Installation elevation",argon:"Thermal gas",super_spacer:"Super Spacer",capillary_tubes:"Capillary tubes",grilles:"Grilles",operation:"Operation",sash_split:"Sash split",number_wide:"Number wide",unit_type:"Unit type"};
+const priceLabel = price => price?.status === "imported" ? "Saved AMSCO price" : price?.status === "priced" ? "Priced" : price?.pricing_issue?.message ? price.pricing_issue.message : price?.status === "amsco_lookup_needed" ? "AMSCO quote needed" : price?.status === "native_unavailable" ? "Pricing unavailable" : ["calculating","native_busy"].includes(price?.status) ? "Calculating…" : "Not priced";
+
+function WindowLine({line,index,settings,price,disabled,condensed,onEdit,onCopy,onRemove,onUpdate,currency}) {
+  const [expanded,setExpanded] = useState(true);
+  const options = line.imported ? (line.options || {}) : resolvedWindowOptions(line,settings,price);
+  const [imageFailed,setImageFailed] = useState(false);
+  const colors = colorParts(options,settings);
+  const details = !condensed && expanded;
+  const entries = Object.entries(options).filter(([key,value]) => optionLabels[key] && value !== undefined && value !== null && value !== "");
+  const drawingLine = {...line,options};
+  const frame = line.frame_dimensions;
+  const additional = additionalLineSpecifications(line);
+  const lineNumber = line.native_line_number ?? (index+1)*100;
+  const changeQty = value => onUpdate?.(index,{qty:value});
+  return <article className="amsco-line-item">
+    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#CCD2D9] bg-[#F8F8F8] px-4 py-2">
+      <div className="min-w-0 break-words text-sm text-[#305367]"><span className="font-semibold">Line {lineNumber}</span>{line.mark && <span className="ml-3">{line.mark}</span>}</div>
+      {(onEdit || onCopy || onRemove) && <div className="flex flex-wrap gap-1.5">
+        {onEdit && <button type="button" className={action} disabled={disabled} onClick={()=>onEdit(line,index)} aria-label={`Edit window ${index+1}`}><Pencil size={14}/>Edit</button>}
+        {onCopy && <button type="button" className={action} disabled={disabled} onClick={()=>onCopy(line)} aria-label={`Duplicate window ${index+1}`}><Copy size={14}/>Copy</button>}
+        {onRemove && <button type="button" className={action+" text-[#914438]"} disabled={disabled} onClick={()=>onRemove(index)} aria-label={`Remove window ${index+1}`}><Trash2 size={14}/>Delete</button>}
+      </div>}
+    </header>
+    <div className="amsco-line-body">
+      <div className="amsco-line-drawing">
+        {line.imported ? (line.drawing ? <ImportedAmscoDrawing drawing={line.drawing} label={"AMSCO drawing for line "+lineNumber}/> : line.image_path && !imageFailed ? <img src={"https://amsco.wtsparadigm.com"+line.image_path} alt={`AMSCO drawing for line ${lineNumber}`} className="mx-auto max-h-64 max-w-full object-contain" loading="lazy" referrerPolicy="no-referrer" onError={()=>setImageFailed(true)}/> : <div className="flex min-h-24 items-center justify-center text-center text-xs text-[#687D8B]">{line.kind === "service" ? "Service / delivery" : "Drawing not available"}</div>) : <WindowDrawing line={drawingLine} settings={settings} grille={parseGrilles(options.grilles)} />}
+        {!condensed && <button className="inline-flex min-h-11 items-center gap-1 text-sm text-[#20386E] underline underline-offset-2" onClick={()=>setExpanded(value=>!value)} aria-expanded={details} aria-label={`${details?"Hide":"Show"} details for line ${lineNumber}`}>{details?"Hide details":"Show details"}{details?<ChevronUp size={15}/>:<ChevronDown size={15}/>}</button>}
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#305367]">
+          <span className="font-medium">Room</span>
+          {onUpdate ? <input aria-label={`Room for line ${lineNumber}`} className="min-h-11 min-w-0 flex-1 rounded border border-[#AAB2BE] px-3 text-base sm:text-sm" value={line.room||""} maxLength={250} placeholder="None assigned" disabled={disabled} onChange={event=>onUpdate(index,{room:event.target.value})}/> : <span className="break-words">{line.room||"None assigned"}</span>}
+        </div>
+        <h3 className="mt-4 break-words text-base font-medium leading-relaxed text-[#305367]">{line.style||"Window"}</h3>
+        {line.width && line.height && <p className="mt-1 text-sm leading-relaxed text-[#526B7B]">{line.width} × {line.height} {line.units||"in"} · {line.dimension_basis === "frame" ? "Frame size" : line.dimension_basis === "rough_opening" ? "Rough opening" : "Call size"}</p>}
+        {!line.imported && <p className="mt-1 break-words text-sm leading-relaxed text-[#526B7B]">{selectedSeries(line)}</p>}
+        {frame?.width && frame?.height && <p className="mt-1 text-sm text-[#526B7B]">Frame: {frame.width} × {frame.height} {frame.units||line.units||"in"}</p>}
+        {!line.imported && <p className="mt-3 break-words text-sm leading-relaxed text-[#526B7B]">{colors.exterior} exterior / {colors.interior} interior</p>}
+        {details && <div className="mt-3 space-y-3">
+          <p className="break-words text-sm leading-7 text-[#526B7B]">{entries.map(([key,value])=>`${optionLabels[key]}: ${specificationValue(key,value,options)}`).join(" · ")}</p>
+          {line.imported && <p className="whitespace-pre-wrap break-words text-sm leading-7 text-[#526B7B]">{line.description}</p>}
+          {(line.notes || (!line.imported && line.description)) && <div className="border-l-2 border-[#D8E2EA] pl-3"><p className="mb-1 text-xs font-semibold text-[#526B7B]">Notes</p><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#526B7B]">{line.notes||line.description}</p></div>}
+          {line.imported && line.specifications?.length>0 && <details><summary className="min-h-11 cursor-pointer py-3 text-sm text-[#20386E]">All saved specifications ({line.specifications.length})</summary><dl className="grid gap-3 text-xs sm:grid-cols-2">{line.specifications.map((spec,i)=><div key={i} className="min-w-0"><dt className="text-[#7A8B97]">{spec.label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-[#526B7B]">{spec.value}</dd></div>)}</dl></details>}
+          {line.imported && line.components?.length>1 && <details><summary className="min-h-11 cursor-pointer py-3 text-sm text-[#20386E]">Component prices ({line.components.length})</summary><div className="space-y-3">{line.components.map(component=><div key={component.native_line_id} className="rounded border border-[#D8E2EA] p-3 text-xs text-[#526B7B]"><p className="font-semibold">{component.native_line_number} · {component.style}</p><p className="mt-2">Qty {component.qty} · Customer {money(component.unit_prices.customer)} each · {money(component.line_totals.customer)} extended</p>{component.notes&&<p className="mt-2 whitespace-pre-wrap">{component.notes}</p>}</div>)}</div></details>}
+          {additional.length > 0 && <details><summary className="min-h-11 cursor-pointer py-3 text-xs text-[#526B7B]">Additional specifications</summary><dl className="grid gap-3 text-xs sm:grid-cols-2">{additional.map(([label,value])=><div key={label} className="min-w-0"><dt className="capitalize text-[#7A8B97]">{label}</dt><dd className="mt-1 break-words text-[#526B7B]">{value}</dd></div>)}</dl></details>}
+          {price?.pricing_evidence?.source === "amsco_source_engine" && <details><summary className="min-h-11 cursor-pointer py-3 text-xs text-[#526B7B]">Pricebook breakdown</summary><dl className="space-y-2 text-xs">{(price.pricing_evidence.components||[]).map((component,i)=><div key={i} className="flex justify-between gap-3"><dt>{component.name}</dt><dd>{money(component.value,currency)}</dd></div>)}</dl></details>}
+        </div>}
+      </div>
+      <div className="amsco-line-prices">
+        <label className="mb-2 block text-sm font-medium text-[#305367]" htmlFor={`line-qty-${line.id||index}`}>Qty</label>
+        {onUpdate ? <div className="flex h-11 rounded border border-[#8C969D]">
+          <button className="inline-flex min-w-11 items-center justify-center disabled:opacity-30" disabled={disabled||Number(line.qty)<=1} aria-label={`Decrease quantity for line ${lineNumber}`} onClick={()=>changeQty(Math.max(1,(Number(line.qty)||1)-1))}><Minus size={17}/></button>
+          <input id={`line-qty-${line.id||index}`} aria-label={`Quantity for line ${lineNumber}`} type="number" inputMode="numeric" min={1} max={1000} step={1} value={line.qty??""} disabled={disabled} onChange={event=>changeQty(event.target.value===""?"":Number(event.target.value))} className="min-w-0 flex-1 border-x border-[#8C969D] text-center text-base tabular-nums" />
+          <button className="inline-flex min-w-11 items-center justify-center disabled:opacity-30" disabled={disabled||Number(line.qty)>=1000} aria-label={`Increase quantity for line ${lineNumber}`} onClick={()=>changeQty(Math.min(1000,(Number(line.qty)||0)+1))}><Plus size={17}/></button>
+        </div> : <p className="flex min-h-11 items-center justify-center rounded border border-[#AAB2BE] text-sm tabular-nums text-[#305367]">{line.qty??"—"}</p>}
+        <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4">
+          {["list","dealer","customer"].map(kind=><div key={kind} className="contents">
+            <div><div className="mb-1.5 text-xs text-[#526B7B]">{kind[0].toUpperCase()+kind.slice(1)}</div><div className="rounded bg-[#F0F1F3] px-2 py-2.5 text-right text-sm tabular-nums text-[#305367]">{money(price?.unit_prices?.[kind],currency)}</div></div>
+            <div><div className="mb-1.5 text-xs text-[#526B7B]">Ext. {kind[0].toUpperCase()+kind.slice(1)}</div><div className={`rounded px-2 py-2.5 text-right text-sm tabular-nums ${kind==="customer"?"bg-[#EAF5EE] font-semibold text-[#276449]":"bg-[#F0F1F3] text-[#305367]"}`}>{money(price?.line_totals?.[kind],currency)}</div></div>
+          </div>)}
+        </div>
+        <p className="mt-3 text-xs text-[#687D8B]" aria-live="polite">{priceLabel(price)}</p>
+      </div>
+    </div>
+  </article>;
+}
+
+export default function AmscoQuoteSchedule({lines,settings={},prices=[],disabled=false,onEdit,onCopy,onRemove,onUpdate,currency="USD"}) {
+  const [search,setSearch] = useState("");
+  const [condensed,setCondensed] = useState(false);
+  const rows = lines.map((line,index)=>({line,index,price:prices[index]})).filter(({line,index})=>[(index+1)*100,line.native_line_number,line.style,line.room,line.mark,line.notes,line.description,line.width+" x "+line.height].join(" ").toLowerCase().includes(search.trim().toLowerCase()));
+  return <div className="min-w-0">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <label className="flex min-h-11 items-center gap-2 text-sm text-[#526B7B]"><input type="checkbox" checked={condensed} onChange={event=>setCondensed(event.target.checked)} className="h-5 w-5 accent-[#20386E]"/>Condensed view</label>
+      <label className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded border border-[#AAB2BE] bg-white px-3 sm:max-w-md"><Search size={17} className="shrink-0 text-[#687D8B]"/><input aria-label="Filter quote line items" type="search" placeholder="Line number, room, description" value={search} onChange={event=>setSearch(event.target.value)} className="w-full min-w-0 bg-transparent text-base outline-none sm:text-sm"/></label>
+    </div>
+    <div className="space-y-3">{rows.map(({line,index,price})=><WindowLine key={line.id||line.native_line_id||index} line={line} index={index} settings={settings} price={price} disabled={disabled} condensed={condensed} onEdit={onEdit} onCopy={onCopy} onRemove={onRemove} onUpdate={onUpdate} currency={currency}/>)}</div>
+    {!rows.length&&<p className="rounded border border-[#CCD2D9] bg-white px-4 py-8 text-center text-sm text-[#687D8B]">{lines.length?"No line items match your filter.":"Add a window to build this quote."}</p>}
+    {!!rows.length&&<p className="mt-3 text-xs leading-relaxed text-[#7A8B97]">{lines.some(line=>line.imported) ? "Original AMSCO descriptions, drawings and saved prices." : "Window illustrations show the selected configuration. Final construction and ratings come from AMSCO."}</p>}
   </div>;
 }

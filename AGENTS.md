@@ -32,3 +32,7 @@ npx skills add base44/skills
 - Prefer the existing Base44 CLI workflow over adding new npm scripts for Base44-specific tasks.
 - Reuse the existing SDK client and Vite plugin patterns before adding new Base44 integration paths.
 - Run the relevant checks from `package.json` before finishing code changes.
+
+## Published pricing verification
+
+After publishing quote or shared backend changes, run `npm run check:published-pricing`, then verify a signed-in window actually displays prices. A successful editor Test Function or Publish toast alone does not verify production. If public calls return `user worker not found`, refresh the affected function resource revisions and republish, then repeat both checks. Preserve pricing logic and data while repairing deployment.

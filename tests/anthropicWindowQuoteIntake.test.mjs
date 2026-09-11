@@ -45,6 +45,7 @@ test('Claude request carries the AMSCO system guard, schema, and supported attac
   let observed;
   const output = { summary: 'two windows', lines: [], settings: {}, questions: [], assumptions: [], unresolved: [] };
   const fetchImpl = async (url, options) => {
+    assert.equal(Object.hasOwn(JSON.parse(options.body), "temperature"), false, "Claude rejects the deprecated temperature parameter");
     observed = { url, options };
     return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ content: [{ type: 'text', text: `\`\`\`json\n${JSON.stringify(output)}\n\`\`\`` }] }) };
   };
