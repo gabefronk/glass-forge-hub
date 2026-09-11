@@ -60,7 +60,7 @@ function components(value,parent) {
   if(!Array.isArray(value)||value.length>100)fail("Invalid saved components.");
   const ids=new Set(),numbers=new Set();
   const items=value.map(v=>{
-    if(!obj(v)||!guid(v.native_line_id)||ids.has(v.native_line_id)||typeof v.native_line_number!=="string"||!/^\\d{1,8}-\\d{1,8}$/.test(v.native_line_number)||numbers.has(v.native_line_number)||!Number.isInteger(v.qty)||v.qty<1||v.qty>10000)fail("Invalid component identity or quantity.");
+    if(!obj(v)||!guid(v.native_line_id)||ids.has(v.native_line_id)||typeof v.native_line_number!=="string"||!/^\d{1,8}-\d{1,8}$/.test(v.native_line_number)||numbers.has(v.native_line_number)||!Number.isInteger(v.qty)||v.qty<1||v.qty>10000)fail("Invalid component identity or quantity.");
     ids.add(v.native_line_id);numbers.add(v.native_line_number);
     const item={native_line_id:v.native_line_id,native_line_number:v.native_line_number,qty:v.qty,style:text(v.style,"component",1000,true),description:text(v.description,"component details",30000,true),notes:text(v.notes,"component notes",20000),specifications:specifications(v.specifications),unit_prices:{},line_totals:{}};
     for(const k of ["list","dealer","customer"]){item.unit_prices[k]=money(v.unit_prices?.[k],k,true);item.line_totals[k]=money(v.line_totals?.[k],k,true);if(Math.abs(item.unit_prices[k]*v.qty-item.line_totals[k])>v.qty*.01001)fail("Component prices do not match quantity.");}
