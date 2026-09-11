@@ -334,7 +334,7 @@ export async function lookupManufacturerSpecs(input, {
 
   if (!sources.length) {
     return { ...unavailable('No cited manufacturer document was available. Ask the customer for the specification or confirm the series/product.'), diagnostics: {
-      blocks: allContent.map(b => ({ type: b.type, result_type: b.content?.type, error_code: b.content?.error_code, result_keys: b.content && !Array.isArray(b.content) ? Object.keys(b.content) : [], citations: (b.citations || []).map(c => ({ type: c.type, document_index: c.document_index, keys: Object.keys(c) })) })),
+      blocks: allContent.map(b => ({ type: b.type, attempted_url: typeof b.input?.url === 'string' ? b.input.url.slice(0, 500) : undefined, result_type: b.content?.type, error_code: b.content?.error_code, result_keys: b.content && !Array.isArray(b.content) ? Object.keys(b.content) : [], citations: (b.citations || []).map(c => ({ type: c.type, document_index: c.document_index, keys: Object.keys(c) })) })),
       documents: docs.map(d => ({ index: d.index, url: d.url, success: d.success, retrieved_at: d.retrieved_at, title: d.title }))
     } };
 
