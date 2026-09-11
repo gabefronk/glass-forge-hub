@@ -96,6 +96,25 @@ export function createImportService({transport,now=()=>new Date(),uuid=()=>crypt
   async function userAction({db,user,body}) {
     if (user?.role !== "admin") fail(403,"Administrator access required.");
     const owner = user.email || user.id;
+    if (body.action === "connection") {
+      const locks = await db.QuoteWorkers.filter({id:SLOT_ID,name:LOCK_NAME},undefined,1);
+      const lock=locks[0];
+      let active;
+      if (lock?.active_quote_id) {
+        active=(await db.QuoteRequests.filter({id:lock.active_quote_id},undefined,1))[0];
+        if (!active) active=(await db.WindowQuoteOnlineRequests.filter({id:lock.active_quote_id},undefined,1))[0];
+      }
+      let reachable=false, code="";
+      try {if(transport){await transport.getConversation(CONVERSATION_ID);reachable=true;}}catch(e){code=e?.code||"UNAVAILABLE";}
+      return {connection:{configured:!!transport,reachable,browser_busy:!!lock?.busy_token,active_status:active?.worker_status||"",active_phase:active?.agent_run?.phase||"",last_seen_at:lock?.last_seen_at||"",code}};
+    }
+    if (body.action === "cancel_waiting") {
+      let row=await dbGet(db,body.import_id);
+      if(row.owner_email!==owner)fail(403,"This import belongs to another user.");
+      if(row.status!=="queued")fail(409,"This lookup has already started.");
+      row=await cas(db,row,{status:"failed",message:"Search cancelled before it started."});
+      return {import:publicImport(row)};
+    }
     if (body.action === "lookup") {
       const number = quoteNumber(body.quote_number);
       if (!id(body.request_id)) fail(400,"Invalid search reference.");
