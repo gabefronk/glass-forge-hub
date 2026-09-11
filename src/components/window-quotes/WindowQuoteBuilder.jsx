@@ -1,7 +1,7 @@
 import { watchPricePreview } from './pricePreviewPolling';
 import { currentPricePreview, glassSpecification, resolvedWindowOptions, specificationValue } from "./windowSpecificationDisplay";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, Copy, FileSpreadsheet, Loader2, Pencil, Plus, Send, Settings2, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, Copy, FileSpreadsheet, Loader2, Paperclip, Pencil, Plus, Send, Settings2, Sparkles, Trash2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { initialQuoteFormValues, loadQuotePreferences } from "@/lib/windowQuotePreferences";
 import { STANDARD_STUDIO_PROFILE } from "@/lib/easyRequest";
@@ -18,6 +18,8 @@ const panel = "min-w-0 rounded-lg border border-[#bdcbd4] bg-white";
 const issueText = item => typeof item === "string" ? item : item?.message || "Review this selection.";
 const errorText = e => e?.response?.data?.error || e?.response?.data?.message || e.message || "Could not complete that step. Your windows are still here.";
 const styleCode = style => /single.?hung/i.test(style) ? "SH" : /slider|vent/i.test(style) ? "XO" : /picture|direct.?set/i.test(style) ? "FX" : "";
+const assistantFileTypes = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+const assistantFileType = file => file.type || assistantFileTypes[file.name.split(".").pop()?.toLowerCase()] || "";
 
 
 const optionLabels = { series: "Series / frame", fin: "Installation fin", color: "Color", exterior_color: "Exterior color", interior_color: "Interior color", glass: "Glass coating", tempered: "Tempered", patterned_glass: "Privacy texture", screen: "Screen", hardware: "Hardware", hardware_color: "Hardware color", glass_thickness: "Glass thickness", glazing_method: "Glazing", elevation: "Installation elevation", argon: "Argon", super_spacer: "Super Spacer", capillary_tubes: "Capillary tubes", grilles: "Grilles", operation: "Operation", sash_split: "Sash split", number_wide: "Number wide", unit_type: "Unit type", viewing_direction: "Viewing direction" };
@@ -60,11 +62,13 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
   const [confirmed, setConfirmed] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiText, setAiText] = useState("");
+  const [aiFiles, setAiFiles] = useState([]);
+  const [assistantInfo, setAssistantInfo] = useState(null);
   const [conversation, setConversation] = useState([]);
   const [suggestion, setSuggestion] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
-  const upload = useRef(null), requestId = useRef(crypto.randomUUID());
+  const upload = useRef(null), aiUpload = useRef(null), requestId = useRef(crypto.randomUUID());
   const editorRef = useRef(null), headingRef = useRef(null), errorRef = useRef(null);
   const focusEditor = useRef(false), previousStep = useRef(step);
   useEffect(() => {
@@ -107,10 +111,27 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
   };
   const applyTradeCode = () => { const parsed = parseTradeCode(tradeCode); if (!parsed.ok) { setError((parsed.issues || []).map(issueText).join(" ") || "Enter a four-digit call code, such as 3050 or 5050."); return; } changeEditor({ width: parsed.width, height: parsed.height, units: "in", dimension_basis: "call" }); };
   const editorHasChanges = () => editor && (editor.line.style !== "Studio Single Hung" || editor.line.dimension_basis !== "call" || tradeCode.trim() || Number(editor.line.qty) !== 1 || [editor.line.width, editor.line.height, editor.line.room, editor.line.mark].some(value => value !== "" && value !== null && value !== undefined) || Object.keys(editor.line.options || {}).length > 0 || editor.index >= 0);
-  const canReplaceSchedule = () => { if (editorHasChanges()) { setError("Add this window to the quote or cancel its edit first, so none of your changes are lost."); return false; } if (conversation.length || suggestion || aiText.trim()) { setError("Apply or discard the proposed AI changes before importing a schedule."); return false; } return true; };
+  const canReplaceSchedule = () => { if (editorHasChanges()) { setError("Add this window to the quote or cancel its edit first, so none of your changes are lost."); return false; } if (conversation.length || suggestion || aiText.trim() || aiFiles.length) { setError("Apply or discard the proposed AI changes before importing a schedule."); return false; } return true; };
   const importSchedule = (value, filename = "") => { if (!canReplaceSchedule()) return; try { const parsed = parseBuilderImport(value, filename); if (parsed.errors?.length) throw new Error(parsed.errors.join(" ")); invalidate(); setLines(parsed.lines); setSource(current => ({ ...current, ...parsed.source })); setEditor(null); setImportOpen(false); } catch (e) { setError(errorText(e)); } };
   const readFile = async event => { const file = event.target.files?.[0]; event.target.value = ""; if (!file || !canReplaceSchedule()) return; if (!/\.(csv|json)$/i.test(file.name) || file.size > 2000000) { setError("Choose a CSV or JSON schedule under 2 MB."); return; } setProcessing("import"); try { importSchedule(await file.text(), file.name); } catch (e) { setError(errorText(e)); } finally { setProcessing(""); } };
   const builderCall = async body => { const response = await base44.functions.invoke("windowQuoteBuilder", body); if (response.data?.error) throw new Error(response.data.error); return response.data; };
+  useEffect(() => {
+    let active = true;
+    builderCall({ action: "assistant_status" }).then(value => { if (active) setAssistantInfo(value); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+  const chooseAssistantFiles = event => {
+    const chosen = [...(event.target.files || [])];
+    event.target.value = "";
+    if (!chosen.length) return;
+    const invalid = chosen.find(file => !Object.values(assistantFileTypes).includes(assistantFileType(file)) || file.size < 1 || file.size > 10000000);
+    if (invalid) { setError("Attach PDF, PNG, JPG, GIF, or WebP files up to 10 MB each."); return; }
+    setAiFiles(current => {
+      const next = [...current, ...chosen].filter((file, index, all) => all.findIndex(item => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified) === index);
+      if (next.length > 3) setError("Attach at most three files at a time.");
+      return next.slice(0, 3);
+    });
+  };
   const pricingDraft = useMemo(() => {
     let candidate = lines;
     if (editor) {
