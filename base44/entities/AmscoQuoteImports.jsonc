@@ -42,6 +42,9 @@
     },
     "expires_at": {
       "type": "string"
+    },
+    "source_file": {
+      "type": "object"
     }
   },
   "required": [

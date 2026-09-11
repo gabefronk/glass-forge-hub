@@ -1,4 +1,5 @@
 import { ImportError, quoteNumber, validateImportedSnapshot, importedQuoteRecord } from "./amscoQuoteImportModel.js";
+import { readPrivateAmscoExport } from "./amscoQuoteXml.js";
 import { createSuperagentTransport } from "./superagentTransport.js";
 
 const SLOT_ID = "6a9dac833d04a18f0fd555f0";
@@ -43,7 +44,7 @@ function prompt(row) {
     ". This returns the complete read-only workflow and result contract. Use native cross-app backend invocation, or HTTPS POST https://base44.app/api/apps/" + APP_ID + "/functions/amscoQuoteImportTools. The scoped execution token belongs only in this request body; never put it in a URL, quote, or user-visible reply.\n" +
     "Use the official Superagent Chrome extension's connected AMSCO session. If unavailable, report needs_sign_in; never claim access from a disconnected browser. Do not create, edit, copy, update, export, reprice, order or delete anything. Read all original lines, descriptions, dimensions, rooms, notes, prices, quote details, customer and total adjustments. Preserve doors and delivery. Stop browser work after your report is accepted.";
 }
-export function createImportService({transport,now=()=>new Date(),uuid=()=>crypto.randomUUID()} = {}) {
+export function createImportService({transport,parseXml,readExport=readPrivateAmscoExport,now=()=>new Date(),uuid=()=>crypto.randomUUID()} = {}) {
   const at = () => now().toISOString();
   const dbGet = async (db,importId) => {
     if (!id(importId)) fail(400,"Invalid import reference.");
@@ -93,9 +94,20 @@ export function createImportService({transport,now=()=>new Date(),uuid=()=>crypt
       return cas(db,fresh,{status:"needs_sign_in",run:{...fresh.run,execution_token:"",phase:"failed",error_code:e?.code||"CONNECTION_FAILED"},message:errorMessages.needs_sign_in});
     }
   }
-  async function userAction({db,user,body}) {
+  async function userAction({db,user,body,client}) {
     if (user?.role !== "admin") fail(403,"Administrator access required.");
     const owner = user.email || user.id;
+    if(body.action==="xml_preview"){
+      if(!parseXml)fail(503,"XML import is not ready. Refresh and try again.");
+      if(!id(body.request_id))fail(400,"Invalid import reference.");
+      const previous=(await db.AmscoQuoteImports.filter({request_id:body.request_id,owner_email:owner},undefined,1))[0];
+      if(previous)return {import:publicImport(previous)};
+      const xml=await readExport(client,body);
+      const snapshot=parseXml(xml,body.quote_number?quoteNumber(body.quote_number):undefined);
+      const row=await db.AmscoQuoteImports.create({request_id:body.request_id,owner_email:owner,quote_number:snapshot.quote_number,status:"preview",version:0,snapshot,
+        source_file:{file_uri:body.file_uri,filename:body.filename},message:"Loaded "+snapshot.line_count+" saved line items from "+body.filename+". Review the quote below."});
+      return {import:publicImport(row)};
+    }
     if (body.action === "connection") {
       const locks = await db.QuoteWorkers.filter({id:SLOT_ID,name:LOCK_NAME},undefined,1);
       const lock=locks[0];
@@ -125,6 +137,10 @@ export function createImportService({transport,now=()=>new Date(),uuid=()=>crypt
         // Reuse a pending search across reloads/devices and keep the shared browser serialized.
         rows = await db.AmscoQuoteImports.filter({owner_email:owner,quote_number:number},"-created_date",10);
         row = rows.find(r=>ACTIVE.has(r.status)) || null;
+      }
+      if(!row){
+        const saved=(await db.AmscoQuoteImports.filter({owner_email:owner,quote_number:number,status:"imported"},"-created_date",1))[0];
+        if(saved)return {import:publicImport(saved)};
       }
       if (!row) row = await db.AmscoQuoteImports.create({request_id:body.request_id,owner_email:owner,quote_number:number,status:"queued",version:0,message:"Waiting for the connected AMSCO browser…",expires_at:new Date(now().getTime()+45*60000).toISOString()});
       return {import:publicImport(await start(db,row))};
@@ -185,14 +201,14 @@ export function createImportHandler({getClient,service,agent=false}) {
       if (!body || typeof body !== "object" || Array.isArray(body)) fail(400,"Invalid request.");
       const client=await getClient(req);
       const db=client.asServiceRole.entities;
-      const output=agent ? await service.agentAction({db,body}) : await service.userAction({db,body,user:await client.auth.me()});
+      const output=agent ? await service.agentAction({db,body}) : await service.userAction({db,body,client,user:await client.auth.me()});
       return new Response(JSON.stringify(output),{headers});
     } catch(e) {
       return new Response(JSON.stringify({error:e instanceof ImportError?e.message:"The AMSCO import connection did not complete. Refresh its status before retrying."}),{status:e instanceof ImportError?e.status:503,headers});
     }
   };
 }
-export function importRuntime() {
+export function importRuntime(options={}) {
   const key = globalThis.Deno?.env?.get("WINDOW_QUOTES_SUPERAGENT_API_KEY");
-  return createImportService({transport:key?createSuperagentTransport({apiKey:key}):null});
+  return createImportService({...options,transport:key?createSuperagentTransport({apiKey:key}):null});
 }

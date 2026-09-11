@@ -38,6 +38,37 @@ export function imagePath(value) {
   if (!/^\/api\/app\/images\/\d+\/_dynamic\/\d+\/\d{4}-\d{2}-\d{2}\/\d{1,4}x\d{1,4}\/\d+\.(?:png|jpg)$/i.test(path)) fail("Invalid AMSCO drawing path");
   return path;
 }
+function specifications(value) {
+  if(value==null)return [];
+  if(!Array.isArray(value)||value.length>1000)fail("Too many saved specifications.");
+  return value.map(v=>({label:text(v?.label,"specification label",180,true),value:text(v?.value,"specification value",10000,true)}));
+}
+function drawing(value) {
+  if(value==null)return null;
+  if(!obj(value)||!["width","height"].every(k=>typeof value[k]==="number"&&Number.isFinite(value[k])&&value[k]>0&&value[k]<=1000)||!Array.isArray(value.paths)||value.paths.length>1500)fail("Invalid drawing.");
+  let count=0;
+  const paths=value.paths.map(p=>{
+    if(!obj(p)||!Array.isArray(p.points)||p.points.length<2||p.points.length>20000||!["frame","glass","grille","operation"].includes(p.layer))fail("Invalid drawing geometry.");
+    count+=p.points.length;if(count>20000)fail("Drawing too complex.");
+    const points=p.points.map(pt=>{if(!Array.isArray(pt)||pt.length!==2||!pt.every(n=>typeof n==="number"&&Number.isFinite(n)&&Math.abs(n)<=2000))fail("Invalid drawing coordinate.");return pt;});
+    return {points,closed:p.closed===true,layer:p.layer,fill:["White","LightGreen","Red","Black","Gray"].includes(p.fill)?p.fill:""};
+  });
+  return {width:value.width,height:value.height,paths};
+}
+function components(value,parent) {
+  if(value==null)return [];
+  if(!Array.isArray(value)||value.length>100)fail("Invalid saved components.");
+  const ids=new Set(),numbers=new Set();
+  const items=value.map(v=>{
+    if(!obj(v)||!guid(v.native_line_id)||ids.has(v.native_line_id)||typeof v.native_line_number!=="string"||!/^\\d{1,8}-\\d{1,8}$/.test(v.native_line_number)||numbers.has(v.native_line_number)||!Number.isInteger(v.qty)||v.qty<1||v.qty>10000)fail("Invalid component identity or quantity.");
+    ids.add(v.native_line_id);numbers.add(v.native_line_number);
+    const item={native_line_id:v.native_line_id,native_line_number:v.native_line_number,qty:v.qty,style:text(v.style,"component",1000,true),description:text(v.description,"component details",30000,true),notes:text(v.notes,"component notes",20000),specifications:specifications(v.specifications),unit_prices:{},line_totals:{}};
+    for(const k of ["list","dealer","customer"]){item.unit_prices[k]=money(v.unit_prices?.[k],k,true);item.line_totals[k]=money(v.line_totals?.[k],k,true);if(Math.abs(item.unit_prices[k]*v.qty-item.line_totals[k])>v.qty*.01001)fail("Component prices do not match quantity.");}
+    return item;
+  });
+  for(const k of ["list","dealer","customer"])if(Math.abs(items.reduce((n,c)=>n+c.line_totals[k],0)-parent.line_totals[k])>.02001)fail("Component totals do not match their line.");
+  return items;
+}
 export function validateImportedSnapshot(raw, expectedNumber) {
   if (!obj(raw) || JSON.stringify(raw).length > 2500000) fail("Invalid or oversized quote snapshot");
   if (quoteNumber(raw.quote_number) !== quoteNumber(expectedNumber)) fail("AMSCO returned a different quote number.");
@@ -57,7 +88,7 @@ export function validateImportedSnapshot(raw, expectedNumber) {
       id:v.native_line_id.toLowerCase(), native_line_id:v.native_line_id.toLowerCase(), native_line_number:num,
       kind:v.kind, qty:v.qty, room:text(v.room,"room",500), style:text(v.style,"product description",1000,true),
       description:text(v.description,"saved specifications",30000,true), notes:text(v.notes,"line notes",20000),
-      options:pairs(v.options,"options"), ratings:pairs(v.ratings,"ratings"),
+      options:pairs(v.options,"options"), ratings:pairs(v.ratings,"ratings"), specifications:specifications(v.specifications), drawing:drawing(v.drawing),
       image_path:imagePath(v.image_path), units:"in", dimension_basis:"frame",
       unit_prices:{}, line_totals:{}, imported:true
     };
@@ -72,11 +103,12 @@ export function validateImportedSnapshot(raw, expectedNumber) {
       line.line_totals[kind] = money(v.line_totals?.[kind],kind + " extended price",true);
       if (Math.abs(Math.round(line.unit_prices[kind]*100)*v.qty - Math.round(line.line_totals[kind]*100)) > v.qty) fail("Saved prices do not match quantity on line " + num);
     }
+    if(v.components?.length)line.components=components(v.components,line);
     return line;
   });
   const totals = {};
   if (!obj(raw.totals)) fail("Saved quote totals are required.");
-  for (const key of ["customer_total","dealer_total","list_total","subtotal","tax","labor","freight","shipping","handling","discount","misc"]) {
+  for (const key of ["customer_total","dealer_total","list_total","subtotal","tax","labor","freight","shipping","handling","discount","misc","unitemized_adjustment"]) {
     const value = money(raw.totals[key],key,["customer_total","dealer_total","subtotal"].includes(key));
     if (value != null) totals[key] = value;
   }
@@ -84,7 +116,7 @@ export function validateImportedSnapshot(raw, expectedNumber) {
   const extensions = Object.fromEntries(["list","dealer","customer"].map(k => [k, lines.reduce((sum,l)=>sum+Math.round(l.line_totals[k]*100),0)/100]));
   // Header adjustments are separate from line prices. Never replace the saved customer total with our own calculation.
   if (Math.abs(totals.subtotal - extensions.customer) > .02) fail("Customer subtotal does not match the complete saved line items.");
-  const additions = ["tax","labor","freight","shipping","handling","misc"].reduce((n,k)=>n+(totals[k]||0),0) - (totals.discount||0);
+  const additions = ["tax","labor","freight","shipping","handling","misc","unitemized_adjustment"].reduce((n,k)=>n+(totals[k]||0),0) - (totals.discount||0);
   if (Math.abs(totals.subtotal + additions - totals.customer_total) > .02) fail("Read every quote-level charge so the saved customer total reconciles.");
   return {
     schema_version:1, quote_number:raw.quote_number, quote_id:raw.quote_id.toLowerCase(),
