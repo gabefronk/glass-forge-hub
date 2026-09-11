@@ -183,7 +183,11 @@ export async function fetchJsonWithin(fetchImpl, url, options, deadlineAt) {
   } finally {
     clearTimeout(fetchTimer);
   }
-  if (!response.ok) return { response, body: null };
+  if (!response.ok) {
+    let errorText = '';
+    try { errorText = await response.text(); } catch { errorText = ''; }
+    return { response, body: null, errorText };
+  }
   const readRemaining = deadlineAt - Date.now();
   if (readRemaining <= 0) throw new Error('Timed out');
   let body = null;
@@ -199,6 +203,19 @@ export async function fetchJsonWithin(fetchImpl, url, options, deadlineAt) {
     clearTimeout(readTimer);
   }
   return { response, body };
+}
+
+// Redact credentials, URLs and long identifiers from a provider error before
+// surfacing it, so the exact failure cause is reportable without leaking
+// secrets or request content.
+function redactError(text) {
+  return String(text || '')
+    .replace(/\b(?:sk-[A-Za-z0-9_-]+|Bearer\s+[^\s,;]+|eyJ[A-Za-z0-9_.-]+)\b/gi, '[redacted]')
+    .replace(/((?:api[_ -]?key|authorization|secret|token)\s*["']?\s*[:=]\s*["']?)[^\s,;"'}]+/gi, '$1[redacted]')
+    .replace(/https?:\/\/[^\s<>"']+/gi, '[URL omitted]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 300);
 }
 
 function unavailable(clarification) {
@@ -266,13 +283,16 @@ export async function lookupManufacturerSpecs(input, {
       outcome = await fetchJsonWithin(fetchImpl, API_URL, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ model, max_tokens: RESEARCH_MAX_TOKENS, temperature: 0, tools, messages })
+        body: JSON.stringify({ model, max_tokens: RESEARCH_MAX_TOKENS, tools, messages })
       }, absolute);
     } catch (error) {
       const timedOut = error?.name === 'AbortError' || error?.message === 'Timed out';
       return unavailable('Research request failed. ' + (timedOut ? 'Timed out.' : 'Try again.'));
     }
-    if (!outcome.response.ok) return unavailable('Research service returned an error (' + (outcome.response.status || 'unknown') + ').');
+    if (!outcome.response.ok) {
+      const detail = redactError(outcome.errorText);
+      return unavailable('Research service returned an error (' + (outcome.response.status || 'unknown') + ').' + (detail ? ' ' + detail : ''));
+    }
     if (!outcome.body) return unavailable('Research response was not readable.');
     const content = Array.isArray(outcome.body?.content) ? outcome.body.content : [];
     allContent.push(...content);
