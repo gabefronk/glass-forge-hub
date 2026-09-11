@@ -35,7 +35,7 @@ export default async function(req) {
     if (input.error) return Response.json({ error: input.error }, { status: 400 });
 
     const result = await lookupManufacturerSpecs(input.value);
-    return Response.json({ ...result, diagnostic_revision: 'endpoint-probe-3' }, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+    return Response.json(result, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
