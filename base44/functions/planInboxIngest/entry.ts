@@ -255,7 +255,11 @@ async function uploadCsv(token, name, csv, parentId = PROCESSED_FOLDER) {
   return driveJson(token, `${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,name`, { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + boundary }, body });
 }
 
+// The owner is replacing this cloud-only extractor with desktop Bluebeam -> Pella.
+// Keep historical checkpoints intact. Reconnecting Drive must not restart old jobs.
+const LEGACY_CLOUD_INTAKE_ENABLED = false;
 export default async function planInboxIngest(req) {
+  if (!LEGACY_CLOUD_INTAKE_ENABLED) return Response.json({ status: 'paused', discovered: 0, created: 0, worked: null, notes: ['Cloud-only plan intake is paused while the desktop workflow is connected. Existing files, quotes and checkpoints are unchanged.'] });
   const t0 = Date.now();
   const left = () => BUDGET_MS - (Date.now() - t0);
   const out = { discovered: 0, created: 0, worked: null, status: null, notes: [] };
