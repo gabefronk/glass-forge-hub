@@ -22,15 +22,15 @@ test("native thickness follows the new result and stale or pending results canno
 });
 test("an unreturned thickness is identified as unresolved rather than guessed from size or from SS defaults",()=>{
  const source={status:"priced",resolved_options:{tempered:false,glazing_method:'3/4" Insulated'}};
- assert.equal(automaticOptionLabel("glass_thickness",line,settings,source),"— Select —");
- assert.equal(automaticOptionLabel("glass_thickness",line,settings,undefined,"loading"),"Loading…");
- assert.equal(automaticOptionLabel("glass_thickness",{...line,width:""},settings),"— Select —");
+ assert.equal(automaticOptionLabel("glass_thickness",line,settings,source),"By window size");
+ assert.equal(automaticOptionLabel("glass_thickness",line,settings,undefined,"loading"),"By window size");
+ assert.equal(automaticOptionLabel("glass_thickness",{...line,width:""},settings),"By window size");
  assert.equal(resolvedWindowOptions(line,settings,source).glass_thickness,undefined);
 });
 test("quote defaults, explicit overrides and fractional pane descriptions retain their meaning",()=>{
  const explicit={...line,options:{tempered:true,glass_thickness:'3/16" over 3/16"'}};
  assert.equal(automaticOptionLabel("tempered",explicit,{tempered:false}),"No");
- assert.equal(automaticOptionLabel("glass_thickness",explicit,settings),"Recalculate automatic selection");
+ assert.equal(automaticOptionLabel("glass_thickness",explicit,settings),"By window size");
  assert.equal(specificationValue("glass_thickness","3/16 inch over 3/16 inch"),"3/16″ over 3/16″");
  assert.match(glassSpecification(explicit,settings),/Tempered glass.*3\/16″ over 3\/16″/);
  assert.match(specificationValue("glass_thickness","SS"),/pane construction unspecified/);
@@ -62,7 +62,7 @@ test("Studio dropdowns use plain display values without changing requested optio
  assert.equal(automaticOptionLabel("glass",line,settings,source),"CozE (LowE)");
  assert.equal(automaticOptionLabel("super_spacer",line,settings,{status:"priced",resolved_options:{super_spacer:true}}),"Yes");
  assert.equal(automaticOptionLabel("elevation",line,{elevation:"Below 1000"},source),"Below 1000");
- assert.equal(automaticOptionLabel("hardware",{...line,style:"Hampton Casement"},settings,source),"— Select —");
- assert.equal(resolvedWindowOptions(line,settings,source).super_spacer,undefined);
+ assert.equal(automaticOptionLabel("hardware",{...line,style:"Hampton Casement"},settings,source),"Standard");
+ assert.equal(resolvedWindowOptions(line,settings,source).super_spacer,false);
  assert.deepEqual(line,original);
 });
