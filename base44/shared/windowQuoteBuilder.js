@@ -115,6 +115,22 @@ function carriedRequirements(value = []) {
     return detail;
   }));
 }
+const assistantAttachmentTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+function assistantAttachments(value = []) {
+  if (!Array.isArray(value) || value.length > 3) fail('Attach at most three PDF or image files');
+  return value.map((item, index) => {
+    keys(item, ['url', 'name', 'type', 'size'], 'file attachment');
+    const url = string(item.url, 'file attachment URL', 5000);
+    let parsed;
+    try { parsed = new URL(url); } catch { fail('Invalid file attachment URL'); }
+    if (parsed.protocol !== 'https:') fail('File attachments require secure URLs');
+    const name = string(item.name, 'file attachment name', 180);
+    if (!name) fail('File attachments need a name');
+    if (!assistantAttachmentTypes.has(item.type)) fail('Use PDF, PNG, JPG, GIF, or WebP files');
+    if (!Number.isInteger(item.size) || item.size < 1 || item.size > 10000000) fail('Each AI attachment must be 10 MB or smaller');
+    return { url, name, type: item.type, size: item.size, index };
+  });
+}
 const isStandard = draft => draft.source?.easy_request?.confirmed === true && draft.source.easy_request.profile_id === STANDARD_STUDIO_PROFILE.id && draft.source.easy_request.profile_revision === STANDARD_STUDIO_PROFILE.revision;
 const unique = value => [...new Set((value || []).filter(item => typeof item === 'string' && item.trim()))];
 const ONLINE_REVIEW_CODES = new Set(['unsupported_product', 'unverified_product', 'unsupported_option', 'unsupported_colors', 'unsupported_dimensions', 'unsupported_assembly', 'unsupported_grilles']);
@@ -345,7 +361,7 @@ export async function builderReviewResponse(result, { allowOnline = false } = {}
   return response;
 }
 
-export function createWindowQuoteBuilderHandler({ getClient, normalizeAI }) {
+export function createWindowQuoteBuilderHandler({ getClient, normalizeAI, assistantStatus = () => ({ id: 'base44_ai', label: 'AMSCO quote specialist', configured: true, model: null, fallback: null }) }) {
   return async req => {
     const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
     try {
@@ -354,15 +370,18 @@ export function createWindowQuoteBuilderHandler({ getClient, normalizeAI }) {
       if (raw.length > BUILDER_LIMITS.body) throw new HttpError(413, 'Request is too large');
       let body;
       try { body = JSON.parse(raw); } catch { fail('Invalid JSON'); }
-      keys(body, ['action', 'draft', 'conversation', 'unresolved_requirements', 'preview_session_id'], 'request');
+      keys(body, ['action', 'draft', 'conversation', 'unresolved_requirements', 'preview_session_id', 'file_attachments'], 'request');
       if (body.preview_session_id !== undefined && (body.action !== 'price_preview' || typeof body.preview_session_id !== 'string' || !/^[a-zA-Z0-9_-]{1,160}$/.test(body.preview_session_id))) fail('Invalid preview session');
-      if (!['assist', 'review', 'price_preview'].includes(body.action)) fail('Unknown builder action');
+      if (!['assist', 'review', 'price_preview', 'assistant_status'].includes(body.action)) fail('Unknown builder action');
       const client = await getClient(req);
       let user;
       try { user = await client.auth.me(); } catch { throw new HttpError(401, 'Sign in required'); }
       if (!user) throw new HttpError(401, 'Sign in required');
       if (user.role !== 'admin') throw new HttpError(403, 'Window Quotes is currently available to administrators');
+      if (body.action === 'assistant_status') return new Response(JSON.stringify(assistantStatus()), { status: 200, headers });
       const draft = validateBuilderDraft(body.draft);
+      const attachments = assistantAttachments(body.file_attachments);
+      if (attachments.length && body.action !== 'assist') fail('File attachments are only available in the AI guide');
       if (body.action === 'price_preview') {
         const db = client.asServiceRole.entities, config = await loadScriptedRunnerConfig({ db });
         return new Response(JSON.stringify(await builderPricePreview(draft, db, { user, config, sessionId: body.preview_session_id })), { status: 200, headers });
@@ -378,10 +397,11 @@ export function createWindowQuoteBuilderHandler({ getClient, normalizeAI }) {
       } else {
         if (!context.messages.some(item => item.role === 'user')) fail('Describe the windows you need or ask the AI guide a question');
         if (typeof normalizeAI !== 'function') throw new Error('AI intake is not configured');
-        result = resolveApprovedBuilderFollowup(draft, context, unresolved) || resolveRoutineBuilderFollowup(draft, context, unresolved) || await normalizeAI({ ...draft, id: 'builder-preview', input_revision: context.revision, history: [], conversation: context.messages,
-          ...(unresolved.length ? { intake_assessment: { unresolved_requirements: unresolved } } : {}) }, { client, action: 'builder_assist' });
+        result = (!attachments.length && (resolveApprovedBuilderFollowup(draft, context, unresolved) || resolveRoutineBuilderFollowup(draft, context, unresolved))) || await normalizeAI({ ...draft, id: 'builder-preview', input_revision: context.revision, history: [], conversation: context.messages,
+          ...(unresolved.length ? { intake_assessment: { unresolved_requirements: unresolved } } : {}) }, { client, action: 'builder_assist', attachments });
       }
       const response = await builderReviewResponse(result, { allowOnline: body.action === 'review' || result.builder_approved === true });
+      if (body.action === 'assist') response.assistant_provider = assistantStatus();
       if (result.builder_approved === true && response.review.ready) response.auto_submit = true;
       return new Response(JSON.stringify(response), { status: 200, headers });
     } catch (error) {
