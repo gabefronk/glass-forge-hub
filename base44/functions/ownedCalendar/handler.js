@@ -21,10 +21,10 @@ export function createOwnedCalendarHandler({getClient,readTracker}) {
    const imported=(snapshot?.events||[]).map((event,index)=>({...event,id:"outlook-"+snapshot.id+"-"+index,source:"outlook",report_required:false,calendar_name:snapshot.calendar_name,captured_at:snapshot.captured_at}));
    const result=filterOwnedCalendar([...calendar,...imported],tracker.rows);
    const metadata=snapshot?{id:snapshot.id,calendar_name:snapshot.calendar_name,range_start:snapshot.range_start,range_end:snapshot.range_end,captured_at:snapshot.captured_at,event_count:snapshot.event_count}:null;
-   return Response.json({groups:query.brief===true?undefined:result.groups,ownership:{counts:result.counts,by_month:result.by_month,tracker_captured_at:tracker.snapshot.source_captured_at,tracker_rows:tracker.rows.length,appended_rows:tracker.appended?.length||0},
+   return Response.json({groups:query.brief===true?undefined:result.groups,ownership:{counts:result.counts,by_month:query.brief===true?{[query.month||new Date().toISOString().slice(0,7)]:result.by_month[query.month||new Date().toISOString().slice(0,7)]}:result.by_month,tracker_captured_at:tracker.snapshot.source_captured_at,tracker_rows:tracker.rows.length,appended_rows:tracker.appended?.length||0},
     outlook:metadata,partial_outlook:recent[0]?.complete===false?{event_count:recent[0].event_count,collection_notes:recent[0].collection_notes}:null,
     // Administrators receive excluded identifiers for audit only, never as calendar display entries.
-    ...(user.role==="admin"?{excluded_events:query.brief===true?result.rejected.filter(e=>e.event_date?.startsWith(query.month||new Date().toISOString().slice(0,7))).map(e=>({event_date:e.event_date,job_name:e.job_name,source:e.source})):result.rejected}:{}),generated_at:new Date().toISOString()});
+    ...(user.role==="admin"?{excluded_events:query.brief===true?result.rejected.filter(e=>e.event_date?.startsWith(query.month||new Date().toISOString().slice(0,7))&&/edge|utah 700/i.test(e.job_name)).map(e=>({event_date:e.event_date,job_name:e.job_name,source:e.source})):result.rejected}:{}),generated_at:new Date().toISOString()});
   }catch{return Response.json({error:"Calendar ownership could not be verified against Sales Tracker. Events are hidden until verification succeeds."},{status:503});}
  };
 }
