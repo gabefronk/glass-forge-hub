@@ -16,3 +16,5 @@
 .amsco-configurator .amsco-columns { display:grid; grid-template-columns:minmax(240px, .72fr) minmax(0,1fr); gap:18px; padding:0 16px 16px; }
 @media(max-width:900px) { .amsco-configurator .amsco-columns { grid-template-columns:minmax(190px,.55fr) minmax(0,1fr); gap:12px; } }
 @media(max-width:640px) { .amsco-configurator .amsco-columns { grid-template-columns:minmax(0,1fr); padding:0 12px 12px; } .amsco-configurator .amsco-pages { flex-wrap:nowrap; overflow-x:auto; padding:12px; } .amsco-configurator .amsco-page { flex-shrink:0; min-height:44px; } }
+
+@media(max-width:640px) { .amsco-configurator .amsco-select { font-size:16px; min-height:44px; } }
