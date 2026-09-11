@@ -11,7 +11,7 @@ import OutlookEventDetails from "@/components/calendar/OutlookEventDetails";
 import CleanCalendar from "@/components/calendar/CleanCalendar";
 import ServiceCalendar from "@/components/calendar/ServiceCalendar";
 import JobKnowledge from "@/components/calendar/JobKnowledge";
-import { combineCalendarSources, snapshotEvents } from "@/lib/outlookCalendar";
+
 
 function formatMonth(m) {
   const [y, mm] = m.split("-").map(Number);
@@ -28,7 +28,9 @@ export default function CalendarPage() {
   const [serviceView,setServiceView]=useState(false);
   const [knowledgeView,setKnowledgeView]=useState(false);
   const [outlook, setOutlook] = useState(null);
-  const [outlookError, setOutlookError] = useState("");
+  const [ownership, setOwnership] = useState(null);
+  const [ownershipError, setOwnershipError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [partialOutlook, setPartialOutlook] = useState(null);
   const [showIsrael, setShowIsrael] = useState(true);
   const [showOutlook, setShowOutlook] = useState(true);
@@ -47,22 +49,23 @@ export default function CalendarPage() {
   const [user, setUser] = useState(null);
 
   const load = async () => {
-    const [evs, jobsArr, me] = await Promise.all([
-      fetchAllPages(base44.entities.CalendarEvents, "-created_date", 1000),
-      fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
-      base44.auth.me().catch(() => null),
-    ]);
-    setEvents(evs);
-    setJobs(jobsArr);
-    if (me) setUser(me);
-    if (me?.role === "admin") {
-      try {
-        const snapshots = await base44.entities.OutlookCalendarSnapshot.filter({complete:true,calendar_name:"UT Window Install"}, "-captured_at", 1);
-        setOutlook(snapshots[0] || null); setOutlookError("");
-        const recent = await base44.entities.OutlookCalendarSnapshot.filter({calendar_name:"UT Window Install"}, "-captured_at", 1);
-        setPartialOutlook(recent[0]?.complete === false ? recent[0] : null);
-      } catch { setOutlookError("Outlook import could not be loaded."); }
-    }
+    setLoading(true); setOwnershipError(""); setSelected(null);
+    try {
+      const [response, jobsArr, me] = await Promise.all([
+        base44.functions.invoke("ownedCalendar", {}),
+        fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
+        base44.auth.me().catch(() => null),
+      ]);
+      setEvents(response.data.groups || []);
+      setOwnership(response.data.ownership || null);
+      setOutlook(response.data.outlook || null);
+      setPartialOutlook(response.data.partial_outlook || null);
+      setJobs(jobsArr);
+      setUser(me);
+    } catch {
+      setEvents([]); setOwnership(null);
+      setOwnershipError("Calendar ownership could not be verified against Sales Tracker. Reload to try again.");
+    } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
   useEffect(() => {
@@ -72,11 +75,11 @@ export default function CalendarPage() {
     return () => phone.removeEventListener("change", adaptView);
   }, []);
 
-  // Show each confirmed cross-calendar visit once. Distinct and recurring events remain separate.
-  const combined = useMemo(
-    () => combineCalendarSources(events, snapshotEvents(outlook), showIsrael, showOutlook),
-    [events, outlook, showIsrael, showOutlook],
-  );
+  // Every group has verified tracker ownership. Choose one visible source per visit.
+  const combined = useMemo(() => ({
+    events: events.map(group => group.find(event => event.source === "outlook" ? showOutlook : showIsrael)).filter(Boolean),
+  }), [events, showIsrael, showOutlook]);
+  const ownershipCounts = ownership?.by_month?.[month];
   const monthEvents = useMemo(() => {
     let filtered = combined.events.filter((e) => (e.event_date || "").slice(0, 7) === month);
     if (unreportedOnly) {
@@ -189,11 +192,15 @@ export default function CalendarPage() {
             <label style={{color:OUTLOOK_COLOR}}><input type="checkbox" checked={showOutlook} onChange={e=>setShowOutlook(e.target.checked)} /> Outlook installs</label>
             <button type="button" className="underline" onClick={load}>Reload imports</button>
           </div>
-          <p className="text-xs mt-2">{outlook ? `Outlook coverage: ${outlook.range_start} through ${outlook.range_end}. Captured ${new Date(outlook.captured_at).toLocaleString()}. ${outlook.event_count} source events. Source entries are preserved; comparison is handled separately.` : "No complete Outlook import yet."}</p>
+          <p className="text-xs mt-2">{outlook ? `Outlook coverage: ${outlook.range_start} through ${outlook.range_end}. Captured ${new Date(outlook.captured_at).toLocaleString()}. ${outlook.event_count} source events. Source records are preserved. Only verified Sales Tracker matches appear below.` : "No complete Outlook import yet."}</p>
           {outlook && Date.now()-new Date(outlook.captured_at).getTime()>26*3600000 && <p className="text-xs text-amber-700">Outlook copy is over 26 hours old.</p>}
           {partialOutlook && <p role="status" className="text-xs text-amber-700">Latest collection is incomplete ({partialOutlook.event_count} events captured). It has not replaced the calendar overlay. {partialOutlook.collection_notes}</p>}
-          {outlookError && <p role="alert">{outlookError}</p>}
+
         </div>}
+        <div className="mb-4 rounded-xl border bg-white p-3 text-sm" style={{borderColor:C.border}}>
+          {loading ? <p role="status">Checking calendar ownership against Sales Tracker…</p> : ownershipError ? <p role="alert" className="text-amber-800">{ownershipError} <button className="underline" onClick={load}>Reload calendar</button></p> : <p role="status">Sales Tracker verified · {ownershipCounts?.visible_events || 0} visits this month · {ownershipCounts?.unmatched_events || 0} unmatched source events excluded · {ownershipCounts?.duplicate_events || 0} duplicate entries combined.</p>}
+          {ownership && <p className="mt-1 text-xs">Matched by OE or PO first, then exact builder, subdivision, and lot. Source calendar records remain intact.</p>}
+        </div>
         {creating && (
           <div className="mb-4">
             <EventForm initial={creating} jobs={jobs} onSave={handleSave} onCancel={() => setCreating(null)} saving={saving} />
