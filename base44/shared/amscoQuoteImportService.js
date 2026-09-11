@@ -129,9 +129,9 @@ export function createImportService({transport,parseXml,readExport=readPrivateAm
         active=(await db.QuoteRequests.filter({id:lock.active_quote_id},undefined,1))[0];
         if (!active) active=(await db.WindowQuoteOnlineRequests.filter({id:lock.active_quote_id},undefined,1))[0];
       }
-      let reachable=false, code="";
-      try {if(transport){await transport.getConversation(CONVERSATION_ID);reachable=true;}}catch(e){code=e?.code||"UNAVAILABLE";}
-      return {connection:{configured:!!transport,reachable,browser_busy:!!lock?.busy_token,active_status:active?.worker_status||"",active_phase:active?.agent_run?.phase||"",last_seen_at:lock?.last_seen_at||"",code}};
+      let reachable=false, code="", provider_state=null;
+      try {if(transport){const conversation=await transport.getConversation(CONVERSATION_ID);reachable=true;provider_state={fields:Object.keys(conversation).filter(k=>!/token|secret|key/i.test(k)),status:conversation.status||conversation.state||"",messages:conversation.messages.slice(-4).map(m=>({role:m.role,fields:Object.keys(m).filter(k=>!/token|secret|key/i.test(k)),status:m.status||m.state||"",created_date:m.created_date||"",message_type:m.type||""}))};}}catch(e){code=e?.code||"UNAVAILABLE";}
+      return {connection:{configured:!!transport,reachable,browser_busy:!!lock?.busy_token,active_status:active?.worker_status||"",active_phase:active?.agent_run?.phase||"",last_seen_at:lock?.last_seen_at||"",code,provider_state}};
     }
     if (body.action === "cancel_waiting") {
       let row=await dbGet(db,body.import_id);
