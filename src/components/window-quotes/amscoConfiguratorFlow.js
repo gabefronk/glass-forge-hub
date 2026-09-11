@@ -1,4 +1,4 @@
-import { AMSCO_SERIES, selectedSeries, stylesForSeries } from "./amscoConfiguratorModel.js";
+import { AMSCO_SERIES, selectedSeries } from "./amscoConfiguratorModel.js";
 import { standardSizeGrid } from "./amscoStandardSizes.js";
 import { createBuilderLine } from "./windowBuilderModel.js";
 
@@ -58,7 +58,7 @@ export function chooseCallWidth(line, width, menu = callSizeMenu(line)) {
 }
 export function configurationReadiness(line, { legacy = false } = {}) {
   const series = selectedSeries(line), wide = line.options?.number_wide ?? (legacy ? 1 : "");
-  const product = !!series && !!line.style && (line.style === "Custom" || stylesForSeries(series).some(item => item.value === line.style) || legacy) &&
+  const product = !!series && !!line.style?.trim() && line.style !== "Custom" &&
     Number.isInteger(Number(wide)) && Number(wide) >= 1 && Number(wide) <= 6;
   const size = product && [line.width, line.height].every(value => value !== "" && Number.isFinite(Number(value)) && Number(value) > 0) &&
     ["call", "frame", "rough_opening"].includes(line.dimension_basis);

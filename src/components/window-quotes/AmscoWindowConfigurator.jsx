@@ -121,7 +121,8 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
             <SelectRow label="Series" value={series} required choices={[{ value: "", label: "— Select —" }, ...AMSCO_SERIES]} onChange={value => resetBranch(changeConfiguratorSeries(line, value))} />
             {series && <SelectRow label="Style / Operation" value={line.style} required choices={[{ value: "", label: "— Select —" }, ...styles, { value: "Custom", label: "Other / custom product" }]} onChange={value => resetBranch(changeProduct(line, value))} />}
             {line.style && <SelectRow label="Number Wide" value={options.number_wide ?? (index >= 0 ? 1 : "")} required choices={[{ value: "", label: "— Select —" }, ...numberWideChoices(line)]} onChange={value => resetBranch(changeNumberWide(line, value))} />}
-            {line.style === "Custom" && <Note>This product will need an AMSCO specialist to confirm the product and available options.</Note>}
+            {line.style && !styles.some(item => item.value === line.style) && <TextRow label="Requested AMSCO Product" value={line.style === "Custom" ? "" : line.style} maxLength={250} placeholder="Enter product name" onChange={value => onChange({ style: value || "Custom" })} />} 
+            {line.style && !styles.some(item => item.value === line.style) && <Note>This product will need an AMSCO specialist to confirm the product and available options.</Note>}
             {!line.style && <Note>Choose the operation first. Its unit details, sizes, and design options will follow.</Note>}
           </>}
           {step === 1 && <>

@@ -147,7 +147,7 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
   useEffect(() => {
     const sequence = ++priceRequest.current;
     if (!pricingDraft.lines.length) {
-      setLivePrice({ status: "idle", lines: [], total: null, ready: false });
+      setLivePrice({ status: "idle", lines: [], total: null, ready: false, inputKey: pricingInputKey });
       return;
     }
     return watchPricePreview(
