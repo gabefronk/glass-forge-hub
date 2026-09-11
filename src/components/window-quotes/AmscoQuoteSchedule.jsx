@@ -4,6 +4,7 @@ import WindowDrawing from "./AmscoWindowDrawing";
 import { colorParts, parseGrilles, selectedSeries } from "./amscoConfiguratorModel";
 import { resolvedWindowOptions, specificationValue } from "./windowSpecificationDisplay";
 import "./amscoQuoteSchedule.css";
+import { additionalLineSpecifications } from "./quoteScheduleModel";
 
 const money = (value, currency = "USD") => value != null && value !== "" && Number.isFinite(Number(value)) ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(value)) : "—";
 const action = "inline-flex min-h-11 items-center justify-center gap-1.5 rounded border border-[#AAB2BE] bg-white px-3 text-sm text-[#305367] hover:bg-[#EDF3FA] disabled:opacity-40";
@@ -18,6 +19,7 @@ function WindowLine({line,index,settings,price,disabled,condensed,onEdit,onCopy,
   const entries = Object.entries(options).filter(([key,value]) => optionLabels[key] && value !== undefined && value !== null && value !== "");
   const drawingLine = {...line,options};
   const frame = line.frame_dimensions;
+  const additional = additionalLineSpecifications(line);
   const lineNumber = line.native_line_number ?? (index+1)*100;
   const changeQty = value => onUpdate?.(index,{qty:value});
   return <article className="amsco-line-item">
@@ -47,6 +49,7 @@ function WindowLine({line,index,settings,price,disabled,condensed,onEdit,onCopy,
         {details && <div className="mt-3 space-y-3">
           <p className="break-words text-sm leading-7 text-[#526B7B]">{entries.map(([key,value])=>`${optionLabels[key]}: ${specificationValue(key,value,options)}`).join(" · ")}</p>
           {(line.notes || line.description) && <div className="border-l-2 border-[#D8E2EA] pl-3"><p className="mb-1 text-xs font-semibold text-[#526B7B]">Notes</p><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#526B7B]">{line.notes||line.description}</p></div>}
+          {additional.length > 0 && <details><summary className="min-h-11 cursor-pointer py-3 text-xs text-[#526B7B]">Additional specifications</summary><dl className="grid gap-3 text-xs sm:grid-cols-2">{additional.map(([label,value])=><div key={label} className="min-w-0"><dt className="capitalize text-[#7A8B97]">{label}</dt><dd className="mt-1 break-words text-[#526B7B]">{value}</dd></div>)}</dl></details>}
           {price?.pricing_evidence?.source === "amsco_source_engine" && <details><summary className="min-h-11 cursor-pointer py-3 text-xs text-[#526B7B]">Pricebook breakdown</summary><dl className="space-y-2 text-xs">{(price.pricing_evidence.components||[]).map((component,i)=><div key={i} className="flex justify-between gap-3"><dt>{component.name}</dt><dd>{money(component.value,currency)}</dd></div>)}</dl></details>}
         </div>}
       </div>
