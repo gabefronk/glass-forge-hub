@@ -8,7 +8,7 @@ const steps = ["Product", "Size", "Options", "Review"];
 const input = "min-h-11 w-full min-w-0 rounded-lg border border-[#B8C5CE] bg-white px-3 py-2 text-base text-[#263B49] focus:border-[#19718D] focus:outline-none focus:ring-2 focus:ring-[#19718D]/20 disabled:opacity-60 sm:text-sm";
 const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#B8C6CF] bg-white px-3 py-2 text-sm font-semibold text-[#305367] hover:bg-[#F6F8FC] disabled:opacity-50";
 const primary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#196C86] bg-[#196C86] px-4 py-2 text-sm font-semibold text-white hover:bg-[#145B71] disabled:opacity-50";
-const money = value => typeof value === "number" && Number.isFinite(value) ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(EgValue) : "—";
+const money = value => typeof value === "number" && Number.isFinite(value) ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value)) : "—";
 function Row({ label, children, note }) {
   const id = useId();
   return <div className="grid min-w-0 gap-2 border-b border-[#E5EAEE] px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] sm:items-center">
@@ -116,7 +116,7 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
         <fieldset disabled={disabled} className="min-w-0"><legend className="sr-only">{steps[step]}</legend>
           {step === 0 && <>
             <SelectRow label="Frame / install series" value={series} choices={[{ value: "", label: "Choose a series" }, ...AMSCO_SERIES]} onChange={value => onChange(changeSeries(line, value))} />
-            <SelectRow label="Window type" value={line.style} choices={[{ value: "", label: "Choose a window type" }, ...styles, { value: "Custom", label: "Other / custom product" }]} onChange={value => onChange({ style: value })} />
+            <SelectRow label="Window type" value={line.style} choices={[{ value: "", label: "Choose a window type" }, ...styles, { value: "Custom", label: "Other / custom product" }]} onChange={value => { onTradeCode(""); onChange({ style: value, width: "", height: "", dimension_basis: "call" }); }} />
             {(!styles.length || line.style === "Custom" || line.style && !styles.some(item => item.value === line.style)) && <TextRow label="Requested AMSCO product" value={line.style === "Custom" ? "" : line.style} placeholder="Enter the product name" maxLength={250} onChange={value => onChange({ style: value || "Custom" })} />}
             <Note>The frame series already carries the installation setup. The next screen automatically loads the standard sizes for this window type.</Note>
           </>}
