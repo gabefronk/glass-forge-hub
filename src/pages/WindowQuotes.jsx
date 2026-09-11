@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, PanelsTopLeft, Search, ArrowLeft, ArrowUpRight, CheckCircle2, Clock3, AlertCircle, Loader2, Settings2, ListChecks, MessageSquare, BriefcaseBusiness, FileText, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, Send, ArrowLeft, ArrowUpRight, CheckCircle2, Clock3, AlertCircle, Loader2, Settings2, ListChecks, MessageSquare, BriefcaseBusiness, FileText, RefreshCw, Trash2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,6 +9,7 @@ import TakeoffEditor, { inputClass, secondaryClass } from "@/components/window-q
 import ConnectClaude from "@/components/window-quotes/ConnectClaude";
 import WindowQuoteResults from "@/components/window-quotes/WindowQuoteResults";
 import WindowQuoteBuilder from "@/components/window-quotes/WindowQuoteBuilder";
+import WindowQuoteList from "@/components/window-quotes/WindowQuoteList";
 import InstallBudgetWorkspace, { QuoteInstallPanel } from "@/components/window-quotes/InstallBudgetWorkspace";
 import WindowPackageProgress from "@/components/window-quotes/WindowPackageProgress";
 import { packageProgress, packageStatus } from "@/components/window-quotes/packageProgress";
@@ -246,7 +247,6 @@ export default function WindowQuotes() {
   const selectedID = params.get("quote");
   const [revisionSeed, setRevisionSeed] = useState(null);
   const [form, setForm] = useState(params.get("new") === "1" ? "new" : null);
-  const [search, setSearch] = useState("");
   const [tab, setTab] = useState(params.get("section") === "install" ? "install" : "conversation");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -263,7 +263,6 @@ export default function WindowQuotes() {
   const locked = ["queued", "running"].includes(quote?.worker_status) || quote?.sales_status === "won";
   const needsRetryReview = !!quote?.retry_review;
   const progress = packageProgress(quote);
-  const visible = quotes.filter((q) => `${q.title || ""} ${q.request_text || ""} ${q.result?.native_quote_number || ""}`.toLowerCase().includes(search.toLowerCase()));
   const serviceStatus = listQuery.isPending ? "Checking service…" : listQuery.isError || worker?.configured === undefined ? "Status unavailable"
     : !worker.configured ? "Not configured" : !worker.online ? "Quoting computer offline — requests stay queued"
     : worker.runner_status === "running" ? "Building a quote"
@@ -322,25 +321,15 @@ export default function WindowQuotes() {
   if (form === "new") return <div className="min-h-screen px-[18px] py-5 min-[700px]:px-[26px]" style={{ background: C.pageBg }}><WindowQuoteBuilder key={revisionSeed?.title || "new"} seed={revisionSeed} preferenceUserId={user?.id} busy={busy} saveError={error} onSave={saveForm} onCancel={() => setForm(null)} /></div>;
   return <div className="min-h-screen px-[18px] py-5 min-[700px]:px-[26px]" style={{ background: C.pageBg }}>
     <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div><div className="mono-label-sm mb-1.5">Glass Forge · Window Quote Pro</div><h1 className="font-heading text-[28px] font-semibold tracking-tight text-[#131A26]">Window Quotes</h1><p className="mt-1 text-sm text-[#616D81]">Build your windows, review the schedule, and get verified AMSCO pricing.</p></div>
-      <div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => setParams({ view: "install" })}><BriefcaseBusiness size={16} />Install Budget</button><ConnectClaude /><button className={primaryClass} onClick={() => { setRevisionSeed(null); setForm("new"); setError(""); }}><Plus size={16} />New quote</button></div>
+      <div><div className="mb-2 text-xs text-[#77839A]">Glass Forge / Window Quotes</div><h1 className="font-heading text-[34px] font-semibold tracking-tight text-[#25334B]">{selectedID ? "Window Quote" : "My Quotes"}</h1></div>
+      <div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => setParams({ view: "install" })}><BriefcaseBusiness size={16} />Install Budget</button><ConnectClaude />{selectedID && <button className={primaryClass} onClick={() => { setRevisionSeed(null); setForm("new"); setError(""); }}><Plus size={16} />New quote</button>}</div>
     </header>
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#DDE3EC] bg-white px-4 py-3">
-      <div className="flex min-w-0 items-center gap-2.5"><MessageSquare size={17} className="shrink-0 text-[#616D81]" /><div className="text-xs text-[#616D81]"><span className="font-semibold text-[#131A26]">AMSCO pricebook</span><span className="ml-2">Supported windows calculate directly.</span><span className="mt-1 block">Configurator fallback: {serviceStatus}</span></div></div>
-      <button className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[#1E4A85]" onClick={refresh} disabled={listQuery.isFetching}><RefreshCw size={13} className={listQuery.isFetching ? "animate-spin" : ""} />Refresh</button>
-    </div>
     {(error || listQuery.isError || (selectedID && detailQuery.isError)) && <div role="alert" className="mb-4 rounded-xl border border-[#EFD2CA] bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error || errorText(detailQuery.error || listQuery.error)}</div>}
-    <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[270px_minmax(0,1fr)]">
-      <aside className={`min-w-0 overflow-hidden rounded-2xl border border-[#DDE3EC] bg-white card-shadow ${selectedID ? "hidden xl:block" : ""}`}>
-        <div className="border-b border-[#E9EDF4] p-4"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-[#131A26]">Requests</h2><span className="text-xs text-[#77839A]">{quotes.length}</span></div><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-[#77839A]" /><input aria-label="Search quote requests" className={inputClass + " pl-9"} placeholder="Search requests" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
-        <div className="p-2 xl:max-h-[650px] xl:overflow-y-auto">
-          {listQuery.isPending ? <div className="p-8 text-center text-sm text-[#77839A]">Loading requests…</div> : visible.length ? visible.map((q) => <button key={q.id} onClick={() => select(q.id)} className={`mb-1 block w-full rounded-xl border p-3 text-left transition-colors ${selectedID === q.id ? "border-[#C3D4EE] bg-[#E7EEFA]" : "border-transparent hover:bg-[#F6F8FC]"}`}><div className="truncate text-sm font-semibold text-[#131A26]">{q.title || "Untitled window request"}</div><div className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#616D81]">{q.request_text || `${q.lines?.length || 0} takeoff lines`}</div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><StatusBadge quote={q} /><span className="text-[10px] text-[#77839A]">{date(q.updated_date || q.created_date)}</span></div></button>) : <div className="p-6 text-center text-sm text-[#77839A]">{search ? "No requests match." : "Your new quote requests will appear here."}</div>}
-        </div>
-      </aside>
-      <section className={`min-w-0 overflow-hidden rounded-2xl border border-[#DDE3EC] bg-white card-shadow ${!selectedID ? "hidden xl:block" : ""}`}>
-        {!selectedID ? <div className="flex min-h-[510px] flex-col items-center justify-center px-6 py-12 text-center"><div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#C3D4EE] bg-[#E7EEFA]"><PanelsTopLeft size={28} className="text-[#2A5EA8]" /></div><h2 className="font-heading text-xl font-semibold text-[#131A26]">Your next window package starts here</h2><p className="mt-3 max-w-md text-sm leading-relaxed text-[#616D81]">Build your windows with visual controls, describe them to the AI guide, or import a schedule. Review the sizes and options, then calculate verified pricing from the mapped AMSCO catalog.</p><button className={primaryClass + " mt-6"} onClick={() => { setRevisionSeed(null); setForm("new"); }}><Plus size={15} />Build a window quote</button><p className="mt-4 text-xs text-[#77839A]">A job is created only when you mark a verified quote won.</p></div> : detailQuery.isPending ? <div className="flex min-h-[400px] items-center justify-center gap-2 text-sm text-[#616D81]"><Loader2 size={18} className="animate-spin" />Loading request…</div> : quote ? <>
+    {!selectedID ? <WindowQuoteList quotes={quotes} loading={listQuery.isPending} failed={listQuery.isError} onOpen={select} onNew={() => { setRevisionSeed(null); setForm("new"); setError(""); }} statusLabel={q => quoteStatusInfo(q).label} renderStatus={q => <StatusBadge quote={q} />} /> : <>
+      <button onClick={() => setParams({})} className="mb-3 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[#1E4A85]"><ArrowLeft size={15} />All quotes</button>
+      <section className="min-w-0 overflow-hidden rounded-xl border border-[#DDE3EC] bg-white">
+        {detailQuery.isPending ? <div className="flex min-h-[400px] items-center justify-center gap-2 text-sm text-[#616D81]"><Loader2 size={18} className="animate-spin" />Loading request…</div> : quote ? <>
           <div className="border-b border-[#E9EDF4] px-4 py-4 sm:px-5">
-            <button onClick={() => setParams({})} className="mb-3 inline-flex min-h-11 items-center gap-1 text-xs font-medium text-[#1E4A85] xl:hidden"><ArrowLeft size={13} />All requests</button>
             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0 sm:flex-1"><div className="mb-2 flex flex-wrap items-center gap-2"><StatusBadge quote={quote} /><span className="text-[11px] text-[#77839A]">Revision {quote.input_revision || 1}</span></div><h2 className="break-words text-lg font-semibold text-[#131A26]">{quote.title || "Untitled window request"}</h2></div><div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => {
               if (quote.worker_status === "ready" || progress) {
                 setRevisionSeed({ title: quote.title, request_text: "", settings: quote.settings, lines: quote.lines, install_budget: quote.install_budget, source: { ...quote.source, revision_of: quote.id } });setForm("new");
@@ -364,6 +353,10 @@ export default function WindowQuotes() {
           {quote.job_id && tab !== "result" && <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between border-t border-[#E9EDF4] p-4 text-sm font-semibold text-[#1E4A85]"><span className="flex items-center gap-2"><BriefcaseBusiness size={16} />Open linked job</span><ArrowUpRight size={15} /></Link>}
         </> : <div className="p-10 text-center text-sm text-[#616D81]">This request is unavailable. Choose another request or refresh.</div>}
       </section>
+    </>}
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 py-3">
+      <div className="flex min-w-0 items-center gap-2.5"><MessageSquare size={17} className="shrink-0 text-[#616D81]" /><div className="text-xs text-[#616D81]"><span className="font-semibold text-[#131A26]">AMSCO pricebook</span><span className="ml-2">Supported windows calculate directly.</span><span className="mt-1 block">Configurator fallback: {serviceStatus}</span></div></div>
+      <button className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[#1E4A85]" onClick={refresh} disabled={listQuery.isFetching}><RefreshCw size={13} className={listQuery.isFetching ? "animate-spin" : ""} />Refresh</button>
     </div>
     <Dialog open={!!form} onOpenChange={(open) => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>{form === "edit" ? "Request details" : revisionSeed ? "Revise window quote" : "New window quote"}</DialogTitle><DialogDescription>{form === "edit" ? "Changes create a new request revision. Previous verified results are kept in history." : revisionSeed ? "This creates a fresh pricing request. The previous verified quote stays unchanged." : "Describe what you need in your own words and add any settings you know. The AI reviews your full request when you send it."}</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{form && <QuoteForm key={form === "edit" ? selectedID : "new"} quote={form === "edit" ? quote : null} seed={form === "new" ? revisionSeed : null} preferenceUserId={user?.id} busy={busy} onSave={saveForm} onCancel={() => setForm(null)} />}</DialogContent></Dialog>
     <Dialog open={!!retryReview} onOpenChange={(open) => { if (!open && !busy) setRetryReview(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>Retry this quote request</DialogTitle><DialogDescription>Review the previous attempt before starting a new quote.</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FBEDEA] p-3 text-sm text-[#8A4038]">{error}</p>}{retryReview && <RetryFailedForm quote={retryReview} busy={busy} onSubmit={retryFailed} onCancel={() => setRetryReview(null)} />}</DialogContent></Dialog>
