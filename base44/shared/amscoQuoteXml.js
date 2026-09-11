@@ -170,8 +170,9 @@ export function createAmscoXmlParser({XMLParser,unzipSync}) {
     }
     const notes=[noteText(root.notes),get(head,"comment"),get(shipping,"shipcomment"),get(root,"SpecialOrderApprovalNotes")].filter(Boolean);
     const attachments=["SpecialOrderAttachmentFileName","SpecialOrderAttachmentFileNameMulti"].map(k=>get(root,k)).filter(Boolean);
-    const refs=array(root.alllineitemmasters?.lineitemmaster);
-    if(refs.length&&refs.length!==lines.length)fail("The saved line index does not match this export.");
+    const refs=array(root.alllineitemmasters?.lineitemmasterid).map(value);
+    const identities=new Set(lines.map(l=>l.native_line_id));
+    if(refs.length!==lines.length||new Set(refs).size!==refs.length||refs.some(ref=>!identities.has(ref)))fail("The saved line index does not match this export.");
     return validateImportedSnapshot({quote_number:number,quote_id:get(root,"id"),title:[get(root,"quotename"),get(root,"projectname")].filter(Boolean).join(" — ")||"AMSCO "+number,
       line_count:lines.length,lines,details:Object.fromEntries(Object.entries(details).filter(([,v])=>v)),customer,notes,attachments,
       totals,warnings,checked:{quote_details:true,customer:true,notes:true,line_items:true,totals:true}},expectedNumber||number);
