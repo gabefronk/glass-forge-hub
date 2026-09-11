@@ -147,6 +147,10 @@ export function createAmscoXmlParser({XMLParser,unzipSync}) {
       totals.unitemized_adjustment=balance;
       warnings.push("The export includes "+new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(balance)+" in other quote-level adjustments without a category breakdown. The saved customer total is preserved.");
     }
+    const dealerLineTotal=round(lines.reduce((n,l)=>n+l.line_totals.dealer,0));
+    const dealerCharges=["totaldealertax","totaldealertax2","totaldealerSH","totaldealerH","totaldealermisc"].reduce((n,k)=>n+numeric(root,k,true),0);
+    const dealerDiscount=numeric(root.quotediscounttotal?.quotediscounttotals,"TotalDealerDiscountWithCharges",true);
+    if(Math.abs(dealerLineTotal+dealerCharges-dealerDiscount-totals.dealer_total)>.02001)fail("The exported dealer total does not match all saved line items and charges. Export the complete quote again.");
     const header=embedded(root,"quoteheader")?.quoteheaderxml;
     const head=header?.quoteheaderdata?.quoteheader,shipping=header?.shipping?.shippingaddress,billing=header?.billing?.billingaddress;
     const details={"AMSCO quote":number,"Quote name":get(root,"quotename"),Project:get(root,"projectname"),Created:get(root,"creationdate"),

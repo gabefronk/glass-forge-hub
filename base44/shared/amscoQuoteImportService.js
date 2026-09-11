@@ -142,6 +142,8 @@ export function createImportService({transport,parseXml,readExport=readPrivateAm
     }
     if (body.action === "lookup") {
       const number = quoteNumber(body.quote_number);
+      const prior=(await db.AmscoQuoteImports.filter({owner_email:owner,quote_number:number,status:"imported"},"-created_date",1))[0];
+      if(prior)return {import:publicImport(prior)};
       if (!id(body.request_id)) fail(400,"Invalid search reference.");
       let rows = await db.AmscoQuoteImports.filter({request_id:body.request_id,owner_email:owner},"created_date",1);
       let row = rows[0];
