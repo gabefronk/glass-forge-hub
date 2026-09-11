@@ -104,3 +104,44 @@ test("invalid report leaves existing quote data and browser ownership untouched"
   await assert.rejects(()=>service.agentAction({db,body:{action:"report",import_id:row.id,execution_token:row.run.execution_token,status:"preview",browser_released:true,snapshot:s}}));
   assert.equal(db.AmscoQuoteImports.rows[0].status,"searching");assert.equal(db.QuoteRequests.rows.length,0);assert.ok(db.QuoteWorkers.rows[0].busy_token);
 });
+
+test("XML preview is private, preserves its source and commits without using the AMSCO browser",async()=>{
+ const db=database();db.QuoteWorkers.rows[0].busy_token="active-pricing";
+ let reads=0;
+ const service=createImportService({readExport:async()=>{reads++;return "xml";},parseXml:()=>snapshot()});
+ const body={action:"xml_preview",request_id:"xml1",filename:"quote.xml",file_uri:"private/test/quote.xml"};
+ const first=await service.userAction({db,user:admin,body});
+ await service.userAction({db,user:admin,body});assert.equal(reads,1);
+ assert.equal(first.import.source_file,undefined);
+ const saved=await service.userAction({db,user:admin,body:{action:"commit",import_id:first.import.id}});
+ assert.ok(saved.import.imported_quote_id);assert.equal(db.QuoteWorkers.rows[0].busy_token,"active-pricing");
+ assert.equal(db.QuoteWorkers.rows[0].import_commit_token,"");
+});
+test("concurrent previews of the same saved quote cannot create duplicate quote rows",async()=>{
+ const db=database();const service=createImportService({readExport:async()=>"xml",parseXml:()=>snapshot()});
+ const previews=await Promise.all(["a","b"].map(request_id=>service.userAction({db,user:admin,body:{action:"xml_preview",request_id}})));
+ const results=await Promise.allSettled(previews.map(p=>service.userAction({db,user:admin,body:{action:"commit",import_id:p.import.id}})));
+ assert.equal(db.QuoteRequests.rows.length,1);
+ for(let i=0;i<results.length;i++)if(results[i].status==="rejected")await service.userAction({db,user:admin,body:{action:"commit",import_id:previews[i].import.id}});
+ assert.equal(db.QuoteRequests.rows.length,1);
+ assert.equal(db.AmscoQuoteImports.rows[0].imported_quote_id,db.AmscoQuoteImports.rows[1].imported_quote_id);
+});
+test("a saved insert with an uncertain response is recovered without repeating the create",async()=>{
+ const db=database();const service=createImportService({readExport:async()=>"xml",parseXml:()=>snapshot()});
+ const preview=await service.userAction({db,user:admin,body:{action:"xml_preview",request_id:"uncertain-save"}});
+ const create=db.QuoteRequests.create;db.QuoteRequests.create=async v=>{await create(v);throw new Error("network timeout");};
+ await assert.rejects(()=>service.userAction({db,user:admin,body:{action:"commit",import_id:preview.import.id}}));
+ assert.ok(db.QuoteWorkers.rows[0].import_commit_token);
+ const recovered=await service.userAction({db,user:admin,body:{action:"status",import_id:preview.import.id}});
+ assert.equal(recovered.import.status,"imported");assert.equal(db.QuoteRequests.rows.length,1);
+ assert.equal(db.QuoteWorkers.rows[0].import_commit_token,"");
+});
+test("expired queued searches finish without taking a browser lock",async()=>{
+ const db=database();db.QuoteWorkers.rows[0].busy_token="other";
+ let now=new Date("2026-09-11T10:00:00Z");
+ const service=createImportService({now:()=>now,transport:{}});
+ const first=await service.userAction({db,user:admin,body:{action:"lookup",request_id:"expired",quote_number:"3517014"}});
+ now=new Date("2026-09-11T11:00:00Z");
+ const result=await service.userAction({db,user:admin,body:{action:"status",import_id:first.import.id}});
+ assert.equal(result.import.status,"failed");assert.equal(db.QuoteWorkers.rows[0].busy_token,"other");
+});
