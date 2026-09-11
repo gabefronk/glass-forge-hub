@@ -5,4 +5,4 @@ import {createAmscoXmlParser} from "../../shared/amscoQuoteXml.js";
 import {createImportHandler,importRuntime} from "../../shared/amscoQuoteImportService.js";
 const service=importRuntime({parseXml:createAmscoXmlParser({XMLParser,unzipSync})});
 const handler=createImportHandler({getClient:createClientFromRequest,service});
-export default async function amscoImport(req){const response=await handler(req);response.headers.set("X-AMSCO-Import-Version","xml-2");return response;}
+export default async function amscoImport(req){const response=await handler(req);response.headers.set("X-AMSCO-Import-Version","xml-3");return response;}

@@ -6,3 +6,5 @@ import {createImportHandler,importRuntime} from "../../shared/amscoQuoteImportSe
 export default createImportHandler({getClient:createClientFromRequest,service:importRuntime({parseXml:createAmscoXmlParser({XMLParser,unzipSync})}),agent:true});
 
 // XML geometry and serialized import commits.
+
+// XML import release: verified saved-line index, component and total reconciliation.
