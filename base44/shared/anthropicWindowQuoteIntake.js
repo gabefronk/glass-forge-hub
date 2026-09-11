@@ -146,7 +146,7 @@ export async function invokeClaudeWindowQuote(
           'anthropic-version': '2023-06-01',
           ...(workspaceId ? { 'anthropic-workspace-id': workspaceId } : {})
         },
-        body: JSON.stringify({ model, max_tokens: 8192, temperature: 0, system: SYSTEM, tools, messages })
+        body: JSON.stringify({ model, max_tokens: 8192, system: SYSTEM, tools, messages })
       }, absolute);
     } catch (error) {
       if (error?.name === 'AbortError' || error?.message === 'Timed out') throw new Error('Intake timed out');
