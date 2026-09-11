@@ -1,5 +1,5 @@
 import { catalogFrameSize } from "../../../base44/shared/amscoOptionDefaults.js";
-import { AMSCO_SERIES, selectedSeries } from "./amscoConfiguratorModel.js";
+import { AMSCO_SERIES, selectedSeries, diagramPanels } from "./amscoConfiguratorModel.js";
 import { standardSizeGrid } from "./amscoStandardSizes.js";
 import { createBuilderLine } from "./windowBuilderModel.js";
 
@@ -28,7 +28,9 @@ export function numberWideChoices(line) {
 }
 export function changeProduct(line, style, series = selectedSeries(line)) {
   const options = { ...line.options, series };
-  for (const key of ["number_wide", "operation", "sash_split", "unit_type"]) delete options[key];
+  for (const key of ["number_wide", "operation", "sash_split", "unit_type", "hardware", "hardware_color"]) delete options[key];
+  // Hardware belongs to the new operation; fixed units have no screen.
+  if (options.screen !== "None" || !style || diagramPanels({style}).kind === "fixed") delete options.screen;
   return { ...line, style, width: "", height: "", dimension_basis: "call", options };
 }
 export function changeConfiguratorSeries(line, series) {

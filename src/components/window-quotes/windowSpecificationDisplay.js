@@ -54,6 +54,11 @@ export function automaticOptionLabel(key,line = {},settings = {},price,priceStat
   if (key === "capillary_tubes") return "By installation elevation";
   return "Automatic";
 }
+export function glassThicknessCorrection(line = {}, settings = {}) {
+  if (!has(line.options?.glass_thickness)) return null;
+  const automatic = catalogOptionDefaults(line,settings).glass_thickness;
+  return automatic && String(line.options.glass_thickness).replaceAll(" inch",'"') !== automatic ? automatic : null;
+}
 export function glassSpecification(line,settings,price) {
   const options = resolvedWindowOptions(line,settings,price);
   return ["glass","tempered","glazing_method","glass_thickness"].filter(key => has(options[key])).map(key => specificationValue(key,options[key],options)).join(" · ");

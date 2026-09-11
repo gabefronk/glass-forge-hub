@@ -1,7 +1,7 @@
 import WindowDrawing from "./AmscoWindowDrawing";
 import { useId, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, Copy, List, Loader2, Plus, RotateCcw, X, ZoomIn } from "lucide-react";
-import { GLASS_THICKNESS_CHOICES, automaticOptionLabel, glassSpecification, resolvedWindowOptions, specificationValue } from "./windowSpecificationDisplay";
+import { GLASS_THICKNESS_CHOICES, automaticOptionLabel, glassThicknessCorrection, glassSpecification, resolvedWindowOptions, specificationValue } from "./windowSpecificationDisplay";
 import { AMSCO_SERIES, GRILLE_TYPES, selectedSeries, stylesForSeries, colorParts, changeColor, parseGrilles, serializeGrilles, diagramPanels } from "./amscoConfiguratorModel";
 import { CONFIGURATOR_PAGES, COZE_CHOICES, newConfiguratorLine, numberWideChoices, changeProduct, changeConfiguratorSeries, changeNumberWide, callSizeMenu, chooseCallWidth, configurationReadiness, frameSize } from "./amscoConfiguratorFlow";
 import "./amscoConfigurator.css";
@@ -42,6 +42,7 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
   const seriesLabel = AMSCO_SERIES.find(item => item.value === series)?.label || series || "Choose a series";
   const specifications = resolvedWindowOptions(line, settings, ready.size ? price : undefined);
   const glassSummary = glassSpecification(line, settings, ready.size ? price : undefined);
+  const automaticGlass = glassThicknessCorrection(line, settings);
   const canVisit = target => target === 0 || target === 1 && ready.product || target > 1 && ready.size;
   const chooseStep = target => {
     if (!canVisit(target)) return;
@@ -86,7 +87,12 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
         {!ready.product ? <div className="flex min-h-44 items-center justify-center rounded border border-[#efefef] p-6 text-center text-sm text-[#607788]">Keep making selections to see an image!</div> :
           <><div className={"py-3 " + (zoom ? "scale-110 my-6" : "")}><WindowDrawing line={line} settings={settings} grille={grilles} /></div><div className="mb-5 flex justify-center"><button type="button" className={button} onClick={() => setZoom(value => !value)}><ZoomIn size={14} />{zoom ? "Zoom Out" : "Zoom In"}</button></div></>}
         {summary && review}
-        {ready.product && <div className="mx-2 mt-4 border-t border-[#e4e8ec] pt-4 text-sm" aria-live="polite"><p className="text-xs text-[#7e8b96]">Customer price · each</p>{ready.size && price?.status === "priced" ? <><p className="mt-1 text-2xl font-semibold text-[#276449]">{money(price.unit_prices?.customer)}</p><p className="mt-1 text-xs">{money(price.line_totals?.customer)} for this quantity</p></> : ready.size && (priceStatus === "loading" || ["calculating", "native_busy"].includes(price?.status)) ? <p className="mt-2 flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Checking AMSCO price…</p> : <p className="mt-2 text-xs leading-relaxed">{ready.size ? "This configuration will be checked for AMSCO pricing." : "Choose width and height to see pricing."}</p>}<p className="mt-4 text-[11px] text-[#8a98a2]">Illustration only. Final construction and ratings come from AMSCO.</p></div>}
+        {ready.size && automaticGlass && <div className="mx-2 mt-4 rounded border border-[#d4dce6] bg-[#f5f8fc] p-3 text-sm">
+          <p>Automatic glass for this size: {specificationValue("glass_thickness", automaticGlass)}.</p>
+          <p className="mt-2 text-xs">The manual thickness selection needs a separate AMSCO price check.</p>
+          <button type="button" className={button + " mt-3 min-h-11"} disabled={disabled} onClick={() => onOption("glass_thickness", "")}>Use automatic glass</button>
+        </div>
+        {ready.product && <div className="mx-2 mt-4 border-t border-[#e4e8ec] pt-4 text-sm" aria-live="polite"><p className="text-xs text-[#7e8b96]">Customer price · each</p>{ready.size && price?.status === "priced" ? <><p className="mt-1 text-2xl font-semibold text-[#276449]">{money(price.unit_prices?.customer)}</p><p className="mt-1 text-xs">{money(price.line_totals?.customer)} for this quantity</p></> : ready.size && (priceStatus === "loading" || ["calculating", "native_busy"].includes(price?.status)) ? <p className="mt-2 flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Checking AMSCO price…</p> : <p className="mt-2 text-xs leading-relaxed">{ready.size ? price?.pricing_issue?.message || "This combination needs an AMSCO price check." : "Choose width and height to see pricing."}</p>}<p className="mt-4 text-[11px] text-[#8a98a2]">Illustration only. Final construction and ratings come from AMSCO.</p></div>}
       </aside>
       <div className="min-w-0" role="tabpanel" id={uid + "-panel"} aria-labelledby={uid + "-tab-" + step}>
         <h3 ref={heading} tabIndex={-1} className="sr-only">{CONFIGURATOR_PAGES[step]}</h3>

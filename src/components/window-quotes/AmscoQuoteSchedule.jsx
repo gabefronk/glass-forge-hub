@@ -9,7 +9,7 @@ import { additionalLineSpecifications } from "./quoteScheduleModel";
 const money = (value, currency = "USD") => value != null && value !== "" && Number.isFinite(Number(value)) ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(value)) : "—";
 const action = "inline-flex min-h-11 items-center justify-center gap-1.5 rounded border border-[#AAB2BE] bg-white px-3 text-sm text-[#305367] hover:bg-[#EDF3FA] disabled:opacity-40";
 const optionLabels = {fin:"Fin",glass:"Glass",tempered:"Tempered",patterned_glass:"Patterned glass",screen:"Screen",hardware:"Hardware",hardware_color:"Hardware finish",glass_thickness:"Glass thickness",glazing_method:"Glazing",elevation:"Installation elevation",argon:"Thermal gas",super_spacer:"Super Spacer",capillary_tubes:"Capillary tubes",grilles:"Grilles",operation:"Operation",sash_split:"Sash split",number_wide:"Number wide",unit_type:"Unit type"};
-const priceLabel = price => price?.status === "priced" ? "Priced" : price?.status === "amsco_lookup_needed" ? "AMSCO quote needed" : price?.status === "native_unavailable" ? "Pricing unavailable" : ["calculating","native_busy"].includes(price?.status) ? "Calculating…" : "Not priced";
+const priceLabel = price => price?.status === "priced" ? "Priced" : price?.pricing_issue?.message ? price.pricing_issue.message : price?.status === "amsco_lookup_needed" ? "AMSCO quote needed" : price?.status === "native_unavailable" ? "Pricing unavailable" : ["calculating","native_busy"].includes(price?.status) ? "Calculating…" : "Not priced";
 
 function WindowLine({line,index,settings,price,disabled,condensed,onEdit,onCopy,onRemove,onUpdate,currency}) {
   const [expanded,setExpanded] = useState(true);
