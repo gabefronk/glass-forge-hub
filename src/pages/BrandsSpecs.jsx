@@ -1,5 +1,3 @@
-import { ExternalLink } from "lucide-react";
-
 const PELLA_ICON_URL =
   "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/86/15/56/86155612-1b79-cc68-7749-624710f1fd57/AppIcon-0-0-1x_U007emarketing-0-7-0-85-220.png/512x512bb.jpg";
 const PELLA_APP_STORE_URL = "https://apps.apple.com/us/app/pella-adm/id937901511";
@@ -9,6 +7,7 @@ const AMSCO_URL = "https://apps.amscowindows.com/";
 
 const NAVY = "#131A26";
 const HAIRLINE = "#DDE3EC";
+const PELLA_BG = "#242021";
 
 const BRANDS = [
   {
@@ -17,6 +16,8 @@ const BRANDS = [
     iconUrl: PELLA_ICON_URL,
     iconAlt: "Pella ADM app icon",
     label: "Pella ADM",
+    bg: PELLA_BG,
+    textColor: "#FFFFFF",
   },
   {
     href: AMSCO_URL,
@@ -24,10 +25,12 @@ const BRANDS = [
     iconUrl: AMSCO_LOGO_URL,
     iconAlt: "AMSCO logo",
     label: "Amsco specs",
+    bg: "#FFFFFF",
+    textColor: NAVY,
   },
 ];
 
-function BrandRow({ href, title, iconUrl, iconAlt, label }) {
+function BrandSquare({ href, title, iconUrl, iconAlt, label, bg, textColor }) {
   return (
     <li role="listitem" className="flex justify-center">
       <a
@@ -36,26 +39,22 @@ function BrandRow({ href, title, iconUrl, iconAlt, label }) {
         rel="noopener noreferrer"
         title={title}
         aria-label={`${label} — opens in a new tab`}
-        className="group flex w-[208px] flex-col items-center text-center motion-safe:transition-all motion-safe:duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2A5EA8] focus-visible:outline-offset-8"
+        className="group flex h-52 w-52 flex-col items-center rounded-2xl motion-safe:transition-transform motion-safe:duration-150 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2A5EA8] focus-visible:outline-offset-8 sm:h-56 sm:w-56"
+        style={{ backgroundColor: bg }}
       >
         <img
           src={iconUrl}
           alt={iconAlt}
           width={160}
           height={160}
-          className="h-36 w-36 shrink-0 object-contain sm:h-40 sm:w-40"
+          className="mt-3 h-36 w-36 shrink-0 object-contain sm:h-40 sm:w-40 sm:mt-3"
           loading="lazy"
         />
         <span
-          className="mt-3 flex items-center gap-1.5 text-base font-semibold motion-safe:transition-colors motion-safe:duration-150 group-hover:text-[#2A5EA8] group-hover:underline group-focus-visible:text-[#2A5EA8] group-focus-visible:underline"
-          style={{ color: NAVY }}
+          className="mt-2.5 text-base font-semibold"
+          style={{ color: textColor }}
         >
           {label}
-          <ExternalLink
-            className="h-3.5 w-3.5 shrink-0 motion-safe:transition-transform motion-safe:duration-150 group-hover:-translate-y-0.5 group-focus-visible:-translate-y-0.5"
-            style={{ color: "#616D81" }}
-            aria-hidden="true"
-          />
         </span>
       </a>
     </li>
@@ -86,7 +85,7 @@ export default function BrandsSpecs() {
                   style={{ width: 160, height: 1, backgroundColor: HAIRLINE, marginBottom: 40, marginTop: 40 }}
                 />
               )}
-              <BrandRow {...b} />
+              <BrandSquare {...b} />
             </div>
           ))}
         </ul>
