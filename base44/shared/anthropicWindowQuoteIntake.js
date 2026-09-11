@@ -68,7 +68,6 @@ export async function invokeClaudeWindowQuote(
     body: JSON.stringify({
       model,
       max_tokens: 8192,
-      temperature: 0,
       system: SYSTEM,
       messages: [{
         role: 'user',
