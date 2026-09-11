@@ -74,3 +74,12 @@ test("unauthorized and unverifiable tracker fail closed",async()=>{
  assert.equal((await harness(null).handler(req())).status,401);assert.equal((await harness("user").handler(req())).status,403);
  const response=await harness("admin",true).handler(req());assert.equal(response.status,503);assert.equal((await response.json()).groups,undefined);
 });
+
+test("cross-calendar note additions do not duplicate the same timed visit",()=>{
+ const google={...event,scope_notes:"Install five windows. Additional field details."};
+ const outlook={...event,id:"outlook-timed",source:"outlook"};
+ const placeholder={...outlook,id:"outlook-all-day",start_time:"",end_time:""};
+ const result=filterOwnedCalendar([placeholder,google,outlook],[row]);
+ assert.equal(result.groups.length,1);assert.equal(result.groups[0].length,3);assert.equal(result.counts.duplicate_events,2);
+ assert.ok(result.groups[0].some(e=>e.scope_notes.includes("Additional field details")));
+});

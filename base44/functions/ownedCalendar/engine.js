@@ -58,22 +58,22 @@ function sameVisit(a, b) {
   if (name(a) !== name(b) || (norm(a.address) && norm(b.address) && norm(a.address) !== norm(b.address))) return false;
   const sameTimes = (a.start_time || "") === (b.start_time || "") && (a.end_time || "") === (b.end_time || "") && (a.end_date || "") === (b.end_date || "");
   const sameNotes = !!notes(a) && notes(a) === notes(b);
-  if (sameTimes) return Boolean(sameNotes || (sameOrder(a,b) && (!notes(a) || !notes(b))));
+  if (sameTimes) return Boolean(sameNotes || (sameOrder(a,b) && (a.source !== b.source || !notes(a) || !notes(b))));
   // An all-day placeholder may duplicate a timed copy only with identical job notes and a shared exact order.
   return Boolean(!a.start_time !== !b.start_time && sameNotes && sameOrder(a,b));
 }
 export function filterOwnedCalendar(source, rows) {
   const match = createOwnershipMatcher(rows), groups = [], byMonth = {}, rejected = [];
   const totals = {source_events:0, unmatched_events:0, duplicate_events:0, visible_events:0, removed_events:0};
-  for (const original of source) {
+  for (const original of [...source].sort((a,b) => Number(!!b.start_time) - Number(!!a.start_time))) {
     const month = String(original.event_date || "").slice(0,7);
     const counts = byMonth[month] ||= {source_events:0, unmatched_events:0, duplicate_events:0, visible_events:0, removed_events:0};
     totals.source_events++; counts.source_events++;
     const ownership = match(original);
     if (!ownership) {totals.unmatched_events++; counts.unmatched_events++; rejected.push({id:original.id,source:original.source,event_date:original.event_date,job_name:original.job_name}); continue;}
     const event = {...original, ownership};
-    // Require compatibility with every member so one untimed copy cannot collapse two distinct timed visits.
-    const existing = groups.find(group => group.every(member => sameVisit(member,event)));
+    // Timed copies anchor the visit. An untimed placeholder cannot bridge distinct start times.
+    const existing = groups.find(group => group.some(member => sameVisit(member,event)) && group.every(member => !member.start_time || !event.start_time || member.start_time === event.start_time));
     if (existing) {existing.push(event);totals.duplicate_events++;counts.duplicate_events++;}
     else {groups.push([event]);totals.visible_events++;counts.visible_events++;}
   }
