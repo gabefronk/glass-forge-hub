@@ -1,3 +1,4 @@
+import { catalogFrameSize } from "../../../base44/shared/amscoOptionDefaults.js";
 import { AMSCO_SERIES, selectedSeries } from "./amscoConfiguratorModel.js";
 import { standardSizeGrid } from "./amscoStandardSizes.js";
 import { createBuilderLine } from "./windowBuilderModel.js";
@@ -68,9 +69,5 @@ export function configurationReadiness(line, { legacy = false } = {}) {
 export function frameSize(line, price) {
   const frame = price?.status === "priced" ? price.frame_dimensions : null;
   if (frame && [frame.width, frame.height].every(value => Number.isFinite(Number(value)) && Number(value) > 0)) return frame;
-  if (line.dimension_basis === "frame") return { width: line.width, height: line.height };
-  if (selectedSeries(line) === AMSCO_SERIES[0].value && line.style === "Studio Single Hung" && Number(line.options?.number_wide || 1) === 1 && line.dimension_basis === "call") {
-    return { width: Number(line.width) > .5 ? Number(line.width) - .5 : "", height: Number(line.height) > .5 ? Number(line.height) - .5 : "" };
-  }
-  return null;
+  return catalogFrameSize(line);
 }

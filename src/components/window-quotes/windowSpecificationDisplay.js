@@ -1,4 +1,4 @@
-import { AMSCO_SERIES, selectedSeries } from "./amscoConfiguratorModel.js";
+import { catalogOptionDefaults } from "../../../base44/shared/amscoOptionDefaults.js";
 
 // Display values only. Never write resolved defaults into the requested options:
 // an omitted thickness must stay automatic when dimensions change.
@@ -28,29 +28,31 @@ export function specificationValue(key,value,options = {}) {
 export function resolvedWindowOptions(line = {},settings = {},price) {
   const inherited = pick(settings);
   if (!has(inherited.glass) && settings.low_e === true) inherited.glass = "CozE (LowE)";
-  return {...inherited,...pick(line.options),...(price?.status === "priced" ? {
+  return {...pick(catalogOptionDefaults(line,settings)),...inherited,...pick(line.options),...(price?.status === "priced" ? {
     ...(price.price_source === "amsco_source_engine" ? pick(price.source_engine?.applied_defaults) : {}),
     ...pick(price.resolved_options)
   } : {})};
 }
 export function automaticOptionLabel(key,line = {},settings = {},price,priceStatus) {
-  // Display fallbacks confirmed for the user's Studio Single Hung setup.
-  // Keep them out of requested options and price evidence; fresh AMSCO values win.
-  const defaults = line.style === "Studio Single Hung" && selectedSeries(line) === AMSCO_SERIES[0].value
-    ? { elevation: "2501 to 6500", super_spacer: false, hardware: "Cam Latch" } : {};
+  // Resolve defaults without waiting for a successful price. In particular,
+  // changing a grille or an offline native runner must not blank the fields.
+  const automaticLine = {...line,options:{...line.options}};
+  delete automaticLine.options[key];
   const explicit = has(line.options?.[key]);
   // An explicit override's result cannot describe the value selected by reset.
-  const resolved = explicit ? resolvedWindowOptions({},settings,undefined) : resolvedWindowOptions(line,settings,price);
-  const value = has(resolved[key]) ? resolved[key] : defaults[key];
+  const resolved = explicit ? resolvedWindowOptions(automaticLine,settings,undefined) : resolvedWindowOptions(line,settings,price);
+  const value = resolved[key];
   if (has(value)) {
     if (key === "tempered") return value === true || value === "true" ? "Yes" : value === false || value === "false" ? "No" : String(value);
     if (key === "argon" && (value === false || value === "false")) return "None";
     return specificationValue(key,value,resolved);
   }
-  if (explicit) return "Recalculate automatic selection";
-  if (!Number(line.width) || !Number(line.height)) return "— Select —";
-  if (priceStatus === "loading" || ["calculating","native_busy"].includes(price?.status)) return "Loading…";
-  return "— Select —";
+  if (!line.style) return "— Select —";
+  // Keep unported constructions on AMSCO's automatic selection, not a guessed
+  // SS/SS value. Native responses supply the actual glass when available.
+  if (key === "glass_thickness") return "By window size";
+  if (key === "capillary_tubes") return "By installation elevation";
+  return "Automatic";
 }
 export function glassSpecification(line,settings,price) {
   const options = resolvedWindowOptions(line,settings,price);
