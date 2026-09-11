@@ -56,7 +56,7 @@ test("missing identifiers do not collapse distinct timed events",()=>{
 const req=()=>new Request("https://example.com",{method:"POST",body:"{}"});
 function harness(role="admin",fail=false){
  let snapshotReads=0;
- const client={auth:{me:async()=>role?{role}:null},entities:{CalendarEvents:{list:async()=>[event]},OutlookCalendarSnapshot:{filter:async()=>{snapshotReads++;return [{id:"s",events:[{...event,job_name:"EDGE - 518 RIVER POINT",oe_number:"",po_number:""}],complete:true}];}}};
+ const client={auth:{me:async()=>role?{role}:null},entities:{CalendarEvents:{list:async()=>[event]},OutlookCalendarSnapshot:{filter:async()=>{snapshotReads++;return [{id:"s",events:[{...event,job_name:"EDGE - 518 RIVER POINT",oe_number:"",po_number:""}],complete:true}];}}}};
  const handler=createOwnedCalendarHandler({getClient:()=>client,readTracker:async()=>{if(fail)throw Error("checksum mismatch");return {rows:[row],snapshot:{source_captured_at:"2026-09-11"},appended:[]};}});
  return {handler,reads:()=>snapshotReads};
 }
