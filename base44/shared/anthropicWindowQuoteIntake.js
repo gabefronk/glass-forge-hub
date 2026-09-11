@@ -1,4 +1,4 @@
-import { lookupManufacturerSpecs } from './manufacturerSpecLookup.js';
+import { lookupManufacturerSpecs, fetchJsonWithin } from './manufacturerSpecLookup.js';
 
 const env = name => {
   try { return globalThis.Deno?.env?.get(name) || ''; }
@@ -8,6 +8,12 @@ const env = name => {
 const DEFAULT_MODEL = 'claude-opus-5';
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+// Total intake budget stays under the 55s conversationalIntake deadline. A single
+// absolute deadline is shared across every model call and research lookup so the
+// whole intake cannot overrun. Final-answer time is reserved so research cannot
+// consume the budget needed to produce the schedule.
+const INTAKE_DEADLINE_MS = 50000;
+const FINAL_ANSWER_RESERVE_MS = 8000;
 
 export function claudeAssistantStatus({
   apiKey = env('ANTHROPIC_API_KEY'),
@@ -67,22 +73,29 @@ const MAX_ROUNDS = 6;
 
 function researchFootnote(sources) {
   const lines = sources.slice(0, 5).map(source => {
+    const ctx = source.manufacturer ? '[' + source.manufacturer + (source.series ? ' ' + source.series : '') + (source.product ? ' ' + source.product : '') + ']' : '';
     const page = source.page ? ' p.' + source.page : '';
-    return '- ' + source.url + (source.title ? ' — ' + source.title : '') + page + ' (retrieved ' + source.retrieved_at + ')';
+    return (ctx ? ctx + ' ' : '') + source.url + (source.title ? ' — ' + source.title : '') + page + ' (retrieved ' + source.retrieved_at + ')';
   });
   return 'Manufacturer research (read-only evidence, not a price or approval):\n' + lines.join('\n');
 }
 
-// Append validated research sources to the existing summary text only. Evidence
-// is advice; it never becomes customer permission, dimensions, defaults or
-// prices, and the normalizer schema / customer source_quotes are unchanged.
+// Append validated research sources to the existing summary text only. The
+// footnote is built complete (full URLs, retrieved_at date and product context)
+// and never truncated mid-link; the original summary is shortened instead.
+// Evidence is advice; it never becomes customer permission, dimensions,
+// defaults or prices, and the normalizer schema / customer source_quotes are
+// unchanged.
 function appendResearchFootnote(parsed, sources) {
   if (!sources.length || !parsed || typeof parsed !== 'object') return parsed;
   const note = researchFootnote(sources);
+  const MAX = 2000;
   if (typeof parsed.summary === 'string') {
-    parsed.summary = (parsed.summary.slice(0, 1500) + '\n\n' + note).slice(0, 1800);
+    const budget = MAX - note.length - 2;
+    const trimmed = budget > 0 ? parsed.summary.slice(0, budget) : '';
+    parsed.summary = trimmed ? (trimmed + '\n\n' + note) : note;
   } else {
-    parsed.summary = note.slice(0, 1800);
+    parsed.summary = note;
   }
   return parsed;
 }
@@ -94,11 +107,20 @@ export async function invokeClaudeWindowQuote(
     apiKey = env('ANTHROPIC_API_KEY'),
     model = env('ANTHROPIC_MODEL') || DEFAULT_MODEL,
     workspaceId = env('ANTHROPIC_WORKSPACE_ID'),
-    fetchImpl = globalThis.fetch
+    fetchImpl = globalThis.fetch,
+    deadlineMs = INTAKE_DEADLINE_MS,
+    deadlineAt = 0
   } = {}
 ) {
   if (!apiKey) throw new Error('Claude is not connected. Add ANTHROPIC_API_KEY in Base44 app secrets.');
   if (typeof fetchImpl !== 'function') throw new Error('Claude transport is unavailable.');
+
+  // One absolute deadline for the whole intake (model calls + research), kept
+  // under the 55s conversationalIntake timeout. Research is capped at the
+  // deadline minus the reserved final-answer time so the schedule can still be
+  // produced after lookups complete.
+  const absolute = deadlineAt > 0 ? deadlineAt : Date.now() + deadlineMs;
+  const researchDeadlineAt = absolute - FINAL_ANSWER_RESERVE_MS;
 
   const schemaInstruction = '\n\nReturn only JSON matching this schema. Omit unknown optional fields.\n' + JSON.stringify(params.response_json_schema || {});
   const tools = [LOOKUP_TOOL];
@@ -113,23 +135,29 @@ export async function invokeClaudeWindowQuote(
   let lookups = 0;
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await fetchImpl(API_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        ...(workspaceId ? { 'anthropic-workspace-id': workspaceId } : {})
-      },
-      body: JSON.stringify({ model, max_tokens: 8192, temperature: 0, system: SYSTEM, tools, messages })
-    });
-
-    if (!response.ok) {
-      const requestId = response.headers?.get?.('request-id') || response.headers?.get?.('x-request-id') || '';
-      throw new Error(`Claude request failed (${response.status})${requestId ? ` · request ${requestId}` : ''}.`);
+    if (absolute - Date.now() <= 0) throw new Error('Intake timed out');
+    let outcome;
+    try {
+      outcome = await fetchJsonWithin(fetchImpl, API_URL, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          ...(workspaceId ? { 'anthropic-workspace-id': workspaceId } : {})
+        },
+        body: JSON.stringify({ model, max_tokens: 8192, temperature: 0, system: SYSTEM, tools, messages })
+      }, absolute);
+    } catch (error) {
+      if (error?.name === 'AbortError' || error?.message === 'Timed out') throw new Error('Intake timed out');
+      throw error;
     }
-    const body = await response.json();
-    const content = Array.isArray(body?.content) ? body.content : [];
+    if (!outcome.response.ok) {
+      const requestId = outcome.response.headers?.get?.('request-id') || outcome.response.headers?.get?.('x-request-id') || '';
+      throw new Error(`Claude request failed (${outcome.response.status})${requestId ? ` · request ${requestId}` : ''}.`);
+    }
+    if (!outcome.body) throw new Error('Claude returned an unreadable response.');
+    const content = Array.isArray(outcome.body?.content) ? outcome.body.content : [];
     const toolUses = content.filter(block => block?.type === 'tool_use' && block.name === 'lookup_manufacturer_specs');
 
     if (!toolUses.length) {
@@ -148,11 +176,14 @@ export async function invokeClaudeWindowQuote(
       lookups++;
       let result;
       try {
-        result = await lookupManufacturerSpecs(use.input || {}, { apiKey, model, fetchImpl });
+        result = await lookupManufacturerSpecs(use.input || {}, { apiKey, model, fetchImpl, deadlineAt: researchDeadlineAt });
       } catch {
         result = { status: 'unavailable', answer: '', sources: [], clarification: 'Lookup failed.' };
       }
-      if (result.status === 'found' && Array.isArray(result.sources)) collectedSources.push(...result.sources);
+      if (result.status === 'found' && Array.isArray(result.sources)) {
+        const ctx = use.input || {};
+        for (const s of result.sources) collectedSources.push({ ...s, manufacturer: ctx.manufacturer, series: ctx.series, product: ctx.product });
+      }
       toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: JSON.stringify(result).slice(0, 8000) });
     }
     messages.push({ role: 'user', content: toolResults });
