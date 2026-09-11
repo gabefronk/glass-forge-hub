@@ -1,6 +1,6 @@
 const PELLA_ICON_URL =
   "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/86/15/56/86155612-1b79-cc68-7749-624710f1fd57/AppIcon-0-0-1x_U007emarketing-0-7-0-85-220.png/512x512bb.jpg";
-const PELLA_APP_STORE_URL = "https://apps.apple.com/us/app/pella-adm/id937901511";
+const PELLA_TECHNICAL_DOCUMENTS_URL = "https://www.pella.com/professionals/downloads/service/perl/";
 const AMSCO_LOGO_URL =
   "https://www.amscowindows.com/wp-content/uploads/2024/11/cropped-AMSCO-Logomark-Vertical-Alternate-Standard-PMS-7684-1-270x270.png";
 const AMSCO_URL = "https://apps.amscowindows.com/";
@@ -11,8 +11,8 @@ const PELLA_BG = "#242021";
 
 const BRANDS = [
   {
-    href: PELLA_APP_STORE_URL,
-    title: "Pella ADM — App Store listing (opens in a new tab)",
+    href: PELLA_TECHNICAL_DOCUMENTS_URL,
+    title: "Pella ADM — Technical documents (opens in a new tab)",
     iconUrl: PELLA_ICON_URL,
     iconAlt: "Pella ADM app icon",
     label: "Pella ADM",
