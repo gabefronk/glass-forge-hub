@@ -72,31 +72,32 @@ const MAX_LOOKUPS = 2;
 const MAX_ROUNDS = 6;
 
 function researchFootnote(sources) {
-  const lines = sources.slice(0, 5).map(source => {
+  const header = 'Manufacturer research (read-only evidence, not a price or approval):';
+  const lines = [];
+  const seen = new Set();
+  for (const source of sources.slice(0, 5)) {
     const ctx = source.manufacturer ? '[' + source.manufacturer + (source.series ? ' ' + source.series : '') + (source.product ? ' ' + source.product : '') + ']' : '';
     const page = source.page ? ' p.' + source.page : '';
-    return (ctx ? ctx + ' ' : '') + source.url + (source.title ? ' — ' + source.title : '') + page + ' (retrieved ' + source.retrieved_at + ')';
-  });
-  return 'Manufacturer research (read-only evidence, not a price or approval):\n' + lines.join('\n');
+    const title = String(source.title || '').slice(0, 80);
+    const line = (ctx ? ctx + ' ' : '') + source.url + (title ? ' — ' + title : '') + page + ' (retrieved ' + source.retrieved_at + ')';
+    if (seen.has(line)) continue;
+    if ([header, ...lines, line].join('\n').length > 1500) continue;
+    seen.add(line);
+    lines.push(line);
+  }
+  return lines.length ? [header, ...lines].join('\n') : '';
 }
 
-// Append validated research sources to the existing summary text only. The
-// footnote is built complete (full URLs, retrieved_at date and product context)
-// and never truncated mid-link; the original summary is shortened instead.
-// Evidence is advice; it never becomes customer permission, dimensions,
-// defaults or prices, and the normalizer schema / customer source_quotes are
-// unchanged.
+// Keep complete citation lines within the existing normalizer's 1800 limit.
+// Only summary/title text is shortened; source URL, date and product context
+// remain intact. Manufacturer evidence never changes customer provenance.
 function appendResearchFootnote(parsed, sources) {
   if (!sources.length || !parsed || typeof parsed !== 'object') return parsed;
   const note = researchFootnote(sources);
-  const MAX = 2000;
-  if (typeof parsed.summary === 'string') {
-    const budget = MAX - note.length - 2;
-    const trimmed = budget > 0 ? parsed.summary.slice(0, budget) : '';
-    parsed.summary = trimmed ? (trimmed + '\n\n' + note) : note;
-  } else {
-    parsed.summary = note;
-  }
+  const summary = typeof parsed.summary === 'string' ? parsed.summary : '';
+  const budget = 1800 - note.length - (note ? 2 : 0);
+  const trimmed = summary.slice(0, Math.max(0, budget));
+  parsed.summary = trimmed && note ? trimmed + '\n\n' + note : trimmed || note;
   return parsed;
 }
 
