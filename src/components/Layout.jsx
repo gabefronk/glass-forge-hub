@@ -4,7 +4,7 @@ import YaFeesSidebar from "@/components/YaFeesSidebar";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { Bot } from "lucide-react";
-import { Receipt, Calendar, Briefcase, BarChart3, Bug, PanelsTopLeft, Diamond, LogOut, Library } from "lucide-react";
+import { Receipt, Calendar, Briefcase, BarChart3, PanelsTopLeft, Diamond, LogOut, Library } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
@@ -65,14 +65,6 @@ export default function Layout() {
             </Link>
           );
         })}
-        {user?.role === "admin" && (
-          <Link to="/match-debug" aria-current={pathname === "/match-debug" ? "page" : undefined} className="flex min-w-0 flex-col items-center gap-1 py-2.5 px-1 flex-1">
-            <Bug className="h-5 w-5" style={{ color: pathname === "/match-debug" ? "#2A5EA8" : "#77839A" }} />
-            <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: pathname === "/match-debug" ? "#2A5EA8" : "#77839A", letterSpacing: ".01em" }}>
-              Debug
-            </span>
-          </Link>
-        )}
       </nav>
     </div>
   );
