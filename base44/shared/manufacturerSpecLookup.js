@@ -95,11 +95,14 @@ function resultItems(block) {
   return [];
 }
 
-// Assign ordinal indices ONLY to web_fetch_tool_result blocks, in order, across
-// all accumulated content. Disallowed or failed documents keep their slot so a
-// later citation's document_index cannot shift onto a different document. A
-// document is evidence only when it has a real nested document, an allowlisted
-// HTTPS URL, and a provider retrieved_at timestamp (never fabricated).
+// Assign ordinal indices ONLY to web_fetch_tool_result blocks that actually
+// returned a fetched document, in order, across all accumulated content. A
+// failed fetch (web_fetch_tool_result_error) is NOT a document and must not
+// consume a document_index, so a later citation cannot shift onto an error
+// slot. A real fetched document keeps its slot even when its domain is
+// disallowed, so a later valid document's index stays aligned. A document is
+// evidence only when it has a real nested document, an allowlisted HTTPS URL,
+// and a provider retrieved_at timestamp (never fabricated).
 function collectDocuments(content, brand, into) {
   let ordinal = into.length;
   for (const block of content) {
@@ -107,12 +110,14 @@ function collectDocuments(content, brand, into) {
     const items = resultItems(block);
     const result = items.find(c => c?.type === 'web_fetch_result') || null;
     const error = items.find(c => ERROR_TYPES.has(c?.type));
-    const url = String(result?.url || block.url || '');
-    const nested = result?.content && typeof result.content === 'object' ? result.content : null;
+    // A failed fetch is not a document and must not consume a document_index.
+    if (error || !result) continue;
+    const url = String(result.url || block.url || '');
+    const nested = result.content && typeof result.content === 'object' ? result.content : null;
     const hasDocument = nested?.type === 'document' && nested?.source && typeof nested.source === 'object';
-    const retrievedAt = typeof result?.retrieved_at === 'string' && result.retrieved_at ? result.retrieved_at : '';
+    const retrievedAt = typeof result.retrieved_at === 'string' && result.retrieved_at ? result.retrieved_at : '';
     const allowed = isAllowedHost(url, brand);
-    const success = !error && !!result && hasDocument && allowed && !!retrievedAt;
+    const success = hasDocument && allowed && !!retrievedAt;
     into.push({
       index: ordinal,
       url,
