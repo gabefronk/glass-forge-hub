@@ -61,7 +61,11 @@ export default function ImportAmscoQuote({onImported}) {
     try{
       const result=await invoke({action:"commit",import_id:lookup.id});setLookup(result);
       if(result.imported_quote_id){setOpen(false);onImported(result.imported_quote_id);}
-    }catch(e){setError(e?.response?.data?.error||e.message);}
+    }catch(e){
+      setError(e?.response?.data?.error||e.message);
+      // A lost response can follow a successful save; recover the same import.
+      try {setLookup(await invoke({action:"status",import_id:lookup.id}));} catch { /* Keep the saved reference for retry. */ }
+    }
     finally{setBusy(false);}
   };
   const reset=()=>{request.current=null;setLookup(null);setError("");};

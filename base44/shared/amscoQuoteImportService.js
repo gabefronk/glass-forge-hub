@@ -130,7 +130,7 @@ export function createImportService({transport,parseXml,readExport=readPrivateAm
         if (!active) active=(await db.WindowQuoteOnlineRequests.filter({id:lock.active_quote_id},undefined,1))[0];
       }
       let reachable=false, code="", provider_state=null;
-      try {if(transport){const conversation=await transport.getConversation(CONVERSATION_ID);reachable=true;provider_state={fields:Object.keys(conversation).filter(k=>!/token|secret|key/i.test(k)),status:conversation.status||conversation.state||"",messages:conversation.messages.slice(-4).map(m=>({role:m.role,fields:Object.keys(m).filter(k=>!/token|secret|key/i.test(k)),status:m.status||m.state||"",created_date:m.created_date||"",message_type:m.type||""}))};}}catch(e){code=e?.code||"UNAVAILABLE";}
+      try {if(transport){const conversation=await transport.getConversation(CONVERSATION_ID);reachable=true;provider_state={fields:Object.keys(conversation).filter(k=>!/token|secret|key/i.test(k)),status:conversation.status||conversation.state||"",messages:conversation.messages.slice(-4).map(m=>({role:m.role,fields:Object.keys(m).filter(k=>!/token|secret|key/i.test(k)),status:m.status||m.state||"",created_date:m.created_date||"",message_type:m.type||"",tool_call_count:Array.isArray(m.tool_calls)?m.tool_calls.length:0,content:m.role==="assistant"?String(m.content||"").replace(/[A-Za-z0-9_\-]{45,}/g,"[redacted]").slice(0,2000):""}))};}}catch(e){code=e?.code||"UNAVAILABLE";}
       return {connection:{configured:!!transport,reachable,browser_busy:!!lock?.busy_token,active_status:active?.worker_status||"",active_phase:active?.agent_run?.phase||"",last_seen_at:lock?.last_seen_at||"",code,provider_state}};
     }
     if (body.action === "cancel_waiting") {
