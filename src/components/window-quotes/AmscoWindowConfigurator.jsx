@@ -144,8 +144,8 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
               {!menu && <Note>Enter the overall assembly dimensions. AMSCO will confirm sizes for this product and number wide.</Note>}
             </>}
             {line.dimension_basis === "call" && <details className="mx-4 mb-4"><summary className="min-h-10 cursor-pointer py-2 text-xs">Enter a four-digit call code</summary><Row label="Quick Call Code" note="3050 = 36 × 60 inches.">{id => <div className="flex gap-2"><input id={id} className={input} value={tradeCode} inputMode="numeric" maxLength={4} placeholder="3050" onChange={event => onTradeCode(event.target.value)} /><button type="button" className={button} disabled={!tradeCode.trim()} onClick={onApplyTradeCode}>Use</button></div>}</Row></details>}
-            {panel.kind === "hung" && optionRow("Sash Split", "sash_split", ["Even"])}
-            {optionRow("Unit Type", "unit_type", ["Complete Unit"])}
+            {panel.kind === "hung" && <SelectRow label="Sash Split" value="Even" choices={["Even"]} onChange={() => {}} />}
+            <SelectRow label="Unit Type" value="Complete Unit" choices={["Complete Unit"]} onChange={() => {}} />
             {["casement", "awning"].includes(panel.kind) ? optionRow("Operation / Venting", "operation", Number(options.number_wide) === 2 ? ["Left / Right", "Fixed / Fixed"] : ["Left", "Right", "Fixed"]) : panel.kind === "slider" ? optionRow("Operation / Venting", "operation", /double vent/i.test(line.style) ? ["XOX"] : ["XO", "OX"]) : <ReadRow label="Operation / Venting" value={productLabel} />}
             <ReadRow label="Frame Width" value={frame?.width || ""} /><ReadRow label="Frame Height" value={frame?.height || ""} />
           </>}
@@ -164,8 +164,8 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
             {optionRow("Glazing Method", "glazing_method", [{ value: "3/4 Insulated", label: '3/4" Insulated' }])}
             {optionRow("Glass Thickness", "glass_thickness", GLASS_THICKNESS_CHOICES)}
             {boolRow("Capillary Tubes", "capillary_tubes")}
-            {panel.kind !== "fixed" && optionRow("Hardware Finish", "hardware_color", ["White", "Taupe", "Black"])}
-            {panel.kind !== "fixed" && optionRow("Screen", "screen", ["White", "Taupe", "Black", "None"])}
+            {panel.kind !== "fixed" && <SelectRow label="Hardware Finish" value={colors.interior} choices={[colors.interior]} onChange={() => {}} note="Matches the interior color." />}
+            {panel.kind !== "fixed" && <SelectRow label="Screen" value={/^none$/i.test(String(options.screen ?? "")) ? "None" : colors.interior} choices={[colors.interior, "None"]} onChange={value => onOption("screen", value)} note="Screen finish matches the interior color." />}
             <Note>Automatic glass construction updates with the window size. Explicit changes stay with this line.</Note>
           </>}
           {step === 4 && <>

@@ -13,6 +13,7 @@ import ProWindowDiagram from "./ProWindowDiagram";
 import AmscoWindowConfigurator from "./AmscoWindowConfigurator";
 import AmscoQuoteSchedule from "./AmscoQuoteSchedule";
 import { newConfiguratorLine, isPristineConfiguratorLine } from "./amscoConfiguratorFlow";
+import { applyConfiguratorSelections } from "./amscoConfiguratorModel";
 
 const primary = "inline-flex min-h-11 items-center justify-center gap-2 rounded bg-[#196c86] px-4 py-3 text-sm font-semibold text-white hover:bg-[#234F8E] disabled:cursor-not-allowed disabled:opacity-50";
 const panel = "min-w-0 rounded-lg border border-[#bdcbd4] bg-white";
@@ -50,9 +51,11 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
   const saveWithInstall = (data, queue) => onSave({ ...data, install_budget: installBudget }, queue);
   const [settings, setSettings] = useState(defaults.settings);
   const [source, setSource] = useState(seed?.source || {});
-  const [lines, setLines] = useState(() => structuredClone(seed?.lines || []));
+  const [storedLines, setLines] = useState(() => structuredClone(seed?.lines || []));
+  const lines = useMemo(() => storedLines.map(line => applyConfiguratorSelections(line, settings)), [storedLines, settings]);
   const [useStandard, setUseStandard] = useState(defaults.use_standard);
-  const [editor, setEditor] = useState(seed?.lines?.length ? null : { index: -1, line: newConfiguratorLine() });
+  const [storedEditor, setEditor] = useState(seed?.lines?.length ? null : { index: -1, line: newConfiguratorLine() });
+  const editor = useMemo(() => storedEditor ? { ...storedEditor, line: applyConfiguratorSelections(storedEditor.line, settings) } : null, [storedEditor, settings]);
   const [tradeCode, setTradeCode] = useState("");
   const [error, setError] = useState("");
   const [step, setStep] = useState("build");
