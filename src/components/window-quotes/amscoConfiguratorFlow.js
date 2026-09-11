@@ -71,5 +71,6 @@ export function configurationReadiness(line, { legacy = false } = {}) {
 export function frameSize(line, price) {
   const frame = price?.status === "priced" ? price.frame_dimensions : null;
   if (frame && [frame.width, frame.height].every(value => Number.isFinite(Number(value)) && Number(value) > 0)) return frame;
+  if (line.dimension_basis === "frame" && [line.width,line.height].every(value => Number(value) > 0)) return {width:line.width,height:line.height};
   return catalogFrameSize(line);
 }

@@ -91,7 +91,6 @@ export function diagramPanels(line) {
   if (/slider|single vent/i.test(line.style || '')) return { columns: 2, rows: 1, kind: 'slider' };
   if (/casement/i.test(line.style || '')) return { columns: Math.min(4, Math.max(1, Number(line.options?.number_wide) || 1)), rows: 1, kind: 'casement' };
   if (/awning/i.test(line.style || '')) return { columns: 1, rows: 1, kind: 'awning' };
-  if (/picture|direct set/i.test(line.style || '')) return { columns: 1, rows: 1, kind: 'fixed' };
   return { columns: 1, rows: 1, kind: 'custom' };
 }
 
