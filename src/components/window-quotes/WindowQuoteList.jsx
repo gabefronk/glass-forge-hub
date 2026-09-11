@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ArrowUpRight, ListChecks, Loader2, Plu
 import { Link } from "react-router-dom";
 import { filterQuoteRows, quoteListRow } from "./quoteListModel";
 
-const control = "h-11 rounded border border-[#AAB2BE] bg-white px-3 text-sm text-[#203B64] outline-none focus:border-[#213D73] focus:ring-2 focus:ring-[#213D73]/20";
+const control = "h-11 rounded border border-[#AAB2BE] bg-white px-3 text-base sm:text-sm text-[#203B64] outline-none focus:border-[#213D73] focus:ring-2 focus:ring-[#213D73]/20";
 const action = "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border border-[#AAB2BE] bg-white text-[#364B66] hover:border-[#213D73] hover:bg-[#EDF3FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#213D73]";
 const columns = [["created", "Created"], ["number", "Number"], ["name", "Name"], ["client", "Client / Yard"], ["status", "Status"], ["units", "Units"], ["total", "Quote Total"]];
 
@@ -39,10 +39,32 @@ export default function WindowQuoteList({ quotes, loading, failed, onOpen, onNew
             {search && <button type="button" aria-label="Clear search" className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded text-[#687385] hover:bg-[#EDF3FA]" onClick={() => setSearch("")}><X size={16} /></button>}
           </div>
         </div>
-        <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded bg-[#20386E] px-4 text-sm font-semibold text-white hover:bg-[#172A53]" onClick={onNew}><Plus size={18} />New quote</button>
+        <button type="button" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded sm:w-auto bg-[#20386E] px-4 text-sm font-semibold text-white hover:bg-[#172A53]" onClick={onNew}><Plus size={18} />New quote</button>
       </div>
     </div>
-    <div className="overflow-x-auto">
+    <div className="md:hidden">
+      {loading ? <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#687385]"><Loader2 size={18} className="animate-spin" />Loading quotes…</div> : visible.map(row => <article key={row.id} className="border-t border-[#C8CED7] py-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[#687385]">
+          <span>{row.number ? `Quote ${row.number}` : "Quote"}</span>
+          {row.created > 0 && <time dateTime={new Date(row.created).toISOString()}>{new Date(row.created).toLocaleDateString("en-US")}</time>}
+        </div>
+        <h2><button className="min-h-11 w-full break-words py-1 text-left text-base font-semibold leading-relaxed text-[#203B64] [overflow-wrap:anywhere] hover:underline" onClick={() => onOpen(row.id)}>{row.name}</button></h2>
+        {row.client && <p className="mt-1 break-words text-sm leading-relaxed text-[#687385]">{row.client}</p>}
+        <div className="my-3 flex flex-wrap items-center justify-between gap-3">
+          {renderStatus(row.quote)}
+          <div className="text-right"><div className="text-xs text-[#687385]">Quote total</div><div className="text-base font-semibold tabular-nums text-[#203B64]">{row.total == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: row.currency }).format(row.total)}</div></div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm text-[#687385]">{row.units} {row.units === 1 ? "unit" : "units"} · {row.lines} {row.lines === 1 ? "line" : "lines"}</span>
+          <div className="flex gap-2">
+            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded border border-[#AAB2BE] px-3 text-sm font-medium text-[#203B64] hover:bg-[#EDF3FA]" aria-label={`View quote: ${row.name}`} onClick={() => onOpen(row.id)}><ListChecks size={17} />View quote</button>
+            {row.quote.job_id && <Link className={action + " min-h-11 min-w-11"} to={`/jobs/${encodeURIComponent(row.quote.job_id)}`} aria-label={`Open linked job: ${row.name}`}><ArrowUpRight size={18} /></Link>}
+          </div>
+        </div>
+      </article>)}
+      {!loading && !visible.length && <div className="border-t border-[#C8CED7] py-12 text-center text-sm text-[#687385]">{failed ? "Quotes couldn’t be loaded. Use Refresh below to try again." : filtered ? <><p>No quotes match these filters.</p><button className="mt-2 min-h-11 font-medium text-[#20386E]" onClick={reset}>Clear filters</button></> : <><p>No quotes yet.</p><button className="mt-2 min-h-11 font-medium text-[#20386E]" onClick={onNew}>Create your first quote</button></>}</div>}
+    </div>
+    <div className="hidden overflow-x-auto md:block">
       <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
         <caption className="sr-only">Saved window quotes. Select a quote name or its view button to open the schedule.</caption>
         <thead>
@@ -72,7 +94,7 @@ export default function WindowQuoteList({ quotes, loading, failed, onOpen, onNew
                 </div>
               </td>
             </tr>)}
-          {!loading && !visible.length && <tr><td colSpan={9} className="px-4 py-14 text-center text-[#687385]">{failed ? "Quotes couldn’t be loaded. Use Refresh below to try again." : filtered ? <><p>No quotes match your search.</p><button className="mt-3 font-medium text-[#20386E] hover:underline" onClick={reset}>Clear filters</button></> : <><p>No quotes yet.</p><button className="mt-3 font-medium text-[#20386E] hover:underline" onClick={onNew}>Create your first quote</button></>}</td></tr>}
+          {!loading && !visible.length && <tr><td colSpan={9} className="px-4 py-14 text-center text-[#687385]">{failed ? "Quotes couldn’t be loaded. Use Refresh below to try again." : filtered ? <><p>No quotes match these filters.</p><button className="mt-3 font-medium text-[#20386E] hover:underline" onClick={reset}>Clear filters</button></> : <><p>No quotes yet.</p><button className="mt-3 font-medium text-[#20386E] hover:underline" onClick={onNew}>Create your first quote</button></>}</td></tr>}
         </tbody>
       </table>
     </div>
