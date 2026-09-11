@@ -12,7 +12,7 @@ export const STUDIO_SH_CALL_SIZES = Object.freeze({
 });
 export const COZE_CHOICES = ["CozE (LowE)", "CozE Tint (LowE 240)", "CozE Max (LowE 340)", "CozE HV (LowE 366)", "CozE Solar (LowE 180)", "CozE HV Bird Glass"];
 export function newConfiguratorLine() {
-  return createBuilderLine("", { options: { series: AMSCO_SERIES[0].value } });
+  return createBuilderLine(undefined, { style: "", options: { series: AMSCO_SERIES[0].value } });
 }
 export function isPristineConfiguratorLine(line) {
   return !line.style && !line.width && !line.height && !line.room && !line.mark && Number(line.qty) === 1 &&

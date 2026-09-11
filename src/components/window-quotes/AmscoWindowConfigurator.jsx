@@ -9,17 +9,17 @@ const input = "amsco-select";
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded border border-[#8c969d] bg-white px-3 py-2 text-sm text-[#40525e] hover:bg-[#f5f7fa] disabled:cursor-not-allowed disabled:opacity-40";
 const primary = button + " !border-[#247d9d] !bg-[#247d9d] !text-white";
 const money = value => typeof value === "number" && Number.isFinite(value) ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value) : "—";
-function Row({ label, children, note, required = false }) {
+function Row({ label, children, note = "", required = false }) {
   const id = useId();
   return <div className="amsco-row"><label htmlFor={id} className="amsco-row-label">{required && <AlertTriangle size={16} className="text-[#d83c50]" aria-label="Selection required" />}{label}</label><div className="amsco-row-value">{children(id)}{note && <p className="mt-2 text-xs leading-relaxed text-[#75838c]">{note}</p>}</div></div>;
 }
-function SelectRow({ label, value, choices, onChange, note, disabled = false, required = false }) {
+function SelectRow({ label, value, choices, onChange, note = "", disabled = false, required = false }) {
   const all = choices.map(choice => typeof choice === "object" ? choice : { value: choice, label: String(choice) });
   if (value !== undefined && value !== "" && !all.some(choice => String(choice.value) === String(value))) all.push({ value, label: String(value) + " (saved selection)" });
   return <Row label={label} note={note} required={required && !value}>{id => <select id={id} className={input} value={value ?? ""} disabled={disabled} aria-required={required} onChange={event => onChange(event.target.value)}>{all.map(choice => <option key={String(choice.value)} value={choice.value}>{choice.label}</option>)}</select>}</Row>;
 }
-function TextRow({ label, value, onChange, note, ...rest }) { return <Row label={label} note={note}>{id => <input id={id} className={input} value={value ?? ""} onChange={event => onChange(event.target.value)} {...rest} />}</Row>; }
-function ReadRow({ label, value, note }) { return <Row label={label} note={note}>{id => <output id={id} className="amsco-readout">{value === "" || value == null ? "Awaiting AMSCO configuration" : String(value)}</output>}</Row>; }
+function TextRow({ label, value, onChange, note = "", ...rest }) { return <Row label={label} note={note}>{id => <input id={id} className={input} value={value ?? ""} onChange={event => onChange(event.target.value)} {...rest} />}</Row>; }
+function ReadRow({ label, value, note = "" }) { return <Row label={label} note={note}>{id => <output id={id} className="amsco-readout">{value === "" || value == null ? "Awaiting AMSCO configuration" : String(value)}</output>}</Row>; }
 function Note({ children }) { return <p className="mx-4 mb-4 text-sm leading-relaxed text-[#75838c]">{children}</p>; }
 function WindowDrawing({ line, settings, grille }) {
   const { rows, kind, columns: baseColumns } = diagramPanels(line);
@@ -57,9 +57,10 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
   const [step, setStep] = useState(0), [visited, setVisited] = useState([0]), [summary, setSummary] = useState(false), [zoom, setZoom] = useState(false);
   const [customGrille, setCustomGrille] = useState(false), [customWidth, setCustomWidth] = useState(false), [customHeight, setCustomHeight] = useState(false);
   const uid = useId(), tabs = useRef(null), heading = useRef(null);
+  const [legacyProduct, setLegacyProduct] = useState(index >= 0);
   const series = selectedSeries(line), styles = stylesForSeries(series), options = line.options || {};
   const colors = colorParts(options, settings), grilles = parseGrilles(options.grilles), panel = diagramPanels(line);
-  const ready = configurationReadiness(line, { legacy: index >= 0 });
+  const ready = configurationReadiness(line, { legacy: legacyProduct });
   const menu = callSizeMenu(line, series), heights = menu?.heightsByWidth[String(line.width)] || [];
   const frame = frameSize(line, ready.size ? price : undefined);
   const widthCustom = customWidth || !menu || !!line.width && !menu.widths.includes(Number(line.width));
@@ -77,7 +78,7 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
       heading.current?.focus({ preventScroll: true });
     });
   };
-  const resetBranch = patch => { onTradeCode(""); setCustomWidth(false); setCustomHeight(false); setVisited([0]); onChange(patch); };
+  const resetBranch = patch => { setLegacyProduct(false); onTradeCode(""); setCustomWidth(false); setCustomHeight(false); setVisited([0]); onChange(patch); };
   const auto = key => automaticOptionLabel(key, line, settings, ready.size ? price : undefined, priceStatus);
   const optionRow = (label, key, choices) => <SelectRow label={label} value={options[key] ?? ""} choices={[{ value: "", label: auto(key) }, ...choices]} onChange={value => onOption(key, value)} />;
   const boolRow = (label, key) => <SelectRow label={label} value={options[key] === undefined ? "" : String(options[key])} choices={[{ value: "", label: auto(key) }, { value: "false", label: "No" }, { value: "true", label: "Yes" }]} onChange={value => onOption(key, value === "" ? "" : value === "true")} />;
@@ -86,7 +87,7 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
   const nativeInformation = price?.status === "priced" ? price.informational_values || {} : {};
   const nativeRatings = price?.status === "priced" ? price.ratings || {} : {};
   const review = <div className="space-y-3 p-4"><h3 className="font-semibold">Configuration summary</h3><dl className="space-y-3 text-sm">{[
-    ["Series", seriesLabel], ["Style / Operation", productLabel], ["Number Wide", options.number_wide ?? (index >= 0 ? 1 : "Choose number wide")],
+    ["Series", seriesLabel], ["Style / Operation", productLabel], ["Number Wide", options.number_wide ?? (legacyProduct ? 1 : "Choose number wide")],
     ["Size", line.width && line.height ? line.width + " × " + line.height + " in · " + line.dimension_basis.replaceAll("_", " ") : "Choose width and height"],
     ["Finish", colors.exterior + " exterior / " + colors.interior + " interior"], ["Glass", glassSummary || "Automatic"], ["Quantity", line.qty], ["Location", [line.mark, line.room].filter(Boolean).join(" · ") || "—"]
   ].map(([label, value]) => <div key={label}><dt className="text-xs text-[#75838c]">{label}</dt><dd className="mt-1 break-words">{value}</dd></div>)}</dl>
@@ -120,7 +121,7 @@ export default function AmscoWindowConfigurator({ line, index, settings, disable
           {step === 0 && <>
             <SelectRow label="Series" value={series} required choices={[{ value: "", label: "— Select —" }, ...AMSCO_SERIES]} onChange={value => resetBranch(changeConfiguratorSeries(line, value))} />
             {series && <SelectRow label="Style / Operation" value={line.style} required choices={[{ value: "", label: "— Select —" }, ...styles, { value: "Custom", label: "Other / custom product" }]} onChange={value => resetBranch(changeProduct(line, value))} />}
-            {line.style && <SelectRow label="Number Wide" value={options.number_wide ?? (index >= 0 ? 1 : "")} required choices={[{ value: "", label: "— Select —" }, ...numberWideChoices(line)]} onChange={value => resetBranch(changeNumberWide(line, value))} />}
+            {line.style && <SelectRow label="Number Wide" value={options.number_wide ?? (legacyProduct ? 1 : "")} required choices={[{ value: "", label: "— Select —" }, ...numberWideChoices(line)]} onChange={value => resetBranch(changeNumberWide(line, value))} />}
             {line.style && !styles.some(item => item.value === line.style) && <TextRow label="Requested AMSCO Product" value={line.style === "Custom" ? "" : line.style} maxLength={250} placeholder="Enter product name" onChange={value => onChange({ style: value || "Custom" })} />} 
             {line.style && !styles.some(item => item.value === line.style) && <Note>This product will need an AMSCO specialist to confirm the product and available options.</Note>}
             {!line.style && <Note>Choose the operation first. Its unit details, sizes, and design options will follow.</Note>}

@@ -25,10 +25,10 @@ const assistantFileType = file => file.type || assistantFileTypes[file.name.spli
 
 const optionLabels = { series: "Series / frame", fin: "Installation fin", color: "Color", exterior_color: "Exterior color", interior_color: "Interior color", glass: "Glass coating", tempered: "Tempered", patterned_glass: "Privacy texture", screen: "Screen", hardware: "Hardware", hardware_color: "Hardware color", glass_thickness: "Glass thickness", glazing_method: "Glazing", elevation: "Installation elevation", argon: "Argon", super_spacer: "Super Spacer", capillary_tubes: "Capillary tubes", grilles: "Grilles", operation: "Operation", sash_split: "Sash split", number_wide: "Number wide", unit_type: "Unit type", viewing_direction: "Viewing direction" };
 const money = value => typeof value === "number" && Number.isFinite(value) ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value)) : "—";
-function Field({ label, children, note }) { return <label className="block min-w-0"><span className="mb-1.5 block text-xs font-semibold text-[#535E72]">{label}</span>{children}{note && <span className="mt-1.5 block text-xs leading-relaxed text-[#77839A]">{note}</span>}</label>; }
+function Field({ label, children, note = "" }) { return <label className="block min-w-0"><span className="mb-1.5 block text-xs font-semibold text-[#535E72]">{label}</span>{children}{note && <span className="mt-1.5 block text-xs leading-relaxed text-[#77839A]">{note}</span>}</label>; }
 function Issues({ items = [] }) { return items.length ? <ul className="list-disc space-y-1 pl-4 text-sm leading-relaxed">{items.map((item, i) => <li key={i}>{issueText(item)}</li>)}</ul> : null; }
 function MiniWindow({ line }) { const code = styleCode(line.style); return <div className="flex h-28 w-20 shrink-0 items-center justify-center rounded-xl bg-[#F6F8FC]" aria-label={`${line.style || "Window"} style illustration`}>{code ? <span aria-hidden="true"><ProWindowDiagram code={code} width={Number(line.width) || 36} height={Number(line.height) || 60} forQuoteThumbnail /></span> : <Plus size={24} className="text-[#77839A]" />}</div>; }
-function WindowCard({ line, index, settings, price, onEdit, onCopy, onRemove, disabled, compact = false }) {
+function WindowCard({ line, index, settings, price = undefined, onEdit = undefined, onCopy = undefined, onRemove = undefined, disabled = false, compact = false }) {
   const options = resolvedWindowOptions(line, settings, price), code = formatTradeCode(Number(line.width), Number(line.height));
   const glassSummary = glassSpecification(line, settings, price);
   const special = [options.fin, options.patterned_glass && options.patterned_glass !== "None" ? options.patterned_glass : null].filter(Boolean);
@@ -58,7 +58,7 @@ export default function WindowQuoteBuilder({ seed, preferenceUserId, busy = fals
   const [step, setStep] = useState("build");
   const [processing, setProcessing] = useState("");
   const [reviewed, setReviewed] = useState(null);
-  const [priceResult, setLivePrice] = useState({ status: "idle", lines: [], total: null, ready: false });
+  const [priceResult, setLivePrice] = useState({ status: "idle", lines: [], total: null, ready: false, inputKey: "" });
   const priceRequest = useRef(0);
   const [confirmed, setConfirmed] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
