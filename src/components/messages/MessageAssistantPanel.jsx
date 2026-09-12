@@ -1,0 +1,44 @@
+import {useCallback,useEffect,useState} from 'react';
+import {Link} from 'react-router-dom';
+import {Bot,RefreshCw,ExternalLink,Copy,CheckCircle2} from 'lucide-react';
+import {base44} from '@/api/base44Client';
+const call=async data=>(await base44.functions.invoke('message-assistant',data)).data;
+const button='min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50';
+export function BlueBubblesPanel(){
+ return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4"><div><h2 className="font-semibold">BlueBubbles</h2><p className="mt-1 text-sm text-slate-600">Connect the web client to your existing Mac server. Your conversations and texting controls stay in BlueBubbles.</p></div><a className={button+' inline-flex items-center gap-2'} href="https://bluebubbles.app/web/" target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4"/>Open full window</a></div>
+  <iframe title="BlueBubbles texting client" src="https://bluebubbles.app/web/" className="h-[75vh] min-h-[580px] w-full border-0 bg-black" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-popups" referrerPolicy="no-referrer"/>
+  <p className="p-4 text-xs text-slate-500">If the embedded client cannot connect, use Open full window. BlueBubbles manages its own sign-in and read status; the Hub assistant does not mark Apple Messages as read.</p>
+ </section>;
+}
+export default function MessageAssistantPanel({conversationKey}){
+ const [data,setData]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[active,setActive]=useState(null);
+ const refresh=useCallback(async()=>{try{setData(await call({action:'status'}));setError('')}catch(e){setError(e.response?.data?.error||'Assistant status is unavailable.')}},[]);
+ useEffect(()=>{refresh();const timer=setInterval(refresh,30000);return()=>clearInterval(timer)},[refresh]);
+ useEffect(()=>{setActive(null);setNotice('')},[conversationKey]);
+ const analyze=async()=>{setBusy(true);setError('');setNotice('');try{const r=await call({action:'analyze',conversation_key:conversationKey});setActive(r.case||null);if(r.no_service_request)setNotice(r.summary||'No service request found in the imported conversation.');await refresh()}catch(e){setError(e.response?.data?.error||'The assistant could not review this conversation.')}finally{setBusy(false)}};
+ const cases=data?.cases||[],selected=active||(conversationKey?cases.find(c=>c.conversation_key===conversationKey):null),result=selected?.result;
+ const copy=async text=>{try{await navigator.clipboard.writeText(text);setNotice('Draft copied. Nothing has been sent.')}catch{setError('Clipboard is unavailable. Select and copy the draft text.')}};
+ return <section className="space-y-5">
+  <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-semibold"><Bot className="h-5 w-5"/>Service assistant</h2><p className="mt-2 max-w-2xl text-sm text-slate-600">Matches work contacts, reviews the imported text history, and prepares a job-specific service handoff.</p></div><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">Draft mode · automatic sending off</span></div>
+  <p className="mt-4 text-sm"><strong>Service route:</strong> {data?.route?.name||'Loading…'}{data?.route&&' · '+data.route.recipients.join(' + ')}</p><p className="mt-1 text-xs text-slate-500">Uses the existing service group. Customer groups with extra participants are not the default destination.</p>
+  <div className="mt-4 flex flex-wrap gap-3"><button className={button} disabled={!conversationKey||busy} onClick={analyze}>{busy?'Reviewing history…':'Review selected conversation'}</button><button className={button+' flex items-center gap-2'} onClick={refresh}><RefreshCw className="h-4 w-4"/>Refresh cases</button></div>
+  {!conversationKey&&<p className="mt-3 text-sm text-slate-600">Choose a conversation in Job inbox first, or open a saved case below.</p>}
+  {(data?.devices||[]).map(d=><p key={d.device_id} className="mt-3 text-xs text-slate-500">{d.label}: {!d.enabled?'paused':Date.now()-Date.parse(d.last_seen_at||'')<180000?'collector connected':'waiting for collector'}{d.last_seen_at?' · '+new Date(d.last_seen_at).toLocaleString():''}{d.last_error?' · '+d.last_error:''}</p>)}
+  {data&&!data.devices?.length&&<p className="mt-3 text-xs text-amber-800">The assistant collector has not connected yet. Imported conversations can be reviewed on demand.</p>}
+  </div>
+  {error&&<p role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-800">{error}</p>}{notice&&<p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">{notice}</p>}
+  <div className="grid items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]"><aside className="rounded-2xl border bg-white p-4"><h3 className="mb-3 font-semibold">Service cases</h3>{!cases.length&&<p className="text-sm text-slate-500">No service drafts yet.</p>}<ol className="space-y-2">{cases.map(c=><li key={c.id}><button onClick={()=>setActive(c)} className={'w-full rounded-xl border p-3 text-left '+(selected?.id===c.id?'border-teal-700 bg-teal-50':'border-slate-200')}><p className="text-sm font-medium">{c.result?.job?.name||c.result?.customer_name||'Job needs matching'}</p><p className="mt-1 line-clamp-2 text-xs text-slate-600">{c.result?.summary}</p><p className="mt-2 text-xs capitalize text-slate-500">{c.status.replaceAll('_',' ')}</p></button></li>)}</ol></aside>
+  <article className="min-w-0 rounded-2xl border bg-white p-5">{!result?<p className="py-12 text-center text-sm text-slate-500">Select a case to see its context, photos and draft.</p>:<>
+   <div className="flex flex-wrap justify-between gap-3"><h3 className="text-lg font-semibold">{result.job?.name||result.customer_name}</h3><Link className="text-sm text-teal-700 underline" to={'/messages?conversation='+encodeURIComponent(selected.conversation_key)}>Open source conversation</Link></div>
+   <p className="mt-3 whitespace-pre-wrap text-sm">{result.summary}</p>{result.job?.address&&<p className="mt-2 text-sm text-slate-600">{result.job.address}</p>}
+   <p className="mt-3 text-xs text-slate-500">{selected.source_message_guids?.length||0} message references · {result.photos?.length||0} selected photos · {selected.history_complete?'Captured history complete':'History coverage incomplete'}</p>
+   <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">{result.issues?.map((v,i)=><li key={i}>{v}</li>)}</ul>
+   {!!result.missing_info?.length&&<div className="mt-4 rounded-xl bg-amber-50 p-4"><h4 className="text-sm font-semibold">Needs clarification</h4><ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{result.missing_info.map((v,i)=><li key={i}>{v}</li>)}</ul></div>}
+   {result.acknowledgment_already_sent?<p className="mt-4 flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4"/>You already acknowledged this request. No duplicate reply is proposed.</p>:result.reply_text&&<div className="mt-5"><h4 className="text-sm font-semibold">Customer reply draft</h4><p className="mt-2 whitespace-pre-wrap rounded-xl bg-blue-50 p-4 text-sm">{result.reply_text}</p><button className={button+' mt-2'} onClick={()=>copy(result.reply_text)}>Copy reply draft</button></div>}
+   <h4 className="mt-5 text-sm font-semibold">Service handoff draft</h4><p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm">{result.service_text}</p><button className={button+' mt-2 inline-flex items-center gap-2'} onClick={()=>copy(result.service_text)}><Copy className="h-4 w-4"/>Copy service draft</button>
+   <h4 className="mt-5 text-sm font-semibold">Selected attachments</h4><ul className="mt-2 space-y-2 text-sm">{result.photos?.map(p=><li key={p.guid} className="rounded-lg border p-3">{p.name||p.guid}<span className="ml-2 text-xs text-slate-500">{p.status==='ready'?'Available in source conversation':'Waiting for import'}</span></li>)}</ul>
+   <p className="mt-5 border-t pt-3 text-xs text-slate-500">This is a saved draft, not a sent service request. Delivery, scheduling and completion are separate steps.</p>
+  </>}</article></div>
+ </section>;
+}
