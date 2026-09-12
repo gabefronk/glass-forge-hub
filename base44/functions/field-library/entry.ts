@@ -30,6 +30,7 @@ async function mergeRows(entity,existing,rows){
 const publicFile=({file_uri,source_snapshot,...f})=>f;
 function reportView(r){return {id:r.id,source:'library',project_id:r.source_project_id,project_name:r.project_name,post_id:r.source_post_id,created_at:r.source_created_at,date:r.report_date,message:r.message,deleted:r.source_deleted,attachments:r.attachments||[],source_checked_at:r.source_checked_at};}
 function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>new Date()}){
+ const sourceTokenCache={value:null,until:0},importCache=new Map();
  return async req=>{
   if(req.method!=='POST')return json({error:'Use POST.'},405);
   let stage='authorization';
@@ -39,10 +40,10 @@ function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>n
    else{const u=await client.auth.me().catch(()=>null);if(u?.role!=='admin'||!OWNERS.has(String(u.email||'').toLowerCase().trim()))fail('Owner access required.',403);}
    const raw=await req.text();if(raw.length>1048576)fail('Request too large.',413);let input;try{input=JSON.parse(raw);}catch{fail('Invalid JSON.');}
    const {action}=input,at=now().toISOString();let tokenPromise;
-   const token=()=>tokenPromise||=getToken(client);
+   const token=()=>tokenPromise||=(sourceTokenCache.value&&Date.now()<sourceTokenCache.until?Promise.resolve(sourceTokenCache.value):getToken(client).then(value=>{sourceTokenCache.value=value;sourceTokenCache.until=Date.now()+45*60000;return value;}));
    const provider=async path=>{const r=await fetchImpl(DB+'/'+path+'.json?auth='+encodeURIComponent(await token()),{signal:AbortSignal.timeout(45000)});if(!r.ok)fail('ProBuild source read failed (HTTP '+r.status+').',502);return r.json();};
    const signed=async uri=>(await client.asServiceRole.integrations.Core.CreateFileSignedUrl({file_uri:uri,expires_in:900})).signed_url;
-   const runFor=async()=>{const run=await api.FieldLibraryImport.get(id(input.run_id));if(!run)fail('Import not found.',404);return run;};
+   const runFor=async()=>{const rid=id(input.run_id),cached=importCache.get(rid);if(cached&&Date.now()<cached.until)return cached.run;const run=await api.FieldLibraryImport.get(rid);if(!run)fail('Import not found.',404);importCache.set(rid,{run,until:Date.now()+10*60000});return run;};
    if(action==='start_import'){
     const active=(await api.FieldLibraryImport.filter({phase:{$in:['metadata','files']}},'-created_date',1))[0];
     if(active)return json({run:active,resumed:true});
@@ -129,7 +130,7 @@ function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>n
     const r=await api.FieldLibraryReport.get(id(input.report_id));if(!r)fail('Report not found.',404);return json({report:reportView(r)});
    }
    fail('Unsupported action.');
-  }catch(error){if(error.publicMessage)return json({error:error.publicMessage},error.status||400);console.error('Field library failed',error?.name||'Error');return json({error:'The library request could not finish at '+stage+'. '+String(error?.response?.status||error?.status||'')+' '+String(error?.message||'').replace(/https?:[^\s]+/g,'[url]').slice(0,300)},500);}
+  }catch(error){if(error.publicMessage)return json({error:error.publicMessage},error.status||400);console.error('Field library failed',error?.name||'Error');return json({error:'The library request could not finish at '+stage+'. '+String(error?.response?.status||error?.status||'')+' '+(Number(error?.response?.status||error?.status)===429?'The service is busy; retry shortly.':'Retrying preserves imported records.')},500);}
  };
 }
 
