@@ -82,7 +82,7 @@ export function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,no
      const path=`teams/${TEAM}/posts/${id(f.source_project_id)}/${id(f.source_post_id)}/attachments/${id(f.source_attachment_id)}`;
      const url='https://firebasestorage.googleapis.com/v0/b/probuild-prod.appspot.com/o/'+encodeURIComponent(path)+'?alt=media'+(f.generation?'&generation='+encodeURIComponent(f.generation):'');
      const chunkSize=6*1048576,offset=Number(f.bytes_stored)||0;
-     const response=await fetchImpl(url,{headers:{Authorization:'Firebase '+await token(),Range:`bytes=${offset}-${offset+chunkSize-1}`},signal:AbortSignal.timeout(90000)});
+     stage='read-original-file';const response=await fetchImpl(url,{headers:{Authorization:'Firebase '+await token(),Range:`bytes=${offset}-${offset+chunkSize-1}`},signal:AbortSignal.timeout(90000)});
      if(!response.ok)fail('Original attachment unavailable (HTTP '+response.status+').',502);
      const range=/^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('content-range')||'');
      if(response.status===206&&(!range||Number(range[1])!==offset))fail('Source returned an invalid file range.',502);
@@ -93,16 +93,16 @@ export function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,no
      if(!bytes.length||/text\/html|application\/json/.test(mime))fail('Invalid source attachment.',502);
      const digest=await hashBytes(bytes);
      const multipart=total>chunkSize;
-     const uploaded=await client.asServiceRole.integrations.Core.UploadPrivateFile({file:new File([bytes],multipart?f.name+'.part-'+offset+'.bin':f.name,{type:multipart?'application/octet-stream':mime})});
+     stage='upload-private-file';const uploaded=await client.asServiceRole.integrations.Core.UploadPrivateFile({file:new File([bytes],multipart?f.name+'.part-'+offset+'.bin':f.name,{type:multipart?'application/octet-stream':mime})});
      if(!uploaded.file_uri)fail('Glass Forge did not store the file.',502);
-     const copied=await fetchImpl(await signed(uploaded.file_uri),{signal:AbortSignal.timeout(90000)});
+     stage='verify-private-file';const copied=await fetchImpl(await signed(uploaded.file_uri),{signal:AbortSignal.timeout(90000)});
      if(!copied.ok)fail('Stored file could not be verified.',502);
      const checked=await boundedBytes(copied,chunkSize);if(checked.length!==bytes.length||await hashBytes(checked)!==digest)fail('Stored file does not match its source.',502);
      const latest=await api.FieldLibraryFile.get(f.id);if((latest.bytes_stored||0)!==offset)return json({file:publicFile(latest),partial:latest.status!=='verified'});
      const chunks=[...(f.chunks||[]),{offset,size:bytes.length,sha256:digest,file_uri:uploaded.file_uri}],stored=offset+bytes.length,complete=stored===total;
      if(stored>total)fail('Stored file exceeds the source size.',502);
      const manifest=chunks.map(({offset,size,sha256})=>({offset,size,sha256}));
-     const saved=await api.FieldLibraryFile.update(f.id,{status:complete?'verified':'copying',file_uri:multipart?'':uploaded.file_uri,chunks,bytes_stored:stored,size:total,mime_type:mime,sha256:multipart?'':digest,manifest_sha256:await hash(JSON.stringify(manifest)),verified_at:complete?at:'',error:'',attempts:(f.attempts||0)+1});
+     stage='save-file-receipt';const saved=await api.FieldLibraryFile.update(f.id,{status:complete?'verified':'copying',file_uri:multipart?'':uploaded.file_uri,chunks,bytes_stored:stored,size:total,mime_type:mime,sha256:multipart?'':digest,manifest_sha256:await hash(JSON.stringify(manifest)),verified_at:complete?at:'',error:'',attempts:(f.attempts||0)+1});
      return json({file:publicFile(saved),partial:!complete});
     }catch(e){await api.FieldLibraryFile.update(f.id,{status:'error',error:e.publicMessage||'File transfer interrupted.',attempts:(f.attempts||0)+1});throw e;}
    }
