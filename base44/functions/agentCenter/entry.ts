@@ -34,7 +34,7 @@ export function buildAgentInventory({workers=[],snapshot=null,events=[],messageD
  for(const row of events){if(!latest.has(row.agent_id))latest.set(row.agent_id,row);}
  const dataTime=iso(snapshot?.source_captured_at);
  return baseNodes.map(node=>{
-  if(node.id==='message_service_assistant'){const d=messageDevices.find(d=>d.label?.toLowerCase().includes('mac'));const fresh=d?.enabled&&now.getTime()-Date.parse(d.last_seen_at||'')<180000;return {...node,connection:fresh?'connected':'planned',status:fresh?'Draft collector online':d&&!d.enabled?'Collector paused':'Waiting for Mac collector',updated_at:d?.last_seen_at||null};}
+  if(node.id==='message_service_assistant'){const d=messageDevices.find(d=>d.label?.toLowerCase().includes('mac'));const fresh=d?.enabled&&!d.last_error&&now.getTime()-Date.parse(d.last_seen_at||'')<180000;return {...node,connection:fresh?'connected':'planned',status:fresh?'Draft collector online':d&&!d.enabled?'Collector paused':d?.last_error?'Collector needs attention':'Waiting for Mac collector',updated_at:d?.last_seen_at||null};}
   const event=latest.get(node.id);
   const status=node.design_only?node.status:event?.event_type==='needs_owner_decision'?'Needs your decision':event?.event_type==='failed'?'Failed':event?.event_type==='completed'?'Completed':event?.event_type==='progress'?'Working':event?.event_type==='started'?'Started':node.status;
   return {...node,status,updated_at:iso(event?.occurred_at),latest_update:clean(event?.message,500)||null,data_updated_at:node.id==='sales_tracker_agent'?dataTime:null};
