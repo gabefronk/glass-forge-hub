@@ -1,0 +1,66 @@
+{
+  "name": "FieldLibraryImport",
+  "type": "object",
+  "properties": {
+    "phase": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "checked_at": {
+      "type": "string"
+    },
+    "source_snapshot": {
+      "type": "object"
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "cursor": {
+      "type": "number"
+    },
+    "projects_checked": {
+      "type": "number"
+    },
+    "reports_imported": {
+      "type": "number"
+    },
+    "files_discovered": {
+      "type": "number"
+    },
+    "files_verified": {
+      "type": "number"
+    },
+    "bytes_verified": {
+      "type": "number"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "source_complete": {
+      "type": "boolean"
+    },
+    "files_complete": {
+      "type": "boolean"
+    },
+    "audit": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "phase"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

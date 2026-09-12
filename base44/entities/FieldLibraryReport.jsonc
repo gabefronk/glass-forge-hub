@@ -1,0 +1,60 @@
+{
+  "name": "FieldLibraryReport",
+  "type": "object",
+  "properties": {
+    "source_key": {
+      "type": "string"
+    },
+    "source_project_id": {
+      "type": "string"
+    },
+    "source_post_id": {
+      "type": "string"
+    },
+    "project_name": {
+      "type": "string"
+    },
+    "library_project_id": {
+      "type": "string"
+    },
+    "report_date": {
+      "type": "string"
+    },
+    "source_created_at": {
+      "type": "string"
+    },
+    "source_deleted": {
+      "type": "boolean"
+    },
+    "message": {
+      "type": "string"
+    },
+    "source_snapshot": {
+      "type": "object"
+    },
+    "source_hash": {
+      "type": "string"
+    },
+    "source_checked_at": {
+      "type": "string"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "import_run_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_key"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

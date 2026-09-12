@@ -1,0 +1,57 @@
+{
+  "name": "FieldLibraryProject",
+  "type": "object",
+  "properties": {
+    "source_key": {
+      "type": "string"
+    },
+    "source_project_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "archived": {
+      "type": "boolean"
+    },
+    "source_deleted": {
+      "type": "boolean"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "job_name": {
+      "type": "string"
+    },
+    "source_snapshot": {
+      "type": "object"
+    },
+    "source_hash": {
+      "type": "string"
+    },
+    "source_checked_at": {
+      "type": "string"
+    },
+    "report_count": {
+      "type": "number"
+    },
+    "attachment_count": {
+      "type": "number"
+    },
+    "import_run_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_key"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
