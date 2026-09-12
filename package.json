@@ -56,6 +56,7 @@
     "fast-xml-parser": "5.11.1",
     "fflate": "0.8.3",
     "framer-motion": "^11.16.4",
+    "heic-to": "1.5.2",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
     "jspdf": "^4.2.1",
