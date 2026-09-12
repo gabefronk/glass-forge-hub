@@ -31,6 +31,11 @@ export function buildDirectory(data, rawJobs, manualLinks=[]) {
   const groups=[...new Map(accepted.map(r=>[r.subdivision+'|'+r.lot,{subdivision:r.subdivision,lot:r.lot,source_rows:[...refs.values()].filter(x=>x.subdivision===r.subdivision&&x.lot===r.lot).map(x=>x.row)}])).values()];
   return {id:j.id,name:j.canonical_name,address:j.address||'',builder,builder_key:builderKey(builder),groups,po_numbers:j.po_numbers||[],oe_numbers:j.oe_numbers||[]};
  });
+ const groupKey=(builder,subdivision,lot)=>builderKey(builder)+'~'+norm(subdivision)+'~'+norm(lot);
+ const represented=new Set(jobs.flatMap(j=>j.groups.map(g=>groupKey(j.builder,g.subdivision,g.lot))));
+ const workbookGroups=new Map();
+ for(const r of data.job_references){const key=groupKey(r.builder,r.subdivision,r.lot);if(represented.has(key))continue;if(!workbookGroups.has(key))workbookGroups.set(key,[]);workbookGroups.get(key).push(r);}
+ for(const [key,rows]of workbookGroups){const r=rows[0];jobs.push({id:'workbook:'+key,name:[r.builder,r.subdivision,r.lot?'Lot '+r.lot:''].filter(Boolean).join(' · '),address:'',builder:r.builder,builder_key:builderKey(r.builder),is_workbook:true,groups:[{subdivision:r.subdivision,lot:r.lot,source_rows:rows.map(x=>x.row)}],po_numbers:[...new Set(rows.map(x=>x.po).filter(Boolean))],oe_numbers:[...new Set(rows.map(x=>x.oe).filter(Boolean))]});}
  const jobIds=new Set(jobs.map(j=>j.id));
  const contacts=data.contacts.map(c=>{
   const key=builderKey(c.builder),qualifier=c.company.slice(c.builder.length).replace(/^\s*-\s*/,''),qt=tokens(qualifier);
@@ -39,7 +44,7 @@ export function buildDirectory(data, rawJobs, manualLinks=[]) {
   const saved=manualLinks.filter(l=>l.contact_key===c.key&&jobIds.has(l.job_id));
   return {...c,builder_key:key,job_specific:specific,auto_job_ids:candidates.length===1?[candidates[0].id]:[],candidate_count:candidates.length,manual_job_ids:saved.map(l=>l.job_id),job_ids:[...new Set([...saved.map(l=>l.job_id),...(candidates.length===1?[candidates[0].id]:[])])]};
  });
- return {source:data.source,contacts,jobs,builders:builderNames,summary:{contacts:contacts.length,phones:contacts.filter(c=>c.phone_key).length,emails:contacts.filter(c=>c.email_key).length,automatic_job_links:contacts.filter(c=>c.auto_job_ids.length).length,manual_job_links:manualLinks.length,review_contacts:contacts.filter(c=>c.review_note).length,job_reference_rows:data.job_references.length,jobs_with_builder:jobs.filter(j=>j.builder).length}};
+ return {source:data.source,contacts,jobs,builders:builderNames,summary:{contacts:contacts.length,phones:contacts.filter(c=>c.phone_key).length,emails:contacts.filter(c=>c.email_key).length,automatic_job_links:contacts.filter(c=>c.auto_job_ids.length).length,manual_job_links:manualLinks.length,review_contacts:contacts.filter(c=>c.review_note).length,workbook_jobs:workbookGroups.size,job_reference_rows:data.job_references.length,jobs_with_builder:jobs.filter(j=>j.builder).length}};
 }
 export function matchingContacts(contacts, participants) {
  const phones=new Set((participants||[]).map(phoneKey).filter(Boolean));

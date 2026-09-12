@@ -14,7 +14,7 @@ export default function ContactsDirectory(){
  const load=useCallback(async()=>{const n=++request.current;try{const r=await call({action:'directory'});if(n===request.current){setData(r);setError('');}}catch(e){if(n===request.current)setError(e.response?.data?.error||'Contacts could not be loaded.');}},[]);
  useEffect(()=>{if(owner)load();return()=>{request.current++}},[owner,load]);
  useEffect(()=>{setVisible(30)},[search,builder,subdivision,jobId,reviewOnly]);
- const change=(key,value)=>{const next=new URLSearchParams(params);if(value)next.set(key,value);else next.delete(key);if(key==='builder'){next.delete('subdivision');next.delete('job');}if(key==='subdivision')next.delete('job');setParams(next);};
+ const change=(key,value)=>{const next=new URLSearchParams(params);if(value)next.set(key,value);else next.delete(key);if(['builder','subdivision','job'].includes(key))next.delete('contact');if(key==='builder'){next.delete('subdivision');next.delete('job');}if(key==='subdivision')next.delete('job');setParams(next);};
  const jobs=data?.jobs||[],contacts=data?.contacts||[],currentJob=jobs.find(j=>j.id===jobId),contact=contacts.find(c=>c.key===selected);
  const activeBuilder=builder||currentJob?.builder||'';
  const builderKey=useMemo(()=>contacts.find(c=>c.builder===activeBuilder)?.builder_key||jobs.find(j=>j.builder===activeBuilder)?.builder_key||'', [contacts,jobs,activeBuilder]);
@@ -25,7 +25,7 @@ export default function ContactsDirectory(){
   if(reviewOnly&&!c.review_note)return false;
   if(activeBuilder&&c.builder!==activeBuilder&&(!builderKey||c.builder_key!==builderKey))return false;
   if(jobId&&!c.job_ids.includes(jobId)&&(c.job_specific||!currentJob?.builder_key||c.builder_key!==currentJob.builder_key))return false;
-  return !search.trim()||[c.name,c.company,c.phone,c.email,c.note].some(v=>v.toLowerCase().includes(search.trim().toLowerCase()));
+  return !search.trim()||[c.name,c.company,c.phone,c.phone_key,c.email,c.note].some(v=>v.toLowerCase().includes(search.trim().toLowerCase()));
  });
  const relatedJobs=contact?jobs.filter(j=>(contact.job_ids.includes(j.id)||(!contact.job_specific&&j.builder_key&&j.builder_key===contact.builder_key))&&(!jobSearch||[j.name,j.address,...j.po_numbers,...j.oe_numbers].some(v=>v.toLowerCase().includes(jobSearch.toLowerCase())))):[];
  const saveLink=async(job,remove=false)=>{setBusy(true);try{await call({action:'link',contact_key:contact.key,job_id:job,remove});setLinkJob('');await load();}catch(e){setError(e.response?.data?.error||'Job link could not be saved.')}finally{setBusy(false)}};

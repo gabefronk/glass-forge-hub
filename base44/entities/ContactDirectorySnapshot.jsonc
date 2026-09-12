@@ -25,12 +25,15 @@
     },
     "job_reference_count": {
       "type": "integer"
+    },
+    "directory_data": {
+      "type": "object",
+      "description": "Normalized contact and job-reference snapshot, imported through the authenticated connector. Owner-only backend access; checksum verified."
     }
   },
   "required": [
     "filename",
-    "content_sha256",
-    "data_file_uri"
+    "content_sha256"
   ],
   "rls": {
     "create": false,
