@@ -2,9 +2,14 @@ import { jsPDF } from 'jspdf';
 
 export const reportFileName = report => (report.title || 'Field report').replace(/[^a-z0-9 _.-]/gi, '').trim().slice(0,100) + ' ' + report.report_date + '.pdf';
 const when = s => new Date(s).toLocaleString('en-US',{timeZone:'America/Denver',dateStyle:'medium',timeStyle:'short'});
-async function imageData(url) {
+async function imageData(url,metadata={}) {
  const response=await fetch(url);if(!response.ok)throw Error('A photo could not be downloaded. Retry before sharing.');
- const blob=await response.blob(),objectUrl=URL.createObjectURL(blob);
+ let blob=await response.blob();
+ if(/image\/hei[cf]/i.test(blob.type)||/\.hei[cf]$/i.test(metadata.name||'')){
+  const {heicTo}=await import('heic-to/csp');
+  blob=await heicTo({blob,type:'image/jpeg',quality:.9});
+ }
+ const objectUrl=URL.createObjectURL(blob);
  try{
   const img=new Image();img.src=objectUrl;await img.decode();
   const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));
@@ -41,7 +46,7 @@ export async function buildReportPdf(report,call,onProgress=()=>{}) {
  for(let i=0;i<photos.length;i++){
   onProgress(`Preparing photo ${i+1} of ${photos.length}…`);
   if(i%2===0)newPage();
-  const source=photos[i],file=await call(source.payload),img=await imageData(file.url);
+  const source=photos[i],file=await call(source.payload),img=await imageData(file.url,file);
   const top=i%2===0?100:423,maxHeight=270,scale=Math.min(width/img.width,maxHeight/img.height),w=img.width*scale,h=img.height*scale;
   doc.addImage(img.data,'JPEG',margin+(width-w)/2,top,w,h,undefined,'FAST');
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor('#475569');
