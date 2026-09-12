@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import YaFeesSidebar from "@/components/YaFeesSidebar";
 import { base44 } from "@/api/base44Client";
-import { canViewAgentCenter } from "@/lib/agentCenterAccess";
-import { Bot } from "lucide-react";
+import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import { Bot, MessageSquare } from "lucide-react";
 import { Receipt, Calendar, Briefcase, BarChart3, PanelsTopLeft, Diamond, LogOut, Library } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -33,7 +33,7 @@ export default function Layout() {
         <Link to="/dashboard" className="flex min-h-11 items-center gap-2 text-xs font-semibold uppercase tracking-wider">
           <Diamond className="h-4 w-4 shrink-0 text-[#2A5EA8]" /> Glass Forge
         </Link>
-        <div className="flex items-center gap-2">{canViewAgentCenter(user) && <Link to="/admin/agents" aria-label="Agent Center" className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-xs font-medium text-[#2A5EA8]"><Bot className="h-4 w-4"/>Agents</Link>}
+        <div className="flex items-center gap-2">{isAgentCenterOwner(user) && <Link to="/messages" aria-label="Messages" className="flex min-h-11 items-center rounded-lg px-2 text-[#2A5EA8]"><MessageSquare className="h-5 w-5"/></Link>}{canViewAgentCenter(user) && <Link to="/admin/agents" aria-label="Agent Center" className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-xs font-medium text-[#2A5EA8]"><Bot className="h-4 w-4"/>Agents</Link>}
         <button type="button" onClick={handleSignOut} disabled={signingOut} aria-label="Sign out" title="Sign out" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[#616D81] hover:bg-[#F6F8FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2A5EA8]">
           <LogOut className="h-5 w-5" />
         </button></div>
