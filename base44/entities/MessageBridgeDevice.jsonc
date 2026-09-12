@@ -1,0 +1,47 @@
+{
+  "name": "MessageBridgeDevice",
+  "type": "object",
+  "properties": {
+    "device_id": {
+      "type": "string"
+    },
+    "token_hash": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "last_seen_at": {
+      "type": "string"
+    },
+    "last_sync_at": {
+      "type": "string"
+    },
+    "last_error": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "source_ok": {
+      "type": "boolean"
+    },
+    "pending_count": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "device_id",
+    "token_hash",
+    "enabled"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
