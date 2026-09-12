@@ -83,14 +83,21 @@ export default function InvoiceHeader({ month, onMonthChange, search, onSearchCh
           )}
         </div>
 
-        {/* Source freshness */}
+        {/* Source freshness — plain label, details behind a control */}
         {probuildStatus && !probuildStatus.error && (
-          <div className="hidden md:flex items-center gap-1.5" style={{ padding: "5px 10px", borderRadius: "99px", backgroundColor: "#F0F1ED", border: "1px solid #DDE0DA", flexShrink: 0 }} title={`Probuild team ID: ${probuildStatus.team_id}\nLast token exchange: ${probuildStatus.last_exchanged_at || "never"}\nLast audit run: ${probuildStatus.last_audit_at || "never"}`}>
-            <span style={{ width: "6px", height: "6px", borderRadius: "99px", backgroundColor: "#166447" }} />
-            <span className="text-[11px] font-medium" style={{ color: "#53615B", whiteSpace: "nowrap" }}>
-              ProBuild · {probuildStatus.team_id?.slice(0, 8)}… · sync {relativeTime(probuildStatus.last_exchanged_at)}
-            </span>
-          </div>
+          <details className="hidden md:block" style={{ flexShrink: 0 }}>
+            <summary className="flex items-center gap-1.5 cursor-pointer list-none" style={{ padding: "5px 10px", borderRadius: "99px", backgroundColor: "#F0F1ED", border: "1px solid #DDE0DA" }}>
+              <span style={{ width: "6px", height: "6px", borderRadius: "99px", backgroundColor: "#166447", flexShrink: 0 }} />
+              <span className="text-[11px] font-medium" style={{ color: "#53615B", whiteSpace: "nowrap" }}>
+                ProBuild · synced {relativeTime(probuildStatus.last_exchanged_at)}
+              </span>
+            </summary>
+            <div className="mt-1.5 rounded-lg p-3 text-[11px]" style={{ backgroundColor: "#FFFFFF", border: "1px solid #DDE0DA", color: "#53615B", lineHeight: 1.5, whiteSpace: "nowrap" }}>
+              <div>Team ID: <span className="font-mono-num">{probuildStatus.team_id || "—"}</span></div>
+              <div>Last token exchange: {probuildStatus.last_exchanged_at ? new Date(probuildStatus.last_exchanged_at).toLocaleString() : "never"}</div>
+              <div>Last audit run: {probuildStatus.last_audit_at ? new Date(probuildStatus.last_audit_at).toLocaleString() : "never"}</div>
+            </div>
+          </details>
         )}
 
         <div className="hidden xl:block" style={{ flex: 1 }} />

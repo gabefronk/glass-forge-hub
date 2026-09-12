@@ -57,7 +57,7 @@ export default function InvoiceSummary({ readyTotal, readyCount, heldTotal, reco
         </div>
       </div>
 
-      {/* Grouped Ready / Held / Billed */}
+      {/* This month — Ready / Held (with breakdown) / Billed */}
       <div>
         <div className="text-[11px] font-semibold uppercase mb-2.5" style={{ color: "#8A958F", letterSpacing: "0.06em" }}>This month</div>
         <div className="grid w-full min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-3">
@@ -65,17 +65,20 @@ export default function InvoiceSummary({ readyTotal, readyCount, heldTotal, reco
           <StatCard tone="held" label="Held for review" value={`$${formatMoney(heldTotal)}`} sub={`${reportBlockedCount + matchBlockedCount} lines held`} clickable={!!onFilterBlocked} onClick={onFilterBlocked} />
           <StatCard tone="billed" label="Billed" value={`$${formatMoney(billedTotal)}`} sub={`${billedCount} lines`} />
         </div>
+        {/* Held breakdown — report/pricing review belongs to the current-month Held card */}
+        <div className="mt-2.5">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2">
+            <StatCard tone="held" label="Waiting on reports" value={`$${formatMoney(reportBlockedTotal)}`} sub={`${reportBlockedCount} lines · review →`} clickable={!!onFilterBlocked} onClick={onFilterBlocked} />
+            <StatCard tone="held" label="Pricing / job review" value={`$${formatMoney(matchBlockedTotal)}`} sub={`${matchBlockedCount} lines · review →`} clickable={!!onFilterMatchBlocked} onClick={onFilterMatchBlocked} />
+          </div>
+        </div>
       </div>
 
-      {/* Scheduled — separate */}
+      {/* Future work — Scheduled only */}
       <div>
         <div className="text-[11px] font-semibold uppercase mb-2.5" style={{ color: "#8A958F", letterSpacing: "0.06em" }}>Future work</div>
         <div className="grid w-full min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2">
           <StatCard tone="scheduled" label="Scheduled" value={`$${formatMoney(scheduledTotal)}`} sub={`${scheduledCount} lines · not yet billable`} />
-          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
-            <StatCard tone="held" label="Waiting on reports" value={`$${formatMoney(reportBlockedTotal)}`} sub={`${reportBlockedCount} lines · review →`} clickable={!!onFilterBlocked} onClick={onFilterBlocked} />
-            <StatCard tone="held" label="Pricing / job review" value={`$${formatMoney(matchBlockedTotal)}`} sub={`${matchBlockedCount} lines · review →`} clickable={!!onFilterMatchBlocked} onClick={onFilterMatchBlocked} />
-          </div>
         </div>
       </div>
     </div>

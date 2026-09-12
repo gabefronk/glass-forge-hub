@@ -166,7 +166,7 @@ export default function CalendarPage() {
               <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "list" ? "" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
             </div>
             <button type="button" onClick={() => setUnreportedOnly(!unreportedOnly)} className="px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] whitespace-nowrap transition-colors" style={unreportedOnly ? { backgroundColor: C.amber, color: "#FFFFFF" } : { border: `1px solid ${C.border}`, color: C.textSecondary }}>Unreported only</button>
-            <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+            <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <RefreshCw className="h-3.5 w-3.5" />{syncing ? "Syncing…" : "Refresh whole month"}
             </button>
             <button onClick={() => { setSelected(null); setCreating({ event_date: selectedDay }); }} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
@@ -185,9 +185,9 @@ export default function CalendarPage() {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-4">
           <h1 className="font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
           <div className="flex items-center gap-1" aria-label="Choose calendar month">
-            <button type="button" onClick={() => shiftMonth(-1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></button>
-            <button type="button" onClick={() => { const today = new Date(); const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`; setMonth(day.slice(0, 7)); setSelectedDay(day); }} className="min-h-11 rounded-full px-3 text-xs font-medium hover:bg-white" style={{ color: C.textSecondary }}>Today</button>
-            <button type="button" onClick={() => shiftMonth(1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Next month"><ChevronRight className="h-4 w-4" /></button>
+            <button type="button" onClick={() => shiftMonth(-1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></button>
+            <button type="button" onClick={() => { const today = new Date(); const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`; setMonth(day.slice(0, 7)); setSelectedDay(day); }} className="min-h-11 rounded-full px-3 text-xs font-medium hover:bg-[#F8F9F6]" style={{ color: C.textSecondary }}>Today</button>
+            <button type="button" onClick={() => shiftMonth(1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Next month"><ChevronRight className="h-4 w-4" /></button>
           </div>
           <div className="flex items-center gap-3 text-[11px]">
             <span className="inline-flex items-center gap-1.5" style={{ color: C.textSecondary }}>
@@ -278,7 +278,7 @@ export default function CalendarPage() {
                   key={e.id}
                   type="button"
                   onClick={() => setSelected(e)}
-                  className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-[#F8FAFD]"
+                  className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-[#F8F9F6]"
                   style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
                 >
                   <div className="flex flex-col items-center justify-center min-w-[42px] pr-1" style={{ borderRight: `1px solid ${C.border}` }}>
