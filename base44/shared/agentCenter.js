@@ -1,5 +1,7 @@
 export const AGENT_CENTER_OWNER_EMAILS = new Set(['gabefronk@gmail.com','gabriel.fronk.wd@gmail.com']);
 export const isAgentCenterOwner = user => user?.role === 'admin' && AGENT_CENTER_OWNER_EMAILS.has(String(user.email||'').trim().toLowerCase());
+
+export const canViewAgentCenter = user => isAgentCenterOwner(user) || (user?.role === 'admin' && String(user.email || '').trim().toLowerCase() === 'trevor.draney7@gmail.com');
 const clean=(value,max=180)=>typeof value==='string'?value.slice(0,max):'';
 const iso=value=>Number.isFinite(Date.parse(value))?new Date(value).toISOString():null;
 const hasSecureSecret=name=>{try{return Boolean(name&&typeof Deno!=='undefined'&&Deno.env.get(name));}catch{return false;}};
@@ -38,9 +40,11 @@ export function createAgentCenterHandler({getClient,now=()=>new Date()}={}) {
  return async req=>{
   if(req.method!=='POST')return Response.json({error:'Use POST.'},{status:405});
   const client=await getClient(req),user=await client.auth.me().catch(()=>null);
-  if(!isAgentCenterOwner(user))return Response.json({error:'This section is private to the Glass Forge owner.'},{status:403});
+  if(!canViewAgentCenter(user))return Response.json({error:'Agent Center access required.'},{status:403});
   try{
-   const input=await req.json(),api=client.asServiceRole.entities,at=now().toISOString();
+   const input=await req.json();
+   if(!isAgentCenterOwner(user)&&input.action!=='inventory')return Response.json({error:'Viewing access only. Owner access is required for this action.'},{status:403});
+   const api=client.asServiceRole.entities,at=now().toISOString();
    if(input.action==='entry'){
     if(!['request','note','result'].includes(input.kind))throw Error('Choose request, note or result.');
     const target=clean(input.target_id,80),title=clean(input.title,161).trim(),body=clean(input.body,5001).trim(),requestKey=clean(input.request_key,100);
