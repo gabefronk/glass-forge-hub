@@ -15,5 +15,11 @@
   },
   "required": [
     "refresh_token"
-  ]
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
 }

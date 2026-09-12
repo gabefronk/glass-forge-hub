@@ -2,8 +2,8 @@ import { Link, useLocation } from "react-router-dom";
 import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { canViewAgentCenter } from "@/lib/agentCenterAccess";
-import { Bot } from "lucide-react";
+import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import { Bot, MessageSquare, Users, FileText } from "lucide-react";
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr } from "@/lib/feeMath";
 
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
+  { label: "Reports", to: "/report-library", icon: FileText, ownerOnly: true },
   { label: "Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },
@@ -86,7 +87,7 @@ export default function YaFeesSidebar() {
 
       {/* Nav */}
       <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-3 space-y-0.5 overflow-y-auto obsidian-scroll">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(item => !item.ownerOnly || isAgentCenterOwner(user)).map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"));
           return (
@@ -109,6 +110,42 @@ export default function YaFeesSidebar() {
             </Link>
           );
         })}
+        {isAgentCenterOwner(user) && (
+          <Link
+            to="/contacts"
+            aria-current={pathname === "/contacts" ? "page" : undefined}
+            className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
+            style={{
+              minHeight: "36px",
+              backgroundColor: pathname === "/contacts" ? "rgba(184,149,90,.14)" : "transparent",
+              color: pathname === "/contacts" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
+              boxShadow: pathname === "/contacts" ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
+            }}
+            onMouseEnter={(e) => { if (pathname !== "/contacts") e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
+            onMouseLeave={(e) => { if (pathname !== "/contacts") e.currentTarget.style.backgroundColor = "transparent"; }}
+          >
+            <Users className="h-4 w-4 shrink-0" style={{ color: pathname === "/contacts" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
+            Contacts
+          </Link>
+        )}
+        {isAgentCenterOwner(user) && (
+          <Link
+            to="/messages"
+            aria-current={pathname === "/messages" ? "page" : undefined}
+            className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
+            style={{
+              minHeight: "36px",
+              backgroundColor: pathname === "/messages" ? "rgba(184,149,90,.14)" : "transparent",
+              color: pathname === "/messages" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
+              boxShadow: pathname === "/messages" ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
+            }}
+            onMouseEnter={(e) => { if (pathname !== "/messages") e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
+            onMouseLeave={(e) => { if (pathname !== "/messages") e.currentTarget.style.backgroundColor = "transparent"; }}
+          >
+            <MessageSquare className="h-4 w-4 shrink-0" style={{ color: pathname === "/messages" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
+            Messages
+          </Link>
+        )}
         {canViewAgentCenter(user) && (
           <Link
             to="/admin/agents"

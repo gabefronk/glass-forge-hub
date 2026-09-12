@@ -1,0 +1,5 @@
+Glass Forge uses heic-to 1.5.2, an unmodified LGPL-3.0 library, in its own lazy-loaded browser module.
+Source and build instructions: https://github.com/hoppergee/heic-to .
+Exact package: https://www.npmjs.com/package/heic-to/v/1.5.2 .
+The library embeds libheif 1.22.2; source: https://github.com/strukturag/libheif .
+License copy: heic-to-LICENSE.txt

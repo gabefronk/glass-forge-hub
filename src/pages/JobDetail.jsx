@@ -11,6 +11,8 @@ import LineItems from "@/components/jobs/LineItems";
 import NotesSection from "@/components/jobs/NotesSection";
 import VisitReports from "@/components/jobs/VisitReports";
 import { fetchAllPages } from "@/lib/pagination";
+import { useAuth } from "@/lib/AuthContext";
+import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 
 function computeStage(rows, job) {
   const billable = rows.filter((r) => Number(r.labor_amt) > 0);
@@ -27,6 +29,7 @@ function computeStage(rows, job) {
 
 export default function JobDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -121,6 +124,7 @@ export default function JobDetail() {
           Back to jobs
         </Link>
 
+        {isAgentCenterOwner(user) && <><Link to={"/messages?job="+encodeURIComponent(id)} className="mb-4 ml-4 inline-flex min-h-11 items-center rounded-lg border bg-white px-3 text-sm text-blue-700">Private job messages</Link><Link to={"/contacts?job="+encodeURIComponent(id)} className="mb-4 ml-4 inline-flex min-h-11 items-center rounded-lg border bg-white px-3 text-sm text-blue-700">Job contacts</Link><Link to={"/reports?job="+encodeURIComponent(id)} className="mb-4 ml-4 inline-flex min-h-11 items-center rounded-lg border bg-white px-3 text-sm text-blue-700">Job reports</Link></>}
         <JobDetailHeader
           job={job}
           status={status}

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Bot, X } from "lucide-react";
-import { canViewAgentCenter } from "@/lib/agentCenterAccess";
+import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import { FileText, MessageSquare, Users } from "lucide-react";
 
 const PRIMARY_NAV = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
@@ -14,6 +15,9 @@ const SECONDARY_NAV = [
   { label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Tracker", ariaLabel: "Sales Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Brands", ariaLabel: "Product Brands & Specifications", to: "/brands-specs", icon: Library },
+  { label: "Reports", ariaLabel: "Report Library", to: "/report-library", icon: FileText, ownerOnly: true },
+  { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
+  { label: "Messages", to: "/messages", icon: MessageSquare, ownerOnly: true },
 ];
 
 export default function MobileBottomNav({ user }) {
@@ -24,7 +28,8 @@ export default function MobileBottomNav({ user }) {
 
   const isPrimaryActive = (to) => pathname === to || (to === "/jobs" && pathname.startsWith("/jobs/"));
   const isSecondaryActive = (to) => pathname === to;
-  const moreActive = pathname === "/admin/agents" || SECONDARY_NAV.some((s) => isSecondaryActive(s.to));
+  const visibleSecondary = SECONDARY_NAV.filter((s) => !s.ownerOnly || isAgentCenterOwner(user));
+  const moreActive = pathname === "/admin/agents" || visibleSecondary.some((s) => isSecondaryActive(s.to));
 
   const navItemStyle = (active) => ({
     backgroundColor: active ? "#2A3A35" : "transparent",
@@ -57,7 +62,7 @@ export default function MobileBottomNav({ user }) {
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2 px-4 pb-4">
-              {SECONDARY_NAV.map((item) => {
+              {visibleSecondary.map((item) => {
                 const Icon = item.icon;
                 const active = isSecondaryActive(item.to);
                 return (
