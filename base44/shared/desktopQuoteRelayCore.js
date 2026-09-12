@@ -47,10 +47,10 @@ export function validateTakeoff(t,fileId){
   return t;
 }
 export function readyForPella(t){
-  const specs=['product_line','glass','interior','exterior','grilles','hardware','installation','dimension_basis'];
+  const specs=['product_line','operation','handing','glass','interior','exterior','grilles','hardware','installation','dimension_basis'];
   return t.questions.length===0&&t.manufacturer==='Pella'&&t.lines.every(l=>
     Number.isFinite(l.width)&&l.width>0&&Number.isFinite(l.height)&&l.height>0&&
-    ['call','frame','rough_opening'].includes(l.dimension_basis)&&
+    ['call','frame','rough_opening'].includes(l.dimension_basis)&&l.unit_of_measure==='inches'&&
     specs.every(k=>typeof l[k]==='string'&&l[k].trim()&&!/^(unknown|tbd|unspecified)$/i.test(l[k]))&&
     typeof l.spec_evidence==='string'&&l.spec_evidence.trim());
 }
