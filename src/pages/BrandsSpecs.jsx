@@ -5,8 +5,8 @@ const AMSCO_LOGO_URL =
   "https://www.amscowindows.com/wp-content/uploads/2024/11/cropped-AMSCO-Logomark-Vertical-Alternate-Standard-PMS-7684-1-270x270.png";
 const AMSCO_URL = "https://apps.amscowindows.com/";
 
-const NAVY = "#131A26";
-const HAIRLINE = "#DDE3EC";
+const NAVY = "var(--gf-ink)";
+const HAIRLINE = "var(--gf-border)";
 const PELLA_BG = "#242021";
 
 const BRANDS = [

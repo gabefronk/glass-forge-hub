@@ -139,7 +139,7 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
               {row.job_date || "—"}
               {orderRef && <> · <span className="font-ref">{row.po_number ? `PO ${row.po_number}` : `OE ${row.oe_number}`}</span></>}
             </span>
-            <button ref={closeBtnRef} onClick={onClose} aria-label="Close details" style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "var(--gf-ink-3)", cursor: "pointer", flexShrink: 0 }}>
+            <button ref={closeBtnRef} onClick={onClose} aria-label="Close details" className="min-w-11 min-h-11 lg:min-w-7 lg:min-h-7" style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "var(--gf-ink-3)", cursor: "pointer", flexShrink: 0 }}>
               <X style={{ width: "16px", height: "16px" }} strokeWidth={1.8} />
             </button>
           </div>
@@ -299,7 +299,7 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
               <Check className="h-4 w-4" /> Mark billed
             </button>
           )}
-          <button onClick={() => onDelete(row.id)} className="rounded-[9px] flex items-center justify-center px-3" style={{ backgroundColor: "var(--gf-error-bg)", border: "1px solid var(--gf-error-border)", color: "var(--gf-error)", minHeight: "44px" }} aria-label="Delete line">
+          <button onClick={() => onDelete(row.id)} className="min-w-11 rounded-[9px] flex items-center justify-center px-3" style={{ backgroundColor: "var(--gf-error-bg)", border: "1px solid var(--gf-error-border)", color: "var(--gf-error)", minHeight: "44px" }} aria-label="Delete line">
             <Trash2 className="h-4 w-4" />
           </button>
         </div>

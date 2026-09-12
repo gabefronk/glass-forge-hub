@@ -21,7 +21,7 @@ function formatMonth(m) {
   return new Date(y, mm - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-const INSTALL_COLOR = "#146556";
+const INSTALL_COLOR = "#0B3F3B";
 const SERVICE_COLOR = "#A43432";
 const OUTLOOK_COLOR = "#7042A1";
 

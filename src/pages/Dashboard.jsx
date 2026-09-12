@@ -139,7 +139,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.pageBg }}>
-        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "#DDE3EC", borderTopColor: C.accent }} />
+        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: C.borderStrong, borderTopColor: C.accent }} />
       </div>
     );
   }
@@ -197,7 +197,7 @@ export default function Dashboard() {
               </span>
             </div>
             {/* Progress bar */}
-            <div className="h-[3px]" style={{ backgroundColor: "#E9EDF4" }}>
+            <div className="h-[3px]" style={{ backgroundColor: C.rowBorder }}>
               <div className="h-full transition-all duration-300" style={{ width: `${sortedToday.length ? (doneCount / sortedToday.length) * 100 : 0}%`, backgroundColor: C.accent }} />
             </div>
             <div>
@@ -238,12 +238,12 @@ export default function Dashboard() {
                       <div className="text-[12px] break-words" style={{ color: C.textMuted }}>
                         {ev.address || ev.scope_notes?.slice(0, 80) || ""}
                       </div>
-                      <span className="mt-1 inline-flex sm:hidden text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: C.accent18, border: "1px solid #C7E4D2", color: C.accentText }}>{tag}</span>
+                      <span className="mt-1 inline-flex sm:hidden text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: C.accent18, border: `1px solid ${C.tagBillable.border}`, color: C.accentText }}>{tag}</span>
                     </div>
                     {/* Tag */}
                     <span
                       className="hidden sm:inline-flex text-[9px] font-semibold tracking-[0.01em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
-                      style={{ backgroundColor: C.accent18, border: "1px solid #C7E4D2", color: C.accentText }}
+                      style={{ backgroundColor: C.accent18, border: `1px solid ${C.tagBillable.border}`, color: C.accentText }}
                     >
                       {tag}
                     </span>
@@ -254,7 +254,7 @@ export default function Dashboard() {
                       aria-pressed={isDone}
                       className="ml-1 sm:ml-3 h-10 w-10 rounded-full shrink-0 flex items-center justify-center transition-all"
                       style={{
-                        border: isDone ? "none" : `1.5px solid #C9CCC4`,
+                        border: isDone ? "none" : `1.5px solid ${C.borderStrong}`,
                         backgroundColor: isDone ? C.accent : "transparent",
                       }}
                     >

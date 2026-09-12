@@ -90,11 +90,11 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
 
         {/* Actions */}
         <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
-          <button onClick={onRefresh} disabled={refreshing} style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: refreshing ? "wait" : "pointer" }}>
+          <button onClick={onRefresh} disabled={refreshing} aria-label={refreshing ? "Refreshing" : "Refresh"} title="Refresh" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: refreshing ? "wait" : "pointer" }}>
             <RefreshCw className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" style={{ animation: refreshing ? "spin 1s linear infinite" : undefined }} />
             <span className="hidden sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
           </button>
-          <button onClick={onExportPdf} disabled={exporting} style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: exporting ? "wait" : "pointer" }}>
+          <button onClick={onExportPdf} disabled={exporting} aria-label={exporting ? "Generating" : "Export"} title="Export" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: exporting ? "wait" : "pointer" }}>
             <Download className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" />
             <span className="hidden sm:inline">{exporting ? "Generating…" : "Export"}</span>
           </button>
@@ -106,7 +106,7 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
               </span>
             </div>
           ) : (
-            <button onClick={onCloseMonth} disabled={closing} style={{ height: "34px", borderRadius: "var(--r-button)", background: "linear-gradient(180deg, var(--gf-teal-500), var(--gf-teal-600))", color: "#F4F1EA", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", whiteSpace: "nowrap", flexShrink: 0, boxShadow: "0 1px 2px rgba(11,63,59,.35), inset 0 1px 0 rgba(255,255,255,.12)", cursor: closing ? "wait" : "pointer" }}>
+            <button onClick={onCloseMonth} disabled={closing} aria-label={closing ? "Closing" : "Close month"} title="Close month" style={{ height: "34px", borderRadius: "var(--r-button)", background: "linear-gradient(180deg, var(--gf-teal-500), var(--gf-teal-600))", color: "#F4F1EA", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", whiteSpace: "nowrap", flexShrink: 0, boxShadow: "0 1px 2px rgba(11,63,59,.35), inset 0 1px 0 rgba(255,255,255,.12)", cursor: closing ? "wait" : "pointer" }}>
               <FileText className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" />
               <span className="hidden sm:inline">{closing ? "Closing…" : "Close month"}</span>
             </button>

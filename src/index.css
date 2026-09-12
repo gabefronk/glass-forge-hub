@@ -284,4 +284,24 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  /* Legacy hex utility remap → Deep Teal & Brass tokens (affects all tabs including protected Window Quotes) */
+  .bg-\[\#20386E\] { background-color: var(--gf-teal-600) !important; }
+  .hover\:bg-\[\#172A53\]:hover { background-color: var(--gf-teal-700) !important; }
+  .bg-\[\#146556\] { background-color: var(--gf-teal-600) !important; }
+  .hover\:bg-\[\#104E44\]:hover { background-color: var(--gf-teal-700) !important; }
+  .border-\[\#DDE3EC\] { border-color: var(--gf-border) !important; }
+  .border-\[\#DDE0DA\] { border-color: var(--gf-border) !important; }
+  .bg-\[\#F0F1ED\] { background-color: var(--gf-field) !important; }
+  .bg-\[\#EAF5EE\] { background-color: var(--gf-tile-teal) !important; }
+  .bg-\[\#FFF3DF\] { background-color: var(--gf-amber-050) !important; }
+  .bg-\[\#FCEDEC\] { background-color: var(--gf-error-bg) !important; }
+  .border-\[\#F0C9C5\] { border-color: var(--gf-error-border) !important; }
+  .text-\[\#182422\] { color: var(--gf-ink) !important; }
+  .text-\[\#53615B\] { color: var(--gf-ink-2) !important; }
+  .text-\[\#166447\] { color: var(--gf-teal-800) !important; }
+  .text-\[\#89511A\] { color: var(--gf-amber-700) !important; }
+  .text-\[\#A43432\] { color: var(--gf-error) !important; }
+  .hover\:bg-\[\#F8F9F6\]:hover { background-color: var(--gf-hover) !important; }
+  .focus-visible\:outline-\[\#2A5EA8\]:focus-visible { outline-color: var(--gf-teal-500) !important; }
 }
