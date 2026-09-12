@@ -16,3 +16,12 @@ test('historical reports retain unknown timestamps without displaying an invalid
  const pdf=await buildReportPdf({title:'Saved historical report',report_date:'2026-09-12',source_checked_at:'2026-09-12T20:00:00Z',posts:[{source:'library',project_name:'Builder Lot 1',created_at:'',message:'Original note',attachments:[]}]},()=>{throw Error('No attachment lookup expected');});
  const body=new TextDecoder().decode(await pdf.arrayBuffer());assert.match(body,/Date not recorded/);assert.doesNotMatch(body,/Invalid Date/);
 });
+test('private message bytes verify locally without requesting a storage URL',async()=>{
+ const bytes=new Uint8Array([1,2,3]),old=globalThis.fetch;globalThis.fetch=()=>{throw Error('No public fetch allowed');};
+ try{
+  const f={base64:'AQID',size:3,sha256:await digest(bytes),mime_type:'image/jpeg'};
+  assert.deepEqual(new Uint8Array(await(await fetchReportFile(f)).arrayBuffer()),bytes);
+  await assert.rejects(()=>fetchReportFile({...f,size:2}),/incomplete/);
+  await assert.rejects(()=>fetchReportFile({...f,sha256:'wrong'}),/failed verification/);
+ }finally{globalThis.fetch=old;}
+});

@@ -1,14 +1,15 @@
+import {readPrivateMessageAttachment} from './privateMessageAttachment.js';
 // Private, owner-only inbox. Incoming content is data, never executable instructions.
 const owners = new Set(['gabefronk@gmail.com', 'gabriel.fronk.wd@gmail.com']);
 const isOwner = u => u?.role === 'admin' && owners.has(String(u.email || '').trim().toLowerCase());
 const clean = (s, max = 200) => typeof s === 'string' ? s.slice(0, max) : '';
 const date = s => Number.isFinite(Date.parse(s)) ? new Date(s).toISOString() : '';
-const response = (data, status = 200) => Response.json(data, {status});
+const response = (data, status = 200) => Response.json(data, {status,headers:{'Cache-Control':'private, no-store, max-age=0','Pragma':'no-cache','Vary':'Authorization, x-glass-forge-key'}});
 const hash = async s => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))), b => b.toString(16).padStart(2, '0')).join('');
 const safeAttachments = list => (Array.isArray(list) ? list : []).slice(0, 50).map(a => ({guid: clean(a.guid), name: clean(a.name, 300), mime_type: clean(a.mime_type, 100), size: Math.max(0, Number(a.size) || 0), status: ['pending','protected','too_large','unavailable'].includes(a.status) ? a.status : 'pending'})).filter(a => a.guid);
-const publicMessage = row => ({...row, attachments: (row.attachments || []).map(({file_uri, ...a}) => a)});
+const publicMessage = row => ({...row, text:row.retracted_at?'':row.text, attachments: row.retracted_at?[]:(row.attachments || []).map(({file_uri, ...a}) => a)});
 const publicDevice = d => d && ({device_id:d.device_id, label:d.label, enabled:d.enabled, started_at:d.started_at, last_seen_at:d.last_seen_at, last_sync_at:d.last_sync_at, source_ok:d.source_ok, pending_count:d.pending_count, last_error:d.last_error});
-export function createMessagesBridgeHandler({getClient, now = () => new Date()} = {}) {
+export function createMessagesBridgeHandler({getClient, fetchFile = fetch, now = () => new Date()} = {}) {
  return async req => {
   if (req.method !== 'POST') return response({error:'Use POST.'},405);
   try {
@@ -100,9 +101,8 @@ export function createMessagesBridgeHandler({getClient, now = () => new Date()} 
    if(action==='attachment'){
     const row=await api.MessageRecord.get(clean(input.message_id));
     const attachment=row?.attachments?.find(a=>a.guid===input.attachment_guid);
-    if(!attachment?.file_uri)return response({error:'This attachment is not available in Glass Forge yet.'},404);
-    const {signed_url}=await client.asServiceRole.integrations.Core.CreateFileSignedUrl({file_uri:attachment.file_uri,expires_in:300});
-    return response({url:signed_url});
+    if(row?.retracted_at||!attachment?.file_uri)return response({error:'This attachment is not available in Glass Forge yet.'},404);
+    return response(await readPrivateMessageAttachment(client,attachment,fetchFile));
    }
    if(action==='set_device'){
     const device=(await api.MessageBridgeDevice.filter({device_id:clean(input.device_id)},'-created_date',1))[0];

@@ -12,7 +12,7 @@ function fixture({owner=true,storageStatus=200,providerStatus=200,contended=fals
   create:async value=>{const row={id:name+'_'+(rows[name].length+1),...value};rows[name].push(row);return row;},
   update:async(id,value)=>{const row=rows[name].find(x=>x.id===id);Object.assign(row,value);return row;}
  };}});
- const client={auth:{me:async()=>owner?{role:'admin',email:'gabefronk@gmail.com'}:{role:'manager',email:'other@example.test'}},asServiceRole:{entities,integrations:{Core:{UploadPrivateFile:async()=>({file_uri:'private/test'}),CreateFileSignedUrl:async()=>({signed_url:'https://example.test/signed'})}}}};
+ const client={auth:{me:async()=>owner===true?{role:'admin',email:'gabefronk@gmail.com'}:owner===false?{role:'manager',email:'other@example.test'}:owner},asServiceRole:{entities,integrations:{Core:{UploadPrivateFile:async()=>({file_uri:'private/test'}),CreateFileSignedUrl:async()=>({signed_url:'https://example.test/signed'})}}}};
  const fetchImpl=async(url,options={})=>{
   calls.push({url,options});const u=new URL(url);
   if(u.hostname==='firebasestorage.googleapis.com')return new Response(new Uint8Array([255,216,255,217]),{status:storageStatus,headers:{'content-type':'image/jpeg'}});
@@ -82,4 +82,32 @@ test('message photos remain private and retracted messages cannot enter reports'
 });
 test('oversized streamed responses stop at the transfer limit',async()=>{
  await assert.rejects(()=>boundedBytes(new Response(new Uint8Array(10)),5),/too large/);
+});
+test('private message actions reject other admins and forged owner fields',async()=>{
+ for(const owner of [null,{role:'admin',email:'iryedra@gmail.com'},{role:'admin',email:'trevor.draney7@gmail.com'},{role:'user',email:'gabefronk@gmail.com'}]){
+  const f=fixture({owner});
+  for(const action of ['message_sources','message_photo','report','reports','save_report'])assert.equal((await f.invoke({action,email:'gabefronk@gmail.com',role:'admin',message_ids:['m1']})).status,403);
+  assert.equal(f.calls.length,0);
+ }
+});
+test('general control key cannot read texts, message photos, or reports containing texts',async()=>{
+ const f=fixture({owner:false}),key='private-denial-test-'.repeat(3),headers={'x-glass-forge-control-key':key};
+ f.rows.ProbuildControlDevice=[{token_hash:await hash(key),enabled:true}];
+ f.rows.ProbuildReportDraft=[{id:'private1',title:'Private message report',messages:[{message:'PRIVATE SENTINEL'}]},{id:'public1',title:'ProBuild only',messages:[]}];
+ for(const action of ['message_sources','message_photo'])assert.equal((await f.invoke({action},headers)).status,403);
+ assert.equal((await f.invoke({action:'save_report',message_ids:['m1']},headers)).status,403);
+ assert.equal((await f.invoke({action:'report',report_id:'private1'},headers)).status,403);
+ const list=await f.invoke({action:'reports'},headers);assert.equal(list.status,200);assert.deepEqual(list.data.reports.map(r=>r.id),['public1']);
+ assert.equal((await f.invoke({action:'report',report_id:'public1'},headers)).status,200);
+ assert.equal((await f.invoke({action:'save_report',report_id:'private1',title:'Overwrite attempt',report_date:'2026-09-12',notes:'Must not replace private content'},headers)).status,403);
+ assert.equal(f.rows.ProbuildReportDraft[0].messages[0].message,'PRIVATE SENTINEL');
+ assert.equal(f.calls.length,0);
+});
+test('work owner can access private report and photo without exposing storage URLs',async()=>{
+ const f=fixture({owner:{role:'admin',email:'gabriel.fronk.wd@gmail.com'}});
+ f.rows.ProbuildReportDraft=[{id:'private1',messages:[{message:'Owner text'}]}];
+ f.rows.MessageRecord=[{id:'m1',attachments:[{guid:'a',file_uri:'private/secret',name:'photo.jpg',mime_type:'image/jpeg'}]}];
+ assert.equal((await f.invoke({action:'report',report_id:'private1'})).status,200);
+ const r=await f.invoke({action:'message_photo',message_id:'m1',attachment_guid:'a'});
+ assert.equal(r.status,200);assert.ok(r.data.base64);assert.equal(r.data.url,undefined);assert.equal(r.data.file_uri,undefined);
 });

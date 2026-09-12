@@ -1,3 +1,4 @@
+import {readPrivateMessageAttachment} from './privateMessageAttachment.js';
 // Owner-controlled ProBuild reports. Provider content is data, never instructions.
 export const TEAM = '-O7aXXhvthc41u60Koc6';
 const DB = 'https://probuild-prod.firebaseio.com/teams/' + TEAM;
@@ -46,6 +47,8 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
    const raw=await req.text();if(raw.length>35000000)fail('Request too large.',413);
    let input;try{input=JSON.parse(raw);}catch{fail('Invalid JSON.');}
    const action=input.action,at=now().toISOString();
+   // General report automation keys never authorize access to Gabriel's texts.
+   if(key && (['message_sources','message_photo'].includes(action) || (action==='save_report' && input.message_ids?.length)))fail('Sign in with Gabriel’s owner account to access private messages.',403);
    let tokenPromise;
    const auth=()=>tokenPromise ||= getToken(client);
    const provider=async(path,options={})=>{
@@ -67,9 +70,9 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
     const term=clean(input.search,120).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     return json({jobs:(await api.Jobs.filter(term?{canonical_name:{$regex:term,$options:'i'}}:{},'canonical_name',60)).map(j=>({id:j.id,name:j.canonical_name,address:j.address}))});
    }
-   if(action==='reports')return json({reports:(await api.ProbuildReportDraft.filter(input.job_id?{job_id:clean(input.job_id)}:{},'-updated_date',50)).map(d=>({id:d.id,title:d.title,report_date:d.report_date,job_id:d.job_id,job_name:d.job_name,updated_date:d.updated_date,post_count:d.posts?.length||0}))});
+   if(action==='reports')return json({reports:(await api.ProbuildReportDraft.filter(input.job_id?{job_id:clean(input.job_id)}:{},'-updated_date',50)).filter(d=>!key||!d.messages?.length).map(d=>({id:d.id,title:d.title,report_date:d.report_date,job_id:d.job_id,job_name:d.job_name,updated_date:d.updated_date,post_count:d.posts?.length||0}))});
    if(action==='report'){
-    const d=await api.ProbuildReportDraft.get(validId(input.report_id));if(!d)fail('Report not found.',404);return json({report:publicDraft(d)});
+    const d=await api.ProbuildReportDraft.get(validId(input.report_id));if(!d)fail('Report not found.',404);if(key&&d.messages?.length)fail('Sign in with Gabriel’s owner account to access this private report.',403);return json({report:publicDraft(d)});
    }
    if(action==='projects'){
     const [projects,linked]=await Promise.all([allProjects(),links()]);
@@ -155,7 +158,7 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
     const m=await api.MessageRecord.get(validId(input.message_id));
     const a=m?.attachments?.find(x=>x.guid===input.attachment_guid);
     if(m?.retracted_at||!a?.file_uri)fail('Message attachment is not available.',404);
-    return json({url:await signed(a.file_uri),name:a.name,mime_type:a.mime_type,size:a.size});
+    return json(await readPrivateMessageAttachment(client,a,fetchImpl));
    }
    if(action==='save_report'){
     const refs=Array.isArray(input.posts)?input.posts:[],messageIds=Array.isArray(input.message_ids)?[...new Set(input.message_ids)]:[];
@@ -172,7 +175,7 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
     validateRange(input.report_date,input.report_date);
     if(!posts.length&&!messages.length&&!clean(input.notes,20000).trim())fail('Choose a source post, message or enter report notes.');
     const row={title,report_date:input.report_date,notes:clean(input.notes,20000),recipient:clean(input.recipient,320),job_id:job?.id||'',job_name:job?.canonical_name||'',posts,messages,source_checked_at:at,status:'draft'};
-    if(input.report_id){const old=await api.ProbuildReportDraft.get(validId(input.report_id));if(!old)fail('Report not found.',404);return json({report:publicDraft(await api.ProbuildReportDraft.update(old.id,row))});}
+    if(input.report_id){const old=await api.ProbuildReportDraft.get(validId(input.report_id));if(!old)fail('Report not found.',404);if(key&&old.messages?.length)fail('Sign in with Gabriel’s owner account to access this private report.',403);return json({report:publicDraft(await api.ProbuildReportDraft.update(old.id,row))});}
     return json({report:publicDraft(await api.ProbuildReportDraft.create(row))});
    }
    fail('Unsupported action.');

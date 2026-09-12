@@ -3,6 +3,13 @@ import { jsPDF } from 'jspdf';
 export const reportFileName = report => (report.title || 'Field report').replace(/[^a-z0-9 _.-]/gi, '').trim().slice(0,100) + ' ' + report.report_date + '.pdf';
 const when = s => s&&Number.isFinite(new Date(s).getTime())?new Date(s).toLocaleString('en-US',{timeZone:'America/Denver',dateStyle:'medium',timeStyle:'short'}):'Date not recorded';
 export async function fetchReportFile(file){
+ if(typeof file.base64==='string'){
+  const bytes=Uint8Array.from(atob(file.base64),c=>c.charCodeAt(0));
+  if(bytes.length!==file.size)throw Error('A private attachment transfer was incomplete.');
+  const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+  if(!file.sha256||digest!==file.sha256)throw Error('A private attachment failed verification.');
+  return new Blob([bytes],{type:file.mime_type||'application/octet-stream'});
+ }
  const sources=file.chunks?.length?file.chunks:[{url:file.url,size:file.size,sha256:file.sha256,offset:0}],parts=[];let offset=0;
  for(const source of sources){
   if(source.offset!==undefined&&source.offset!==offset)throw Error('File pieces are incomplete. Retry before sharing.');

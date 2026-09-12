@@ -20,6 +20,26 @@
       "WindowQuoteRunnerConfig": {
         "operations": [],
         "description": null
+      },
+      "MessageRecord": {
+        "operations": [],
+        "description": null
+      },
+      "MessageConversation": {
+        "operations": [],
+        "description": null
+      },
+      "MessageBridgeDevice": {
+        "operations": [],
+        "description": null
+      },
+      "ProbuildReportDraft": {
+        "operations": [],
+        "description": null
+      },
+      "ProbuildControlDevice": {
+        "operations": [],
+        "description": null
       }
     },
     "functions": [
@@ -701,4 +721,3 @@
     ]
   }
 }
-
