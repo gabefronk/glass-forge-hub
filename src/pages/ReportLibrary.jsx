@@ -19,13 +19,15 @@ function Attachment({file,onError}){
   const heic=/image\/hei[cf]/i.test(result.mime_type)||/\.hei[cf]$/i.test(result.name||'');
   if(result.chunks?.length||heic){
    const original=await fetchReportFile(result);
-   result.original_url=result.url||URL.createObjectURL(original);
-   if(heic){const {heicTo}=await import('heic-to/csp');result.url=URL.createObjectURL(await heicTo({blob:original,type:'image/jpeg',quality:.9}));}
-   else result.url=result.original_url;
+   if(heic){
+    const {heicTo}=await import('heic-to/csp');const preview=await heicTo({blob:original,type:'image/jpeg',quality:.9});
+    result.original_url=URL.createObjectURL(original);result.url=URL.createObjectURL(preview);
+    result.download_name=result.name.replace(/\.(jpe?g|bin)$/i,'.heic');
+   }else{result.original_url=result.url||URL.createObjectURL(original);result.url=result.original_url;}
   }
   setSource(result);
  }catch(e){onError(e.response?.data?.error||'This attachment could not be opened.');}finally{setBusy(false);}};
- return <div className="min-w-0 overflow-hidden rounded-xl border bg-slate-50">{source?<><a className="block break-all text-sm text-blue-800" href={source.url} target="_blank" rel="noreferrer">{source.mime_type?.startsWith('image/')?<img className="h-40 w-full object-contain" src={source.url} alt={file.name}/>:<span className="block p-4">Open {file.name}</span>}</a>{source.original_url&&source.original_url!==source.url&&<a className="block p-3 text-center text-xs text-blue-800 underline" href={source.original_url} download={source.name} target="_blank" rel="noreferrer">Download original</a>}</>:<button className="flex min-h-28 w-full flex-col items-center justify-center gap-2 p-3 text-sm text-blue-800" disabled={busy} onClick={open}>{file.type==='photo'?<Camera className="h-5 w-5"/>:<FileText className="h-5 w-5"/>}{busy?'Opening…':file.type==='photo'?'View photo':file.name}</button>}</div>;
+ return <div className="min-w-0 overflow-hidden rounded-xl border bg-slate-50">{source?<><a className="block break-all text-sm text-blue-800" href={source.url} target="_blank" rel="noreferrer">{source.mime_type?.startsWith('image/')?<img className="h-40 w-full object-contain" src={source.url} alt={file.name}/>:<span className="block p-4">Open {file.name}</span>}</a>{source.original_url&&source.original_url!==source.url&&<a className="block p-3 text-center text-xs text-blue-800 underline" href={source.original_url} download={source.download_name||source.name} target="_blank" rel="noreferrer">Download original</a>}</>:<button className="flex min-h-28 w-full flex-col items-center justify-center gap-2 p-3 text-sm text-blue-800" disabled={busy} onClick={open}>{file.type==='photo'?<Camera className="h-5 w-5"/>:<FileText className="h-5 w-5"/>}{busy?'Opening…':file.type==='photo'?'View photo':file.name}</button>}</div>;
 }
 export default function ReportLibrary(){
  const [params,setParams]=useSearchParams(),[owner,setOwner]=useState(null),[run,setRun]=useState(null),[query,setQuery]=useState(''),[includeDeleted,setIncludeDeleted]=useState(false);
