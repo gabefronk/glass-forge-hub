@@ -134,7 +134,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   const insetBar = selected ? "inset 3px 0 0 #2A5EA8" : blocked ? "inset 3px 0 0 #8A4038" : "none";
 
   const subline = reportAttached
-    ? "Report attached · ready to bill"
+    ? "Report attachment noted"
     : [row.line_description, row.po_number && `PO ${row.po_number}`, crewName(row.calendar_creator), noteTokens(row.note_text)].filter(Boolean).join(" · ") || "—";
 
   const handleClick = (e) => {
@@ -228,6 +228,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           }}
         >
           {subline}
+          {row.pricing_review_reason && <span className="block mt-1 text-amber-800">{row.pricing_review_reason}{row.split_candidate_amt != null ? ` Candidate split: ${formatMoney(row.split_candidate_amt)} (excluded).` : ""}</span>}
         </span>
       </div>
 

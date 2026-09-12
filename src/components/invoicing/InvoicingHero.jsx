@@ -55,7 +55,7 @@ function Stat({ label, value, sub, coral, onClick }) {
   );
 }
 
-export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCount, reportBlockedCount, noSourceDataCount, customFeeCount, billedTotal, billedCount, scheduledTotal, scheduledCount, monthEarnedTotal, monthEarnedCount, onFilterBlocked, onFilterMatchBlocked }) {
+export default function InvoicingHero({ readyTotal, readyCount, heldTotal, recordedLaborTotal, splitReviewCount, matchBlockedTotal, reportBlockedTotal, matchBlockedCount, reportBlockedCount, noSourceDataCount, customFeeCount, billedTotal, billedCount, scheduledTotal, scheduledCount, monthEarnedTotal, monthEarnedCount, onFilterBlocked, onFilterMatchBlocked }) {
   return (
     <div
       style={{
@@ -76,7 +76,7 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
             marginBottom: "10px",
           }}
         >
-          Ready to bill
+          Recorded fees this month to date
         </div>
         <div
           style={{
@@ -89,7 +89,7 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
             lineHeight: 1,
           }}
         >
-          ${formatMoney(readyTotal)}
+          ${formatMoney(monthEarnedTotal)}
         </div>
         <div
           style={{
@@ -100,7 +100,9 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
             overflowWrap: "anywhere",
           }}
         >
-          {readyCount} lines ready · {reportBlockedCount} waiting on a report · {matchBlockedCount} match review · {customFeeCount} custom fee %
+          ${formatMoney(readyTotal)} ready to bill · ${formatMoney(heldTotal)} held for review or reports · ${formatMoney(billedTotal)} billed
+          <span className="block mt-2 text-sm">Recorded labor ${formatMoney(recordedLaborTotal)}. Includes provisional amounts held for review; future jobs appear under Scheduled.</span>
+          {splitReviewCount > 0 && <span className="block mt-2 text-sm text-amber-800">{splitReviewCount} profit-split notes need allocation review. Candidate splits are excluded from totals.</span>}
           {noSourceDataCount > 0 && (
             <span style={{ display: "block", marginTop: "6px", fontFamily: "'Archivo',sans-serif", fontSize: "11px", color: "#8A4038" }}>
               ⚠ Source data missing for {noSourceDataCount} {noSourceDataCount === 1 ? "line" : "lines"} — Probuild pull may have failed
@@ -110,11 +112,11 @@ export default function InvoicingHero({ readyTotal, readyCount, matchBlockedCoun
       </div>
 
       <div className="grid w-full min-w-0 grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3 xl:grid-cols-5">
-        <Stat label="Earned to date" value={`$${formatMoney(monthEarnedTotal)}`} sub={`${monthEarnedCount} lines · excl. scheduled`} />
+        <Stat label="Ready to bill" value={`${formatMoney(readyTotal)}`} sub={`${readyCount} eligible lines`} />
         <Stat label="Billed" value={`$${formatMoney(billedTotal)}`} sub={`${billedCount} lines`} />
         <Stat label="Scheduled" value={`$${formatMoney(scheduledTotal)}`} sub={`${scheduledCount} lines`} />
-        <Stat label="Needs a report" value={String(reportBlockedCount)} sub="fix →" coral onClick={onFilterBlocked} />
-        <Stat label="Match review" value={String(matchBlockedCount)} sub="fix →" coral onClick={onFilterMatchBlocked} />
+        <Stat label="Waiting on reports" value={`${formatMoney(reportBlockedTotal)}`} sub={`${reportBlockedCount} lines · review →`} coral onClick={onFilterBlocked} />
+        <Stat label="Pricing / job review" value={`${formatMoney(matchBlockedTotal)}`} sub={`${matchBlockedCount} lines · review →`} coral onClick={onFilterMatchBlocked} />
       </div>
     </div>
   );

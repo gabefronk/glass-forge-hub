@@ -83,7 +83,7 @@ export async function fetchProbuildProjects(idToken) {
 export async function fetchProbuildPostsForProject(idToken, projectId) {
   try {
     const r = await fetch(`${DB_BASE}/teams/${TEAM_ID}/posts/${projectId}.json?auth=${idToken}`);
-    if (!r.ok) return [];
+    if (!r.ok) throw new Error('posts_fetch_failed: project ' + projectId + ', HTTP ' + r.status);
     const j = await r.json();
     if (!j) return [];
     const out = [];
@@ -92,8 +92,8 @@ export async function fetchProbuildPostsForProject(idToken, projectId) {
       out.push({ projectId, postId, post });
     }
     return out;
-  } catch {
-    return [];
+  } catch (error) {
+    throw new Error('ProBuild posts unavailable for project ' + projectId + ': ' + error.message.replace(/auth=[^&\\s]+/g, 'auth=[redacted]'));
   }
 }
 
@@ -105,8 +105,7 @@ export function filterProjectsByWindow(projects, windowStartMs, windowEndMs) {
   for (const p of projects) {
     if (p.deletedAt) { deleted++; continue; }
     const lm = toMs(p.lastModifiedAt);
-    if (lm == null) { skippedModified++; continue; }
-    if (lm >= windowStartMs && lm <= windowEndMs) {
+    if (lm == null || lm >= windowStartMs - 86400000) {
       qualifying.push(p);
     } else {
       skippedModified++;

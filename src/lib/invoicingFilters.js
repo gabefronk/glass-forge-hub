@@ -1,3 +1,4 @@
+import { duplicatePostIds } from "../../base44/shared/billingCore.js";
 import { isFutureRow, isTripChargeAmount } from "@/lib/feeMath";
 
 // Report statuses that are considered "ok" — no report blocking.
@@ -64,7 +65,7 @@ export function resolveSupersession(r, rowById) {
 export function buildSupersededSet(rows) {
   const rowById = new Map();
   for (const r of rows) rowById.set(r.id, r);
-  const excluded = new Set();
+  const excluded = duplicatePostIds(rows);
   for (const r of rows) {
     if (!r.superseded_by) continue;
     const ex = resolveSupersession(r, rowById);

@@ -19,7 +19,7 @@ export function createOwnedCalendarHandler({getClient,readTracker}) {
    if(!tracker.rows?.length)throw Error("No verified tracker rows.");
    const snapshot=snapshots[0]||null;
    const imported=(snapshot?.events||[]).map((event,index)=>({...event,id:"outlook-"+snapshot.id+"-"+index,source:"outlook",report_required:false,calendar_name:snapshot.calendar_name,captured_at:snapshot.captured_at}));
-   const result=filterOwnedCalendar([...calendar,...imported],tracker.rows);
+   const result=filterOwnedCalendar([...calendar.filter(e=>e.source_status !== 'cancelled'),...imported],tracker.rows);
    const metadata=snapshot?{id:snapshot.id,calendar_name:snapshot.calendar_name,range_start:snapshot.range_start,range_end:snapshot.range_end,captured_at:snapshot.captured_at,event_count:snapshot.event_count}:null;
    return Response.json({groups:query.brief===true?undefined:result.groups,ownership:{counts:result.counts,by_month:query.brief===true?{[query.month||new Date().toISOString().slice(0,7)]:result.by_month[query.month||new Date().toISOString().slice(0,7)]}:result.by_month,tracker_captured_at:tracker.snapshot.source_captured_at,tracker_rows:tracker.rows.length,appended_rows:tracker.appended?.length||0},
     outlook:metadata,partial_outlook:recent[0]?.complete===false?{event_count:recent[0].event_count,collection_notes:recent[0].collection_notes}:null,

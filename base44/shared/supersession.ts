@@ -1,3 +1,4 @@
+import { duplicatePostIds } from "./billingCore.js";
 // Shared supersession + provenance logic used by both the frontend
 // (invoicingFilters.js) and the backend (closeMonthSnapshot). Keeping this
 // in one place ensures the snapshot and the UI agree on which rows count.
@@ -58,7 +59,7 @@ export function resolveSupersession(
 export function buildSupersededSet(rows: any[]): Set<string> {
   const rowById = new Map<string, any>();
   for (const r of rows) rowById.set(r.id, r);
-  const excluded = new Set<string>();
+  const excluded = duplicatePostIds(rows);
   for (const r of rows) {
     if (!r.superseded_by) continue;
     const ex = resolveSupersession(r, rowById);
