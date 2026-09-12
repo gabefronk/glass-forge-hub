@@ -38,7 +38,7 @@ export function extractLaborAmount(description) {
     if (!tail && /^\s*\$/.test(lines[i + 1] || "")) tail = lines[i + 1].trim();
     if (tail.includes("$")) tail = tail.slice(tail.indexOf("$"));
     // A leading minus is ambiguous in imported notes; surface it for review.
-    const amount = tail.match(/^\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?=\s|$|[-–—,;]|\.(?!\d)|\/win\b)/i);
+    const amount = tail.match(/^\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?=\s|$|[-–—,;]|\.(?!\d)|\/win\d*\b)/i);
     if (!amount || /\b(?:man\s*)?(?:hours?|hrs?)\b/i.test(tail.slice(amount[0].length, amount[0].length + 20))) continue;
     return Number(amount[1].replace(/,/g, ""));
   }
