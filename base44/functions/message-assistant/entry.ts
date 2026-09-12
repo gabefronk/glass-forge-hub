@@ -66,18 +66,21 @@ const schema={type:'object',properties:{
 export function validateAnalysis(result,{messages,jobs,historyComplete}){
  const byGuid=new Map(messages.map(m=>[m.source_guid,m])),photos=new Map(messages.flatMap(m=>(m.attachments||[]).map(a=>[a.guid,{...a,message_guid:m.source_guid}])));
  const evidence=[...new Set((result.source_message_guids||[]).filter(g=>byGuid.has(g)))];
- const source=byGuid.get(result.source_request_guid),job=jobs.find(j=>j.id===result.job_id);
+ const source=byGuid.get(result.source_request_guid);let job=jobs.find(j=>j.id===result.job_id);
  const missing=(result.missing_info||[]).slice(0,20).map(v=>trim(v,500));
  if(!source||source.direction!=='incoming')missing.push('The original incoming service request must be identified.');
+ const explicitLots=[...String(source?.text||'').matchAll(/\b(?:[A-Z]{2,4}|[Ll]ot\s*#?\s*)(\d{1,5})\b/g)].map(m=>m[1]);
+ const jobLots=(job?.groups||[]).map(g=>String(g.lot));
+ if(job&&explicitLots.length&&!explicitLots.every(lot=>jobLots.includes(lot)||new RegExp('(?:^|\\D)'+lot+'(?:\\D|$)').test(job.name||''))){job=null;missing.push('The lot in the request conflicts with the proposed job. Do not use an older job from the thread.');}
  if(!job)missing.push('Confirm the exact job, subdivision and lot.');
  if(!historyComplete)missing.push('More conversation history may be needed; coverage is incomplete.');
  if(!evidence.length)missing.push('No valid message evidence was supplied.');
  const chosenPhotos=[...new Set(result.photo_guids||[])].filter(g=>photos.has(g)).map(g=>photos.get(g));
  if((result.photo_guids||[]).some(g=>!photos.has(g)))missing.push('A referenced photo could not be matched to this conversation.');
  if(chosenPhotos.some(a=>a.status!=='ready'))missing.push('Some selected photos have not finished importing.');
- const ack=byGuid.get(result.ack_evidence_guid),already=Boolean(result.acknowledgment_already_sent&&ack?.direction==='outgoing');
+ const ack=byGuid.get(result.ack_evidence_guid),already=Boolean(result.acknowledgment_already_sent&&ack?.direction==='outgoing'&&Date.parse(ack.sent_at)>=Date.parse(source?.sent_at));
  if(result.acknowledgment_already_sent&&!already)missing.push('The claimed previous acknowledgment could not be verified.');
- return {...result,summary:trim(result.summary,4000),service_text:trim(result.service_text,8000),reply_text:already?'':trim(result.reply_text,2000),issues:(result.issues||[]).slice(0,20).map(v=>trim(v,1000)),source_message_guids:evidence,photos:chosenPhotos.map(({file_uri,...a})=>a),job:job||null,missing_info:[...new Set(missing)],acknowledgment_already_sent:already,ack_evidence_guid:already?ack.source_guid:'',draft_only:true};
+ return {...result,summary:trim(result.summary,4000),service_text:job?trim(result.service_text,8000):'',reply_text:already?'':trim(result.reply_text,2000),issues:(result.issues||[]).slice(0,20).map(v=>trim(v,1000)),source_message_guids:evidence,photos:chosenPhotos.map(({file_uri,...a})=>a),job:job||null,missing_info:[...new Set(missing)],acknowledgment_already_sent:already,ack_evidence_guid:already?ack.source_guid:'',draft_only:true};
 }
 async function rows(entity,query,sort='-created_date',max=2000){
  const out=[];for(let skip=0;skip<max;skip+=500){const p=query?await entity.filter(query,sort,500,skip):await entity.list(sort,500,skip);out.push(...p);if(p.length<500)return out;}throw Error('Source is too large for a complete lookup.');
@@ -155,7 +158,7 @@ export function createMessageAssistantHandler({getClient,loadDirectory,now=()=>n
    if(!contacts.length)return reply({error:'Match a work contact before preparing a service request.'},409);
    let messages=await api.MessageRecord.filter({conversation_key:conversationKey},'-sent_at',251);
    const truncated=messages.length>250;messages=messages.slice(0,250).filter(m=>!m.retracted_at);
-   const digest=await hash(JSON.stringify(messages.map(m=>[m.source_guid,m.text,m.edited_at,m.attachments?.map(a=>[a.guid,a.status])])));
+   const digest=await hash('assistant-v2:'+JSON.stringify(messages.map(m=>[m.source_guid,m.text,m.edited_at,m.attachments?.map(a=>[a.guid,a.status])])));
    const cached=(await api.MessageServiceCase.filter({conversation_key:conversationKey,source_digest:digest},'-reviewed_at',1))[0];
    if(cached)return reply({case:cached,cached:true});
    const capture=(await api.MessageAssistantCapture.filter({conversation_key:conversationKey},'-created_date',1))[0];
