@@ -45,7 +45,7 @@ function entity(initial=[]) {
   const rows=structuredClone(initial);
   return { rows, list:async(_sort,limit=1000,skip=0)=>structuredClone(rows.slice(skip,skip+limit)),
     bulkCreate:async data=>{const created=data.map((r,i)=>({...r,id:"new-"+(rows.length+i)}));rows.push(...created);return structuredClone(created).reverse();},
-    bulkUpdate:async data=>{for(const p of data){const r=rows.find(r=>r.id===p.id);assert.ok(r,"update target exists");Object.assign(r,p);}return data;} };
+    bulkUpdate:async data=>{assert.equal(new Set(data.map(r=>r.id)).size,data.length,"one patch per entity");for(const p of data){const r=rows.find(r=>r.id===p.id);assert.ok(r,"update target exists");Object.assign(r,p);}return data;} };
 }
 async function moduleUrl(url) {
   if (!url.pathname.endsWith(".ts")) return url.href;
@@ -69,7 +69,7 @@ async function handler(name, client, posts=[]) {
   return (await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64")+"#"+Math.random())).default;
 }
 function client(fees,events=[]) {
-  const entities={FeeLines:entity(fees),CalendarEvents:entity(events),Jobs:entity([{id:"job",canonical_name:"test job",aliases:[]}]),MonthCloseSnapshot:entity(),FieldReports:entity()};
+  const entities={FeeLines:entity(fees),CalendarEvents:entity(events),Jobs:entity([{id:"job",canonical_name:"test job",aliases:[]}]),MonthCloseSnapshot:entity(),FieldReports:entity(),AppSettings:entity(),ReportAudit:entity()};
   return {asServiceRole:{entities},entities};
 }
 test("calendar reverse merge reserves the post, records returned IDs and is idempotent",async()=>{
@@ -93,4 +93,13 @@ test("ProBuild refresh preserves calendar identity, custom fee and report notes"
   assert.equal(r.job_date,"2026-09-06");assert.equal(r.job_name_raw,"Calendar title");assert.equal(r.source,"both");assert.equal(r.labor_amt,375);assert.equal(r.fee_amt,56.25);
   assert.match(r.note_text,/Appointment instructions/);assert.match(r.note_text,/3 composite man hours/);
   assert.equal(c.entities.FieldReports.rows.length,1);assert.equal(r.photo_urls.length,1);
+});
+
+test("month-wide report audit sends one update per event and keeps the fresh status",async()=>{
+  const c=client([],[{id:"old-event",event_date:"2020-01-02",job_name:"test job",report_required:true,report_status:"missing_all",match_method:"none",matched_post_ids:[]}]);
+  const run=await handler("auditFieldReports",c);
+  const res=await run(new Request("https://test/",{method:"POST",body:JSON.stringify({start_date:"2020-01-01",end_date:"2020-01-31",force:true})}));
+  assert.equal(res.status,200,await res.text());
+  assert.equal(c.entities.CalendarEvents.rows[0].report_status,"no_source_data");
+  assert.equal(c.entities.CalendarEvents.rows[0].report_required,true);
 });

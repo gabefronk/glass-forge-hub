@@ -55,7 +55,7 @@ export default function Invoicing() {
         if (e.google_event_id) rsm.set(e.google_event_id, e.report_status);
       }
       setReportStatusMap(rsm);
-      setFeeLines(Array.isArray(fl) ? fl : []);
+      setFeeLines(Array.isArray(fl) ? fl.map(r => ({...r, labor_amt: computeLaborAmt(r), fee_amt: computeFeeAmt(r)})) : []);
       setLoadError("");
       window.dispatchEvent(new Event("billing-updated"));
       const feeEventIds = new Set((Array.isArray(fl) ? fl : []).map((f) => f.calendar_event_id).filter(Boolean));
@@ -444,7 +444,7 @@ export default function Invoicing() {
             />
             {view === "lines" ? (
               <LineList
-                rows={filteredRows}
+                rows={filteredRows.map(r => ({ ...r, _reportBlocked: isReportBlocked(r, reportStatusMap) }))}
                 sort={sort}
                 selectedIds={selectedIds}
                 onToggle={toggleRow}
