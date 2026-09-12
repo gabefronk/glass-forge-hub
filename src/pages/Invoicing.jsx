@@ -339,9 +339,6 @@ export default function Invoicing() {
       <InvoiceHeader
         month={month}
         onMonthChange={setMonth}
-        search={search}
-        onSearchChange={setSearch}
-        searchRef={searchRef}
         onExportPdf={handleExportPdf}
         exporting={exporting}
         monthClosed={monthClosed}
@@ -377,7 +374,11 @@ export default function Invoicing() {
               onFilterBlocked={() => setFilter("needs_report")}
               onFilterMatchBlocked={() => setFilter("needs_review")}
             />
+            <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "16px" }}>
             <InvoiceToolbar
+              search={search}
+              onSearchChange={setSearch}
+              searchRef={searchRef}
               view={view}
               onViewChange={setView}
               filter={filter}
@@ -416,6 +417,7 @@ export default function Invoicing() {
                 onOpenJob={() => {}}
               />
             )}
+            </div>
           </>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { Search, ChevronLeft, ChevronRight, Lock, RefreshCw, Download, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, RefreshCw, Download, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 
@@ -14,7 +14,7 @@ function relativeTime(iso) {
   return `${days}d ago`;
 }
 
-export default function InvoiceHeader({ month, onMonthChange, search, onSearchChange, searchRef, onExportPdf, exporting, monthClosed, onCloseMonth, closing, onRefresh, refreshing, syncMessage, loadError }) {
+export default function InvoiceHeader({ month, onMonthChange, onExportPdf, exporting, monthClosed, onCloseMonth, closing, onRefresh, refreshing, syncMessage, loadError }) {
   const [probuildStatus, setProbuildStatus] = useState(null);
 
   useEffect(() => {
@@ -86,21 +86,7 @@ export default function InvoiceHeader({ month, onMonthChange, search, onSearchCh
           </details>
         )}
 
-        {/* Search — kept in current position */}
-        <div className="relative flex w-full min-w-0 items-center sm:w-auto sm:flex-1 sm:basis-[220px]">
-          <Search style={{ position: "absolute", left: "12px", width: "16px", height: "16px", color: "var(--gf-placeholder)", pointerEvents: "none" }} strokeWidth={1.8} strokeLinecap="round" />
-          <input
-            ref={searchRef}
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search lines and jobs"
-            aria-label="Search lines and jobs"
-            style={{ width: "100%", minWidth: 0, height: "34px", borderRadius: "var(--r-control)", backgroundColor: "var(--gf-field)", border: "1px solid var(--gf-border)", color: "var(--gf-ink)", fontSize: "13px", fontFamily: "var(--font-body)", paddingLeft: "36px", paddingRight: "40px", outline: "none" }}
-          />
-          <span style={{ position: "absolute", right: "10px", fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--gf-placeholder)", border: "1px solid var(--gf-border)", borderRadius: "4px", padding: "1px 4px", pointerEvents: "none" }}>⌘K</span>
-        </div>
-
-        <div className="hidden xl:block" style={{ flex: 1 }} />
+        <div style={{ flex: 1 }} />
 
         {/* Actions */}
         <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
