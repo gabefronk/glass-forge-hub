@@ -2,6 +2,23 @@
   "name": "FeeLines",
   "type": "object",
   "properties": {
+    "calendar_note_text": {
+      "type": "string"
+    },
+    "probuild_note_text": {
+      "type": "string"
+    },
+    "probuild_job_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "pricing_review_reason": {
+      "type": "string"
+    },
+    "split_candidate_amt": {
+      "type": "number",
+      "description": "Unconfirmed split from source notes; excluded from totals until allocated."
+    },
     "job_id": {
       "type": "string",
       "title": "Job Id",
