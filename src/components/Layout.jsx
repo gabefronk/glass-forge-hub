@@ -3,13 +3,14 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import YaFeesSidebar from "@/components/YaFeesSidebar";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { Bot, MessageSquare, Users } from "lucide-react";
+import { Bot, MessageSquare, Users, FileText } from "lucide-react";
 import { Receipt, Calendar, Briefcase, BarChart3, PanelsTopLeft, Diamond, LogOut, Library } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
+  { label: "Reports", to: "/reports", icon: FileText, ownerOnly: true },
   { label: "Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },
@@ -53,7 +54,7 @@ export default function Layout() {
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(item => !item.ownerOnly || isAgentCenterOwner(user)).map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"));
           return (

@@ -3,7 +3,7 @@ import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { Bot, MessageSquare, Users } from "lucide-react";
+import { Bot, MessageSquare, Users, FileText } from "lucide-react";
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr } from "@/lib/feeMath";
 
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
+  { label: "Reports", to: "/reports", icon: FileText, ownerOnly: true },
   { label: "Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },
@@ -85,7 +86,7 @@ export default function YaFeesSidebar() {
 
       {/* Nav */}
       <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-4 space-y-1 overflow-y-auto obsidian-scroll">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(item => !item.ownerOnly || isAgentCenterOwner(user)).map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"));
           return (
