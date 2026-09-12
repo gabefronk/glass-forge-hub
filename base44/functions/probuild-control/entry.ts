@@ -13,6 +13,17 @@ Deno.serve(async(req)=>{
   if(i.action==='projects')return Response.json({projects:projects.map(p=>({id:p.id,name:p.name||p.title||'',last_modified_at:p.lastModifiedAt,archived:!!p.archivedAt,deleted:!!p.deletedAt})),checked_at:new Date().toISOString()});
   if(!projects.some(p=>p.id===i.project_id))return Response.json({error:'Project not found'},{status:404});
   const posts=await fetchProbuildPostsForProject(token,i.project_id);
+  if(i.action==='photo'){
+   const a=posts.find(p=>p.postId===i.post_id)?.post?.attachments?.[i.attachment_id];
+   if(!a||a.type!=='photo')return Response.json({error:'Photo not found'},{status:404});
+   const path=`teams/-O7aXXhvthc41u60Koc6/posts/${i.project_id}/${i.post_id}/attachments/${i.attachment_id}`;
+   const u=`https://firebasestorage.googleapis.com/v0/b/probuild-prod.appspot.com/o/${encodeURIComponent(path)}?alt=media&generation=${encodeURIComponent(a.generation||'')}`;
+   const r=await fetch(u,{headers:{Authorization:`Firebase ${token}`}});
+   if(!r.ok)return Response.json({error:'Photo retrieval failed',upstream_status:r.status},{status:502});
+   const bytes=new Uint8Array(await r.arrayBuffer());let b='';for(let j=0;j<bytes.length;j+=32768)b+=String.fromCharCode(...bytes.subarray(j,j+32768));
+   return Response.json({mime_type:r.headers.get('content-type'),size:bytes.length,base64:btoa(b)});
+  }
+  if(i.action!=='project')return Response.json({error:'Unsupported action'},{status:400});
   return Response.json({project:projects.find(p=>p.id===i.project_id),posts});
  }catch(e){console.error('Probuild control failed',e?.name);return Response.json({error:'ProBuild source unavailable'},{status:502});}
 });
