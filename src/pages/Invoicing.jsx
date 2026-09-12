@@ -373,6 +373,7 @@ export default function Invoicing() {
             )}
             <InvoiceSummary
               {...heroStats}
+              month={month}
               onFilterBlocked={() => setFilter("needs_report")}
               onFilterMatchBlocked={() => setFilter("needs_review")}
             />
