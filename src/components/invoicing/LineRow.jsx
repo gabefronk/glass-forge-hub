@@ -103,7 +103,7 @@ function InlineEditor({ row, onSave, onCancel, onDelete }) {
   );
 }
 
-function StatusDot({ label, dotColor, textColor, onClick, clickable }) {
+function StatusDot({ label, dot, text, onClick, clickable }) {
   const Tag = clickable ? "button" : "span";
   return (
     <Tag
@@ -112,7 +112,7 @@ function StatusDot({ label, dotColor, textColor, onClick, clickable }) {
       style={{
         fontSize: "12.5px",
         fontWeight: 500,
-        color: textColor,
+        color: text,
         background: "none",
         border: "none",
         cursor: clickable ? "pointer" : "default",
@@ -121,8 +121,8 @@ function StatusDot({ label, dotColor, textColor, onClick, clickable }) {
       }}
     >
       <span style={{ position: "relative", width: "7px", height: "7px", flexShrink: 0 }}>
-        <span style={{ position: "absolute", inset: "-3px", borderRadius: "99px", backgroundColor: dotColor, opacity: 0.2 }} />
-        <span style={{ position: "absolute", inset: 0, borderRadius: "99px", backgroundColor: dotColor }} />
+        <span style={{ position: "absolute", inset: "-3px", borderRadius: "99px", backgroundColor: dot, opacity: 0.2 }} />
+        <span style={{ position: "absolute", inset: 0, borderRadius: "99px", backgroundColor: dot }} />
       </span>
       {label}
     </Tag>
