@@ -3,7 +3,7 @@ import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { Bot, MessageSquare } from "lucide-react";
+import { Bot, MessageSquare, Users } from "lucide-react";
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr } from "@/lib/feeMath";
 
@@ -105,6 +105,7 @@ export default function YaFeesSidebar() {
             </Link>
           );
         })}
+        {isAgentCenterOwner(user) && <Link to="/contacts" aria-current={pathname === "/contacts" ? "page" : undefined} className="flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-[#2A5EA8]"><Users className="h-4 w-4 shrink-0"/>Contacts</Link>}
         {isAgentCenterOwner(user) && <Link to="/messages" aria-current={pathname === "/messages" ? "page" : undefined} className="flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-[#2A5EA8]"><MessageSquare className="h-4 w-4 shrink-0"/>Messages</Link>}
         {canViewAgentCenter(user) && <Link to="/admin/agents" aria-current={pathname === "/admin/agents" ? "page" : undefined} className={"flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium "+(pathname === "/admin/agents" ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#535E72]")}><Bot className="h-4 w-4 shrink-0"/>Agent Center</Link>}
       </nav>
