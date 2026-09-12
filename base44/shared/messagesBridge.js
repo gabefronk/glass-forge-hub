@@ -67,6 +67,7 @@ export function createMessagesBridgeHandler({getClient, now = () => new Date()} 
    if (action === 'inbox') {
     const query={};
     if (input.job_id) query.job_id=clean(input.job_id);
+    if(Array.isArray(input.contact_participants))query.participants={$in:input.contact_participants.filter(v=>typeof v==='string'&&v.length<=300).slice(0,10)};
     const q=clean(input.search,120).trim();
     if(q){const pattern=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');query.$or=['title','last_text','job_name','participants'].map(k=>({[k]:{$regex:pattern,$options:'i'}}));}
     const skip=Math.max(0,Math.min(100000,Math.floor(Number(input.skip)||0)));
