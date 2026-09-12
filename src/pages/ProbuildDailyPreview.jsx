@@ -1,7 +1,7 @@
 import {useState} from "react";
 import {base44} from "@/api/base44Client";
 export default function ProbuildDailyPreview(){
- const [date,setDate]=useState("2026-09-11"),[data,setData]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+ const [date,setDate]=useState(()=>{const today=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Denver",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());const d=new Date(today+"T12:00:00Z");d.setUTCDate(d.getUTCDate()-1);return d.toISOString().slice(0,10);}),[data,setData]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);
  async function load(offset=0){
   setBusy(true);setError("");
   try{const r=await base44.functions.invoke("preview-probuild-daily",{date,offset});setData(r.data);}
