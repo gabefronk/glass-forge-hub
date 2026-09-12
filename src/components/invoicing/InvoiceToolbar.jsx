@@ -10,7 +10,7 @@ const FILTERS = [
 
 export default function InvoiceToolbar({ search, onSearchChange, searchRef, view, onViewChange, filter, onFilterChange, filterCounts, sort, onSortChange, hideZeros, onHideZerosChange, lineCount, readyCount, onSelectAllReady }) {
   return (
-    <div className="flex flex-wrap items-center gap-2" style={{ minHeight: "56px", padding: "10px 16px", borderBottom: "1px solid var(--gf-hairline)" }}>
+    <div className="flex flex-wrap items-center gap-1" style={{ minHeight: "48px", padding: "5px 16px", borderBottom: "1px solid var(--gf-hairline)" }}>
       {/* Search */}
       <div className="relative w-full sm:w-auto" style={{ flexShrink: 0, maxWidth: "300px" }}>
         <Search style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", width: "16px", height: "16px", color: "var(--gf-placeholder)", pointerEvents: "none" }} strokeWidth={1.8} strokeLinecap="round" />

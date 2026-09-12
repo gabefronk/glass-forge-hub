@@ -36,6 +36,16 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
 
   return (
     <div style={{ position: "relative", paddingBottom: "8px" }}>
+      {/* Desktop column headers */}
+      <div className="hidden sm:flex items-center" style={{ height: "26px", padding: "0 16px", gap: "14px", borderBottom: "1px solid var(--gf-hairline)", backgroundColor: "var(--gf-card-band)" }}>
+        <div style={{ width: "28px", flexShrink: 0 }} />
+        <div style={{ width: "30px", flexShrink: 0 }} />
+        <span className="text-[11px] font-semibold uppercase" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", flex: "1 1 auto" }}>Job</span>
+        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "80px", flexShrink: 0 }}>Labor</span>
+        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "128px", flexShrink: 0 }}>Status</span>
+        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "100px", flexShrink: 0 }}>Fee</span>
+        <div style={{ width: "28px", flexShrink: 0 }} />
+      </div>
       {grouped.map((group, gi) => (
         <div key={group.date || "all"}>
           {group.date && sort === "date" && (

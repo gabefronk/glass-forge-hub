@@ -241,16 +241,16 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
             data-no-open
             onClick={(e) => { e.stopPropagation(); onOpenDetails(row); }}
             className="text-[14px] font-medium truncate text-left"
-            style={{ color: "var(--gf-ink)", textDecoration: isBilled ? "line-through" : "none", minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit" }}
+            style={{ color: "var(--gf-ink)", textDecoration: isBilled ? "line-through" : "none", flexShrink: 0, flexBasis: "220px", minWidth: "180px", maxWidth: "280px", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit" }}
           >
             {row.job_name_raw || row.job_name_norm || row.line_description}
           </button>
           {isCustomFee && (
-            <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ backgroundColor: "var(--gf-teal-050)", border: "1px solid var(--gf-teal-halo)", color: "var(--gf-teal-600)" }}>
+            <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ backgroundColor: "var(--gf-teal-050)", border: "1px solid var(--gf-teal-halo)", color: "var(--gf-teal-600)", flexShrink: 0 }}>
               {Math.round((row.fee_pct || 0) * 100)}%
             </span>
           )}
-          <span className="text-[12.5px] truncate" style={{ color: reportAttached ? "var(--gf-teal-600)" : "var(--gf-ink-3)", minWidth: 0 }}>
+          <span className="text-[12.5px] truncate" style={{ color: reportAttached ? "var(--gf-teal-600)" : "var(--gf-ink-3)", flex: "1 1 0", minWidth: 0 }}>
             {subline}
           </span>
         </div>

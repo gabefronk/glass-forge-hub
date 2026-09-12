@@ -374,7 +374,7 @@ export default function Invoicing() {
               onFilterBlocked={() => setFilter("needs_report")}
               onFilterMatchBlocked={() => setFilter("needs_review")}
             />
-            <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "16px" }}>
+            <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "2px" }}>
             <InvoiceToolbar
               search={search}
               onSearchChange={setSearch}

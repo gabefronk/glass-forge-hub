@@ -16,7 +16,7 @@ export default function InvoiceSummary({ readyTotal, readyCount, heldTotal, reco
   const eyebrow = `RECORDED FEES · ${monthShort(month)}`;
 
   return (
-    <div style={{ padding: "10px 0 22px" }}>
+    <div style={{ padding: "10px 0 6px" }}>
       {/* Desktop: single flex row */}
       <div className="hidden sm:flex items-stretch flex-nowrap" style={{ whiteSpace: "nowrap" }}>
         {/* Hero cell */}
@@ -96,7 +96,7 @@ export default function InvoiceSummary({ readyTotal, readyCount, heldTotal, reco
       </div>
 
       {/* Provisional + allocation warning */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-[12px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-[12px]">
         <span style={{ color: "var(--gf-ink-3)" }}>Includes provisional amounts held for review.</span>
         {splitReviewCount > 0 && (
           <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ backgroundColor: "var(--gf-amber-050)", border: "1px solid var(--gf-amber-100)", color: "var(--gf-amber-700)" }}>
