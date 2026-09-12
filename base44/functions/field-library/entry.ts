@@ -155,3 +155,5 @@ function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>n
 }
 
 Deno.serve(createFieldLibraryHandler({getClient:createClientFromRequest,getToken:getProbuildIdToken}));
+
+// Resource revision: report batch transfer 2026-09-12.
