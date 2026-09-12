@@ -6,7 +6,7 @@ const FILTERS = [
   { key: "billed", label: "Billed" },
 ];
 
-export default function InvoiceToolbar({ view, onViewChange, filter, onFilterChange, filterCounts, sort, onSortChange, hideZeros, onHideZerosChange, lineCount }) {
+export default function InvoiceToolbar({ view, onViewChange, filter, onFilterChange, filterCounts, sort, onSortChange, hideZeros, onHideZerosChange, lineCount, readyCount, onSelectAllReady }) {
   return (
     <div className="min-w-0" style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "12px", borderBottom: "1px solid #DDE0DA", flexWrap: "wrap" }}>
       {/* Lines / Jobs segmented toggle */}
@@ -112,6 +112,15 @@ export default function InvoiceToolbar({ view, onViewChange, filter, onFilterCha
         <span style={{ fontSize: "13px", color: "#53615B", whiteSpace: "nowrap" }}>Hide $0</span>
         <span className="max-[699px]:hidden" style={{ fontFamily: "'Archivo',sans-serif", fontSize: "12px", color: "#53615B", whiteSpace: "nowrap" }}>{lineCount} lines</span>
       </div>
+
+      {/* Select ready — bulk action with list controls */}
+      <button
+        onClick={onSelectAllReady}
+        className="text-[13px] font-semibold rounded-full px-3.5 py-2 whitespace-nowrap"
+        style={{ backgroundColor: "#146556", border: "1px solid #104E44", color: "#FFFFFF", cursor: "pointer", flexShrink: 0 }}
+      >
+        Select ready{readyCount > 0 ? ` (${readyCount})` : ""}
+      </button>
     </div>
   );
 }

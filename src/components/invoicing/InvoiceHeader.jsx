@@ -14,7 +14,7 @@ function relativeTime(iso) {
   return `${days}d ago`;
 }
 
-export default function InvoiceHeader({ month, onMonthChange, search, onSearchChange, readyCount, onSelectAllReady, searchRef, onExportPdf, exporting, monthClosed, onCloseMonth, closing, onRefresh, refreshing, syncMessage, loadError }) {
+export default function InvoiceHeader({ month, onMonthChange, search, onSearchChange, searchRef, onExportPdf, exporting, monthClosed, onCloseMonth, closing, onRefresh, refreshing, syncMessage, loadError }) {
   const [probuildStatus, setProbuildStatus] = useState(null);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function InvoiceHeader({ month, onMonthChange, search, onSearchCh
 
   return (
     <div style={{ position: "relative", zIndex: 30, backgroundColor: "#FFFFFF", borderBottom: "1px solid #DDE0DA" }}>
-      <div className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-3 px-4 py-3 sm:px-6 xl:px-10">
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-3 px-5 py-3 sm:px-6 lg:px-8">
         {/* Title + month picker */}
         <div className="flex items-center gap-3" style={{ flexShrink: 0 }}>
           <div className="flex flex-col" style={{ gap: "1px" }}>
@@ -141,13 +141,10 @@ export default function InvoiceHeader({ month, onMonthChange, search, onSearchCh
           <span style={{ position: "absolute", right: "10px", fontFamily: "'Archivo',sans-serif", fontSize: "10px", color: "#8A958F", border: "1px solid #DDE0DA", borderRadius: "4px", padding: "1px 4px", pointerEvents: "none" }}>⌘K</span>
         </div>
 
-        <button onClick={onSelectAllReady} className="w-full sm:w-auto" style={{ ...btnBase, backgroundColor: "#146556", border: "1px solid #104E44", color: "#FFFFFF", fontWeight: 600, justifyContent: "center", cursor: "pointer" }}>
-          Select all ready{readyCount > 0 ? ` (${readyCount})` : ""}
-        </button>
       </div>
 
       {(syncMessage || loadError) && (
-        <div className="mx-auto max-w-[1180px] px-4 pb-3 sm:px-6 xl:px-10">
+        <div className="mx-auto max-w-[1440px] px-5 pb-3 sm:px-6 lg:px-8">
           {loadError && <p role="alert" className="text-[13px]" style={{ color: "#A43432" }}>{loadError}</p>}
           {syncMessage && !loadError && <p role="status" className="text-[13px]" style={{ color: "#53615B" }}>{syncMessage}</p>}
         </div>

@@ -341,8 +341,6 @@ export default function Invoicing() {
         onMonthChange={setMonth}
         search={search}
         onSearchChange={setSearch}
-        readyCount={heroStats.readyCount}
-        onSelectAllReady={handleSelectAllReady}
         searchRef={searchRef}
         onExportPdf={handleExportPdf}
         exporting={exporting}
@@ -355,7 +353,7 @@ export default function Invoicing() {
         loadError={loadError}
       />
 
-      <div className="mx-auto min-w-0 max-w-[1180px] px-4 sm:px-6 xl:px-10" style={{ paddingBottom: selectedIds.size > 0 ? "220px" : "60px" }}>
+      <div className="mx-auto min-w-0 max-w-[1440px] px-5 sm:px-6 lg:px-8" style={{ paddingBottom: selectedIds.size > 0 ? "220px" : "60px" }}>
         {showEmptyState ? (
           <div style={{ padding: "120px 0", textAlign: "center" }}>
             <p className="text-[17px]" style={{ color: "#53615B", marginBottom: "8px" }}>
@@ -389,6 +387,8 @@ export default function Invoicing() {
               hideZeros={hideZeros}
               onHideZerosChange={() => setHideZeros(!hideZeros)}
               lineCount={filteredRows.length}
+              readyCount={heroStats.readyCount}
+              onSelectAllReady={handleSelectAllReady}
             />
             {view === "lines" ? (
               <LineList

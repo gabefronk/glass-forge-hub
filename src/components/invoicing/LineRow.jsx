@@ -102,8 +102,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   const fee = computeFeeAmt(row);
   const isCustomFee = row.fee_type !== "profit_split" && Number(row.fee_pct) !== 0.1;
   const opacity = isBilled ? 0.55 : 1;
-  const bg = selected ? "#EAF5EE" : blocked ? "#FCEDEC" : "transparent";
-  const insetBar = selected ? "inset 3px 0 0 #146556" : blocked ? "inset 3px 0 0 #A43432" : "none";
+  const insetBar = selected ? "inset 3px 0 0 #146556" : blocked ? "inset 3px 0 0 #F0DBA8" : "none";
 
   // Compact subline: PO · crew · note preview (2 lines max, no repeated job name)
   const notePreview = noteTokens(row.note_text);
@@ -133,7 +132,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
         data-no-open
         onClick={(e) => { e.stopPropagation(); if (isMatch) setEditing(true); else onAddReport(row.id); }}
         className="text-[11px] font-semibold rounded-full px-2.5 py-1 whitespace-nowrap"
-        style={{ border: "1px solid #F0C9C5", backgroundColor: "#FCEDEC", color: "#A43432" }}
+        style={{ border: "1px solid #F0DBA8", backgroundColor: "#FFF3DF", color: "#89511A" }}
       >
         {isMatch ? "Review pricing" : "Review report"}
       </button>
@@ -149,10 +148,10 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   return (
     <div
       onClick={handleRowClick}
-      className="grid min-w-0 grid-cols-[40px_minmax(0,1fr)_36px] items-center gap-x-2 xl:grid-cols-[40px_minmax(0,1fr)_90px_90px_120px_36px] xl:gap-x-3"
+      className={`grid min-w-0 grid-cols-[40px_minmax(0,1fr)_36px] items-center gap-x-2 xl:grid-cols-[40px_minmax(0,1fr)_90px_90px_120px_36px] xl:gap-x-3 ${selected ? "bg-[#EAF5EE]" : "hover:bg-[#F8F9F6] focus-within:bg-[#F8F9F6]"}`}
       style={{
         padding: "10px 12px", minHeight: "56px", borderRadius: "10px",
-        borderBottom: "1px solid #ECEEEA", backgroundColor: bg, boxShadow: insetBar,
+        borderBottom: "1px solid #ECEEEA", boxShadow: insetBar,
         cursor: "pointer", opacity, transition: "background-color .15s",
       }}
     >

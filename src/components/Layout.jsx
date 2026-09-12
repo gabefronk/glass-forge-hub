@@ -29,7 +29,7 @@ export default function Layout() {
           </button>
         </div>
       </header>
-      <main className="app-main lg:ml-[232px] min-w-0">
+      <main className="app-main lg:ml-[216px] min-w-0">
         <Outlet />
       </main>
       <MobileBottomNav user={user} />

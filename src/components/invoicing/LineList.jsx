@@ -35,7 +35,16 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
   }
 
   return (
-    <div>
+    <div className="rounded-xl overflow-hidden" style={{ backgroundColor: "#FFFFFF", border: "1px solid #DDE0DA" }}>
+      {/* Desktop column headers */}
+      <div className="hidden xl:grid px-3 py-2" style={{ gridTemplateColumns: "40px minmax(0,1fr) 90px 90px 120px 36px", gap: "12px", borderBottom: "1px solid #DDE0DA", backgroundColor: "#F8F9F6" }}>
+        <span />
+        <span className="text-[11px] font-semibold uppercase" style={{ color: "#8A958F", letterSpacing: "0.06em" }}>Job</span>
+        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "#8A958F", letterSpacing: "0.06em" }}>Labor</span>
+        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "#8A958F", letterSpacing: "0.06em" }}>Fee</span>
+        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "#8A958F", letterSpacing: "0.06em" }}>Status</span>
+        <span />
+      </div>
       {grouped.map((group, gi) => (
         <div key={group.date || "all"}>
           {group.date && sort === "date" && (

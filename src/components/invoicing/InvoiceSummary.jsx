@@ -1,85 +1,71 @@
 import { formatMoney } from "@/lib/feeMath";
 
-function StatCard({ label, value, sub, tone, onClick, clickable }) {
-  const Comp = onClick ? "button" : "div";
-  const tones = {
-    ready: { color: "#166447", bg: "#EAF5EE", border: "#C7E4D2" },
-    held: { color: "#89511A", bg: "#FFF3DF", border: "#F0DBA8" },
-    billed: { color: "#53615B", bg: "#F0F1ED", border: "#DDE0DA" },
-    scheduled: { color: "#335E91", bg: "#EBF2FC", border: "#C7D8EF" },
-    muted: { color: "#53615B", bg: "transparent", border: "#DDE0DA" },
-  };
-  const t = tones[tone] || tones.muted;
+export default function InvoiceSummary({ readyTotal, readyCount, heldTotal, recordedLaborTotal, splitReviewCount, matchBlockedTotal, matchBlockedCount, reportBlockedTotal, reportBlockedCount, noSourceDataCount, billedTotal, billedCount, scheduledTotal, scheduledCount, monthEarnedTotal, monthEarnedCount, onFilterBlocked, onFilterMatchBlocked }) {
   return (
-    <Comp
-      onClick={onClick}
-      style={{
-        textAlign: "left",
-        cursor: clickable ? "pointer" : "default",
-        border: `1px solid ${t.border}`,
-        backgroundColor: t.bg,
-        borderRadius: "12px",
-        padding: "14px 16px",
-        minWidth: 0,
-        display: "flex",
-        flexDirection: "column",
-        gap: "4px",
-        transition: "box-shadow .15s, transform .15s",
-      }}
-    >
-      <span className="text-[12px] font-medium" style={{ color: t.color, letterSpacing: "0.01em" }}>{label}</span>
-      <span className="font-mono-num-bold text-[28px]" style={{ color: t.color, letterSpacing: "-0.03em", lineHeight: 1.1 }}>{value}</span>
-      {sub && <span className="text-[12px]" style={{ color: t.color, opacity: 0.8 }}>{sub}</span>}
-    </Comp>
+    <div className="rounded-xl" style={{ backgroundColor: "#FFFFFF", border: "1px solid #DDE0DA" }}>
+      {/* Headline + labor + notes */}
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-5 py-3.5 sm:px-6">
+        <div>
+          <div className="text-[11px] font-medium mb-0.5" style={{ color: "#53615B", letterSpacing: "0.02em" }}>Recorded fees</div>
+          <div className="font-mono-num-bold" style={{ fontSize: "32px", fontWeight: 800, color: "#182422", letterSpacing: "-0.03em", lineHeight: 1 }}>
+            ${formatMoney(monthEarnedTotal)}
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] font-medium mb-0.5" style={{ color: "#53615B", letterSpacing: "0.02em" }}>Recorded labor</div>
+          <div className="font-mono-num-bold text-[18px]" style={{ color: "#53615B", letterSpacing: "-0.02em" }}>
+            ${formatMoney(recordedLaborTotal)}
+          </div>
+        </div>
+        <div className="min-w-0 flex-1 text-[12px] self-end" style={{ color: "#8A958F", lineHeight: 1.5 }}>
+          Includes provisional amounts held for review.
+          {splitReviewCount > 0 && <span style={{ color: "#89511A" }}> {splitReviewCount} profit-split {splitReviewCount === 1 ? "note" : "notes"} need allocation.</span>}
+        </div>
+      </div>
+
+      {/* Metric strip: Ready | Held | Billed */}
+      <div className="grid grid-cols-3 border-t border-b" style={{ borderColor: "#DDE0DA" }}>
+        <MetricCell label="Ready to bill" value={`$${formatMoney(readyTotal)}`} sub={`${readyCount} lines`} tone="ready" />
+        <MetricCell label="Held for review" value={`$${formatMoney(heldTotal)}`} sub={`${reportBlockedCount + matchBlockedCount} lines`} tone="held" />
+        <MetricCell label="Billed" value={`$${formatMoney(billedTotal)}`} sub={`${billedCount} lines`} tone="billed" last />
+      </div>
+
+      {/* Held breakdown — actionable subset links */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2 sm:px-6 text-[12px]">
+        <span style={{ color: "#8A958F" }}>Held:</span>
+        {onFilterBlocked && (
+          <button onClick={onFilterBlocked} className="font-medium hover:underline" style={{ color: "#89511A" }}>
+            {reportBlockedCount} waiting on reports · ${formatMoney(reportBlockedTotal)}
+          </button>
+        )}
+        {onFilterMatchBlocked && (
+          <button onClick={onFilterMatchBlocked} className="font-medium hover:underline" style={{ color: "#89511A" }}>
+            {matchBlockedCount} pricing review · ${formatMoney(matchBlockedTotal)}
+          </button>
+        )}
+        {noSourceDataCount > 0 && (
+          <span style={{ color: "#A43432" }}>⚠ {noSourceDataCount} missing source data</span>
+        )}
+      </div>
+
+      {/* Future — divider + scheduled */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2.5 sm:px-6" style={{ borderTop: "1px solid #ECEEEA" }}>
+        <span className="text-[11px] font-semibold uppercase" style={{ color: "#8A958F", letterSpacing: "0.06em" }}>Future</span>
+        <span className="font-mono-num-bold text-[16px]" style={{ color: "#335E91" }}>${formatMoney(scheduledTotal)}</span>
+        <span className="text-[12px]" style={{ color: "#8A958F" }}>{scheduledCount} scheduled · not yet billable</span>
+      </div>
+    </div>
   );
 }
 
-export default function InvoiceSummary({ readyTotal, readyCount, heldTotal, recordedLaborTotal, splitReviewCount, matchBlockedTotal, reportBlockedTotal, matchBlockedCount, reportBlockedCount, noSourceDataCount, customFeeCount, billedTotal, billedCount, scheduledTotal, scheduledCount, monthEarnedTotal, monthEarnedCount, onFilterBlocked, onFilterMatchBlocked }) {
+function MetricCell({ label, value, sub, tone, last }) {
+  const colors = { ready: "#166447", held: "#89511A", billed: "#53615B" };
   return (
-    <div className="flex min-w-0 flex-col" style={{ gap: "20px", paddingTop: "28px", paddingBottom: "24px" }}>
-      {/* Recorded fees headline */}
-      <div className="min-w-0 max-w-full">
-        <div className="text-[12px] font-medium" style={{ color: "#53615B", letterSpacing: "0.02em", marginBottom: "8px" }}>
-          Recorded fees this month to date
-        </div>
-        <div className="font-mono-num-bold" style={{ fontSize: "clamp(40px, 7vw, 48px)", fontWeight: 800, color: "#182422", letterSpacing: "-0.04em", lineHeight: 1 }}>
-          ${formatMoney(monthEarnedTotal)}
-        </div>
-        <div className="text-[15px]" style={{ color: "#53615B", marginTop: "10px" }}>
-          ${formatMoney(readyTotal)} ready to bill · ${formatMoney(heldTotal)} held for review or reports · ${formatMoney(billedTotal)} billed
-          <span className="block mt-1.5 text-[13px]">Recorded labor ${formatMoney(recordedLaborTotal)}. Includes provisional amounts held for review; future jobs appear under Scheduled.</span>
-          {splitReviewCount > 0 && <span className="block mt-1.5 text-[13px]" style={{ color: "#89511A" }}>{splitReviewCount} profit-split notes need allocation review. Candidate splits are excluded from totals.</span>}
-          {noSourceDataCount > 0 && (
-            <span className="block mt-1.5 text-[13px]" style={{ color: "#A43432" }}>
-              ⚠ Source data missing for {noSourceDataCount} {noSourceDataCount === 1 ? "line" : "lines"} — ProBuild pull may have failed
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* This month — Ready / Held (with breakdown) / Billed */}
-      <div>
-        <div className="text-[11px] font-semibold uppercase mb-2.5" style={{ color: "#8A958F", letterSpacing: "0.06em" }}>This month</div>
-        <div className="grid w-full min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-3">
-          <StatCard tone="ready" label="Ready to bill" value={`$${formatMoney(readyTotal)}`} sub={`${readyCount} eligible lines`} />
-          <StatCard tone="held" label="Held for review" value={`$${formatMoney(heldTotal)}`} sub={`${reportBlockedCount + matchBlockedCount} lines held`} clickable={!!onFilterBlocked} onClick={onFilterBlocked} />
-          <StatCard tone="billed" label="Billed" value={`$${formatMoney(billedTotal)}`} sub={`${billedCount} lines`} />
-        </div>
-        {/* Held breakdown — report/pricing review belongs to the current-month Held card */}
-        <div className="mt-2.5">
-          <div className="grid w-full min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2">
-            <StatCard tone="held" label="Waiting on reports" value={`$${formatMoney(reportBlockedTotal)}`} sub={`${reportBlockedCount} lines · review →`} clickable={!!onFilterBlocked} onClick={onFilterBlocked} />
-            <StatCard tone="held" label="Pricing / job review" value={`$${formatMoney(matchBlockedTotal)}`} sub={`${matchBlockedCount} lines · review →`} clickable={!!onFilterMatchBlocked} onClick={onFilterMatchBlocked} />
-          </div>
-        </div>
-      </div>
-
-      {/* Future work — Scheduled only */}
-      <div>
-        <div className="text-[11px] font-semibold uppercase mb-2.5" style={{ color: "#8A958F", letterSpacing: "0.06em" }}>Future work</div>
-        <div className="grid w-full min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2">
-          <StatCard tone="scheduled" label="Scheduled" value={`$${formatMoney(scheduledTotal)}`} sub={`${scheduledCount} lines · not yet billable`} />
-        </div>
+    <div className="px-3 py-2.5" style={{ borderRight: last ? "none" : "1px solid #DDE0DA" }}>
+      <div className="text-[11px] font-medium mb-0.5" style={{ color: "#53615B" }}>{label}</div>
+      <div className="flex items-baseline gap-1.5 flex-wrap">
+        <span className="font-mono-num-bold text-[20px]" style={{ color: colors[tone] || colors.billed, letterSpacing: "-0.02em" }}>{value}</span>
+        <span className="text-[11px]" style={{ color: "#8A958F" }}>{sub}</span>
       </div>
     </div>
   );

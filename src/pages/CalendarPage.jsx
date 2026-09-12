@@ -13,6 +13,7 @@ import OutlookEventDetails from "@/components/calendar/OutlookEventDetails";
 import CleanCalendar from "@/components/calendar/CleanCalendar";
 import ServiceCalendar from "@/components/calendar/ServiceCalendar";
 import JobKnowledge from "@/components/calendar/JobKnowledge";
+import SourceCoverageBar from "@/components/calendar/SourceCoverageBar";
 
 
 function formatMonth(m) {
@@ -176,12 +177,7 @@ export default function CalendarPage() {
         </div>
 
         {syncMessage && <p role="status" className="mb-4 rounded-lg border bg-white p-3 text-sm">{syncMessage}</p>}
-        {user?.role === "admin" && <details className="mb-4 rounded-xl border bg-white p-4">
-          <summary className="cursor-pointer font-semibold">Source events needing ownership review ({excludedEvents.filter(e => e.event_date?.startsWith(month)).length})</summary>
-          <p className="my-2 text-sm">These source events were imported but did not match the verified Sales Tracker. They remain outside the verified schedule until matched.</p>
-          {excludedEvents.filter(e => e.event_date?.startsWith(month)).sort((a,b) => a.event_date.localeCompare(b.event_date)).map((e,i) => <div key={e.id || i} className="border-t py-2 text-sm">{e.event_date} · {e.job_name} · {e.source}</div>)}
-        </details>}
-        {outlook && <p className="mb-4 rounded-lg border bg-white p-3 text-sm">Outlook is an imported snapshot covering {outlook.range_start} through {outlook.range_end}, captured {outlook.captured_at}. Refresh whole month pulls Google and ProBuild; a new Outlook import is needed for dates outside this coverage.</p>}
+
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-4">
           <h1 className="font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
           <div className="flex items-center gap-1" aria-label="Choose calendar month">
@@ -199,21 +195,22 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {user?.role === "admin" && <div className="mb-4 rounded-xl border p-3 text-sm" style={{borderColor:C.border}}>
-          <div className="flex flex-wrap gap-4">
-            <label><input type="checkbox" checked={showIsrael} onChange={e=>setShowIsrael(e.target.checked)} /> Israel / existing calendar</label>
-            <label style={{color:OUTLOOK_COLOR}}><input type="checkbox" checked={showOutlook} onChange={e=>setShowOutlook(e.target.checked)} /> Outlook installs</label>
-            <button type="button" className="underline" onClick={load}>Reload imports</button>
-          </div>
-          <p className="text-xs mt-2">{outlook ? `Outlook coverage: ${outlook.range_start} through ${outlook.range_end}. Captured ${new Date(outlook.captured_at).toLocaleString()}. ${outlook.event_count} source events. Source records are preserved. Only verified Sales Tracker matches appear below.` : "No complete Outlook import yet."}</p>
-          {outlook && Date.now()-new Date(outlook.captured_at).getTime()>26*3600000 && <p className="text-xs text-amber-700">Outlook copy is over 26 hours old.</p>}
-          {partialOutlook && <p role="status" className="text-xs text-amber-700">Latest collection is incomplete ({partialOutlook.event_count} events captured). It has not replaced the calendar overlay. {partialOutlook.collection_notes}</p>}
-
-        </div>}
-        <div className="mb-4 rounded-xl border bg-white p-3 text-sm" style={{borderColor:C.border}}>
-          {loading ? <p role="status">Checking calendar ownership against Sales Tracker…</p> : ownershipError ? <p role="alert" className="text-amber-800">{ownershipError} <button className="underline" onClick={load}>Reload calendar</button></p> : <p role="status">Sales Tracker verified · {ownershipCounts?.visible_events || 0} visits this month · {ownershipCounts?.unmatched_events || 0} unmatched source events excluded · {ownershipCounts?.duplicate_events || 0} duplicate entries combined.</p>}
-          {ownership && <p className="mt-1 text-xs">Matched by OE or PO first, then exact builder, subdivision, and lot. Source calendar records remain intact.</p>}
-        </div>
+        <SourceCoverageBar
+          outlook={outlook}
+          partialOutlook={partialOutlook}
+          ownership={ownership}
+          ownershipCounts={ownershipCounts}
+          ownershipError={ownershipError}
+          loading={loading}
+          excludedEvents={excludedEvents}
+          month={month}
+          user={user}
+          showIsrael={showIsrael}
+          setShowIsrael={setShowIsrael}
+          showOutlook={showOutlook}
+          setShowOutlook={setShowOutlook}
+          onReload={load}
+        />
         {creating && (
           <div className="mb-4">
             <EventForm initial={creating} jobs={jobs} onSave={handleSave} onCancel={() => setCreating(null)} saving={saving} />
