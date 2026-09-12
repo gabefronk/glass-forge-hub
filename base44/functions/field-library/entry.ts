@@ -27,7 +27,7 @@ async function mergeRows(entity,existing,rows){
  for(let i=0;i<missing.length;i+=50){const batch=missing.slice(i,i+50);if(entity.bulkCreate)await entity.bulkCreate(batch);else for(const row of batch)await entity.create(row);}
  await parallel(rows.filter(r=>byKey.has(r.source_key)),r=>entity.update(byKey.get(r.source_key).id,r));
 }
-const publicFile=({file_uri,source_snapshot,...f})=>f;
+const publicFile=({file_uri,source_snapshot,chunks,...f})=>({...f,chunks:(chunks||[]).map(({file_uri,...c})=>c)});
 function reportView(r){return {id:r.id,source:'library',project_id:r.source_project_id,project_name:r.project_name,post_id:r.source_post_id,created_at:r.source_created_at,date:r.report_date,message:r.message,deleted:r.source_deleted,attachments:r.attachments||[],source_checked_at:r.source_checked_at};}
 function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>new Date()}){
  const sourceTokenCache={value:null,until:0},importCache=new Map();
@@ -83,18 +83,29 @@ function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>n
     try{
      const path=`teams/${TEAM}/posts/${id(f.source_project_id)}/${id(f.source_post_id)}/attachments/${id(f.source_attachment_id)}`;
      const url='https://firebasestorage.googleapis.com/v0/b/probuild-prod.appspot.com/o/'+encodeURIComponent(path)+'?alt=media'+(f.generation?'&generation='+encodeURIComponent(f.generation):'');
-     const response=await fetchImpl(url,{headers:{Authorization:'Firebase '+await token()},signal:AbortSignal.timeout(90000)});
+     const chunkSize=6*1048576,offset=Number(f.bytes_stored)||0;
+     const response=await fetchImpl(url,{headers:{Authorization:'Firebase '+await token(),Range:`bytes=${offset}-${offset+chunkSize-1}`},signal:AbortSignal.timeout(90000)});
      if(!response.ok)fail('Original attachment unavailable (HTTP '+response.status+').',502);
-     const bytes=await boundedBytes(response),mime=response.headers.get('content-type')||f.mime_type;
+     const range=/^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('content-range')||'');
+     if(response.status===206&&(!range||Number(range[1])!==offset))fail('Source returned an invalid file range.',502);
+     if(offset&&!range)fail('Source did not honor the requested file range.',502);
+     const bytes=await boundedBytes(response,chunkSize),mime=response.headers.get('content-type')||f.mime_type,total=range?Number(range[3]):bytes.length;
+     if(range&&Number(range[2])-Number(range[1])+1!==bytes.length)fail('Source file range is incomplete.',502);
+     if(f.size&&f.chunks?.length&&f.size!==total)fail('Source file size changed during transfer.',409);
      if(!bytes.length||/text\/html|application\/json/.test(mime))fail('Invalid source attachment.',502);
      const digest=await hashBytes(bytes);
-     const uploaded=await client.asServiceRole.integrations.Core.UploadPrivateFile({file:new File([bytes],f.name,{type:mime})});
+     const multipart=total>chunkSize;
+     const uploaded=await client.asServiceRole.integrations.Core.UploadPrivateFile({file:new File([bytes],multipart?f.name+'.part-'+offset+'.bin':f.name,{type:multipart?'application/octet-stream':mime})});
      if(!uploaded.file_uri)fail('Glass Forge did not store the file.',502);
      const copied=await fetchImpl(await signed(uploaded.file_uri),{signal:AbortSignal.timeout(90000)});
      if(!copied.ok)fail('Stored file could not be verified.',502);
-     const checked=await boundedBytes(copied);if(checked.length!==bytes.length||await hashBytes(checked)!==digest)fail('Stored file does not match its source.',502);
-     const saved=await api.FieldLibraryFile.update(f.id,{status:'verified',file_uri:uploaded.file_uri,size:bytes.length,mime_type:mime,sha256:digest,verified_at:at,error:'',attempts:(f.attempts||0)+1});
-     return json({file:publicFile(saved)});
+     const checked=await boundedBytes(copied,chunkSize);if(checked.length!==bytes.length||await hashBytes(checked)!==digest)fail('Stored file does not match its source.',502);
+     const latest=await api.FieldLibraryFile.get(f.id);if((latest.bytes_stored||0)!==offset)return json({file:publicFile(latest),partial:latest.status!=='verified'});
+     const chunks=[...(f.chunks||[]),{offset,size:bytes.length,sha256:digest,file_uri:uploaded.file_uri}],stored=offset+bytes.length,complete=stored===total;
+     if(stored>total)fail('Stored file exceeds the source size.',502);
+     const manifest=chunks.map(({offset,size,sha256})=>({offset,size,sha256}));
+     const saved=await api.FieldLibraryFile.update(f.id,{status:complete?'verified':'copying',file_uri:multipart?'':uploaded.file_uri,chunks,bytes_stored:stored,size:total,mime_type:mime,sha256:multipart?'':digest,manifest_sha256:await hash(JSON.stringify(manifest)),verified_at:complete?at:'',error:'',attempts:(f.attempts||0)+1});
+     return json({file:publicFile(saved),partial:!complete});
     }catch(e){await api.FieldLibraryFile.update(f.id,{status:'error',error:e.publicMessage||'File transfer interrupted.',attempts:(f.attempts||0)+1});throw e;}
    }
    if(action==='audit_import'){
@@ -123,8 +134,9 @@ function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>n
    }
    if(action==='file'){
     const f=(await api.FieldLibraryFile.filter({source_key:String(input.source_key||'').slice(0,800)},'-created_date',1))[0];
-    if(!f||f.status!=='verified'||!f.file_uri)fail('This attachment has not finished transferring.',409);
-    return json({file:publicFile(f),url:await signed(f.file_uri),name:f.name,mime_type:f.mime_type,size:f.size,sha256:f.sha256});
+    if(!f||f.status!=='verified'||(!f.file_uri&&!f.chunks?.length))fail('This attachment has not finished transferring.',409);
+    const chunks=f.file_uri?[]:await parallel(f.chunks,async c=>({url:await signed(c.file_uri),offset:c.offset,size:c.size,sha256:c.sha256}),3);
+    return json({file:publicFile(f),url:f.file_uri?await signed(f.file_uri):null,chunks,name:f.name,mime_type:f.mime_type,size:f.size,sha256:f.sha256,manifest_sha256:f.manifest_sha256});
    }
    if(action==='report'){
     const r=await api.FieldLibraryReport.get(id(input.report_id));if(!r)fail('Report not found.',404);return json({report:reportView(r)});

@@ -58,6 +58,18 @@
     },
     "import_run_id": {
       "type": "string"
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "bytes_stored": {
+      "type": "number"
+    },
+    "manifest_sha256": {
+      "type": "string"
     }
   },
   "required": [

@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {base44} from '@/api/base44Client';
 import {isAgentCenterOwner} from '@/lib/agentCenterAccess';
-import {buildReportPdf,buildEmailDraft,downloadFile} from '@/components/reports/reportExport';
+import {buildReportPdf,buildEmailDraft,downloadFile,fetchReportFile} from '@/components/reports/reportExport';
 import {Archive,Camera,FileText,RefreshCw,Download} from 'lucide-react';
 
 const call=async data=>(await base44.functions.invoke('field-library',data)).data;
@@ -13,7 +13,8 @@ const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Denver',year:
 const when=s=>s?new Date(s).toLocaleString('en-US',{timeZone:'America/Denver',dateStyle:'medium',timeStyle:'short'}):'Date not recorded';
 function Attachment({file,onError}){
  const [source,setSource]=useState(null),[busy,setBusy]=useState(false);
- const open=async()=>{setBusy(true);try{setSource(await call({action:'file',source_key:file.source_key}));}catch(e){onError(e.response?.data?.error||'This attachment could not be opened.');}finally{setBusy(false);}};
+ useEffect(()=>()=>{if(source?.url?.startsWith('blob:'))URL.revokeObjectURL(source.url);},[source]);
+ const open=async()=>{setBusy(true);try{const result=await call({action:'file',source_key:file.source_key});if(result.chunks?.length)result.url=URL.createObjectURL(await fetchReportFile(result));setSource(result);}catch(e){onError(e.response?.data?.error||'This attachment could not be opened.');}finally{setBusy(false);}};
  return <div className="min-w-0 overflow-hidden rounded-xl border bg-slate-50">{source?<a className="block break-all text-sm text-blue-800" href={source.url} target="_blank" rel="noreferrer">{source.mime_type?.startsWith('image/')?<img className="h-40 w-full object-contain" src={source.url} alt={file.name}/>:<span className="block p-4">Open {file.name}</span>}</a>:<button className="flex min-h-28 w-full flex-col items-center justify-center gap-2 p-3 text-sm text-blue-800" disabled={busy} onClick={open}>{file.type==='photo'?<Camera className="h-5 w-5"/>:<FileText className="h-5 w-5"/>}{busy?'Opening…':file.type==='photo'?'View photo':file.name}</button>}</div>;
 }
 export default function ReportLibrary(){

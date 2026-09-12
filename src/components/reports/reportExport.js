@@ -2,9 +2,20 @@ import { jsPDF } from 'jspdf';
 
 export const reportFileName = report => (report.title || 'Field report').replace(/[^a-z0-9 _.-]/gi, '').trim().slice(0,100) + ' ' + report.report_date + '.pdf';
 const when = s => new Date(s).toLocaleString('en-US',{timeZone:'America/Denver',dateStyle:'medium',timeStyle:'short'});
+export async function fetchReportFile(file){
+ const sources=file.chunks?.length?file.chunks:[{url:file.url,size:file.size,sha256:file.sha256,offset:0}],parts=[];let offset=0;
+ for(const source of sources){
+  if(source.offset!==undefined&&source.offset!==offset)throw Error('File pieces are incomplete. Retry before sharing.');
+  const response=await fetch(source.url);if(!response.ok)throw Error('A saved file could not be downloaded. Retry before sharing.');
+  const bytes=await response.arrayBuffer();if(source.size&&bytes.byteLength!==source.size)throw Error('A saved file transfer was incomplete.');
+  if(source.sha256){const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');if(digest!==source.sha256)throw Error('A saved file failed verification.');}
+  parts.push(bytes);offset+=bytes.byteLength;
+ }
+ if(file.size&&offset!==file.size)throw Error('The saved file size does not match its source.');
+ return new Blob(parts,{type:file.mime_type||'application/octet-stream'});
+}
 async function imageData(url,metadata={}) {
- const response=await fetch(url);if(!response.ok)throw Error('A photo could not be downloaded. Retry before sharing.');
- let blob=await response.blob();
+ let blob=await fetchReportFile({...metadata,url});
  if(/image\/hei[cf]/i.test(blob.type)||/\.hei[cf]$/i.test(metadata.name||'')){
   const {heicTo}=await import('heic-to/csp');
   blob=await heicTo({blob,type:'image/jpeg',quality:.9});
