@@ -37,62 +37,48 @@ export default function InvoiceHeader({ month, onMonthChange, search, onSearchCh
     onMonthChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   };
 
-  const btnBase = {
-    height: "40px",
-    borderRadius: "8px",
-    fontFamily: "'Archivo',sans-serif",
-    fontSize: "13px",
-    fontWeight: 500,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "0 14px",
-    whiteSpace: "nowrap",
-    flexShrink: 0,
-    cursor: "pointer",
-  };
+  // Status line: combine "Closes in N days" and "ProBuild synced Xm ago" (existing values)
+  const statusParts = [];
+  if (isCurrent && daysLeft > 0) statusParts.push(`Closes in ${daysLeft} days`);
+  if (probuildStatus && !probuildStatus.error) statusParts.push(`ProBuild synced ${relativeTime(probuildStatus.last_exchanged_at)}`);
+  const statusLine = statusParts.join(" · ");
 
   return (
-    <div style={{ position: "relative", zIndex: 30, backgroundColor: "#FFFFFF", borderBottom: "1px solid #DDE0DA" }}>
-      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-3 px-5 py-3 sm:px-6 lg:px-8">
-        {/* Title + month picker */}
-        <div className="flex items-center gap-3" style={{ flexShrink: 0 }}>
-          <div className="flex flex-col" style={{ gap: "1px" }}>
-            <span className="text-[11px] font-medium" style={{ color: "#53615B", letterSpacing: "0.02em" }}>Invoicing · Monthly close</span>
-            <span className="text-[20px] font-bold" style={{ color: "#182422", letterSpacing: "-0.02em" }}>Invoicing</span>
-          </div>
-        </div>
-
-        <div className="hidden sm:block" style={{ width: "1px", height: "32px", backgroundColor: "#DDE0DA", flexShrink: 0 }} />
-
-        {/* Month picker */}
-        <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-          <button onClick={() => shift(-1)} aria-label="Previous month" style={{ ...btnBase, width: "40px", padding: 0, justifyContent: "center", backgroundColor: "#F0F1ED", border: "1px solid #DDE0DA", color: "#53615B" }}>
-            <ChevronLeft style={{ width: "16px", height: "16px" }} />
-          </button>
-          <span className="text-[14px] font-semibold" style={{ color: "#182422", minWidth: "120px", textAlign: "center", whiteSpace: "nowrap" }}>
-            {monthName}
-          </span>
-          <button onClick={() => shift(1)} aria-label="Next month" style={{ ...btnBase, width: "40px", padding: 0, justifyContent: "center", backgroundColor: "#F0F1ED", border: "1px solid #DDE0DA", color: "#53615B" }}>
-            <ChevronRight style={{ width: "16px", height: "16px" }} />
-          </button>
-          {isCurrent && daysLeft > 0 && (
-            <span className="ml-1 text-[11px] font-semibold" style={{ padding: "3px 8px", borderRadius: "99px", backgroundColor: "#FFF3DF", border: "1px solid #F0DBA8", color: "#89511A", whiteSpace: "nowrap" }}>
-              Closes in {daysLeft} days
-            </span>
+    <div style={{ position: "relative", zIndex: 30, backgroundColor: "var(--gf-card)", borderBottom: "1px solid var(--gf-border)" }}>
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-5 px-5 sm:px-6 lg:px-8" style={{ minHeight: "68px", padding: "12px 0" }}>
+        {/* Left: title + status line */}
+        <div className="flex flex-col" style={{ flexShrink: 0 }}>
+          <span className="text-[20px] font-semibold" style={{ color: "var(--gf-ink)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>Invoicing</span>
+          {statusLine && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span style={{ width: "6px", height: "6px", borderRadius: "99px", backgroundColor: "var(--gf-sync)", flexShrink: 0 }} />
+              <span className="text-[12px]" style={{ color: "var(--gf-ink-3)" }}>{statusLine}</span>
+            </div>
           )}
         </div>
 
-        {/* Source freshness — plain label, details behind a control */}
+        {/* Month stepper */}
+        <div className="flex items-center" style={{ flexShrink: 0 }}>
+          <div className="flex items-center" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)" }}>
+            <button onClick={() => shift(-1)} aria-label="Previous month" style={{ width: "32px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid var(--gf-hairline)", color: "var(--gf-ink-2)", cursor: "pointer", backgroundColor: "transparent" }}>
+              <ChevronLeft style={{ width: "16px", height: "16px" }} strokeWidth={1.8} strokeLinecap="round" />
+            </button>
+            <span className="text-[13.5px] font-semibold" style={{ color: "var(--gf-ink)", minWidth: "110px", textAlign: "center", whiteSpace: "nowrap" }}>
+              {monthName}
+            </span>
+            <button onClick={() => shift(1)} aria-label="Next month" style={{ width: "32px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", borderLeft: "1px solid var(--gf-hairline)", color: "var(--gf-ink-2)", cursor: "pointer", backgroundColor: "transparent" }}>
+              <ChevronRight style={{ width: "16px", height: "16px" }} strokeWidth={1.8} strokeLinecap="round" />
+            </button>
+          </div>
+        </div>
+
+        {/* ProBuild details — keep for extra info (Team ID, audit run, etc.) */}
         {probuildStatus && !probuildStatus.error && (
           <details className="hidden md:block" style={{ flexShrink: 0 }}>
-            <summary className="flex items-center gap-1.5 cursor-pointer list-none" style={{ padding: "5px 10px", borderRadius: "99px", backgroundColor: "#F0F1ED", border: "1px solid #DDE0DA" }}>
-              <span style={{ width: "6px", height: "6px", borderRadius: "99px", backgroundColor: "#166447", flexShrink: 0 }} />
-              <span className="text-[11px] font-medium" style={{ color: "#53615B", whiteSpace: "nowrap" }}>
-                ProBuild · synced {relativeTime(probuildStatus.last_exchanged_at)}
-              </span>
+            <summary className="cursor-pointer list-none" style={{ padding: "5px 10px", borderRadius: "var(--r-chip)", backgroundColor: "var(--gf-field)", border: "1px solid var(--gf-border)", color: "var(--gf-ink-3)", fontSize: "11px", fontWeight: 500 }}>
+              Details
             </summary>
-            <div className="mt-1.5 rounded-lg p-3 text-[11px]" style={{ backgroundColor: "#FFFFFF", border: "1px solid #DDE0DA", color: "#53615B", lineHeight: 1.5, whiteSpace: "nowrap" }}>
+            <div className="mt-1.5 rounded-lg p-3 text-[11px]" style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", color: "var(--gf-ink-3)", lineHeight: 1.5, whiteSpace: "nowrap" }}>
               <div>Team ID: <span className="font-mono-num">{probuildStatus.team_id || "—"}</span></div>
               <div>Last token exchange: {probuildStatus.last_exchanged_at ? new Date(probuildStatus.last_exchanged_at).toLocaleString() : "never"}</div>
               <div>Last audit run: {probuildStatus.last_audit_at ? new Date(probuildStatus.last_audit_at).toLocaleString() : "never"}</div>
@@ -100,53 +86,52 @@ export default function InvoiceHeader({ month, onMonthChange, search, onSearchCh
           </details>
         )}
 
-        <div className="hidden xl:block" style={{ flex: 1 }} />
-
-        {/* Actions group */}
-        <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
-          <button onClick={onRefresh} disabled={refreshing} className="min-h-10" style={{ ...btnBase, backgroundColor: "#F0F1ED", border: "1px solid #DDE0DA", color: "#182422", cursor: refreshing ? "wait" : "pointer" }}>
-            <RefreshCw className="h-3.5 w-3.5" style={{ animation: refreshing ? "spin 1s linear infinite" : undefined }} />
-            <span className="hidden sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
-          </button>
-          <button onClick={onExportPdf} disabled={exporting} className="min-h-10" style={{ ...btnBase, backgroundColor: "#FFFFFF", border: "1px solid #DDE0DA", color: "#182422", cursor: exporting ? "wait" : "pointer" }}>
-            <Download className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{exporting ? "Generating…" : "Export"}</span>
-          </button>
-          {monthClosed ? (
-            <div className="flex items-center gap-1.5" style={{ padding: "0 12px", height: "40px", borderRadius: "8px", backgroundColor: "#EAF5EE", border: "1px solid #C7E4D2", whiteSpace: "nowrap", flexShrink: 0 }} title={`Closed ${new Date(monthClosed.closed_at).toLocaleString()}\nBy ${monthClosed.closed_by}\nInvoiced: $${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)} (${monthClosed.invoiced_line_count ?? monthClosed.line_count} ready)\nEarned: $${monthClosed.earned_total?.toFixed(2)} (${monthClosed.earned_line_count} lines)\nTotal rows: ${monthClosed.total_rows}`}>
-              <Lock style={{ width: "13px", height: "13px", color: "#166447" }} />
-              <span className="text-[12px] font-semibold" style={{ color: "#166447" }}>
-                Closed · ${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)}
-              </span>
-            </div>
-          ) : (
-            <button onClick={onCloseMonth} disabled={closing} className="min-h-10" style={{ ...btnBase, backgroundColor: "#FFFFFF", border: "1px solid #DDE0DA", color: "#182422", cursor: closing ? "wait" : "pointer" }}>
-              <FileText className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{closing ? "Closing…" : "Close month"}</span>
-            </button>
-          )}
-        </div>
-
-        {/* Search */}
+        {/* Search — kept in current position */}
         <div className="relative flex w-full min-w-0 items-center sm:w-auto sm:flex-1 sm:basis-[220px]">
-          <Search style={{ position: "absolute", left: "12px", width: "15px", height: "15px", color: "#8A958F", pointerEvents: "none" }} />
+          <Search style={{ position: "absolute", left: "12px", width: "16px", height: "16px", color: "var(--gf-placeholder)", pointerEvents: "none" }} strokeWidth={1.8} strokeLinecap="round" />
           <input
             ref={searchRef}
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search lines and jobs"
             aria-label="Search lines and jobs"
-            style={{ width: "100%", minWidth: 0, height: "40px", borderRadius: "8px", backgroundColor: "#F0F1ED", border: "1px solid #DDE0DA", color: "#182422", fontSize: "14px", fontFamily: "'Archivo',sans-serif", paddingLeft: "36px", paddingRight: "40px", outline: "none" }}
+            style={{ width: "100%", minWidth: 0, height: "34px", borderRadius: "var(--r-control)", backgroundColor: "var(--gf-field)", border: "1px solid var(--gf-border)", color: "var(--gf-ink)", fontSize: "13px", fontFamily: "var(--font-body)", paddingLeft: "36px", paddingRight: "40px", outline: "none" }}
           />
-          <span style={{ position: "absolute", right: "10px", fontFamily: "'Archivo',sans-serif", fontSize: "10px", color: "#8A958F", border: "1px solid #DDE0DA", borderRadius: "4px", padding: "1px 4px", pointerEvents: "none" }}>⌘K</span>
+          <span style={{ position: "absolute", right: "10px", fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--gf-placeholder)", border: "1px solid var(--gf-border)", borderRadius: "4px", padding: "1px 4px", pointerEvents: "none" }}>⌘K</span>
         </div>
 
+        <div className="hidden xl:block" style={{ flex: 1 }} />
+
+        {/* Actions */}
+        <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+          <button onClick={onRefresh} disabled={refreshing} style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: refreshing ? "wait" : "pointer" }}>
+            <RefreshCw className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" style={{ animation: refreshing ? "spin 1s linear infinite" : undefined }} />
+            <span className="hidden sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
+          </button>
+          <button onClick={onExportPdf} disabled={exporting} style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: exporting ? "wait" : "pointer" }}>
+            <Download className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" />
+            <span className="hidden sm:inline">{exporting ? "Generating…" : "Export"}</span>
+          </button>
+          {monthClosed ? (
+            <div className="flex items-center gap-1.5" style={{ padding: "0 12px", height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-teal-050)", border: "1px solid var(--gf-teal-halo)", whiteSpace: "nowrap", flexShrink: 0 }} title={`Closed ${new Date(monthClosed.closed_at).toLocaleString()}\nBy ${monthClosed.closed_by}\nInvoiced: $${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)} (${monthClosed.invoiced_line_count ?? monthClosed.line_count} ready)\nEarned: $${monthClosed.earned_total?.toFixed(2)} (${monthClosed.earned_line_count} lines)\nTotal rows: ${monthClosed.total_rows}`}>
+              <Lock style={{ width: "14px", height: "14px", color: "var(--gf-teal-600)" }} strokeWidth={1.8} strokeLinecap="round" />
+              <span className="text-[12px] font-semibold" style={{ color: "var(--gf-teal-800)" }}>
+                Closed · ${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)}
+              </span>
+            </div>
+          ) : (
+            <button onClick={onCloseMonth} disabled={closing} style={{ height: "34px", borderRadius: "var(--r-button)", background: "linear-gradient(180deg, var(--gf-teal-500), var(--gf-teal-600))", color: "#F4F1EA", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", whiteSpace: "nowrap", flexShrink: 0, boxShadow: "0 1px 2px rgba(11,63,59,.35), inset 0 1px 0 rgba(255,255,255,.12)", cursor: closing ? "wait" : "pointer" }}>
+              <FileText className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" />
+              <span className="hidden sm:inline">{closing ? "Closing…" : "Close month"}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {(syncMessage || loadError) && (
         <div className="mx-auto max-w-[1440px] px-5 pb-3 sm:px-6 lg:px-8">
           {loadError && <p role="alert" className="text-[13px]" style={{ color: "#A43432" }}>{loadError}</p>}
-          {syncMessage && !loadError && <p role="status" className="text-[13px]" style={{ color: "#53615B" }}>{syncMessage}</p>}
+          {syncMessage && !loadError && <p role="status" className="text-[13px]" style={{ color: "var(--gf-ink-3)" }}>{syncMessage}</p>}
         </div>
       )}
     </div>

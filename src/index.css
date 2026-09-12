@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -47,10 +47,10 @@
     --chart-5: #D0E8DF;
     --radius: 12px;
     --control-radius: 8px;
-    --font-heading: 'Archivo', ui-sans-serif, system-ui, sans-serif;
-    --font-body: 'Archivo', ui-sans-serif, system-ui, sans-serif;
-    --font-display: 'Archivo', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'Geist', system-ui, sans-serif;
+    --font-body: 'Geist', system-ui, sans-serif;
+    --font-display: 'Geist', system-ui, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, monospace;
 
     /* Graphite navigation */
     --sidebar-bg: #1B2925;
@@ -61,6 +61,71 @@
     --sidebar-accent-foreground: #E8EAE5;
     --sidebar-border: #2A3A35;
     --sidebar-ring: #3A4A44;
+
+    /* Glass Forge — Deep Teal & Brass design system */
+    --gf-body: #E4DFD4;
+    --gf-canvas: #F4F1EA;
+    --gf-card: #FFFFFF;
+    --gf-card-band: #FAF8F3;
+    --gf-field: #F4F1EA;
+    --gf-hover: #F6F3EC;
+    --gf-border: #E2DCD1;
+    --gf-border-2: #E0DACF;
+    --gf-hairline: #EEE9E0;
+    --gf-hairline-2: #F3EFE7;
+    --gf-check: #CEC6B8;
+    --gf-ink: #101617;
+    --gf-ink-2: #566063;
+    --gf-ink-3: #616A6D;
+    --gf-ink-4: #34403F;
+    --gf-placeholder: #8A8F93;
+    --gf-teal-600: #0B3F3B;
+    --gf-teal-500: #10524C;
+    --gf-teal-700: #093431;
+    --gf-teal-800: #082F2C;
+    --gf-teal-050: #EEF5F3;
+    --gf-teal-halo: rgba(11,63,59,.14);
+    --gf-brass-400: #B8955A;
+    --gf-brass-300: #E0C994;
+    --gf-brass-hover: #CCAA6D;
+    --gf-on-brass: #1D160A;
+    --gf-amber-500: #C08B2E;
+    --gf-amber-700: #6F4E10;
+    --gf-amber-050: #FAF0DA;
+    --gf-amber-100: #EFDFB7;
+    --gf-amber-row: #FBF5E6;
+    --gf-amber-halo: rgba(192,139,46,.18);
+    --gf-slate-300: #8C9EAF;
+    --gf-slate-700: #34506A;
+    --gf-stone-300: #B8B0A4;
+    --gf-sidebar-top: #0E2426;
+    --gf-sidebar-bottom: #0A1D1F;
+    --gf-sidebar-text: #AEB5B7;
+    --gf-sidebar-text-on: #F2EEE8;
+    --gf-sidebar-muted: #7C8688;
+    --gf-graphite-900: #0C1F21;
+    --gf-sync: #3B8A5A;
+    --gf-tile-teal: #E2EEEB;
+    --gf-tile-teal-ink: #082F2C;
+    --gf-tile-slate: #E7EDF2;
+    --gf-tile-slate-ink: #34506A;
+    --gf-tile-sage: #E8EEE4;
+    --gf-tile-sage-ink: #3B5A3A;
+    --gf-tile-sand: #F1E8D6;
+    --gf-tile-sand-ink: #6F4E10;
+    --gf-tile-stone: #F3EFE7;
+    --gf-tile-stone-ink: #566063;
+    --shadow-card: 0 1px 2px rgba(21,24,26,.04), 0 16px 40px -28px rgba(21,24,26,.25);
+    --shadow-row: 0 1px 2px rgba(21,24,26,.05), 0 3px 8px -3px rgba(21,24,26,.10);
+    --shadow-row-hover: 0 1px 2px rgba(21,24,26,.06), 0 4px 12px -4px rgba(21,24,26,.16);
+    --shadow-control: 0 1px 2px rgba(21,24,26,.04);
+    --shadow-float: 0 12px 32px -8px rgba(21,24,26,.5), inset 0 1px 0 rgba(255,255,255,.08);
+    --r-check: 4.5px;
+    --r-chip: 7px;
+    --r-control: 8px;
+    --r-button: 9px;
+    --r-row: 9px;
+    --r-card: 12px;
   }
 
   .dark {
@@ -102,10 +167,10 @@
     --chart-5: #D0E8DF;
     --radius: 12px;
     --control-radius: 8px;
-    --font-heading: 'Archivo', ui-sans-serif, system-ui, sans-serif;
-    --font-body: 'Archivo', ui-sans-serif, system-ui, sans-serif;
-    --font-display: 'Archivo', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'Geist', system-ui, sans-serif;
+    --font-body: 'Geist', system-ui, sans-serif;
+    --font-display: 'Geist', system-ui, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, monospace;
     --sidebar-bg: #1B2925;
     --sidebar-foreground: #E8EAE5;
     --sidebar-primary: #146556;
@@ -129,6 +194,7 @@
     font-family: var(--font-body);
     font-size: 15px;
     font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
@@ -167,14 +233,20 @@
 
 @layer utilities {
   .font-mono-num {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
     font-weight: 500;
   }
   .font-mono-num-bold {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
     font-weight: 700;
+  }
+  .font-ref {
+    font-family: var(--font-mono);
+    font-weight: 500;
   }
   .mono-label {
     font-family: var(--font-mono);

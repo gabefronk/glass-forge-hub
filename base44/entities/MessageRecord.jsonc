@@ -1,0 +1,63 @@
+{
+  "name": "MessageRecord",
+  "type": "object",
+  "properties": {
+    "source_key": {
+      "type": "string"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "source_guid": {
+      "type": "string"
+    },
+    "conversation_key": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "sent_at": {
+      "type": "string"
+    },
+    "sender": {
+      "type": "string"
+    },
+    "reply_guid": {
+      "type": "string"
+    },
+    "edited_at": {
+      "type": "string"
+    },
+    "retracted_at": {
+      "type": "string"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "incoming",
+        "outgoing"
+      ]
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "source_key",
+    "device_id",
+    "source_guid",
+    "conversation_key",
+    "sent_at",
+    "direction"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

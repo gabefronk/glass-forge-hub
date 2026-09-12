@@ -1,0 +1,25 @@
+{
+  "name": "ContactJobLink",
+  "type": "object",
+  "properties": {
+    "contact_key": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "contact_key",
+    "job_id"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

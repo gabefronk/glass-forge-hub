@@ -71,18 +71,21 @@ export default function YaFeesSidebar() {
   return (
     <aside
       className="hidden lg:flex fixed left-0 top-0 h-dvh shrink-0 flex-col z-30"
-      style={{ width: "216px", backgroundColor: "#1B2925", borderRight: "1px solid #2A3A35" }}
+      style={{ width: "232px", background: "linear-gradient(180deg, var(--gf-sidebar-top), var(--gf-sidebar-bottom))", borderRight: "1px solid rgba(255,255,255,.06)" }}
     >
       {/* Brand */}
-      <div className="flex items-center gap-2.5 px-5 h-16" style={{ borderBottom: "1px solid #2A3A35" }}>
-        <Diamond className="h-4 w-4" style={{ color: "#146556" }} fill="#146556" />
-        <span className="text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: "#E8EAE5" }}>
-          Glass Forge
-        </span>
+      <div className="flex items-center gap-2.5 px-3" style={{ height: "64px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+        <div className="flex items-center justify-center shrink-0" style={{ width: "26px", height: "26px", borderRadius: "8px", background: "linear-gradient(135deg, var(--gf-brass-400), var(--gf-teal-600))" }}>
+          <Diamond className="h-3.5 w-3.5" style={{ color: "#FFFFFF" }} strokeWidth={1.8} strokeLinecap="round" />
+        </div>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[13px] font-semibold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.01em" }}>Glass Forge</span>
+          <span className="text-[10.5px] font-medium uppercase" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.08em" }}>HUB</span>
+        </div>
       </div>
 
       {/* Nav */}
-      <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-4 space-y-0.5 overflow-y-auto obsidian-scroll">
+      <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-3 space-y-0.5 overflow-y-auto obsidian-scroll">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"));
@@ -91,22 +94,36 @@ export default function YaFeesSidebar() {
               key={item.to}
               to={item.to}
               aria-current={active ? "page" : undefined}
-              className="flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium transition-colors whitespace-nowrap rounded-lg"
+              className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
               style={{
-                backgroundColor: active ? "#2A3A35" : "transparent",
-                color: active ? "#E8EAE5" : "#A8B2AC",
+                minHeight: "36px",
+                backgroundColor: active ? "rgba(184,149,90,.14)" : "transparent",
+                color: active ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
+                boxShadow: active ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
               }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = "transparent"; }}
             >
-              <Icon className="h-4 w-4 shrink-0" style={{ color: active ? "#146556" : "#A8B2AC" }} />
+              <Icon className="h-4 w-4 shrink-0" style={{ color: active ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
               {item.label}
             </Link>
           );
         })}
         {canViewAgentCenter(user) && (
-          <Link to="/admin/agents" aria-current={pathname === "/admin/agents" ? "page" : undefined}
-            className="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors"
-            style={{ backgroundColor: pathname === "/admin/agents" ? "#2A3A35" : "transparent", color: pathname === "/admin/agents" ? "#E8EAE5" : "#A8B2AC" }}>
-            <Bot className="h-4 w-4 shrink-0" style={{ color: pathname === "/admin/agents" ? "#146556" : "#A8B2AC" }}/>
+          <Link
+            to="/admin/agents"
+            aria-current={pathname === "/admin/agents" ? "page" : undefined}
+            className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
+            style={{
+              minHeight: "36px",
+              backgroundColor: pathname === "/admin/agents" ? "rgba(184,149,90,.14)" : "transparent",
+              color: pathname === "/admin/agents" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
+              boxShadow: pathname === "/admin/agents" ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
+            }}
+            onMouseEnter={(e) => { if (pathname !== "/admin/agents") e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
+            onMouseLeave={(e) => { if (pathname !== "/admin/agents") e.currentTarget.style.backgroundColor = "transparent"; }}
+          >
+            <Bot className="h-4 w-4 shrink-0" style={{ color: pathname === "/admin/agents" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
             Agent Center
           </Link>
         )}
@@ -114,13 +131,13 @@ export default function YaFeesSidebar() {
 
       {/* Unbilled mini card */}
       <div className="px-3 pb-3">
-        <div className="rounded-xl px-3.5 py-3" style={{ backgroundColor: "#2A3A35", border: "1px solid #3A4A44" }}>
-          <div className="text-[11px] font-medium mb-1.5" style={{ color: "#A8B2AC", letterSpacing: "0.01em" }}>Ready to bill · {monthLabel(currentMonthStr())}</div>
+        <div className="rounded-xl px-3.5 py-3" style={{ backgroundColor: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)" }}>
+          <div className="text-[11px] font-medium mb-1.5" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.01em" }}>Ready to bill · {monthLabel(currentMonthStr())}</div>
           <div className="flex flex-wrap items-baseline gap-1.5 break-all">
-            <span className="font-mono-num-bold text-[18px]" style={{ color: "#A0D3C5", letterSpacing: "-0.02em" }}>
+            <span className="font-mono-num-bold text-[18px]" style={{ color: "var(--gf-brass-300)", letterSpacing: "-0.02em" }}>
               ${formatMoney(unbilled.total)}
             </span>
-            <span className="text-[11px]" style={{ color: "#A8B2AC" }}>
+            <span className="text-[11px]" style={{ color: "var(--gf-sidebar-muted)" }}>
               / {unbilled.count} lines
             </span>
           </div>
@@ -129,15 +146,17 @@ export default function YaFeesSidebar() {
 
       {/* User chip */}
       <div className="px-3 pb-4">
-        <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl" style={{ backgroundColor: "#2A3A35", border: "1px solid #3A4A44" }}>
-          <div className="h-7 w-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-semibold" style={{ backgroundColor: "#146556", color: "#FFFFFF" }}>
-            {(user?.email || user?.full_name || "?").charAt(0).toUpperCase()}
+        <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)" }}>
+          <div className="flex items-center justify-center shrink-0" style={{ width: "28px", height: "28px", borderRadius: "99px", background: "linear-gradient(135deg, var(--gf-brass-400), var(--gf-teal-600))" }}>
+            <span className="text-[11px] font-semibold" style={{ color: "#FFFFFF" }}>
+              {(user?.email || user?.full_name || "?").charAt(0).toUpperCase()}
+            </span>
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[12px] font-medium truncate" style={{ color: "#E8EAE5" }}>
+            <div className="text-[12.5px] font-medium truncate" style={{ color: "var(--gf-sidebar-text-on)" }}>
               {user?.full_name || user?.email?.split("@")[0] || "User"}
             </div>
-            <div className="text-[10px] truncate" style={{ color: "#A8B2AC" }}>
+            <div className="text-[11px] truncate" style={{ color: "var(--gf-sidebar-muted)" }}>
               {user?.email || ""}
             </div>
           </div>
@@ -146,12 +165,12 @@ export default function YaFeesSidebar() {
             disabled={signingOut}
             title="Sign out"
             aria-label="Sign out"
-            className="shrink-0 flex items-center justify-center h-7 w-7 rounded-full transition-colors"
-            style={{ color: "#A8B2AC" }}
+            className="shrink-0 flex items-center justify-center rounded-full transition-colors"
+            style={{ color: "var(--gf-sidebar-muted)", width: "28px", height: "28px" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "#A43432")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#A8B2AC")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--gf-sidebar-muted)")}
           >
-            <LogOut className="h-3.5 w-3.5" />
+            <LogOut className="h-3.5 w-3.5" strokeWidth={1.8} strokeLinecap="round" />
           </button>
         </div>
       </div>

@@ -1,0 +1,54 @@
+{
+  "name": "ProbuildReportScan",
+  "type": "object",
+  "properties": {
+    "start_date": {
+      "type": "string"
+    },
+    "end_date": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "checked_at": {
+      "type": "string"
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "posts": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "cursor": {
+      "type": "number"
+    },
+    "finished": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "start_date",
+    "end_date",
+    "projects",
+    "cursor"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

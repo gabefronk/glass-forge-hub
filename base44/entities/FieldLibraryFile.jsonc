@@ -1,0 +1,84 @@
+{
+  "name": "FieldLibraryFile",
+  "type": "object",
+  "properties": {
+    "source_key": {
+      "type": "string"
+    },
+    "source_project_id": {
+      "type": "string"
+    },
+    "source_post_id": {
+      "type": "string"
+    },
+    "source_attachment_id": {
+      "type": "string"
+    },
+    "generation": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "mime_type": {
+      "type": "string"
+    },
+    "source_type": {
+      "type": "string"
+    },
+    "source_snapshot": {
+      "type": "object"
+    },
+    "source_deleted": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string"
+    },
+    "source_size": {
+      "type": "number"
+    },
+    "size": {
+      "type": "number"
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "file_uri": {
+      "type": "string"
+    },
+    "verified_at": {
+      "type": "string"
+    },
+    "error": {
+      "type": "string"
+    },
+    "attempts": {
+      "type": "number"
+    },
+    "import_run_id": {
+      "type": "string"
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "bytes_stored": {
+      "type": "number"
+    },
+    "manifest_sha256": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_key"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
