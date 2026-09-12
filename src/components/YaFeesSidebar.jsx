@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import { canViewAgentCenter } from "@/lib/agentCenterAccess";
 import { Bot } from "lucide-react";
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
 import { formatMoney } from "@/lib/feeMath";
@@ -107,7 +107,7 @@ export default function YaFeesSidebar() {
             </Link>
           );
         })}
-        {isAgentCenterOwner(user) && <Link to="/admin/agents" aria-current={pathname === "/admin/agents" ? "page" : undefined} className={"flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium "+(pathname === "/admin/agents" ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#535E72]")}><Bot className="h-4 w-4 shrink-0"/>Agent Center</Link>}
+        {canViewAgentCenter(user) && <Link to="/admin/agents" aria-current={pathname === "/admin/agents" ? "page" : undefined} className={"flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium "+(pathname === "/admin/agents" ? "bg-[#E7EEFA] text-[#1E4A85]" : "text-[#535E72]")}><Bot className="h-4 w-4 shrink-0"/>Agent Center</Link>}
       </nav>
 
       {/* Unbilled mini card */}
