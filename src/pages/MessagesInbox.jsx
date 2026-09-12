@@ -6,12 +6,14 @@ import {useAuth} from '@/lib/AuthContext';
 import {isAgentCenterOwner} from '@/lib/agentCenterAccess';
 import {fetchReportFile,downloadFile} from '@/components/reports/reportExport';
 import ConversationContacts from '@/components/contacts/ConversationContacts';
+import MessageAssistantPanel,{BlueBubblesPanel} from '@/components/messages/MessageAssistantPanel';
 const call=async data=>(await base44.functions.invoke('messages-bridge',data)).data;
 const when=value=>value?new Date(value).toLocaleString():'Not yet';
 const control='min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm';
 const attachmentLabel={pending:'Waiting for Mac',protected:'Open on approved device',too_large:'Open in Messages · over 8 MB',unavailable:'Not downloaded on Mac'};
 export default function MessagesInbox(){
  const {user}=useAuth(),owner=isAgentCenterOwner(user),[params,setParams]=useSearchParams();
+ const view=params.get('view')||'inbox';
  const selected=params.get('conversation')||'',jobFilter=params.get('job')||'',contactKey=params.get('contact')||'';
  const [contactFilter,setContactFilter]=useState(null);
  useEffect(()=>{let active=true;setContactFilter(null);if(owner&&contactKey)base44.functions.invoke('contacts-directory',{action:'contact',contact_key:contactKey}).then(r=>{if(active)setContactFilter(r.data.contact)}).catch(()=>{if(active)setError('This contact could not be loaded. Open Contacts and choose them again.')});return()=>{active=false}},[contactKey,owner]);
@@ -22,7 +24,7 @@ export default function MessagesInbox(){
  const loadDetail=useCallback(async()=>{const id=++detailRequest.current;if(!selected){setDetail(null);return}try{const result=await call({action:'conversation',conversation_key:selected,skip:messageSkip});if(id===detailRequest.current){setDetail(result);setJob(result.conversation.job_id||'')}}catch(e){if(id===detailRequest.current){setDetail(null);setError(e.response?.data?.error||'Conversation could not be loaded.')}}},[selected,messageSkip]);
  useEffect(()=>{if(!owner)return;const timer=setTimeout(refresh,250);const poll=setInterval(refresh,15000);return()=>{clearTimeout(timer);clearInterval(poll)}},[owner,refresh]);
  useEffect(()=>{if(!owner)return;setDetail(null);loadDetail();const poll=setInterval(loadDetail,15000);return()=>{clearInterval(poll);detailRequest.current++}},[owner,loadDetail]);
- useEffect(()=>{if(!owner||!selected)return;call({action:'mark_read',conversation_key:selected}).catch(()=>{})},[owner,selected]);
+ // Reviewing a thread preserves its unread state.
  const choose=key=>{setMessageSkip(0);setLinking(false);const next=new URLSearchParams(params);if(key)next.set('conversation',key);else next.delete('conversation');setParams(next)};
  const findJobs=async()=>{setBusy(true);try{const r=await call({action:'jobs',search:jobSearch});setJobs(r.jobs)}catch{setError('Jobs could not be loaded.')}finally{setBusy(false)}};
  const saveJob=async()=>{setBusy(true);try{await call({action:'link_job',conversation_key:selected,job_id:job});setLinking(false);await Promise.all([refresh(),loadDetail()])}catch{setError('Job link could not be saved.')}finally{setBusy(false)}};
@@ -31,10 +33,12 @@ export default function MessagesInbox(){
  if(!owner)return <div className="p-8"><LockKeyhole className="mb-3 h-6 w-6"/><h1 className="text-xl font-semibold">Private Messages</h1><p className="mt-2 text-slate-600">Only Gabriel’s owner accounts can open this inbox.</p></div>;
  const conversations=data?.conversations||[],devices=data?.devices||[];
  return <div className="mx-auto max-w-7xl space-y-5 p-4 pb-32 sm:p-6">
-  <header className="rounded-2xl bg-[#172438] p-5 text-white"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-300"><LockKeyhole className="h-4 w-4"/>Private to Gabriel</p><h1 className="mt-3 flex items-center gap-2 text-2xl font-semibold"><MessageSquare className="h-6 w-6"/>Messages</h1><p className="mt-2 max-w-xl text-sm text-slate-300">New texts and attachments from your Mac, kept in the same conversation. Link a job once to find its updates here again.</p></div><button className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-500 px-4 text-sm" disabled={loading} onClick={async()=>{setLoading(true);await Promise.all([refresh(),loadDetail()]);setLoading(false)}}><RefreshCw className={'h-4 w-4 '+(loading?'animate-spin':'')}/>Refresh</button></div>
+  <header className="rounded-2xl bg-[#172438] p-5 text-white"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-300"><LockKeyhole className="h-4 w-4"/>Private to Gabriel</p><h1 className="mt-3 flex items-center gap-2 text-2xl font-semibold"><MessageSquare className="h-6 w-6"/>Messages</h1><p className="mt-2 max-w-xl text-sm text-slate-300">Your conversations, job context and service follow-ups in one place.</p></div><button className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-500 px-4 text-sm" disabled={loading} onClick={async()=>{setLoading(true);await Promise.all([refresh(),loadDetail()]);setLoading(false)}}><RefreshCw className={'h-4 w-4 '+(loading?'animate-spin':'')}/>Refresh</button></div>
    {devices.map(d=>{const fresh=Date.now()-Date.parse(d.last_seen_at||'')<180000;return <div key={d.device_id} className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-600 pt-4 text-xs"><div><strong className={d.enabled&&fresh&&d.source_ok?'text-emerald-300':'text-amber-200'}>{!d.enabled?'Sync paused':fresh&&d.source_ok?'Mac connected':fresh?'Messages source unavailable':'Waiting for Mac'}</strong><span className="ml-3 text-slate-300">Last check: {when(d.last_seen_at)} · {d.pending_count||0} pending</span>{d.last_error&&<p className="mt-1 text-amber-200">{d.last_error}</p>}</div><button disabled={busy} onClick={()=>toggleDevice(d)} className="min-h-10 rounded-lg border border-slate-500 px-3">{d.enabled?'Pause sync':'Resume sync'}</button></div>})}
    {!devices.length&&<p className="mt-4 text-sm text-amber-200">The Mac connection is being configured.</p>}
   </header>
+  <nav aria-label="Message workspace" className="flex flex-wrap gap-2">{[['inbox','Job inbox'],['bluebubbles','BlueBubbles'],['assistant','Service assistant']].map(([key,label])=><button key={key} aria-pressed={view===key} className={'min-h-11 rounded-xl border px-4 text-sm font-medium '+(view===key?'border-teal-900 bg-teal-900 text-white':'border-slate-200 bg-white text-slate-700')} onClick={()=>{const next=new URLSearchParams(params);next.set('view',key);setParams(next)}}>{label}</button>)}</nav>
+  {view==='bluebubbles'?<BlueBubblesPanel/>:view==='assistant'?<MessageAssistantPanel conversationKey={selected}/>:<>
   {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
   {contactKey&&<p className="text-sm">Showing messages for {contactFilter?.name||'this contact'}. <Link to="/contacts" className="text-blue-700 underline">Contacts</Link> · <Link to="/messages" className="text-blue-700 underline">Show all messages</Link></p>}
   {jobFilter&&<p className="text-sm">Showing messages linked to this job. <Link to="/messages" className="text-blue-700 underline">Show all</Link></p>}
@@ -50,5 +54,6 @@ export default function MessagesInbox(){
     <ol className="space-y-4">{[...detail.messages].reverse().map(m=><li key={m.id} className={'flex '+(m.direction==='outgoing'?'justify-end':'justify-start')}><article className={'min-w-0 max-w-[94%] rounded-2xl p-3 sm:max-w-[85%] '+(m.direction==='outgoing'?'bg-blue-50':'bg-slate-100')}><p className="mb-1 break-words text-[11px] font-medium text-slate-500">{m.direction==='outgoing'?'You':m.sender||detail.conversation.title}</p><p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{m.retracted_at?'Message was unsent':m.text||'Attachment'}</p>{!m.retracted_at&&m.attachments?.map(a=><div key={a.guid} className="mt-3 rounded-lg border border-slate-200 bg-white/80 p-3">{a.status==='ready'?<button disabled={busy} className="flex min-h-10 items-center gap-2 break-all text-left text-sm text-blue-700" onClick={()=>openAttachment(m,a)}><Paperclip className="h-4 w-4 shrink-0"/>{a.name||'Open attachment'}</button>:<><p className="break-all text-sm">{a.name||'Attachment'}</p><p className="mt-1 text-xs text-slate-500">{attachmentLabel[a.status]||'Waiting for attachment'}</p></>}</div>)}<time className="mt-2 block text-[10px] text-slate-400">{when(m.sent_at)}{m.edited_at?' · Edited':''}</time></article></li>)}</ol><p className="mt-6 border-t pt-3 text-xs text-slate-500">Review inbox · Replies are sent from Apple Messages. Security-code messages are skipped by the Mac bridge.</p>
    </>}</section>
   </div>
+  </>}
  </div>;
 }
