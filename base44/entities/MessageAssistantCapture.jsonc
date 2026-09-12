@@ -1,0 +1,33 @@
+{
+  "name": "MessageAssistantCapture",
+  "type": "object",
+  "properties": {
+    "conversation_key": {
+      "type": "string"
+    },
+    "captured_at": {
+      "type": "string"
+    },
+    "history_complete": {
+      "type": "boolean"
+    },
+    "message_count": {
+      "type": "number"
+    },
+    "oldest_at": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "conversation_key"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
