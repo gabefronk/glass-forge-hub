@@ -18,160 +18,49 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
   }, [rows]);
 
   if (jobs.length === 0) {
-    return (
-      <div style={{ padding: "80px 0", textAlign: "center" }}>
-        <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "15px", color: "#616D81" }}>No jobs for this month.</p>
-      </div>
-    );
+    return <div style={{ padding: "80px 0", textAlign: "center" }}><p className="text-[15px]" style={{ color: "#53615B" }}>No jobs for this month.</p></div>;
   }
 
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "12px 12px",
-          borderBottom: "1px solid #DDE3EC",
-        }}
-      >
-        <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "10px", letterSpacing: ".01em", color: "#616D81" }}>Sort: fee ↓</span>
-        <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "11px", color: "#616D81" }}>{jobs.length} jobs</span>
+      <div className="flex items-center justify-between px-3 py-3" style={{ borderBottom: "1px solid #DDE0DA" }}>
+        <span className="text-[12px] font-medium" style={{ color: "#53615B" }}>Sort: fee ↓</span>
+        <span className="text-[12px]" style={{ color: "#53615B" }}>{jobs.length} jobs</span>
       </div>
       {jobs.map((job) => {
         const key = job.id || job.name;
         const isOpen = expanded === key;
         return (
-          <div key={key} style={{ borderBottom: "1px solid #E9EDF4" }}>
+          <div key={key} style={{ borderBottom: "1px solid #ECEEEA" }}>
             <button
               onClick={() => setExpanded(isOpen ? null : key)}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0,1fr) auto 20px",
-                gap: "10px",
-                alignItems: "center",
-                width: "100%",
-                padding: "16px 12px",
-                minHeight: "64px",
-                backgroundColor: "transparent",
-                border: "none",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
+              className="w-full grid items-center text-left"
+              style={{ gridTemplateColumns: "minmax(0,1fr) auto 20px", gap: "10px", padding: "14px 12px", minHeight: "60px", backgroundColor: "transparent", border: "none", cursor: "pointer" }}
             >
               <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontFamily: "'Archivo',sans-serif",
-                    fontSize: "15px",
-                    fontWeight: 700,
-                    color: "#131A26",
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {job.name}
-                </div>
-                <div style={{ fontFamily: "'Archivo',sans-serif", fontSize: "12.5px", color: "#616D81", marginTop: "2px" }}>
-                  {job.lines.length} lines
-                </div>
+                <div className="text-[15px] font-semibold break-words" style={{ color: "#182422" }}>{job.name}</div>
+                <div className="text-[12px]" style={{ color: "#53615B", marginTop: "2px" }}>{job.lines.length} lines</div>
               </div>
-              <span
-                style={{
-                  textAlign: "right",
-                  fontFamily: "'Archivo',sans-serif",
-                  fontSize: job.fee >= 250 ? "17px" : "14px",
-                  fontWeight: job.fee >= 250 ? 700 : 600,
-                  color: "#1E4A85",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                ${formatMoney(job.fee)}
-              </span>
-              <span style={{ textAlign: "right", color: "#77839A", fontFamily: "'Archivo',sans-serif", fontSize: "14px" }}>
-                {isOpen ? "⌄" : "›"}
-              </span>
+              <span className="font-mono-num-bold text-right" style={{ fontSize: job.fee >= 250 ? "17px" : "14px", color: "#166447", whiteSpace: "nowrap" }}>${formatMoney(job.fee)}</span>
+              <span className="text-right text-[14px]" style={{ color: "#8A958F" }}>{isOpen ? "⌄" : "›"}</span>
             </button>
             {isOpen && (
-              <div style={{ padding: "0 12px 16px" }}>
+              <div className="px-3 pb-4">
                 {job.lines.map((line) => (
-                  <div
-                    key={line.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "8px 0",
-                      borderTop: "1px solid #E9EDF4",
-                      gap: "12px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: "'Archivo',sans-serif",
-                        fontSize: "13px",
-                        color: "#535E72",
-                        minWidth: 0,
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      {line.line_description || line.job_name_raw}
-                    </span>
-                    <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "13px", fontWeight: 600, color: "#1E4A85", whiteSpace: "nowrap" }}>
-                      ${formatMoney(computeFeeAmt(line))}
-                    </span>
+                  <div key={line.id} className="flex justify-between items-start py-2 gap-3" style={{ borderTop: "1px solid #ECEEEA" }}>
+                    <span className="text-[13px] break-words" style={{ color: "#53615B", minWidth: 0 }}>{line.line_description || line.job_name_raw}</span>
+                    <span className="font-mono-num-bold text-[13px]" style={{ color: "#166447", whiteSpace: "nowrap" }}>${formatMoney(computeFeeAmt(line))}</span>
                   </div>
                 ))}
-                <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
-                  <button
-                    onClick={() => onBillJob(job)}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: "10px",
-                      border: "1px solid #1E4A85",
-                      backgroundColor: "#2A5EA8",
-                      color: "#FFFFFF",
-                      fontFamily: "'Archivo',sans-serif",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  <button onClick={() => onBillJob(job)} className="min-h-10 rounded-lg px-3.5 text-[13px] font-semibold whitespace-nowrap" style={{ border: "1px solid #104E44", backgroundColor: "#146556", color: "#FFFFFF", cursor: "pointer" }}>
                     Bill this job · ${formatMoney(job.fee)}
                   </button>
-                  <button
-                    onClick={() => onExportJob(job)}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: "10px",
-                      border: "1px solid #DDE3EC",
-                      backgroundColor: "#FFFFFF",
-                      color: "#131A26",
-                      fontFamily: "'Archivo',sans-serif",
-                      fontSize: "12px",
-                      fontWeight: 500,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <button onClick={() => onExportJob(job)} className="min-h-10 rounded-lg px-3.5 text-[13px] font-medium whitespace-nowrap" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#182422", cursor: "pointer" }}>
                     Export CSV
                   </button>
                   {job.id && (
-                    <button
-                      onClick={() => navigate(`/jobs/${job.id}`)}
-                      style={{
-                        padding: "8px 14px",
-                        borderRadius: "10px",
-                        border: "1px solid #DDE3EC",
-                        backgroundColor: "#FFFFFF",
-                        color: "#131A26",
-                        fontFamily: "'Archivo',sans-serif",
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <button onClick={() => navigate(`/jobs/${job.id}`)} className="min-h-10 rounded-lg px-3.5 text-[13px] font-medium whitespace-nowrap" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#182422", cursor: "pointer" }}>
                       Open job ↗
                     </button>
                   )}

@@ -20,8 +20,8 @@ function formatMonth(m) {
   return new Date(y, mm - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-const INSTALL_COLOR = "#2A5EA8";
-const SERVICE_COLOR = "#8A4038";
+const INSTALL_COLOR = "#146556";
+const SERVICE_COLOR = "#A43432";
 const OUTLOOK_COLOR = "#7042A1";
 
 export default function CalendarPage() {
@@ -258,7 +258,7 @@ export default function CalendarPage() {
                           <div className="text-[13px] font-medium truncate" style={{ color: C.text }}>{e.job_name}</div>
                           {e.address && <div className="text-[11px] truncate" style={{ color: C.textMuted }}>{e.address}</div>}
                         </div>
-                        <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "#E7EEFA" : "#FBEDEA", border: isInstall ? "1px solid #C3D4EE" : "1px solid #EFD2CA", color }}>{e.source === "outlook" ? "Outlook" : isInstall ? "Install" : "Service"}</span>
+                        <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "#EAF5EE" : "#FCEDEC", border: isInstall ? "1px solid #C7E4D2" : "1px solid #F0C9C5", color }}>{e.source === "outlook" ? "Outlook" : isInstall ? "Install" : "Service"}</span>
                       </button>
                     );
                   })}
@@ -272,7 +272,7 @@ export default function CalendarPage() {
             {monthEvents.sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "")).map((e) => {
               const isInstall = e.source === "app";
               const color = e.source === "outlook" ? OUTLOOK_COLOR : isInstall ? INSTALL_COLOR : SERVICE_COLOR;
-              const bg = e.source === "outlook" ? "#F0E9FA" : isInstall ? "#E7EEFA" : "#FBEDEA";
+              const bg = e.source === "outlook" ? "#F0E9FA" : isInstall ? "#EAF5EE" : "#FCEDEC";
               return (
                 <button
                   key={e.id}

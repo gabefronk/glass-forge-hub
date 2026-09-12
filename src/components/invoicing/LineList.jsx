@@ -4,7 +4,7 @@ import { computeFeeAmt } from "@/lib/feeMath";
 import DayHeader from "./DayHeader";
 import LineRow from "./LineRow";
 
-export default function LineList({ rows, sort, selectedIds, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, reportAttached, onToggleDay, onClearFilters }) {
+export default function LineList({ rows, sort, selectedIds, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, reportAttached, onToggleDay, onClearFilters }) {
   const grouped = useMemo(() => {
     if (sort === "fee") {
       return [{ date: null, rows: [...rows].sort((a, b) => computeFeeAmt(b) - computeFeeAmt(a)) }];
@@ -26,22 +26,8 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
   if (rows.length === 0) {
     return (
       <div style={{ padding: "80px 0", textAlign: "center" }}>
-        <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "15px", color: "#616D81" }}>Nothing matches those filters.</p>
-        <button
-          onClick={onClearFilters}
-          style={{
-            marginTop: "12px",
-            padding: "8px 16px",
-            borderRadius: "10px",
-            border: "1px solid #DDE3EC",
-            backgroundColor: "#FFFFFF",
-            color: "#1E4A85",
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "13px",
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
+        <p className="text-[15px]" style={{ color: "#53615B" }}>Nothing matches those filters.</p>
+        <button onClick={onClearFilters} className="mt-3 min-h-10 rounded-lg px-4 text-[13px] font-medium" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#104E44", cursor: "pointer" }}>
           Clear filters
         </button>
       </div>
@@ -79,6 +65,7 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
               onAddReport={onAddReport}
               onMarkBilled={onMarkBilled}
               onOpenJob={onOpenJob}
+              onOpenDetails={onOpenDetails}
             />
           ))}
         </div>

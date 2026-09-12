@@ -1,44 +1,45 @@
 import { isFutureRow } from "@/lib/feeMath";
 
-// ── Blueprint (Light) Palette ───────────────────────────────────────────
+// ── Glass Forge Design Refresh palette ──────────────────────────────────
+// Warm off-white canvas, opaque white surfaces, graphite nav, teal primary.
 export const C = {
-  pageBg: "#EEF1F6",
+  pageBg: "#F5F6F3",
   card: "#FFFFFF",
-  cardAlt: "#F6F8FC",
-  text: "#131A26",
-  textSecondary: "#535E72",
-  textMuted: "#616D81",
-  textFaint: "#77839A",
-  accent: "#2A5EA8",
+  cardAlt: "#F0F1ED",
+  text: "#182422",
+  textSecondary: "#53615B",
+  textMuted: "#53615B",
+  textFaint: "#8A958F",
+  accent: "#146556",
   accentDark: "#FFFFFF",
-  accentText: "#1E4A85",
-  border: "#DDE3EC",
-  borderStrong: "#CBD4E1",
-  rowBorder: "#E9EDF4",
-  rowHover: "#F8FAFD",
-  headerBg: "#F6F8FC",
-  headerText: "#616D81",
-  tagBillable: { bg: "#E7EEFA", text: "#1E4A85", border: "#C3D4EE" },
-  tagCal: { bg: "#F6F8FC", text: "#535E72", border: "#DDE3EC" },
-  tagReview: { bg: "#FCF5E9", text: "#8A5A10", border: "#EEDAB4" },
-  tagNoCharge: { bg: "#F6F8FC", text: "#657185", border: "#DDE3EC" },
-  tagSplit: { bg: "#E7EEFA", text: "#1E4A85", border: "#C3D4EE" },
-  tagBlocked: { bg: "#FBEDEA", text: "#8A4038", border: "#EFD2CA" },
-  amber: "#8A5A10",
-  amberLight: "#FCF5E9",
-  accent18: "#E7EEFA",
-  accent12: "#E7EEFA",
-  accent06: "#F6F8FC",
-  mutedBg: "#F6F8FC",
-  mutedText: "#616D81",
-  leftBarZero: "#DDE3EC",
-  sidebarBg: "#FFFFFF",
-  cardShadow: "0 1px 2px rgba(19,26,38,.05), 0 6px 16px -10px rgba(19,26,38,.14)",
-  elevatedShadow: "0 1px 2px rgba(19,26,38,.05), 0 10px 24px -18px rgba(19,26,38,.22)",
-  primaryBtn: "#2A5EA8",
-  primaryBtnBorder: "#1E4A85",
-  primaryBtnHover: "#234F8E",
-  successDot: "#3B82F6",
+  accentText: "#104E44",
+  border: "#DDE0DA",
+  borderStrong: "#C9CCC4",
+  rowBorder: "#ECEEEA",
+  rowHover: "#F8F9F6",
+  headerBg: "#F0F1ED",
+  headerText: "#53615B",
+  tagBillable: { bg: "#EAF5EE", text: "#166447", border: "#C7E4D2" },
+  tagCal: { bg: "#EBF2FC", text: "#335E91", border: "#C7D8EF" },
+  tagReview: { bg: "#FFF3DF", text: "#89511A", border: "#F0DBA8" },
+  tagNoCharge: { bg: "#F0F1ED", text: "#53615B", border: "#DDE0DA" },
+  tagSplit: { bg: "#EAF5EE", text: "#166447", border: "#C7E4D2" },
+  tagBlocked: { bg: "#FCEDEC", text: "#A43432", border: "#F0C9C5" },
+  amber: "#89511A",
+  amberLight: "#FFF3DF",
+  accent18: "#E6F0EC",
+  accent12: "#E6F0EC",
+  accent06: "#F0F1ED",
+  mutedBg: "#F0F1ED",
+  mutedText: "#53615B",
+  leftBarZero: "#DDE0DA",
+  sidebarBg: "#1B2925",
+  cardShadow: "0 1px 2px rgba(24,36,34,.04), 0 4px 12px -8px rgba(24,36,34,.10)",
+  elevatedShadow: "0 1px 2px rgba(24,36,34,.04), 0 8px 20px -12px rgba(24,36,34,.16)",
+  primaryBtn: "#146556",
+  primaryBtnBorder: "#104E44",
+  primaryBtnHover: "#104E44",
+  successDot: "#166447",
 };
 
 const GABE_EMAIL = "gabriel.fronk.wd@gmail.com";
@@ -78,12 +79,12 @@ export function isZeroRow(row) {
 }
 
 export function statusTag(row) {
-  if (isFutureRow(row)) return { label: "Scheduled", bg: C.amberLight, text: C.amber };
+  if (isFutureRow(row)) return { label: "Scheduled", bg: C.tagCal.bg, text: C.tagCal.text };
   if (row.fee_type === "profit_split") return { label: "Split", bg: C.tagSplit.bg, text: C.tagSplit.text };
   if (isZeroRow(row)) return { label: "No charge", bg: C.tagNoCharge.bg, text: C.tagNoCharge.text };
   if (row.needs_review && !row.manually_adjusted) return { label: "Review", bg: C.tagReview.bg, text: C.tagReview.text };
-  if (row.billed_to_bfs) return { label: "Billed", bg: C.tagCal.bg, text: C.tagCal.text };
-  return { label: "Billable", bg: C.tagBillable.bg, text: C.tagBillable.text };
+  if (row.billed_to_bfs) return { label: "Billed", bg: C.tagBillable.bg, text: C.tagBillable.text };
+  return { label: "Ready", bg: C.tagBillable.bg, text: C.tagBillable.text };
 }
 
 export const UNBILLED_GRID = "grid grid-cols-[26px_minmax(130px,1fr)_90px_48px_82px_108px] gap-3";

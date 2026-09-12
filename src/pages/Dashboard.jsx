@@ -238,12 +238,12 @@ export default function Dashboard() {
                       <div className="text-[12px] break-words" style={{ color: C.textMuted }}>
                         {ev.address || ev.scope_notes?.slice(0, 80) || ""}
                       </div>
-                      <span className="mt-1 inline-flex sm:hidden text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: C.accent18, border: "1px solid #C3D4EE", color: C.accentText }}>{tag}</span>
+                      <span className="mt-1 inline-flex sm:hidden text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: C.accent18, border: "1px solid #C7E4D2", color: C.accentText }}>{tag}</span>
                     </div>
                     {/* Tag */}
                     <span
                       className="hidden sm:inline-flex text-[9px] font-semibold tracking-[0.01em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
-                      style={{ backgroundColor: C.accent18, border: "1px solid #C3D4EE", color: C.accentText }}
+                      style={{ backgroundColor: C.accent18, border: "1px solid #C7E4D2", color: C.accentText }}
                     >
                       {tag}
                     </span>
@@ -254,7 +254,7 @@ export default function Dashboard() {
                       aria-pressed={isDone}
                       className="ml-1 sm:ml-3 h-10 w-10 rounded-full shrink-0 flex items-center justify-center transition-all"
                       style={{
-                        border: isDone ? "none" : `1.5px solid #CBD4E1`,
+                        border: isDone ? "none" : `1.5px solid #C9CCC4`,
                         backgroundColor: isDone ? C.accent : "transparent",
                       }}
                     >
@@ -280,12 +280,18 @@ export default function Dashboard() {
                   {crewForEvent(firstUp) ? `Crew: ${crewForEvent(firstUp)}` : ""}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#FFFFFF", color: C.accent }}>
-                    Open checklist
-                  </button>
-                  <button className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "#FFFFFF" }}>
+                <button disabled title="Checklist feature not available yet" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.45)", cursor: "not-allowed" }}>
+                  Open checklist
+                </button>
+                {firstUp.address ? (
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(firstUp.address)}`} target="_blank" rel="noreferrer" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#FFFFFF", color: C.accent }}>
+                    Directions
+                  </a>
+                ) : (
+                  <button disabled title="No address on file for this event" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.45)", cursor: "not-allowed" }}>
                     Directions
                   </button>
+                )}
                 </div>
               </div>
             )}

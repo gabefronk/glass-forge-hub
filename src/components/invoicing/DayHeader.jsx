@@ -5,89 +5,31 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
   const dateLabel = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   return (
-    <div
-      style={{
-        marginTop: "26px",
-        marginBottom: "8px",
-        backgroundColor: "#EEF1F6",
-      }}
-    >
+    <div style={{ marginTop: "20px", marginBottom: "6px", backgroundColor: "transparent" }}>
       <div
-        className="card-shadow"
+        className="flex items-center gap-3 rounded-xl"
         style={{
-          minHeight: "46px",
-          flexWrap: "wrap",
-          borderRadius: "14px",
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #DDE3EC",
-          boxShadow: "inset 3px 0 0 #2A5EA8, 0 1px 2px rgba(19,26,38,.05), 0 6px 16px -10px rgba(19,26,38,.14)",
-          display: "flex",
-          alignItems: "center",
-          padding: "10px 12px",
-          gap: "12px",
+          minHeight: "40px", padding: "8px 12px",
+          backgroundColor: "#F0F1ED", border: "1px solid #DDE0DA",
+          boxShadow: "inset 3px 0 0 #146556",
         }}
       >
-        <span
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "13px",
-            fontWeight: 700,
-            letterSpacing: ".01em",
-            color: "#131A26",
-            whiteSpace: "nowrap",
-          }}
-        >
+        <span className="text-[13px] font-semibold" style={{ color: "#182422", whiteSpace: "nowrap" }}>
           {dateLabel}
         </span>
-        <span
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "11px",
-            color: "#616D81",
-            whiteSpace: "nowrap",
-          }}
-        >
+        <span className="text-[12px]" style={{ color: "#53615B", whiteSpace: "nowrap" }}>
           {lineCount} {lineCount === 1 ? "line" : "lines"}
         </span>
         <button
           onClick={onSelectDay}
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "10px",
-            fontWeight: 600,
-            letterSpacing: ".01em",
-            padding: "4px 10px",
-            borderRadius: "99px",
-            border: allSelected ? "1px solid #C3D4EE" : "1px solid #DDE3EC",
-            cursor: "pointer",
-            backgroundColor: allSelected ? "#E7EEFA" : "#F6F8FC",
-            color: allSelected ? "#1E4A85" : "#535E72",
-            whiteSpace: "nowrap",
-          }}
+          className="text-[11px] font-semibold rounded-full px-2.5 py-1 whitespace-nowrap"
+          style={{ border: allSelected ? "1px solid #C7E4D2" : "1px solid #DDE0DA", backgroundColor: allSelected ? "#EAF5EE" : "#FFFFFF", color: allSelected ? "#166447" : "#53615B", cursor: "pointer" }}
         >
           {allSelected ? "Deselect day" : "Select day"}
         </button>
         <div style={{ flex: 1 }} />
-        <span
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "10px",
-            letterSpacing: ".01em",
-            color: "#616D81",
-            whiteSpace: "nowrap",
-          }}
-        >
-          Day fee
-        </span>
-        <span
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "14.5px",
-            fontWeight: 700,
-            color: isLargest ? "#1E4A85" : "#535E72",
-            whiteSpace: "nowrap",
-          }}
-        >
+        <span className="text-[11px]" style={{ color: "#53615B", whiteSpace: "nowrap" }}>Day fee</span>
+        <span className="font-mono-num-bold text-[14px]" style={{ color: isLargest ? "#166447" : "#53615B", whiteSpace: "nowrap" }}>
           ${formatMoney(dayFee)}
         </span>
       </div>

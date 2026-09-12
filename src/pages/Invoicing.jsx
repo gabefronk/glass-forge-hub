@@ -4,13 +4,14 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { computeFeeAmt, computeLaborAmt, currentMonthStr } from "@/lib/feeMath";
 import { isReady, isMatchBlocked, isReportBlocked, buildSupersededSet } from "@/lib/invoicingFilters";
-import InvoicingTopBar from "@/components/invoicing/InvoicingTopBar";
-import InvoicingHero from "@/components/invoicing/InvoicingHero";
-import InvoicingToolbar from "@/components/invoicing/InvoicingToolbar";
+import InvoiceHeader from "@/components/invoicing/InvoiceHeader";
+import InvoiceSummary from "@/components/invoicing/InvoiceSummary";
+import InvoiceToolbar from "@/components/invoicing/InvoiceToolbar";
 import LineList from "@/components/invoicing/LineList";
 import JobsView from "@/components/invoicing/JobsView";
 import FloatingActionBar from "@/components/invoicing/FloatingActionBar";
 import UnprocessedEventsBanner from "@/components/invoicing/UnprocessedEventsBanner";
+import LineDetailsDrawer from "@/components/invoicing/LineDetailsDrawer";
 
 export default function Invoicing() {
   const [month, setMonth] = useState(currentMonthStr());
@@ -30,6 +31,7 @@ export default function Invoicing() {
   const [unprocessedCount, setUnprocessedCount] = useState(0);
   const [monthClosed, setMonthClosed] = useState(null);
   const [closing, setClosing] = useState(false);
+  const [detailRow, setDetailRow] = useState(null);
   const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [reportAttached, setReportAttached] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("inv_reportAttached") || "[]")); } catch { return new Set(); }
@@ -77,7 +79,6 @@ export default function Invoicing() {
   useEffect(() => { load(); }, [month]);
 
   const monthRows = useMemo(() => feeLines.filter((r) => r.invoice_month === month), [feeLines, month]);
-
   const supersededSet = useMemo(() => buildSupersededSet(feeLines), [feeLines]);
 
   const filteredRows = useMemo(() => {
@@ -112,7 +113,6 @@ export default function Invoicing() {
     return monthRows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + (computeFeeAmt(r) || 0), 0);
   }, [monthRows, selectedIds]);
 
-  // ── Undo system ──────────────────────────────────────────────────
   const performAction = useCallback((message, doFn, undoFn) => {
     doFn();
     setUndo({ message, undoFn });
@@ -121,47 +121,26 @@ export default function Invoicing() {
   }, []);
 
   const handleUndo = useCallback(() => {
-    setUndo((prev) => {
-      if (prev?.undoFn) prev.undoFn();
-      return null;
-    });
+    setUndo((prev) => { if (prev?.undoFn) prev.undoFn(); return null; });
     clearTimeout(undoTimer.current);
   }, []);
 
-  // ── Selection ────────────────────────────────────────────────────
   const toggleRow = useCallback((id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
     lastClickedIndex.current = filteredRows.findIndex((r) => r.id === id);
   }, [filteredRows]);
 
   const shiftClickRow = useCallback((id) => {
     const currentIndex = filteredRows.findIndex((r) => r.id === id);
-    if (lastClickedIndex.current === null || currentIndex === -1) {
-      toggleRow(id);
-      return;
-    }
+    if (lastClickedIndex.current === null || currentIndex === -1) { toggleRow(id); return; }
     const start = Math.min(lastClickedIndex.current, currentIndex);
     const end = Math.max(lastClickedIndex.current, currentIndex);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (let i = start; i <= end; i++) next.add(filteredRows[i].id);
-      return next;
-    });
+    setSelectedIds((prev) => { const next = new Set(prev); for (let i = start; i <= end; i++) next.add(filteredRows[i].id); return next; });
   }, [filteredRows, toggleRow]);
 
   const toggleDay = useCallback((dayRows) => {
     const allSelected = dayRows.every((r) => selectedIds.has(r.id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allSelected) dayRows.forEach((r) => next.delete(r.id));
-      else dayRows.forEach((r) => next.add(r.id));
-      return next;
-    });
+    setSelectedIds((prev) => { const next = new Set(prev); if (allSelected) dayRows.forEach((r) => next.delete(r.id)); else dayRows.forEach((r) => next.add(r.id)); return next; });
   }, [selectedIds]);
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
@@ -170,7 +149,6 @@ export default function Invoicing() {
     setSelectedIds(new Set(monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet)).map((r) => r.id)));
   }, [monthRows, reportStatusMap, supersededSet]);
 
-  // ── Edit / delete ────────────────────────────────────────────────
   const handleEdit = useCallback(async (id, patch) => {
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
@@ -201,15 +179,11 @@ export default function Invoicing() {
     const { id: _id, created_date, updated_date, created_by_id, ...rest } = row;
     setFeeLines((prev) => prev.filter((r) => r.id !== id));
     base44.entities.FeeLines.delete(id);
-    performAction("Line deleted", () => {}, async () => {
-      const restored = await base44.entities.FeeLines.create(rest);
-      setFeeLines((prev) => [...prev, restored]);
-    });
+    performAction("Line deleted", () => {}, async () => { const restored = await base44.entities.FeeLines.create(rest); setFeeLines((prev) => [...prev, restored]); });
+    setDetailRow(null);
   }, [feeLines, performAction]);
 
-  const handleAddReport = useCallback(() => {
-    window.location.assign("/calendar");
-  }, []);
+  const handleAddReport = useCallback(() => { window.location.assign("/calendar"); }, []);
 
   const handleMarkBilled = useCallback((id, value = true) => {
     const row = feeLines.find((r) => r.id === id);
@@ -255,10 +229,7 @@ export default function Invoicing() {
     const deletedData = selected.map((r) => { const { id, created_date, updated_date, created_by_id, ...rest } = r; return rest; });
     setFeeLines((prev) => prev.filter((r) => !selectedIds.has(r.id)));
     Promise.all(selected.map((r) => base44.entities.FeeLines.delete(r.id)));
-    performAction(`${selected.length} lines deleted`, () => {}, async () => {
-      const restored = await base44.entities.FeeLines.bulkCreate(deletedData);
-      setFeeLines((prev) => [...prev, ...restored]);
-    });
+    performAction(`${selected.length} lines deleted`, () => {}, async () => { const restored = await base44.entities.FeeLines.bulkCreate(deletedData); setFeeLines((prev) => [...prev, ...restored]); });
     clearSelection();
   }, [feeLines, selectedIds, performAction, clearSelection]);
 
@@ -273,7 +244,6 @@ export default function Invoicing() {
     const a = document.createElement("a"); a.href = url; a.download = `selected-lines-${month}.csv`; a.click(); URL.revokeObjectURL(url);
   }, [feeLines, selectedIds, month]);
 
-  // ── Jobs view handlers ───────────────────────────────────────────
   const handleBillJob = useCallback((job) => {
     const updates = job.lines.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
     const prevStates = job.lines.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs }));
@@ -318,53 +288,38 @@ export default function Invoicing() {
     setClosing(true);
     try {
       const res = await base44.functions.invoke("closeMonthSnapshot", { month, force: !!monthClosed });
-      if (res?.error === "already_closed") {
-        window.alert(`Already closed on ${new Date(res.closed_at).toLocaleDateString()}.`);
-      }
+      if (res?.error === "already_closed") { window.alert(`Already closed on ${new Date(res.closed_at).toLocaleDateString()}.`); }
       const snapshots = await base44.entities.MonthCloseSnapshot.list("-created_date", 100);
       const snap = (Array.isArray(snapshots) ? snapshots : []).find((s) => s.month === month);
       setMonthClosed(snap || null);
-    } catch (e) {
-      console.error("Close month error:", e);
-    } finally {
-      setClosing(false);
-    }
+    } catch (e) { console.error("Close month error:", e); }
+    finally { setClosing(false); }
   };
 
   const handleExportPdf = async () => {
     setExporting(true);
     try {
       const { exportInvoicePdf } = await import("@/lib/exportInvoicePdf");
-      // Use the same eligibility and fee calculation as Ready to bill.
-      // Copy rows for export only; never rewrite saved financial records.
       const exportRows = monthRows
         .filter((r) => isReady(r, reportStatusMap, supersededSet))
-        .map((r) => ({
-          ...r,
-          labor_amt: computeLaborAmt(r),
-          fee_amt: computeFeeAmt(r),
-        }));
+        .map((r) => ({ ...r, labor_amt: computeLaborAmt(r), fee_amt: computeFeeAmt(r) }));
       await exportInvoicePdf(month, exportRows);
-    } catch (e) {
-      console.error("PDF export error:", e);
-    } finally {
-      setExporting(false);
-    }
+    } catch (e) { console.error("PDF export error:", e); }
+    finally { setExporting(false); }
   };
 
-  // ── Keyboard shortcuts ───────────────────────────────────────────
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); searchRef.current?.focus(); return; }
       if ((e.metaKey || e.ctrlKey) && e.key === "a") { e.preventDefault(); setSelectedIds(new Set(filteredRows.map((r) => r.id))); return; }
-      if (e.key === "Escape") { setSelectedIds(new Set()); return; }
+      if (e.key === "Escape") { setSelectedIds(new Set()); setDetailRow(null); return; }
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { if (selectedIds.size > 0) handleMarkBilledSelected(); return; }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [filteredRows, selectedIds, handleMarkBilledSelected]);
 
-  // ── Empty month state ────────────────────────────────────────────
   const today = new Date();
   const currentMonth = currentMonthStr();
   const isPast = month < currentMonth;
@@ -373,15 +328,15 @@ export default function Invoicing() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: "#EEF1F6" }}>
-        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "#DDE3EC", borderTopColor: "#2A5EA8" }} />
+      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: "#F5F6F3" }}>
+        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "#DDE0DA", borderTopColor: "#146556" }} />
       </div>
     );
   }
 
   return (
-    <div style={{ backgroundColor: "#EEF1F6", minHeight: "100vh" }}>
-      <InvoicingTopBar
+    <div style={{ backgroundColor: "#F5F6F3", minHeight: "100vh" }}>
+      <InvoiceHeader
         month={month}
         onMonthChange={setMonth}
         search={search}
@@ -394,29 +349,22 @@ export default function Invoicing() {
         monthClosed={monthClosed}
         onCloseMonth={handleCloseMonth}
         closing={closing}
+        onRefresh={handleRunIngest}
+        refreshing={runningIngest}
+        syncMessage={syncMessage}
+        loadError={loadError}
       />
 
-      <div
-        className="mx-auto min-w-0 max-w-[1180px] px-4 sm:px-6 xl:px-10"
-        style={{ paddingBottom: selectedIds.size > 0 ? "220px" : "60px" }}
-      >
-        <div className="mt-5 rounded-xl border bg-white p-4">
-          <button className="rounded-full border px-4 py-2 font-semibold" onClick={handleRunIngest} disabled={runningIngest}>{runningIngest ? "Refreshing…" : "Refresh whole month"}</button>
-          <span role="status" className="ml-3 text-sm">{syncMessage}</span>
-          {loadError && <p role="alert" className="mt-2 text-red-700">{loadError}</p>}
-        </div>
+      <div className="mx-auto min-w-0 max-w-[1180px] px-4 sm:px-6 xl:px-10" style={{ paddingBottom: selectedIds.size > 0 ? "220px" : "60px" }}>
         {showEmptyState ? (
           <div style={{ padding: "120px 0", textAlign: "center" }}>
-            <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "17px", color: "#616D81", marginBottom: "8px" }}>
+            <p className="text-[17px]" style={{ color: "#53615B", marginBottom: "8px" }}>
               {isPast ? "No billing rows loaded for this month." : "No data for this month yet."}
             </p>
-            <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "13px", color: "#77839A", marginBottom: "20px" }}>
+            <p className="text-[13px]" style={{ color: "#8A958F", marginBottom: "20px" }}>
               {isPast ? "Refresh this month to check the source calendars and ProBuild." : "Come back after the first jobs are posted."}
             </p>
-            <button
-              onClick={() => setMonth(currentMonth)}
-              style={{ padding: "10px 20px", borderRadius: "10px", border: "1px solid #DDE3EC", backgroundColor: "#FFFFFF", color: "#1E4A85", fontFamily: "'Archivo',sans-serif", fontSize: "13px", fontWeight: 500, cursor: "pointer" }}
-            >
+            <button onClick={() => setMonth(currentMonth)} className="min-h-10 rounded-lg px-5 text-[13px] font-medium" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#104E44", cursor: "pointer" }}>
               Back to {new Date().toLocaleDateString("en-US", { month: "long" })}
             </button>
           </div>
@@ -425,12 +373,12 @@ export default function Invoicing() {
             {unprocessedCount > 0 && (
               <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
             )}
-            <InvoicingHero
+            <InvoiceSummary
               {...heroStats}
               onFilterBlocked={() => setFilter("needs_report")}
               onFilterMatchBlocked={() => setFilter("needs_review")}
             />
-            <InvoicingToolbar
+            <InvoiceToolbar
               view={view}
               onViewChange={setView}
               filter={filter}
@@ -454,6 +402,7 @@ export default function Invoicing() {
                 onAddReport={handleAddReport}
                 onMarkBilled={handleMarkBilled}
                 onOpenJob={() => {}}
+                onOpenDetails={setDetailRow}
                 reportAttached={reportAttached}
                 onToggleDay={toggleDay}
                 onClearFilters={() => { setFilter("all"); setSearch(""); setHideZeros(false); }}
@@ -482,44 +431,21 @@ export default function Invoicing() {
         />
       )}
 
+      {detailRow && (
+        <LineDetailsDrawer
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          onEdit={(id) => { setDetailRow(null); handleEdit(id, {}); }}
+          onDelete={handleDelete}
+          onMarkBilled={handleMarkBilled}
+          onOpenJob={(jobId) => { setDetailRow(null); window.location.assign(`/jobs/${jobId}`); }}
+        />
+      )}
+
       {undo && (
-        <div
-          style={{
-            position: "fixed",
-            top: "80px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 60,
-            backgroundColor: "#FFFFFF",
-            border: "1px solid #DDE3EC",
-            borderRadius: "99px",
-            padding: "10px 16px",
-            maxWidth: "calc(100vw - 32px)",
-            width: "max-content",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            boxShadow: "0 1px 2px rgba(19,26,38,.05), 0 10px 24px -18px rgba(19,26,38,.22)",
-          }}
-        >
-          <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "13px", color: "#535E72" }}>{undo.message}</span>
-          <button
-            onClick={handleUndo}
-            style={{
-              fontFamily: "'Archivo',sans-serif",
-              fontSize: "11px",
-              fontWeight: 600,
-              letterSpacing: ".01em",
-              color: "#1E4A85",
-              border: "1px solid #C3D4EE",
-              borderRadius: "99px",
-              padding: "4px 10px",
-              cursor: "pointer",
-              backgroundColor: "#E7EEFA",
-            }}
-          >
-            Undo
-          </button>
+        <div style={{ position: "fixed", top: "80px", left: "50%", transform: "translateX(-50%)", zIndex: 60, backgroundColor: "#1B2925", border: "1px solid #2A3A35", borderRadius: "99px", padding: "10px 16px", maxWidth: "calc(100vw - 32px)", width: "max-content", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 8px 24px -12px rgba(24,36,34,.30)" }}>
+          <span className="text-[13px]" style={{ color: "#E8EAE5" }}>{undo.message}</span>
+          <button onClick={handleUndo} className="text-[11px] font-semibold rounded-full px-2.5 py-1" style={{ border: "1px solid #3A4A44", backgroundColor: "#2A3A35", color: "#146556", cursor: "pointer" }}>Undo</button>
         </div>
       )}
     </div>

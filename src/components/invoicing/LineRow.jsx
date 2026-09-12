@@ -9,24 +9,14 @@ function MenuItem({ icon: Icon, label, onClick, danger }) {
     <button
       onClick={onClick}
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        width: "100%",
-        padding: "8px 10px",
-        borderRadius: "6px",
-        border: "none",
-        backgroundColor: "transparent",
-        color: danger ? "#8A4038" : "#535E72",
-        fontFamily: "'Archivo',sans-serif",
-        fontSize: "12.5px",
-        fontWeight: 500,
-        cursor: "pointer",
-        textAlign: "left",
-        whiteSpace: "nowrap",
+        display: "flex", alignItems: "center", gap: "8px", width: "100%",
+        padding: "8px 10px", borderRadius: "6px", border: "none",
+        backgroundColor: "transparent", color: danger ? "#A43432" : "#53615B",
+        fontFamily: "'Archivo',sans-serif", fontSize: "13px", fontWeight: 500,
+        cursor: "pointer", textAlign: "left", whiteSpace: "nowrap",
       }}
     >
-      {Icon && <Icon style={{ width: "13px", height: "13px" }} />}
+      {Icon && <Icon style={{ width: "14px", height: "14px" }} />}
       {label}
     </button>
   );
@@ -45,61 +35,47 @@ function InlineEditor({ row, onSave, onCancel, onDelete }) {
   }, [labor, feePct]);
 
   const inputStyle = {
-    backgroundColor: "#FFFFFF",
-    border: "1px solid #DDE3EC",
-    borderRadius: "9px",
-    padding: "8px 10px",
-    color: "#131A26",
-    fontFamily: "'Archivo',sans-serif",
-    fontSize: "13px",
-    outline: "none",
-    width: "100%",
+    backgroundColor: "#FFFFFF", border: "1px solid #DDE0DA", borderRadius: "8px",
+    padding: "8px 10px", color: "#182422", fontFamily: "'Archivo',sans-serif",
+    fontSize: "14px", outline: "none", width: "100%",
   };
 
   return (
-    <div
-      style={{
-        backgroundColor: "#F6F8FC",
-        border: "1px solid #C3D4EE",
-        borderRadius: "14px",
-        padding: "16px",
-        margin: "4px 0",
-      }}
-    >
+    <div className="rounded-xl p-4 my-1" style={{ backgroundColor: "#F0F1ED", border: "1px solid #C7E4D2" }}>
       <div className="mb-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label style={{ fontFamily: "'Archivo',sans-serif", fontSize: "9px", letterSpacing: ".01em", color: "#616D81", display: "block", marginBottom: "4px" }}>Description</label>
+          <label className="text-[12px] font-medium block mb-1" style={{ color: "#53615B" }}>Description</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
         </div>
         <div>
-          <label style={{ fontFamily: "'Archivo',sans-serif", fontSize: "9px", letterSpacing: ".01em", color: "#616D81", display: "block", marginBottom: "4px" }}>Detail</label>
+          <label className="text-[12px] font-medium block mb-1" style={{ color: "#53615B" }}>Detail</label>
           <input value={detail} onChange={(e) => setDetail(e.target.value)} style={inputStyle} />
         </div>
         <div>
-          <label style={{ fontFamily: "'Archivo',sans-serif", fontSize: "9px", letterSpacing: ".01em", color: "#616D81", display: "block", marginBottom: "4px" }}>Labor $</label>
+          <label className="text-[12px] font-medium block mb-1" style={{ color: "#53615B" }}>Labor $</label>
           <input type="number" value={labor} onChange={(e) => setLabor(e.target.value)} style={inputStyle} />
         </div>
         <div>
-          <label style={{ fontFamily: "'Archivo',sans-serif", fontSize: "9px", letterSpacing: ".01em", color: "#616D81", display: "block", marginBottom: "4px" }}>Fee %</label>
+          <label className="text-[12px] font-medium block mb-1" style={{ color: "#53615B" }}>Fee %</label>
           <input type="number" value={feePct} onChange={(e) => setFeePct(e.target.value)} style={inputStyle} />
         </div>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "10px", letterSpacing: ".01em", color: "#616D81" }}>Fee </span>
-          <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: "17px", fontWeight: 700, color: "#1E4A85" }}>${formatMoney(liveFee)}</span>
+          <span className="text-[12px]" style={{ color: "#53615B" }}>Fee </span>
+          <span className="font-mono-num-bold text-[18px]" style={{ color: "#166447" }}>${formatMoney(liveFee)}</span>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          <button onClick={() => onDelete(row.id)} style={{ padding: "7px 14px", borderRadius: "10px", border: "1px solid #EFD2CA", backgroundColor: "transparent", color: "#8A4038", fontFamily: "'Archivo',sans-serif", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Delete line</button>
-          <button onClick={onCancel} style={{ padding: "7px 14px", borderRadius: "10px", border: "1px solid #DDE3EC", backgroundColor: "#FFFFFF", color: "#535E72", fontFamily: "'Archivo',sans-serif", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}>Cancel</button>
-          <button onClick={() => onSave(row.id, { line_description: description, note_text: detail, labor_amt: Number(labor) || 0, fee_pct: (Number(feePct) || 0) / 100, manually_adjusted: true })} style={{ padding: "7px 16px", borderRadius: "10px", border: "1px solid #1E4A85", backgroundColor: "#2A5EA8", color: "#FFFFFF", fontFamily: "'Archivo',sans-serif", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Save</button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => onDelete(row.id)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold" style={{ border: "1px solid #F0C9C5", backgroundColor: "transparent", color: "#A43432" }}>Delete line</button>
+          <button onClick={onCancel} className="min-h-10 rounded-lg px-3 text-[13px] font-medium" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#53615B" }}>Cancel</button>
+          <button onClick={() => onSave(row.id, { line_description: description, note_text: detail, labor_amt: Number(labor) || 0, fee_pct: (Number(feePct) || 0) / 100, manually_adjusted: true })} className="min-h-10 rounded-lg px-4 text-[13px] font-semibold" style={{ border: "1px solid #104E44", backgroundColor: "#146556", color: "#FFFFFF" }}>Save</button>
         </div>
       </div>
     </div>
   );
 }
 
-export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, isFuture, isBilled, isZero }) {
+export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -107,9 +83,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
   useEffect(() => {
     if (!menuOpen) return;
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    };
+    const handler = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
@@ -126,240 +100,125 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   }
 
   const fee = computeFeeAmt(row);
-  const isBig = fee >= 300;
   const isCustomFee = row.fee_type !== "profit_split" && Number(row.fee_pct) !== 0.1;
-  const opacity = isBilled ? 0.45 : 1;
-  const textOpacity = isZero && !isBilled ? 0.48 : 1;
-  const bg = selected ? "#E7EEFA" : blocked ? "#FBEDEA" : "transparent";
-  const insetBar = selected ? "inset 3px 0 0 #2A5EA8" : blocked ? "inset 3px 0 0 #8A4038" : "none";
+  const opacity = isBilled ? 0.55 : 1;
+  const bg = selected ? "#EAF5EE" : blocked ? "#FCEDEC" : "transparent";
+  const insetBar = selected ? "inset 3px 0 0 #146556" : blocked ? "inset 3px 0 0 #A43432" : "none";
 
+  // Compact subline: PO · crew · note preview (2 lines max, no repeated job name)
+  const notePreview = noteTokens(row.note_text);
+  const sublineParts = [row.po_number && `PO ${row.po_number}`, crewName(row.calendar_creator)].filter(Boolean);
   const subline = reportAttached
     ? "Report attachment noted"
-    : [row.line_description, row.po_number && `PO ${row.po_number}`, crewName(row.calendar_creator), noteTokens(row.note_text)].filter(Boolean).join(" · ") || "—";
+    : [sublineParts.join(" · "), notePreview].filter(Boolean).join(" — ") || "—";
 
-  const handleClick = (e) => {
+  const handleCheckboxClick = (e) => {
+    e.stopPropagation();
     if (e.shiftKey) onShiftClick(row.id);
     else onToggle(row.id);
   };
 
+  const handleRowClick = (e) => {
+    // Don't open details if clicking checkbox or menu
+    if (e.target.closest("[data-no-open]")) return;
+    onOpenDetails(row);
+  };
+
+  // Status pill
+  let statusPill = null;
+  if (blocked) {
+    const isMatch = row.needs_review && !row.manually_adjusted;
+    statusPill = (
+      <button
+        data-no-open
+        onClick={(e) => { e.stopPropagation(); if (isMatch) setEditing(true); else onAddReport(row.id); }}
+        className="text-[11px] font-semibold rounded-full px-2.5 py-1 whitespace-nowrap"
+        style={{ border: "1px solid #F0C9C5", backgroundColor: "#FCEDEC", color: "#A43432" }}
+      >
+        {isMatch ? "Review pricing" : "Review report"}
+      </button>
+    );
+  } else if (isFuture) {
+    statusPill = <span className="text-[11px] font-semibold rounded-full px-2.5 py-1 whitespace-nowrap" style={{ backgroundColor: "#EBF2FC", border: "1px solid #C7D8EF", color: "#335E91" }}>Scheduled</span>;
+  } else if (isBilled) {
+    statusPill = <span className="text-[11px] font-semibold rounded-full px-2.5 py-1 whitespace-nowrap" style={{ backgroundColor: "#EAF5EE", border: "1px solid #C7E4D2", color: "#166447" }}>Billed</span>;
+  } else if (fee > 0) {
+    statusPill = <span className="text-[11px] font-semibold rounded-full px-2.5 py-1 whitespace-nowrap" style={{ backgroundColor: "#EAF5EE", border: "1px solid #C7E4D2", color: "#166447" }}>Ready</span>;
+  }
+
   return (
     <div
-      className="grid min-w-0 grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-x-2 gap-y-2 xl:grid-cols-[44px_minmax(0,1fr)_100px_108px_116px_44px] xl:gap-x-3"
-      onClick={handleClick}
+      onClick={handleRowClick}
+      className="grid min-w-0 grid-cols-[40px_minmax(0,1fr)_36px] items-center gap-x-2 xl:grid-cols-[40px_minmax(0,1fr)_90px_90px_120px_36px] xl:gap-x-3"
       style={{
-        padding: "15px 12px",
-        minHeight: "64px",
-        borderRadius: "10px",
-        borderBottom: "1px solid #E9EDF4",
-        backgroundColor: bg,
-        boxShadow: insetBar,
-        cursor: "pointer",
-        opacity,
-        transition: "background-color .15s",
+        padding: "10px 12px", minHeight: "56px", borderRadius: "10px",
+        borderBottom: "1px solid #ECEEEA", backgroundColor: bg, boxShadow: insetBar,
+        cursor: "pointer", opacity, transition: "background-color .15s",
       }}
     >
-      {/* Checkbox */}
+      {/* Checkbox — separate from row click */}
       <button
-        onClick={(e) => { e.stopPropagation(); handleClick(e); }}
+        data-no-open
+        onClick={handleCheckboxClick}
         aria-label={`Select ${row.job_name_raw || row.job_name_norm || "invoice line"}`}
         aria-pressed={selected}
-        className="col-start-1 row-start-1"
-        style={{
-          width: "44px",
-          height: "44px",
-          borderRadius: "8px",
-          border: "none",
-          backgroundColor: "transparent",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          flexShrink: 0,
-        }}
+        className="col-start-1 row-start-1 flex items-center justify-center"
+        style={{ width: "40px", height: "40px", borderRadius: "8px", border: "none", backgroundColor: "transparent", cursor: "pointer", flexShrink: 0 }}
       >
-        <span aria-hidden="true" style={{ width: "28px", height: "28px", borderRadius: "99px", border: selected ? "none" : "1.5px solid #CBD4E1", backgroundColor: selected ? "#2A5EA8" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {selected && <Check style={{ width: "12px", height: "12px", color: "#FFFFFF" }} strokeWidth={3} />}
+        <span aria-hidden="true" style={{ width: "24px", height: "24px", borderRadius: "6px", border: selected ? "none" : "1.5px solid #C9CCC4", backgroundColor: selected ? "#146556" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {selected && <Check style={{ width: "14px", height: "14px", color: "#FFFFFF" }} strokeWidth={3} />}
         </span>
       </button>
 
-      {/* Title + subline + chip */}
+      {/* Title + subline */}
       <div className="col-start-2 row-start-1" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", minWidth: 0 }}>
-          <span
-            style={{
-              fontFamily: "'Archivo',sans-serif",
-              fontSize: "15px",
-              fontWeight: 600,
-              color: "#131A26",
-              overflowWrap: "anywhere",
-              textDecoration: isBilled ? "line-through" : "none",
-              opacity: textOpacity,
-              minWidth: 0,
-            }}
-          >
+        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+          <span className="text-[14px] font-semibold line-clamp-2" style={{ color: "#182422", textDecoration: isBilled ? "line-through" : "none", opacity: isZero && !isBilled ? 0.6 : 1, minWidth: 0 }}>
             {row.job_name_raw || row.job_name_norm || row.line_description}
           </span>
           {isCustomFee && (
-            <span
-              style={{
-                fontFamily: "'Archivo',sans-serif",
-                fontSize: "10px",
-                fontWeight: 600,
-                padding: "2px 6px",
-                borderRadius: "4px",
-                backgroundColor: "#E7EEFA",
-                border: "1px solid #C3D4EE",
-                color: "#1E4A85",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
+            <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ backgroundColor: "#E6F0EC", border: "1px solid #C7E4D2", color: "#104E44" }}>
               {Math.round((row.fee_pct || 0) * 100)}%
             </span>
           )}
         </div>
-        <span
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "12.5px",
-            color: reportAttached ? "#1E4A85" : "#616D81",
-            overflowWrap: "anywhere",
-            opacity: textOpacity,
-          }}
-        >
+        <span className="text-[12px] line-clamp-2" style={{ color: reportAttached ? "#166447" : "#53615B", opacity: isZero && !isBilled ? 0.6 : 1 }}>
           {subline}
-          {row.pricing_review_reason && <span className="block mt-1 text-amber-800">{row.pricing_review_reason}{row.split_candidate_amt != null ? ` Candidate split: ${formatMoney(row.split_candidate_amt)} (excluded).` : ""}</span>}
         </span>
       </div>
 
-      {/* Labor */}
-      <span
-        className="col-start-2 row-start-2 xl:col-start-3 xl:row-start-1 xl:text-right"
-        style={{
-          fontFamily: "'Archivo',sans-serif",
-          fontSize: "13.5px",
-          fontWeight: 500,
-          color: "#535E72",
-          whiteSpace: "nowrap",
-          opacity: textOpacity,
-        }}
-      >
-        <span className="mr-1 text-xs xl:hidden">Labor</span>
+      {/* Labor — desktop only */}
+      <span className="hidden xl:block xl:col-start-3 xl:row-start-1 xl:text-right font-mono-num text-[13px]" style={{ color: "#53615B", whiteSpace: "nowrap" }}>
         ${formatMoney(row.labor_amt)}
       </span>
 
-      {/* Fee */}
-      <span
-        className="col-start-2 row-start-3 xl:col-start-4 xl:row-start-1 xl:text-right"
-        style={{
-          fontFamily: "'Archivo',sans-serif",
-          fontSize: isBig ? "17px" : "13.5px",
-          fontWeight: isBig ? 700 : 600,
-          color: "#1E4A85",
-          whiteSpace: "nowrap",
-          opacity: textOpacity,
-        }}
-      >
-        <span className="mr-1 text-xs xl:hidden">Fee</span>
+      {/* Fee — desktop only */}
+      <span className="hidden xl:block xl:col-start-4 xl:row-start-1 xl:text-right font-mono-num-bold text-[14px]" style={{ color: "#166447", whiteSpace: "nowrap" }}>
         ${formatMoney(fee)}
       </span>
 
       {/* Status */}
-      <div className="col-start-2 row-start-4 flex flex-wrap gap-2 empty:hidden xl:col-start-5 xl:row-start-1 xl:justify-end">
-        {blocked && (
-          <button
-            onClick={(e) => { e.stopPropagation(); if (row.needs_review && !row.manually_adjusted) setEditing(true); else onAddReport(row.id); }}
-            style={{
-              fontFamily: "'Archivo',sans-serif",
-              fontSize: "10px",
-              fontWeight: 600,
-              letterSpacing: ".01em",
-              padding: "5px 10px",
-              borderRadius: "99px",
-              border: "1px solid #EFD2CA",
-              cursor: "pointer",
-              backgroundColor: "#FBEDEA",
-              color: "#8A4038",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {row.needs_review && !row.manually_adjusted ? "Review pricing / job" : "Review report"}
-          </button>
-        )}
-        {!blocked && isFuture && (
-          <span
-            style={{
-              fontFamily: "'Archivo',sans-serif",
-              fontSize: "10px",
-              fontWeight: 600,
-              letterSpacing: ".01em",
-              padding: "4px 8px",
-              borderRadius: "99px",
-              backgroundColor: "#F6F8FC",
-              border: "1px solid #DDE3EC",
-              color: "#616D81",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Scheduled
-          </span>
-        )}
-        {!blocked && !isFuture && isBilled && (
-          <span
-            style={{
-              fontFamily: "'Archivo',sans-serif",
-              fontSize: "10px",
-              fontWeight: 600,
-              letterSpacing: ".01em",
-              padding: "4px 8px",
-              borderRadius: "99px",
-              backgroundColor: "#E7EEFA",
-              border: "1px solid #C3D4EE",
-              color: "#1E4A85",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Billed
-          </span>
-        )}
+      <div className="col-start-2 row-start-2 flex items-center gap-2 xl:col-start-5 xl:row-start-1 xl:justify-end">
+        {/* Mobile labor/fee inline */}
+        <span className="xl:hidden font-mono-num text-[12px]" style={{ color: "#53615B" }}>${formatMoney(row.labor_amt)}</span>
+        <span className="xl:hidden font-mono-num-bold text-[13px]" style={{ color: "#166447" }}>${formatMoney(fee)}</span>
+        {statusPill}
       </div>
 
       {/* Menu */}
-      <div className="col-start-3 row-start-1 self-start xl:col-start-6 xl:self-center" ref={menuRef} style={{ position: "relative", display: "flex", justifyContent: "flex-end" }}>
+      <div data-no-open className="col-start-3 row-start-1 self-start xl:col-start-6 xl:self-center" ref={menuRef} style={{ position: "relative", display: "flex", justifyContent: "flex-end" }}>
         <button
+          data-no-open
           onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
           aria-label="Invoice line actions"
           aria-expanded={menuOpen}
-          style={{
-            width: "44px",
-            height: "44px",
-            borderRadius: "6px",
-            border: "none",
-            backgroundColor: "transparent",
-            color: "#77839A",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          style={{ width: "36px", height: "36px", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "#8A958F", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           <MoreHorizontal style={{ width: "16px", height: "16px" }} />
         </button>
         {menuOpen && (
-          <div
-            style={{
-              position: "absolute",
-              right: 0,
-              top: "100%",
-              zIndex: 30,
-              backgroundColor: "#FFFFFF",
-              border: "1px solid #DDE3EC",
-              borderRadius: "10px",
-              padding: "4px",
-              minWidth: "190px",
-              boxShadow: "0 1px 2px rgba(19,26,38,.05), 0 10px 24px -18px rgba(19,26,38,.22)",
-            }}
-          >
+          <div style={{ position: "absolute", right: 0, top: "100%", zIndex: 30, backgroundColor: "#FFFFFF", border: "1px solid #DDE0DA", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "0 1px 2px rgba(24,36,34,.04), 0 8px 20px -12px rgba(24,36,34,.16)" }}>
+            <MenuItem icon={ExternalLink} label="Open details" onClick={() => { onOpenDetails(row); setMenuOpen(false); }} />
             <MenuItem icon={Pencil} label="Edit line" onClick={() => { setEditing(true); setMenuOpen(false); }} />
             {row.job_id && <MenuItem icon={ExternalLink} label="Open job ↗" onClick={() => { navigate(`/jobs/${row.job_id}`); setMenuOpen(false); }} />}
             {isBilled ? (
