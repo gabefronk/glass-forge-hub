@@ -51,3 +51,9 @@ test('source attachments with missing type become photo-report images after veri
  const r=s.api.FieldLibraryReport.rows().find(r=>r.source_post_id==='post1');const read=await s.call({action:'report',report_id:r.id});assert.equal(read.report.attachments[0].type,'photo');assert.equal(read.report.attachments[0].mime_type,'image/jpeg');assert.equal(read.report.attachments[0].name,'photo1.jpg');assert.deepEqual(r.source_snapshot.attachments.photo1,{generation:'100'});
  const file=await s.call({action:'file',source_key:f.source_key});assert.equal(file.name,'photo1.jpg');
 });
+test('bounded file batches isolate failures and safely resume verified members',async()=>{
+ const s=setup();await importAll(s);const f=s.api.FieldLibraryFile.rows()[0];
+ const batch=await s.call({action:'copy_files',file_ids:[f.id,'missing']});assert.equal(batch.status,200);assert.equal(batch.results[0].file.status,'verified');assert.equal(batch.results[1].status,404);
+ const resumed=await s.call({action:'copy_files',file_ids:[f.id]});assert.equal(resumed.results[0].already_verified,true);assert.equal(s.files.size,1);
+ assert.equal((await s.call({action:'copy_files',file_ids:[f.id,f.id]})).status,400);assert.equal((await s.call({action:'copy_files',file_ids:Array.from({length:9},(_,i)=>'f'+i)})).status,400);
+});

@@ -78,9 +78,9 @@ function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>n
    if(action==='pending_files'){
     const run=await runFor();return json({files:(await api.FieldLibraryFile.filter({import_run_id:run.id,status:{$ne:'verified'}},'id',Math.min(500,Number(input.limit)||100),Math.max(0,Number(input.offset)||0))).map(publicFile)});
    }
-   if(action==='copy_file'){
-    const f=await api.FieldLibraryFile.get(id(input.file_id));if(!f)fail('File not found.',404);
-    if(f.status==='verified')return json({file:publicFile(f),already_verified:true});
+   const copyFile=async fileId=>{
+    stage='load-file';const f=await api.FieldLibraryFile.get(id(fileId));if(!f)fail('File not found.',404);
+    if(f.status==='verified')return {file:publicFile(f),already_verified:true};
     try{
      const path=`teams/${TEAM}/posts/${id(f.source_project_id)}/${id(f.source_post_id)}/attachments/${id(f.source_attachment_id)}`;
      const url='https://firebasestorage.googleapis.com/v0/b/probuild-prod.appspot.com/o/'+encodeURIComponent(path)+'?alt=media'+(f.generation?'&generation='+encodeURIComponent(f.generation):'');
@@ -101,15 +101,22 @@ function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>n
      stage='verify-private-file';const copied=await fetchImpl(await signed(uploaded.file_uri),{signal:AbortSignal.timeout(90000)});
      if(!copied.ok)fail('Stored file could not be verified.',502);
      const checked=await boundedBytes(copied,chunkSize);if(checked.length!==bytes.length||await hashBytes(checked)!==digest)fail('Stored file does not match its source.',502);
-     const latest=await api.FieldLibraryFile.get(f.id);if((latest.bytes_stored||0)!==offset)return json({file:publicFile(latest),partial:latest.status!=='verified'});
+     const latest=await api.FieldLibraryFile.get(f.id);if((latest.bytes_stored||0)!==offset)return {file:publicFile(latest),partial:latest.status!=='verified'};
      const chunks=[...(f.chunks||[]),{offset,size:bytes.length,sha256:digest,file_uri:uploaded.file_uri}],stored=offset+bytes.length,complete=stored===total;
      if(stored>total)fail('Stored file exceeds the source size.',502);
      const manifest=chunks.map(({offset,size,sha256})=>({offset,size,sha256}));
      stage='save-file-receipt';const saved=await api.FieldLibraryFile.update(f.id,{status:complete?'verified':'copying',file_uri:multipart?'':uploaded.file_uri,chunks,bytes_stored:stored,size:total,mime_type:mime,sha256:multipart?'':digest,manifest_sha256:await hash(JSON.stringify(manifest)),verified_at:complete?at:'',error:'',attempts:(f.attempts||0)+1});
-     return json({file:publicFile(saved),partial:!complete});
+     return {file:publicFile(saved),partial:!complete};
     }catch(e){await api.FieldLibraryFile.update(f.id,{status:'error',error:e.publicMessage||'File transfer interrupted.',attempts:(f.attempts||0)+1});throw e;}
+   };
+   if(action==='copy_file')return json(await copyFile(input.file_id));
+   if(action==='copy_files'){
+    const ids=input.file_ids;if(!Array.isArray(ids)||!ids.length||ids.length>8||new Set(ids).size!==ids.length)fail('Choose one to eight distinct files.');ids.forEach(id);
+    const results=await parallel(ids,async fileId=>{try{return {file_id:fileId,...await copyFile(fileId)};}catch(e){return {file_id:fileId,error:e.publicMessage||'File transfer interrupted. Retry this file.',status:e.status||e.response?.status||500};}},2);
+    return json({results});
    }
    if(action==='audit_import'){
+    stage='audit-import';
     const run=await runFor();const [projects,reports,files]=await Promise.all([all(api.FieldLibraryProject,{import_run_id:run.id}),all(api.FieldLibraryReport,{import_run_id:run.id}),all(api.FieldLibraryFile,{import_run_id:run.id})]);
     const imported=new Set(projects.map(p=>p.source_project_id)),missingProjects=run.project_ids.filter(pid=>!imported.has(pid));
     const missingReports=projects.filter(p=>reports.filter(r=>r.source_project_id===p.source_project_id).length!==p.report_count).map(p=>p.source_project_id);
