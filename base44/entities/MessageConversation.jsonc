@@ -1,0 +1,50 @@
+{
+  "name": "MessageConversation",
+  "type": "object",
+  "properties": {
+    "conversation_key": {
+      "type": "string"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "source_chat_guid": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "last_message_at": {
+      "type": "string"
+    },
+    "last_text": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "job_name": {
+      "type": "string"
+    },
+    "last_read_at": {
+      "type": "string"
+    },
+    "participants": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "conversation_key",
+    "device_id",
+    "title"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
