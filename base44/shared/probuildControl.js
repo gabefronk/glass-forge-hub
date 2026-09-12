@@ -32,6 +32,7 @@ export async function boundedBytes(response, max=25165824) {
 export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()=>new Date()}) {
  return async req => {
   if(req.method!=='POST')return json({error:'Use POST.'},405);
+  let stage='request';
   try {
    const client=await getClient(req),api=client.asServiceRole.entities;
    const key=req.headers.get('x-glass-forge-control-key');
@@ -114,6 +115,7 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
     return json({saved:true,project:{...projectPublic({id,...updated}),version:await hash(JSON.stringify([updated.name||'',updated.description||'']))}});
    }
    if(action==='photo'||action==='photo_bytes'){
+    stage='attachment metadata';
     const p=await oneProject(input.project_id),postId=validId(input.post_id),attachmentId=validId(input.attachment_id);
     const post=await (await provider('posts/'+p.id+'/'+postId)).json();
     const attachment=post?.attachments?.[attachmentId];
@@ -126,16 +128,21 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
     // This path is the official web client's FileReference.PostAttachments layout.
     const path=`teams/${TEAM}/posts/${p.id}/${postId}/attachments/${attachmentId}`;
     const url=BUCKET+encodeURIComponent(path)+'?alt=media'+(generation?'&generation='+encodeURIComponent(generation):'');
+    stage='original attachment download';
     const response=await fetchImpl(url,{headers:{Authorization:'Firebase '+await auth()},signal:AbortSignal.timeout(45000),redirect:'error'});
     if(!response.ok)fail('The original photo could not be downloaded from ProBuild.',502);
+    stage='original attachment bytes';
     const bytes=await boundedBytes(response),mime=clean(response.headers.get('content-type'),100)||attachment.mimeType||'application/octet-stream';
     if(!bytes.length||/text\/html|application\/json/.test(mime))fail('ProBuild returned an invalid attachment.',502);
     const name=clean(attachment.fileMetadata?.name)||`${attachmentId}.${mime.includes('png')?'png':mime.startsWith('image/')?'jpg':'bin'}`;
     const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
     if(action==='photo_bytes')return json({name,mime_type:mime,size:bytes.length,sha256,base64:asBase64(bytes)});
+    stage='private attachment storage';
     const {file_uri}=await client.asServiceRole.integrations.Core.UploadPrivateFile({file:new File([bytes],name,{type:mime})});
     if(!file_uri)fail('Could not save the private photo copy.',502);
+    stage='attachment record';
     const asset=await api.ProbuildAsset.create({asset_key:assetKey,project_id:p.id,post_id:postId,attachment_id:attachmentId,generation,name,mime_type:mime,size:bytes.length,sha256,file_uri});
+    stage='attachment link';
     return json({asset_id:asset.id,url:await signed(file_uri),name,mime_type:mime,size:bytes.length,sha256});
    }
    if(action==='message_sources'){
@@ -172,8 +179,8 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
    fail('Unsupported action.');
   } catch(error) {
    if(error.publicMessage)return json({error:error.publicMessage},error.status||400);
-   console.error('ProBuild control failed',error?.name||'Error');
-   return json({error:'ProBuild request could not be completed. Refresh and retry; saved reports are retained.'},502);
+   console.error('ProBuild control failed',stage,error?.name||'Error',String(error?.message||'').replace(/https?:[^\s]+/g,'[provider URL]').slice(0,220));
+   return json({error:'ProBuild request could not be completed at '+stage+'. Refresh and retry; saved reports are retained.'},502);
   }
  };
 }
