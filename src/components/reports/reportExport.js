@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 
 export const reportFileName = report => (report.title || 'Field report').replace(/[^a-z0-9 _.-]/gi, '').trim().slice(0,100) + ' ' + report.report_date + '.pdf';
-const when = s => new Date(s).toLocaleString('en-US',{timeZone:'America/Denver',dateStyle:'medium',timeStyle:'short'});
+const when = s => s&&Number.isFinite(new Date(s).getTime())?new Date(s).toLocaleString('en-US',{timeZone:'America/Denver',dateStyle:'medium',timeStyle:'short'}):'Date not recorded';
 export async function fetchReportFile(file){
  const sources=file.chunks?.length?file.chunks:[{url:file.url,size:file.size,sha256:file.sha256,offset:0}],parts=[];let offset=0;
  for(const source of sources){

@@ -10,7 +10,7 @@ const button='min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm 
 const primary='min-h-11 rounded-xl bg-[#245889] px-4 text-sm font-medium text-white disabled:opacity-50';
 const field='mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3 text-sm';
 const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Denver',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-const when=s=>s?new Date(s).toLocaleString('en-US',{timeZone:'America/Denver',dateStyle:'medium',timeStyle:'short'}):'Date not recorded';
+const when=s=>s&&Number.isFinite(new Date(s).getTime())?new Date(s).toLocaleString('en-US',{timeZone:'America/Denver',dateStyle:'medium',timeStyle:'short'}):'Date not recorded';
 function Attachment({file,onError}){
  const [source,setSource]=useState(null),[busy,setBusy]=useState(false);
  useEffect(()=>()=>{if(source?.url?.startsWith('blob:'))URL.revokeObjectURL(source.url);},[source]);
