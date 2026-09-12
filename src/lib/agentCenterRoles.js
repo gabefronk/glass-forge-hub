@@ -219,5 +219,5 @@ export const ORG_TREE = {
     ] },
     { leadId: "development_lead", label: "Development", leadToManagerLabel: "Daily section summary", members: [{ id: "codex_development" }] },
   ],
-  directSupport: [{ id: "mac_manager" }],
+  directSupport: [{ id: "mac_manager" }, { id: "message_service_assistant" }],
 };
