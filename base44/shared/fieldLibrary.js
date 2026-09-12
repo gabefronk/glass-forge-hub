@@ -25,8 +25,9 @@ export async function mergeRows(entity,existing,rows){
  for(let i=0;i<missing.length;i+=50){const batch=missing.slice(i,i+50);if(entity.bulkCreate)await entity.bulkCreate(batch);else for(const row of batch)await entity.create(row);}
  await parallel(rows.filter(r=>byKey.has(r.source_key)),r=>entity.update(byKey.get(r.source_key).id,r));
 }
-const publicFile=({file_uri,source_snapshot,chunks,...f})=>({...f,chunks:(chunks||[]).map(({file_uri,...c})=>c)});
-export function reportView(r){return {id:r.id,source:'library',project_id:r.source_project_id,project_name:r.project_name,post_id:r.source_post_id,created_at:r.source_created_at,date:r.report_date,message:r.message,deleted:r.source_deleted,attachments:r.attachments||[],source_checked_at:r.source_checked_at};}
+const displayName=f=>{const ext={'image/jpeg':'jpg','image/png':'png','image/heic':'heic','image/heif':'heif','video/mp4':'mp4','video/quicktime':'mov','application/pdf':'pdf'}[f.mime_type];return ext&&!f.source_snapshot?.fileMetadata?.name&&f.name?.endsWith('.bin')?f.name.slice(0,-3)+ext:f.name;};
+const publicFile=({file_uri,source_snapshot,chunks,...f})=>({...f,name:displayName({...f,source_snapshot}),chunks:(chunks||[]).map(({file_uri,...c})=>c)});
+export function reportView(r,files=[]){const byKey=new Map(files.map(f=>[f.source_key,f]));return {id:r.id,source:'library',project_id:r.source_project_id,project_name:r.project_name,post_id:r.source_post_id,created_at:r.source_created_at,date:r.report_date,message:r.message,deleted:r.source_deleted,attachments:(r.attachments||[]).map(a=>{const f=byKey.get(a.source_key);return f?{...a,type:f.mime_type?.startsWith('image/')?'photo':a.type||'file',mime_type:f.mime_type||a.mime_type,name:displayName(f)||a.name,size:f.size||a.size,status:f.status}:a;}),source_checked_at:r.source_checked_at};}
 export function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>new Date()}){
  const sourceTokenCache={value:null,until:0},importCache=new Map();
  return async req=>{
@@ -127,17 +128,17 @@ export function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,no
    }
    if(action==='project'){
     const p=await api.FieldLibraryProject.get(id(input.project_id));if(!p)fail('Project not found.',404);
-    const rows=await api.FieldLibraryReport.filter({library_project_id:p.id,...(input.include_deleted?{}:{source_deleted:false})},'-source_created_at',51,Math.max(0,Number(input.offset)||0));
-    const {source_snapshot,...project}=p;return json({project,reports:rows.slice(0,50).map(reportView),has_more:rows.length>50});
+    const [rows,files]=await Promise.all([api.FieldLibraryReport.filter({library_project_id:p.id,...(input.include_deleted?{}:{source_deleted:false})},'-source_created_at',51,Math.max(0,Number(input.offset)||0)),all(api.FieldLibraryFile,{source_project_id:p.source_project_id})]);
+    const {source_snapshot,...project}=p;return json({project,reports:rows.slice(0,50).map(r=>reportView(r,files)),has_more:rows.length>50});
    }
    if(action==='file'){
     const f=(await api.FieldLibraryFile.filter({source_key:String(input.source_key||'').slice(0,800)},'-created_date',1))[0];
     if(!f||f.status!=='verified'||(!f.file_uri&&!f.chunks?.length))fail('This attachment has not finished transferring.',409);
     const chunks=f.file_uri?[]:await parallel(f.chunks,async c=>({url:await signed(c.file_uri),offset:c.offset,size:c.size,sha256:c.sha256}),3);
-    return json({file:publicFile(f),url:f.file_uri?await signed(f.file_uri):null,chunks,name:f.name,mime_type:f.mime_type,size:f.size,sha256:f.sha256,manifest_sha256:f.manifest_sha256});
+    return json({file:publicFile(f),url:f.file_uri?await signed(f.file_uri):null,chunks,name:displayName(f),mime_type:f.mime_type,size:f.size,sha256:f.sha256,manifest_sha256:f.manifest_sha256});
    }
    if(action==='report'){
-    const r=await api.FieldLibraryReport.get(id(input.report_id));if(!r)fail('Report not found.',404);return json({report:reportView(r)});
+    const r=await api.FieldLibraryReport.get(id(input.report_id));if(!r)fail('Report not found.',404);const files=await all(api.FieldLibraryFile,{source_project_id:r.source_project_id,source_post_id:r.source_post_id});return json({report:reportView(r,files)});
    }
    fail('Unsupported action.');
   }catch(error){if(error.publicMessage)return json({error:error.publicMessage},error.status||400);console.error('Field library failed',error?.name||'Error');return json({error:'The library request could not finish at '+stage+'. '+String(error?.response?.status||error?.status||'')+' '+(Number(error?.response?.status||error?.status)===429?'The service is busy; retry shortly.':'Retrying preserves imported records.')},500);}

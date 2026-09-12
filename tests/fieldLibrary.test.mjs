@@ -46,3 +46,8 @@ test('invalid source ranges never become saved file pieces',async()=>{
  const s=setup();s.setSourceBytes(new Uint8Array(6*1048576+1));s.badRange();await importAll(s);const f=s.api.FieldLibraryFile.rows()[0];
  const result=await s.call({action:'copy_file',file_id:f.id});assert.equal(result.status,502);assert.match(result.error,/invalid file range/);assert.equal(s.files.size,0);assert.equal(s.api.FieldLibraryFile.rows()[0].status,'error');
 });
+test('source attachments with missing type become photo-report images after verified storage identifies them',async()=>{
+ const s=setup();s.source.posts.project1.post1.attachments.photo1={generation:'100'};await importAll(s);const f=s.api.FieldLibraryFile.rows()[0];await s.call({action:'copy_file',file_id:f.id});s.disconnect();
+ const r=s.api.FieldLibraryReport.rows().find(r=>r.source_post_id==='post1');const read=await s.call({action:'report',report_id:r.id});assert.equal(read.report.attachments[0].type,'photo');assert.equal(read.report.attachments[0].mime_type,'image/jpeg');assert.equal(read.report.attachments[0].name,'photo1.jpg');assert.deepEqual(r.source_snapshot.attachments.photo1,{generation:'100'});
+ const file=await s.call({action:'file',source_key:f.source_key});assert.equal(file.name,'photo1.jpg');
+});
