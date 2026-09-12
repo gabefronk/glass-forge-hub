@@ -6,88 +6,34 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
 
   return (
     <div
+      className="flex items-center"
       style={{
-        marginTop: "26px",
-        marginBottom: "8px",
-        backgroundColor: "#EEF1F6",
+        marginTop: "4px",
+        height: "36px",
+        backgroundColor: "var(--gf-card-band)",
+        borderTop: "1px solid var(--gf-hairline)",
+        borderBottom: "1px solid var(--gf-hairline)",
+        padding: "0 16px",
+        gap: "12px",
       }}
     >
-      <div
-        className="card-shadow"
-        style={{
-          minHeight: "46px",
-          flexWrap: "wrap",
-          borderRadius: "14px",
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #DDE3EC",
-          boxShadow: "inset 3px 0 0 #2A5EA8, 0 1px 2px rgba(19,26,38,.05), 0 6px 16px -10px rgba(19,26,38,.14)",
-          display: "flex",
-          alignItems: "center",
-          padding: "10px 12px",
-          gap: "12px",
-        }}
+      <span className="text-[12.5px] font-semibold" style={{ color: "var(--gf-ink)", whiteSpace: "nowrap" }}>
+        {dateLabel}
+      </span>
+      <span className="text-[12px]" style={{ color: "var(--gf-ink-3)", whiteSpace: "nowrap" }}>
+        {lineCount} {lineCount === 1 ? "line" : "lines"}
+      </span>
+      <button
+        onClick={onSelectDay}
+        className="text-[11px] font-medium hover:underline"
+        style={{ color: allSelected ? "var(--gf-teal-600)" : "var(--gf-ink-3)", background: "none", border: "none", cursor: "pointer", whiteSpace: "nowrap", padding: 0 }}
       >
-        <span
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "13px",
-            fontWeight: 700,
-            letterSpacing: ".01em",
-            color: "#131A26",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {dateLabel}
-        </span>
-        <span
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "11px",
-            color: "#616D81",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {lineCount} {lineCount === 1 ? "line" : "lines"}
-        </span>
-        <button
-          onClick={onSelectDay}
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "10px",
-            fontWeight: 600,
-            letterSpacing: ".01em",
-            padding: "4px 10px",
-            borderRadius: "99px",
-            border: allSelected ? "1px solid #C3D4EE" : "1px solid #DDE3EC",
-            cursor: "pointer",
-            backgroundColor: allSelected ? "#E7EEFA" : "#F6F8FC",
-            color: allSelected ? "#1E4A85" : "#535E72",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {allSelected ? "Deselect day" : "Select day"}
-        </button>
-        <div style={{ flex: 1 }} />
-        <span
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "10px",
-            letterSpacing: ".01em",
-            color: "#616D81",
-            whiteSpace: "nowrap",
-          }}
-        >
-          Day fee
-        </span>
-        <span
-          style={{
-            fontFamily: "'Archivo',sans-serif",
-            fontSize: "14.5px",
-            fontWeight: 700,
-            color: isLargest ? "#1E4A85" : "#535E72",
-            whiteSpace: "nowrap",
-          }}
-        >
+        {allSelected ? "Deselect" : "Select day"}
+      </button>
+      <div style={{ flex: "1 1 0%", minWidth: 0 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", width: "100px", justifyContent: "flex-end", whiteSpace: "nowrap" }}>
+        <span className="text-[11.5px]" style={{ color: "var(--gf-ink-3)" }}>Day fee</span>
+        <span className="text-[12.5px] font-semibold font-mono-num" style={{ color: isLargest ? "var(--gf-teal-600)" : "var(--gf-ink)" }}>
           ${formatMoney(dayFee)}
         </span>
       </div>

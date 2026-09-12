@@ -43,6 +43,26 @@ module.exports = {
   			border: 'var(--border)',
   			input: 'var(--input)',
   			ring: 'var(--ring)',
+  			ready: {
+  				DEFAULT: 'var(--ready)',
+  				bg: 'var(--ready-bg)',
+  				border: 'var(--ready-border)'
+  			},
+  			review: {
+  				DEFAULT: 'var(--review)',
+  				bg: 'var(--review-bg)',
+  				border: 'var(--review-border)'
+  			},
+  			error: {
+  				DEFAULT: 'var(--error)',
+  				bg: 'var(--error-bg)',
+  				border: 'var(--error-border)'
+  			},
+  			scheduled: {
+  				DEFAULT: 'var(--scheduled)',
+  				bg: 'var(--scheduled-bg)',
+  				border: 'var(--scheduled-border)'
+  			},
   			chart: {
   				'1': 'var(--chart-1)',
   				'2': 'var(--chart-2)',

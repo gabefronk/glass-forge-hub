@@ -13,6 +13,7 @@ import OutlookEventDetails from "@/components/calendar/OutlookEventDetails";
 import CleanCalendar from "@/components/calendar/CleanCalendar";
 import ServiceCalendar from "@/components/calendar/ServiceCalendar";
 import JobKnowledge from "@/components/calendar/JobKnowledge";
+import SourceCoverageBar from "@/components/calendar/SourceCoverageBar";
 
 
 function formatMonth(m) {
@@ -20,8 +21,8 @@ function formatMonth(m) {
   return new Date(y, mm - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-const INSTALL_COLOR = "#2A5EA8";
-const SERVICE_COLOR = "#8A4038";
+const INSTALL_COLOR = "#0B3F3B";
+const SERVICE_COLOR = "#A43432";
 const OUTLOOK_COLOR = "#7042A1";
 
 export default function CalendarPage() {
@@ -166,7 +167,7 @@ export default function CalendarPage() {
               <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "list" ? "" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
             </div>
             <button type="button" onClick={() => setUnreportedOnly(!unreportedOnly)} className="px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] whitespace-nowrap transition-colors" style={unreportedOnly ? { backgroundColor: C.amber, color: "#FFFFFF" } : { border: `1px solid ${C.border}`, color: C.textSecondary }}>Unreported only</button>
-            <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+            <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <RefreshCw className="h-3.5 w-3.5" />{syncing ? "Syncing…" : "Refresh whole month"}
             </button>
             <button onClick={() => { setSelected(null); setCreating({ event_date: selectedDay }); }} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
@@ -176,18 +177,13 @@ export default function CalendarPage() {
         </div>
 
         {syncMessage && <p role="status" className="mb-4 rounded-lg border bg-white p-3 text-sm">{syncMessage}</p>}
-        {user?.role === "admin" && <details className="mb-4 rounded-xl border bg-white p-4">
-          <summary className="cursor-pointer font-semibold">Source events needing ownership review ({excludedEvents.filter(e => e.event_date?.startsWith(month)).length})</summary>
-          <p className="my-2 text-sm">These source events were imported but did not match the verified Sales Tracker. They remain outside the verified schedule until matched.</p>
-          {excludedEvents.filter(e => e.event_date?.startsWith(month)).sort((a,b) => a.event_date.localeCompare(b.event_date)).map((e,i) => <div key={e.id || i} className="border-t py-2 text-sm">{e.event_date} · {e.job_name} · {e.source}</div>)}
-        </details>}
-        {outlook && <p className="mb-4 rounded-lg border bg-white p-3 text-sm">Outlook is an imported snapshot covering {outlook.range_start} through {outlook.range_end}, captured {outlook.captured_at}. Refresh whole month pulls Google and ProBuild; a new Outlook import is needed for dates outside this coverage.</p>}
+
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-4">
           <h1 className="font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
           <div className="flex items-center gap-1" aria-label="Choose calendar month">
-            <button type="button" onClick={() => shiftMonth(-1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></button>
-            <button type="button" onClick={() => { const today = new Date(); const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`; setMonth(day.slice(0, 7)); setSelectedDay(day); }} className="min-h-11 rounded-full px-3 text-xs font-medium hover:bg-white" style={{ color: C.textSecondary }}>Today</button>
-            <button type="button" onClick={() => shiftMonth(1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Next month"><ChevronRight className="h-4 w-4" /></button>
+            <button type="button" onClick={() => shiftMonth(-1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></button>
+            <button type="button" onClick={() => { const today = new Date(); const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`; setMonth(day.slice(0, 7)); setSelectedDay(day); }} className="min-h-11 rounded-full px-3 text-xs font-medium hover:bg-[#F8F9F6]" style={{ color: C.textSecondary }}>Today</button>
+            <button type="button" onClick={() => shiftMonth(1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Next month"><ChevronRight className="h-4 w-4" /></button>
           </div>
           <div className="flex items-center gap-3 text-[11px]">
             <span className="inline-flex items-center gap-1.5" style={{ color: C.textSecondary }}>
@@ -199,21 +195,22 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {user?.role === "admin" && <div className="mb-4 rounded-xl border p-3 text-sm" style={{borderColor:C.border}}>
-          <div className="flex flex-wrap gap-4">
-            <label><input type="checkbox" checked={showIsrael} onChange={e=>setShowIsrael(e.target.checked)} /> Israel / existing calendar</label>
-            <label style={{color:OUTLOOK_COLOR}}><input type="checkbox" checked={showOutlook} onChange={e=>setShowOutlook(e.target.checked)} /> Outlook installs</label>
-            <button type="button" className="underline" onClick={load}>Reload imports</button>
-          </div>
-          <p className="text-xs mt-2">{outlook ? `Outlook coverage: ${outlook.range_start} through ${outlook.range_end}. Captured ${new Date(outlook.captured_at).toLocaleString()}. ${outlook.event_count} source events. Source records are preserved. Only verified Sales Tracker matches appear below.` : "No complete Outlook import yet."}</p>
-          {outlook && Date.now()-new Date(outlook.captured_at).getTime()>26*3600000 && <p className="text-xs text-amber-700">Outlook copy is over 26 hours old.</p>}
-          {partialOutlook && <p role="status" className="text-xs text-amber-700">Latest collection is incomplete ({partialOutlook.event_count} events captured). It has not replaced the calendar overlay. {partialOutlook.collection_notes}</p>}
-
-        </div>}
-        <div className="mb-4 rounded-xl border bg-white p-3 text-sm" style={{borderColor:C.border}}>
-          {loading ? <p role="status">Checking calendar ownership against Sales Tracker…</p> : ownershipError ? <p role="alert" className="text-amber-800">{ownershipError} <button className="underline" onClick={load}>Reload calendar</button></p> : <p role="status">Sales Tracker verified · {ownershipCounts?.visible_events || 0} visits this month · {ownershipCounts?.unmatched_events || 0} unmatched source events excluded · {ownershipCounts?.duplicate_events || 0} duplicate entries combined.</p>}
-          {ownership && <p className="mt-1 text-xs">Matched by OE or PO first, then exact builder, subdivision, and lot. Source calendar records remain intact.</p>}
-        </div>
+        <SourceCoverageBar
+          outlook={outlook}
+          partialOutlook={partialOutlook}
+          ownership={ownership}
+          ownershipCounts={ownershipCounts}
+          ownershipError={ownershipError}
+          loading={loading}
+          excludedEvents={excludedEvents}
+          month={month}
+          user={user}
+          showIsrael={showIsrael}
+          setShowIsrael={setShowIsrael}
+          showOutlook={showOutlook}
+          setShowOutlook={setShowOutlook}
+          onReload={load}
+        />
         {creating && (
           <div className="mb-4">
             <EventForm initial={creating} jobs={jobs} onSave={handleSave} onCancel={() => setCreating(null)} saving={saving} />
@@ -258,7 +255,7 @@ export default function CalendarPage() {
                           <div className="text-[13px] font-medium truncate" style={{ color: C.text }}>{e.job_name}</div>
                           {e.address && <div className="text-[11px] truncate" style={{ color: C.textMuted }}>{e.address}</div>}
                         </div>
-                        <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "#E7EEFA" : "#FBEDEA", border: isInstall ? "1px solid #C3D4EE" : "1px solid #EFD2CA", color }}>{e.source === "outlook" ? "Outlook" : isInstall ? "Install" : "Service"}</span>
+                        <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "#EAF5EE" : "#FCEDEC", border: isInstall ? "1px solid #C7E4D2" : "1px solid #F0C9C5", color }}>{e.source === "outlook" ? "Outlook" : isInstall ? "Install" : "Service"}</span>
                       </button>
                     );
                   })}
@@ -272,13 +269,13 @@ export default function CalendarPage() {
             {monthEvents.sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "")).map((e) => {
               const isInstall = e.source === "app";
               const color = e.source === "outlook" ? OUTLOOK_COLOR : isInstall ? INSTALL_COLOR : SERVICE_COLOR;
-              const bg = e.source === "outlook" ? "#F0E9FA" : isInstall ? "#E7EEFA" : "#FBEDEA";
+              const bg = e.source === "outlook" ? "#F0E9FA" : isInstall ? "#EAF5EE" : "#FCEDEC";
               return (
                 <button
                   key={e.id}
                   type="button"
                   onClick={() => setSelected(e)}
-                  className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-[#F8FAFD]"
+                  className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-[#F8F9F6]"
                   style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
                 >
                   <div className="flex flex-col items-center justify-center min-w-[42px] pr-1" style={{ borderRight: `1px solid ${C.border}` }}>

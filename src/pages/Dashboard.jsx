@@ -139,7 +139,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.pageBg }}>
-        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "#DDE3EC", borderTopColor: C.accent }} />
+        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: C.borderStrong, borderTopColor: C.accent }} />
       </div>
     );
   }
@@ -159,7 +159,7 @@ export default function Dashboard() {
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <Download className="h-3.5 w-3.5" />
               Export statement
             </button>
@@ -197,7 +197,7 @@ export default function Dashboard() {
               </span>
             </div>
             {/* Progress bar */}
-            <div className="h-[3px]" style={{ backgroundColor: "#E9EDF4" }}>
+            <div className="h-[3px]" style={{ backgroundColor: C.rowBorder }}>
               <div className="h-full transition-all duration-300" style={{ width: `${sortedToday.length ? (doneCount / sortedToday.length) * 100 : 0}%`, backgroundColor: C.accent }} />
             </div>
             <div>
@@ -238,12 +238,12 @@ export default function Dashboard() {
                       <div className="text-[12px] break-words" style={{ color: C.textMuted }}>
                         {ev.address || ev.scope_notes?.slice(0, 80) || ""}
                       </div>
-                      <span className="mt-1 inline-flex sm:hidden text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: C.accent18, border: "1px solid #C3D4EE", color: C.accentText }}>{tag}</span>
+                      <span className="mt-1 inline-flex sm:hidden text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: C.accent18, border: `1px solid ${C.tagBillable.border}`, color: C.accentText }}>{tag}</span>
                     </div>
                     {/* Tag */}
                     <span
                       className="hidden sm:inline-flex text-[9px] font-semibold tracking-[0.01em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
-                      style={{ backgroundColor: C.accent18, border: "1px solid #C3D4EE", color: C.accentText }}
+                      style={{ backgroundColor: C.accent18, border: `1px solid ${C.tagBillable.border}`, color: C.accentText }}
                     >
                       {tag}
                     </span>
@@ -254,7 +254,7 @@ export default function Dashboard() {
                       aria-pressed={isDone}
                       className="ml-1 sm:ml-3 h-10 w-10 rounded-full shrink-0 flex items-center justify-center transition-all"
                       style={{
-                        border: isDone ? "none" : `1.5px solid #CBD4E1`,
+                        border: isDone ? "none" : `1.5px solid ${C.borderStrong}`,
                         backgroundColor: isDone ? C.accent : "transparent",
                       }}
                     >
@@ -280,12 +280,18 @@ export default function Dashboard() {
                   {crewForEvent(firstUp) ? `Crew: ${crewForEvent(firstUp)}` : ""}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#FFFFFF", color: C.accent }}>
-                    Open checklist
-                  </button>
-                  <button className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "#FFFFFF" }}>
+                <button disabled title="Checklist feature not available yet" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.45)", cursor: "not-allowed" }}>
+                  Open checklist
+                </button>
+                {firstUp.address ? (
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(firstUp.address)}`} target="_blank" rel="noreferrer" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#FFFFFF", color: C.accent }}>
+                    Directions
+                  </a>
+                ) : (
+                  <button disabled title="No address on file for this event" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.45)", cursor: "not-allowed" }}>
                     Directions
                   </button>
+                )}
                 </div>
               </div>
             )}

@@ -29,31 +29,31 @@ export default function JobListRow({ job, stats }) {
       style={{
         display: "grid", gridTemplateColumns: COLS, alignItems: "center",
         gap: 12, padding: "14px 16px", minHeight: 60,
-        borderTop: "1px solid #E9EDF4", cursor: "pointer",
+        borderTop: "1px solid #ECEEEA", cursor: "pointer",
       }}
     >
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontFamily: "'Archivo',sans-serif", fontWeight: 700, fontSize: "14px", color: "#131A26",
+        <div style={{ fontFamily: "'Archivo',sans-serif", fontWeight: 700, fontSize: "14px", color: "#182422",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.canonical_name}</div>
-        <div style={{ fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "12px", color: "#616D81",
+        <div style={{ fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "12px", color: "#53615B",
           marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.address || ""}</div>
       </div>
-      <span style={{ minWidth: 0, fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "13px", color: "#535E72",
+      <span style={{ minWidth: 0, fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "13px", color: "#53615B",
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.builder || "—"}</span>
-      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#131A26" }}>{stats.visits}</span>
-      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#616D81", whiteSpace: "nowrap" }}>{stats.lastReport ? formatShort(stats.lastReport) : "—"}</span>
-      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13.5px", color: "#131A26", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.labor)}</span>
-      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 700, fontSize: "13.5px", color: isZero ? "#657185" : "#1E4A85", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.fee)}</span>
+      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#182422" }}>{stats.visits}</span>
+      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#53615B", whiteSpace: "nowrap" }}>{stats.lastReport ? formatShort(stats.lastReport) : "—"}</span>
+      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13.5px", color: "#182422", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.labor)}</span>
+      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 700, fontSize: "13.5px", color: isZero ? "#53615B" : "#166447", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.fee)}</span>
       <span style={{ minWidth: 0 }}>
         <span style={{
           display: "inline-block", fontFamily: "'Archivo',sans-serif", fontWeight: 600, fontSize: "9.5px", letterSpacing: ".01em",
           padding: "4px 8px", borderRadius: 4, whiteSpace: "nowrap",
-          backgroundColor: isComplete ? "#E7EEFA" : isNeedsReport ? "#FBEDEA" : "#F6F8FC",
-          border: isComplete ? "1px solid #C3D4EE" : isNeedsReport ? "1px solid #EFD2CA" : "1px solid #DDE3EC",
-          color: isComplete ? "#1E4A85" : isNeedsReport ? "#8A4038" : "#535E72",
+          backgroundColor: isComplete ? "#EAF5EE" : isNeedsReport ? "#FCEDEC" : "#F0F1ED",
+          border: isComplete ? "1px solid #C7E4D2" : isNeedsReport ? "1px solid #F0C9C5" : "1px solid #DDE0DA",
+          color: isComplete ? "#166447" : isNeedsReport ? "#A43432" : "#53615B",
         }}>{statusStr}</span>
       </span>
-      <span style={{ display: "flex", justifyContent: "flex-end", color: "#77839A" }}>›</span>
+      <span style={{ display: "flex", justifyContent: "flex-end", color: "#8A958F" }}>›</span>
     </Link>
   );
 }

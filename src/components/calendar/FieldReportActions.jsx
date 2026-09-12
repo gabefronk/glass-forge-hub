@@ -21,13 +21,13 @@ export default function FieldReportActions({ event, user, onChanged }) {
 
   let statusText, statusColor, statusBg, statusBorder;
   if (event.report_status === "rescheduled") {
-    statusText = "Rescheduled"; statusColor = C.textMuted; statusBg = "#F6F8FC"; statusBorder = "#DDE3EC";
+    statusText = "Rescheduled"; statusColor = C.textMuted; statusBg = "#F0F1ED"; statusBorder = "#DDE0DA";
   } else if (days === 0) {
-    statusText = "Awaiting report"; statusColor = "#8A5A10"; statusBg = "#FCF5E9"; statusBorder = "#EEDAB4";
+    statusText = "Awaiting report"; statusColor = "#89511A"; statusBg = "#FFF3DF"; statusBorder = "#F0DBA8";
   } else if (days >= 3) {
-    statusText = `${days} days late`; statusColor = "#8A4038"; statusBg = "#FBEDEA"; statusBorder = "#EFD2CA";
+    statusText = `${days} days late`; statusColor = "#A43432"; statusBg = "#FCEDEC"; statusBorder = "#F0C9C5";
   } else {
-    statusText = `${days} day${days > 1 ? "s" : ""} late`; statusColor = "#8A4038"; statusBg = "#FBEDEA"; statusBorder = "#EFD2CA";
+    statusText = `${days} day${days > 1 ? "s" : ""} late`; statusColor = "#A43432"; statusBg = "#FCEDEC"; statusBorder = "#F0C9C5";
   }
 
   const missing = [];
@@ -87,7 +87,7 @@ export default function FieldReportActions({ event, user, onChanged }) {
       </div>
 
       {uploading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setUploading(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(24,36,34,.40)" }} onClick={() => setUploading(false)}>
           <div className="rounded-[14px] p-4 sm:p-5 max-w-md w-full max-h-[90dvh] overflow-y-auto overscroll-contain card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Upload field report</h3>
             <p className="break-words text-[12px] mb-3" style={{ color: C.textMuted }}>{event.job_name}</p>
@@ -102,7 +102,7 @@ export default function FieldReportActions({ event, user, onChanged }) {
       )}
 
       {waiving && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setWaiving(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(24,36,34,.40)" }} onClick={() => setWaiving(false)}>
           <div className="rounded-[14px] p-4 sm:p-5 max-w-md w-full max-h-[90dvh] overflow-y-auto overscroll-contain card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Waive report requirement</h3>
             <p className="break-words text-[12px] mb-3" style={{ color: C.textMuted }}>{event.job_name}</p>

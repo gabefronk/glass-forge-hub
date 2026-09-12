@@ -6,12 +6,12 @@ import { AlertTriangle } from "lucide-react";
 
 function statusLabel(event) {
   if (event.report_status === "rescheduled") {
-    return { text: "Rescheduled", color: C.textMuted, bg: "#F6F8FC", border: "#DDE3EC", dot: C.textMuted };
+    return { text: "Rescheduled", color: C.textMuted, bg: "#F0F1ED", border: "#DDE0DA", dot: C.textMuted };
   }
   const days = event.days_late || 0;
-  if (days === 0) return { text: "Awaiting report", color: "#8A5A10", bg: "#FCF5E9", border: "#EEDAB4", dot: "#8A5A10" };
-  if (days >= 3) return { text: `${days} days late`, color: "#8A4038", bg: "#FBEDEA", border: "#EFD2CA", dot: "#8A4038", escalate: true };
-  return { text: `${days} day${days > 1 ? "s" : ""} late`, color: "#8A4038", bg: "#FBEDEA", border: "#EFD2CA", dot: "#8A4038" };
+  if (days === 0) return { text: "Awaiting report", color: "#89511A", bg: "#FFF3DF", border: "#F0DBA8", dot: "#89511A" };
+  if (days >= 3) return { text: `${days} days late`, color: "#A43432", bg: "#FCEDEC", border: "#F0C9C5", dot: "#A43432", escalate: true };
+  return { text: `${days} day${days > 1 ? "s" : ""} late`, color: "#A43432", bg: "#FCEDEC", border: "#F0C9C5", dot: "#A43432" };
 }
 
 function missingText(event) {
@@ -103,10 +103,10 @@ export default function OutstandingReports({ events, user, onChanged, compliance
   return (
     <>
       {noSourceDates.length > 0 && (
-        <div className="rounded-[14px] px-5 py-4 mb-5 flex items-start gap-3 card-shadow" style={{ backgroundColor: "#FBEDEA", border: `1px solid #EFD2CA` }}>
-          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#8A4038" }} />
+        <div className="rounded-[14px] px-5 py-4 mb-5 flex items-start gap-3 card-shadow" style={{ backgroundColor: "#FCEDEC", border: `1px solid #F0C9C5` }}>
+          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#A43432" }} />
           <div className="min-w-0 break-words">
-            <div className="text-[14px] font-semibold mb-1" style={{ color: "#8A4038" }}>Probuild sync incomplete</div>
+            <div className="text-[14px] font-semibold mb-1" style={{ color: "#A43432" }}>Probuild sync incomplete</div>
             <div className="text-[12px]" style={{ color: C.textMuted }}>
               No field reports ingested for {noSourceDates.join(", ")} — flags suppressed. The Probuild pull may have failed; check the ingest logs.
             </div>
@@ -159,7 +159,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
       )}
 
       {uploading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setUploading(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(24,36,34,.40)" }} onClick={() => setUploading(null)}>
           <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Upload field report</h3>
             <p className="text-[12px] mb-3 break-words" style={{ color: C.textMuted }}>{uploading.job_name}</p>
@@ -174,7 +174,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
       )}
 
       {waiving && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(19,26,38,.40)" }} onClick={() => setWaiving(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(24,36,34,.40)" }} onClick={() => setWaiving(null)}>
           <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Waive report requirement</h3>
             <p className="text-[12px] mb-3 break-words" style={{ color: C.textMuted }}>{waiving.job_name}</p>
