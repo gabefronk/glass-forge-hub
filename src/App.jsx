@@ -26,6 +26,7 @@ import AdminAgentCenter from "@/pages/AdminAgentCenter";
 import BrandsSpecs from "@/pages/BrandsSpecs";
 import ProbuildDailyPreview from "@/pages/ProbuildDailyPreview";
 import MessagesInbox from "@/pages/MessagesInbox";
+import ContactsDirectory from "@/pages/ContactsDirectory";
 // Add page imports here
 
 const AuthenticatedApp = () => {
@@ -69,6 +70,7 @@ const AuthenticatedApp = () => {
           <Route path="/admin/agents" element={<AdminAgentCenter />} />
           <Route path="/admin/probuild-daily" element={<ProbuildDailyPreview />} />
           <Route path="/messages" element={<MessagesInbox />} />
+          <Route path="/contacts" element={<ContactsDirectory />} />
           <Route path="/jobs" element={<JobsHub />} />
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/match-debug" element={<MatchDebug />} />
