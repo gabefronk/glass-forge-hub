@@ -28,6 +28,7 @@ import ProbuildDailyPreview from "@/pages/ProbuildDailyPreview";
 import MessagesInbox from "@/pages/MessagesInbox";
 import ContactsDirectory from "@/pages/ContactsDirectory";
 import ProbuildReports from '@/pages/ProbuildReports';
+import ReportLibrary from '@/pages/ReportLibrary';
 // Add page imports here
 
 const AuthenticatedApp = () => {
@@ -73,6 +74,7 @@ const AuthenticatedApp = () => {
           <Route path="/messages" element={<MessagesInbox />} />
           <Route path="/contacts" element={<ContactsDirectory />} />
           <Route path="/reports" element={<ProbuildReports />} />
+          <Route path="/report-library" element={<ReportLibrary />} />
           <Route path="/jobs" element={<JobsHub />} />
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/match-debug" element={<MatchDebug />} />

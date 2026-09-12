@@ -37,8 +37,8 @@ export async function buildReportPdf(report,call,onProgress=()=>{}) {
     if(a.status==='ready'&&a.mime_type?.startsWith('image/'))photos.push({caption:(s.sender||'Text message')+' · '+when(s.created_at),payload:{action:'message_photo',message_id:s.id,attachment_guid:a.guid}});
     else if(a.mime_type?.startsWith('image/'))throw Error('A selected text photo has not finished syncing. Wait for Messages to show it as ready.');
     else text('Additional attachment: '+(a.name||'File')+' (available in Messages)',9);
-   }else if(a.type==='photo')photos.push({caption:s.project_name+' · '+when(s.created_at),payload:{action:'photo',project_id:s.project_id,post_id:s.post_id,attachment_id:a.id,generation:a.generation}});
-   else text('Additional attachment: '+(a.name||a.document_name||'File')+' (available in ProBuild)',9);
+   }else if(a.type==='photo')photos.push({caption:s.project_name+' · '+when(s.created_at),payload:s.source==='library'?{action:'library_file',source_key:a.source_key}:{action:'photo',project_id:s.project_id,post_id:s.post_id,attachment_id:a.id,generation:a.generation}});
+   else text('Additional attachment: '+(a.name||a.document_name||'File')+' (available in the report library or source)',9);
   }
  }
  if(photos.length>60)throw Error('This report contains more than 60 photos. Split it into smaller reports for easier sharing.');
