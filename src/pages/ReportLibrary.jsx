@@ -13,9 +13,19 @@ const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Denver',year:
 const when=s=>s&&Number.isFinite(new Date(s).getTime())?new Date(s).toLocaleString('en-US',{timeZone:'America/Denver',dateStyle:'medium',timeStyle:'short'}):'Date not recorded';
 function Attachment({file,onError}){
  const [source,setSource]=useState(null),[busy,setBusy]=useState(false);
- useEffect(()=>()=>{if(source?.url?.startsWith('blob:'))URL.revokeObjectURL(source.url);},[source]);
- const open=async()=>{setBusy(true);try{const result=await call({action:'file',source_key:file.source_key});if(result.chunks?.length)result.url=URL.createObjectURL(await fetchReportFile(result));setSource(result);}catch(e){onError(e.response?.data?.error||'This attachment could not be opened.');}finally{setBusy(false);}};
- return <div className="min-w-0 overflow-hidden rounded-xl border bg-slate-50">{source?<a className="block break-all text-sm text-blue-800" href={source.url} target="_blank" rel="noreferrer">{source.mime_type?.startsWith('image/')?<img className="h-40 w-full object-contain" src={source.url} alt={file.name}/>:<span className="block p-4">Open {file.name}</span>}</a>:<button className="flex min-h-28 w-full flex-col items-center justify-center gap-2 p-3 text-sm text-blue-800" disabled={busy} onClick={open}>{file.type==='photo'?<Camera className="h-5 w-5"/>:<FileText className="h-5 w-5"/>}{busy?'Opening…':file.type==='photo'?'View photo':file.name}</button>}</div>;
+ useEffect(()=>()=>{for(const url of new Set([source?.url,source?.original_url]))if(url?.startsWith('blob:'))URL.revokeObjectURL(url);},[source]);
+ const open=async()=>{setBusy(true);try{
+  const result=await call({action:'file',source_key:file.source_key});
+  const heic=/image\/hei[cf]/i.test(result.mime_type)||/\.hei[cf]$/i.test(result.name||'');
+  if(result.chunks?.length||heic){
+   const original=await fetchReportFile(result);
+   result.original_url=result.url||URL.createObjectURL(original);
+   if(heic){const {heicTo}=await import('heic-to/csp');result.url=URL.createObjectURL(await heicTo({blob:original,type:'image/jpeg',quality:.9}));}
+   else result.url=result.original_url;
+  }
+  setSource(result);
+ }catch(e){onError(e.response?.data?.error||'This attachment could not be opened.');}finally{setBusy(false);}};
+ return <div className="min-w-0 overflow-hidden rounded-xl border bg-slate-50">{source?<><a className="block break-all text-sm text-blue-800" href={source.url} target="_blank" rel="noreferrer">{source.mime_type?.startsWith('image/')?<img className="h-40 w-full object-contain" src={source.url} alt={file.name}/>:<span className="block p-4">Open {file.name}</span>}</a>{source.original_url&&source.original_url!==source.url&&<a className="block p-3 text-center text-xs text-blue-800 underline" href={source.original_url} download={source.name} target="_blank" rel="noreferrer">Download original</a>}</>:<button className="flex min-h-28 w-full flex-col items-center justify-center gap-2 p-3 text-sm text-blue-800" disabled={busy} onClick={open}>{file.type==='photo'?<Camera className="h-5 w-5"/>:<FileText className="h-5 w-5"/>}{busy?'Opening…':file.type==='photo'?'View photo':file.name}</button>}</div>;
 }
 export default function ReportLibrary(){
  const [params,setParams]=useSearchParams(),[owner,setOwner]=useState(null),[run,setRun]=useState(null),[query,setQuery]=useState(''),[includeDeleted,setIncludeDeleted]=useState(false);
