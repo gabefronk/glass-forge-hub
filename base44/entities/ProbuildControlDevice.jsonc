@@ -1,0 +1,32 @@
+{
+  "name": "ProbuildControlDevice",
+  "type": "object",
+  "properties": {
+    "device_id": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string"
+    },
+    "token_hash": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "last_seen_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "device_id",
+    "token_hash",
+    "enabled"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
