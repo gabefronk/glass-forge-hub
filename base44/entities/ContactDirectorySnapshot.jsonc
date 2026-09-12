@@ -1,0 +1,41 @@
+{
+  "name": "ContactDirectorySnapshot",
+  "type": "object",
+  "properties": {
+    "filename": {
+      "type": "string"
+    },
+    "source_location": {
+      "type": "string"
+    },
+    "captured_at": {
+      "type": "string"
+    },
+    "workbook_sha256": {
+      "type": "string"
+    },
+    "content_sha256": {
+      "type": "string"
+    },
+    "data_file_uri": {
+      "type": "string"
+    },
+    "contact_count": {
+      "type": "integer"
+    },
+    "job_reference_count": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "filename",
+    "content_sha256",
+    "data_file_uri"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
