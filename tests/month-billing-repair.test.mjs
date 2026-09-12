@@ -5,7 +5,7 @@ import ts from "typescript";
 import { extractLaborAmount, extractExplicitService, parseServiceBilling, computeLaborAmt, computeFeeAmt, duplicatePostIds, pricingReview, extractPhotoUrls, denverDate, denverMidnight } from "../base44/shared/billingCore.js";
 
 test("real calendar note formats preserve explicit amounts and reject ambiguity", () => {
-  for (const [text, amount] of [["SUB LABOR 4,883.00", 4883], ["Subpay $75 – invoice to framers",75],["Subpay: $150",150],["Labor $2,333-win",2333]]) assert.equal(extractLaborAmount(text),amount);
+  for (const [text, amount] of [["SUB LABOR 4,883.00", 4883], ["Subpay $75 – invoice to framers",75],["Subpay: $150",150],["Labor $2,333-win",2333],["Labor-$18,000-win",18000],["Labor to pull basement storage window - $110",110],["LABOR: $3117/WIN2",3117]]) assert.equal(extractLaborAmount(text),amount);
   for (const text of ["Labor$-3168-win", "Labor 3 hours", "Labor\nSale Price $30,906.03"]) assert.equal(extractLaborAmount(text),null);
   assert.ok(pricingReview("Labor$-3168-win")?.reason);
   assert.equal(pricingReview("Profit: $4,605.81\nSplit: $2,302.91")?.amount,2302.91);

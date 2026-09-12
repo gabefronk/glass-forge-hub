@@ -1,3 +1,4 @@
+import { computeLaborAmt, computeFeeAmt, denverDate } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { fetchAllPages } from '../../shared/pagination.ts';
 import { buildSupersededSet } from '../../shared/supersession.ts';
@@ -48,22 +49,21 @@ export default async function(req) {
 
     // Build the snapshot from current FeeLines + CalendarEvents
     const allFees = await fetchAllPages(base44.asServiceRole.entities.FeeLines, '-created_date', 5000);
-    const monthRows = allFees.filter((f) => f.invoice_month === month);
+    const monthRows = allFees.filter((f) => f.invoice_month === month).map(f => ({ ...f, labor_amt: computeLaborAmt(f), fee_amt: computeFeeAmt(f) }));
 
     // Load CalendarEvents for report_status (same as the Invoicing UI)
     const allCalEvents = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 5000);
     const reportStatusMap = new Map();
     for (const e of allCalEvents) {
-      if (e.google_event_id && (e.event_date || '').startsWith(month)) {
+      if (e.google_event_id) {
         reportStatusMap.set(e.google_event_id, e.report_status);
       }
     }
 
     // Conditional supersession — same logic as the Invoicing UI
-    const supersededSet = buildSupersededSet(monthRows);
+    const supersededSet = buildSupersededSet(allFees);
 
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const todayStr = denverDate();
     const OK_REPORT_STATUSES = ['ok', 'waived', 'pre_compliance', 'no_source_data'];
 
     const isFuture = (f) => !!(f.job_date && f.job_date > todayStr);
@@ -84,7 +84,7 @@ export default async function(req) {
       (Number(f.labor_amt) > 0 || f.fee_type === 'profit_split');
 
     const isEarned = (f) =>
-      !supersededSet.has(f.id) &&
+      f.billable && !supersededSet.has(f.id) &&
       !isFuture(f) &&
       (Number(f.labor_amt) > 0 || f.fee_type === 'profit_split');
 
@@ -127,7 +127,7 @@ export default async function(req) {
       'invoiced_subtotal: rows that are billable, not billed_to_bfs, not future, not match-blocked',
       '(needs_review && !manually_adjusted), not report-blocked (report_status not in',
       'ok/waived/pre_compliance/no_source_data), not superseded, labor_amt > 0 or fee_type = profit_split.',
-      'earned_total: non-superseded, non-future, labor_amt > 0 or fee_type = profit_split.',
+      'earned_total: billable, non-superseded, non-future, labor_amt > 0 or fee_type = profit_split; includes provisional held amounts.',
       'total_rows: count of all month rows including superseded.',
     ].join(' ');
 

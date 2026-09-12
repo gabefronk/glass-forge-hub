@@ -36,8 +36,9 @@ export function extractLaborAmount(description) {
     if (!hit) continue;
     let tail = lines[i].slice(hit.index + hit[0].length).trim();
     if (!tail && /^\s*\$/.test(lines[i + 1] || "")) tail = lines[i + 1].trim();
+    if (tail.includes("$")) tail = tail.slice(tail.indexOf("$"));
     // A leading minus is ambiguous in imported notes; surface it for review.
-    const amount = tail.match(/^\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?=\s|$|[-–—,;])/);
+    const amount = tail.match(/^\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?=\s|$|[-–—,;]|\.(?!\d)|\/win\b)/i);
     if (!amount || /\b(?:man\s*)?(?:hours?|hrs?)\b/i.test(tail.slice(amount[0].length, amount[0].length + 20))) continue;
     return Number(amount[1].replace(/,/g, ""));
   }
@@ -50,7 +51,11 @@ export function extractExplicitService(note) {
   const tripMatches = [...text.matchAll(/\b(?:(\d+(?:\.\d+)?)\s+)?trip\s+charges?\b/g)];
   let trips = tripMatches.length === 1 ? Number(tripMatches[0][1] || 1) : null;
   if (trips == null && /\+\s*(?:a\s+)?trip\b/.test(text)) trips = 1;
+  const statedTrips = text.match(/\b(\d+)\s+trips?\b/);
+  const uncertainTrips = trips == null && statedTrips;
+  if (uncertainTrips) trips = Number(statedTrips[1]);
   let reason = quantities.length > 1 || tripMatches.length > 1 ? "Multiple quantities: confirm the total." : null;
+  if (uncertainTrips) reason ||= "Trip count stated without charge wording; confirm billable trips.";
   if (/\bno\s*charge|not\s+billable/i.test(text) && (hours > 0 || trips > 0)) reason = "Hours or trips stated with no-charge instructions.";
   if (hours == null && /\bman[\s-]*(?:hours?|hrs?)\b/.test(text)) reason ||= "Man-hour quantity is not explicit.";
   if (trips != null && /\bextra\s+trip\b/.test(text)) reason ||= "Confirm whether the extra trip is included in the trip-charge count.";
