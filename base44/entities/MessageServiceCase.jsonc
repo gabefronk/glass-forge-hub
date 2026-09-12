@@ -1,0 +1,65 @@
+{
+  "name": "MessageServiceCase",
+  "type": "object",
+  "properties": {
+    "case_key": {
+      "type": "string"
+    },
+    "conversation_key": {
+      "type": "string"
+    },
+    "source_request_guid": {
+      "type": "string"
+    },
+    "source_digest": {
+      "type": "string"
+    },
+    "reviewed_at": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "needs_context",
+        "draft",
+        "dispatched",
+        "scheduled",
+        "completed",
+        "dismissed"
+      ]
+    },
+    "result": {
+      "type": "object"
+    },
+    "source_message_guids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "destination_chat_guid": {
+      "type": "string"
+    },
+    "recipients": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "history_complete": {
+      "type": "boolean"
+    },
+    "recorded_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "case_key"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
