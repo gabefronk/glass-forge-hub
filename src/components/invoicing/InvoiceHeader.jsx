@@ -45,7 +45,7 @@ export default function InvoiceHeader({ month, onMonthChange, search, onSearchCh
 
   return (
     <div style={{ position: "relative", zIndex: 30, backgroundColor: "var(--gf-card)", borderBottom: "1px solid var(--gf-border)" }}>
-      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-5 px-5 sm:px-6 lg:px-8" style={{ minHeight: "68px", padding: "12px 0" }}>
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-5 px-5 sm:px-6 lg:px-8" style={{ minHeight: "68px", paddingTop: "12px", paddingBottom: "12px" }}>
         {/* Left: title + status line */}
         <div className="flex flex-col" style={{ flexShrink: 0 }}>
           <span className="text-[20px] font-semibold" style={{ color: "var(--gf-ink)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>Invoicing</span>
