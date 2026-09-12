@@ -4,45 +4,8 @@
 // Rows where manually_adjusted = true preserve their labor_amt (never recomputed from man_hours/trip_charges);
 // fee_amt is always derived from labor_amt × fee_pct.
 
-export const MAN_HOUR_RATE = 100;
-export const TRIP_RATE = 75;
-
-// A notes amount is a "pure trip charge" if it's a positive multiple of $75
-// but NOT also a multiple of $100 (which would suggest man hours).
-// $75 = 1 trip, $150 = 2 trips → trip charge. $100 = 1 man hour → not.
-// $300 = ambiguous (3×$100 or 4×$75) → not a trip charge (review case).
-export function isTripChargeAmount(amt) {
-  const n = Number(amt);
-  return n > 0 && n % TRIP_RATE === 0 && n % MAN_HOUR_RATE !== 0;
-}
-
-export function computeLaborAmt(row) {
-  if (row.manually_adjusted) return row.labor_amt;
-  const calAmt = row.calendar_labor_amt;
-  if (calAmt != null && calAmt !== "") {
-    const amt = Number(calAmt) || 0;
-    // Trip-charge + labor: notes amount is a pure trip charge and Probuild
-    // man_hours were merged in. Add them instead of overriding.
-    if (isTripChargeAmount(amt) && Number(row.man_hours) > 0) {
-      return amt + Number(row.man_hours) * MAN_HOUR_RATE;
-    }
-    return amt;
-  }
-  const mh = Number(row.man_hours) || 0;
-  const tc = Number(row.trip_charges) || 0;
-  return mh * MAN_HOUR_RATE + tc * TRIP_RATE;
-}
-
-export function computeFeeAmt(row) {
-  if (row.fee_type === 'profit_split') {
-    const sale = Number(row.sale_price) || 0;
-    const cost = Number(row.cost) || 0;
-    const split = row.split_pct != null ? Number(row.split_pct) : 0.5;
-    return Math.round((sale - cost) * split * 100) / 100;
-  }
-  const labor = computeLaborAmt(row);
-  return Math.round(labor * (Number(row.fee_pct) || 0) * 100) / 100;
-}
+import { computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount, laborRate, denverDate } from "../../base44/shared/billingCore.js";
+export { computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount };
 
 // Profit = sale_price − cost (display only, never stored).
 export function computeProfit(row) {
@@ -64,21 +27,21 @@ export function feeMathString(row) {
   }
   if (row.calendar_labor_amt != null && row.calendar_labor_amt !== "") {
     const calAmt = Number(row.calendar_labor_amt) || 0;
-    if (isTripChargeAmount(calAmt) && Number(row.man_hours) > 0) {
+    if (/trip\s+charge/i.test(row.calendar_note_text || row.note_text || "") && isTripChargeAmount(calAmt) && Number(row.man_hours) > 0) {
       const mh = Number(row.man_hours) || 0;
-      const labor = calAmt + mh * MAN_HOUR_RATE;
+      const labor = calAmt + mh * laborRate(row);
       const fee = Math.round(labor * (Number(row.fee_pct) || 0) * 100) / 100;
-      return `$${formatMoney(calAmt)} (trip) + ${mh} man hour${mh === 1 ? "" : "s"} × $${MAN_HOUR_RATE} = $${formatMoney(labor)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(fee)}`;
+      return `$${formatMoney(calAmt)} (trip) + ${mh} man hour${mh === 1 ? "" : "s"} × $${laborRate(row)} = $${formatMoney(labor)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(fee)}`;
     }
     const fee = Math.round(calAmt * (Number(row.fee_pct) || 0) * 100) / 100;
     return `calendar labor $${formatMoney(calAmt)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(fee)}`;
   }
   const mh = Number(row.man_hours) || 0;
   const tc = Number(row.trip_charges) || 0;
-  const labor = mh * MAN_HOUR_RATE + tc * TRIP_RATE;
+  const labor = mh * laborRate(row) + tc * TRIP_RATE;
   const fee = Math.round(labor * (Number(row.fee_pct) || 0) * 100) / 100;
   const parts = [];
-  if (mh) parts.push(`${mh} man hour${mh === 1 ? "" : "s"} × $${MAN_HOUR_RATE}`);
+  if (mh) parts.push(`${mh} man hour${mh === 1 ? "" : "s"} × $${laborRate(row)}`);
   if (tc) parts.push(`${tc} trip${tc === 1 ? "" : "s"} × $${TRIP_RATE}`);
   const lhs = parts.join(" + ") || "$0";
   return `${lhs} = $${formatMoney(labor)} × ${Math.round((row.fee_pct || 0) * 100)}% = $${formatMoney(fee)}`;
@@ -91,8 +54,7 @@ export function formatMoney(n) {
 
 // Today's date (YYYY-MM-DD) for future-event exclusion
 function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return denverDate();
 }
 
 // A row is "future" if its job_date is after today — scheduled but not yet billable.
@@ -226,8 +188,7 @@ export function filterRows(rows, filter) {
 }
 
 export function currentMonthStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return denverDate().slice(0, 7);
 }
 
 export function monthLabel(monthStr) {

@@ -1,3 +1,5 @@
+import { invoicingStats } from "@/lib/invoicingStats";
+import { denverDate } from "../../base44/shared/billingCore.js";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -8,7 +10,7 @@ import OutstandingReports from "@/components/dashboard/OutstandingReports";
 import ComplianceSettings from "@/components/dashboard/ComplianceSettings";
 
 function todayStr() {
-  return new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
+  return denverDate(); // YYYY-MM-DD
 }
 
 function greeting() {
@@ -46,6 +48,8 @@ function crewForEvent(ev) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [calendarError, setCalendarError] = useState("");
+  const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [profits, setProfits] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
   const [tomorrowEvents, setTomorrowEvents] = useState([]);
@@ -57,21 +61,24 @@ export default function Dashboard() {
   const [complianceStartDate, setComplianceStartDate] = useState(null);
 
   const today = todayStr();
-  const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString("sv-SE");
+  const tomorrow = denverDate(new Date(Date.now() + 86400000));
   const currentMonth = today.slice(0, 7);
 
   const load = async () => {
     try {
-      const [mp, reconciliation, fl, me, settings] = await Promise.all([
+      const [mp, reconciliation, fl, me, settings, calSource] = await Promise.all([
         base44.entities.MonthlyProfit.list("-month", 500),
-        base44.functions.invoke("reconcileInstallCalendar", {}).catch(() => null),
+        base44.functions.invoke("ownedCalendar", {}).catch(error => ({ data: { error: error?.response?.data?.error || "Calendar could not refresh." } })),
         base44.entities.FeeLines.filter({ invoice_month: currentMonth }, "-job_date", 5000),
         base44.auth.me().catch(() => null),
         base44.entities.AppSettings.list("-created_date", 10).catch(() => []),
+        base44.entities.CalendarEvents.list("-event_date", 5000),
       ]);
       // The run sheet is operational only: the reconciliation function returns
       // sales-tracker-verified jobs and leaves unmatched source events in review.
-      const allEvents = Array.isArray(reconciliation?.data?.events) ? reconciliation.data.events : [];
+      setCalendarError(reconciliation?.data?.error || "");
+      const allEvents = (reconciliation?.data?.groups || []).map(group => group[0]).filter(Boolean);
+      setReportStatusMap(new Map(calSource.filter(e => e.google_event_id).map(e => [e.google_event_id, e.report_status])));
       setProfits(Array.isArray(mp) ? mp : []);
       setAllCalendarEvents(Array.isArray(allEvents) ? allEvents : []);
       setTodayEvents((Array.isArray(allEvents) ? allEvents : []).filter((e) => (e.event_date || "").slice(0, 10) === today));
@@ -89,21 +96,8 @@ export default function Dashboard() {
     return profits.reduce((s, p) => s + (Number(p.ya_windows_profit) || 0) + (Number(p.glass_forge_profit) || 0), 0);
   }, [profits]);
 
-  const monthProfit = useMemo(() => {
-    const mp = profits.find((p) => p.month === currentMonth);
-    return (Number(mp?.ya_windows_profit) || 0) + (Number(mp?.glass_forge_profit) || 0);
-  }, [profits, currentMonth]);
-
-  const monthlyAvg = useMemo(() => {
-    if (!profits.length) return 0;
-    return ytdProfit / profits.length;
-  }, [profits, ytdProfit]);
-
-  const unbilled = useMemo(() => {
-    const rows = feeLines.filter((r) => !r.billed_to_bfs && Number(r.labor_amt) > 0);
-    const total = rows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
-    return { total, count: rows.length };
-  }, [feeLines]);
+  const billing = useMemo(() => invoicingStats(feeLines, reportStatusMap), [feeLines, reportStatusMap]);
+  const unbilled = { total: billing.readyTotal, count: billing.readyCount };
 
   const onHold = useMemo(() => {
     // Jobs with needs_report status — approximate from fee lines
@@ -179,14 +173,15 @@ export default function Dashboard() {
         {/* KPI row */}
         <div className="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-4 gap-3">
           <KpiCard label="Profit YTD" value={`$${formatMoney(ytdProfit)}`} sub="+11.56% share" subColor={C.accent} />
-          <KpiCard label="August" value={`$${formatMoney(monthProfit)}`} valueColor={C.accent} sub={`avg $${formatMoney(monthlyAvg)} / mo`} />
-          <KpiCard label="Unbilled" value={`$${formatMoney(unbilled.total)}`} sub={`${unbilled.count} invoices past 30 days`} />
+          <KpiCard label={`${currentMonth} recorded fees`} value={`${formatMoney(billing.monthEarnedTotal)}`} valueColor={C.accent} sub={`${formatMoney(billing.heldTotal)} held · excludes scheduled`} />
+          <KpiCard label="Ready to bill" value={`$${formatMoney(unbilled.total)}`} sub={`${unbilled.count} eligible lines this month`} />
           <KpiCard label="On hold" value={String(onHold.count)} valueColor={C.amber} sub={onHold.name || "—"} subColor={C.amber} />
         </div>
       </div>
 
       {/* Body */}
       <div className="px-[26px] max-[699px]:px-[18px] pb-10">
+        {calendarError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{calendarError}</p>}
         <OutstandingReports events={allCalendarEvents} user={user} onChanged={load} complianceStartDate={complianceStartDate} />
         {user?.role === "admin" && (
           <ComplianceSettings value={complianceStartDate} onChanged={load} />

@@ -1,3 +1,5 @@
+import { computeLaborAmt, computeFeeAmt, extractLaborAmount } from "./billingCore.js";
+export { computeLaborAmt, computeFeeAmt, extractLaborAmount };
 // Shared ingest helpers used by both fetchCalendarEvents and fetchProbuildPosts.
 // Never copy this logic into a function — import it.
 
@@ -203,36 +205,6 @@ export function isTripChargeAmount(amt) {
   return n > 0 && n % TRIP_RATE === 0 && n % MAN_HOUR_RATE !== 0;
 }
 
-export function computeLaborAmt(row) {
-  if (row.manually_adjusted) return row.labor_amt;
-  const calAmt = row.calendar_labor_amt;
-  if (calAmt != null && calAmt !== "") {
-    const amt = Number(calAmt) || 0;
-    // Trip-charge + labor: notes amount is a pure trip charge and Probuild
-    // man_hours were merged in. Add them instead of overriding.
-    if (isTripChargeAmount(amt) && Number(row.man_hours) > 0) {
-      return amt + Number(row.man_hours) * MAN_HOUR_RATE;
-    }
-    return amt;
-  }
-  const mh = Number(row.man_hours) || 0;
-  const tc = Number(row.trip_charges) || 0;
-  return mh * MAN_HOUR_RATE + tc * TRIP_RATE;
-}
-
-export function computeFeeAmt(row) {
-  if (row.manually_adjusted) return row.fee_amt;
-  if (row.fee_type === 'profit_split') {
-    const sale = Number(row.sale_price) || 0;
-    const cost = Number(row.cost) || 0;
-    const split = row.split_pct != null ? Number(row.split_pct) : 0.5;
-    return (sale - cost) * split;
-  }
-  const labor = Number(row.labor_amt) || 0;
-  const pct = row.fee_pct != null ? Number(row.fee_pct) : 0.1;
-  return labor * pct;
-}
-
 export function computeProfit(row) {
   if (row.fee_type !== 'profit_split') return 0;
   return (Number(row.sale_price) || 0) - (Number(row.cost) || 0);
@@ -311,29 +283,13 @@ export function extractProfitSplit(description) {
   return null;
 }
 
-export function extractLaborAmount(description) {
-  if (!description) return null;
-  const lines = String(description).split(/\r?\n/);
-  const moneyRe = /\$\s?([\d,]+(?:\.\d{1,2})?)/;
-  for (let i = 0; i < lines.length; i++) {
-    if (!/labor/i.test(lines[i])) continue;
-    const m = lines[i].match(moneyRe);
-    if (m) return Number(m[1].replace(/,/g, ''));
-    if (i + 1 < lines.length) {
-      const m2 = lines[i + 1].match(moneyRe);
-      if (m2) return Number(m2[1].replace(/,/g, ''));
-    }
-  }
-  return null;
-}
-
 const CONF_RANK = { unmatched: 0, low: 1, high: 2 };
 
 export function mergeReviewFlags(existing, incoming) {
   // If the incoming row now has a job_id, the match succeeded — clear the
   // flag. Stickiness only applies to rows that are STILL unresolved (no job).
   if (incoming.job_id) {
-    return { needs_review: false, match_confidence: 'high' };
+    return { needs_review: !!incoming.needs_review || incoming.service_review_status === 'review' || !!incoming.pricing_review_reason, match_confidence: 'high' };
   }
   // No job_id — confidence is always "unmatched", never "high".
   const needs_review = !!(existing && existing.needs_review) || !!incoming.needs_review;

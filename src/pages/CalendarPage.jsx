@@ -1,3 +1,5 @@
+import { refreshMonth } from "@/lib/refreshMonth";
+import { currentMonthStr } from "@/lib/feeMath";
 import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
@@ -28,6 +30,8 @@ export default function CalendarPage() {
   const [serviceView,setServiceView]=useState(false);
   const [knowledgeView,setKnowledgeView]=useState(false);
   const [outlook, setOutlook] = useState(null);
+  const [excludedEvents, setExcludedEvents] = useState([]);
+  const [syncMessage, setSyncMessage] = useState("");
   const [ownership, setOwnership] = useState(null);
   const [ownershipError, setOwnershipError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -35,7 +39,7 @@ export default function CalendarPage() {
   const [showIsrael, setShowIsrael] = useState(true);
   const [showOutlook, setShowOutlook] = useState(true);
   const [jobs, setJobs] = useState([]);
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(currentMonthStr);
   const [view, setView] = useState(() => {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) return "list";
     return "month";
@@ -56,7 +60,9 @@ export default function CalendarPage() {
         fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
         base44.auth.me().catch(() => null),
       ]);
+      if (response.data?.error) throw new Error(response.data.error);
       setEvents(response.data.groups || []);
+      setExcludedEvents(response.data.excluded_events || []);
       setOwnership(response.data.ownership || null);
       setOutlook(response.data.outlook || null);
       setPartialOutlook(response.data.partial_outlook || null);
@@ -128,10 +134,10 @@ export default function CalendarPage() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await base44.functions.invoke("syncGoogleCalendarEvents", {});
-      await base44.functions.invoke("fetchCalendarEvents", {});
+      await refreshMonth(month, setSyncMessage);
       await load();
-    } finally { setSyncing(false); }
+      setSyncMessage("Google Calendar, ProBuild and billing refreshed for " + month + ". Outlook coverage is shown below.");
+    } catch (error) { setSyncMessage("Refresh incomplete. " + error.message); await load(); } finally { setSyncing(false); }
   };
 
   const dayLabel = (d) => {
@@ -161,7 +167,7 @@ export default function CalendarPage() {
             </div>
             <button type="button" onClick={() => setUnreportedOnly(!unreportedOnly)} className="px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] whitespace-nowrap transition-colors" style={unreportedOnly ? { backgroundColor: C.amber, color: "#FFFFFF" } : { border: `1px solid ${C.border}`, color: C.textSecondary }}>Unreported only</button>
             <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8FAFD]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
-              <RefreshCw className="h-3.5 w-3.5" />{syncing ? "Syncing…" : "Sync Google"}
+              <RefreshCw className="h-3.5 w-3.5" />{syncing ? "Syncing…" : "Refresh whole month"}
             </button>
             <button onClick={() => { setSelected(null); setCreating({ event_date: selectedDay }); }} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
               <Plus className="h-3.5 w-3.5" />New event
@@ -169,6 +175,13 @@ export default function CalendarPage() {
           </div>
         </div>
 
+        {syncMessage && <p role="status" className="mb-4 rounded-lg border bg-white p-3 text-sm">{syncMessage}</p>}
+        {user?.role === "admin" && <details className="mb-4 rounded-xl border bg-white p-4">
+          <summary className="cursor-pointer font-semibold">Source events needing ownership review ({excludedEvents.filter(e => e.event_date?.startsWith(month)).length})</summary>
+          <p className="my-2 text-sm">These source events were imported but did not match the verified Sales Tracker. They remain outside the verified schedule until matched.</p>
+          {excludedEvents.filter(e => e.event_date?.startsWith(month)).sort((a,b) => a.event_date.localeCompare(b.event_date)).map((e,i) => <div key={e.id || i} className="border-t py-2 text-sm">{e.event_date} · {e.job_name} · {e.source}</div>)}
+        </details>}
+        {outlook && <p className="mb-4 rounded-lg border bg-white p-3 text-sm">Outlook is an imported snapshot covering {outlook.range_start} through {outlook.range_end}, captured {outlook.captured_at}. Refresh whole month pulls Google and ProBuild; a new Outlook import is needed for dates outside this coverage.</p>}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-4">
           <h1 className="font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
           <div className="flex items-center gap-1" aria-label="Choose calendar month">
