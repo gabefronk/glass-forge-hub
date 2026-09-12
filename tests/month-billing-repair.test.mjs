@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import ts from "typescript";
 import { extractLaborAmount, extractExplicitService, parseServiceBilling, computeLaborAmt, computeFeeAmt, duplicatePostIds, pricingReview, extractPhotoUrls, denverDate, denverMidnight } from "../base44/shared/billingCore.js";
 
 test("real calendar note formats preserve explicit amounts and reject ambiguity", () => {
@@ -46,14 +47,25 @@ function entity(initial=[]) {
     bulkCreate:async data=>{const created=data.map((r,i)=>({...r,id:"new-"+(rows.length+i)}));rows.push(...created);return structuredClone(created).reverse();},
     bulkUpdate:async data=>{for(const p of data){const r=rows.find(r=>r.id===p.id);assert.ok(r,"update target exists");Object.assign(r,p);}return data;} };
 }
+async function moduleUrl(url) {
+  if (!url.pathname.endsWith(".ts")) return url.href;
+  let source = await readFile(url, "utf8");
+  for (const match of [...source.matchAll(/from ['"](\.[^'"]+)['"]/g)]) {
+    source = source.replace(match[0], "from " + JSON.stringify(await moduleUrl(new URL(match[1], url))));
+  }
+  source = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  return "data:text/javascript;base64," + Buffer.from(source).toString("base64");
+}
 async function handler(name, client, posts=[]) {
   globalThis.__billingTestClient=client;globalThis.__billingTestPosts=posts;
   const url=new URL("../base44/functions/"+name+"/entry.ts",import.meta.url);
   let source=await readFile(url,"utf8");
   source=source.replace(/import \{ createClientFromRequest \} from [^;]+;/,'const createClientFromRequest = () => globalThis.__billingTestClient;');
   source=source.replace(/import \{ toMs, getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject, filterProjectsByWindow \} from [^;]+;/, 'const getProbuildIdToken=async()=>"test", fetchProbuildProjects=async()=>[{id:"project",name:"test job"}], filterProjectsByWindow=p=>({qualifying:p,stats:{}}), fetchProbuildPostsForProject=async()=>globalThis.__billingTestPosts;');
-  source=source.replace(/from '(\.\.\/[^']+)'/g,(_m,p)=>"from '"+new URL(p,url).href+"'");
-  source=source.replace(/from "(\.\.\/[^"]+)"/g,(_m,p)=>'from "'+new URL(p,url).href+'"');
+  for (const match of [...source.matchAll(/from ['"](\.\.\/[^'"]+)['"]/g)]) {
+    source = source.replace(match[0], "from " + JSON.stringify(await moduleUrl(new URL(match[1], url))));
+  }
+
   return (await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64")+"#"+Math.random())).default;
 }
 function client(fees,events=[]) {
