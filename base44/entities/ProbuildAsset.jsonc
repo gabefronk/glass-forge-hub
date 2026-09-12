@@ -1,0 +1,46 @@
+{
+  "name": "ProbuildAsset",
+  "type": "object",
+  "properties": {
+    "asset_key": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "post_id": {
+      "type": "string"
+    },
+    "attachment_id": {
+      "type": "string"
+    },
+    "generation": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "mime_type": {
+      "type": "string"
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "file_uri": {
+      "type": "string"
+    },
+    "size": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "asset_key",
+    "file_uri"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

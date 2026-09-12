@@ -18,7 +18,7 @@ export function normalizePost(project, postId, p) {
   attachments:entries(p.attachments).map(([id,a])=>({id,type:clean(a.type),generation:clean(String(a.generation||'')),name:clean(a.fileMetadata?.name)||`${id}.${a.type==='photo'?'jpg':'bin'}`,mime_type:clean(a.mimeType)|| (a.type==='photo'?'image/jpeg':'application/octet-stream'),size:Number(a.fileMetadata?.sizeInBytes)||0,width:a.imageMetadata?.width||0,height:a.imageMetadata?.height||0,document_name:clean(a.documentName)}))};
 }
 export function validateRange(start,end) {
- const valid = d => /^\d{4}-\d{2}-\d{2}$/.test(d||'') && new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
+ const valid = d => /^\d{4}-\d{2}-\d{2}$/.test(d||'') && Number.isFinite(Date.parse(d+'T12:00:00Z')) && new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
  if(!valid(start)||!valid(end)||end<start||Date.parse(end)-Date.parse(start)>31*86400000)fail('Choose a valid date range of up to 31 days.');
  return {start,end};
 }

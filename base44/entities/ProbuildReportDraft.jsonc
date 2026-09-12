@@ -1,0 +1,52 @@
+{
+  "name": "ProbuildReportDraft",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "report_date": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "recipient": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "job_name": {
+      "type": "string"
+    },
+    "source_checked_at": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "posts": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "title",
+    "report_date"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
