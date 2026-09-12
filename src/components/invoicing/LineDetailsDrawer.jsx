@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { X, Pencil, Trash2, Check, ExternalLink } from "lucide-react";
 import { computeFeeAmt, computeLaborAmt, formatMoney, feeMathString } from "@/lib/feeMath";
 import { crewName } from "@/lib/feeUI";
@@ -13,11 +13,50 @@ function Field({ label, children }) {
 }
 
 export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMarkBilled, onOpenJob }) {
+  const drawerRef = useRef(null);
+  const closeBtnRef = useRef(null);
+  const openerRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
-    const handler = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+    if (!row) return;
+    openerRef.current = document.activeElement;
+    closeBtnRef.current?.focus();
+
+    const getFocusable = () => {
+      if (!drawerRef.current) return [];
+      return Array.from(drawerRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )).filter((el) => !el.hasAttribute("disabled"));
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); onCloseRef.current(); return; }
+      if (e.key !== "Tab") return;
+      const focusable = getFocusable();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first || !drawerRef.current.contains(document.activeElement)) {
+          e.preventDefault(); last.focus();
+        }
+      } else {
+        if (document.activeElement === last || !drawerRef.current.contains(document.activeElement)) {
+          e.preventDefault(); first.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (openerRef.current && typeof openerRef.current.focus === "function") {
+        openerRef.current.focus();
+      }
+    };
+  }, [row]);
 
   if (!row) return null;
 
@@ -33,7 +72,9 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
       <div onClick={onClose} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(24,36,34,.32)", zIndex: 60 }} />
       {/* Drawer */}
       <aside
+        ref={drawerRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Line details"
         style={{
           position: "fixed", right: 0, top: 0, bottom: 0, width: "100%", maxWidth: "480px",
@@ -48,7 +89,7 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
             <div className="text-[11px] font-medium" style={{ color: "#53615B" }}>Invoice line</div>
             <div className="text-[16px] font-semibold truncate" style={{ color: "#182422" }}>{row.job_name_raw || row.job_name_norm || row.line_description}</div>
           </div>
-          <button onClick={onClose} aria-label="Close details" className="shrink-0 flex items-center justify-center rounded-lg" style={{ height: "40px", width: "40px", color: "#53615B" }}>
+          <button ref={closeBtnRef} onClick={onClose} aria-label="Close details" className="shrink-0 flex items-center justify-center rounded-lg" style={{ height: "40px", width: "40px", color: "#53615B" }}>
             <X className="h-5 w-5" />
           </button>
         </div>

@@ -7,7 +7,7 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
   return (
     <div style={{ marginTop: "20px", marginBottom: "6px", backgroundColor: "transparent" }}>
       <div
-        className="flex items-center gap-3 rounded-xl"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl"
         style={{
           minHeight: "40px", padding: "8px 12px",
           backgroundColor: "#F0F1ED", border: "1px solid #DDE0DA",
@@ -27,11 +27,13 @@ export default function DayHeader({ date, lineCount, dayFee, isLargest, allSelec
         >
           {allSelected ? "Deselect day" : "Select day"}
         </button>
-        <div style={{ flex: 1 }} />
-        <span className="text-[11px]" style={{ color: "#53615B", whiteSpace: "nowrap" }}>Day fee</span>
-        <span className="font-mono-num-bold text-[14px]" style={{ color: isLargest ? "#166447" : "#53615B", whiteSpace: "nowrap" }}>
-          ${formatMoney(dayFee)}
-        </span>
+        <div style={{ flex: "1 1 0%", minWidth: 0 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}>
+          <span className="text-[11px]" style={{ color: "#53615B" }}>Day fee</span>
+          <span className="font-mono-num-bold text-[14px]" style={{ color: isLargest ? "#166447" : "#53615B" }}>
+            ${formatMoney(dayFee)}
+          </span>
+        </div>
       </div>
     </div>
   );

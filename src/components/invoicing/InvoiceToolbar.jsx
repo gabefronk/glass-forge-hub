@@ -8,7 +8,7 @@ const FILTERS = [
 
 export default function InvoiceToolbar({ view, onViewChange, filter, onFilterChange, filterCounts, sort, onSortChange, hideZeros, onHideZerosChange, lineCount }) {
   return (
-    <div className="min-w-0 inv-toolbar-scroll" style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "12px", borderBottom: "1px solid #DDE0DA", flexWrap: "nowrap" }}>
+    <div className="min-w-0" style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "12px", borderBottom: "1px solid #DDE0DA", flexWrap: "wrap" }}>
       {/* Lines / Jobs segmented toggle */}
       <div style={{ display: "inline-flex", backgroundColor: "#F0F1ED", borderRadius: "8px", padding: "3px", flexShrink: 0, border: "1px solid #DDE0DA" }}>
         {["lines", "jobs"].map((v) => (
@@ -36,7 +36,7 @@ export default function InvoiceToolbar({ view, onViewChange, filter, onFilterCha
       </div>
 
       {/* Filter chips */}
-      <div className="flex min-w-0 flex-nowrap gap-2">
+      <div className="flex min-w-0 flex-wrap gap-2">
         {FILTERS.map((f) => {
           const active = filter === f.key;
           const isWarning = f.key === "needs_report";
@@ -74,7 +74,7 @@ export default function InvoiceToolbar({ view, onViewChange, filter, onFilterCha
         })}
       </div>
 
-      <div style={{ flex: 1, minWidth: "12px" }} />
+      <div style={{ flex: "1 1 0%", minWidth: 0 }} />
 
       {/* Sort toggle */}
       <button

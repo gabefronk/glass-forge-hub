@@ -173,9 +173,14 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
       {/* Title + subline */}
       <div className="col-start-2 row-start-1" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
         <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-          <span className="text-[14px] font-semibold line-clamp-2" style={{ color: "#182422", textDecoration: isBilled ? "line-through" : "none", opacity: isZero && !isBilled ? 0.6 : 1, minWidth: 0 }}>
+          <button
+            data-no-open
+            onClick={(e) => { e.stopPropagation(); onOpenDetails(row); }}
+            className="text-[14px] font-semibold line-clamp-2 text-left"
+            style={{ color: "#182422", textDecoration: isBilled ? "line-through" : "none", opacity: isZero && !isBilled ? 0.6 : 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit" }}
+          >
             {row.job_name_raw || row.job_name_norm || row.line_description}
-          </span>
+          </button>
           {isCustomFee && (
             <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ backgroundColor: "#E6F0EC", border: "1px solid #C7E4D2", color: "#104E44" }}>
               {Math.round((row.fee_pct || 0) * 100)}%

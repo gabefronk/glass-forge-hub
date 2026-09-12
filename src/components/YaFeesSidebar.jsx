@@ -117,7 +117,7 @@ export default function YaFeesSidebar() {
         <div className="rounded-xl px-3.5 py-3" style={{ backgroundColor: "#2A3A35", border: "1px solid #3A4A44" }}>
           <div className="text-[11px] font-medium mb-1.5" style={{ color: "#8A958F", letterSpacing: "0.01em" }}>Ready to bill · {monthLabel(currentMonthStr())}</div>
           <div className="flex flex-wrap items-baseline gap-1.5 break-all">
-            <span className="font-mono-num-bold text-[18px]" style={{ color: "#146556", letterSpacing: "-0.02em" }}>
+            <span className="font-mono-num-bold text-[18px]" style={{ color: "#A0D3C5", letterSpacing: "-0.02em" }}>
               ${formatMoney(unbilled.total)}
             </span>
             <span className="text-[11px]" style={{ color: "#8A958F" }}>
