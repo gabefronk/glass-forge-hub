@@ -59,14 +59,14 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
 
         {/* Month stepper */}
         <div className="flex items-center" style={{ flexShrink: 0 }}>
-          <div className="flex items-center" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)" }}>
-            <button onClick={() => shift(-1)} aria-label="Previous month" style={{ width: "32px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid var(--gf-hairline)", color: "var(--gf-ink-2)", cursor: "pointer", backgroundColor: "transparent" }}>
+          <div className="flex items-center min-h-11 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)" }}>
+            <button onClick={() => shift(-1)} aria-label="Previous month" className="min-w-11 sm:min-w-8" style={{ width: "32px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1px solid var(--gf-hairline)", color: "var(--gf-ink-2)", cursor: "pointer", backgroundColor: "transparent" }}>
               <ChevronLeft style={{ width: "16px", height: "16px" }} strokeWidth={1.8} strokeLinecap="round" />
             </button>
             <span className="text-[13.5px] font-semibold" style={{ color: "var(--gf-ink)", minWidth: "110px", textAlign: "center", whiteSpace: "nowrap" }}>
               {monthName}
             </span>
-            <button onClick={() => shift(1)} aria-label="Next month" style={{ width: "32px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", borderLeft: "1px solid var(--gf-hairline)", color: "var(--gf-ink-2)", cursor: "pointer", backgroundColor: "transparent" }}>
+            <button onClick={() => shift(1)} aria-label="Next month" className="min-w-11 sm:min-w-8" style={{ width: "32px", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", borderLeft: "1px solid var(--gf-hairline)", color: "var(--gf-ink-2)", cursor: "pointer", backgroundColor: "transparent" }}>
               <ChevronRight style={{ width: "16px", height: "16px" }} strokeWidth={1.8} strokeLinecap="round" />
             </button>
           </div>
@@ -90,11 +90,11 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
 
         {/* Actions */}
         <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
-          <button onClick={onRefresh} disabled={refreshing} aria-label={refreshing ? "Refreshing" : "Refresh"} title="Refresh" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: refreshing ? "wait" : "pointer" }}>
+          <button onClick={onRefresh} disabled={refreshing} aria-label={refreshing ? "Refreshing" : "Refresh"} title="Refresh" className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: refreshing ? "wait" : "pointer" }}>
             <RefreshCw className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" style={{ animation: refreshing ? "spin 1s linear infinite" : undefined }} />
             <span className="hidden sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
           </button>
-          <button onClick={onExportPdf} disabled={exporting} aria-label={exporting ? "Generating" : "Export"} title="Export" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: exporting ? "wait" : "pointer" }}>
+          <button onClick={onExportPdf} disabled={exporting} aria-label={exporting ? "Generating" : "Export"} title="Export" className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: exporting ? "wait" : "pointer" }}>
             <Download className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" />
             <span className="hidden sm:inline">{exporting ? "Generating…" : "Export"}</span>
           </button>
@@ -106,7 +106,7 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
               </span>
             </div>
           ) : (
-            <button onClick={onCloseMonth} disabled={closing} aria-label={closing ? "Closing" : "Close month"} title="Close month" style={{ height: "34px", borderRadius: "var(--r-button)", background: "linear-gradient(180deg, var(--gf-teal-500), var(--gf-teal-600))", color: "#F4F1EA", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", whiteSpace: "nowrap", flexShrink: 0, boxShadow: "0 1px 2px rgba(11,63,59,.35), inset 0 1px 0 rgba(255,255,255,.12)", cursor: closing ? "wait" : "pointer" }}>
+            <button onClick={onCloseMonth} disabled={closing} aria-label={closing ? "Closing" : "Close month"} title="Close month" className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", background: "linear-gradient(180deg, var(--gf-teal-500), var(--gf-teal-600))", color: "#F4F1EA", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", whiteSpace: "nowrap", flexShrink: 0, boxShadow: "0 1px 2px rgba(11,63,59,.35), inset 0 1px 0 rgba(255,255,255,.12)", cursor: closing ? "wait" : "pointer" }}>
               <FileText className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" />
               <span className="hidden sm:inline">{closing ? "Closing…" : "Close month"}</span>
             </button>

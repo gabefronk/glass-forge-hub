@@ -199,9 +199,9 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
                 </>
               )}
               {needsReview && (
-                <div className="flex items-center justify-between" style={{ padding: "10px 14px", borderBottom: "1px solid var(--gf-hairline)", whiteSpace: "nowrap", backgroundColor: "var(--gf-amber-row)" }}>
-                  <span className="text-[13px]" style={{ color: "var(--gf-amber-700)" }}>Held for review</span>
-                  <span className="text-[12px]" style={{ color: "var(--gf-amber-700)" }}>{row.pricing_review_reason || "Pricing needs confirmation"}</span>
+                <div className="flex items-baseline justify-between gap-2" style={{ padding: "10px 14px", borderBottom: "1px solid var(--gf-hairline)", backgroundColor: "var(--gf-amber-row)" }}>
+                  <span className="text-[13px] whitespace-nowrap" style={{ color: "var(--gf-amber-700)" }}>Held for review</span>
+                  <span className="text-[12px] text-right min-w-0" style={{ color: "var(--gf-amber-700)" }}>{row.pricing_review_reason || "Pricing needs confirmation"}</span>
                 </div>
               )}
               <div className="flex items-center justify-between" style={{ padding: "10px 14px", whiteSpace: "nowrap", backgroundColor: "var(--gf-card-band)" }}>
