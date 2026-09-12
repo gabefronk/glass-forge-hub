@@ -45,7 +45,7 @@ test('paired device keys authenticate independently of browser sessions',async()
  const r=await f.invoke({action:'projects'},{'x-glass-forge-control-key':key});assert.equal(r.status,200);assert.equal(r.data.projects.length,2);assert.equal(JSON.stringify(r.data).includes('test-token'),false);
 });
 test('daily export checks all accessible projects and excludes deleted content',async()=>{
- const f=fixture(),r=await f.invoke({action:'daily',start_date:'2026-09-11'});assert.equal(r.status,200);assert.equal(r.data.coverage.accessible_projects,2);assert.equal(r.data.coverage.complete,true);assert.equal(r.data.posts.length,1);assert.equal(r.data.coverage.attachment_count,1);assert.equal(f.calls.length,2);
+ const f=fixture(),scan=await f.invoke({action:'daily',start_date:'2026-09-11'}),r=await f.invoke({action:'daily_next',scan_id:scan.data.scan_id,offset:0});assert.equal(r.status,200);assert.equal(r.data.coverage.accessible_projects,2);assert.equal(r.data.coverage.complete,true);assert.equal(r.data.posts.length,1);assert.equal(r.data.coverage.attachment_count,1);assert.equal(f.calls.length,3);
 });
 test('upstream failure never claims a complete or empty daily report',async()=>{
  const r=await fixture({providerStatus:503}).invoke({action:'daily',start_date:'2026-09-11'});assert.equal(r.status,502);assert.equal(r.data.coverage,undefined);

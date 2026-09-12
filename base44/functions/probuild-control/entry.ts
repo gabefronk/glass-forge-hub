@@ -1,6 +1,6 @@
 import {createClientFromRequest} from 'npm:@base44/sdk@0.8.48';
 import {getProbuildIdToken} from '../../shared/probuildApi.ts';
-// Generated from shared/probuildControl.js. Inline handler keeps the deployed resource revision tied to its implementation.
+// Generated from shared/probuildControl.js; keep the deployed resource and tests on the same implementation.
 // Owner-controlled ProBuild reports. Provider content is data, never instructions.
 const TEAM = '-O7aXXhvthc41u60Koc6';
 const DB = 'https://probuild-prod.firebaseio.com/teams/' + TEAM;
@@ -35,7 +35,6 @@ async function boundedBytes(response, max=25165824) {
 function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()=>new Date()}) {
  return async req => {
   if(req.method!=='POST')return json({error:'Use POST.'},405);
-  let stage='request';
   try {
    const client=await getClient(req),api=client.asServiceRole.entities;
    const key=req.headers.get('x-glass-forge-control-key');
@@ -50,8 +49,8 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
    const raw=await req.text();if(raw.length>35000000)fail('Request too large.',413);
    let input;try{input=JSON.parse(raw);}catch{fail('Invalid JSON.');}
    const action=input.action,at=now().toISOString();
-   let token;
-   const auth=async()=>token ||= await getToken(client);
+   let tokenPromise;
+   const auth=()=>tokenPromise ||= getToken(client);
    const provider=async(path,options={})=>{
     const response=await fetchImpl(DB+'/'+path+'.json?auth='+encodeURIComponent(await auth()),{signal:AbortSignal.timeout(45000),...options});
     if(response.status===412)fail('This project changed. Refresh it before saving.',409);
@@ -83,17 +82,23 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
     const p=await oneProject(input.project_id);const [posts,linked]=await Promise.all([postList(p),links({project_id:p.id})]);
     return json({project:{...projectPublic(p),version:await hash(JSON.stringify([p.name||'',p.description||'']))},posts:posts.filter(p=>!p.deleted),job:linked[0]||null,checked_at:at});
    }
+   const scanView=scan=>({scan_id:scan.id,next_offset:scan.cursor,finished:scan.finished===true,posts:scan.posts||[],coverage:{complete:scan.finished===true&&!(scan.errors||[]).length,accessible_projects:scan.projects.length,checked_projects:scan.cursor,failed_projects:scan.errors||[],start_date:scan.start_date,end_date:scan.end_date,checked_at:scan.checked_at||scan.started_at,started_at:scan.started_at,source:'Authenticated ProBuild project reads',attachment_count:(scan.posts||[]).reduce((n,p)=>n+p.attachments.length,0)}});
    if(action==='daily'){
-    const {start,end}=validateRange(input.start_date,input.end_date||input.start_date);
-    const projects=await allProjects();
-    // A single authenticated team avoids 911 separate project requests.
-    // Failure or a size limit is an error, never an empty/complete report.
-    const response=await provider('posts');const bytes=await boundedBytes(response,67108864);let all;
-    try{all=JSON.parse(new TextDecoder().decode(bytes));}catch{fail('ProBuild returned an incomplete source export.',502);}
-    const posts=[];let examined=0;
-    for(const p of projects){if(p.deletedAt)continue;examined++;for(const [id,x] of entries(all?.[p.id])){const n=normalizePost(p,id,x);if(!n.deleted&&n.date>=start&&n.date<=end)posts.push(n);}}
-    posts.sort((a,b)=>a.project_name.localeCompare(b.project_name)||a.created_at.localeCompare(b.created_at));
-    return json({posts,coverage:{complete:true,accessible_projects:examined,start_date:start,end_date:end,checked_at:at,source:'Authenticated ProBuild team export',attachment_count:posts.reduce((n,p)=>n+p.attachments.length,0)}});
+    const {start,end}=validateRange(input.start_date,input.end_date||input.start_date),projects=(await allProjects()).filter(p=>!p.deletedAt).map(p=>({id:p.id,name:p.name||p.title||''}));
+    const scan=await api.ProbuildReportScan.create({start_date:start,end_date:end,projects,cursor:0,posts:[],errors:[],started_at:at,finished:projects.length===0,checked_at:at});
+    return json(scanView(scan));
+   }
+   if(action==='daily_next'){
+    const scan=await api.ProbuildReportScan.get(validId(input.scan_id));if(!scan)fail('Source scan not found.',404);
+    if(scan.finished||input.offset!==scan.cursor)return json(scanView(scan));
+    const batch=scan.projects.slice(scan.cursor,scan.cursor+30),results=new Array(batch.length);let next=0;
+    const worker=async()=>{for(;;){const i=next++;if(i>=batch.length)return;const p=batch[i];try{const list=await postList(p);results[i]={posts:list.filter(x=>!x.deleted&&x.date>=scan.start_date&&x.date<=scan.end_date)};}catch{results[i]={error:{project_id:p.id,project_name:p.name}};}}};
+    await Promise.all(Array.from({length:Math.min(6,batch.length)},worker));
+    // Cursor guard makes retried completed requests idempotent.
+    const latest=await api.ProbuildReportScan.get(scan.id);if(latest.cursor!==scan.cursor)return json(scanView(latest));
+    const cursor=scan.cursor+batch.length,posts=[...(scan.posts||[]),...results.flatMap(r=>r.posts||[])],errors=[...(scan.errors||[]),...results.filter(r=>r.error).map(r=>r.error)];
+    const saved=await api.ProbuildReportScan.update(scan.id,{cursor,posts,errors,finished:cursor===scan.projects.length,checked_at:at});
+    return json(scanView(saved));
    }
    if(action==='link_job'){
     const p=await oneProject(input.project_id),job=input.job_id?await api.Jobs.get(validId(input.job_id)):null;
@@ -118,7 +123,6 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
     return json({saved:true,project:{...projectPublic({id,...updated}),version:await hash(JSON.stringify([updated.name||'',updated.description||'']))}});
    }
    if(action==='photo'||action==='photo_bytes'){
-    stage='attachment metadata';
     const p=await oneProject(input.project_id),postId=validId(input.post_id),attachmentId=validId(input.attachment_id);
     const post=await (await provider('posts/'+p.id+'/'+postId)).json();
     const attachment=post?.attachments?.[attachmentId];
@@ -131,21 +135,16 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
     // This path is the official web client's FileReference.PostAttachments layout.
     const path=`teams/${TEAM}/posts/${p.id}/${postId}/attachments/${attachmentId}`;
     const url=BUCKET+encodeURIComponent(path)+'?alt=media'+(generation?'&generation='+encodeURIComponent(generation):'');
-    stage='original attachment download';
-    const response=await fetchImpl(url,{headers:{Authorization:'Firebase '+await auth()},signal:AbortSignal.timeout(45000),redirect:'error'});
+    const response=await fetchImpl(url,{headers:{Authorization:'Firebase '+await auth()},signal:AbortSignal.timeout(45000)});
     if(!response.ok)fail('The original photo could not be downloaded from ProBuild.',502);
-    stage='original attachment bytes';
     const bytes=await boundedBytes(response),mime=clean(response.headers.get('content-type'),100)||attachment.mimeType||'application/octet-stream';
     if(!bytes.length||/text\/html|application\/json/.test(mime))fail('ProBuild returned an invalid attachment.',502);
     const name=clean(attachment.fileMetadata?.name)||`${attachmentId}.${mime.includes('png')?'png':mime.startsWith('image/')?'jpg':'bin'}`;
     const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
     if(action==='photo_bytes')return json({name,mime_type:mime,size:bytes.length,sha256,base64:asBase64(bytes)});
-    stage='private attachment storage';
     const {file_uri}=await client.asServiceRole.integrations.Core.UploadPrivateFile({file:new File([bytes],name,{type:mime})});
     if(!file_uri)fail('Could not save the private photo copy.',502);
-    stage='attachment record';
     const asset=await api.ProbuildAsset.create({asset_key:assetKey,project_id:p.id,post_id:postId,attachment_id:attachmentId,generation,name,mime_type:mime,size:bytes.length,sha256,file_uri});
-    stage='attachment link';
     return json({asset_id:asset.id,url:await signed(file_uri),name,mime_type:mime,size:bytes.length,sha256});
    }
    if(action==='message_sources'){
@@ -182,9 +181,10 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
    fail('Unsupported action.');
   } catch(error) {
    if(error.publicMessage)return json({error:error.publicMessage},error.status||400);
-   console.error('ProBuild control failed',stage,error?.name||'Error',String(error?.message||'').replace(/https?:[^\s]+/g,'[provider URL]').slice(0,220));
-   return json({error:'ProBuild request could not be completed at '+stage+'. Refresh and retry; saved reports are retained.'},502);
+   console.error('ProBuild control failed',error?.name||'Error');
+   return json({error:'ProBuild request could not be completed. Refresh and retry; saved reports are retained.'},502);
   }
  };
 }
+
 Deno.serve(createProbuildControlHandler({getClient:createClientFromRequest,getToken:getProbuildIdToken}));
