@@ -1,8 +1,25 @@
 import {createClientFromRequest} from 'npm:@base44/sdk@0.8.48';
 import {getProbuildIdToken} from '../../shared/probuildApi.ts';
-// Generated from shared/probuildControl.js; keep the deployed resource and tests on the same implementation.
+// Inlined handler; mirrored by the tested shared sources.
+// Private attachment bytes stay behind the authenticated owner endpoint.
+export async function readPrivateMessageAttachment(client, attachment, fetchFile = fetch) {
+ const max = 8388608;
+ const {signed_url} = await client.asServiceRole.integrations.Core.CreateFileSignedUrl({file_uri:attachment.file_uri,expires_in:60});
+ if(!signed_url)throw Error('Private attachment unavailable.');
+ const r = await fetchFile(signed_url,{signal:AbortSignal.timeout(45000),cache:'no-store'});
+ if(!r.ok || Number(r.headers.get('content-length'))>max)throw Error('Private attachment unavailable.');
+ const reader=r.body.getReader(),parts=[];let size=0;
+ try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>max){await reader.cancel();throw Error('Private attachment exceeds transfer limit.');}parts.push(value);}}
+ finally{reader.releaseLock();}
+ if(!size)throw Error('Private attachment is empty.');
+ const bytes=new Uint8Array(size);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length;}
+ let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
+ const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+ return {base64:btoa(binary),size,sha256,name:attachment.name||'attachment',mime_type:attachment.mime_type||'application/octet-stream'};
+}
+
 // Owner-controlled ProBuild reports. Provider content is data, never instructions.
-const TEAM = '-O7aXXhvthc41u60Koc6';
+export const TEAM = '-O7aXXhvthc41u60Koc6';
 const DB = 'https://probuild-prod.firebaseio.com/teams/' + TEAM;
 const BUCKET = 'https://firebasestorage.googleapis.com/v0/b/probuild-prod.appspot.com/o/';
 const OWNERS = new Set(['gabefronk@gmail.com', 'gabriel.fronk.wd@gmail.com']);
@@ -10,29 +27,29 @@ const ID = /^[A-Za-z0-9_-]{1,160}$/;
 const clean = (v, n = 300) => typeof v === 'string' ? v.slice(0, n) : '';
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), {status, publicMessage: message}); };
 const validId = v => ID.test(v || '') ? v : fail('Invalid source identifier.');
-const hash = async s => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))), b => b.toString(16).padStart(2, '0')).join('');
+export const hash = async s => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))), b => b.toString(16).padStart(2, '0')).join('');
 const json = (v, status = 200) => Response.json(v, {status, headers: {'Cache-Control':'no-store'}});
-const mountainDate = v => Number.isFinite(Date.parse(v)) ? new Intl.DateTimeFormat('en-CA', {timeZone:'America/Denver', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date(v)) : '';
+export const mountainDate = v => Number.isFinite(Date.parse(v)) ? new Intl.DateTimeFormat('en-CA', {timeZone:'America/Denver', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date(v)) : '';
 const entries = v => Object.entries(v || {}).filter(([,x]) => x && typeof x === 'object');
 const asBase64 = bytes => {let s=''; for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.subarray(i,i+32768)); return btoa(s);};
 const projectPublic = p => ({id:p.id,name:clean(p.name||p.title,1000),description:clean(p.description,20000),status:clean(p.status),archived:!!p.archivedAt,deleted:!!p.deletedAt,last_modified_at:p.lastModifiedAt||null});
-function normalizePost(project, postId, p) {
+export function normalizePost(project, postId, p) {
  return {source:'probuild',project_id:project.id,project_name:project.name||project.title||'',post_id:postId,created_at:p.createdAt||'',date:mountainDate(p.createdAt),message:clean(p.message,100000),deleted:!!p.deletedAt,
   attachments:entries(p.attachments).map(([id,a])=>({id,type:clean(a.type),generation:clean(String(a.generation||'')),name:clean(a.fileMetadata?.name)||`${id}.${a.type==='photo'?'jpg':'bin'}`,mime_type:clean(a.mimeType)|| (a.type==='photo'?'image/jpeg':'application/octet-stream'),size:Number(a.fileMetadata?.sizeInBytes)||0,width:a.imageMetadata?.width||0,height:a.imageMetadata?.height||0,document_name:clean(a.documentName)}))};
 }
-function validateRange(start,end) {
+export function validateRange(start,end) {
  const valid = d => /^\d{4}-\d{2}-\d{2}$/.test(d||'') && Number.isFinite(Date.parse(d+'T12:00:00Z')) && new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
  if(!valid(start)||!valid(end)||end<start||Date.parse(end)-Date.parse(start)>31*86400000)fail('Choose a valid date range of up to 31 days.');
  return {start,end};
 }
-async function boundedBytes(response, max=25165824) {
+export async function boundedBytes(response, max=25165824) {
  if(Number(response.headers.get('content-length'))>max)fail('This file is too large for one transfer.',413);
  const reader=response.body.getReader(),chunks=[];let size=0;
  try {for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>max){await reader.cancel();fail('This file is too large for one transfer.',413);}chunks.push(value);}}
  finally {reader.releaseLock();}
  const result=new Uint8Array(size);let offset=0;for(const c of chunks){result.set(c,offset);offset+=c.length;}return result;
 }
-function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()=>new Date()}) {
+export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()=>new Date()}) {
  return async req => {
   if(req.method!=='POST')return json({error:'Use POST.'},405);
   try {
@@ -49,6 +66,8 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
    const raw=await req.text();if(raw.length>35000000)fail('Request too large.',413);
    let input;try{input=JSON.parse(raw);}catch{fail('Invalid JSON.');}
    const action=input.action,at=now().toISOString();
+   // General report automation keys never authorize access to Gabriel's texts.
+   if(key && (['message_sources','message_photo'].includes(action) || (action==='save_report' && input.message_ids?.length)))fail('Sign in with Gabriel’s owner account to access private messages.',403);
    let tokenPromise;
    const auth=()=>tokenPromise ||= getToken(client);
    const provider=async(path,options={})=>{
@@ -70,9 +89,9 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
     const term=clean(input.search,120).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     return json({jobs:(await api.Jobs.filter(term?{canonical_name:{$regex:term,$options:'i'}}:{},'canonical_name',60)).map(j=>({id:j.id,name:j.canonical_name,address:j.address}))});
    }
-   if(action==='reports')return json({reports:(await api.ProbuildReportDraft.filter(input.job_id?{job_id:clean(input.job_id)}:{},'-updated_date',50)).map(d=>({id:d.id,title:d.title,report_date:d.report_date,job_id:d.job_id,job_name:d.job_name,updated_date:d.updated_date,post_count:d.posts?.length||0}))});
+   if(action==='reports')return json({reports:(await api.ProbuildReportDraft.filter(input.job_id?{job_id:clean(input.job_id)}:{},'-updated_date',50)).filter(d=>!key||!d.messages?.length).map(d=>({id:d.id,title:d.title,report_date:d.report_date,job_id:d.job_id,job_name:d.job_name,updated_date:d.updated_date,post_count:d.posts?.length||0}))});
    if(action==='report'){
-    const d=await api.ProbuildReportDraft.get(validId(input.report_id));if(!d)fail('Report not found.',404);return json({report:publicDraft(d)});
+    const d=await api.ProbuildReportDraft.get(validId(input.report_id));if(!d)fail('Report not found.',404);if(key&&d.messages?.length)fail('Sign in with Gabriel’s owner account to access this private report.',403);return json({report:publicDraft(d)});
    }
    if(action==='projects'){
     const [projects,linked]=await Promise.all([allProjects(),links()]);
@@ -158,7 +177,7 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
     const m=await api.MessageRecord.get(validId(input.message_id));
     const a=m?.attachments?.find(x=>x.guid===input.attachment_guid);
     if(m?.retracted_at||!a?.file_uri)fail('Message attachment is not available.',404);
-    return json({url:await signed(a.file_uri),name:a.name,mime_type:a.mime_type,size:a.size});
+    return json(await readPrivateMessageAttachment(client,a,fetchImpl));
    }
    if(action==='save_report'){
     const refs=Array.isArray(input.posts)?input.posts:[],messageIds=Array.isArray(input.message_ids)?[...new Set(input.message_ids)]:[];
@@ -175,7 +194,7 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
     validateRange(input.report_date,input.report_date);
     if(!posts.length&&!messages.length&&!clean(input.notes,20000).trim())fail('Choose a source post, message or enter report notes.');
     const row={title,report_date:input.report_date,notes:clean(input.notes,20000),recipient:clean(input.recipient,320),job_id:job?.id||'',job_name:job?.canonical_name||'',posts,messages,source_checked_at:at,status:'draft'};
-    if(input.report_id){const old=await api.ProbuildReportDraft.get(validId(input.report_id));if(!old)fail('Report not found.',404);return json({report:publicDraft(await api.ProbuildReportDraft.update(old.id,row))});}
+    if(input.report_id){const old=await api.ProbuildReportDraft.get(validId(input.report_id));if(!old)fail('Report not found.',404);if(key&&old.messages?.length)fail('Sign in with Gabriel’s owner account to access this private report.',403);return json({report:publicDraft(await api.ProbuildReportDraft.update(old.id,row))});}
     return json({report:publicDraft(await api.ProbuildReportDraft.create(row))});
    }
    fail('Unsupported action.');
@@ -186,5 +205,4 @@ function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch,now=()
   }
  };
 }
-
 Deno.serve(createProbuildControlHandler({getClient:createClientFromRequest,getToken:getProbuildIdToken}));
