@@ -1,0 +1,48 @@
+{
+  "name": "DesktopQuoteRelay",
+  "type": "object",
+  "description": "Durable single queue for the two explicitly paired Bluebeam/Pella desktop workers.",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "state_version": {
+      "type": "integer",
+      "default": 0
+    },
+    "state": {
+      "type": "object"
+    },
+    "credentials": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "name",
+    "state_version",
+    "state",
+    "credentials"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
