@@ -1,6 +1,6 @@
 import {useEffect,useState} from "react";
 import {Link} from "react-router-dom";
-import {Bot,LockKeyhole,RefreshCw,GitBranch,ShieldAlert,FileText,Clock3,PlugZap,CheckCircle2,RotateCcw,Unplug,ArrowUpRight} from "lucide-react";
+import {Bot,LockKeyhole,RefreshCw,GitBranch,ShieldAlert,FileText,Clock3,PlugZap,CheckCircle2,Unplug} from "lucide-react";
 import {base44} from "@/api/base44Client";
 import {useAuth} from "@/lib/AuthContext";
 import {isAgentCenterOwner,canViewAgentCenter} from "@/lib/agentCenterAccess";
