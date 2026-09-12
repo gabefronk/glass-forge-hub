@@ -1,3 +1,4 @@
+import { denverMidnight, denverDate } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmount, htmlToText } from '../../shared/ingestShared.ts';
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
@@ -25,20 +26,20 @@ export default async function(req) {
     const today = new Date();
     const endStr = body.end_date || new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const startStr = body.start_date || new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const timeMin = new Date(startStr + 'T00:00:00Z').toISOString();
-    const timeMax = new Date(endStr + 'T23:59:59Z').toISOString();
+    const timeMin = denverMidnight(startStr);
+    const timeMax = denverMidnight(new Date(Date.parse(endStr + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10));
 
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('googlecalendar');
     const headers = { Authorization: `Bearer ${accessToken}` };
 
-    const baseUrl = `${CAL_API}/calendars/${encodeURIComponent(FULL_CAL)}/events?maxResults=100&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
+    const baseUrl = `${CAL_API}/calendars/${encodeURIComponent(FULL_CAL)}/events?maxResults=100&singleEvents=true&showDeleted=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
     const allItems = [];
     let pageToken = null;
     do {
       let url = baseUrl;
       if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
       const res = await fetch(url, { headers });
-      if (!res.ok) return Response.json({ error: 'calendar_api_error', detail: await res.text() }, { status: 200 });
+      if (!res.ok) return Response.json({ error: 'calendar_api_error', detail: await res.text() }, { status: 502 });
       const data = await res.json();
       allItems.push(...(data.items || []));
       pageToken = data.nextPageToken || null;
@@ -53,15 +54,21 @@ export default async function(req) {
     let skippedApp = 0;
     for (const ev of allItems) {
       if (ev.extendedProperties?.private?.appSource === 'glassforge') { skippedApp++; continue; }
+      if (ev.status === 'cancelled') {
+        const ex = byGoogleId.get(ev.id);
+        if (ex && ex.source !== 'app') toUpdate.push({ id: ex.id, source_status: 'cancelled', report_required: false });
+        continue;
+      }
       const startRef = ev.start || {};
       const endRef = ev.end || {};
-      const event_date = startRef.dateTime ? String(startRef.dateTime).slice(0, 10) : (startRef.date || '');
+      const event_date = startRef.dateTime ? denverDate(startRef.dateTime) : (startRef.date || '');
       if (!event_date) continue;
       const start_time = startRef.dateTime ? String(startRef.dateTime).slice(11, 16) : null;
       const end_time = endRef.dateTime ? String(endRef.dateTime).slice(11, 16) : null;
       const end_date = (!endRef.dateTime && endRef.date) ? endRef.date : null;
       const row = {
         source: 'google',
+        source_status: ev.status || 'confirmed',
         event_date,
         start_time,
         end_time,
@@ -119,11 +126,12 @@ export default async function(req) {
     // By default only push NEW or NEVER-PUSHED events to avoid timeout.
     // Pass { force_repush: true } to re-push all events (for repairs).
     const forceRepush = !!body.force_repush;
-    const pushCandidates = forceRepush
+    const changed = (e) => { const before = byGoogleId.get(e.google_event_id); return before && ['event_date','start_time','end_time','end_date','job_name','scope_notes','address'].some(k => (before[k] ?? '') !== (e[k] ?? '')); };
+    const pushCandidates = body.pull_only ? [] : forceRepush
       ? [...createdRecords, ...toUpdate]
-      : [...createdRecords, ...toUpdate.filter(e => !e.installer_event_id)];
+      : [...createdRecords, ...toUpdate.filter(e => e.source_status !== 'cancelled' && (!e.installer_event_id || changed(e)))];
 
-    const installerMap = await fetchInstallerEventMap(headers);
+    const installerMap = pushCandidates.length ? await fetchInstallerEventMap(headers) : new Map();
 
     let installerPushed = 0, installerFailed = 0, installerSkipped = 0;
     const installerFailures = [];
@@ -140,7 +148,7 @@ export default async function(req) {
     for (const batch of chunk(installerIdUpdates, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
 
     return Response.json({
-      ok: true,
+      ok: installerFailed === 0,
       fetched: allItems.length,
       created: toCreate.length,
       updated: toUpdate.length,

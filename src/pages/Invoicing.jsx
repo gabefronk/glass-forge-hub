@@ -1,3 +1,5 @@
+import { refreshMonth } from "@/lib/refreshMonth";
+import { invoicingStats } from "@/lib/invoicingStats";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { computeFeeAmt, computeLaborAmt, currentMonthStr, isFutureRow } from "@/lib/feeMath";
@@ -23,6 +25,8 @@ export default function Invoicing() {
   const [undo, setUndo] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [runningIngest, setRunningIngest] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [unprocessedCount, setUnprocessedCount] = useState(0);
   const [monthClosed, setMonthClosed] = useState(null);
   const [closing, setClosing] = useState(false);
@@ -43,15 +47,17 @@ export default function Invoicing() {
     setLoading(true);
     try {
       const [fl, calEvents] = await Promise.all([
-        base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000),
+        base44.entities.FeeLines.list("-job_date", 5000),
         base44.entities.CalendarEvents.list("-event_date", 5000),
       ]);
       const rsm = new Map();
       for (const e of (Array.isArray(calEvents) ? calEvents : [])) {
-        if (e.google_event_id && (e.event_date || "").startsWith(month)) rsm.set(e.google_event_id, e.report_status);
+        if (e.google_event_id) rsm.set(e.google_event_id, e.report_status);
       }
       setReportStatusMap(rsm);
       setFeeLines(Array.isArray(fl) ? fl : []);
+      setLoadError("");
+      window.dispatchEvent(new Event("billing-updated"));
       const feeEventIds = new Set((Array.isArray(fl) ? fl : []).map((f) => f.calendar_event_id).filter(Boolean));
       const unprocessed = (Array.isArray(calEvents) ? calEvents : []).filter(
         (e) => (e.event_date || "").startsWith(month) && e.source === "google" && e.google_event_id && !feeEventIds.has(e.google_event_id)
@@ -63,7 +69,7 @@ export default function Invoicing() {
         setMonthClosed(snap || null);
       } catch { setMonthClosed(null); }
     } catch (e) {
-      console.error("Invoicing load error:", e);
+      setLoadError("Could not load billing data. " + (e.message || "Try refresh."));
     } finally {
       setLoading(false);
     }
@@ -72,7 +78,7 @@ export default function Invoicing() {
 
   const monthRows = useMemo(() => feeLines.filter((r) => r.invoice_month === month), [feeLines, month]);
 
-  const supersededSet = useMemo(() => buildSupersededSet(monthRows), [monthRows]);
+  const supersededSet = useMemo(() => buildSupersededSet(feeLines), [feeLines]);
 
   const filteredRows = useMemo(() => {
     let rows = monthRows.filter((r) => !supersededSet.has(r.id));
@@ -80,7 +86,7 @@ export default function Invoicing() {
     else if (filter === "needs_review") rows = rows.filter(isMatchBlocked);
     else if (filter === "needs_report") rows = rows.filter((r) => isReportBlocked(r, reportStatusMap));
     else if (filter === "billed") rows = rows.filter((r) => r.billed_to_bfs);
-    if (hideZeros) rows = rows.filter((r) => Number(r.labor_amt) !== 0);
+    if (hideZeros) rows = rows.filter((r) => computeFeeAmt(r) !== 0 || isMatchBlocked(r) || r.fee_type === "profit_split");
     if (search.trim()) {
       const q = search.toLowerCase();
       rows = rows.filter((r) =>
@@ -100,29 +106,7 @@ export default function Invoicing() {
     billed: monthRows.filter((r) => r.billed_to_bfs).length,
   }), [monthRows, reportStatusMap, supersededSet]);
 
-  const heroStats = useMemo(() => {
-    const ready = monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet));
-    const matchBlocked = monthRows.filter(isMatchBlocked);
-    const reportBlocked = monthRows.filter((r) => isReportBlocked(r, reportStatusMap));
-    const noSourceData = monthRows.filter((r) => r.calendar_event_id && reportStatusMap.get(r.calendar_event_id) === "no_source_data");
-    const billed = monthRows.filter((r) => r.billed_to_bfs);
-    const scheduled = monthRows.filter((r) => isFutureRow(r));
-    const monthEarned = monthRows.filter((r) => !supersededSet.has(r.id) && !isFutureRow(r) && (Number(r.labor_amt) > 0 || r.fee_type === "profit_split"));
-    return {
-      readyTotal: ready.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
-      readyCount: ready.length,
-      matchBlockedCount: matchBlocked.length,
-      reportBlockedCount: reportBlocked.length,
-      noSourceDataCount: noSourceData.length,
-      customFeeCount: monthRows.filter(isCustomFee).length,
-      billedTotal: billed.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
-      billedCount: billed.length,
-      scheduledTotal: scheduled.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
-      scheduledCount: scheduled.length,
-      monthEarnedTotal: monthEarned.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0),
-      monthEarnedCount: monthEarned.length,
-    };
-  }, [monthRows, reportStatusMap, supersededSet]);
+  const heroStats = useMemo(() => invoicingStats(monthRows, reportStatusMap, supersededSet), [monthRows, reportStatusMap, supersededSet]);
 
   const selectedFee = useMemo(() => {
     return monthRows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + (computeFeeAmt(r) || 0), 0);
@@ -203,7 +187,7 @@ export default function Invoicing() {
         merged.fee_amt = Math.round((sale - cost) * split * 100) / 100;
       } else {
         merged.labor_amt = computeLaborAmt({ ...merged, manually_adjusted: true });
-        merged.fee_amt = computeFeeAmt({ ...merged, manually_adjusted: true });
+        merged.fee_amt = Math.round((Number(merged.labor_amt) || 0) * (Number(merged.fee_pct) || 0) * 100) / 100;
       }
     }
     setFeeLines((prev) => prev.map((r) => (r.id === id ? merged : r)));
@@ -223,17 +207,9 @@ export default function Invoicing() {
     });
   }, [feeLines, performAction]);
 
-  const handleAddReport = useCallback((id) => {
-    const row = feeLines.find((r) => r.id === id);
-    if (!row) return;
-    const prevReview = row.needs_review;
-    handleEdit(id, { needs_review: false, manually_adjusted: true });
-    setReportAttached((prev) => new Set([...prev, id]));
-    performAction("Report attached", () => {}, () => {
-      handleEdit(id, { needs_review: prevReview });
-      setReportAttached((prev) => { const next = new Set(prev); next.delete(id); return next; });
-    });
-  }, [feeLines, handleEdit, performAction]);
+  const handleAddReport = useCallback(() => {
+    window.location.assign("/calendar");
+  }, []);
 
   const handleMarkBilled = useCallback((id, value = true) => {
     const row = feeLines.find((r) => r.id === id);
@@ -322,10 +298,12 @@ export default function Invoicing() {
   const handleRunIngest = async () => {
     setRunningIngest(true);
     try {
-      await base44.functions.invoke("fetchCalendarEvents", {});
+      const result = await refreshMonth(month, setSyncMessage);
       await load();
+      setSyncMessage("Month refreshed: calendar, ProBuild, pricing and report checks." + (result.fetchCalendarEvents?.locked_months?.includes(month) ? " Billing rows are locked for this imported or closed month." : ""));
     } catch (e) {
-      console.error("Ingest error:", e);
+      setSyncMessage("Refresh incomplete. " + e.message);
+      await load();
     } finally {
       setRunningIngest(false);
     }
@@ -388,7 +366,7 @@ export default function Invoicing() {
 
   // ── Empty month state ────────────────────────────────────────────
   const today = new Date();
-  const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonth = currentMonthStr();
   const isPast = month < currentMonth;
   const isFutureM = month > currentMonth;
   const showEmptyState = monthRows.length === 0 && (isPast || isFutureM);
@@ -422,13 +400,18 @@ export default function Invoicing() {
         className="mx-auto min-w-0 max-w-[1180px] px-4 sm:px-6 xl:px-10"
         style={{ paddingBottom: selectedIds.size > 0 ? "220px" : "60px" }}
       >
+        <div className="mt-5 rounded-xl border bg-white p-4">
+          <button className="rounded-full border px-4 py-2 font-semibold" onClick={handleRunIngest} disabled={runningIngest}>{runningIngest ? "Refreshing…" : "Refresh whole month"}</button>
+          <span role="status" className="ml-3 text-sm">{syncMessage}</span>
+          {loadError && <p role="alert" className="mt-2 text-red-700">{loadError}</p>}
+        </div>
         {showEmptyState ? (
           <div style={{ padding: "120px 0", textAlign: "center" }}>
             <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "17px", color: "#616D81", marginBottom: "8px" }}>
-              {isPast ? "This month is closed." : "No data for this month yet."}
+              {isPast ? "No billing rows loaded for this month." : "No data for this month yet."}
             </p>
             <p style={{ fontFamily: "'Archivo',sans-serif", fontSize: "13px", color: "#77839A", marginBottom: "20px" }}>
-              {isPast ? "Switch back to the current month to continue working." : "Come back after the first jobs are posted."}
+              {isPast ? "Refresh this month to check the source calendars and ProBuild." : "Come back after the first jobs are posted."}
             </p>
             <button
               onClick={() => setMonth(currentMonth)}
