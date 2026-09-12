@@ -62,6 +62,13 @@ export function createMessageAssistantHandler({getClient,loadDirectory,now=()=>n
     await api.MessageRecord.update(row.id,{attachments:row.attachments.map(p=>p.guid===a.guid?{...p,file_uri,status:'ready'}:p)});
     return reply({ok:true});
    }
+   if(action==='set_collector'){
+    if(device)return reply({error:'Owner required.'},403);
+    const d=(await api.MessageAssistantDevice.filter({device_id:trim(input.device_id)},'-created_date',1))[0];
+    if(!d)return reply({error:'Collector not found.'},404);
+    await api.MessageAssistantDevice.update(d.id,{enabled:input.enabled===true});
+    return reply({ok:true});
+   }
    const directory=await loadDirectory(client);
    const workContacts=directory.contacts.filter(c=>c.builder&&c.phone_key);
    if(action==='catalog')return reply({contacts:workContacts.map(c=>({name:c.name,phone:c.phone_key,builder:c.builder})),route:SERVICE_ROUTE,mode:'draft_only'});
