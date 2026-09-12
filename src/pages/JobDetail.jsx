@@ -124,7 +124,7 @@ export default function JobDetail() {
           Back to jobs
         </Link>
 
-        {isAgentCenterOwner(user) && <><Link to={"/messages?job="+encodeURIComponent(id)} className="mb-4 ml-4 inline-flex min-h-11 items-center rounded-lg border bg-white px-3 text-sm text-blue-700">Private job messages</Link><Link to={"/contacts?job="+encodeURIComponent(id)} className="mb-4 ml-4 inline-flex min-h-11 items-center rounded-lg border bg-white px-3 text-sm text-blue-700">Job contacts</Link></>}
+        {isAgentCenterOwner(user) && <><Link to={"/messages?job="+encodeURIComponent(id)} className="mb-4 ml-4 inline-flex min-h-11 items-center rounded-lg border bg-white px-3 text-sm text-blue-700">Private job messages</Link><Link to={"/contacts?job="+encodeURIComponent(id)} className="mb-4 ml-4 inline-flex min-h-11 items-center rounded-lg border bg-white px-3 text-sm text-blue-700">Job contacts</Link><Link to={"/reports?job="+encodeURIComponent(id)} className="mb-4 ml-4 inline-flex min-h-11 items-center rounded-lg border bg-white px-3 text-sm text-blue-700">Job reports</Link></>}
         <JobDetailHeader
           job={job}
           status={status}
