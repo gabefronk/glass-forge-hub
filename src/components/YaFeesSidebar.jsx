@@ -5,7 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter } from "@/lib/agentCenterAccess";
 import { Bot } from "lucide-react";
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
-import { formatMoney } from "@/lib/feeMath";
+import { formatMoney, computeFeeAmt, currentMonthStr } from "@/lib/feeMath";
 
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
@@ -17,10 +17,6 @@ const NAV_ITEMS = [
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
 ];
 
-function currentMonthStr() {
-  return new Date().toISOString().slice(0, 7);
-}
-
 function monthLabel(m) {
   const [y, mm] = m.split("-").map(Number);
   return new Date(y, mm - 1, 1).toLocaleDateString("en-US", { month: "short" });
@@ -30,6 +26,8 @@ export default function YaFeesSidebar() {
   const { pathname } = useLocation();
   const [unbilled, setUnbilled] = useState({ total: 0, count: 0 });
   const [user, setUser] = useState(null);
+  const [billingRevision, setBillingRevision] = useState(0);
+  useEffect(() => { const update = () => setBillingRevision(n => n + 1); window.addEventListener("billing-updated", update); return () => window.removeEventListener("billing-updated", update); }, []);
   const [signingOut, setSigningOut] = useState(false);
 
   const handleSignOut = async () => {
@@ -62,15 +60,15 @@ export default function YaFeesSidebar() {
         ]);
         const rsm = new Map();
         for (const e of (Array.isArray(calEvents) ? calEvents : [])) {
-          if (e.google_event_id && (e.event_date || "").startsWith(month)) rsm.set(e.google_event_id, e.report_status);
+          if (e.google_event_id) rsm.set(e.google_event_id, e.report_status);
         }
         const ss = buildSupersededSet(rows);
         const readyRows = rows.filter((r) => isReady(r, rsm, ss));
-        const total = readyRows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);
+        const total = readyRows.reduce((s, r) => s + computeFeeAmt(r), 0);
         setUnbilled({ total, count: readyRows.length });
       } catch {}
     })();
-  }, [pathname]);
+  }, [pathname, billingRevision]);
 
   return (
     <aside
@@ -113,7 +111,7 @@ export default function YaFeesSidebar() {
       {/* Unbilled mini card */}
       <div className="px-3 pb-3">
         <div className="rounded-[10px] px-3.5 py-3 card-shadow" style={{ backgroundColor: "#F6F8FC", border: "1px solid #DDE3EC" }}>
-          <div className="mono-label-sm mb-1.5">Unbilled · {monthLabel(currentMonthStr())}</div>
+          <div className="mono-label-sm mb-1.5">Ready to bill · {monthLabel(currentMonthStr())}</div>
           <div className="flex flex-wrap items-baseline gap-1.5 break-all">
             <span className="font-mono-num-bold text-[18px]" style={{ color: "#1E4A85", letterSpacing: "-0.02em" }}>
               ${formatMoney(unbilled.total)}
