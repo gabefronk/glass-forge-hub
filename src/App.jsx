@@ -25,6 +25,7 @@ import SalesTracker from '@/pages/SalesTracker';
 import AdminAgentCenter from "@/pages/AdminAgentCenter";
 import BrandsSpecs from "@/pages/BrandsSpecs";
 import ProbuildDailyPreview from "@/pages/ProbuildDailyPreview";
+import MessagesInbox from "@/pages/MessagesInbox";
 // Add page imports here
 
 const AuthenticatedApp = () => {
@@ -67,6 +68,7 @@ const AuthenticatedApp = () => {
           <Route path="/sales-tracker" element={<SalesTracker />} />
           <Route path="/admin/agents" element={<AdminAgentCenter />} />
           <Route path="/admin/probuild-daily" element={<ProbuildDailyPreview />} />
+          <Route path="/messages" element={<MessagesInbox />} />
           <Route path="/jobs" element={<JobsHub />} />
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/match-debug" element={<MatchDebug />} />
