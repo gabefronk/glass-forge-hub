@@ -33,7 +33,7 @@ export default async function desktopQuoteRelay(req){
     }
     const {accessToken}=await base44.asServiceRole.connectors.getConnection('googledrive');
     assert(accessToken,'Drive connection unavailable');
-    const gf=async(path,options={})=>{
+    const gf=async(path,options:any={})=>{
       const response=await fetch(DRIVE+path,{...options,headers:{Authorization:`Bearer ${accessToken}`,...options.headers},signal:AbortSignal.timeout(25000)});
       if(!response.ok)throw new Error(`Drive HTTP ${response.status}`);return response;
     };
