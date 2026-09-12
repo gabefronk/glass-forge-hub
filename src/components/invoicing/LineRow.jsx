@@ -268,7 +268,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
       <div className="col-start-2 row-start-4 flex flex-wrap gap-2 empty:hidden xl:col-start-5 xl:row-start-1 xl:justify-end">
         {blocked && (
           <button
-            onClick={(e) => { e.stopPropagation(); onAddReport(row.id); }}
+            onClick={(e) => { e.stopPropagation(); if (row.needs_review && !row.manually_adjusted) setEditing(true); else onAddReport(row.id); }}
             style={{
               fontFamily: "'Archivo',sans-serif",
               fontSize: "10px",
@@ -283,7 +283,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
               whiteSpace: "nowrap",
             }}
           >
-            Add report
+            {row.needs_review && !row.manually_adjusted ? "Review pricing / job" : "Review report"}
           </button>
         )}
         {!blocked && isFuture && (

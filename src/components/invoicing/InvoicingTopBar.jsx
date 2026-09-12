@@ -18,7 +18,10 @@ export default function InvoicingTopBar({ month, onMonthChange, search, onSearch
   const [probuildStatus, setProbuildStatus] = useState(null);
 
   useEffect(() => {
-    base44.functions.invoke("probuildStatus", {}).then(res => setProbuildStatus(res.data)).catch(() => {});
+    const refresh = () => base44.functions.invoke("probuildStatus", {}).then(res => setProbuildStatus(res.data)).catch(() => {});
+    refresh();
+    window.addEventListener("billing-updated", refresh);
+    return () => window.removeEventListener("billing-updated", refresh);
   }, []);
   const [y, m] = month.split("-").map(Number);
   const monthName = new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });

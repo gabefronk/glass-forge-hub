@@ -351,6 +351,7 @@ export default async function(req) {
 
     // Refresh days_late for all other outstanding events (not on audited dates)
     for (const event of allEvents) {
+      if (body.start_date && body.end_date && !datesToAudit.includes(event.event_date)) continue;
       if (updatedIds.has(event.id)) continue;
       if (event.report_required === false) continue;
       if (['ok', 'waived', 'rescheduled', 'no_source_data', 'pre_compliance'].includes(event.report_status)) continue;
@@ -408,7 +409,11 @@ export default async function(req) {
       }
       return days;
     };
-    for (const event of allEvents) {
+    const pendingState = new Map();
+    for (const patch of toUpdate) pendingState.set(patch.id, { ...(pendingState.get(patch.id) || {}), ...patch });
+    for (const original of allEvents) {
+      if (body.start_date && body.end_date && !datesToAudit.includes(original.event_date)) continue;
+      const event = { ...original, ...(pendingState.get(original.id) || {}) };
       if (event.report_required === false || event.report_status !== 'missing_all') continue;
       if ((event.matched_post_ids || []).length > 0 || event.match_method !== 'none') continue;
       if (businessDaysElapsed(event.event_date) < 10) continue;
@@ -440,19 +445,24 @@ export default async function(req) {
     }
 
     const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
-    for (const batch of chunk(toUpdate, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
+    const uniqueUpdates = new Map();
+    for (const patch of toUpdate) {
+      const defined = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined));
+      uniqueUpdates.set(patch.id, { ...(uniqueUpdates.get(patch.id) || {}), ...defined });
+    }
+    for (const batch of chunk([...uniqueUpdates.values()], 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
     for (const batch of chunk(audits, 500)) await base44.asServiceRole.entities.ReportAudit.bulkCreate(batch);
 
     return Response.json({
       dates_audited: datesToAudit,
       events_evaluated: updatedIds.size,
-      updated: toUpdate.length,
+      updated: uniqueUpdates.size,
       audits_written: audits.length,
       run_id: runId,
       date_summaries: dateSummaries,
       offset_distribution: offsetCounts,
     });
   } catch (error) {
-    return Response.json({ error: error.message, stack: error.stack }, { status: 200 });
+    return Response.json({ error: error.message }, { status: 500 });
   }
 }

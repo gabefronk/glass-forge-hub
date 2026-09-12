@@ -1,3 +1,4 @@
+import { isFutureRow } from "@/lib/feeMath";
 import { useMemo } from "react";
 import { computeFeeAmt } from "@/lib/feeMath";
 import DayHeader from "./DayHeader";
@@ -66,9 +67,9 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
               key={row.id}
               row={row}
               selected={selectedIds.has(row.id)}
-              blocked={row.needs_review && !row.manually_adjusted}
+              blocked={(row.needs_review && !row.manually_adjusted) || row._reportBlocked}
               reportAttached={reportAttached.has(row.id)}
-              isFuture={row.job_date && row.job_date > new Date().toISOString().slice(0, 10)}
+              isFuture={isFutureRow(row)}
               isBilled={!!row.billed_to_bfs}
               isZero={Number(row.labor_amt) === 0}
               onToggle={onToggle}
