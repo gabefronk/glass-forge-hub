@@ -30,6 +30,7 @@ export function reportView(r){return {id:r.id,source:'library',project_id:r.sour
 export function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,now=()=>new Date()}){
  return async req=>{
   if(req.method!=='POST')return json({error:'Use POST.'},405);
+  let stage='authorization';
   try{
    const client=await getClient(req),api=client.asServiceRole.entities,key=req.headers.get('x-glass-forge-control-key');
    if(key){if(key.length<40||key.length>200)fail('Device authorization required.',401);if(!(await api.ProbuildControlDevice.filter({token_hash:await hash(key),enabled:true},'-created_date',1))[0])fail('Device authorization required.',401);}
@@ -48,13 +49,13 @@ export function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,no
     return json({run});
    }
    if(action==='import_project'){
-    const run=await runFor(),pid=id(input.project_id);if(!run.project_ids.includes(pid))fail('Project is outside this import.');
-    const p=run.source_snapshot[pid],posts=await provider('posts/'+pid),pkey=sourceKey(pid);
-    const link=(await api.ProbuildProjectLink.filter({project_id:pid},'-updated_date',1))[0];
-    const old=(await api.FieldLibraryProject.filter({source_key:pkey},'-created_date',1))[0];
-    const row={source_key:pkey,source_project_id:pid,name:p.name||p.title||pid,description:p.description||'',archived:!!p.archivedAt,source_deleted:!!p.deletedAt,job_id:link?.job_id||'',job_name:link?.job_name||'',source_snapshot:p,source_hash:await hash(JSON.stringify(p)),source_checked_at:at,report_count:entries(posts).length,attachment_count:entries(posts).reduce((n,[,post])=>n+entries(post.attachments).length,0),import_run_id:run.id};
-    const project=old?await api.FieldLibraryProject.update(old.id,row):await api.FieldLibraryProject.create(row);
-    const [existingReports,existingFiles]=await Promise.all([all(api.FieldLibraryReport,{source_project_id:pid}),all(api.FieldLibraryFile,{source_project_id:pid})]);
+    stage='load-import';const run=await runFor(),pid=id(input.project_id);if(!run.project_ids.includes(pid))fail('Project is outside this import.');
+    stage='load-posts';const p=run.source_snapshot[pid],posts=await provider('posts/'+pid),pkey=sourceKey(pid);
+    stage='job-link';const link=(await api.ProbuildProjectLink.filter({project_id:pid},'-updated_date',1))[0];
+    stage='project-lookup';const old=(await api.FieldLibraryProject.filter({source_key:pkey},'-created_date',1))[0];
+    stage='project-build';const row={source_key:pkey,source_project_id:pid,name:p.name||p.title||pid,description:p.description||'',archived:!!p.archivedAt,source_deleted:!!p.deletedAt,job_id:link?.job_id||'',job_name:link?.job_name||'',source_snapshot:p,source_hash:await hash(JSON.stringify(p)),source_checked_at:at,report_count:entries(posts).length,attachment_count:entries(posts).reduce((n,[,post])=>n+entries(post.attachments).length,0),import_run_id:run.id};
+    stage='project-save';const project=old?await api.FieldLibraryProject.update(old.id,row):await api.FieldLibraryProject.create(row);
+    stage='existing-records';const [existingReports,existingFiles]=await Promise.all([all(api.FieldLibraryReport,{source_project_id:pid}),all(api.FieldLibraryFile,{source_project_id:pid})]);
     const fileMap=new Map(existingFiles.map(f=>[f.source_key,f]));const reports=[],files=[];
     for(const [postId,post] of entries(posts)){
      const attachments=[];
@@ -67,7 +68,7 @@ export function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,no
      }
      reports.push({source_key:sourceKey(pid,postId),source_project_id:pid,source_post_id:postId,library_project_id:project.id,project_name:row.name,report_date:date(post.createdAt),source_created_at:iso(post.createdAt),source_deleted:!!post.deletedAt,message:post.message||'',source_snapshot:post,source_hash:await hash(JSON.stringify(post)),source_checked_at:at,attachments,import_run_id:run.id});
     }
-    await mergeRows(api.FieldLibraryReport,existingReports,reports);await mergeRows(api.FieldLibraryFile,existingFiles,files);
+    stage='save-reports';await mergeRows(api.FieldLibraryReport,existingReports,reports);stage='save-files';await mergeRows(api.FieldLibraryFile,existingFiles,files);
     return json({project_id:pid,library_project_id:project.id,reports:reports.length,files:files.length,source_deleted:row.source_deleted,archived:row.archived});
    }
    if(action==='pending_files'){
@@ -126,6 +127,6 @@ export function createFieldLibraryHandler({getClient,getToken,fetchImpl=fetch,no
     const r=await api.FieldLibraryReport.get(id(input.report_id));if(!r)fail('Report not found.',404);return json({report:reportView(r)});
    }
    fail('Unsupported action.');
-  }catch(error){if(error.publicMessage)return json({error:error.publicMessage},error.status||400);console.error('Field library failed',error?.name||'Error');return json({error:'The library request could not finish. Retrying preserves imported records.'},500);}
+  }catch(error){if(error.publicMessage)return json({error:error.publicMessage},error.status||400);console.error('Field library failed',error?.name||'Error');return json({error:'The library request could not finish at '+stage+'. '+String(error?.response?.status||error?.status||'')+' '+String(error?.message||'').replace(/https?:[^\s]+/g,'[url]').slice(0,300)},500);}
  };
 }
