@@ -4,7 +4,7 @@ const labels={queued:'Waiting for local Hermes',claimed:'Local Hermes is reviewi
 export default function HermesResearchQueue({jobId,research}){
   const [open,setOpen]=useState(false),[data,setData]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const current=useRef(true);
-  useEffect(()=>()=>{current.current=false;},[]);
+  useEffect(()=>{current.current=true;return()=>{current.current=false;};},[]);
   const load=async()=>{try{const r=(await base44.functions.invoke('research-queue',{action:'status',job_id:jobId})).data;if(current.current){setData(r);setError('');}}catch{if(current.current)setError('The local research queue is unavailable. Your job information is unchanged.');}};
   useEffect(()=>{if(!open)return;load();const timer=setInterval(load,15000);return()=>clearInterval(timer);},[open,jobId]);
   const act=async(action,extra={})=>{setBusy(true);setError('');try{await base44.functions.invoke('research-queue',{action,...extra});await load();}catch(e){if(current.current)setError(e.response?.data?.error||'The request could not finish. Refresh before retrying.');}finally{if(current.current)setBusy(false);}};
