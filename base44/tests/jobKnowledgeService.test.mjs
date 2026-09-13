@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {adaptKnowledgeSources,collectKnowledgeSources,refreshJobKnowledge,readPreparedJob,allKnowledgeRows,isKnowledgeOwner} from '../shared/jobKnowledgeService.mjs';
-import {buildJobReplyFacts} from './jobReplyContext.mjs';
+import {buildJobReplyFacts} from '../shared/jobReplyContext.mjs';
 
 const NOW='2026-09-13T15:00:00Z';
 const JOBS=[{id:'j16',canonical_name:'Acme - Pine Grove lot 16',aliases:['Acme - 16 Pine Grove'],po_numbers:['0016'],oe_numbers:['OE16'],address:'16 Main St'}, {id:'j17',canonical_name:'Acme - Pine Grove lot 17',po_numbers:['0017'],oe_numbers:['OE17'],address:'17 Main St'}];
