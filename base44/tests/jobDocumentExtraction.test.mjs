@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { extractJobDocuments as actualExtract, validateJobDocumentResult, JOB_DOCUMENT_SCHEMA } from '../shared/jobDocumentExtraction.mjs';
+import { extractJobDocuments as actualExtract, validateJobDocumentResult, JOB_DOCUMENT_SCHEMA, JOB_DOCUMENT_EXTRACTOR_REVISION } from '../shared/jobDocumentExtraction.mjs';
 const now = '2026-09-13T10:00:00Z';
 const pdfBytes = new TextEncoder().encode('%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -65,7 +65,7 @@ test('successful hash-key extraction is reused and changed hash is new work', as
 });
 
 test('failed extraction retries only after 24 hours and updates existing keyed record', async () => {
-  const recent = { id: 'failure', extraction_key: 'pdf1:' + digest, status: 'failed', checked_at: '2026-09-12T10:00:01Z', attempts: 1 };
+  const recent = { id: 'failure', extraction_key: 'pdf1:' + digest, status: 'failed', checked_at: '2026-09-12T10:00:01Z', attempts: 1, extractor_revision: JOB_DOCUMENT_EXTRACTOR_REVISION };
   const first = fixture([file()], [recent]); assert.equal((await extractJobDocuments(first.api, { now })).retry_deferred, 1);
   assert.equal(first.calls.extraction.length, 0);
   recent.checked_at = '2026-09-12T10:00:00Z'; const next = fixture([file()], [recent]);
@@ -220,4 +220,37 @@ test('private URL signing cannot redirect the reader to non-HTTPS URLs', async (
   const f = fixture(); f.api.integrations.Core.CreateFileSignedUrl = async () => ({ signed_url: 'http://private.example/raw' });
   const result = await extractJobDocuments(f.api, { now });
   assert.equal(result.failed, 1); assert.equal(f.calls.fetched.length, 0); assert.equal(f.calls.extraction.length, 0);
+});
+
+test('failed superseded revision retries once and current revision backs off', async () => {
+  const prior = { id:'prior', extraction_key:'pdf1:'+digest, status:'failed', checked_at:now, attempts:1 };
+  const f=fixture([file()],[prior]);
+  f.api.integrations.Core.ExtractDataFromUploadedFile=async()=>{throw Error('Unknown private payload');};
+  const first=await extractJobDocuments(f.api,{now});
+  assert.equal(first.attempted,1);assert.equal(first.revision_retries,1);
+  assert.equal(f.records[0].extractor_revision,JOB_DOCUMENT_EXTRACTOR_REVISION);
+  const second=await extractJobDocuments(f.api,{now});
+  assert.equal(second.attempted,0);assert.equal(second.retry_deferred,1);
+});
+
+test('diagnostics identify provider status without exposing error body or signed URL', async () => {
+  const f=fixture();
+  f.api.integrations.Core.ExtractDataFromUploadedFile=async()=>{throw Object.assign(Error('https://private.example?token=TOP-SECRET'),{response:{status:403,data:'TOP-SECRET'}});};
+  const r=await extractJobDocuments(f.api,{now});
+  assert.equal(r.outcomes[0].error_stage,'extract_provider');assert.equal(r.outcomes[0].error_code,'provider_http_error');assert.equal(r.outcomes[0].error_http_status,403);
+  assert(!JSON.stringify([r,f.records]).includes('TOP-SECRET'));
+});
+
+test('storage status and content validation failures have separate fixed diagnostic stages', async () => {
+  const f=fixture();f.fetchImpl=async()=>new Response('private error',{status:403});
+  const r=await extractJobDocuments(f.api,{now});assert.equal(r.outcomes[0].error_stage,'private_read');assert.equal(r.outcomes[0].error_http_status,403);assert.equal(f.calls.extraction.length,0);
+  const bad=fixture([file('bad',{sha256:'a'.repeat(64)})]);const b=await extractJobDocuments(bad.api,{now});
+  assert.equal(b.outcomes[0].error_stage,'source_hash');assert.equal(b.outcomes[0].error_code,'private_file_hash_changed');
+});
+
+test('future or invalid receipt timestamps cannot be retried through revision migration', async () => {
+  for(const checked_at of ['bad-date','2026-10-01T00:00:00Z']) {
+    const f=fixture([file()],[{id:'old',extraction_key:'pdf1:'+digest,status:'failed',checked_at}]);
+    const r=await extractJobDocuments(f.api,{now});assert.equal(r.attempted,0);assert.equal(r.retry_deferred,1);
+  }
 });

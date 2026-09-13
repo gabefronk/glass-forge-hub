@@ -38,6 +38,18 @@
     },
     "error": {
       "type": "string"
+    },
+    "extractor_revision": {
+      "type": "string"
+    },
+    "error_stage": {
+      "type": "string"
+    },
+    "error_code": {
+      "type": "string"
+    },
+    "error_http_status": {
+      "type": "integer"
     }
   },
   "required": [

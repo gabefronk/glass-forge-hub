@@ -2,6 +2,21 @@
 // files, jobs, arrivals, calendars, quotes and fees are never modified here.
 const MAX_BYTES = 8 * 1024 * 1024;
 const RETRY_MS = 24 * 60 * 60 * 1000;
+export const JOB_DOCUMENT_EXTRACTOR_REVISION = 'job-pdf-20260913-r3';
+// Only explicitly superseded implementations receive one immediate retry.
+// Missing revision denotes the earlier implementation's legacy receipts.
+const SUPERSEDED_REVISIONS = new Set(['', 'job-pdf-20260913-r1', 'job-pdf-20260913-r2']);
+const ERROR_STAGES = new Set(['candidate_listing', 'existing_state', 'source_receipt', 'private_sign', 'private_read', 'chunk_receipt', 'chunk_hash', 'source_hash', 'pdf_signature', 'private_copy_upload', 'private_copy_hash', 'extract_provider', 'extract_schema', 'save_receipt']);
+const ERROR_CODES = new Set(['source_receipt_changed', 'private_file_required', 'signed_file_unavailable', 'private_file_read_failed', 'private_file_overflow', 'private_file_size_changed', 'invalid_private_chunks', 'private_manifest_changed', 'private_chunk_changed', 'private_file_hash_changed', 'private_file_not_pdf', 'private_copy_changed', 'invalid_extraction_shape', 'invalid_extraction_text', 'invalid_extraction_page', 'invalid_document_type', 'invalid_extraction_items', 'invalid_job_identifier_type', 'invalid_document_date', 'diagram_is_not_operational_schedule', 'extraction_result_too_large', 'extraction_provider_failed', 'document_run_deadline', 'document_operation_deadline', 'document_candidates_invalid', 'document_candidates_repeated']);
+function safeDiagnostic(stage, error) {
+  const status = [error?.status, error?.response?.status].find(value => Number.isInteger(value) && value >= 400 && value <= 599);
+  const name = error?.name;
+  return {
+    error_stage: ERROR_STAGES.has(stage) ? stage : 'source_receipt',
+    error_code: ERROR_CODES.has(error?.message) ? error.message : status ? 'provider_http_error' : ['AbortError', 'TimeoutError'].includes(name) ? 'provider_timeout' : name === 'TypeError' ? 'provider_type_error' : 'provider_operation_failed',
+    ...(status ? { error_http_status: status } : {})
+  };
+}
 const DOCUMENT_TYPES = ['invoice', 'quote', 'order_confirmation', 'service_report', 'delivery_notice', 'parts_diagram', 'technical_specification', 'other', 'unknown'];
 const IDENTIFIER_TYPES = ['job_name', 'builder', 'subdivision', 'lot', 'address', 'po', 'oe', 'order_number', 'project_id'];
 const DATE_MEANINGS = ['document_date', 'estimated_arrival', 'scheduled_service', 'order_date', 'delivery_date', 'invoice_due_date', 'revision_date', 'other'];
@@ -100,15 +115,19 @@ function checkedSignedUrl(value) {
   return url.href;
 }
 
-async function readPrivateBytes(api, uri, expectedSize, fetchImpl, run) {
+async function readPrivateBytes(api, uri, expectedSize, fetchImpl, run, diagnostic) {
+  diagnostic.stage = 'private_sign';
   if (!privateUri(uri)) throw Error('private_file_required');
   const signed = await run(() => api.integrations.Core.CreateFileSignedUrl({ file_uri: uri, expires_in: 600 }));
   const url = checkedSignedUrl(signed?.signed_url);
+  diagnostic.stage = 'private_read';
   const bytes = await run(async () => {
     // Covers both the response and its streaming body. Refuse redirects instead
     // of following a signed source URL to a new, unverified destination.
     const response = await fetchImpl(url, { signal: AbortSignal.timeout(20000), redirect: 'error' });
-    if (!response.ok || !response.body || Number(response.headers.get('content-length')) > expectedSize) throw Error('private_file_read_failed');
+    if (!response.ok) throw Object.assign(Error('private_file_read_failed'), { status: response.status });
+    if (!response.body) throw Error('private_file_read_failed');
+    if (Number(response.headers.get('content-length')) > expectedSize) throw Error('private_file_overflow');
     const reader = response.body.getReader(), parts = []; let length = 0;
     try {
       for (;;) {
@@ -127,10 +146,11 @@ async function readPrivateBytes(api, uri, expectedSize, fetchImpl, run) {
   return { bytes, url };
 }
 
-async function verifiedPdfUrl(api, file, fetchImpl, run) {
+async function verifiedPdfUrl(api, file, fetchImpl, run, diagnostic) {
   let bytes, url;
-  if (file.file_uri) ({ bytes, url } = await readPrivateBytes(api, file.file_uri, file.size, fetchImpl, run));
+  if (file.file_uri) ({ bytes, url } = await readPrivateBytes(api, file.file_uri, file.size, fetchImpl, run, diagnostic));
   else {
+    diagnostic.stage = 'chunk_receipt';
     if (!Array.isArray(file.chunks) || !file.chunks.length || file.chunks.length > 8) throw Error('invalid_private_chunks');
     let total = 0;
     for (const chunk of file.chunks) {
@@ -142,21 +162,26 @@ async function verifiedPdfUrl(api, file, fetchImpl, run) {
     if (file.manifest_sha256 && (!SHA256.test(file.manifest_sha256) || await hashBytes(new TextEncoder().encode(JSON.stringify(manifest))) !== file.manifest_sha256.toLowerCase())) throw Error('private_manifest_changed');
     bytes = new Uint8Array(total);
     for (const chunk of file.chunks) {
-      const part = await readPrivateBytes(api, chunk.file_uri, chunk.size, fetchImpl, run);
+      const part = await readPrivateBytes(api, chunk.file_uri, chunk.size, fetchImpl, run, diagnostic);
+      diagnostic.stage = 'chunk_hash';
       if (await hashBytes(part.bytes) !== chunk.sha256.toLowerCase()) throw Error('private_chunk_changed');
       bytes.set(part.bytes, chunk.offset);
     }
   }
+  diagnostic.stage = 'source_hash';
   if (await hashBytes(bytes) !== file.sha256.toLowerCase()) throw Error('private_file_hash_changed');
   // MIME and a .pdf filename are candidate hints only. Validate the actual
   // stored bytes before sending anything to the extraction integration.
+  diagnostic.stage = 'pdf_signature';
   if (!/^%PDF-[12]\.\d/.test(new TextDecoder().decode(bytes.subarray(0, 8)))) throw Error('private_file_not_pdf');
   if (url) return url; // Reuse the verified ordinary private object unchanged.
   // ExtractDataFromUploadedFile needs one file. Only reassembled chunks require
   // a derivative private PDF copy; no source receipt or public upload is used.
   const safeId = file.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100) || 'source';
+  diagnostic.stage = 'private_copy_upload';
   const uploaded = await run(() => api.integrations.Core.UploadPrivateFile({ file: new File([bytes], 'job-document-' + safeId + '.pdf', { type: 'application/pdf' }) }));
-  const copied = await readPrivateBytes(api, uploaded?.file_uri, file.size, fetchImpl, run);
+  const copied = await readPrivateBytes(api, uploaded?.file_uri, file.size, fetchImpl, run, diagnostic);
+  diagnostic.stage = 'private_copy_hash';
   if (await hashBytes(copied.bytes) !== file.sha256.toLowerCase()) throw Error('private_copy_changed');
   return copied.url;
 }
@@ -193,14 +218,14 @@ export async function extractJobDocuments(api, { now = new Date(), maxFiles = 2,
   if (!Number.isFinite(nowMs)) throw Error('Invalid extraction time.');
   const at = nowDate.toISOString();
   const run = boundedRun();
-  const result = { checked_at: at, attempted: 0, extracted: 0, failed: 0, skipped: 0, retry_deferred: 0, eligible: 0, pdf_candidates_without_whole_sha: 0, candidates_complete: true, saved_index_complete: true, lookups: 0, lookup_limit_reached: false, has_more: false, outcomes: [], automatic_arrival_confirmation: false };
+  const result = { checked_at: at, extractor_revision: JOB_DOCUMENT_EXTRACTOR_REVISION, attempted: 0, extracted: 0, failed: 0, skipped: 0, retry_deferred: 0, revision_retries: 0, eligible: 0, pdf_candidates_without_whole_sha: 0, candidates_complete: true, saved_index_complete: true, lookups: 0, lookup_limit_reached: false, has_more: false, outcomes: [], automatic_arrival_confirmation: false };
   if (maxFiles === 0) return result;
   let candidates, savedIndex;
   try { [candidates, savedIndex] = await Promise.all([
     listCandidates(api.entities.FieldLibraryFile, run, { status: 'verified' }, ['id', 'status', 'name', 'file_uri', 'sha256', 'size', 'mime_type', 'source_deleted', 'verified_at', 'source_project_id', 'source_post_id', 'source_attachment_id']),
     listCandidates(api.entities.JobDocumentExtraction, run, {}, ['id', 'extraction_key', 'status', 'checked_at'])
   ]); }
-  catch { return { ...result, candidates_complete: false, error: 'Document candidate listing failed.' }; }
+  catch (error) { return { ...result, candidates_complete: false, error: 'Document candidate listing failed.', ...safeDiagnostic('candidate_listing', error) }; }
   result.candidates_complete = candidates.complete;
   result.saved_index_complete = savedIndex.complete;
   // Skip known finished hashes before spending per-key lookup budget, so a
@@ -214,7 +239,7 @@ export async function extractJobDocuments(api, { now = new Date(), maxFiles = 2,
     if (finished.has(key)) { result.skipped++; continue; }
     if (result.attempted >= maxFiles) { result.has_more = true; break; }
     if (result.lookups >= MAX_LOOKUPS) { result.has_more = true; result.lookup_limit_reached = true; break; }
-    let existing;
+    let existing, revisionRetry = false;
     try {
       result.lookups++;
       const prior = await run(() => api.entities.JobDocumentExtraction.filter({ extraction_key: key }, '-checked_at', 5));
@@ -223,34 +248,41 @@ export async function extractJobDocuments(api, { now = new Date(), maxFiles = 2,
       existing = prior[0];
       if (existing) {
         const checked = Date.parse(existing.checked_at);
-        if (existing.status !== 'failed' || !Number.isFinite(checked) || nowMs - checked < RETRY_MS) { result.retry_deferred++; continue; }
+        const previousRevision = existing.extractor_revision == null ? '' : existing.extractor_revision;
+        revisionRetry = existing.status === 'failed' && typeof previousRevision === 'string' && SUPERSEDED_REVISIONS.has(previousRevision);
+        if (existing.status !== 'failed' || !Number.isFinite(checked) || checked > nowMs || (!revisionRetry && nowMs - checked < RETRY_MS)) { result.retry_deferred++; continue; }
       }
-    } catch { result.skipped++; result.outcomes.push({ file_id: file.id, status: 'deferred', error: 'Existing extraction state unavailable.' }); continue; }
+    } catch (error) { result.skipped++; result.outcomes.push({ file_id: file.id, status: 'deferred', error: 'Existing extraction state unavailable.', ...safeDiagnostic('existing_state', error) }); continue; }
     if (inFlight.has(key)) { result.retry_deferred++; continue; }
     inFlight.add(key); result.attempted++;
+    if (revisionRetry) result.revision_retries++;
     const record = { extraction_key: key, file_id: file.id, sha256: file.sha256.toLowerCase(),
       source_project_id: String(file.source_project_id || ''), source_post_id: String(file.source_post_id || ''), source_attachment_id: String(file.source_attachment_id || ''),
-      status: 'failed', checked_at: at, attempts: (Number(existing?.attempts) || 0) + 1, result: null, error: '' };
+      status: 'failed', checked_at: at, extractor_revision: JOB_DOCUMENT_EXTRACTOR_REVISION, attempts: (Number(existing?.attempts) || 0) + 1, result: null, error: '', error_stage: '', error_code: '', error_http_status: null };
+    const diagnostic = { stage: 'source_receipt' };
     try {
       // Recheck the receipt immediately before signing; changed/deleted source
       // data cannot be stored under a previous hash's extraction key.
       const current = await run(() => api.entities.FieldLibraryFile.get(file.id));
       if (!eligible(current, nowMs) || current.sha256.toLowerCase() !== file.sha256.toLowerCase() || current.file_uri !== file.file_uri || current.size !== file.size) throw Error('source_receipt_changed');
-      const url = await verifiedPdfUrl(api, current, fetchImpl, run);
+      const url = await verifiedPdfUrl(api, current, fetchImpl, run, diagnostic);
+      diagnostic.stage = 'extract_provider';
       const raw = await run(() => api.integrations.Core.ExtractDataFromUploadedFile({ file_url: url, json_schema: JOB_DOCUMENT_SCHEMA }), 45000);
+      diagnostic.stage = 'extract_schema';
       record.result = validateJobDocumentResult(raw);
       record.status = 'extracted_needs_review';
-    } catch {
+    } catch (error) {
       record.status = 'failed'; record.result = null;
+      Object.assign(record, safeDiagnostic(diagnostic.stage, error));
       record.error = 'Private PDF extraction could not be validated. Retry after 24 hours; original file preserved.';
     }
     try {
       const saved = await run(() => existing ? api.entities.JobDocumentExtraction.update(existing.id, record) : api.entities.JobDocumentExtraction.create(record));
       result[record.status === 'extracted_needs_review' ? 'extracted' : 'failed']++;
-      result.outcomes.push({ file_id: file.id, extraction_id: saved?.id || existing?.id || null, status: record.status });
-    } catch {
+      result.outcomes.push({ file_id: file.id, extraction_id: saved?.id || existing?.id || null, status: record.status, ...(record.status === 'failed' ? { error_stage: record.error_stage, error_code: record.error_code, ...(record.error_http_status ? { error_http_status: record.error_http_status } : {}) } : {}) });
+    } catch (error) {
       result.failed++;
-      result.outcomes.push({ file_id: file.id, status: 'failed', error: 'Extraction receipt could not be saved; original file preserved.' });
+      result.outcomes.push({ file_id: file.id, status: 'failed', error: 'Extraction receipt could not be saved; original file preserved.', ...safeDiagnostic('save_receipt', error) });
     } finally { inFlight.delete(key); }
   }
   if (!candidates.complete) result.has_more = true;
