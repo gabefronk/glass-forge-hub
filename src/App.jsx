@@ -29,6 +29,7 @@ import MessagesInbox from "@/pages/MessagesInbox";
 import ContactsDirectory from "@/pages/ContactsDirectory";
 import ProbuildReports from '@/pages/ProbuildReports';
 import ReportLibrary from '@/pages/ReportLibrary';
+import SystemMap from "@/pages/SystemMap";
 // Add page imports here
 
 const AuthenticatedApp = () => {
@@ -70,6 +71,7 @@ const AuthenticatedApp = () => {
           <Route path="/window-quotes" element={<WindowQuotes />} />
           <Route path="/sales-tracker" element={<SalesTracker />} />
           <Route path="/admin/agents" element={<AdminAgentCenter />} />
+          <Route path="/system-map" element={<SystemMap />} />
           <Route path="/admin/probuild-daily" element={<ProbuildDailyPreview />} />
           <Route path="/messages" element={<MessagesInbox />} />
           <Route path="/contacts" element={<ContactsDirectory />} />
