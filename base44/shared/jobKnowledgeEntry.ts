@@ -3,7 +3,7 @@ import {isKnowledgeOwner,refreshJobKnowledge,readPreparedJob,allKnowledgeRows} f
 import {resolvePreparedJobQuery,buildPreparedJobLookup} from './preparedJobLookup.mjs';
 import {readKnowledgeTracker} from './jobKnowledgeRuntime.ts';
 import {readJobKnowledgeProviders} from './jobKnowledgeProviders.ts';
-import {extractJobDocuments} from './jobDocumentExtraction.mjs';
+import {extractJobDocuments,JOB_DOCUMENT_EXTRACTOR_REVISION} from './jobDocumentExtraction.mjs';
 const reply=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store'}});
 Deno.serve(async req=>{
   if(req.method!=='POST')return reply({error:'Use POST.'},405);
@@ -27,7 +27,7 @@ Deno.serve(async req=>{
     if(input.action==='status') {
       const [rows,completed]=await Promise.all([api.entities.JobKnowledgeRun.list('-started_at',5),api.entities.JobKnowledgeRun.filter({status:'complete'},'-started_at',1)]);
       const clean=({unassigned,...r})=>({...r,unassigned_count:r.unassigned_count??unassigned?.length??0});
-      return reply({runs:rows.map(clean),latest_complete:completed[0]?clean(completed[0]):null,automatic_send_allowed:false});
+      return reply({runs:rows.map(clean),latest_complete:completed[0]?clean(completed[0]):null,automatic_send_allowed:false,document_extractor_revision:JOB_DOCUMENT_EXTRACTOR_REVISION});
     }
     if(input.action==='unassigned') {
       const run=(await api.entities.JobKnowledgeRun.filter({status:'complete'},'-started_at',1))[0];
