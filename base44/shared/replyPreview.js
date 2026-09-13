@@ -1,11 +1,13 @@
 import { DEFAULT_MODEL, buildReplyRequest, validateReplyPlan } from './replyPlanner.mjs';
 import { readPreparedJob } from './jobKnowledgeService.mjs';
 import { buildJobReplyFacts } from './jobReplyContext.mjs';
+import { MESSAGE_DRAFT_POLICY_VERSION } from './messageDraftPolicy.mjs';
+export { MESSAGE_DRAFT_POLICY_VERSION, MESSAGE_DRAFT_GUIDANCE } from './messageDraftPolicy.mjs';
 export const REPLY_MODEL = DEFAULT_MODEL;
 
 const previewResult = (body, status = 200) => ({
   status,
-  body: { ...body, model: DEFAULT_MODEL, preview_only: true, send_enabled: false },
+  body: { ...body, model: DEFAULT_MODEL, drafting_policy_version: MESSAGE_DRAFT_POLICY_VERSION, preview_only: true, send_enabled: false },
 });
 const needsOwner = note => previewResult({ plan: {
   decision: 'owner_needed', intent: 'none', reply_text: '', source_message_guids: [],
