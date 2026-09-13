@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
+import HermesResearchQueue from './HermesResearchQueue';
 import {base44} from '@/api/base44Client';
 
 const PURPOSES=[['documents','Plans or documents'],['eta','Product arrival estimate'],['installation_schedule','Installation schedule'],['service_schedule','Service schedule'],['service_issue','Service history'],['missing_parts','Missing parts'],['completion','Work completion'],['referral','Homeowner referral'],['technical_question','Product or technical documents'],['site_clarification','Site details']];
@@ -40,5 +41,6 @@ export default function JobResearchPanel({jobId}) {
       {packet.dedupe_key&&<button type="button" onClick={copy} className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-2">Copy handoff for Mac</button>}
       <details className="mt-3"><summary className="cursor-pointer text-xs">Full source-check handoff</summary><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(packet,null,2)}</pre></details>
     </div>}
+    <HermesResearchQueue key={jobId} jobId={jobId} research={{purpose,...(filename.trim()?{requested_filename:filename.trim()}:{}),...(start&&end?{start_date:start,end_date:end}:{})}}/>
   </details>;
 }
