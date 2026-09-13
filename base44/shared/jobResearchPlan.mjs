@@ -56,7 +56,7 @@ const QUESTIONS = {
   service_issue:'Verify the reported issue, exact component and relevant service history without inferring diagnosis or warranty.',
   missing_parts:'Verify the missing component against the exact order and current source; do not infer availability.',
   documents:'Find the requested document for this exact job and lot, verify its contents, revision and page coverage.',
-  referral:'Gather the exact referred job's existing context and prepare a private owner question about the referral. Do not infer a complaint, warranty or requested action from a contact card.',
+  referral:'Gather existing context for the exact referred job and prepare a private owner question about the referral. Do not infer a complaint, warranty or requested action from a contact card.',
   completion:'Verify reported work against the requested component and distinguish scheduled, reported and independently confirmed completion.',
   technical_question:'Locate the exact relevant source document and page; leave unsupported technical interpretation for owner review.',
   site_clarification:'Verify only the missing site or component identity detail within this exact job; omit unrelated access information.'

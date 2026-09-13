@@ -1,5 +1,4 @@
-// Calendar selected-scope revision calendar-review-20260913-v1; production registration r2.
-
+// Job research planning 20260913 v1; approved native iPad session.
 // base44/shared/jobKnowledgeEntry.ts
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.48";
 
@@ -55,24 +54,24 @@ function lots(value) {
   }
   return unique(found);
 }
-function addIndex(map, value, id2) {
+function addIndex(map, value, id3) {
   if (!value) return;
   if (!map.has(value)) map.set(value, /* @__PURE__ */ new Set());
-  map.get(value).add(id2);
+  map.get(value).add(id3);
 }
 function createJobIndex({ jobs = [], projectLinks = [] } = {}) {
   if (!Array.isArray(jobs) || jobs.length > 5e4 || !Array.isArray(projectLinks)) throw new TypeError("Invalid job catalog.");
   const index = { byId: /* @__PURE__ */ new Map(), names: /* @__PURE__ */ new Map(), po: /* @__PURE__ */ new Map(), oe: /* @__PURE__ */ new Map(), address: /* @__PURE__ */ new Map(), project: /* @__PURE__ */ new Map() };
   for (const input of jobs) {
-    const id2 = str(input.id || input.job_id);
-    if (!id2 || index.byId.has(id2)) throw new TypeError("Job IDs must be present and unique.");
-    const job = { id: id2, canonical_name: str(input.canonical_name || input.job_name || input.name), aliases: list(input.aliases), address: str(input.address), po_numbers: list(input.po_numbers), oe_numbers: list(input.oe_numbers) };
+    const id3 = str(input.id || input.job_id);
+    if (!id3 || index.byId.has(id3)) throw new TypeError("Job IDs must be present and unique.");
+    const job = { id: id3, canonical_name: str(input.canonical_name || input.job_name || input.name), aliases: list(input.aliases), address: str(input.address), po_numbers: list(input.po_numbers), oe_numbers: list(input.oe_numbers) };
     if (!job.canonical_name) throw new TypeError("Canonical job names are required.");
-    index.byId.set(id2, job);
-    for (const name of [job.canonical_name, ...job.aliases]) addIndex(index.names, norm(name), id2);
-    for (const p of job.po_numbers) addIndex(index.po, norm(p), id2);
-    for (const o of job.oe_numbers) addIndex(index.oe, norm(o), id2);
-    addIndex(index.address, addressKey(job.address), id2);
+    index.byId.set(id3, job);
+    for (const name of [job.canonical_name, ...job.aliases]) addIndex(index.names, norm(name), id3);
+    for (const p of job.po_numbers) addIndex(index.po, norm(p), id3);
+    for (const o of job.oe_numbers) addIndex(index.oe, norm(o), id3);
+    addIndex(index.address, addressKey(job.address), id3);
   }
   for (const link of projectLinks) {
     if (link.source_deleted || link.enabled === false) continue;
@@ -116,7 +115,7 @@ function matchJobEvidence(row, catalog) {
   if (rowLots.length > 1 || row.multi_job === true) return result("ambiguous", "multiple_lots_or_jobs", allCandidates);
   if (!constraints.length) return result("unmatched", "no_exact_identity");
   let candidates = [...constraints[0].ids];
-  for (const c of constraints.slice(1)) candidates = candidates.filter((id2) => c.ids.has(id2));
+  for (const c of constraints.slice(1)) candidates = candidates.filter((id3) => c.ids.has(id3));
   if (!candidates.length) return result("conflict", "contradictory_identifiers", allCandidates);
   if (candidates.length !== 1) return result("ambiguous", "multiple_exact_jobs", candidates);
   const job = idx.byId.get(candidates[0]);
@@ -295,13 +294,13 @@ function buildJobContexts({ jobs = [], evidence = [], projectLinks = [], sourceS
   for (const e of dedup.rejected) {
     const match = matchJobEvidence(e, index);
     unassigned.push({ source_key: e.source_key, reason: e.rejection_reason, candidate_job_ids: match.candidate_job_ids });
-    for (const id2 of match.candidate_job_ids) byJob.get(id2)?.conflicts.push(issue(e.rejection_reason, e.source_key, "Conflicting versions were excluded.", "error"));
+    for (const id3 of match.candidate_job_ids) byJob.get(id3)?.conflicts.push(issue(e.rejection_reason, e.source_key, "Conflicting versions were excluded.", "error"));
   }
   for (const e of dedup.accepted) {
     const match = matchJobEvidence(e, index);
     if (match.status !== "matched") {
       unassigned.push({ source_key: e.source_key, reason: match.reason, candidate_job_ids: match.candidate_job_ids });
-      for (const id2 of match.candidate_job_ids) byJob.get(id2)?.conflicts.push(issue(match.reason, e.source_key, "Evidence was excluded until its job identity is reviewed.", "error"));
+      for (const id3 of match.candidate_job_ids) byJob.get(id3)?.conflicts.push(issue(match.reason, e.source_key, "Evidence was excluded until its job identity is reviewed.", "error"));
       continue;
     }
     const c = byJob.get(match.job_id), classification = classify(e);
@@ -337,12 +336,12 @@ function buildJobContexts({ jobs = [], evidence = [], projectLinks = [], sourceS
     const orderDates = /* @__PURE__ */ new Map();
     for (const e of c.evidence.filter((e2) => e2.category === "arrival" && e2.active && e2.date_info.local_date)) {
       const ids = [...e.po_numbers.map((p) => "po:" + norm(p)), ...e.oe_numbers.map((o) => "oe:" + norm(o))];
-      for (const id2 of ids) {
-        if (!orderDates.has(id2)) orderDates.set(id2, []);
-        orderDates.get(id2).push(e);
+      for (const id3 of ids) {
+        if (!orderDates.has(id3)) orderDates.set(id3, []);
+        orderDates.get(id3).push(e);
       }
     }
-    for (const [id2, rows] of orderDates) if (unique(rows.map((e) => e.date_info.local_date)).length > 1) c.conflicts.push(issue("conflicting_arrival_dates", null, `${id2} has differing source dates: ${unique(rows.map((e) => e.source_key)).join(", ")}.`, "error"));
+    for (const [id3, rows] of orderDates) if (unique(rows.map((e) => e.date_info.local_date)).length > 1) c.conflicts.push(issue("conflicting_arrival_dates", null, `${id3} has differing source dates: ${unique(rows.map((e) => e.source_key)).join(", ")}.`, "error"));
     c.evidence_references = c.timeline.map((e) => ({ source_key: e.source_key, source_type: e.source_type, source_id: e.source_id, date: e.date, kind: e.kind, status: e.status, source_updated_at: e.source_updated_at, source_checked_at: e.source_checked_at, source_aliases: e.source_aliases, source_url: e.source_url }));
     const allCounts = { evidence: c.evidence.length, next_events: c.next_events.length, next_arrivals: c.next_arrivals.length, notes: c.latest_notes.length, documents: c.latest_documents.length };
     c.items_truncated = c.evidence.length > maxEvidencePerJob;
@@ -444,7 +443,7 @@ function assessCalendarCoverage({ calendarName, snapshots = [], batches = [], ra
     const freshness = sourceFreshness2({ observedAt: batch.captured_at, now, maxAgeHours });
     const ids = batch.snapshot_ids;
     let valid = batch.timezone === "America/Denver" && isCalendarDate(batch.range_start) && isCalendarDate(batch.range_end) && batch.range_start <= batch.range_end && ["fresh", "stale"].includes(freshness.status) && Array.isArray(ids) && ids.length > 0 && new Set(ids).size === ids.length && Number.isInteger(batch.event_count) && batch.event_count >= 0;
-    const chunks = valid ? ids.map((id2) => duplicateIds.has(id2) ? null : validSnapshot(byId.get(id2), calendarName, now, maxAgeHours)) : [];
+    const chunks = valid ? ids.map((id3) => duplicateIds.has(id3) ? null : validSnapshot(byId.get(id3), calendarName, now, maxAgeHours)) : [];
     valid = valid && chunks.every((chunk) => chunk && chunk.range_start >= batch.range_start && chunk.range_end <= batch.range_end && instant2(chunk.captured_at) <= instant2(batch.captured_at) + 3e5) && chunks.reduce((n, chunk) => n + (chunk?.event_count || 0), 0) === batch.event_count;
     valid = valid && chunks.every((chunk) => instant2(batch.captured_at) - instant2(chunk.captured_at) <= maxAgeHours * 36e5);
     if (!valid) {
@@ -582,8 +581,8 @@ function buildTrustedSourceLinks({ jobs = [], fees = [], projects = [], links = 
   }
   return {
     project_links: projectLinks,
-    calendar_job: (id2) => calendar.get(text(id2))?.job_id || null,
-    post_job: (id2) => posts.get(text(id2))?.job_id || null,
+    calendar_job: (id3) => calendar.get(text(id3))?.job_id || null,
+    post_job: (id3) => posts.get(text(id3))?.job_id || null,
     calendar_links: [...calendar].map(([source_id, value]) => ({ source_id, ...value })),
     post_links: [...posts].map(([source_id, value]) => ({ source_id, ...value })),
     diagnostics,
@@ -1127,7 +1126,7 @@ function calendarReviewEvidence({ captures = [], jobs = [], now }) {
 var OWNERS2 = /* @__PURE__ */ new Set(["gabefronk@gmail.com", "gabriel.fronk.wd@gmail.com"]);
 var isKnowledgeOwner = (user) => user?.role === "admin" && OWNERS2.has(String(user.email || "").trim().toLowerCase());
 var fields = (s) => s.split(",");
-var dayPlus = (day, n) => new Date(Date.parse(day + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+var dayPlus = (day2, n) => new Date(Date.parse(day2 + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
 var asText = (v) => typeof v === "string" ? v : "";
 var latest = (rows) => [...rows].sort((a, b) => String(b.captured_at || b.source_captured_at || "").localeCompare(String(a.captured_at || a.source_captured_at || "")))[0];
 async function allKnowledgeRows(entity, selected, query = {}) {
@@ -1151,7 +1150,7 @@ function calendarCandidates(relevant, manifests, now) {
   const candidates = good.map((s) => ({ ...s, complete: s.complete === true, is_batch: false }));
   let invalid = good.length !== relevant.length;
   for (const b of manifests) {
-    const ids = b.snapshot_ids || [], parts = ids.map((id2) => byId.get(id2));
+    const ids = b.snapshot_ids || [], parts = ids.map((id3) => byId.get(id3));
     if (b.timezone !== "America/Denver" || !isCalendarDate(b.range_start) || !isCalendarDate(b.range_end) || b.range_start > b.range_end || !["fresh", "stale"].includes(sourceFreshness2({ observedAt: b.captured_at, now, maxAgeHours: 26 }).status) || !ids.length || new Set(ids).size !== ids.length || parts.some((p) => !p || p.calendar_name !== b.calendar_name || p.range_start < b.range_start || p.range_end > b.range_end || Date.parse(p.captured_at) > Date.parse(b.captured_at) + 3e5 || Date.parse(b.captured_at) - Date.parse(p.captured_at) > 26 * 36e5) || parts.reduce((n, p) => n + (p?.events?.length || 0), 0) !== b.event_count) {
       invalid = true;
       continue;
@@ -1288,8 +1287,8 @@ function addDocumentExtractions({ data, evidence, sourceStatus, issues, reportJo
     }
     const { record: x, file, base, result } = rows[0];
     const labels = result.job_identifiers.map((i) => `${i.type}: ${i.value}; page ${i.page}; quotation: ${i.source_quote}`).join("\n");
-    const dates = result.dated_statements.map((d) => `${d.meaning}: ${d.date_text}${d.normalized_date ? " [" + d.normalized_date + "]" : ""}; page ${d.page}; quotation: ${d.source_quote}${d.uncertainty ? "; uncertainty: " + d.uncertainty : ""}`).join("\n");
-    const text4 = "UNREVIEWED PDF EXTRACTION \u2014 OWNER REFERENCE ONLY. This model-generated extraction must be checked against the original PDF; no extracted identifier or date is promoted to a job mapping, product arrival, service schedule, or customer reply fact.\nDocument type: " + result.document_type + "\nSummary: " + result.summary + "\nUnreviewed identifiers:\n" + labels + "\nUnreviewed dated statements:\n" + dates;
+    const dates2 = result.dated_statements.map((d) => `${d.meaning}: ${d.date_text}${d.normalized_date ? " [" + d.normalized_date + "]" : ""}; page ${d.page}; quotation: ${d.source_quote}${d.uncertainty ? "; uncertainty: " + d.uncertainty : ""}`).join("\n");
+    const text4 = "UNREVIEWED PDF EXTRACTION \u2014 OWNER REFERENCE ONLY. This model-generated extraction must be checked against the original PDF; no extracted identifier or date is promoted to a job mapping, product arrival, service schedule, or customer reply fact.\nDocument type: " + result.document_type + "\nSummary: " + result.summary + "\nUnreviewed identifiers:\n" + labels + "\nUnreviewed dated statements:\n" + dates2;
     base.text = "Unreviewed PDF extraction is available at [document_extraction:" + x.id + "]. Review the original PDF before relying on its statements.";
     base.attachments = base.attachments.map((a) => ({ ...a, text_extracted: true }));
     for (const report of evidence.filter((e) => e.source_type === "probuild_library")) for (const a of report.attachments || []) if (a.id === file.id) a.text_extracted = true;
@@ -1551,7 +1550,7 @@ function adaptKnowledgeSources(data, now, generatedAt = now) {
     if (g.examples.length < 10) g.examples.push(u);
   }
   for (const [key, g] of groups) issues.push({ ...warning(key.split(":")[0], key.split(":").slice(1).join(":"), g.count + " source records were not assigned safely; some may be non-job events.", /^(?:document|document_extraction|field_report|library_report|live_probuild|identity_probuild_project|identity_probuild_post):/.test(key) ? "field_reporting_lead" : key.startsWith("tracker:") ? "sales_order_lead" : "calendar_ops_lead"), count: g.count, examples: g.examples });
-  return { ...result, source_status: sourceStatus, issues, source_counts: { jobs: jobs.length, calendar: calendar.length, field_reports: reports.length, library_projects: projects.length, library_reports: libraryReports.length, files: files.length, pdf_files: pdfCount, job_notes: notes.length, tracker_rows: trackerRows.length, service_cases: serviceCases.length, live_google: liveCounts.calendar, live_probuild: liveCounts.probuild, document_extractions: documentExtraction.received, indexed_document_extractions: documentExtraction.indexed, rejected_document_extractions: documentExtraction.rejected.length, trusted_project_links: trusted.counts.project_links, trusted_calendar_links: trusted.counts.calendar_links, trusted_post_links: trusted.counts.post_links, trusted_identity_diagnostics: trusted.diagnostics.length, duplicate_report_origins: [...libraryIds].filter((id2) => reports.some((r) => r.post_id === id2)).length } };
+  return { ...result, source_status: sourceStatus, issues, source_counts: { jobs: jobs.length, calendar: calendar.length, field_reports: reports.length, library_projects: projects.length, library_reports: libraryReports.length, files: files.length, pdf_files: pdfCount, job_notes: notes.length, tracker_rows: trackerRows.length, service_cases: serviceCases.length, live_google: liveCounts.calendar, live_probuild: liveCounts.probuild, document_extractions: documentExtraction.received, indexed_document_extractions: documentExtraction.indexed, rejected_document_extractions: documentExtraction.rejected.length, trusted_project_links: trusted.counts.project_links, trusted_calendar_links: trusted.counts.calendar_links, trusted_post_links: trusted.counts.post_links, trusted_identity_diagnostics: trusted.diagnostics.length, duplicate_report_origins: [...libraryIds].filter((id3) => reports.some((r) => r.post_id === id3)).length } };
 }
 async function collectKnowledgeSources(api, readTracker, now, providerData, getNow) {
   const definitions = {
@@ -1859,7 +1858,7 @@ function resolvePreparedJobQuery({ query = {}, jobs = [], projectLinks = [], cat
   }
   if (!constraints.length) return stop("needs_identity", "Provide one complete current job identity.");
   let candidates = constraints[0];
-  for (const set of constraints.slice(1)) candidates = candidates.filter((id2) => set.includes(id2));
+  for (const set of constraints.slice(1)) candidates = candidates.filter((id3) => set.includes(id3));
   if (!candidates.length) return stop("conflict", "The supplied job and order identifiers disagree. Verify the job and complete order number before continuing.", constraints.flat());
   if (candidates.length > 1) return stop("ambiguous", "More than one job matches exactly; provide the exact job ID or a distinguishing complete order number.", candidates);
   return { ...out, status: "matched", job_id: candidates[0], candidate_job_ids: candidates, question: null };
@@ -1907,6 +1906,179 @@ function buildPreparedJobLookup({ query = {}, jobs = [], projectLinks = [], cata
   const warnings = out.source_freshness.filter((s) => s.state !== "current").map((s) => `${s.source_type}: ${s.state}`);
   out.owner_brief = [`Prepared job ${identity.job_id}.`, out.facts.length ? out.facts.join("\n") : out.question || "", warnings.length ? "Source limitations: " + warnings.join("; ") : "", out.facts_truncated ? "Five facts shown; further prepared evidence remains in the owner job view." : "", "No source systems were queried by this lookup and no message was sent."].filter(Boolean).join("\n").slice(0, 6e3);
   return out;
+}
+
+// base44/shared/jobResearchPlan.mjs
+var RESEARCH_PLAN_VERSION = "job-research-20260913-v1";
+var RESEARCH_PURPOSES = Object.freeze(["eta", "installation_schedule", "service_schedule", "service_issue", "missing_parts", "documents", "referral", "completion", "technical_question", "site_clarification"]);
+var QUERY_KEYS = ["job_id", "job_name", "builder", "subdivision", "lot", "po", "oe", "project_id"];
+var SOURCE_TYPES = /* @__PURE__ */ new Set(["sales_tracker", "calendar", "live_google", "outlook_installation", "outlook_service", "outlook_installation_selected", "outlook_service_selected", "probuild_reports", "probuild_library", "live_probuild", "documents", "document_extractions", "job_notes", "service_requests"]);
+var AGE = 26 * 36e5;
+var DAY2 = 864e5;
+var own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+var plain = (o) => !!o && typeof o === "object" && !Array.isArray(o) && [Object.prototype, null].includes(Object.getPrototypeOf(o));
+var clean = (v, max = 200) => typeof v === "string" && v.length <= max && !/[\u0000-\u001f\u007f]/u.test(v);
+var sensitive = (v) => /https?:\/\/|\b(?:password|passcode|access.token|api.key|client.secret|verification.code)\b|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\+[1-9]\d{9,14}/i.test(v);
+var selector = (v, max = 200) => clean(v, max) && !sensitive(v);
+var id = (v) => typeof v === "string" && /^[A-Za-z0-9_-]{1,160}$/.test(v);
+var refKey = (v) => clean(v, 300) && !!v.trim() && !sensitive(v);
+var freeze = (v) => {
+  if (v && typeof v === "object" && !Object.isFrozen(v)) {
+    Object.values(v).forEach(freeze);
+    Object.freeze(v);
+  }
+  return v;
+};
+function day(v) {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v + "T12:00:00Z")) && (/* @__PURE__ */ new Date(v + "T12:00:00Z")).toISOString().slice(0, 10) === v;
+}
+function instant4(v) {
+  if (typeof v !== "string") return null;
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-](\d{2}):(\d{2}))$/.exec(v);
+  if (!m || !day(m[1]) || +m[2] > 23 || +m[3] > 59 || +m[4] > 59 || +(m[6] || 0) > 23 || +(m[7] || 0) > 59) return null;
+  const n = Date.parse(v);
+  return Number.isFinite(n) ? n : null;
+}
+var fresh = (v, now) => {
+  const n = instant4(v);
+  return n !== null && n <= now && now - n <= AGE;
+};
+var norm5 = (v) => String(v || "").normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
+function denverDay(ms) {
+  const p = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(ms));
+  return ["year", "month", "day"].map((k) => p.find((x) => x.type === k).value).join("-");
+}
+function fingerprint(value) {
+  let h = 0x6c62272e07bb014262b821756295c58dn;
+  for (const b of new TextEncoder().encode(JSON.stringify(value))) h = BigInt.asUintN(128, (h ^ BigInt(b)) * 0x1000000000000000000013bn);
+  return h.toString(16).padStart(32, "0");
+}
+function dates(research, now) {
+  const today = denverDay(now), explicit = own(research, "start_date") || own(research, "end_date");
+  if (research.time_zone !== void 0 && research.time_zone !== "America/Denver") return null;
+  if (!explicit && !["eta", "installation_schedule", "service_schedule"].includes(research.purpose)) return research.mode && research.mode !== "current_revision" ? null : { mode: "current_revision", start_date: null, end_date: null, time_zone: "America/Denver", bounds: null, explicit: false, applicability: "source_revision", document_date_filter: false };
+  const start = explicit ? research.start_date : today, end = explicit ? research.end_date : new Date(Date.parse(today + "T12:00:00Z") + 13 * DAY2).toISOString().slice(0, 10);
+  if (!day(start) || !day(end) || start > end || Date.parse(end) - Date.parse(start) > 92 * DAY2) return null;
+  const mode = end < today ? "historical" : start < today ? "mixed" : "current";
+  if (research.mode !== void 0 && research.mode !== mode) return null;
+  return { mode, start_date: start, end_date: end, time_zone: "America/Denver", bounds: "inclusive", explicit, applicability: "activity_window", document_date_filter: false };
+}
+var ROUTES = {
+  base44_cached: { source: "base44_cached", app: "Glass Forge", route: "prepared_job_references" },
+  google_calendar: { source: "google_calendar", app: "Google Calendar", route: "existing_base44_direct_reader" },
+  probuild: { source: "probuild", app: "ProBuild", route: "existing_base44_direct_reader" },
+  onedrive: { source: "onedrive", app: "OneDrive", route: "mac_wired_ipad_existing_native_session" },
+  teams: { source: "teams", app: "OneDrive (company Teams library)", route: "mac_wired_ipad_existing_native_session" },
+  outlook: { source: "outlook", app: "Outlook", route: "mac_wired_ipad_existing_native_session" }
+};
+var STEPS = {
+  eta: ["base44_cached", "probuild", "outlook"],
+  installation_schedule: ["base44_cached", "google_calendar", "outlook"],
+  service_schedule: ["base44_cached", "google_calendar", "probuild", "outlook"],
+  service_issue: ["base44_cached", "probuild", "onedrive", "teams", "outlook"],
+  missing_parts: ["base44_cached", "probuild", "onedrive", "teams", "outlook"],
+  documents: ["base44_cached", "probuild", "onedrive", "teams", "outlook"],
+  referral: ["base44_cached", "google_calendar", "probuild", "onedrive", "teams", "outlook"],
+  completion: ["base44_cached", "probuild", "google_calendar", "outlook"],
+  technical_question: ["base44_cached", "probuild", "onedrive", "teams", "outlook"],
+  site_clarification: ["base44_cached", "probuild", "outlook"]
+};
+var QUESTIONS = {
+  eta: "Verify the exact order or component arrival estimate and distinguish it from delivery or crew arrival.",
+  installation_schedule: "Verify the current installation date, scope and cancellation status for this job.",
+  service_schedule: "Verify the current service visit date, scope and cancellation status for this job.",
+  service_issue: "Verify the reported issue, exact component and relevant service history without inferring diagnosis or warranty.",
+  missing_parts: "Verify the missing component against the exact order and current source; do not infer availability.",
+  documents: "Find the requested document for this exact job and lot, verify its contents, revision and page coverage.",
+  referral: "Gather existing context for the exact referred job and prepare a private owner question about the referral. Do not infer a complaint, warranty or requested action from a contact card.",
+  completion: "Verify reported work against the requested component and distinguish scheduled, reported and independently confirmed completion.",
+  technical_question: "Locate the exact relevant source document and page; leave unsupported technical interpretation for owner review.",
+  site_clarification: "Verify only the missing site or component identity detail within this exact job; omit unrelated access information."
+};
+var PERMISSIONS = freeze({ research_mapping_only: true, dispatch: false, sends: false, read_state_changes: false, record_changes: false, permissions_changes: false, new_sessions: false, credentials: false, microsoft_web_or_oauth: false });
+var RESEARCH_RESULT_SCHEMA = freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["dedupe_key", "job_id", "identity", "purpose", "date_scope", "source", "app", "observed_at", "search_coverage", "findings", "action_receipt"],
+  properties: {
+    dedupe_key: { type: "string" },
+    job_id: { type: ["string", "null"] },
+    identity: { type: "object", description: "Echo every requested job/order/lot constraint; provisional identity stays unbound." },
+    purpose: { enum: RESEARCH_PURPOSES },
+    date_scope: { type: "object", description: "Echo exact requested range, timezone and current/historical/mixed mode." },
+    source: { enum: Object.keys(ROUTES) },
+    app: { type: "string" },
+    observed_at: { type: "string", format: "date-time" },
+    search_coverage: { type: "object", additionalProperties: false, required: ["scope", "complete", "truncated", "searched_locations", "gaps"], properties: { scope: { const: "selected_job" }, complete: { type: "boolean" }, truncated: { type: "boolean" }, searched_locations: { type: "array", items: { type: "string" } }, gaps: { type: "array", items: { type: "string" } } } },
+    findings: { type: "array", maxItems: 20, items: { type: "object", required: ["source_reference", "path", "page", "revision", "source_date", "observed_at", "sha256", "verification_state"], properties: { source_reference: { type: "string" }, path: { type: ["string", "null"], description: "Exact verified file path or source locator, no credential-bearing URL." }, page: { type: ["integer", "null"], minimum: 1 }, revision: { type: ["string", "null"] }, source_date: { type: ["string", "null"] }, observed_at: { type: "string", format: "date-time" }, sha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }, verification_state: { const: "needs_review" } } } },
+    action_receipt: { type: "object", required: ["sends", "read_state_changes", "record_changes"], properties: { sends: { const: 0 }, read_state_changes: { const: 0 }, record_changes: { const: 0 } } }
+  }
+});
+function approvedEvidence(lookup, scope, dateScope, now) {
+  const rows = Array.isArray(lookup.source_freshness) ? lookup.source_freshness : [], types = /* @__PURE__ */ new Map();
+  for (const r of rows.slice(0, 25)) if (plain(r) && SOURCE_TYPES.has(r.source_type)) types.set(r.source_type, types.has(r.source_type) ? null : r);
+  const checks = [...types].filter(([, s]) => s).map(([source_type, s]) => ({ source_type, state: s.state === "current" && fresh(s.checked_at, now) && s.complete === true ? "current" : "needs_review", checked_at: instant4(s.checked_at) !== null ? s.checked_at : null, range_start: day(s.range_start) ? s.range_start : null, range_end: day(s.range_end) ? s.range_end : null }));
+  const refs = Array.isArray(lookup.references) ? lookup.references : [], facts = Array.isArray(lookup.facts) ? lookup.facts : [], accepted = [];
+  const preparedCurrent = id(lookup.run_id) && fresh(lookup.prepared_at, now) && lookup.stale !== true;
+  for (let i = 0; i < Math.min(refs.length, facts.length, 5); i++) {
+    const r = refs[i], fact = facts[i];
+    if (!plain(r) || !refKey(r.source_key) || !refKey(r.source_id) || !SOURCE_TYPES.has(r.source_type) || !clean(fact, 1e3) || sensitive(fact)) continue;
+    if (refs.filter((v) => v?.source_key === r.source_key).length !== 1) continue;
+    const source = checks.find((s) => s.source_type === r.source_type), date = day(r.date) ? r.date : instant4(r.date) !== null ? denverDay(Date.parse(r.date)) : null;
+    const sameOrder = ["po", "oe"].every((k) => !scope[k] || Array.isArray(r[k + "_numbers"]) && r[k + "_numbers"].some((v) => norm5(v) === norm5(scope[k])));
+    const marker = ` [${scope.job_id}]: `, suffix = ` Source [${r.source_key}], checked ${r.source_checked_at}.`;
+    if (!fact.startsWith("Job ") || !fact.includes(marker) || !fact.endsWith(suffix)) continue;
+    const body = fact.slice(fact.indexOf(marker) + marker.length, -suffix.length);
+    const category = /^(?:An estimated product arrival is listed|Product arrival is scheduled) for /.test(body) ? "eta" : /^Installation is scheduled for /.test(body) ? "installation_schedule" : /^A service visit is scheduled for /.test(body) ? "service_schedule" : null;
+    const sourceAllowed = category === "eta" ? ["sales_tracker", "live_probuild", "probuild_library"] : category === "installation_schedule" ? ["calendar", "live_google", "outlook_installation"] : ["calendar", "live_google", "outlook_service"];
+    const label = r.date + (day(r.date) ? " (calendar date in America/Denver; exact time not provided)" : "");
+    const approvedBodies = [`An estimated product arrival is listed for ${label}. This is an estimate, not confirmation of arrival.`, `Product arrival is scheduled for ${label}. The source labels the schedule confirmed; this does not establish that products have arrived.`, `Installation is scheduled for ${label}. A schedule does not establish completion.`, `A service visit is scheduled for ${label}. A schedule does not establish completion.`];
+    if (!category || !approvedBodies.includes(body) || !sourceAllowed.includes(r.source_type) || !date || !preparedCurrent || !sameOrder || source?.state !== "current" || !fresh(r.source_checked_at, now)) continue;
+    if (dateScope.mode !== "current" || date < dateScope.start_date || date > dateScope.end_date || instant4(r.date) !== null && Date.parse(r.date) < now) continue;
+    if (source.range_start && dateScope.start_date < source.range_start || source.range_end && dateScope.end_date > source.range_end) continue;
+    accepted.push({ category, fact, reference: { source_key: r.source_key, source_type: r.source_type, source_id: r.source_id, date: r.date, source_checked_at: r.source_checked_at } });
+  }
+  return { accepted, checks, unknown_sources_omitted: rows.some((s) => !SOURCE_TYPES.has(s?.source_type)) };
+}
+function buildJobResearchPlan({ query = {}, lookup = {}, research = {}, now } = {}) {
+  const result = { version: RESEARCH_PLAN_VERSION, status: "blocked", reason: null, dedupe_key: null, purpose: null, identity: null, date_scope: null, prepared_run_id: null, verified_facts: [], source_references: [], source_checks: [], steps: [], reply_ready: false, manual_handoff: false, dispatch: false, dispatched: false, automatic_send_allowed: false, auto_attach_to_job: false, batching: { scope: "one_exact_job_or_provisional_triplet", max_parallel_ipad_tasks: 1, reuse_verified_library_result: true }, permissions: PERMISSIONS, result_packet_schema: RESEARCH_RESULT_SCHEMA, result_packet_schema_status: "documentation_only_no_importer" };
+  const stop = (reason) => freeze({ ...result, reason });
+  const clock = instant4(now);
+  if (clock === null) return stop("invalid_current_time");
+  if (!plain(query) || !plain(lookup) || !plain(research)) return stop("invalid_input");
+  if (own(query, "start_date") || own(query, "end_date")) return stop("research_dates_must_be_separate");
+  if (QUERY_KEYS.some((k) => query[k] !== void 0 && !selector(query[k]))) return stop("invalid_identity_selector");
+  const q = Object.fromEntries(QUERY_KEYS.filter((k) => typeof query[k] === "string" && query[k].trim()).map((k) => [k, query[k].trim()]));
+  if (!Object.keys(q).length) return stop("missing_requested_identity");
+  if (q.lot && !/^\d{1,6}[a-z]?$/i.test(q.lot) || /\blots?\s*#?\s*\d+[a-z]?\s*(?:-|\/|,|&|and|through|to)\s*\d+/i.test(q.job_name || "")) return stop("multiple_or_invalid_lots");
+  if (["po", "oe", "job_id", "project_id"].some((k) => q[k] && !/^[A-Za-z0-9_-]+$/.test(q[k]))) return stop("invalid_exact_identifier");
+  if (!RESEARCH_PURPOSES.includes(research.purpose)) return stop("unsupported_research_purpose");
+  if (research.requested_filename !== void 0 && (!selector(research.requested_filename, 250) || /[\\/]/.test(research.requested_filename))) return stop("invalid_document_selector");
+  const dateScope = dates(research, clock);
+  if (!dateScope) return stop("invalid_research_date_scope");
+  result.purpose = research.purpose;
+  result.date_scope = dateScope;
+  const provisional = lookup.status === "not_found" && q.builder && q.subdivision && q.lot && !q.job_id && !q.po && !q.oe && !q.project_id && !q.job_name;
+  if (!provisional && !["matched", "needs_review", "not_prepared"].includes(lookup.status)) return stop("job_identity_requires_review");
+  if (!provisional && (!id(lookup.job_id) || q.job_id && q.job_id !== lookup.job_id || Array.isArray(lookup.candidate_job_ids) && (lookup.candidate_job_ids.length !== 1 || lookup.candidate_job_ids[0] !== lookup.job_id))) return stop("job_identity_mismatch");
+  if (lookup.job_name !== void 0 && !selector(lookup.job_name)) return stop("invalid_canonical_name");
+  const identity = { job_id: provisional ? null : lookup.job_id, canonical_name: provisional ? null : lookup.job_name || null, verification: provisional ? "provisional_lookup_only" : "exact_prepared_lookup", supplied_constraints: q };
+  result.identity = identity;
+  const evidence = provisional ? { accepted: [], checks: [], unknown_sources_omitted: false } : approvedEvidence(lookup, { ...q, job_id: lookup.job_id }, dateScope, clock);
+  result.prepared_run_id = !provisional && id(lookup.run_id) ? lookup.run_id : null;
+  result.source_checks = evidence.checks;
+  result.unknown_sources_omitted = evidence.unknown_sources_omitted;
+  result.verified_facts = evidence.accepted.map((x) => x.fact);
+  result.source_references = evidence.accepted.map((x) => x.reference);
+  const selectors = { ...q, ...identity.canonical_name ? { canonical_name: identity.canonical_name } : {}, ...research.requested_filename ? { requested_filename: research.requested_filename } : {} };
+  result.dedupe_key = RESEARCH_PLAN_VERSION + ":" + fingerprint([identity, result.prepared_run_id, research.purpose, dateScope, selectors, result.source_references]);
+  const matching = evidence.accepted.filter((e) => e.category === research.purpose);
+  if (lookup.status === "matched" && matching.length && !lookup.facts_truncated && !lookup.source_freshness_truncated) {
+    return freeze({ ...result, status: "ready_from_prepared", reason: "current_matching_typed_facts", reply_ready: true, verified_facts: matching.map((e) => e.fact), source_references: matching.map((e) => e.reference) });
+  }
+  const routes = provisional ? STEPS[research.purpose].filter((s) => !["google_calendar", "probuild"].includes(s)) : STEPS[research.purpose];
+  result.steps = routes.map((source, i) => ({ step: i + 1, ...ROUTES[source], question: QUESTIONS[research.purpose], untrusted_selectors: { ...selectors }, job_id: identity.job_id, date_scope: dateScope, document_date_filter: false, requires_explicit_mail_period: source === "outlook" && dateScope.mode === "current_revision", when: source === "teams" ? "Reuse the prior OneDrive library result; search separately only in a different verified company Teams library location." : i ? "Only if earlier scoped checks leave this question unresolved." : "Review the exact cached job or provisional catalog identity first.", stop_conditions: ["Use one iPad surface serially; this packet does not spawn workers or dispatch research.", "Stop on conflicting identity, unavailable existing session, or any required read-state change.", "Mail searches require a bounded relevant period; document searches preserve older files and verify current revision.", "Do not broaden the account, participants, lot, order, source permissions or requested date scope.", "Return evidence for review; no sending, authentication, dispatch or source edits."] }));
+  return freeze({ ...result, status: provisional ? "provisional_lookup" : "research_needed", reason: provisional ? "no_exact_catalog_match_is_not_proof_of_absence" : "specific_current_evidence_required", manual_handoff: true });
 }
 
 // base44/shared/jobKnowledgeRuntime.ts
@@ -2090,10 +2262,10 @@ function denverMidnight(date) {
 // base44/shared/jobKnowledgeProviders.ts
 var GOOGLE_CALENDAR = "iryedra@gmail.com";
 var GOOGLE_API = "https://www.googleapis.com/calendar/v3";
-var DAY2 = 864e5;
+var DAY3 = 864e5;
 var defaultProbuildApi = { getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject };
-var addDays = (date, count) => new Date(Date.parse(date + "T12:00:00Z") + count * DAY2).toISOString().slice(0, 10);
-var id = (value) => typeof value === "string" && value.length > 0 && value.length <= 300 && !/[\s/?#]/.test(value) ? value : null;
+var addDays = (date, count) => new Date(Date.parse(date + "T12:00:00Z") + count * DAY3).toISOString().slice(0, 10);
+var id2 = (value) => typeof value === "string" && value.length > 0 && value.length <= 300 && !/[\s/?#]/.test(value) ? value : null;
 var safeText = (value, max = 2e4) => String(value ?? "").replace(/https?:\/\/[^\s<>"']+/gi, "[link omitted]").slice(0, max);
 var stamp = (value) => {
   const ms = typeof value === "number" ? value : Date.parse(value);
@@ -2146,7 +2318,7 @@ function resultBase(start, end, attemptedAt) {
   return { items: [], attempted_at: attemptedAt, checked_at: null, range_start: start, range_end: end, complete: false, error: null };
 }
 function calendarItem(event) {
-  if (!event || !id(event.id)) throw Error("calendar_invalid_event_identity");
+  if (!event || !id2(event.id)) throw Error("calendar_invalid_event_identity");
   const cancelled = event.status === "cancelled";
   const start = event.start || {}, end = event.end || {};
   const eventDate = start.dateTime ? localDate(start.dateTime) : validDate(start.date) ? start.date : null;
@@ -2169,7 +2341,7 @@ function calendarItem(event) {
     source_location: safeText(event.location, 2e3),
     created_at: stamp(event.created),
     source_updated_at: stamp(event.updated),
-    recurring_event_id: id(event.recurringEventId),
+    recurring_event_id: id2(event.recurringEventId),
     original_start_at: stamp(event.originalStartTime?.dateTime),
     original_start_date: validDate(event.originalStartTime?.date) ? event.originalStartTime.date : null,
     source_text_truncated: String(event.description || "").length > 2e4
@@ -2252,7 +2424,7 @@ async function readProbuild(base44, settings) {
     if (!Array.isArray(projects)) throw Error("probuild_invalid_projects");
     const unique4 = /* @__PURE__ */ new Map();
     for (const project of projects) {
-      if (!project || !id(String(project.id || ""))) throw Error("probuild_invalid_project_identity");
+      if (!project || !id2(String(project.id || ""))) throw Error("probuild_invalid_project_identity");
       if (unique4.has(String(project.id))) throw Error("probuild_duplicate_project_identity");
       unique4.set(String(project.id), project);
     }
@@ -2289,16 +2461,16 @@ async function readProbuild(base44, settings) {
           result.source_posts_read += rows.length;
           rows.sort((a, b) => Math.max(millis(b.post?.createdAt), millis(b.post?.lastModifiedAt), millis(b.post?.deletedAt)) - Math.max(millis(a.post?.createdAt), millis(a.post?.lastModifiedAt), millis(a.post?.deletedAt)));
           for (const row of rows) {
-            if (!row || String(row.projectId) !== String(project.id) || !id(String(row.postId || "")) || !row.post || typeof row.post !== "object") throw Error("probuild_invalid_post_identity");
+            if (!row || String(row.projectId) !== String(project.id) || !id2(String(row.postId || "")) || !row.post || typeof row.post !== "object") throw Error("probuild_invalid_post_identity");
             const post = row.post;
             const created = stamp(post.createdAt), modified = stamp(post.lastModifiedAt || post.updatedAt), deleted = stamp(post.deletedAt);
-            const dates = [created, modified, deleted].filter(Boolean).map(localDate);
-            if (!dates.length) {
+            const dates2 = [created, modified, deleted].filter(Boolean).map(localDate);
+            if (!dates2.length) {
               result.undated_post_count++;
               reasons.add("probuild_undated_posts");
               continue;
             }
-            if (!dates.some((date) => date >= start && date <= end)) continue;
+            if (!dates2.some((date) => date >= start && date <= end)) continue;
             if (items.size >= limits.maxPosts) {
               reasons.add("probuild_post_limit");
               break;
@@ -2373,22 +2545,27 @@ Deno.serve(async (req) => {
       const checked = await verifyCalendarReviews(rows, (/* @__PURE__ */ new Date()).toISOString());
       return reply({ ...checked, revision: REVIEW_VERSION });
     }
-    if (input.action === "lookup_prepared") {
+    if (input.action === "lookup_prepared" || input.action === "plan_research") {
       const query = input.query || {}, now = (/* @__PURE__ */ new Date()).toISOString();
       const jobs = await allKnowledgeRows(api.entities.Jobs, ["id", "canonical_name", "aliases", "builder", "po_numbers", "oe_numbers", "address"]);
       const projectLinks = query.project_id ? await allKnowledgeRows(api.entities.ProbuildProjectLink, ["project_id", "job_id"]) : [];
       const identity = resolvePreparedJobQuery({ query, jobs, projectLinks, catalogComplete: true });
-      if (identity.status !== "matched") return reply(identity);
-      const prepared = await readPreparedJob(api, identity.job_id, now);
-      return reply(buildPreparedJobLookup({ query, jobs, projectLinks, prepared, now }));
+      let lookup = identity;
+      if (identity.status === "matched") {
+        const prepared = await readPreparedJob(api, identity.job_id, now);
+        lookup = buildPreparedJobLookup({ query, jobs, projectLinks, prepared, now });
+      }
+      if (input.action === "lookup_prepared") return reply(lookup);
+      const job = identity.status === "matched" ? jobs.find((j) => j.id === identity.job_id) : null;
+      return reply({ lookup, research_plan: buildJobResearchPlan({ query, lookup: { ...lookup, job_name: job?.canonical_name }, research: input.research || {}, now }) });
     }
     if (input.action === "extract_documents") return reply(await extractJobDocuments(api, { maxFiles: 2 }));
     if (input.action === "refresh") return reply(await refreshJobKnowledge({ api, readTracker: readKnowledgeTracker, readProviders: () => readJobKnowledgeProviders(client), force: input.force === true }));
     if (input.action === "get") return reply(await readPreparedJob(api, input.job_id));
     if (input.action === "status") {
       const [rows, completed] = await Promise.all([api.entities.JobKnowledgeRun.list("-started_at", 5), api.entities.JobKnowledgeRun.filter({ status: "complete" }, "-started_at", 1)]);
-      const clean = ({ unassigned, ...r }) => ({ ...r, unassigned_count: r.unassigned_count ?? unassigned?.length ?? 0 });
-      return reply({ runs: rows.map(clean), latest_complete: completed[0] ? clean(completed[0]) : null, automatic_send_allowed: false, document_extractor_revision: JOB_DOCUMENT_EXTRACTOR_REVISION, calendar_review_revision: REVIEW_VERSION });
+      const clean2 = ({ unassigned, ...r }) => ({ ...r, unassigned_count: r.unassigned_count ?? unassigned?.length ?? 0 });
+      return reply({ runs: rows.map(clean2), latest_complete: completed[0] ? clean2(completed[0]) : null, automatic_send_allowed: false, document_extractor_revision: JOB_DOCUMENT_EXTRACTOR_REVISION, calendar_review_revision: REVIEW_VERSION });
     }
     if (input.action === "unassigned") {
       const run = (await api.entities.JobKnowledgeRun.filter({ status: "complete" }, "-started_at", 1))[0];
