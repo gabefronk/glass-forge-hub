@@ -1,0 +1,1 @@
+import{readFile}from'node:fs/promises';import{transform}from'esbuild';export async function load(url,context,next){if(url.startsWith('file:')&&url.endsWith('.ts')){const source=await readFile(new URL(url),'utf8');return{format:'module',source:(await transform(source,{loader:'ts',format:'esm',target:'es2022'})).code,shortCircuit:true};}return next(url,context);}

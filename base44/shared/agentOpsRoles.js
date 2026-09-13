@@ -1,3 +1,6 @@
+import { fetchAllPages } from './pagination.ts';
+import { denverDate } from './billingCore.js';
+
 // Autonomous daily operations roles + reconciliation for the Agent Center.
 // Backend-only: shared by the runDailyOperations function. The frontend keeps
 // its own copy of the daily-plan text in src/lib/agentCenterRoles.js for the
@@ -39,6 +42,56 @@ export const SECTION_LEADS = [
 export const DEFAULT_ENABLEMENT = Object.fromEntries(SECTION_LEADS.map(l => [l.id, true]));
 
 const MISSING_REPORT_STATES = ['missing_all', 'missing_photos', 'missing_notes'];
+const KNOWLEDGE_LEADS = ['calendar_ops_lead', 'sales_order_lead', 'field_reporting_lead', 'development_lead'];
+const SOURCE_ROLES = {
+  calendar_ops_lead: ['live_google', 'outlook_installation', 'outlook_service'],
+  sales_order_lead: ['sales_tracker'],
+  field_reporting_lead: ['live_probuild', 'probuild_library', 'documents'],
+};
+const nowFor = ctx => {
+  const value = typeof ctx.now === 'function' ? ctx.now() : (ctx.now || new Date());
+  const now = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(now.getTime())) throw Error('Invalid daily operations clock.');
+  return now;
+};
+const readOnce = (ctx, key, action) => {
+  if (!ctx.dailyReadCache) return action();
+  if (!ctx.dailyReadCache.has(key)) ctx.dailyReadCache.set(key, Promise.resolve().then(action));
+  return ctx.dailyReadCache.get(key);
+};
+const calendarRows = ctx => readOnce(ctx, 'calendar_rows', () => fetchAllPages(ctx.entities.CalendarEvents, '-event_date', 1000));
+const pastRequired = (events, today) => events.filter(event => typeof event.event_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(event.event_date) && event.event_date <= today && event.source_status !== 'cancelled' && event.report_required !== false);
+const sourceLabel = key => ({ live_google: 'Google Calendar live read', outlook_installation: 'Outlook installation capture', outlook_service: 'Outlook service capture', sales_tracker: 'Sales Tracker capture', live_probuild: 'ProBuild incremental live read', probuild_library: 'ProBuild saved library', documents: 'Document evidence' })[key] || key.replaceAll('_', ' ');
+
+function sourceReview(key, source, nowMs) {
+  const label = sourceLabel(key);
+  if (!source || source.available !== true) return { text: label + ': unavailable', gap: true };
+  if (source.complete !== true || source.coverage?.fresh_complete === false) return { text: label + ': incomplete coverage', gap: true };
+  const checked = Date.parse(source.checked_at);
+  if (!Number.isFinite(checked) || checked > nowMs + 300000) return { text: label + ': source freshness unverified', gap: true };
+  if (nowMs - checked > 26 * 3600000) return { text: label + ': stale capture (' + new Date(checked).toISOString() + ')', gap: true };
+  const range = source.range_start && source.range_end ? ` for ${source.range_start} through ${source.range_end}` : '';
+  return { text: label + ': checked ' + new Date(checked).toISOString() + range + (key === 'live_probuild' ? ' (incremental scope; historical library not revalidated)' : ''), gap: false };
+}
+
+async function knowledgeReview(lead, ctx) {
+  if (!KNOWLEDGE_LEADS.includes(lead.id)) return { summary: '', exceptions: [] };
+  const rows = await readOnce(ctx, 'knowledge_run', () => ctx.entities.JobKnowledgeRun.filter({ status: 'complete' }, '-started_at', 1));
+  const run = Array.isArray(rows) ? rows[0] : null;
+  if (!run) return { summary: 'Job information has no completed preparation run.', exceptions: ['Job information is not prepared; source coverage and job assignments need review.'] };
+  const nowMs = nowFor(ctx).getTime(), checked = Date.parse(run.completed_at), exceptions = [];
+  if (!Number.isFinite(checked) || checked > nowMs + 300000 || nowMs - checked > 26 * 3600000) exceptions.push('The latest completed job preparation is stale or has an invalid completion time.');
+  const keys = SOURCE_ROLES[lead.id] || Object.keys(run.source_status || {});
+  const sources = keys.map(key => sourceReview(key, run.source_status?.[key], nowMs));
+  const gapSources = sources.filter(source => source.gap);
+  if (gapSources.length) exceptions.push('Job source checks need attention: ' + gapSources.map(source => source.text).join('; ') + '.');
+  const issues = (Array.isArray(run.issues) ? run.issues : []).filter(issue => issue && !['resolved', 'closed'].includes(issue.status) && (lead.id === 'development_lead' || issue.assigned_to === lead.id));
+  const codes = [...new Set(issues.map(issue => /^[a-z0-9_:-]{1,100}$/i.test(String(issue.code || '')) ? issue.code.replaceAll('_', ' ') : 'source review required'))];
+  if (issues.length) exceptions.push(`${issues.length} unresolved job-data issues assigned to ${lead.id === 'development_lead' ? 'section leads' : lead.name}: ${codes.slice(0, 8).join(', ')}${codes.length > 8 ? ', and additional issues' : ''}.`);
+  const jobs = Number.isSafeInteger(run.counts?.jobs) ? run.counts.jobs : 0;
+  const unassigned = Number.isSafeInteger(run.unassigned_count) ? run.unassigned_count : (Number.isSafeInteger(run.counts?.unassigned_records) ? run.counts.unassigned_records : 0);
+  return { summary: `Job preparation ${run.id}: ${jobs} job dossiers, ${unassigned} unassigned source records, ${issues.length} relevant unresolved issues. ` + sources.map(source => source.text).join('; ') + '.', exceptions };
+}
 
 export async function checkConnector(kind, ctx) {
   try {
@@ -46,8 +99,13 @@ export async function checkConnector(kind, ctx) {
       const c = await ctx.connectors.getConnection(kind);
       return Boolean(c && c.accessToken);
     }
-    if (kind === 'probuild') return Boolean(ctx.secrets.get('PROBUILD_REFRESH_TOKEN'));
-    if (kind === 'superagent') return Boolean(ctx.secrets.get('WINDOW_QUOTES_SUPERAGENT_API_KEY'));
+    if (kind === 'probuild') {
+      // Normal auth rotation can leave the active token in ProbuildAuth rather
+      // than in the original secret. Presence is configuration, not health.
+      const records = ctx.entities.ProbuildAuth ? await ctx.entities.ProbuildAuth.list('-updated_date', 1).catch(() => []) : [];
+      return Boolean(records?.[0]?.refresh_token || await ctx.secrets?.get('PROBUILD_REFRESH_TOKEN'));
+    }
+    if (kind === 'superagent') return Boolean(await ctx.secrets?.get('WINDOW_QUOTES_SUPERAGENT_API_KEY'));
   } catch { return false; }
   return false;
 }
@@ -62,38 +120,38 @@ export async function reconcileLead(lead, ctx) {
   let connectorAvailable = null;
   if (lead.connector) {
     connectorAvailable = await checkConnector(lead.connector, ctx);
-    if (!connectorAvailable) exceptions.push(`Requires new external authorization: ${lead.connectorLabel} is not configured.`);
+    if (!connectorAvailable) exceptions.push(`${lead.connectorLabel} configuration could not be confirmed; check its connection before requesting new authorization.`);
   }
   try {
     if (lead.id === 'calendar_ops_lead') {
-      const events = await ctx.entities.CalendarEvents.list('-event_date', 200);
-      const today = new Date().toISOString().slice(0, 10);
-      const past = events.filter(e => (e.event_date || '') <= today);
+      const events = await calendarRows(ctx);
+      const today = denverDate(nowFor(ctx));
+      const past = pastRequired(events, today);
       const pending = past.filter(e => e.report_status === 'pending').length;
       const missing = past.filter(e => MISSING_REPORT_STATES.includes(e.report_status)).length;
       const late = past.filter(e => MISSING_REPORT_STATES.includes(e.report_status) && (e.days_late || 0) > 0).length;
-      summary = `Reconciled ${past.length} scheduled events: ${pending} pending, ${missing} missing/incomplete reports, ${late} past grace.`;
+      summary = `Reviewed all ${events.length} stored calendar rows; ${past.length} past/current required events: ${pending} pending, ${missing} missing/incomplete reports, ${late} past grace.`;
       if (late > 0) exceptions.push(`${late} calendar events have missing field reports past the grace period (missing required data).`);
     } else if (lead.id === 'sales_order_lead') {
       const quotes = await ctx.entities.QuoteRequests.list('-created_date', 100);
       const open = quotes.filter(q => q.sales_status !== 'won');
       const failed = open.filter(q => q.worker_status === 'failed').length;
       const needsDetails = open.filter(q => q.worker_status === 'needs_details').length;
-      summary = `Reviewed ${open.length} open sales/order requests: ${failed} failed, ${needsDetails} need details.`;
+      summary = `Reviewed ${open.length} open requests among the latest ${quotes.length} sales/order records: ${failed} failed, ${needsDetails} need details.`;
       if (failed > 0) exceptions.push(`${failed} sales/order requests failed and need owner review (conflicting records).`);
     } else if (lead.id === 'field_reporting_lead') {
-      const events = await ctx.entities.CalendarEvents.list('-event_date', 200);
-      const today = new Date().toISOString().slice(0, 10);
-      const past = events.filter(e => (e.event_date || '') <= today);
+      const events = await calendarRows(ctx);
+      const today = denverDate(nowFor(ctx));
+      const past = pastRequired(events, today);
       const missing = past.filter(e => MISSING_REPORT_STATES.includes(e.report_status));
-      const reports = await ctx.entities.FieldReports.list('-created_at', 100);
-      summary = `Reconciled ${past.length} events and ${reports.length} recent field reports: ${missing.length} events missing reports.`;
+      const reports = await readOnce(ctx, 'field_reports', () => fetchAllPages(ctx.entities.FieldReports, '-created_at', 1000));
+      summary = `Reviewed ${past.length} past/current required events and all ${reports.length} stored field reports: ${missing.length} events missing reports.`;
       if (missing.length > 0) exceptions.push(`${missing.length} field reports missing (missing required data).`);
     } else if (lead.id === 'quoting_lead') {
       const quotes = await ctx.entities.QuoteRequests.list('-created_date', 100);
       const failed = quotes.filter(q => q.worker_status === 'failed').length;
       const needsSign = quotes.filter(q => q.worker_status === 'needs_sign_in').length;
-      summary = `Reviewed ${quotes.length} quote requests: ${failed} failed, ${needsSign} need sign-in.`;
+      summary = `Reviewed the latest ${quotes.length} quote requests: ${failed} failed, ${needsSign} need sign-in.`;
       if (failed > 0) exceptions.push(`${failed} quote requests failed (conflicting records or connector failure).`);
       if (needsSign > 0) exceptions.push(`${needsSign} quote requests need account sign-in (requires new external authorization).`);
     } else if (lead.id === 'development_lead') {
@@ -101,15 +159,22 @@ export async function reconcileLead(lead, ctx) {
       const drive = await checkConnector('googledrive', ctx);
       const quotes = await ctx.entities.QuoteRequests.list('-created_date', 50);
       const failed = quotes.filter(q => q.worker_status === 'failed').length;
-      summary = `Integration health: Google Calendar ${cal ? 'ok' : 'unavailable'}, Google Drive ${drive ? 'ok' : 'unavailable'}, ${failed} failed quote requests.`;
+      summary = `Connector configuration: Google Calendar ${cal ? 'configured' : 'unavailable'}, Google Drive ${drive ? 'configured' : 'unavailable'}. Configuration alone does not verify a source read. ${failed} failed requests among the latest ${quotes.length} quote records.`;
       if (!cal) exceptions.push('Google Calendar connector unavailable (connector failure).');
       if (!drive) exceptions.push('Google Drive connector unavailable (connector failure).');
     } else {
       summary = `Routine reconciliation completed for ${lead.name}.`;
     }
   } catch (e) {
-    exceptions.push(`Could not reconcile internal status: ${e.message || e} (connector failure or data unavailable).`);
+    exceptions.push('Could not completely read internal status; pagination, connector or data access needs review.');
     if (!summary) summary = `Reconciliation incomplete for ${lead.name}.`;
+  }
+  try {
+    const knowledge = await knowledgeReview(lead, ctx);
+    if (knowledge.summary) summary += ' ' + knowledge.summary;
+    exceptions.push(...knowledge.exceptions);
+  } catch {
+    exceptions.push('The latest completed job-information preparation could not be read; job source coverage is unverified.');
   }
   return { summary, exceptions, connectorAvailable };
 }
@@ -131,7 +196,9 @@ export async function executeDailyRuns(ctx, { triggeredBy = 'scheduler', onlyLea
   const config = await getOrCreateConfig(ctx);
   if (!config.autonomous_enabled) return { skipped: true, reason: 'Autonomous operations disabled.' };
   if (config.paused && triggeredBy === 'scheduler') return { skipped: true, reason: 'Autonomous operations paused.' };
-  const runDate = new Date().toISOString().slice(0, 10);
+  const runNow = nowFor(ctx);
+  const runDate = denverDate(runNow);
+  const runCtx = { ...ctx, now: runNow, dailyReadCache: new Map() };
   const leads = SECTION_LEADS.filter(l => onlyLeadId ? l.id === onlyLeadId : (config.lead_enablement && config.lead_enablement[l.id] !== false));
   const results = [];
   for (const lead of leads) {
@@ -141,8 +208,8 @@ export async function executeDailyRuns(ctx, { triggeredBy = 'scheduler', onlyLea
       summary: '', blockers: [], exceptions: [], plan_snapshot: lead.plan, escalated: false,
     });
     let result;
-    try { result = await reconcileLead(lead, ctx); }
-    catch (e) { result = { summary: `Reconciliation failed: ${e.message || e}`, exceptions: ['Connector failure or data unavailable prevented reconciliation.'] }; }
+    try { result = await reconcileLead(lead, runCtx); }
+    catch { result = { summary: 'Reconciliation failed; internal data access needs review.', exceptions: ['Connector failure or data unavailable prevented reconciliation.'] }; }
     const exceptions = result.exceptions || [];
     const state = exceptions.length > 0 ? 'blocked' : 'completed';
     const updated = await ctx.entities.AgentDailyRun.update(run.id, {

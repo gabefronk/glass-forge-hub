@@ -122,7 +122,7 @@ export default function JobKnowledgeReview() {
   if(!owner)return null;
   const now=Date.now(),sources=Object.entries(currentRun?.source_status||{}),counts=currentRun?.counts||{};
   const needsCheck=sources.filter(([,source])=>freshness(source,now).label!=='Current within listed scope').length;
-  const attemptFailed=latestAttempt?.status==='failed',attemptRunning=latestAttempt?.status==='running';
+  const attemptFailed=latestAttempt?.status==='failed',attemptRunning=latestAttempt?.status==='building';
   const age=now-Date.parse(currentRun?.started_at),preparationOld=!!currentRun&&(!Number.isFinite(age)||age<0||age>26*3600000);
   return <section id="job-preparation" aria-label="Job preparation review" className="rounded-2xl border border-[#DDE3EC] bg-white p-5 sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold text-slate-900">Job preparation</h2><p className="mt-1 max-w-2xl text-sm text-slate-600">The assistant’s job context, source freshness and records awaiting a reliable job match.</p></div><button type="button" onClick={checkStatus} disabled={busy} className={control}><RefreshCw aria-hidden="true" className={'h-4 w-4 '+(busy?'animate-spin':'')}/>{busy?'Checking…':'Check status'}</button></div>
