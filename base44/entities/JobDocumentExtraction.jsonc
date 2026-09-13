@@ -50,6 +50,9 @@
     },
     "error_http_status": {
       "type": "integer"
+    },
+    "error_redirect_origin": {
+      "type": "string"
     }
   },
   "required": [

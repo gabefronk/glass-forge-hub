@@ -144,7 +144,7 @@ test('actual mp/private namespace is reused after full SHA and PDF verification'
   const { api, calls } = fixture([f]);
   const result = await extractJobDocuments(api, { now });
   assert.equal(result.extracted, 1); assert.equal(calls.privateUploads.length, 0);
-  assert.equal(calls.signed[0].file_uri, f.file_uri); assert.equal(calls.fetched[0].options.redirect, 'error');
+  assert.equal(calls.signed[0].file_uri, f.file_uri); assert.equal(calls.fetched[0].options.redirect, 'manual');
   assert.equal(calls.extraction[0].file_url, calls.fetched[0].url);
 });
 
@@ -253,4 +253,11 @@ test('future or invalid receipt timestamps cannot be retried through revision mi
     const f=fixture([file()],[{id:'old',extraction_key:'pdf1:'+digest,status:'failed',checked_at}]);
     const r=await extractJobDocuments(f.api,{now});assert.equal(r.attempted,0);assert.equal(r.retry_deferred,1);
   }
+});
+
+test('storage redirects are not followed and only their origin is reported', async () => {
+  const f=fixture();f.fetchImpl=async()=>new Response(null,{status:302,headers:{location:'https://storage.example/private.pdf?signature=TOP-SECRET'}});
+  const r=await extractJobDocuments(f.api,{now});
+  assert.equal(r.outcomes[0].error_code,'private_file_redirect');assert.equal(r.outcomes[0].error_http_status,302);assert.equal(r.outcomes[0].error_redirect_origin,'https://storage.example');
+  assert.equal(f.calls.extraction.length,0);assert(!JSON.stringify([r,f.records]).includes('TOP-SECRET'));assert(!JSON.stringify([r,f.records]).includes('private.pdf'));
 });

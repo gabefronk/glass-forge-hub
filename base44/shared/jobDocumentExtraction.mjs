@@ -2,19 +2,20 @@
 // files, jobs, arrivals, calendars, quotes and fees are never modified here.
 const MAX_BYTES = 8 * 1024 * 1024;
 const RETRY_MS = 24 * 60 * 60 * 1000;
-export const JOB_DOCUMENT_EXTRACTOR_REVISION = 'job-pdf-20260913-r3';
+export const JOB_DOCUMENT_EXTRACTOR_REVISION = 'job-pdf-20260913-r4';
 // Only explicitly superseded implementations receive one immediate retry.
 // Missing revision denotes the earlier implementation's legacy receipts.
-const SUPERSEDED_REVISIONS = new Set(['', 'job-pdf-20260913-r1', 'job-pdf-20260913-r2']);
+const SUPERSEDED_REVISIONS = new Set(['', 'job-pdf-20260913-r1', 'job-pdf-20260913-r2', 'job-pdf-20260913-r3']);
 const ERROR_STAGES = new Set(['candidate_listing', 'existing_state', 'source_receipt', 'private_sign', 'private_read', 'chunk_receipt', 'chunk_hash', 'source_hash', 'pdf_signature', 'private_copy_upload', 'private_copy_hash', 'extract_provider', 'extract_schema', 'save_receipt']);
-const ERROR_CODES = new Set(['source_receipt_changed', 'private_file_required', 'signed_file_unavailable', 'private_file_read_failed', 'private_file_overflow', 'private_file_size_changed', 'invalid_private_chunks', 'private_manifest_changed', 'private_chunk_changed', 'private_file_hash_changed', 'private_file_not_pdf', 'private_copy_changed', 'invalid_extraction_shape', 'invalid_extraction_text', 'invalid_extraction_page', 'invalid_document_type', 'invalid_extraction_items', 'invalid_job_identifier_type', 'invalid_document_date', 'diagram_is_not_operational_schedule', 'extraction_result_too_large', 'extraction_provider_failed', 'document_run_deadline', 'document_operation_deadline', 'document_candidates_invalid', 'document_candidates_repeated']);
+const ERROR_CODES = new Set(['private_file_redirect', 'source_receipt_changed', 'private_file_required', 'signed_file_unavailable', 'private_file_read_failed', 'private_file_overflow', 'private_file_size_changed', 'invalid_private_chunks', 'private_manifest_changed', 'private_chunk_changed', 'private_file_hash_changed', 'private_file_not_pdf', 'private_copy_changed', 'invalid_extraction_shape', 'invalid_extraction_text', 'invalid_extraction_page', 'invalid_document_type', 'invalid_extraction_items', 'invalid_job_identifier_type', 'invalid_document_date', 'diagram_is_not_operational_schedule', 'extraction_result_too_large', 'extraction_provider_failed', 'document_run_deadline', 'document_operation_deadline', 'document_candidates_invalid', 'document_candidates_repeated']);
 function safeDiagnostic(stage, error) {
-  const status = [error?.status, error?.response?.status].find(value => Number.isInteger(value) && value >= 400 && value <= 599);
+  const status = [error?.status, error?.response?.status].find(value => Number.isInteger(value) && value >= 300 && value <= 599);
   const name = error?.name;
   return {
     error_stage: ERROR_STAGES.has(stage) ? stage : 'source_receipt',
     error_code: ERROR_CODES.has(error?.message) ? error.message : status ? 'provider_http_error' : ['AbortError', 'TimeoutError'].includes(name) ? 'provider_timeout' : name === 'TypeError' ? 'provider_type_error' : 'provider_operation_failed',
-    ...(status ? { error_http_status: status } : {})
+    ...(status ? { error_http_status: status } : {}),
+    ...(typeof error?.safeRedirectOrigin === 'string' && /^https:\/\/[a-z0-9.-]+(?::443)?$/.test(error.safeRedirectOrigin) ? { error_redirect_origin: error.safeRedirectOrigin } : {})
   };
 }
 const DOCUMENT_TYPES = ['invoice', 'quote', 'order_confirmation', 'service_report', 'delivery_notice', 'parts_diagram', 'technical_specification', 'other', 'unknown'];
@@ -124,7 +125,12 @@ async function readPrivateBytes(api, uri, expectedSize, fetchImpl, run, diagnost
   const bytes = await run(async () => {
     // Covers both the response and its streaming body. Refuse redirects instead
     // of following a signed source URL to a new, unverified destination.
-    const response = await fetchImpl(url, { signal: AbortSignal.timeout(20000), redirect: 'error' });
+    const response = await fetchImpl(url, { signal: AbortSignal.timeout(20000), redirect: 'manual' });
+    if (response.status >= 300 && response.status < 400) {
+      let origin = '';
+      try { origin = new URL(response.headers.get('location'), url).origin; } catch {}
+      throw Object.assign(Error('private_file_redirect'), { status: response.status, safeRedirectOrigin: origin });
+    }
     if (!response.ok) throw Object.assign(Error('private_file_read_failed'), { status: response.status });
     if (!response.body) throw Error('private_file_read_failed');
     if (Number(response.headers.get('content-length')) > expectedSize) throw Error('private_file_overflow');
@@ -258,7 +264,7 @@ export async function extractJobDocuments(api, { now = new Date(), maxFiles = 2,
     if (revisionRetry) result.revision_retries++;
     const record = { extraction_key: key, file_id: file.id, sha256: file.sha256.toLowerCase(),
       source_project_id: String(file.source_project_id || ''), source_post_id: String(file.source_post_id || ''), source_attachment_id: String(file.source_attachment_id || ''),
-      status: 'failed', checked_at: at, extractor_revision: JOB_DOCUMENT_EXTRACTOR_REVISION, attempts: (Number(existing?.attempts) || 0) + 1, result: null, error: '', error_stage: '', error_code: '', error_http_status: null };
+      status: 'failed', checked_at: at, extractor_revision: JOB_DOCUMENT_EXTRACTOR_REVISION, attempts: (Number(existing?.attempts) || 0) + 1, result: null, error: '', error_stage: '', error_code: '', error_http_status: null, error_redirect_origin: '' };
     const diagnostic = { stage: 'source_receipt' };
     try {
       // Recheck the receipt immediately before signing; changed/deleted source
@@ -279,7 +285,7 @@ export async function extractJobDocuments(api, { now = new Date(), maxFiles = 2,
     try {
       const saved = await run(() => existing ? api.entities.JobDocumentExtraction.update(existing.id, record) : api.entities.JobDocumentExtraction.create(record));
       result[record.status === 'extracted_needs_review' ? 'extracted' : 'failed']++;
-      result.outcomes.push({ file_id: file.id, extraction_id: saved?.id || existing?.id || null, status: record.status, ...(record.status === 'failed' ? { error_stage: record.error_stage, error_code: record.error_code, ...(record.error_http_status ? { error_http_status: record.error_http_status } : {}) } : {}) });
+      result.outcomes.push({ file_id: file.id, extraction_id: saved?.id || existing?.id || null, status: record.status, ...(record.status === 'failed' ? { error_stage: record.error_stage, error_code: record.error_code, ...(record.error_http_status ? { error_http_status: record.error_http_status } : {}), ...(record.error_redirect_origin ? { error_redirect_origin: record.error_redirect_origin } : {}) } : {}) });
     } catch (error) {
       result.failed++;
       result.outcomes.push({ file_id: file.id, status: 'failed', error: 'Extraction receipt could not be saved; original file preserved.', ...safeDiagnostic('save_receipt', error) });
