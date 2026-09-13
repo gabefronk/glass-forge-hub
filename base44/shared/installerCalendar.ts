@@ -44,7 +44,10 @@ export function buildInstallerEvent(ev) {
   if (useTime) {
     // Timed event: copy source end_time exactly (fallback +1h if missing).
     const endTime = (end_time && /^\d{2}:\d{2}$/.test(end_time)) ? end_time : addHour(start_time);
-    end = { dateTime: `${event_date}T${endTime}:00`, timeZone: 'America/Denver' };
+    // End times at/before the start belong to the following day, including the
+    // +1h fallback from 23:xx. Preserve the source clock time and Denver zone.
+    const timedEndDate = endTime <= start_time ? addDay(event_date) : event_date;
+    end = { dateTime: `${timedEndDate}T${endTime}:00`, timeZone: 'America/Denver' };
   } else {
     // All-day: Google treats end.date as EXCLUSIVE. Use stored end_date or start + 1 day.
     end = { date: end_date || addDay(event_date) };
@@ -75,16 +78,36 @@ export function buildInstallerEvent(ev) {
 // sourceGoogleEventId → installer event ID. Used for idempotent matching
 // when a CalendarEvents row has no stored installer_event_id.
 export async function fetchInstallerEventMap(headers) {
-  const url = `${CAL_API}/calendars/${encodeURIComponent(INSTALLER_CAL_ID)}/events?maxResults=2500&singleEvents=true`;
-  const res = await fetch(url, { headers });
-  if (!res.ok) return new Map();
-  const data = await res.json();
+  const baseUrl = `${CAL_API}/calendars/${encodeURIComponent(INSTALLER_CAL_ID)}/events?maxResults=2500&singleEvents=true`;
   const map = new Map();
-  for (const ev of data.items || []) {
-    const sid = ev.extendedProperties?.private?.sourceGoogleEventId;
-    if (sid) map.set(sid, ev.id);
+  const visitedTokens = new Set();
+  let pageToken = null;
+  for (let page = 0; page < 50; page++) {
+    const url = baseUrl + (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '');
+    const res = await fetch(url, { headers });
+    // Missing identity lookup is not an empty calendar. Fail before callers
+    // can create a duplicate installer event based on incomplete evidence.
+    if (!res.ok) throw new Error(`Installer calendar lookup failed (HTTP ${res.status}).`);
+    const data = await res.json();
+    if (!data || typeof data !== 'object' || Array.isArray(data) || data.error || (data.items !== undefined && !Array.isArray(data.items))) {
+      throw new Error('Installer calendar lookup returned an invalid page.');
+    }
+    for (const ev of data.items || []) {
+      if (!ev || typeof ev !== 'object') throw new Error('Installer calendar lookup returned an invalid event.');
+      const sid = ev.extendedProperties?.private?.sourceGoogleEventId;
+      if (sid) {
+        if (typeof sid !== 'string' || typeof ev.id !== 'string' || !ev.id) throw new Error('Installer calendar lookup returned an invalid event identity.');
+        map.set(sid, ev.id);
+      }
+    }
+    if (data.nextPageToken == null || data.nextPageToken === '') return map;
+    if (typeof data.nextPageToken !== 'string' || visitedTokens.has(data.nextPageToken)) {
+      throw new Error('Installer calendar lookup returned an invalid or repeated page token.');
+    }
+    visitedTokens.add(data.nextPageToken);
+    pageToken = data.nextPageToken;
   }
-  return map;
+  throw new Error('Installer calendar lookup exceeded 50 pages; completeness is not verified.');
 }
 
 // Upsert a single event to the installer calendar. If existingId is present,
