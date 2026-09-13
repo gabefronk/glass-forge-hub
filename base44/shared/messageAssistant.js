@@ -26,7 +26,7 @@ export function validateAnalysis(result,{messages,jobs,historyComplete}){
  if(chosenPhotos.some(a=>a.status!=='ready'))missing.push('Some selected photos have not finished importing.');
  const ack=byGuid.get(result.ack_evidence_guid),already=Boolean(result.acknowledgment_already_sent&&ack?.direction==='outgoing'&&Date.parse(ack.sent_at)>=Date.parse(source?.sent_at));
  if(result.acknowledgment_already_sent&&!already)missing.push('The claimed previous acknowledgment could not be verified.');
- return {...result,drafting_policy_version:MESSAGE_DRAFT_POLICY_VERSION,summary:trim(result.summary,4000),service_text:job?trim(result.service_text,8000):'',reply_text:already?'':trim(result.reply_text,2000),issues:(result.issues||[]).slice(0,20).map(v=>trim(v,1000)),source_message_guids:evidence,photos:chosenPhotos.map(({file_uri,...a})=>a),job:job||null,missing_info:[...new Set(missing)],acknowledgment_already_sent:already,ack_evidence_guid:already?ack.source_guid:'',draft_only:true};
+ return {...result,drafting_policy_version:MESSAGE_DRAFT_POLICY_VERSION,solution_map_version:MESSAGE_SOLUTION_MAP_VERSION,summary:trim(result.summary,4000),service_text:job?trim(result.service_text,8000):'',reply_text:already?'':trim(result.reply_text,2000),issues:(result.issues||[]).slice(0,20).map(v=>trim(v,1000)),source_message_guids:evidence,photos:chosenPhotos.map(({file_uri,...a})=>a),job:job||null,missing_info:[...new Set(missing)],acknowledgment_already_sent:already,ack_evidence_guid:already?ack.source_guid:'',draft_only:true};
 }
 async function rows(entity,query,sort='-created_date',max=2000){
  const out=[];for(let skip=0;skip<max;skip+=500){const p=query?await entity.filter(query,sort,500,skip):await entity.list(sort,500,skip);out.push(...p);if(p.length<500)return out;}throw Error('Source is too large for a complete lookup.');
@@ -115,7 +115,7 @@ export function createMessageAssistantHandler({getClient,loadDirectory,now=()=>n
    if(!contacts.length)return reply({error:'Match a work contact before preparing a service request.'},409);
    let messages=await api.MessageRecord.filter({conversation_key:conversationKey},'-sent_at',251);
    const truncated=messages.length>250;messages=messages.slice(0,250).filter(m=>!m.retracted_at);
-   const digest=await hash('assistant-v2:'+MESSAGE_DRAFT_POLICY_VERSION+':'+JSON.stringify(messages.map(m=>[m.source_guid,m.text,m.edited_at,m.attachments?.map(a=>[a.guid,a.status])])));
+   const digest=await hash('assistant-v2:'+MESSAGE_DRAFT_POLICY_VERSION+':'+MESSAGE_SOLUTION_MAP_VERSION+':'+JSON.stringify(messages.map(m=>[m.source_guid,m.text,m.edited_at,m.attachments?.map(a=>[a.guid,a.status])])));
    const cached=(await api.MessageServiceCase.filter({conversation_key:conversationKey,source_digest:digest},'-reviewed_at',1))[0];
    if(cached)return reply({case:cached,cached:true});
    const capture=(await api.MessageAssistantCapture.filter({conversation_key:conversationKey},'-created_date',1))[0];
