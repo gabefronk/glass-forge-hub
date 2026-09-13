@@ -1,0 +1,114 @@
+{
+  "name": "CalendarReviewCapture",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "integer"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "verified"
+      ]
+    },
+    "capture_key": {
+      "type": "string"
+    },
+    "package_sha256": {
+      "type": "string"
+    },
+    "calendar_name": {
+      "type": "string",
+      "enum": [
+        "UT DC Service",
+        "UT Window Install"
+      ]
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "range_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "range_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "timezone": {
+      "type": "string",
+      "enum": [
+        "America/Denver"
+      ]
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "selected_job_candidates"
+      ]
+    },
+    "complete": {
+      "type": "boolean",
+      "default": false
+    },
+    "agenda_coverage_complete": {
+      "type": "boolean"
+    },
+    "selected_detail_coverage_complete": {
+      "type": "boolean"
+    },
+    "full_calendar_details_complete": {
+      "type": "boolean",
+      "default": false
+    },
+    "source_manifest": {
+      "type": "object"
+    },
+    "selected_events": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "deferred_agenda": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "daily_coverage": {
+      "type": "object"
+    },
+    "content_sha256": {
+      "type": "string"
+    }
+  },
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "capture_key",
+    "package_sha256",
+    "calendar_name",
+    "captured_at",
+    "range_start",
+    "range_end",
+    "timezone",
+    "scope",
+    "complete",
+    "agenda_coverage_complete",
+    "selected_detail_coverage_complete",
+    "full_calendar_details_complete",
+    "source_manifest",
+    "selected_events",
+    "deferred_agenda",
+    "daily_coverage",
+    "content_sha256"
+  ]
+}
