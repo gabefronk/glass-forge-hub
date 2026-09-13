@@ -13,7 +13,12 @@ export function text(v,n=200){if(typeof v!=='string'||v.length>n||/[\u0000-\u000
 const key=v=>{text(v,180);if(!/^[A-Za-z0-9:_-]+$/.test(v))fail(400,'Invalid identifier.');return v;};
 const at=n=>new Date(n).toISOString();
 export function initialState(){return {protocol_version:QUEUE_VERSION,paused:true,tasks:[],active_task_id:null,worker_id:WORKER_ID,last_worker_seen_at:null};}
-export function checkState(s){if(!s||s.protocol_version!==QUEUE_VERSION||!Array.isArray(s.tasks)||s.tasks.length>MAX_TASKS||s.worker_id!==WORKER_ID||new Set(s.tasks.map(t=>t.task_id)).size!==s.tasks.length||new Set(s.tasks.map(t=>t.request_key)).size!==s.tasks.length)fail(503,'Research queue needs operator review.');return s;}
+export function checkState(s){
+  if(!s||s.protocol_version!==QUEUE_VERSION||!Array.isArray(s.tasks)||s.tasks.length>MAX_TASKS||s.worker_id!==WORKER_ID||new Set(s.tasks.map(t=>t.task_id)).size!==s.tasks.length||new Set(s.tasks.map(t=>t.request_key)).size!==s.tasks.length)fail(503,'Research queue needs operator review.');
+  const active=s.tasks.filter(t=>t.status==='claimed'||t.status==='cancel_requested');
+  if(active.length>1||(active.length===0&&s.active_task_id!==null)||(active.length===1&&s.active_task_id!==active[0].task_id))fail(503,'Research queue needs operator review.');
+  return s;
+}
 export const taskSummary=t=>({task_id:t.task_id,request_key:t.request_key,job_id:t.packet?.identity?.job_id,job_name:t.packet?.identity?.canonical_name,purpose:t.packet?.purpose,status:t.status,created_at:t.created_at,updated_at:t.updated_at,lease_expires_at:t.lease_expires_at||null,local_job_id:t.result?.local_job_id||null,result:t.result||null,error:t.error||null});
 const assignment=t=>({task_id:t.task_id,request_key:t.request_key,claim_id:t.claim_id,payload_sha256:t.payload_sha256,lease_expires_at:t.lease_expires_at,max_runtime_seconds:900,max_turns:40,packet:t.packet});
 const bound=(s,input)=>{const t=s.tasks.find(t=>t.task_id===key(input.task_id));if(!t)fail(404,'Task not found.');if(t.worker_id!==WORKER_ID||t.claim_id!==input.claim_id||t.payload_sha256!==input.payload_sha256)fail(409,'Task assignment changed; reconcile the existing attempt.');return t;};
@@ -36,10 +41,11 @@ function validateResult(raw,task){
 export async function enqueueState(original,packet,now,uuid){
   const s=structuredClone(checkState(original)),n=Date.parse(now);if(!Number.isFinite(n))fail(500,'Invalid clock.');
   if(!packet?.identity?.job_id||packet.capabilities?.supplied_sources_only!==true)fail(400,'An exact prepared job is required.');
-  const payload_sha256=await digest(packet),request_key=await digest({protocol:QUEUE_VERSION,plan_key:packet.plan_key,payload_sha256});
+  const detached=structuredClone(packet);
+  const payload_sha256=await digest(detached),request_key=await digest({protocol:QUEUE_VERSION,plan_key:detached.plan_key,payload_sha256});
   const existing=s.tasks.find(t=>t.request_key===request_key);if(existing)return {state:s,changed:false,body:{ok:true,duplicate:true,task:taskSummary(existing)}};
   if(s.tasks.length>=MAX_TASKS)fail(409,'Pilot queue is full; retained results need operator review.');
-  const task={task_id:uuid(),request_key,payload_sha256,packet:structuredClone(packet),status:'queued',created_at:now,updated_at:now,worker_id:WORKER_ID,claim_id:null,claim_request_id:null,lease_expires_at:null,deadline_at:null,result:null,result_hash:null,error:null};
+  const task={task_id:uuid(),request_key,payload_sha256,packet:detached,status:'queued',created_at:now,updated_at:now,worker_id:WORKER_ID,claim_id:null,claim_request_id:null,lease_expires_at:null,deadline_at:null,result:null,result_hash:null,error:null};
   s.tasks.push(task);return {state:s,changed:true,body:{ok:true,duplicate:false,task:taskSummary(task)}};
 }
 export async function workerTransition(original,input,now,uuid){
