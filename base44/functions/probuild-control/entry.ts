@@ -101,25 +101,45 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
     const p=await oneProject(input.project_id);const [posts,linked]=await Promise.all([postList(p),links({project_id:p.id})]);
     return json({project:{...projectPublic(p),version:await hash(JSON.stringify([p.name||'',p.description||'']))},posts:posts.filter(p=>!p.deleted),job:linked[0]||null,checked_at:at});
    }
-   const scanView=scan=>({scan_id:scan.id,next_offset:scan.cursor,finished:scan.finished===true,posts:scan.posts||[],coverage:{complete:scan.finished===true&&!(scan.errors||[]).length,accessible_projects:scan.projects.length,checked_projects:scan.cursor,failed_projects:scan.errors||[],start_date:scan.start_date,end_date:scan.end_date,checked_at:scan.checked_at||scan.started_at,started_at:scan.started_at,source:'Authenticated ProBuild project reads',attachment_count:(scan.posts||[]).reduce((n,p)=>n+p.attachments.length,0)}});
+   const scanView=scan=>({scan_id:scan.id,next_offset:scan.cursor,finished:scan.finished===true&&!(scan.errors||[]).length,posts:scan.posts||[],coverage:{complete:scan.finished===true&&!(scan.errors||[]).length,accessible_projects:scan.projects.length,checked_projects:scan.cursor,failed_projects:scan.errors||[],start_date:scan.start_date,end_date:scan.end_date,checked_at:scan.checked_at||scan.started_at,started_at:scan.started_at,source:'Authenticated ProBuild project reads',attachment_count:(scan.posts||[]).reduce((n,p)=>n+p.attachments.length,0)}});
    if(action==='daily'){
     const {start,end}=validateRange(input.start_date,input.end_date||input.start_date),projects=(await allProjects()).filter(p=>!p.deletedAt).map(p=>({id:p.id,name:p.name||p.title||''}));
     const scan=await api.ProbuildReportScan.create({start_date:start,end_date:end,projects,cursor:0,posts:[],errors:[],started_at:at,finished:projects.length===0,checked_at:at});
     return json(scanView(scan));
    }
-   if(action==='daily_next'){
+   if(action==='daily_next'   if(action==='daily_next'){
     const scan=await api.ProbuildReportScan.get(validId(input.scan_id));if(!scan)fail('Source scan not found.',404);
-    if(scan.finished||input.offset!==scan.cursor)return json(scanView(scan));
-    const batch=scan.projects.slice(scan.cursor,scan.cursor+30),results=new Array(batch.length);let next=0;
+    if(input.offset!==scan.cursor)return json(scanView(scan));
+    const legacyRetry=scan.cursor===scan.projects.length&&(scan.errors||[]).length>0;
+    if(scan.finished&&!legacyRetry)return json(scanView(scan));
+    const retry=scan.retry_state||{};
+    if(retry.exhausted)return json({...scanView(scan),error:'Source page retry limit reached; review is required.'},409);
+    if(retry.next_retry_at&&Date.parse(at)<Date.parse(retry.next_retry_at))return json({...scanView(scan),retry_after:retry.next_retry_at},429);
+    const failedIds=new Set((scan.errors||[]).map(e=>e.project_id));
+    const batch=legacyRetry?scan.projects.filter(p=>failedIds.has(p.id)).slice(0,30):scan.projects.slice(scan.cursor,scan.cursor+30);
+    if(!batch.length)return json({...scanView(scan),error:'Source scan coverage requires review.'},409);
+    const results=new Array(batch.length);let next=0;
     const worker=async()=>{for(;;){const i=next++;if(i>=batch.length)return;const p=batch[i];try{const list=await postList(p);results[i]={posts:list.filter(x=>!x.deleted&&x.date>=scan.start_date&&x.date<=scan.end_date)};}catch{results[i]={error:{project_id:p.id,project_name:p.name}};}}};
     await Promise.all(Array.from({length:Math.min(6,batch.length)},worker));
-    // Cursor guard makes retried completed requests idempotent.
-    const latest=await api.ProbuildReportScan.get(scan.id);if(latest.cursor!==scan.cursor)return json(scanView(latest));
-    const cursor=scan.cursor+batch.length,posts=[...(scan.posts||[]),...results.flatMap(r=>r.posts||[])],errors=[...(scan.errors||[]),...results.filter(r=>r.error).map(r=>r.error)];
-    const saved=await api.ProbuildReportScan.update(scan.id,{cursor,posts,errors,finished:cursor===scan.projects.length,checked_at:at});
+    const latest=await api.ProbuildReportScan.get(scan.id);
+    if(latest.cursor!==scan.cursor||JSON.stringify(latest.retry_state||{})!==JSON.stringify(scan.retry_state||{}))return json(scanView(latest));
+    const failures=results.filter(r=>r.error).map(r=>r.error);
+    if(failures.length){
+     const attempts=(retry.cursor===scan.cursor?Number(retry.attempts)||0:0)+1,exhausted=attempts>=3;
+     const pageIds=new Set(batch.map(p=>p.id));
+     const errors=[...(scan.errors||[]).filter(e=>!pageIds.has(e.project_id)),...failures];
+     const history=[...(scan.error_history||[]),{action:'daily_next',code:'source_page_incomplete',at,cursor:scan.cursor,attempt:attempts,failed_project_ids:failures.map(e=>e.project_id)}].slice(-100);
+     const saved=await api.ProbuildReportScan.update(scan.id,{errors,error_history:history,retry_state:{cursor:scan.cursor,attempts,exhausted,next_retry_at:exhausted?null:new Date(Date.parse(at)+(attempts===1?30000:120000)).toISOString()},checked_at:at});
+     return json({...scanView(saved),error:exhausted?'Source page retry limit reached; review is required.':'Source page incomplete; saved cursor retained.'},exhausted?409:502);
+    }
+    const pageIds=new Set(batch.map(p=>p.id)),errors=(scan.errors||[]).filter(e=>!pageIds.has(e.project_id));
+    const byId=new Map((scan.posts||[]).map(p=>[p.project_id+':'+p.post_id,p]));
+    for(const post of results.flatMap(r=>r.posts||[]))byId.set(post.project_id+':'+post.post_id,post);
+    const cursor=legacyRetry?scan.cursor:scan.cursor+batch.length;
+    const saved=await api.ProbuildReportScan.update(scan.id,{cursor,posts:[...byId.values()],errors,finished:cursor===scan.projects.length&&!errors.length,retry_state:{cursor,attempts:0,exhausted:false,next_retry_at:null},checked_at:at});
     return json(scanView(saved));
    }
-   if(action==='link_job'){
+
     const p=await oneProject(input.project_id),job=input.job_id?await api.Jobs.get(validId(input.job_id)):null;
     if(input.job_id&&!job)fail('Choose an existing job.');
     const prior=(await links({project_id:p.id}))[0],row={project_id:p.id,project_name:p.name,job_id:job?.id||'',job_name:job?.canonical_name||''};

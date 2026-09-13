@@ -37,6 +37,15 @@
     },
     "finished": {
       "type": "boolean"
+    },
+    "retry_state": {
+      "type": "object"
+    },
+    "error_history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
     }
   },
   "required": [
