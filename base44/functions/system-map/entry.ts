@@ -1,4 +1,4 @@
-import { createClientFromRequest } from "npm:@base44/sdk";
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.48";
 
 // Embedded to keep the private function self-contained in Base44 deployments.
 // This is a static evidence snapshot, not a live service-health response.
