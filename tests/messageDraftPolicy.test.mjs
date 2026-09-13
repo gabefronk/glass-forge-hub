@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {MESSAGE_DRAFT_POLICY_VERSION as VERSION, MESSAGE_DRAFT_GUIDANCE as GUIDANCE} from '../base44/shared/messageDraftPolicy.mjs';
+import {MESSAGE_SOLUTION_MAP_VERSION as MAP_VERSION, MESSAGE_SOLUTION_MAP as MAP} from '../base44/shared/messageSolutionMap.mjs';
 import {buildReplyRequest} from '../base44/shared/replyPlanner.mjs';
 import {createMessageAssistantHandler,validateAnalysis} from '../base44/shared/messageAssistant.js';
 
@@ -23,9 +24,10 @@ test('owner policy is part of the trusted runtime prompt, not supplied by incomi
  assert.ok(!GUIDANCE.includes('Deer Water')&&!GUIDANCE.includes('Ryan')&&!GUIDANCE.includes('sharepoint.com'));
 });
 test('case facts cannot carry into a new preview and missing attachments stay gated',()=>{
- const first=preview(['Private synthetic quote fact: SAMPLE-ONLY-A.']);
+ const first=preview(['Private synthetic quote fact: SAMPLE-ONLY-A. https://example.invalid/case-a-only.pdf']);
  assert.ok(first.request.prompt.includes('SAMPLE-ONLY-A'));
  assert.ok(!preview().request.prompt.includes('SAMPLE-ONLY-A'));
+ assert.ok(!preview().request.prompt.includes('case-a-only.pdf'));
  const attachmentOnly=preview([],{messages:[{...messages[0],text:'',attachments:[{guid:'card',name:'homeowner.vcf'}]}]});
  assert.equal(attachmentOnly.request,null);
  assert.equal(attachmentOnly.preflight_plan.decision,'owner_needed');
@@ -38,8 +40,8 @@ test('unambiguous job reference needs no street address, while wrong lot still f
  assert.equal(conflict.service_text,'');
  assert.equal(conflict.job,null);
 });
-function fixture(modelResult=result){
- const oldDigest=createHash('sha256').update('assistant-v2:'+JSON.stringify(messages.map(m=>[m.source_guid,m.text,m.edited_at,m.attachments?.map(a=>[a.guid,a.status])]))).digest('hex');
+function fixture(modelResult=result,oldPolicy='owner-approved-2026-09-13-v1',oldMap=null){
+ const oldDigest=createHash('sha256').update('assistant-v2:'+oldPolicy+':'+(oldMap===null?'':oldMap+':')+JSON.stringify(messages.map(m=>[m.source_guid,m.text,m.edited_at,m.attachments?.map(a=>[a.guid,a.status])]))).digest('hex');
  const stored=[{id:'old',case_key:'old-key',conversation_key:scope.conversation_key,source_digest:oldDigest,result:{reply_text:'Old style'}}];
  const calls={prompts:[],writes:0};
  const api={
@@ -64,10 +66,31 @@ test('service path consumes policy and replaces old policy cache without adding 
  assert.ok(calls.prompts[0].includes(GUIDANCE));
  assert.equal(fresh.case.result.drafting_policy_version,VERSION);
  assert.equal(fresh.case.result.draft_only,true);
+ assert.equal(fresh.case.result.solution_map_version,MAP_VERSION);
  const cached=await run();
  assert.equal(cached.cached,true);
  assert.equal(calls.prompts.length,1);
  assert.equal(calls.writes,1);
+});
+test('map-only revisions invalidate older cached drafts',async()=>{
+ const {calls,run}=fixture(result,VERSION,'solution-map-previous');
+ await run();
+ assert.equal(calls.prompts.length,1);
+ assert.equal(calls.writes,1);
+ assert.equal((await run()).cached,true);
+});
+test('owner status returns maps without generating drafts or mutating records',async()=>{
+ const reads=[];
+ const list=name=>({list:async()=>{reads.push(name);return [];}});
+ const client={auth:{me:async()=>({role:'admin',email:'gabefronk@gmail.com'})},asServiceRole:{entities:{MessageServiceCase:list('cases'),MessageAssistantDevice:list('devices')}}};
+ const handler=createMessageAssistantHandler({getClient:async()=>client,loadDirectory:async()=>{throw Error('Unexpected source lookup');},now:()=>new Date(now)});
+ const response=await handler(new Request('https://test.invalid',{method:'POST',body:JSON.stringify({action:'status'})}));
+ assert.equal(response.status,200);
+ const body=await response.json();
+ assert.deepEqual(body.solution_map,{version:MAP_VERSION,mode:'draft_guidance',scenarios:MAP});
+ assert.equal(body.mode,'draft_only');
+ assert.equal(body.reply_planner.send_enabled,false);
+ assert.deepEqual(reads,['cases','devices']);
 });
 test('document-only classification remains outside service cases',async()=>{
  const {run,calls}=fixture({...result,is_service_request:false,summary:'Document request needs the document workflow.'});
