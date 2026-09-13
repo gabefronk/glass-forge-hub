@@ -2,6 +2,32 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {adaptKnowledgeSources,collectKnowledgeSources,refreshJobKnowledge,readPreparedJob,allKnowledgeRows,isKnowledgeOwner} from '../shared/jobKnowledgeService.mjs';
 import {buildJobReplyFacts} from '../shared/jobReplyContext.mjs';
+import {makeCalendarReview} from '../shared/calendarReview.mjs';
+async function scopedFixture() {
+ const m={calendar_name:'UT DC Service',timezone:'America/Denver',range_start:'2026-09-15',range_end:'2026-09-15',agenda_scan_first_observed_at:'2026-09-13T14:00:00Z',agenda_scan_last_observed_at:'2026-09-13T14:30:00Z',complete:false,full_calendar_details_complete:false,agenda_coverage_complete:true,selected_detail_coverage_complete:true,missing_selected_details:0,tracker_source:{sha256:'a'.repeat(64),captured_at:'2026-09-12T07:03:00Z'},selected_detail_count:2,deferred_agenda_count:1,agenda_event_count:3};
+ const e={calendar_name:m.calendar_name,source_occurrence_key:'local:one',event_date:'2026-09-15',job_name:JOBS[0].canonical_name,address:'16 Main St',scope_notes:'Inspect latch.',captured_at:'2026-09-13T14:10:00Z',source_start_date:'2026-09-15',source_end_date:'2026-09-15',multi_day:false,all_day:true,start_time:'',end_time:'',available_description_verified:true,source_date_labels_verified:true,screening:{capture_details:true,ownership_verified:false}};
+ return {...await makeCalendarReview({packageSha256:'a'.repeat(64),manifest:m,selectedEvents:[e,{...e,source_occurrence_key:'local:two',scope_notes:'PO: 99999'}],deferredAgenda:[{source_occurrence_key:'local:three',event_date:'2026-09-15',job_name:'Deferred unknown',screening:{capture_details:false,ownership_verified:false}}],dailyCoverage:{'2026-09-15':{agenda_complete:true,selected_details_complete:true,agenda_entry_count:3,selected_entry_count:2,selected_details_captured:2,deferred_title_count:1}}},NOW),id:'review1'};
+}
+test('scoped details do not cancel legacy full coverage or create confirmed reply facts',async()=>{
+ const r=await scopedFixture(),out=adapt({snapshots:[snap()],calendarReviews:[r]}),c=ctx(out);
+ assert.equal(c.evidence.filter(e=>e.source_type==='outlook_service'&&e.status!=='superseded').length,1);
+ assert.equal(c.evidence.filter(e=>e.source_type==='outlook_service_selected').length,1);
+ assert.equal(c.sources.outlook_service_selected.complete,false);
+ assert.equal(out.unassigned.filter(u=>u.reason==='supplied_order_unknown').length,1);
+ assert.equal(out.counts.selected_calendar_matches,1);
+ const facts=buildJobReplyFacts({conversation:{job_id:'j16'},prepared:{context:c,run_id:'scoped-test'},now:NOW});
+ assert.ok(!JSON.stringify(facts).includes('Inspect latch.'));
+ assert.ok(!c.evidence.some(e=>e.job_name==='Deferred unknown'));
+});
+test('collector rejects tampered scoped notes and preserves their review diagnostic',async()=>{
+ const row=await scopedFixture();row.selected_events[0].scope_notes+=' tampered';
+ const api=fakeApi({Jobs:JOBS,CalendarReviewCapture:[row]});
+ const out=await collectKnowledgeSources(api,async()=>[],NOW);
+ assert.equal(ctx(out).evidence.filter(e=>e.source_type==='outlook_service_selected').length,0);
+ assert.equal(out.counts.invalid_calendar_captures,1);
+ assert.ok(out.unassigned.some(u=>u.reason==='capture_content_hash_mismatch'));
+ assert.ok(!api.calls.some(c=>['create','update','bulkCreate'].includes(c.method)));
+});
 
 const NOW='2026-09-13T15:00:00Z';
 const JOBS=[{id:'j16',canonical_name:'Acme - Pine Grove lot 16',aliases:['Acme - 16 Pine Grove'],po_numbers:['0016'],oe_numbers:['OE16'],address:'16 Main St'}, {id:'j17',canonical_name:'Acme - Pine Grove lot 17',po_numbers:['0017'],oe_numbers:['OE17'],address:'17 Main St'}];
@@ -13,7 +39,7 @@ const ctx=out=>out.contexts.find(c=>c.job_id==='j16');
 
 function fakeApi(initial={},options={}) {
   const stores={},calls=[];let sequence=0;
-  const names=['Jobs','CalendarEvents','FieldReports','FieldLibraryProject','FieldLibraryReport','FieldLibraryFile','ProbuildProjectLink','JobNotes','FeeLines','OutlookCalendarSnapshot','OutlookCalendarBatch','MessageServiceCase','SalesTrackerSnapshot','FieldLibraryImport','JobKnowledgeRun','JobKnowledge','JobKnowledgeUnassigned','AgentCenterEscalation','JobDocumentExtraction'];
+  const names=['Jobs','CalendarEvents','FieldReports','FieldLibraryProject','FieldLibraryReport','FieldLibraryFile','ProbuildProjectLink','JobNotes','FeeLines','OutlookCalendarSnapshot','OutlookCalendarBatch','MessageServiceCase','SalesTrackerSnapshot','FieldLibraryImport','JobKnowledgeRun','JobKnowledge','JobKnowledgeUnassigned','AgentCenterEscalation','JobDocumentExtraction','CalendarReviewCapture'];
   const entities=Object.fromEntries(names.map(name=>{
     stores[name]=structuredClone(initial[name]||[]);
     const filter=async(query={},sort='id',limit=500,skip=0,selected)=>{
