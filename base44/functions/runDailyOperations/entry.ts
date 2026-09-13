@@ -1,3 +1,5 @@
+// Calendar selected-scope revision calendar-review-20260913-v1.
+
 // base44/shared/jobDailyEntry.ts
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import { secrets as secrets2 } from "base44:runtime";
@@ -1214,6 +1216,167 @@ async function extractJobDocuments(api, { now = /* @__PURE__ */ new Date(), maxF
   return result;
 }
 
+// base44/shared/calendarReview.mjs
+var REVIEW_CALENDARS = ["UT DC Service", "UT Window Install"];
+var HASH = /^[a-f0-9]{64}$/;
+var KEYS = ["schema_version", "capture_key", "package_sha256", "calendar_name", "captured_at", "range_start", "range_end", "timezone", "scope", "complete", "agenda_coverage_complete", "selected_detail_coverage_complete", "full_calendar_details_complete", "source_manifest", "selected_events", "deferred_agenda", "daily_coverage"];
+var assert = (value, code) => {
+  if (!value) throw new Error(code);
+};
+var calendarReviewContent = (row) => Object.fromEntries(KEYS.map((key) => [key, row[key]]));
+var canonicalReviewJSON = (value) => JSON.stringify(value, (_, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
+async function calendarReviewHash(value) {
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalReviewJSON(value))))].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+var validInstant = (v, now) => ["fresh", "stale"].includes(sourceFreshness2({ observedAt: v, now, maxAgeHours: 26 }).status);
+var slug = (calendar) => calendar === "UT DC Service" ? "service" : "install";
+var dayList = (start, end) => {
+  assert(isCalendarDate(start) && isCalendarDate(end) && start <= end, "invalid_range");
+  const count = (Date.parse(end + "T12:00:00Z") - Date.parse(start + "T12:00:00Z")) / 864e5 + 1;
+  assert(count <= 93, "range_exceeds_93_days");
+  return Array.from({ length: count }, (_, i) => new Date(Date.parse(start + "T12:00:00Z") + i * 864e5).toISOString().slice(0, 10));
+};
+function validateCalendarReview(row, now) {
+  assert(row?.schema_version === 1 && REVIEW_CALENDARS.includes(row.calendar_name), "unsupported_capture");
+  assert(HASH.test(row.package_sha256 || "") && row.capture_key === row.package_sha256 + ":" + slug(row.calendar_name), "invalid_capture_identity");
+  assert(row.timezone === "America/Denver" && row.scope === "selected_job_candidates", "unsupported_scope");
+  assert(row.complete === false && row.full_calendar_details_complete === false && row.agenda_coverage_complete === true && row.selected_detail_coverage_complete === true, "scope_flags_invalid");
+  assert(validInstant(row.captured_at, now), "capture_time_invalid");
+  const days2 = dayList(row.range_start, row.range_end), manifest = row.source_manifest;
+  assert(manifest && manifest.calendar_name === row.calendar_name && manifest.timezone === row.timezone && manifest.range_start === row.range_start && manifest.range_end === row.range_end, "manifest_identity_mismatch");
+  assert(manifest.agenda_scan_last_observed_at === row.captured_at && validInstant(manifest.agenda_scan_first_observed_at, now) && Date.parse(manifest.agenda_scan_first_observed_at) <= Date.parse(row.captured_at), "manifest_time_mismatch");
+  assert(manifest.complete === false && manifest.full_calendar_details_complete === false && manifest.agenda_coverage_complete === true && manifest.selected_detail_coverage_complete === true && manifest.missing_selected_details === 0, "manifest_scope_mismatch");
+  assert(HASH.test(manifest.tracker_source?.sha256 || "") && validInstant(manifest.tracker_source.captured_at, now), "tracker_receipt_missing");
+  assert(Array.isArray(row.selected_events) && Array.isArray(row.deferred_agenda) && row.selected_events.length + row.deferred_agenda.length <= 2e3, "invalid_entries");
+  assert(manifest.selected_detail_count === row.selected_events.length && manifest.deferred_agenda_count === row.deferred_agenda.length && manifest.agenda_event_count === row.selected_events.length + row.deferred_agenda.length, "manifest_count_mismatch");
+  const coverage = row.daily_coverage;
+  assert(coverage && typeof coverage === "object" && !Array.isArray(coverage) && Object.keys(coverage).sort().join("|") === days2.join("|"), "daily_coverage_missing");
+  const seen = /* @__PURE__ */ new Set();
+  for (const [kind, entries] of [["selected", row.selected_events], ["deferred", row.deferred_agenda]]) {
+    assert(new TextEncoder().encode(JSON.stringify(entries)).length <= 1e5, "entry_field_exceeds_limit");
+    for (const event of entries) {
+      assert(event && isCalendarDate(event.event_date) && days2.includes(event.event_date) && typeof event.job_name === "string" && event.job_name.trim() && event.job_name.length <= 2e3, "event_identity_invalid");
+      const key = event.source_occurrence_key;
+      assert(typeof key === "string" && key.length > 0 && key.length <= 500 && !/[\u0000-\u001f]/.test(key) && !seen.has(key), "occurrence_key_duplicate_or_invalid");
+      seen.add(key);
+      assert(event.screening?.ownership_verified === false && !event.job_id, "candidate_ownership_promoted");
+      if (kind === "selected") {
+        assert(event.calendar_name === row.calendar_name && event.screening.capture_details === true, "selected_scope_mismatch");
+        assert(event.available_description_verified === true && event.source_date_labels_verified === true, "unverified_selected_detail");
+        assert(typeof event.scope_notes === "string" && event.scope_notes.length <= 24e3 && typeof event.address === "string", "event_detail_invalid");
+        assert(validInstant(event.captured_at, now) && Date.parse(event.captured_at) >= Date.parse(manifest.agenda_scan_first_observed_at) - 3e5 && Date.parse(event.captured_at) <= Date.parse(row.captured_at) + 3e5, "event_capture_time_invalid");
+        assert(isCalendarDate(event.source_start_date) && isCalendarDate(event.source_end_date) && event.source_start_date <= event.event_date && event.event_date <= event.source_end_date, "event_source_dates_invalid");
+        assert(typeof event.all_day === "boolean" && typeof event.multi_day === "boolean" && event.multi_day === (event.source_start_date !== event.source_end_date), "event_span_invalid");
+        for (const field of ["start_time", "end_time"]) assert(typeof event[field] === "string" && (event.all_day ? event[field] === "" : /^([01]\d|2[0-3]):[0-5]\d$/.test(event[field])), "event_clock_invalid");
+      } else assert(event.screening.capture_details === false, "deferred_scope_mismatch");
+    }
+  }
+  for (const date of days2) {
+    const d = coverage[date], selected = row.selected_events.filter((e) => e.event_date === date).length, deferred = row.deferred_agenda.filter((e) => e.event_date === date).length;
+    assert(d?.agenda_complete === true && d.selected_details_complete === true && d.selected_entry_count === selected && d.selected_details_captured === selected && d.deferred_title_count === deferred && d.agenda_entry_count === selected + deferred, "daily_partition_mismatch");
+  }
+  assert(new TextEncoder().encode(JSON.stringify(calendarReviewContent(row))).length <= 24e4, "capture_exceeds_limit");
+  return row;
+}
+async function verifyCalendarReviews(rows, now) {
+  const captures = [], rejected = [], keys2 = /* @__PURE__ */ new Map();
+  for (const row of rows) keys2.set(row.capture_key, (keys2.get(row.capture_key) || 0) + 1);
+  for (const row of rows) {
+    try {
+      assert(row.status === "verified", "capture_not_verified");
+      assert(keys2.get(row.capture_key) === 1, "duplicate_capture_identity");
+      validateCalendarReview(row, now);
+      assert(HASH.test(row.content_sha256 || "") && await calendarReviewHash(calendarReviewContent(row)) === row.content_sha256, "capture_content_hash_mismatch");
+      captures.push(row);
+    } catch (e) {
+      rejected.push({ id: row.id || null, capture_key: row.capture_key || null, reason: /^[a-z0-9_]+$/.test(e.message) ? e.message : "capture_validation_failed" });
+    }
+  }
+  return { captures, rejected };
+}
+var norm3 = (value) => String(value || "").normalize("NFKC").toLowerCase().replace(/[\u2010-\u2015]/g, "-").replace(/\s+/g, " ").trim();
+function calendarIdentityLabel(value) {
+  let s = norm3(value);
+  for (let i = 0; i < 6; i++) {
+    const next = s.replace(/^(?:(?:bb|ya|mds|w|i|s)\s*-\s*|#\d+\s*|\((?:l\.?\s*i\.?|\d+\s*techs?)\)\s*)/, "");
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+var words = (value) => calendarIdentityLabel(value).replace(/\b(?:homes?|lot)\b/g, " ").match(/[a-z0-9]+/g)?.sort().join("|") || "";
+var oe = (value) => norm3(value).replace(/^(\d{8})-\d{2}$/, "$1");
+function calendarEventIdentity(event, jobs) {
+  const label = calendarIdentityLabel(event.job_name), notes = event.scope_notes || "";
+  const po = [...new Set([...notes.matchAll(/\bP\.?\s*O\.?\s*(?:number|no\.?|#)?\s*[:=#-]\s*([0-9][A-Za-z0-9-]{2,40})/gi)].map((m) => norm3(m[1])))];
+  const oes = [...new Set([...notes.matchAll(/\bO\.?\s*E\.?\s*(?:number|no\.?|#)?\s*[:=#-]\s*(\d{8}(?:-\d{2})?)\b/gi)].map((m) => oe(m[1])))];
+  const result = { job_id: null, po_numbers: po, oe_numbers: oes, candidate_job_ids: [], reason: "no_exact_identity" };
+  if (/\b\d+[a-z]?\s*(?:-|\/|,|&|and|through|to)\s*\d+[a-z]?\b/.test(label)) return { ...result, reason: "multiple_lots_or_units" };
+  let candidates = jobs.filter((j) => [j.canonical_name, ...j.aliases || []].some((n) => words(n) === words(label)));
+  result.candidate_job_ids = candidates.map((j) => j.id);
+  for (const [values, field, normalize2] of [[po, "po_numbers", norm3], [oes, "oe_numbers", oe]]) for (const value of values) {
+    const known = jobs.filter((j) => (j[field] || []).some((v) => normalize2(v) === value));
+    if (!known.length) return { ...result, reason: "supplied_order_unknown" };
+    candidates = candidates.filter((j) => known.some((k) => k.id === j.id));
+    if (!candidates.length) return { ...result, reason: "supplied_order_conflict" };
+  }
+  if (candidates.length !== 1) return { ...result, reason: candidates.length ? "multiple_exact_jobs" : "no_exact_identity" };
+  return { ...result, job_id: candidates[0].id, reason: "exact_calendar_identity" };
+}
+function calendarReviewEvidence({ captures = [], jobs = [], now }) {
+  const evidence = [], source_status = {}, diagnostics = [];
+  for (const calendar of REVIEW_CALENDARS) {
+    const rows = captures.filter((c) => c.calendar_name === calendar).sort((a, b) => Date.parse(b.captured_at) - Date.parse(a.captured_at));
+    if (!rows.length) continue;
+    const latest2 = rows[0], type = calendar === "UT DC Service" ? "outlook_service_selected" : "outlook_installation_selected";
+    source_status[type] = {
+      available: true,
+      complete: false,
+      checked_at: latest2.captured_at,
+      range_start: latest2.range_start,
+      range_end: latest2.range_end,
+      selected_detail_coverage_complete: true,
+      full_calendar_details_complete: false,
+      agenda_event_count: latest2.source_manifest.agenda_event_count,
+      selected_detail_count: latest2.selected_events.length,
+      deferred_agenda_count: latest2.deferred_agenda.length,
+      tracker_source: latest2.source_manifest.tracker_source
+    };
+    for (const capture of rows) {
+      validateCalendarReview(capture, now);
+      for (const event of capture.selected_events) {
+        const identity = calendarEventIdentity(event, jobs), origin = capture.package_sha256 + ":" + slug(calendar) + ":" + event.source_occurrence_key;
+        const key = "calendar_review:" + origin;
+        const old = capture.capture_key !== latest2.capture_key;
+        if (!identity.job_id) {
+          diagnostics.push({ source_key: key, source_type: type, source_id: origin, job_name: event.job_name, reason: identity.reason, candidate_job_ids: identity.candidate_job_ids });
+          continue;
+        }
+        evidence.push({
+          source_key: key,
+          source_type: type,
+          source_id: origin,
+          job_id: identity.job_id,
+          job_name: event.job_name,
+          address: event.address,
+          po_numbers: identity.po_numbers,
+          oe_numbers: identity.oe_numbers,
+          date: event.event_date,
+          end_date: event.event_date,
+          end_exclusive: false,
+          kind: old ? "note" : calendar === "UT DC Service" ? "service_scheduled" : "installation_scheduled",
+          status: old ? "historical_capture_unverified" : "schedule_saved_cancellation_unverified",
+          text: event.scope_notes + "\nCapture scope: selected job candidate; ownership not confirmed. Source title: " + event.job_name + "\nSource dates: " + event.source_start_date + " through " + event.source_end_date + " inclusive." + (event.start_time ? " Source time: " + event.start_time + "\u2013" + event.end_time + " America/Denver." : " All-day agenda occurrence.") + "\nSelection tracker: " + capture.source_manifest.tracker_source.captured_at + "; current ownership and app append batches were not verified." + (old ? " Earlier separate capture; do not treat it as the current schedule." : ""),
+          source_checked_at: event.captured_at,
+          source_updated_at: null,
+          source_url: "https://glass-forge-hub.base44.app/calendar"
+        });
+      }
+    }
+  }
+  return { evidence, source_status, diagnostics };
+}
+
 // base44/shared/jobKnowledgeService.mjs
 var fields = (s) => s.split(",");
 var dayPlus = (day, n) => new Date(Date.parse(day + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
@@ -1568,6 +1731,10 @@ function adaptKnowledgeSources(data, now, generatedAt = now) {
     if (!coverage.fresh_complete) issues.push(warning(type, "calendar_coverage_gap", "Upcoming 31 days are not completely covered by a fresh capture. Last capture: " + (selected?.captured_at || "none") + ".", "calendar_ops_lead"));
     issues.push(warning(type, "cancellation_not_verified", "Saved Outlook events do not establish current cancellation status. Confirm before promising a visit.", "calendar_ops_lead"));
   }
+  const scopedCalendar = calendarReviewEvidence({ captures: data.calendarReviews || [], jobs, now });
+  evidence.push(...scopedCalendar.evidence);
+  Object.assign(sourceStatus, scopedCalendar.source_status);
+  for (const [type, status] of Object.entries(scopedCalendar.source_status)) issues.push(warning(type, "selected_calendar_scope", status.selected_detail_count + " selected details captured; " + status.deferred_agenda_count + " agenda entries remain deferred. Full-calendar details, current ownership and cancellations are not verified.", "calendar_ops_lead"));
   for (const r of trackerRows) {
     const label = [r.builder, r.subdivision, "lot " + r.lot].filter(Boolean).join(" ");
     const variants = [label, r.builder + " - " + r.lot + " " + r.subdivision, r.builder + " " + r.subdivision + " " + r.lot, r.builder + " - " + r.subdivision + " - " + r.lot];
@@ -1611,9 +1778,12 @@ function adaptKnowledgeSources(data, now, generatedAt = now) {
     const e = rows[0];
     return { ...u, source_type: e.source_type, source_id: e.source_id, job_name: identityText(e.job_name) || null, project_id: identityText(e.project_id) || null, address: identityText(e.address) || null, po_numbers: (e.po_numbers || []).map(identityText), oe_numbers: (e.oe_numbers || []).map(identityText) };
   });
-  result.unassigned.push(...documentExtraction.rejected, ...trusted.diagnostics.map((d) => ({ source_key: "identity:" + d.source_type + ":" + d.source_id, source_type: "identity_" + d.source_type, source_id: d.source_id, reason: d.reason, candidate_job_ids: d.candidate_job_ids, fee_ids: d.fee_ids, details: d.details || [] })));
+  result.unassigned.push(...scopedCalendar.diagnostics, ...(data.calendarReviewRejected || []).map((r) => ({ source_key: "calendar_review_invalid:" + r.id, source_type: "calendar_review", source_id: r.id, reason: r.reason, candidate_job_ids: [] })), ...documentExtraction.rejected, ...trusted.diagnostics.map((d) => ({ source_key: "identity:" + d.source_type + ":" + d.source_id, source_type: "identity_" + d.source_type, source_id: d.source_id, reason: d.reason, candidate_job_ids: d.candidate_job_ids, fee_ids: d.fee_ids, details: d.details || [] })));
   result.counts.identity_link_diagnostics = trusted.diagnostics.length;
   result.counts.extraction_rejections = documentExtraction.rejected.length;
+  result.counts.selected_calendar_matches = scopedCalendar.evidence.length;
+  result.counts.selected_calendar_review = scopedCalendar.diagnostics.length;
+  result.counts.invalid_calendar_captures = (data.calendarReviewRejected || []).length;
   result.counts.unassigned_records = result.unassigned.length;
   for (const context of result.contexts) {
     const unreviewed = context.evidence.filter((e) => e.source_type === "document_extractions");
@@ -1649,7 +1819,8 @@ async function collectKnowledgeSources(api, readTracker, now, providerData, getN
     fees: ["FeeLines", "id,job_id,calendar_event_id,probuild_post_id,probuild_project_id,job_name_raw,job_name_norm,needs_review,match_confidence,superseded_by"],
     snapshots: ["OutlookCalendarSnapshot", "id,calendar_name,captured_at,range_start,range_end,timezone,complete,events,event_count"],
     batches: ["OutlookCalendarBatch", "id,calendar_name,captured_at,range_start,range_end,timezone,complete,snapshot_ids,event_count"],
-    serviceCases: ["MessageServiceCase", "id,status,result,updated_date"]
+    serviceCases: ["MessageServiceCase", "id,status,result,updated_date"],
+    calendarReviews: ["CalendarReviewCapture", "id,status,schema_version,capture_key,package_sha256,calendar_name,captured_at,range_start,range_end,timezone,scope,complete,agenda_coverage_complete,selected_detail_coverage_complete,full_calendar_details_complete,source_manifest,selected_events,deferred_agenda,daily_coverage,content_sha256"]
   };
   const data = {}, entries = Object.entries(definitions);
   let cursor = 0;
@@ -1661,6 +1832,9 @@ async function collectKnowledgeSources(api, readTracker, now, providerData, getN
       data[key] = await allKnowledgeRows(api.entities[entity], fields(selected), query);
     }
   }));
+  const reviewCheck = await verifyCalendarReviews(data.calendarReviews, now);
+  data.calendarReviews = reviewCheck.captures;
+  data.calendarReviewRejected = reviewCheck.rejected;
   data.tracker = (await api.entities.SalesTrackerSnapshot.filter({ status: "validated" }, "-source_captured_at", 1))[0] || null;
   data.libraryImport = (await api.entities.FieldLibraryImport.list("-created_date", 1, 0, fields("id,checked_at,source_complete,files_complete")))[0] || null;
   data.trackerRows = [];

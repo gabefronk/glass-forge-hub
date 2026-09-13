@@ -148,7 +148,7 @@ export default function CalendarPage() {
 
   if(user?.role==="admin" && knowledgeView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setKnowledgeView(false)}>Back to calendar</button><JobKnowledge /></div>;
   if(user?.role==="admin" && serviceView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setServiceView(false)}>Back to calendar</button><ServiceCalendar /></div>;
-  if(user?.role==="admin" && cleanView) return <div className="p-5" style={{backgroundColor:C.pageBg,minHeight:"100vh"}}><button className="mb-4 underline" onClick={()=>setCleanView(false)}>Back to calendar</button><button className="mb-4 ml-4 underline" onClick={()=>setServiceView(true)}>Service calendar</button><button className="mb-4 ml-4 underline" onClick={()=>setKnowledgeView(true)}>Find job update</button><CleanCalendar /></div>;
+  if(user?.role==="admin" && cleanView) return <div className="p-5" style={{backgroundColor:C.pageBg,minHeight:"100vh"}}><button className="mb-4 underline" onClick={()=>setCleanView(false)}>Back to calendar</button><button className="mb-4 ml-4 underline" onClick={()=>setServiceView(true)}>iPad schedules</button><button className="mb-4 ml-4 underline" onClick={()=>setKnowledgeView(true)}>Find job update</button><CleanCalendar /></div>;
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
@@ -159,7 +159,7 @@ export default function CalendarPage() {
               <div className="mono-label-sm mb-1">Schedule</div>
               <h1 className="font-heading text-[22px] font-semibold tracking-[-0.03em]" style={{ color: C.text }}>Calendar</h1>
             </div>
-            {user?.role==="admin"&&<button className="ml-auto rounded-full border px-3 py-2 text-[12px] font-semibold" style={{borderColor:C.border,color:C.textSecondary}} onClick={()=>setCleanView(true)}>Installation calendar</button>}
+            {user?.role==="admin"&&<button className="rounded-full border px-3 py-2 text-sm" onClick={()=>setServiceView(true)}>iPad schedules</button>}{user?.role==="admin"&&<button className="ml-auto rounded-full border px-3 py-2 text-[12px] font-semibold" style={{borderColor:C.border,color:C.textSecondary}} onClick={()=>setCleanView(true)}>Installation calendar</button>}
           </div>
           <div className="mt-4 flex w-full flex-wrap items-center gap-2">
             <div className="flex rounded-full p-0.5" style={{ border: `1px solid ${C.border}` }}>
