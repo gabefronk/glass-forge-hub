@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("../base44/functions/system-map/entry.ts", import.meta.url), "utf8");
 const snapshot = JSON.parse(await readFile(new URL("./system-map-data.json", import.meta.url), "utf8"));
-const sdkImport = /^import \{ createClientFromRequest \} from "npm:@base44\/sdk";\r?\n/m;
+const sdkImport = /^import \{ createClientFromRequest \} from "npm:@base44\/sdk@0\.8\.48";\r?\n/m;
 const denoServe = /^Deno\.serve\(handleSystemMap\);\s*$/m;
 assert.match(source, sdkImport, "The actual entry must import the Base44 request-authentication client");
 assert.match(source, denoServe, "The deployed entry must start the actual handler");
@@ -217,3 +217,4 @@ test("deployment entry is self-contained and has no data writes, model calls or 
   assert.doesNotMatch(source, /\b(?:fetch|eval)\s*\(|\bimport\s*\(/);
   assert.doesNotMatch(source, /\breq\s*\.\s*(?:headers|json|text|arrayBuffer|formData|blob)\b/);
 });
+
