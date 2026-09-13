@@ -1,4 +1,4 @@
-// Calendar selected-scope revision calendar-review-20260913-v1.
+// Calendar selected-scope revision calendar-review-20260913-v1; production registration r2.
 
 // base44/shared/jobDailyEntry.ts
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
