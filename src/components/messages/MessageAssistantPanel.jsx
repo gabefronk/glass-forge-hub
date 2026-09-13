@@ -28,6 +28,14 @@ export default function MessageAssistantPanel({conversationKey}){
  const copy=async text=>{try{await navigator.clipboard.writeText(text);setNotice('Draft copied. Nothing has been sent.')}catch{setError('Clipboard is unavailable. Select and copy the draft text.')}};
  const previewReply=async()=>{const revision=++replyRevision.current;setReplyBusy(true);setReplyPlan(null);setReplyContext(null);setError('');try{const r=await call({action:'reply_preview',conversation_key:conversationKey,goal:replyGoal});if(replyRevision.current!==revision)return;if(r.error)throw new Error(r.error);setReplyPlan(r.plan);setReplyContext(r.job_context||null)}catch(e){if(replyRevision.current===revision)setError(e.response?.data?.error||e.message||'The reply could not be prepared.')}finally{if(replyRevision.current===revision)setReplyBusy(false)}};
  return <section className="space-y-5">
+  {!!data?.solution_map?.scenarios?.length&&<details className="rounded-2xl border border-slate-200 bg-white p-5">
+   <summary className="cursor-pointer font-medium">Saved solution maps ({data.solution_map.scenarios.length})</summary>
+   <p className="mt-3 text-sm text-slate-600">How the assistant prepares a response: what to check, the proposed next step, and what needs your review. Booking, ordering and sending still need their connected workflows.</p>
+   <div className="mt-4 space-y-3">{data.solution_map.scenarios.map(s=><details key={s.id} className="rounded-xl border border-slate-200 p-4">
+    <summary className="cursor-pointer text-sm font-medium">{s.title}</summary>
+    <dl className="mt-3 space-y-3 text-sm">{[['When it applies',s.trigger],['Evidence to check',s.evidence],['Proposed next step',s.draft_step],['Needs your review',s.owner_review],['Proof it is finished',s.completion],['Available now',s.current_support]].map(([label,value])=><div key={label}><dt className="font-medium">{label}</dt><dd className="mt-1 text-slate-600">{value}</dd></div>)}</dl>
+   </details>)}</div>
+  </details>}
   <div className="rounded-2xl border border-slate-200 bg-white p-5">
    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Reply in your style</h2><span className="rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-800">Automatic replies off</span></div>
    <p className="mt-2 text-sm text-slate-600">Uses your outgoing messages for tone and current facts from the linked job brief. Unverified schedules and conflicting job details are left out. Previewing a reply uses Base44 AI credits with GPT-5.6 Sol.</p>
