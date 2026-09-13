@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Bot, X } from "lucide-react";
 import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { FileText, MessageSquare, Users } from "lucide-react";
+import { FileText, MessageSquare, Users, Network } from "lucide-react";
 
 const PRIMARY_NAV = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
@@ -18,6 +18,7 @@ const SECONDARY_NAV = [
   { label: "Reports", ariaLabel: "Report Library", to: "/report-library", icon: FileText, ownerOnly: true },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
   { label: "Messages", to: "/messages", icon: MessageSquare, ownerOnly: true },
+  { label: "System map", to: "/system-map", icon: Network, ownerOnly: true },
 ];
 
 export default function MobileBottomNav({ user }) {
