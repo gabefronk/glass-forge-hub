@@ -1,5 +1,7 @@
 import { buildJobContexts, createJobIndex, matchJobEvidence } from './jobContextCore.mjs';
 import { assessCalendarCoverage, denverCalendarDate, isCalendarDate, sourceFreshness } from './calendarCoverage.mjs';
+import { buildTrustedSourceLinks } from './trustedSourceLinks.mjs';
+import { validateJobDocumentResult } from './jobDocumentExtraction.mjs';
 
 // Only generated knowledge records are written. Original jobs, reports, calendars,
 // fees, quotes and message read states remain authoritative and unchanged.
@@ -19,13 +21,6 @@ export async function allKnowledgeRows(entity, selected, query = {}) {
   }
   throw Error('Source pagination exceeded safe limit; no complete generation published');
 }
-const stableLink = (rows,key) => {
-  const map=new Map();
-  for(const r of rows)if(r.job_id&&r[key]&&!r.needs_review&&!r.superseded_by&&r.match_confidence!=='low') {
-    if(!map.has(r[key]))map.set(r[key],new Set()); map.get(r[key]).add(r.job_id);
-  }
-  return id => map.get(id)?.size===1?[...map.get(id)][0]:null;
-};
 const warning = (source,code,detail,assigned_to) => ({source,code,detail,assigned_to,status:'needs_review'});
 function calendarCandidates(relevant,manifests,now) {
   const valid=s=>s?.timezone==='America/Denver'&&isCalendarDate(s.range_start)&&isCalendarDate(s.range_end)&&s.range_start<=s.range_end&&Array.isArray(s.events)&&Number.isInteger(s.event_count)&&s.events.length===s.event_count&&s.events.every(e=>e&&isCalendarDate(e.event_date)&&e.event_date>=s.range_start&&e.event_date<=s.range_end)&&['fresh','stale'].includes(sourceFreshness({observedAt:s.captured_at,now,maxAgeHours:26}).status);
@@ -39,15 +34,114 @@ function calendarCandidates(relevant,manifests,now) {
   }
   return {candidates,invalid};
 }
-export function adaptKnowledgeSources(data,now) {
+function mergeLiveEvidence({data,evidence,sourceStatus,issues,calendarJob,reportJob,now}) {
+  if(!data.providerData)return {calendar:0,probuild:0};
+  const {calendar=[],reports=[],libraryReports=[],files=[]}=data;
+  const providers=data.providerData;
+  const scope=(raw,type,assigned)=> {
+    const value=raw&&typeof raw==='object'?raw:{};
+    const items=Array.isArray(value.items)?value.items:[];
+    const validCheck=typeof value.checked_at==='string'&&/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value.checked_at)&&Number.isFinite(Date.parse(value.checked_at));
+    const complete=value.complete===true&&validCheck&&isCalendarDate(value.range_start)&&isCalendarDate(value.range_end)&&value.range_start<=value.range_end;
+    sourceStatus[type]={available:items.length>0||complete,complete,checked_at:complete?value.checked_at:null,range_start:value.range_start,range_end:value.range_end};
+    if(!complete)issues.push(warning(type,'live_source_incomplete','The live source read was unavailable, partial, or outside a verified scope. Cached job evidence remains available with its original freshness. '+(/^[a-z0-9_,]{1,200}$/i.test(value.error||'')?value.error:''),assigned));
+    return {...value,items,complete,checked_at:complete?value.checked_at:null};
+  };
+  const google=scope(providers.calendar,'live_google','calendar_ops_lead');
+  const probuild=scope(providers.probuild,'live_probuild','field_reporting_lead');
+  const key=(project,post)=>String(project||'')+'\u0000'+String(post||'');
+  const deletedProjects=new Set((Array.isArray(probuild.deleted_projects)?probuild.deleted_projects:[]).filter(p=>p?.deleted===true&&p.project_id).map(p=>String(p.project_id)));
+  const postsById=new Map();
+  for(const p of probuild.items)if(p?.post_id&&p.project_id)postsById.set(key(p.project_id,p.post_id),p);
+  const postFor=(project,post)=>postsById.get(key(project,post));
+  const googleById=new Map();
+  for(const g of google.items)if(g?.google_event_id)googleById.set(String(g.google_event_id),g);
+  const cachedGoogle=new Map(calendar.map(e=>[e.id,e]));
+  const cachedReports=new Map(reports.map(e=>[e.id,e]));
+  const cachedLibrary=new Map(libraryReports.map(e=>[e.id,e]));
+  const cachedFiles=new Map(files.map(e=>[e.id,e]));
+  for(const e of evidence) {
+    const cached=e.source_type==='calendar'?cachedGoogle.get(e.source_id):e.source_type==='probuild_reports'?cachedReports.get(e.source_key.slice('field_report:'.length)):e.source_type==='probuild_library'?cachedLibrary.get(e.source_key.slice('library_report:'.length)):e.source_type==='documents'?cachedFiles.get(e.source_id):null;
+    if(!cached)continue;
+    if(e.source_type==='calendar'&&googleById.has(String(cached.google_event_id))) {e.status='superseded';continue;}
+    const project=cached.project_id||cached.source_project_id,post=cached.post_id||cached.source_post_id;
+    if(deletedProjects.has(String(project)))e.status='deleted';
+    else if(postFor(project,post))e.status=e.source_type==='documents'?(postFor(project,post).deleted?'deleted':e.status):'superseded';
+  }
+  for(const g of google.items) {
+    if(!g?.google_event_id)continue;
+    const cached=calendar.filter(e=>String(e.google_event_id)===String(g.google_event_id));
+    const one=values=>{const found=[...new Set(values.filter(Boolean))];return found.length===1?found[0]:null;};
+    const jobs=[...new Set([...cached.map(e=>e.job_id),calendarJob(g.google_event_id)].filter(Boolean))];
+    const deleted=g.deleted===true||g.source_status==='cancelled';
+    evidence.push({source_key:'live_google:'+g.google_event_id,source_type:'live_google',source_id:String(g.google_event_id),
+      job_id:jobs.length===1?jobs[0]:null,multi_job:jobs.length>1,
+      job_name:g.job_name||one(cached.map(e=>e.job_name)),address:g.address||one(cached.map(e=>e.address)),
+      po_numbers:[...new Set(cached.map(e=>e.po_number).filter(Boolean))],oe_numbers:[...new Set(cached.map(e=>e.oe_number).filter(Boolean))],
+      date:g.start_at||g.event_date||one(cached.map(e=>e.event_date)),end_date:g.start_at?g.end_at:(g.all_day?g.end_date:null),end_exclusive:g.all_day===true,
+      kind:'calendar_event',status:deleted?'cancelled':g.source_status||'unverified',text:g.scope_notes||'',
+      source_updated_at:g.source_updated_at,source_checked_at:google.checked_at,
+      source_url:'https://glass-forge-hub.base44.app/calendar'});
+  }
+  for(const p of probuild.items) {
+    if(!p?.post_id||!p.project_id)continue;
+    const cached=[...reports.filter(r=>r.post_id===p.post_id&&r.project_id===p.project_id),...libraryReports.filter(r=>r.source_post_id===p.post_id&&r.source_project_id===p.project_id)];
+    const names=[...new Set(cached.map(r=>r.job_name||r.project_name).filter(Boolean))];
+    evidence.push({source_key:'live_probuild:'+p.project_id+':'+p.post_id,source_type:'live_probuild',source_id:p.project_id+':'+p.post_id,
+      project_id:p.project_id,job_id:reportJob(p.post_id),job_name:p.job_name||(names.length===1?names[0]:null),date:p.job_date||p.created_at||cached[0]?.job_date||cached[0]?.report_date,
+      kind:'field_report',status:p.deleted||deletedProjects.has(String(p.project_id))?'deleted':'recorded',text:p.message||'',
+      source_updated_at:p.source_updated_at||p.created_at,source_checked_at:probuild.checked_at,
+      attachments:[],source_url:'https://glass-forge-hub.base44.app/reports'});
+  }
+  if(deletedProjects.size)issues.push(warning('live_probuild','deleted_projects','Live ProBuild reports '+deletedProjects.size+' deleted projects. Their cached report/document evidence remains in history and is excluded from current notes.','field_reporting_lead'));
+  return {calendar:google.items.length,probuild:probuild.items.length};
+}
+function addDocumentExtractions({data,evidence,sourceStatus,issues,reportJob}) {
+  const extractions=Array.isArray(data.extractions)?data.extractions:[],filesById=new Map(data.files.map(f=>[f.id,f]));
+  const candidates=new Map(), rejected=[];let indexed=0;
+  const reject=(x,reason)=>rejected.push({source_key:'document_extraction:'+x.id,source_type:'document_extractions',source_id:x.id,file_id:x.file_id,reason,candidate_job_ids:[]});
+  for(const x of extractions) {
+    if(x.status!=='extracted_needs_review')continue;
+    const file=filesById.get(x.file_id),base=evidence.find(e=>e.source_key==='document:'+x.file_id);
+    if(!file||!base||file.source_deleted||file.status!=='verified'||base.status==='deleted') {reject(x,'extraction_source_unavailable');continue;}
+    if(!/^[a-f0-9]{64}$/i.test(file.sha256||'')||!/^[a-f0-9]{64}$/i.test(x.sha256||'')||file.sha256.toLowerCase()!==x.sha256.toLowerCase()||(x.extraction_key&&x.extraction_key!==file.id+':'+file.sha256.toLowerCase())) {reject(x,'extraction_source_hash_changed');continue;}
+    if((x.source_project_id&&x.source_project_id!==file.source_project_id)||(x.source_post_id&&x.source_post_id!==file.source_post_id)) {reject(x,'extraction_source_identity_changed');continue;}
+    let result;try{result=validateJobDocumentResult(x.result);}catch{reject(x,'extraction_schema_invalid');continue;}
+    if(!candidates.has(file.id))candidates.set(file.id,[]);candidates.get(file.id).push({record:x,file,base,result});
+  }
+  for(const rows of candidates.values()) {
+    if(rows.length!==1) {for(const row of rows)reject(row.record,'duplicate_extraction_requires_review');continue;}
+    const {record:x,file,base,result}=rows[0];
+    const labels=result.job_identifiers.map(i=>`${i.type}: ${i.value}; page ${i.page}; quotation: ${i.source_quote}`).join('\n');
+    const dates=result.dated_statements.map(d=>`${d.meaning}: ${d.date_text}${d.normalized_date?' ['+d.normalized_date+']':''}; page ${d.page}; quotation: ${d.source_quote}${d.uncertainty?'; uncertainty: '+d.uncertainty:''}`).join('\n');
+    const text='UNREVIEWED PDF EXTRACTION — OWNER REFERENCE ONLY. This model-generated extraction must be checked against the original PDF; no extracted identifier or date is promoted to a job mapping, product arrival, service schedule, or customer reply fact.\nDocument type: '+result.document_type+'\nSummary: '+result.summary+'\nUnreviewed identifiers:\n'+labels+'\nUnreviewed dated statements:\n'+dates;
+    // Keep the original file reference while making the distinct extraction and
+    // review state visible. Its generated statements never become typed dates.
+    base.text='Unreviewed PDF extraction is available at [document_extraction:'+x.id+']. Review the original PDF before relying on its statements.';
+    base.attachments=base.attachments.map(a=>({...a,text_extracted:true}));
+    for(const report of evidence.filter(e=>e.source_type==='probuild_library'))for(const a of report.attachments||[])if(a.id===file.id)a.text_extracted=true;
+    evidence.push({source_key:'document_extraction:'+x.id,source_type:'document_extractions',source_id:x.id,
+      project_id:file.source_project_id,job_id:reportJob(file.source_post_id),job_name:base.job_name,date:base.date,
+      kind:'document',status:'extracted_needs_review',text,source_updated_at:x.checked_at,source_checked_at:base.source_checked_at,
+      attachments:[{id:file.id,name:file.name,mime_type:file.mime_type,status:'extracted_needs_review',text_extracted:true}],
+      source_url:'https://glass-forge-hub.base44.app/report-library'});
+    indexed++;
+  }
+  if(extractions.length)sourceStatus.document_extractions={available:indexed>0,complete:false};
+  if(indexed)issues.push(warning('document_extractions','pdf_extraction_needs_review',indexed+' PDF extractions are indexed as owner-only references. Their identifiers and dates have not been approved for automated job updates or customer replies.','field_reporting_lead'));
+  return {received:extractions.length,indexed,rejected};
+}
+export function adaptKnowledgeSources(data,now,generatedAt=now) {
   const {jobs,calendar,reports,projects,libraryReports,files,links,notes,fees,snapshots,batches,tracker,trackerRows,serviceCases,libraryImport}=data;
   const issues=[], evidence=[];
-  const calendarJob=stableLink(fees,'calendar_event_id'), reportJob=stableLink(fees,'probuild_post_id');
-  const projectLinks=[...links,...projects.filter(p=>p.job_id&&!p.source_deleted).map(p=>({project_id:p.source_project_id,job_id:p.job_id}))];
+  const trusted=buildTrustedSourceLinks({jobs,fees,projects,links});
+  const calendarJob=trusted.calendar_job, reportJob=trusted.post_job;
+  const projectLinks=[...links,...projects.filter(p=>p.job_id&&!p.source_deleted).map(p=>({project_id:p.source_project_id,job_id:p.job_id})),...trusted.project_links];
   const bareIndex=createJobIndex({jobs,projectLinks});
+  const alreadyMappedProjects=new Set(projectLinks.filter(p=>p.project_id&&p.job_id&&p.source_deleted!==true&&p.enabled!==false).map(p=>p.project_id));
   // A unique exact source name can suggest the existing canonical association;
   // it is evidence-local only and never rewrites the job or ProBuild project.
-  for(const p of projects.filter(p=>!p.job_id&&!p.source_deleted)) {
+  for(const p of projects.filter(p=>!p.job_id&&!p.source_deleted&&!alreadyMappedProjects.has(p.source_project_id))) {
     const m=matchJobEvidence({job_name:p.name},bareIndex);
     if(m.status==='matched')projectLinks.push({project_id:p.source_project_id,job_id:m.job_id});
   }
@@ -144,47 +238,79 @@ export function adaptKnowledgeSources(data,now) {
       source_checked_at:tracker.source_captured_at,source_url:'https://glass-forge-hub.base44.app/sales-tracker'});
   }
   if(!tracker||Date.parse(now)-Date.parse(tracker.source_captured_at)>26*3600000)issues.push(warning('sales_tracker','stale_arrival_source','Arrival dates come from '+(tracker?.source_captured_at||'no validated snapshot')+'. Obtain a current Sales Tracker; do not confirm delivery from this copy.','sales_order_lead'));
-  const result=buildJobContexts({jobs,evidence,projectLinks,sourceStatus,now,maxEvidencePerJob:200});
+  const liveCounts=mergeLiveEvidence({data,evidence,sourceStatus,issues,calendarJob,reportJob,now});
+  const documentExtraction=addDocumentExtractions({data,evidence,sourceStatus,issues,reportJob});
+  const missingTextIssue=issues.findIndex(i=>i.source==='documents'&&i.code==='pdf_text_not_extracted');
+  if(missingTextIssue>=0) {
+    const missing=pdfCount-documentExtraction.indexed;
+    if(missing===0)issues.splice(missingTextIssue,1);
+    else issues[missingTextIssue].detail=missing+' PDF references have no current validated extraction. '+documentExtraction.indexed+' separate extractions are available for owner review; none approve shipment or service dates.';
+  }
+  const result=buildJobContexts({jobs,evidence,projectLinks,sourceStatus,now:generatedAt,maxEvidencePerJob:200});
+  const evidenceByKey=new Map();
+  for(const e of evidence) {if(!evidenceByKey.has(e.source_key))evidenceByKey.set(e.source_key,[]);evidenceByKey.get(e.source_key).push(e);}
+  const identityText=v=>asText(v).replace(/https?:\/\/[^\s<>"']+/gi,'[link omitted]').slice(0,2000);
+  result.unassigned=result.unassigned.map(u=>{
+    const rows=evidenceByKey.get(u.source_key)||[];
+    if(rows.length!==1)return {...u,identity_metadata_ambiguous:rows.length>1};
+    const e=rows[0];
+    return {...u,source_type:e.source_type,source_id:e.source_id,job_name:identityText(e.job_name)||null,project_id:identityText(e.project_id)||null,address:identityText(e.address)||null,po_numbers:(e.po_numbers||[]).map(identityText),oe_numbers:(e.oe_numbers||[]).map(identityText)};
+  });
+  result.unassigned.push(...documentExtraction.rejected,...trusted.diagnostics.map(d=>({source_key:'identity:'+d.source_type+':'+d.source_id,source_type:'identity_'+d.source_type,source_id:d.source_id,reason:d.reason,candidate_job_ids:d.candidate_job_ids,fee_ids:d.fee_ids,details:d.details||[]})));
+  result.counts.identity_link_diagnostics=trusted.diagnostics.length;
+  result.counts.extraction_rejections=documentExtraction.rejected.length;
+  result.counts.unassigned_records=result.unassigned.length;
+  for(const context of result.contexts) {
+    const unreviewed=context.evidence.filter(e=>e.source_type==='document_extractions');
+    for(const e of unreviewed)context.gaps.push({code:'document_extraction_needs_review',source_key:e.source_key,detail:'Extracted document statements are for owner review only; no job identity or operational date has been promoted.',severity:'warning'});
+    if(unreviewed.length){context.counts.gaps=context.gaps.length;if(context.status==='ready')context.status='incomplete';context.briefing+='\nUnreviewed PDF extractions are owner references only; never use them as approved reply facts.';}
+  }
   const groups=new Map();
-  for(const u of result.unassigned) { const key=(u.source_key||'unknown').split(':')[0]+':'+u.reason; if(!groups.has(key))groups.set(key,{count:0,examples:[]}); const g=groups.get(key);g.count++;if(g.examples.length<10)g.examples.push(u); }
-  for(const [key,g] of groups)issues.push({...warning(key.split(':')[0],key.split(':').slice(1).join(':'),g.count+' source records were not assigned safely; some may be non-job events.',/^(?:document|field_report|library_report):/.test(key)?'field_reporting_lead':key.startsWith('tracker:')?'sales_order_lead':'calendar_ops_lead'),count:g.count,examples:g.examples});
-  return {...result,source_status:sourceStatus,issues,source_counts:{jobs:jobs.length,calendar:calendar.length,field_reports:reports.length,library_projects:projects.length,library_reports:libraryReports.length,files:files.length,pdf_files:pdfCount,job_notes:notes.length,tracker_rows:trackerRows.length,service_cases:serviceCases.length,duplicate_report_origins:[...libraryIds].filter(id=>reports.some(r=>r.post_id===id)).length}};
+  for(const u of result.unassigned) { const key=((u.source_key||'').startsWith('identity:')?u.source_type:(u.source_key||'unknown').split(':')[0])+':'+u.reason; if(!groups.has(key))groups.set(key,{count:0,examples:[]}); const g=groups.get(key);g.count++;if(g.examples.length<10)g.examples.push(u); }
+  for(const [key,g] of groups)issues.push({...warning(key.split(':')[0],key.split(':').slice(1).join(':'),g.count+' source records were not assigned safely; some may be non-job events.',/^(?:document|document_extraction|field_report|library_report|live_probuild|identity_probuild_project|identity_probuild_post):/.test(key)?'field_reporting_lead':key.startsWith('tracker:')?'sales_order_lead':'calendar_ops_lead'),count:g.count,examples:g.examples});
+  return {...result,source_status:sourceStatus,issues,source_counts:{jobs:jobs.length,calendar:calendar.length,field_reports:reports.length,library_projects:projects.length,library_reports:libraryReports.length,files:files.length,pdf_files:pdfCount,job_notes:notes.length,tracker_rows:trackerRows.length,service_cases:serviceCases.length,live_google:liveCounts.calendar,live_probuild:liveCounts.probuild,document_extractions:documentExtraction.received,indexed_document_extractions:documentExtraction.indexed,rejected_document_extractions:documentExtraction.rejected.length,trusted_project_links:trusted.counts.project_links,trusted_calendar_links:trusted.counts.calendar_links,trusted_post_links:trusted.counts.post_links,trusted_identity_diagnostics:trusted.diagnostics.length,duplicate_report_origins:[...libraryIds].filter(id=>reports.some(r=>r.post_id===id)).length}};
 }
 
-export async function collectKnowledgeSources(api,readTracker,now) {
+export async function collectKnowledgeSources(api,readTracker,now,providerData,getNow) {
   const definitions={
     jobs:['Jobs','id,canonical_name,aliases,po_numbers,oe_numbers,address,builder'],
     calendar:['CalendarEvents','id,job_id,job_name,address,source,source_status,event_date,start_time,end_time,end_date,scope_notes,po_number,oe_number,google_event_id,updated_date'],
     reports:['FieldReports','id,post_id,project_id,job_name,job_date,message,attachment_count'],
     projects:['FieldLibraryProject','id,source_project_id,name,job_id,source_deleted,source_checked_at'],
     libraryReports:['FieldLibraryReport','id,source_post_id,source_project_id,project_name,report_date,source_created_at,source_deleted,message,source_checked_at,attachments'],
-    files:['FieldLibraryFile','id,source_key,source_project_id,source_post_id,name,mime_type,status,source_deleted,verified_at'],
+    files:['FieldLibraryFile','id,source_key,source_project_id,source_post_id,name,mime_type,status,source_deleted,verified_at,sha256'],
+    extractions:['JobDocumentExtraction','id,extraction_key,file_id,sha256,source_project_id,source_post_id,status,checked_at,result',{status:'extracted_needs_review'}],
     links:['ProbuildProjectLink','id,project_id,job_id,job_name'],notes:['JobNotes','id,job_id,note_date,body,updated_date'],
-    fees:['FeeLines','id,job_id,calendar_event_id,probuild_post_id,needs_review,match_confidence,superseded_by'],
+    fees:['FeeLines','id,job_id,calendar_event_id,probuild_post_id,probuild_project_id,job_name_raw,job_name_norm,needs_review,match_confidence,superseded_by'],
     snapshots:['OutlookCalendarSnapshot','id,calendar_name,captured_at,range_start,range_end,timezone,complete,events,event_count'],
     batches:['OutlookCalendarBatch','id,calendar_name,captured_at,range_start,range_end,timezone,complete,snapshot_ids,event_count'],
     serviceCases:['MessageServiceCase','id,status,result,updated_date'],
   };
   const data={},entries=Object.entries(definitions);let cursor=0;
-  await Promise.all(Array.from({length:3},async()=>{for(;;){const item=entries[cursor++];if(!item)return;const [key,[entity,selected]]=item;data[key]=await allKnowledgeRows(api.entities[entity],fields(selected));}}));
+  await Promise.all(Array.from({length:3},async()=>{for(;;){const item=entries[cursor++];if(!item)return;const [key,[entity,selected,query={}]]=item;data[key]=await allKnowledgeRows(api.entities[entity],fields(selected),query);}}));
   data.tracker=(await api.entities.SalesTrackerSnapshot.filter({status:'validated'},'-source_captured_at',1))[0]||null;
   data.libraryImport=(await api.entities.FieldLibraryImport.list('-created_date',1,0,fields('id,checked_at,source_complete,files_complete')))[0]||null;
   data.trackerRows=[];
   if(data.tracker) data.trackerRows=await readTracker(data.tracker,api);
-  return adaptKnowledgeSources(data,now);
+  if(typeof providerData==='function') {
+    try {data.providerData=await providerData();}
+    catch {data.providerData={calendar:{items:[],complete:false,error:'provider_read_failed'},probuild:{items:[],complete:false,error:'provider_read_failed'}};}
+  } else data.providerData=providerData;
+  const generatedAt=typeof getNow==='function'?getNow():now;
+  return adaptKnowledgeSources(data,now,generatedAt);
 }
 
-export async function refreshJobKnowledge({api,readTracker,now=new Date().toISOString(),force=false}) {
+export async function refreshJobKnowledge({api,readTracker,readProviders,now=new Date().toISOString(),getNow=()=>new Date().toISOString(),force=false}) {
   const active=(await api.entities.JobKnowledgeRun.filter({status:'building'},'-started_at',1))[0];
   if(active&&Date.parse(now)-Date.parse(active.started_at)<15*60000)return {status:'busy',run_id:active.id};
   const previous=(await api.entities.JobKnowledgeRun.filter({status:'complete'},'-started_at',1))[0];
   if(!force&&previous&&Date.parse(now)-Date.parse(previous.completed_at)<30*60000)return {status:'recent',run_id:previous.id,counts:previous.counts};
   const run=await api.entities.JobKnowledgeRun.create({status:'building',started_at:now,automatic_send_allowed:false});
   try {
-    const result=await collectKnowledgeSources(api,readTracker,now);
+    const result=await collectKnowledgeSources(api,readTracker,now,readProviders,getNow);
     // A new immutable generation becomes visible only after every job is stored.
     // A failed build leaves the previous complete generation available and stale.
-    const records=result.contexts.map(context=>({run_id:run.id,job_id:context.job_id,job_name:context.job_name,status:context.status,generated_at:now,briefing:context.briefing,context}));
+    const records=result.contexts.map(context=>({run_id:run.id,job_id:context.job_id,job_name:context.job_name,status:context.status,generated_at:context.generated_at,briefing:context.briefing,context}));
     for(let i=0;i<records.length;i+=25)await api.entities.JobKnowledge.bulkCreate(records.slice(i,i+25));
     const unassignedChunks=[];
     for(let i=0;i<result.unassigned.length;i+=200)unassignedChunks.push({run_id:run.id,chunk_index:i/200,records:result.unassigned.slice(i,i+200)});
@@ -194,16 +320,24 @@ export async function refreshJobKnowledge({api,readTracker,now=new Date().toISOS
     if(persisted.length!==records.length||new Set(persisted.map(r=>r.job_id)).size!==records.length||persisted.some(r=>!expectedJobs.has(r.job_id)))throw Error('Prepared job count mismatch');
     const savedChunks=await allKnowledgeRows(api.entities.JobKnowledgeUnassigned,['id','chunk_index','records'],{run_id:run.id});
     if(savedChunks.length!==unassignedChunks.length||new Set(savedChunks.map(c=>c.chunk_index)).size!==unassignedChunks.length||savedChunks.some(c=>!Number.isInteger(c.chunk_index)||c.chunk_index<0||c.chunk_index>=unassignedChunks.length||JSON.stringify(c.records)!==JSON.stringify(unassignedChunks[c.chunk_index].records)))throw Error('Prepared unassigned source references mismatch');
-    const completed_at=new Date().toISOString();
+    const completed_at=getNow();
     await api.entities.JobKnowledgeRun.update(run.id,{status:'complete',completed_at,counts:result.counts,source_counts:result.source_counts,source_status:result.source_status,issues:result.issues,unassigned_count:result.unassigned.length,unassigned_chunks:unassignedChunks.length,automatic_send_allowed:false});
     // One persistent exception per type, updated instead of texting repeatedly.
     let notification_error=false;
-    try { for(const issue of result.issues) {
+    try { const activeKeys=new Set(),previousKeys=new Set((previous?.issues||[]).map(i=>'job_knowledge:'+i.source+':'+i.code));
+    for(const issue of result.issues) {
       const key='job_knowledge:'+issue.source+':'+issue.code;
+      activeKeys.add(key);
       const old=(await api.entities.AgentCenterEscalation.filter({escalation_key:key},'-created_date',1))[0];
-      const row={escalation_key:key,agent_id:issue.assigned_to,department:'Job information',title:'Job data: '+issue.code.replaceAll('_',' '),context:issue.detail,status:'needs_owner_decision',created_at:old?.created_at||now};
+      const continued=previousKeys.has(key),preserveClosed=old&&['answered','dismissed'].includes(old.status)&&(continued||!previous);
+      const row={escalation_key:key,agent_id:issue.assigned_to,department:'Job information',title:'Job data: '+issue.code.replaceAll('_',' '),context:issue.detail,status:preserveClosed?old.status:'needs_owner_decision',created_at:old?.created_at||now,...(preserveClosed?{}:{resolved_at:null,resolution:''})};
       if(old)await api.entities.AgentCenterEscalation.update(old.id,row);else await api.entities.AgentCenterEscalation.create(row);
-    }}catch{notification_error=true;}
+    }
+    const existing=await allKnowledgeRows(api.entities.AgentCenterEscalation,['id','escalation_key','status'],{department:'Job information'});
+    for(const item of existing)if(typeof item.escalation_key==='string'&&item.escalation_key.startsWith('job_knowledge:')&&!activeKeys.has(item.escalation_key)&&item.status==='needs_owner_decision') {
+      await api.entities.AgentCenterEscalation.update(item.id,{status:'answered',resolved_at:getNow(),resolution:'No longer present in completed preparation '+run.id+'.'});
+    }
+    }catch{notification_error=true;}
     return {status:'complete',run_id:run.id,counts:result.counts,source_counts:result.source_counts,issues:result.issues.length,notification_error,automatic_send_allowed:false};
   }catch(error){await api.entities.JobKnowledgeRun.update(run.id,{status:'failed',completed_at:new Date().toISOString(),error:'Job preparation failed. The previous complete generation is retained; source records were not changed.'}).catch(()=>{});throw error;}
 }

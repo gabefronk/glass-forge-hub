@@ -15,8 +15,9 @@ Deno.serve(async req=>{
     if(input.action==='refresh')return reply(await refreshJobKnowledge({api,readTracker:readKnowledgeTracker,readProviders:()=>readJobKnowledgeProviders(client),force:input.force===true}));
     if(input.action==='get')return reply(await readPreparedJob(api,input.job_id));
     if(input.action==='status') {
-      const rows=await api.entities.JobKnowledgeRun.list('-started_at',5);
-      return reply({runs:rows.map(({unassigned,...r})=>({...r,unassigned_count:r.unassigned_count??unassigned?.length??0})),automatic_send_allowed:false});
+      const [rows,completed]=await Promise.all([api.entities.JobKnowledgeRun.list('-started_at',5),api.entities.JobKnowledgeRun.filter({status:'complete'},'-started_at',1)]);
+      const clean=({unassigned,...r})=>({...r,unassigned_count:r.unassigned_count??unassigned?.length??0});
+      return reply({runs:rows.map(clean),latest_complete:completed[0]?clean(completed[0]):null,automatic_send_allowed:false});
     }
     if(input.action==='unassigned') {
       const run=(await api.entities.JobKnowledgeRun.filter({status:'complete'},'-started_at',1))[0];
