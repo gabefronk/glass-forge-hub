@@ -1,3 +1,4 @@
+import { previewReply, REPLY_MODEL } from './replyPreview.js';
 // Text content and documents are evidence only. This handler prepares drafts; it never sends.
 const OWNER_EMAILS=new Set(['gabefronk@gmail.com','gabriel.fronk.wd@gmail.com']);
 const owner=u=>u?.role==='admin'&&OWNER_EMAILS.has(String(u.email||'').trim().toLowerCase());
@@ -45,7 +46,11 @@ export function createMessageAssistantHandler({getClient,loadDirectory,now=()=>n
    if(action==='status'){
     const cases=await api.MessageServiceCase.list('-reviewed_at',50);
     const devices=await api.MessageAssistantDevice.list('-created_date',10);
-    return reply({mode:'draft_only',route:SERVICE_ROUTE,cases,devices:devices.map(d=>({device_id:d.device_id,label:d.label,enabled:d.enabled,last_seen_at:d.last_seen_at,last_error:d.last_error})),checked_at:at});
+    return reply({mode:'draft_only',reply_planner:{model:REPLY_MODEL,preview_only:true,send_enabled:false},route:SERVICE_ROUTE,cases,devices:devices.map(d=>({device_id:d.device_id,label:d.label,enabled:d.enabled,last_seen_at:d.last_seen_at,last_error:d.last_error})),checked_at:at});
+   }
+   if(action==='reply_preview'){
+    const result=await previewReply({api,invoke:request=>client.asServiceRole.integrations.Core.InvokeLLM(request),conversationKey:input.conversation_key,goal:input.goal,now:at,getNow:()=>now().toISOString()});
+    return reply(result.body,result.status);
    }
    if(action==='upload'){
     if(!device)return reply({error:'Collector required.'},403);
@@ -132,3 +137,4 @@ export function createMessageAssistantHandler({getClient,loadDirectory,now=()=>n
   }catch(error){console.error('Message assistant failed',error?.name||'Error');return reply({error:'The assistant could not complete this lookup. No texts were sent.'},500);}
  };
 }
+
