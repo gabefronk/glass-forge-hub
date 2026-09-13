@@ -2,6 +2,7 @@ import { buildJobContexts, createJobIndex, matchJobEvidence } from './jobContext
 import { assessCalendarCoverage, denverCalendarDate, isCalendarDate, sourceFreshness } from './calendarCoverage.mjs';
 import { buildTrustedSourceLinks } from './trustedSourceLinks.mjs';
 import { validateJobDocumentResult } from './jobDocumentExtraction.mjs';
+import { verifyCalendarReviews, calendarReviewEvidence } from './calendarReview.mjs';
 
 // Only generated knowledge records are written. Original jobs, reports, calendars,
 // fees, quotes and message read states remain authoritative and unchanged.
@@ -225,6 +226,10 @@ export function adaptKnowledgeSources(data,now,generatedAt=now) {
     if(!coverage.fresh_complete)issues.push(warning(type,'calendar_coverage_gap','Upcoming 31 days are not completely covered by a fresh capture. Last capture: '+(selected?.captured_at||'none')+'.','calendar_ops_lead'));
     issues.push(warning(type,'cancellation_not_verified','Saved Outlook events do not establish current cancellation status. Confirm before promising a visit.','calendar_ops_lead'));
   }
+  const scopedCalendar = calendarReviewEvidence({captures:data.calendarReviews||[],jobs,now});
+  evidence.push(...scopedCalendar.evidence);
+  Object.assign(sourceStatus,scopedCalendar.source_status);
+  for(const [type,status] of Object.entries(scopedCalendar.source_status))issues.push(warning(type,'selected_calendar_scope',status.selected_detail_count+' selected details captured; '+status.deferred_agenda_count+' agenda entries remain deferred. Full-calendar details, current ownership and cancellations are not verified.','calendar_ops_lead'));
   for(const r of trackerRows) {
     const label=[r.builder,r.subdivision,'lot '+r.lot].filter(Boolean).join(' ');
     const variants=[label,r.builder+' - '+r.lot+' '+r.subdivision,r.builder+' '+r.subdivision+' '+r.lot,r.builder+' - '+r.subdivision+' - '+r.lot];
@@ -256,9 +261,12 @@ export function adaptKnowledgeSources(data,now,generatedAt=now) {
     const e=rows[0];
     return {...u,source_type:e.source_type,source_id:e.source_id,job_name:identityText(e.job_name)||null,project_id:identityText(e.project_id)||null,address:identityText(e.address)||null,po_numbers:(e.po_numbers||[]).map(identityText),oe_numbers:(e.oe_numbers||[]).map(identityText)};
   });
-  result.unassigned.push(...documentExtraction.rejected,...trusted.diagnostics.map(d=>({source_key:'identity:'+d.source_type+':'+d.source_id,source_type:'identity_'+d.source_type,source_id:d.source_id,reason:d.reason,candidate_job_ids:d.candidate_job_ids,fee_ids:d.fee_ids,details:d.details||[]})));
+  result.unassigned.push(...scopedCalendar.diagnostics,...(data.calendarReviewRejected||[]).map(r=>({source_key:'calendar_review_invalid:'+r.id,source_type:'calendar_review',source_id:r.id,reason:r.reason,candidate_job_ids:[]})),...documentExtraction.rejected,...trusted.diagnostics.map(d=>({source_key:'identity:'+d.source_type+':'+d.source_id,source_type:'identity_'+d.source_type,source_id:d.source_id,reason:d.reason,candidate_job_ids:d.candidate_job_ids,fee_ids:d.fee_ids,details:d.details||[]})));
   result.counts.identity_link_diagnostics=trusted.diagnostics.length;
   result.counts.extraction_rejections=documentExtraction.rejected.length;
+  result.counts.selected_calendar_matches=scopedCalendar.evidence.length;
+  result.counts.selected_calendar_review=scopedCalendar.diagnostics.length;
+  result.counts.invalid_calendar_captures=(data.calendarReviewRejected||[]).length;
   result.counts.unassigned_records=result.unassigned.length;
   for(const context of result.contexts) {
     const unreviewed=context.evidence.filter(e=>e.source_type==='document_extractions');
@@ -285,9 +293,12 @@ export async function collectKnowledgeSources(api,readTracker,now,providerData,g
     snapshots:['OutlookCalendarSnapshot','id,calendar_name,captured_at,range_start,range_end,timezone,complete,events,event_count'],
     batches:['OutlookCalendarBatch','id,calendar_name,captured_at,range_start,range_end,timezone,complete,snapshot_ids,event_count'],
     serviceCases:['MessageServiceCase','id,status,result,updated_date'],
+    calendarReviews:['CalendarReviewCapture','id,status,schema_version,capture_key,package_sha256,calendar_name,captured_at,range_start,range_end,timezone,scope,complete,agenda_coverage_complete,selected_detail_coverage_complete,full_calendar_details_complete,source_manifest,selected_events,deferred_agenda,daily_coverage,content_sha256'],
   };
   const data={},entries=Object.entries(definitions);let cursor=0;
   await Promise.all(Array.from({length:3},async()=>{for(;;){const item=entries[cursor++];if(!item)return;const [key,[entity,selected,query={}]]=item;data[key]=await allKnowledgeRows(api.entities[entity],fields(selected),query);}}));
+  const reviewCheck=await verifyCalendarReviews(data.calendarReviews,now);
+  data.calendarReviews=reviewCheck.captures;data.calendarReviewRejected=reviewCheck.rejected;
   data.tracker=(await api.entities.SalesTrackerSnapshot.filter({status:'validated'},'-source_captured_at',1))[0]||null;
   data.libraryImport=(await api.entities.FieldLibraryImport.list('-created_date',1,0,fields('id,checked_at,source_complete,files_complete')))[0]||null;
   data.trackerRows=[];

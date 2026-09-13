@@ -4,14 +4,22 @@ import {resolvePreparedJobQuery,buildPreparedJobLookup} from './preparedJobLooku
 import {readKnowledgeTracker} from './jobKnowledgeRuntime.ts';
 import {readJobKnowledgeProviders} from './jobKnowledgeProviders.ts';
 import {extractJobDocuments,JOB_DOCUMENT_EXTRACTOR_REVISION} from './jobDocumentExtraction.mjs';
+import {verifyCalendarReviews,importCalendarReview,REVIEW_VERSION} from './calendarReview.mjs';
 const reply=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store'}});
 Deno.serve(async req=>{
   if(req.method!=='POST')return reply({error:'Use POST.'},405);
   const client=createClientFromRequest(req),user=await client.auth.me().catch(()=>null);
   if(!isKnowledgeOwner(user))return reply({error:'Owner access required.'},403);
   try {
-    const raw=await req.text();if(raw.length>4000)return reply({error:'Request too large.'},413);
+    const raw=await req.text();if(new TextEncoder().encode(raw).length>260000)return reply({error:'Request too large.'},413);
     const input=JSON.parse(raw),api=client.asServiceRole;
+    if(input.action==='import_calendar_review')return reply(await importCalendarReview({api,user,record:input.record,now:new Date().toISOString()}));
+    if(raw.length>4000)return reply({error:'Request too large.'},413);
+    if(input.action==='calendar_reviews') {
+      const rows=await allKnowledgeRows(api.entities.CalendarReviewCapture);
+      const checked=await verifyCalendarReviews(rows,new Date().toISOString());
+      return reply({...checked,revision:REVIEW_VERSION});
+    }
     if(input.action==='lookup_prepared') {
       const query=input.query||{},now=new Date().toISOString();
       const jobs=await allKnowledgeRows(api.entities.Jobs,['id','canonical_name','aliases','builder','po_numbers','oe_numbers','address']);
@@ -27,7 +35,7 @@ Deno.serve(async req=>{
     if(input.action==='status') {
       const [rows,completed]=await Promise.all([api.entities.JobKnowledgeRun.list('-started_at',5),api.entities.JobKnowledgeRun.filter({status:'complete'},'-started_at',1)]);
       const clean=({unassigned,...r})=>({...r,unassigned_count:r.unassigned_count??unassigned?.length??0});
-      return reply({runs:rows.map(clean),latest_complete:completed[0]?clean(completed[0]):null,automatic_send_allowed:false,document_extractor_revision:JOB_DOCUMENT_EXTRACTOR_REVISION});
+      return reply({runs:rows.map(clean),latest_complete:completed[0]?clean(completed[0]):null,automatic_send_allowed:false,document_extractor_revision:JOB_DOCUMENT_EXTRACTOR_REVISION,calendar_review_revision:REVIEW_VERSION});
     }
     if(input.action==='unassigned') {
       const run=(await api.entities.JobKnowledgeRun.filter({status:'complete'},'-started_at',1))[0];
