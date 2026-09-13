@@ -1,0 +1,38 @@
+{
+  "name": "JobKnowledge",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "job_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "briefing": {
+      "type": "string"
+    },
+    "context": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "job_id",
+    "run_id",
+    "context"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

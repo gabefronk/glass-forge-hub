@@ -1,0 +1,64 @@
+{
+  "name": "JobKnowledgeRun",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "building",
+        "complete",
+        "failed"
+      ]
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string"
+    },
+    "counts": {
+      "type": "object"
+    },
+    "source_counts": {
+      "type": "object"
+    },
+    "source_status": {
+      "type": "object"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "unassigned": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "automatic_send_allowed": {
+      "type": "boolean",
+      "default": false
+    },
+    "error": {
+      "type": "string"
+    },
+    "unassigned_count": {
+      "type": "integer"
+    },
+    "unassigned_chunks": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "status",
+    "started_at"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
