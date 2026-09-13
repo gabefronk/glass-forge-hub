@@ -1,6 +1,7 @@
 import {createClientFromRequest} from 'npm:@base44/sdk@0.8.48';
 import {getProbuildIdToken} from '../../shared/probuildApi.ts';
 // Inlined handler; mirrored by the tested shared sources.
+// Scan recovery revision probuild-scan-retry-20260913-r1.
 // Private attachment bytes stay behind the authenticated owner endpoint.
 export async function readPrivateMessageAttachment(client, attachment, fetchFile = fetch) {
  const max = 8388608;
