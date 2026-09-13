@@ -1,4 +1,5 @@
 import {createClientFromRequest} from 'npm:@base44/sdk@0.8.48';
+// Deployment recovery 2026-09-13: restore the existing authenticated worker.
 // Inlined private handler; mirrored by the tested shared sources.
 // Private attachment bytes stay behind the authenticated owner endpoint.
 export async function readPrivateMessageAttachment(client, attachment, fetchFile = fetch) {
