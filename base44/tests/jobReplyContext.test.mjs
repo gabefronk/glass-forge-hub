@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildJobReplyFacts} from './jobReplyContext.mjs';
+import {buildJobReplyFacts} from '../shared/jobReplyContext.mjs';
 
 const NOW='2026-09-13T15:00:00Z';
 const entry=patch=>({source_key:'cal:e1',source_type:'calendar',matched_job_id:'j16',job_id:'j16',date:'2026-09-14',kind:'service_scheduled',category:'service',certainty:'scheduled_only',active:true,status:'scheduled',source_checked_at:NOW,...patch});

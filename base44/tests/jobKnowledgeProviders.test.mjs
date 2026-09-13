@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-const source = await readFile(new URL('../integration/jobKnowledgeProviders.ts', import.meta.url), 'utf8');
-const billing = new URL('../source-audit/base44/shared/billingCore.js', import.meta.url);
+const source = await readFile(new URL('../shared/jobKnowledgeProviders.ts', import.meta.url), 'utf8');
+const billing = new URL('../shared/billingCore.js', import.meta.url);
 // Replace only the platform import boundary; every provider read is injected.
 const testSource = source.replace("import { getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject } from './probuildApi.ts';", 'const getProbuildIdToken = () => { throw Error("Production auth unexpectedly invoked"); }; const fetchProbuildProjects = getProbuildIdToken; const fetchProbuildPostsForProject = getProbuildIdToken;').replace("'./billingCore.js'", JSON.stringify(billing.href));
 const { readJobKnowledgeProviders } = await import('data:text/javascript;base64,' + Buffer.from(testSource).toString('base64'));

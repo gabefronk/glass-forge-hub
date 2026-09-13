@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTrustedSourceLinks } from './trustedSourceLinks.mjs';
+import { buildTrustedSourceLinks } from '../shared/trustedSourceLinks.mjs';
 const jobs = [{ id:'j16', canonical_name:'Acme - 16 Pine Grove' }, { id:'duplicate16', canonical_name:'Acme - 16 Pine Grove' }, { id:'j17', canonical_name:'Acme - 17 Pine Grove' }];
 const fee = patch => ({ id:'f1',job_id:'j16',job_name_raw:'Acme - 16 Pine Grove',match_confidence:'high',probuild_project_id:'p16',probuild_post_id:'post1',calendar_event_id:'event1',...patch });
 const project = patch => ({ source_project_id:'p16',name:'Acme - 16 Pine Grove',source_deleted:false,...patch });

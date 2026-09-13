@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractJobDocuments, validateJobDocumentResult, JOB_DOCUMENT_SCHEMA } from '../integration/jobDocumentExtraction.mjs';
+import { extractJobDocuments, validateJobDocumentResult, JOB_DOCUMENT_SCHEMA } from '../shared/jobDocumentExtraction.mjs';
 const now = '2026-09-13T10:00:00Z';
 const digest = 'a'.repeat(64);
 const file = (id = 'pdf1', changes = {}) => ({ id, status: 'verified', source_deleted: false, mime_type: 'application/pdf', file_uri: 'private/library/' + id + '.pdf', sha256: digest, size: 1024, verified_at: '2026-09-12T10:00:00Z', source_project_id: 'project1', source_post_id: 'post1', ...changes });

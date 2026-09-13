@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { fetchAllPages } from './repairs/base44/shared/pagination.ts';
+import { fetchAllPages } from '../shared/pagination.ts';
 
 // Execute the proposed installer module unchanged except resolving its unchanged
 // sanitizer import to the preserved audit dependency tree. No mock sanitizer.
-const installerUrl = new URL('./repairs/base44/shared/installerCalendar.ts', import.meta.url);
-const originalSanitizerUrl = new URL('../source-audit/base44/shared/sanitize.ts', import.meta.url);
+const installerUrl = new URL('../shared/installerCalendar.ts', import.meta.url);
+const originalSanitizerUrl = new URL('../shared/sanitize.ts', import.meta.url);
 const installerSource = (await readFile(installerUrl, 'utf8')).replace("'./sanitize.ts'", JSON.stringify(originalSanitizerUrl.href));
 const { fetchInstallerEventMap, buildInstallerEvent, upsertInstallerEvent } = await import('data:text/javascript;base64,' + Buffer.from(installerSource).toString('base64'));
 const page = (items = [], nextPageToken) => Response.json({ items, ...(nextPageToken ? { nextPageToken } : {}) });
