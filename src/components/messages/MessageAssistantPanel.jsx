@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {Bot,RefreshCw,ExternalLink,Copy,CheckCircle2} from 'lucide-react';
 import {base44} from '@/api/base44Client';
@@ -14,6 +14,9 @@ export function BlueBubblesPanel(){
  </section>;
 }
 export default function MessageAssistantPanel({conversationKey}){
+ const [replyGoal,setReplyGoal]=useState(''),[replyPlan,setReplyPlan]=useState(null),[replyBusy,setReplyBusy]=useState(false);
+ const replyRevision=useRef(0);
+ useEffect(()=>{replyRevision.current+=1;setReplyGoal('');setReplyPlan(null);setReplyBusy(false);return()=>{replyRevision.current+=1}},[conversationKey]);
  const [data,setData]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[active,setActive]=useState(null);
  const refresh=useCallback(async()=>{try{setData(await call({action:'status'}));setError('')}catch(e){setError(e.response?.data?.error||'Assistant status is unavailable.')}},[]);
  useEffect(()=>{refresh();const timer=setInterval(refresh,30000);return()=>clearInterval(timer)},[refresh]);
@@ -22,7 +25,17 @@ export default function MessageAssistantPanel({conversationKey}){
  const cases=data?.cases||[],selected=active||(conversationKey?cases.find(c=>c.conversation_key===conversationKey):null),result=selected?.result;
  const toggleCollector=async d=>{try{await call({action:'set_collector',device_id:d.device_id,enabled:!d.enabled});await refresh()}catch{setError('Could not change collector status.')}};
  const copy=async text=>{try{await navigator.clipboard.writeText(text);setNotice('Draft copied. Nothing has been sent.')}catch{setError('Clipboard is unavailable. Select and copy the draft text.')}};
+ const previewReply=async()=>{const revision=++replyRevision.current;setReplyBusy(true);setReplyPlan(null);setError('');try{const r=await call({action:'reply_preview',conversation_key:conversationKey,goal:replyGoal});if(replyRevision.current!==revision)return;if(r.error)throw new Error(r.error);setReplyPlan(r.plan)}catch(e){if(replyRevision.current===revision)setError(e.response?.data?.error||e.message||'The reply could not be prepared.')}finally{if(replyRevision.current===revision)setReplyBusy(false)}};
  return <section className="space-y-5">
+  <div className="rounded-2xl border border-slate-200 bg-white p-5">
+   <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Reply in your style</h2><span className="rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-800">Automatic replies off</span></div>
+   <p className="mt-2 text-sm text-slate-600">Uses your outgoing messages in the selected conversation for tone and asks for missing details. Previewing a reply uses Base44 AI credits with GPT-5.6 Sol.</p>
+   {!conversationKey&&<p className="mt-3 text-sm text-slate-600">Choose a conversation in Job inbox first.</p>}
+   <label className="mt-4 block text-sm font-medium" htmlFor="reply-goal">What should the assistant handle?</label>
+   <textarea id="reply-goal" value={replyGoal} maxLength={1000} disabled={!conversationKey} onChange={e=>{replyRevision.current+=1;setReplyGoal(e.target.value);setReplyPlan(null);setReplyBusy(false)}} placeholder="For example: Ask which door is affected and whether they can send a photo." className="mt-2 min-h-20 w-full rounded-lg border border-slate-300 p-3 text-sm disabled:opacity-50"/>
+   <button className={button+' mt-3'} disabled={!conversationKey||!replyGoal.trim()||replyBusy} onClick={previewReply}>{replyBusy?'Preparing reply…':'Preview reply'}</button>
+   {replyPlan&&<div role="status" className="mt-4 rounded-xl bg-slate-50 p-4 text-sm"><p className="font-medium">{replyPlan.decision==='reply'?'Reply preview':replyPlan.decision==='wait'?'No reply needed':'Needs your attention'}</p>{replyPlan.reply_text&&<><p className="mt-2 whitespace-pre-wrap">{replyPlan.reply_text}</p><button className={button+' mt-3'} onClick={()=>copy(replyPlan.reply_text)}>Copy reply draft</button></>}{replyPlan.owner_note&&<p className="mt-2 text-slate-600">{replyPlan.owner_note}</p>}<p className="mt-3 text-xs text-slate-500">Nothing has been sent. Review the wording and latest messages before using it.</p></div>}
+  </div>
   <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-semibold"><Bot className="h-5 w-5"/>Service assistant</h2><p className="mt-2 max-w-2xl text-sm text-slate-600">Matches work contacts, reviews the imported text history, and prepares a job-specific service handoff.</p></div><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">Draft mode · automatic sending off</span></div>
   <p className="mt-4 text-sm"><strong>Service route:</strong> {data?.route?.name||'Loading…'}{data?.route&&' · '+data.route.recipients.join(' · ')}</p><p className="mt-1 text-xs text-slate-500">Uses the existing service group. Customer groups with extra participants are not the default destination.</p>
   <div className="mt-4 flex flex-wrap gap-3"><button className={button} disabled={!conversationKey||busy} onClick={analyze}>{busy?'Reviewing history…':'Review selected conversation'}</button><button className={button+' flex items-center gap-2'} onClick={refresh}><RefreshCw className="h-4 w-4"/>Refresh cases</button></div>
@@ -45,3 +58,4 @@ export default function MessageAssistantPanel({conversationKey}){
   </>}</article></div>
  </section>;
 }
+
