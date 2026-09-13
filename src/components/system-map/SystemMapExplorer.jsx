@@ -274,6 +274,7 @@ export default function SystemMapExplorer({ data }) {
     </header>
 
     <div className="gsm-toolbar">
+      <select className="gsm-mobile-view-select" aria-label="Choose system map view" value={activeView.id} onChange={event => chooseView(event.target.value)}>{model.views.map(view => <option key={view.id} value={view.id}>{view.title} ({view.nodeIds.length})</option>)}</select>
       <div className="gsm-view-tabs" role="tablist" aria-label="System map views">{model.views.map((view, index) => <button type="button" key={view.id} id={`${reactId}-tab-${index}`} className="gsm-view-tab" role="tab" aria-selected={activeView.id === view.id} aria-controls={`${reactId}-view`} tabIndex={activeView.id === view.id ? 0 : -1} onClick={() => chooseView(view.id)} onKeyDown={event => handleTabKey(event, index)}>{view.title}<span>{view.nodeIds.length}</span></button>)}</div>
       <div className="gsm-search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.7" /><path d="m16 16 4.5 4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg><input id={searchId} type="search" value={query} onChange={event => { setQuery(event.target.value); setSelectedId(null); }} placeholder="Search every system…" aria-label="Search all systems, details, and next steps" />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search">×</button>}</div>
     </div>
