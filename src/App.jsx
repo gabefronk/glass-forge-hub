@@ -30,6 +30,7 @@ import ContactsDirectory from "@/pages/ContactsDirectory";
 import ProbuildReports from '@/pages/ProbuildReports';
 import ReportLibrary from '@/pages/ReportLibrary';
 import SystemMap from "@/pages/SystemMap";
+import ResearchQueue from "@/pages/ResearchQueue";
 // Add page imports here
 
 const AuthenticatedApp = () => {
@@ -81,6 +82,7 @@ const AuthenticatedApp = () => {
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/match-debug" element={<MatchDebug />} />
           <Route path="/brands-specs" element={<BrandsSpecs />} />
+          <Route path="/research-queue" element={<ResearchQueue />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
