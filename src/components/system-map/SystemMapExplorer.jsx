@@ -111,7 +111,7 @@ function layoutNodes(nodes, edges) {
       else if (fromHub && !towardHub) right.push(node);
       else (left.length <= right.length ? left : right).push(node);
     });
-    while (Math.abs(left.length - right.length) > 2) {
+    while (Math.abs(left.length - right.length) > 1) {
       const larger = left.length > right.length ? left : right;
       const smaller = larger === left ? right : left;
       smaller.push(larger.pop());
@@ -234,7 +234,10 @@ export default function SystemMapExplorer({ data }) {
       const workspace = document.getElementById(`${reactId}-view`);
       if (!panel || !workspace) return;
       const stacked = Math.abs(panel.getBoundingClientRect().left - workspace.getBoundingClientRect().left) < 12;
-      if (!onlyWhenStacked || stacked) panel.scrollIntoView({ behavior: 'auto', block: 'start' });
+      if (!onlyWhenStacked || stacked) {
+        panel.focus({ preventScroll: true });
+        panel.scrollIntoView({ behavior: 'auto', block: 'start' });
+      }
     });
   }
 
@@ -298,7 +301,7 @@ export default function SystemMapExplorer({ data }) {
         </div>}
       </div>
 
-      <aside className="gsm-details" id={detailId} aria-label="Selected system details" aria-live="polite">
+      <aside className="gsm-details" id={detailId} tabIndex={-1} aria-label="Selected system details" aria-live="polite">
         {selected ? <><p className="gsm-detail-kicker">{selected.category}</p><h2 className="gsm-detail-title">{selected.label}</h2><StatusBadge status={selected.status} /><p className="gsm-detail-summary">{selected.summary}</p>{selected.owner && <div className="gsm-detail-meta"><span>Responsible</span><strong>{selected.owner}</strong></div>}
           {selected.details.length > 0 && <section className="gsm-detail-section"><h3>What to know</h3><ul className="gsm-detail-list">{selected.details.map((detail, index) => <li key={index}>{detail}</li>)}</ul></section>}
           {selected.nextStep && <section className="gsm-next-step"><h3>Next step</h3><p>{selected.nextStep}</p></section>}
