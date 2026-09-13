@@ -107,11 +107,11 @@ test('configured connectors do not mask stale or incomplete provider observation
   assert(!JSON.stringify(result).includes('PRIVATE-'));
 });
 
-test('completed job preparation is selected by completion time and stale runs block', async () => {
+test('completed job preparation is selected by source generation order and stale runs block', async () => {
   const run = freshRun(); run.completed_at = '2026-09-10T01:00:00Z';
   const { ctx, reads } = fixture({ run });
   const result = await reconcileLead(lead('sales_order_lead'), ctx);
-  assert.deepEqual(reads.find(r => r.name === 'JobKnowledgeRun'), { name: 'JobKnowledgeRun', query: { status: 'complete' }, sort: '-completed_at', limit: 1 });
+  assert.deepEqual(reads.find(r => r.name === 'JobKnowledgeRun'), { name: 'JobKnowledgeRun', query: { status: 'complete' }, sort: '-started_at', limit: 1 });
   assert(result.exceptions.some(value => /latest completed job preparation is stale/.test(value)));
 });
 
