@@ -1,3 +1,4 @@
+// Published diagnostic revision job-pdf-20260913-r4; private files remain private.
 // base44/shared/jobKnowledgeEntry.ts
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.48";
 
