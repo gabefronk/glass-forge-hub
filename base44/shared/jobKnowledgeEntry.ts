@@ -1,5 +1,6 @@
 import {createClientFromRequest} from 'npm:@base44/sdk@0.8.48';
-import {isKnowledgeOwner,refreshJobKnowledge,readPreparedJob} from './jobKnowledgeService.mjs';
+import {isKnowledgeOwner,refreshJobKnowledge,readPreparedJob,allKnowledgeRows} from './jobKnowledgeService.mjs';
+import {resolvePreparedJobQuery,buildPreparedJobLookup} from './preparedJobLookup.mjs';
 import {readKnowledgeTracker} from './jobKnowledgeRuntime.ts';
 import {readJobKnowledgeProviders} from './jobKnowledgeProviders.ts';
 import {extractJobDocuments} from './jobDocumentExtraction.mjs';
@@ -11,6 +12,15 @@ Deno.serve(async req=>{
   try {
     const raw=await req.text();if(raw.length>4000)return reply({error:'Request too large.'},413);
     const input=JSON.parse(raw),api=client.asServiceRole;
+    if(input.action==='lookup_prepared') {
+      const query=input.query||{},now=new Date().toISOString();
+      const jobs=await allKnowledgeRows(api.entities.Jobs,['id','canonical_name','aliases','builder','po_numbers','oe_numbers','address']);
+      const projectLinks=query.project_id?await allKnowledgeRows(api.entities.ProbuildProjectLink,['project_id','job_id']):[];
+      const identity=resolvePreparedJobQuery({query,jobs,projectLinks,catalogComplete:true});
+      if(identity.status!=='matched')return reply(identity);
+      const prepared=await readPreparedJob(api,identity.job_id,now);
+      return reply(buildPreparedJobLookup({query,jobs,projectLinks,prepared,now}));
+    }
     if(input.action==='extract_documents')return reply(await extractJobDocuments(api,{maxFiles:2}));
     if(input.action==='refresh')return reply(await refreshJobKnowledge({api,readTracker:readKnowledgeTracker,readProviders:()=>readJobKnowledgeProviders(client),force:input.force===true}));
     if(input.action==='get')return reply(await readPreparedJob(api,input.job_id));

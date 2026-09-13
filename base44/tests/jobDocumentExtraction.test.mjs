@@ -1,24 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractJobDocuments, validateJobDocumentResult, JOB_DOCUMENT_SCHEMA } from '../shared/jobDocumentExtraction.mjs';
+import { createHash } from 'node:crypto';
+import { extractJobDocuments as actualExtract, validateJobDocumentResult, JOB_DOCUMENT_SCHEMA } from '../shared/jobDocumentExtraction.mjs';
 const now = '2026-09-13T10:00:00Z';
-const digest = 'a'.repeat(64);
-const file = (id = 'pdf1', changes = {}) => ({ id, status: 'verified', source_deleted: false, mime_type: 'application/pdf', file_uri: 'private/library/' + id + '.pdf', sha256: digest, size: 1024, verified_at: '2026-09-12T10:00:00Z', source_project_id: 'project1', source_post_id: 'post1', ...changes });
+const pdfBytes = new TextEncoder().encode('%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n');
+const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+const digest = hash(pdfBytes), fixtures = new WeakMap();
+const extractJobDocuments = (api, options) => actualExtract(api, { fetchImpl: fixtures.get(api).fetchImpl, ...options });
+const file = (id = 'pdf1', changes = {}) => ({ id, name: id + '.pdf', status: 'verified', source_deleted: false, mime_type: 'application/pdf', file_uri: 'private/library/' + id + '.pdf', sha256: hash(changes._bytes || pdfBytes), size: (changes._bytes || pdfBytes).length, verified_at: '2026-09-12T10:00:00Z', source_project_id: 'project1', source_post_id: 'post1', ...changes });
 const dateFact = (meaning = 'document_date') => ({ date_text: 'September 15, 2026', normalized_date: '2026-09-15', meaning, source_quote: 'Document date: September 15, 2026', page: 1, uncertainty: '' });
 const output = (changes = {}) => ({ document_type: 'invoice', job_identifiers: [{ type: 'lot', value: '24', source_quote: 'Lot 24', page: 1 }], dated_statements: [dateFact()], summary: 'Invoice for work at lot 24.', ...changes });
 function fixture(files = [file()], records = []) {
-  const calls = { signed: [], extraction: [], created: [], updated: [], sourceWrites: 0, publicUploads: 0 };
+  const calls = { signed: [], fetched: [], extraction: [], created: [], updated: [], sourceWrites: 0, publicUploads: 0, privateUploads: [] };
+  const blobs = new Map(files.map(f => [f.file_uri, f._bytes || pdfBytes]));
   const api = { entities: {
     FieldLibraryFile: { filter: async (query, _, size, skip) => files.filter(f => !query.status || f.status === query.status).slice(skip, skip + size), get: async id => files.find(f => f.id === id), update: async () => { calls.sourceWrites++; throw Error('Source write forbidden'); } },
     JobDocumentExtraction: { filter: async ({ extraction_key }, _, size = 5, skip = 0) => records.filter(r => !extraction_key || r.extraction_key === extraction_key).slice(skip, skip + size),
       create: async record => { const saved = { id: 'extracted-' + (records.length + 1), ...structuredClone(record) }; calls.created.push(saved); records.push(saved); return saved; },
       update: async (id, record) => { const saved = { id, ...structuredClone(record) }; calls.updated.push(saved); Object.assign(records.find(r => r.id === id), saved); return saved; } }
   }, integrations: { Core: {
-    CreateFileSignedUrl: async args => { calls.signed.push(args); return { signed_url: 'https://private.example/pdf?signature=TOP-SECRET' }; },
+    CreateFileSignedUrl: async args => { calls.signed.push(args); return { signed_url: 'https://private.example/' + encodeURIComponent(args.file_uri) + '?signature=TOP-SECRET' }; },
     ExtractDataFromUploadedFile: async args => { calls.extraction.push(args); return output(); },
-    UploadFile: async () => { calls.publicUploads++; throw Error('Public upload forbidden'); }
+    UploadFile: async () => { calls.publicUploads++; throw Error('Public upload forbidden'); },
+    UploadPrivateFile: async ({ file }) => { calls.privateUploads.push(file); const uri = 'mp/private/reassembled-' + calls.privateUploads.length + '.pdf'; blobs.set(uri, new Uint8Array(await file.arrayBuffer())); return { file_uri: uri }; }
   } } };
-  return { api, calls, records };
+  const fixture = { api, calls, records, blobs, fetchImpl: async (url, options) => { calls.fetched.push({ url, options }); const bytes = blobs.get(decodeURIComponent(new URL(url).pathname.slice(1))); return bytes ? new Response(bytes, { headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': String(bytes.length) } }) : new Response('', { status: 404 }); } };
+  fixtures.set(api, fixture);
+  return fixture;
 }
 
 test('uses private signed URL and stores review-only extraction without signed credentials', async () => {
@@ -30,6 +38,7 @@ test('uses private signed URL and stores review-only extraction without signed c
   assert.equal(calls.created[0].result.dated_statements[0].meaning, 'document_date');
   assert.ok(!JSON.stringify([result, calls.created]).includes('TOP-SECRET'));
   assert.equal(calls.sourceWrites, 0); assert.equal(calls.publicUploads, 0);
+  assert.equal(calls.fetched.length, 1); assert.equal(calls.privateUploads.length, 0);
 });
 
 test('processes at most two eligible PDFs and leaves remaining work visible', async () => {
@@ -49,9 +58,10 @@ test('successful hash-key extraction is reused and changed hash is new work', as
   const previous = { id: 'prior', extraction_key: 'pdf1:' + digest, status: 'extracted_needs_review', checked_at: now };
   const first = fixture([file()], [previous]); assert.equal((await extractJobDocuments(first.api, { now })).skipped, 1);
   assert.equal(first.calls.extraction.length, 0);
-  const changed = fixture([file('pdf1', { sha256: 'b'.repeat(64) })], [previous]);
+  const changedBytes = new TextEncoder().encode('%PDF-1.7\nUpdated PDF source\n%%EOF\n');
+  const changed = fixture([file('pdf1', { _bytes: changedBytes })], [previous]);
   assert.equal((await extractJobDocuments(changed.api, { now })).extracted, 1);
-  assert.equal(changed.calls.created[0].sha256, 'b'.repeat(64));
+  assert.equal(changed.calls.created[0].sha256, hash(changedBytes));
 });
 
 test('failed extraction retries only after 24 hours and updates existing keyed record', async () => {
@@ -127,4 +137,87 @@ test('completed-document backlog does not starve a new PDF beyond lookup budget'
   const result = await extractJobDocuments(api, { now });
   assert.equal(result.skipped, 101); assert.equal(result.extracted, 1); assert.equal(result.lookups, 1);
   assert.equal(calls.created[0].file_id, 'pdf101');
+});
+
+test('actual mp/private namespace is reused after full SHA and PDF verification', async () => {
+  const f = file('actual', { file_uri: 'mp/private/verified-source.pdf', chunks: [{ offset: 0, size: pdfBytes.length, sha256: digest, file_uri: 'mp/private/verified-source.pdf' }] });
+  const { api, calls } = fixture([f]);
+  const result = await extractJobDocuments(api, { now });
+  assert.equal(result.extracted, 1); assert.equal(calls.privateUploads.length, 0);
+  assert.equal(calls.signed[0].file_uri, f.file_uri); assert.equal(calls.fetched[0].options.redirect, 'error');
+  assert.equal(calls.extraction[0].file_url, calls.fetched[0].url);
+});
+
+test('octet-stream PDF filename is admitted only when its verified bytes are PDF', async () => {
+  const good = file('named', { mime_type: 'application/octet-stream', name: 'Parts Drawing.PDF' });
+  const disguised = file('wrong', { mime_type: 'application/octet-stream', name: 'fake.pdf', _bytes: new TextEncoder().encode('<html>Not a PDF</html>') });
+  const f = fixture([good, disguised]);
+  const result = await extractJobDocuments(f.api, { now });
+  assert.equal(result.eligible, 2); assert.equal(result.extracted, 1); assert.equal(result.failed, 1);
+  assert.equal(f.calls.extraction.length, 1); assert.equal(f.calls.sourceWrites, 0);
+});
+
+test('PDF MIME with non-PDF bytes or a changed full hash never reaches extraction', async () => {
+  const fake = file('fake', { _bytes: new TextEncoder().encode('not a pdf') });
+  const mismatch = file('mismatch', { sha256: 'b'.repeat(64) });
+  const f = fixture([fake, mismatch]);
+  const result = await extractJobDocuments(f.api, { now });
+  assert.equal(result.failed, 2); assert.equal(f.calls.extraction.length, 0); assert.equal(f.calls.privateUploads.length, 0);
+});
+
+test('private PDF streaming rejects oversized and truncated responses before extraction', async () => {
+  const large = fixture();
+  large.fetchImpl = async () => new Response(new Uint8Array(pdfBytes.length + 1));
+  assert.equal((await extractJobDocuments(large.api, { now })).failed, 1);
+  assert.equal(large.calls.extraction.length, 0);
+  const short = fixture();
+  short.fetchImpl = async () => new Response(pdfBytes.subarray(0, -1));
+  assert.equal((await extractJobDocuments(short.api, { now })).failed, 1);
+  assert.equal(short.calls.extraction.length, 0);
+});
+
+function chunkFixture(overrides = {}) {
+  const parts = [pdfBytes.subarray(0, 20), pdfBytes.subarray(20)];
+  const chunks = [{ offset: 0, size: parts[0].length, sha256: hash(parts[0]), file_uri: 'mp/private/first.bin' }, { offset: parts[0].length, size: parts[1].length, sha256: hash(parts[1]), file_uri: 'mp/private/second.bin' }];
+  const manifest = JSON.stringify(chunks.map(({ offset, size, sha256 }) => ({ offset, size, sha256 })));
+  const f = fixture([file('chunked', { file_uri: '', chunks, bytes_stored: pdfBytes.length, manifest_sha256: hash(manifest), ...overrides })]);
+  f.blobs.set(chunks[0].file_uri, parts[0]); f.blobs.set(chunks[1].file_uri, parts[1]);
+  return f;
+}
+
+test('verified chunks reassemble into a verified private PDF without modifying source receipts', async () => {
+  const f = chunkFixture(), result = await extractJobDocuments(f.api, { now });
+  assert.equal(result.extracted, 1); assert.equal(f.calls.privateUploads.length, 1);
+  assert.equal(f.calls.privateUploads[0].type, 'application/pdf');
+  assert.deepEqual(new Uint8Array(await f.calls.privateUploads[0].arrayBuffer()), pdfBytes);
+  assert.equal(f.calls.fetched.length, 3); // two chunks and verification of new private object
+  assert.equal(f.calls.extraction[0].file_url, f.calls.fetched[2].url);
+  assert.equal(f.calls.sourceWrites, 0); assert.equal(f.calls.publicUploads, 0);
+  assert(!JSON.stringify([result, f.records]).includes('TOP-SECRET'));
+});
+
+test('chunk corruption, malformed ranges, and altered manifest fail before extraction', async () => {
+  const corrupt = chunkFixture(); corrupt.blobs.set('mp/private/first.bin', new Uint8Array(20));
+  assert.equal((await extractJobDocuments(corrupt.api, { now })).failed, 1);
+  assert.equal(corrupt.calls.privateUploads.length, 0);
+  const malformed = chunkFixture(); const get = malformed.api.entities.FieldLibraryFile.get;
+  malformed.api.entities.FieldLibraryFile.get = async id => { const value = structuredClone(await get(id)); value.chunks[1].offset++; return value; };
+  assert.equal((await extractJobDocuments(malformed.api, { now })).failed, 1);
+  assert.equal(malformed.calls.signed.length, 0);
+  const manifest = chunkFixture({ manifest_sha256: 'b'.repeat(64) });
+  assert.equal((await extractJobDocuments(manifest.api, { now })).failed, 1);
+  assert.equal(manifest.calls.signed.length, 0);
+});
+
+test('multipart receipts without a whole-file SHA remain explicitly deferred', async () => {
+  const f = chunkFixture({ sha256: '' });
+  const result = await extractJobDocuments(f.api, { now });
+  assert.equal(result.eligible, 0); assert.equal(result.pdf_candidates_without_whole_sha, 1);
+  assert.equal(f.calls.fetched.length, 0); assert.equal(f.calls.sourceWrites, 0);
+});
+
+test('private URL signing cannot redirect the reader to non-HTTPS URLs', async () => {
+  const f = fixture(); f.api.integrations.Core.CreateFileSignedUrl = async () => ({ signed_url: 'http://private.example/raw' });
+  const result = await extractJobDocuments(f.api, { now });
+  assert.equal(result.failed, 1); assert.equal(f.calls.fetched.length, 0); assert.equal(f.calls.extraction.length, 0);
 });
