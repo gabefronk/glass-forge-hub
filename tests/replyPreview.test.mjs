@@ -131,6 +131,35 @@ function assertPreviewOnly(body) {
   assert.equal(body.send_enabled, false);
 }
 
+function withJob(state) {
+  state.MessageConversation[0].job_id = 'job-1';
+  state.JobKnowledgeRun = [{ id:'run-1',status:'complete',started_at:OBSERVED,completed_at:OBSERVED }];
+  state.JobKnowledge = [{id:'prepared-1',run_id:'run-1',job_id:'job-1',context:{
+    job_id:'job-1',job_name:'Example lot 12',generated_at:OBSERVED,status:'ready',time_zone:'America/Denver',
+    conflicts:[],sources:{live_google:{source_type:'live_google',state:'current',available:true,complete:true,checked_at:OBSERVED}},
+    evidence:[{source_key:'live_google:event-1',source_type:'live_google',matched_job_id:'job-1',job_id:'job-1',active:true,category:'installation',certainty:'scheduled_only',status:'confirmed',date:'2026-09-15',source_checked_at:OBSERVED}],
+  }}];
+}
+
+test('verified prepared job facts are read without importing other private job notes or writing', async () => {
+  const h=harness();withJob(h.state);
+  h.state.JobKnowledge[0].context.latest_notes=[{text:'private access detail that must stay out of drafts'}];
+  const result=await h.preview();
+  assert.equal(result.body.job_context.facts_used,1);
+  assert.match(h.calls.model[0].prompt,/2026-09-15/);
+  assert.doesNotMatch(h.calls.model[0].prompt,/private access detail/);
+  assertReadOnly(h.calls);
+});
+
+test('job reassignment or replacement preparation during generation invalidates the preview', async () => {
+  for(const mutate of [state=>{state.MessageConversation[0].job_id='job-2';},state=>{state.JobKnowledgeRun[0].id='run-2';},state=>{state.JobKnowledge[0].context.evidence[0].status='cancelled';}]){
+    const h=harness({onInvoke:({state})=>{mutate(state);return draft();}});withJob(h.state);
+    const result=await h.preview();
+    assert.equal(result.body.plan.decision,'owner_needed');assert.equal(result.body.plan.reply_text,'');
+    assertReadOnly(h.calls);
+  }
+});
+
 test('invalid preview inputs are rejected before any data or provider lookup', async () => {
   for (const overrides of [
     { conversationKey: undefined }, { conversationKey: '' }, { conversationKey: 1 },

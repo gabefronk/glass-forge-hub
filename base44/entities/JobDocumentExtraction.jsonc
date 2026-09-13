@@ -1,0 +1,56 @@
+{
+  "name": "JobDocumentExtraction",
+  "type": "object",
+  "properties": {
+    "extraction_key": {
+      "type": "string"
+    },
+    "file_id": {
+      "type": "string"
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "source_project_id": {
+      "type": "string"
+    },
+    "source_post_id": {
+      "type": "string"
+    },
+    "source_attachment_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "extracted_needs_review",
+        "failed"
+      ]
+    },
+    "checked_at": {
+      "type": "string"
+    },
+    "attempts": {
+      "type": "integer"
+    },
+    "result": {
+      "type": "object"
+    },
+    "error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "extraction_key",
+    "file_id",
+    "sha256",
+    "status",
+    "checked_at"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

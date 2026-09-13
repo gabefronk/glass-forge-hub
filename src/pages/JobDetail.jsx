@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -10,6 +10,7 @@ import SitePhotos from "@/components/jobs/SitePhotos";
 import LineItems from "@/components/jobs/LineItems";
 import NotesSection from "@/components/jobs/NotesSection";
 import VisitReports from "@/components/jobs/VisitReports";
+import JobKnowledgePanel from "@/components/jobs/JobKnowledgePanel";
 import { fetchAllPages } from "@/lib/pagination";
 import { useAuth } from "@/lib/AuthContext";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
@@ -38,34 +39,39 @@ export default function JobDetail() {
   const [lightbox, setLightbox] = useState(null);
   const [checkedItems, setCheckedItems] = useState(new Set());
   const [calEvents, setCalEvents] = useState([]);
+  const loadVersion = useRef(0);
 
   const loadAll = async () => {
+    const version = ++loadVersion.current;
+    setCalEvents([]);
     const [jb, fl, nt, me] = await Promise.all([
       base44.entities.Jobs.get(id),
       base44.entities.FeeLines.filter({ job_id: id }, "-job_date", 5000),
       base44.entities.JobNotes.filter({ job_id: id }, "-note_date", 500),
       base44.auth.me().catch(() => null),
     ]);
+    if (version !== loadVersion.current) return;
     setJob(jb);
     setRows(fl);
     setNotes(nt);
     if (me) setCurrentUser(me.email || me.full_name || "");
-    // Load CalendarEvents for this job (matched via FeeLines' calendar_event_id)
+    // Include direct job assignments even when there is no billing row.
     const calIds = new Set(fl.filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
-    if (calIds.size > 0) {
-      const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
-      setCalEvents(allCal.filter((e) => calIds.has(e.google_event_id)));
-    }
+    const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
+    if (version === loadVersion.current) setCalEvents(allCal.filter((e) => e.job_id ? e.job_id === id : Boolean(e.google_event_id) && calIds.has(e.google_event_id)));
   };
 
   useEffect(() => {
+    let current = true;
+    setLoading(true);
     (async () => {
       try {
         await loadAll();
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     })();
+    return () => { current = false; loadVersion.current++; };
   }, [id]);
 
   const status = useMemo(() => jobStatus(rows), [rows]);
@@ -135,6 +141,8 @@ export default function JobDetail() {
           checklistTotal={CHECKLIST_TOTAL}
           onAddPhoto={() => setLightbox(null)}
         />
+
+        {isAgentCenterOwner(user) && <JobKnowledgePanel key={id} jobId={id} />}
 
         {job.source_window_quote_id && (
           <Link to={`/window-quotes?quote=${encodeURIComponent(job.source_window_quote_id)}`} className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#C3D4EE] bg-[#E7EEFA] p-4 text-sm text-[#1E4A85] break-words [&>div]:min-w-0">

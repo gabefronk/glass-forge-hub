@@ -1,4 +1,6 @@
 import { DEFAULT_MODEL, buildReplyRequest, validateReplyPlan } from './replyPlanner.mjs';
+import { readPreparedJob } from './jobKnowledgeService.mjs';
+import { buildJobReplyFacts } from './jobReplyContext.mjs';
 export const REPLY_MODEL = DEFAULT_MODEL;
 
 const previewResult = (body, status = 200) => ({
@@ -42,11 +44,13 @@ export async function previewReply({ api, invoke, conversationKey, goal, now, ge
   if (Date.parse(convo.last_message_at || '') > latestDate) {
     return needsOwner('A newer message has arrived. Wait for this conversation to finish importing.');
   }
+  const jobPrepared = convo.job_id ? await readPreparedJob({ entities: api }, convo.job_id, now).catch(() => null) : null;
+  const jobFacts = buildJobReplyFacts({ conversation: convo, prepared: jobPrepared, now });
   const prepared = buildReplyRequest({
     conversation: convo, messages, now, observed_at: capture.captured_at,
     policy: {
       conversation_key: conversationKey, source_chat_guid: convo.source_chat_guid,
-      participants: convo.participants, goal: goal.trim(), style_examples: [], approved_facts: [],
+      participants: convo.participants, goal: goal.trim(), style_examples: [], approved_facts: jobFacts.facts,
     },
   });
   if (prepared.preflight_plan) return previewResult({ plan: prepared.preflight_plan });
@@ -54,17 +58,22 @@ export async function previewReply({ api, invoke, conversationKey, goal, now, ge
   const plan = validateReplyPlan(modelResult, prepared.context);
   // A generation can take time. An owner reply, edit, retraction or recipient change
   // invalidates the preview instead of presenting a reply to an obsolete snapshot.
-  const [newConvos, newRecords, newDevices] = await Promise.all([
+  const [newConvos, newRecords, newDevices, newestJob] = await Promise.all([
     api.MessageConversation.filter({ conversation_key: conversationKey }, '-created_date', 1),
     api.MessageRecord.filter({ conversation_key: conversationKey }, '-sent_at', 251),
     api.MessageBridgeDevice.filter({ device_id: convo.device_id }, '-created_date', 1),
+    convo.job_id ? readPreparedJob({ entities: api }, convo.job_id, getNow()).catch(() => null) : null,
   ]);
+  const latestFacts = buildJobReplyFacts({ conversation: newConvos[0], prepared: newestJob, now: getNow() });
   if (route(newConvos[0]) !== route(convo) || snapshot(newRecords.slice(0, 250)) !== snapshot(messages) ||
+      newConvos[0]?.job_id !== convo.job_id || (jobFacts.facts.length > 0 &&
+        (latestFacts.run_id !== jobFacts.run_id || JSON.stringify(latestFacts.facts) !== JSON.stringify(jobFacts.facts))) ||
       newConvos[0]?.last_message_at !== convo.last_message_at || !newDevices[0]?.enabled || !newDevices[0]?.source_ok ||
       !fresh(newDevices[0]?.last_seen_at, getNow()) || !fresh(capture.captured_at, getNow())) {
     return needsOwner('The conversation or connection changed while preparing this reply. Review the latest messages and try again.');
   }
   return previewResult({ plan, observed_at: capture.captured_at,
+    job_context: { job_id: jobFacts.job_id, run_id: jobFacts.run_id, facts_used: jobFacts.facts.length, notes: jobFacts.notes },
     history_complete: capture.history_complete === true && records.length <= 250,
   });
 }
