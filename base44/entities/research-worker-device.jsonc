@@ -1,0 +1,33 @@
+{
+  "name": "ResearchWorkerDevice",
+  "type": "object",
+  "properties": {
+    "worker_id": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "token_hash": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "label": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "worker_id",
+    "scope",
+    "token_hash",
+    "enabled"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
