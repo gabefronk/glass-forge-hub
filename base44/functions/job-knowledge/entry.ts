@@ -1,4 +1,4 @@
-// Job research planning 20260913 v1; approved native iPad session.
+// Job research planning 20260913 v1; approved native iPad session; production resource r1.
 // base44/shared/jobKnowledgeEntry.ts
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.48";
 
