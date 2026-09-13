@@ -1,3 +1,4 @@
+// Job preparation with private PDF diagnostics, revision job-pdf-20260913-r3.
 // base44/shared/jobKnowledgeEntry.ts
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.48";
 
