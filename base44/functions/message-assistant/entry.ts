@@ -1,5 +1,5 @@
 import {createClientFromRequest} from "npm:@base44/sdk";
-// Deployment revision 2026-09-13: policy v2 and eleven solution maps; draft-only worker.
+// Deployment revision 2026-09-13: policy v3 and solution maps v2; approved iPad route; draft-only worker.
 // Source workbook values remain intact. Matching creates associations, never edits jobs.
 export const norm = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
 export const phoneKey = value => { const d=String(value||'').replace(/\D/g,''); return d.length===10?'+1'+d:d.length===11&&d[0]==='1'?'+'+d:''; };
