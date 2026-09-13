@@ -1,4 +1,5 @@
 import {useCallback,useEffect,useState} from 'react';
+import JobResearchPanel from './JobResearchPanel';
 import {Link} from 'react-router-dom';
 import {base44} from '@/api/base44Client';
 
@@ -31,5 +32,6 @@ export default function JobKnowledgePanel({jobId}) {
       {(items?.length>30||c.items_truncated)&&<p className="mt-3 text-xs text-slate-500">Showing a concise selection. All {c.counts?.evidence||0} source references are retained in this brief.</p>}
       <details className="mt-4 border-t pt-3"><summary className="cursor-pointer text-sm font-medium">Source freshness and open checks</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{Object.values(c.sources||{}).map(s=><div key={s.source_type} className="rounded-lg bg-slate-50 p-3 text-xs"><strong>{label(s.source_type)} · {label(s.state)}</strong><p className="mt-1">Checked {when(s.checked_at)}</p>{s.range_end&&<p>Coverage {s.range_start} through {s.range_end}</p>}</div>)}</div><ul className="mt-3 space-y-1 pl-4 text-xs text-slate-600">{[...(c.conflicts||[]),...(c.gaps||[])].slice(0,30).map((g,i)=><li key={i}>{label(g.code)}{g.detail?': '+g.detail:''}</li>)}</ul><Link to="/admin/agents" className="mt-3 inline-block text-sm text-teal-800 underline">Review assigned exceptions</Link></details>
     </>}
+    <JobResearchPanel key={jobId} jobId={jobId}/>
   </section>;
 }

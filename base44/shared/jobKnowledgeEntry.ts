@@ -1,6 +1,7 @@
 import {createClientFromRequest} from 'npm:@base44/sdk@0.8.48';
 import {isKnowledgeOwner,refreshJobKnowledge,readPreparedJob,allKnowledgeRows} from './jobKnowledgeService.mjs';
 import {resolvePreparedJobQuery,buildPreparedJobLookup} from './preparedJobLookup.mjs';
+import {buildJobResearchPlan} from './jobResearchPlan.mjs';
 import {readKnowledgeTracker} from './jobKnowledgeRuntime.ts';
 import {readJobKnowledgeProviders} from './jobKnowledgeProviders.ts';
 import {extractJobDocuments,JOB_DOCUMENT_EXTRACTOR_REVISION} from './jobDocumentExtraction.mjs';
@@ -20,14 +21,19 @@ Deno.serve(async req=>{
       const checked=await verifyCalendarReviews(rows,new Date().toISOString());
       return reply({...checked,revision:REVIEW_VERSION});
     }
-    if(input.action==='lookup_prepared') {
+    if(input.action==='lookup_prepared'||input.action==='plan_research') {
       const query=input.query||{},now=new Date().toISOString();
       const jobs=await allKnowledgeRows(api.entities.Jobs,['id','canonical_name','aliases','builder','po_numbers','oe_numbers','address']);
       const projectLinks=query.project_id?await allKnowledgeRows(api.entities.ProbuildProjectLink,['project_id','job_id']):[];
       const identity=resolvePreparedJobQuery({query,jobs,projectLinks,catalogComplete:true});
-      if(identity.status!=='matched')return reply(identity);
-      const prepared=await readPreparedJob(api,identity.job_id,now);
-      return reply(buildPreparedJobLookup({query,jobs,projectLinks,prepared,now}));
+      let lookup=identity;
+      if(identity.status==='matched') {
+        const prepared=await readPreparedJob(api,identity.job_id,now);
+        lookup=buildPreparedJobLookup({query,jobs,projectLinks,prepared,now});
+      }
+      if(input.action==='lookup_prepared')return reply(lookup);
+      const job=identity.status==='matched'?jobs.find(j=>j.id===identity.job_id):null;
+      return reply({lookup,research_plan:buildJobResearchPlan({query,lookup:{...lookup,job_name:job?.canonical_name},research:input.research||{},now})});
     }
     if(input.action==='extract_documents')return reply(await extractJobDocuments(api,{maxFiles:2}));
     if(input.action==='refresh')return reply(await refreshJobKnowledge({api,readTracker:readKnowledgeTracker,readProviders:()=>readJobKnowledgeProviders(client),force:input.force===true}));
