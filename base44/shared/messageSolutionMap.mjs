@@ -46,7 +46,7 @@ export const MESSAGE_SOLUTION_MAP = Object.freeze([
     "title": "Schedule, reschedule or status",
     "trigger": "A customer or installer asks when work is scheduled, requests a change or asks whether a crew is coming.",
     "evidence": "Exact job and event; current date/time/timezone; assigned crew; event status; proposed versus confirmed occurrence; customer constraints.",
-    "draft_step": "Summarize a verified schedule or prepare the requested change for review. Distinguish an invitation from acceptance and a past event from completed work.",
+    "draft_step": "Summarize a verified schedule or prepare the requested change for review. Distinguish an invitation from acceptance and a past event from completed work. A crew arrival estimate is separate from a material delivery estimate; historical ETAs are not current facts.",
     "owner_review": "No confirmed event, conflicting crews, cancellation, stale date, new appointment commitment or required homeowner coordination.",
     "completion": "The confirmed event and affected parties agree on the schedule; arrival and completion remain separate facts.",
     "current_support": "Fresh typed installation/service event facts. Availability search, booking, calendar changes and appointment notifications are not connected."
@@ -64,10 +64,10 @@ export const MESSAGE_SOLUTION_MAP = Object.freeze([
   {
     "id": "documents",
     "title": "Construction plans or other documents",
-    "trigger": "An installer or work contact asks for plans, a drawing, quote or job document.",
-    "evidence": "Exact sender and job; current calendar assignment when applicable; verified live folder; correct document and lot coverage; recipient; file and revision evidence.",
-    "draft_step": "Identify the requested document and any missing retrieval step. For plans, follow the owner's preferred PDF attachment workflow through Outlook on the wired iPad after verification.",
-    "owner_review": "Wrong or grouped lot coverage, unverified document/revision, missing recipient, sign-in block, oversized attachment or uncertain send result.",
+    "trigger": "An installer or work contact asks for plans, a drawing, engineering letter, quote or job document.",
+    "evidence": "Exact sender and job; current calendar assignment when applicable; verified live folder; correct document and lot coverage; recipient; file and revision evidence. For technical clarification, verify the exact page/revision and the responsible qualified reviewer.",
+    "draft_step": "Identify the requested document and any missing retrieval step. For plans, follow the owner's preferred PDF attachment workflow through Outlook on the wired iPad after verification. Receiving a letter or image does not establish its contents or engineering approval.",
+    "owner_review": "Wrong or grouped lot coverage, unverified document/revision, missing recipient, sign-in block, oversized attachment or uncertain send result. Structural interpretation or requested technical approval needs the qualified reviewer.",
     "completion": "The exact file is accepted as an attachment and the intended message is verified sent; recipient arrival is a separate check.",
     "current_support": "Document-request guidance only. Automatic retrieval, local iPad control, Outlook attachment handling and sending are not connected to this draft worker."
   },
@@ -100,6 +100,16 @@ export const MESSAGE_SOLUTION_MAP = Object.freeze([
     "owner_review": "No completion evidence, unreviewed images, contradictory reports, repeated failure, invoice/credit decision or requested closure.",
     "completion": "Verified outcome and remaining items are recorded for the right job; closure and customer confirmation are explicit.",
     "current_support": "Evidence summaries and owner-review notes. Visual inspection, automatic job closure and customer/team follow-up sends are not connected."
+  },
+  {
+    "id": "temporary_coverage",
+    "title": "Temporary superintendent coverage",
+    "trigger": "A work contact is away and names alternate contacts for a limited period.",
+    "evidence": "Verified sender and alternate roles; exact job scope; effective and return dates with timezone; owner-approved routing and current conversation participants.",
+    "draft_step": "Summarize the temporary coverage for owner review and check whether it is still active. An incoming message does not authorize changing recipients.",
+    "owner_review": "Expired or ambiguous dates, unmatched alternate contacts, permanent reassignment assumptions or any recipient outside the bound conversation.",
+    "completion": "The owner verifies the effective and expiry dates of a routing record. Expired coverage stops applying; later coordination is a separate action.",
+    "current_support": "Draft summaries only. Automated contact reassignment, recipient changes and private messaging are not connected."
   }
 ].map(scenario => Object.freeze(scenario)));
 
