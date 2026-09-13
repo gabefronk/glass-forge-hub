@@ -1,0 +1,106 @@
+{
+  "name": "ProbuildRefreshRun",
+  "type": "object",
+  "properties": {
+    "run_key": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "history_complete": {
+      "type": "boolean"
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "metadata",
+        "files",
+        "retry_wait",
+        "failed",
+        "complete"
+      ]
+    },
+    "phase": {
+      "type": "string"
+    },
+    "cursor": {
+      "type": "integer"
+    },
+    "attempts": {
+      "type": "integer"
+    },
+    "next_retry_at": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "checked_at": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string"
+    },
+    "source_complete": {
+      "type": "boolean"
+    },
+    "writes_complete": {
+      "type": "boolean"
+    },
+    "assets_complete": {
+      "type": "boolean"
+    },
+    "file_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "counts": {
+      "type": "object"
+    },
+    "current_plan": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "run_key",
+    "scope",
+    "targets",
+    "status",
+    "phase",
+    "cursor",
+    "started_at"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
