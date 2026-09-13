@@ -1,5 +1,5 @@
 // Reusable planning guidance only; no customer records, source values, URLs or actions.
-export const MESSAGE_SOLUTION_MAP_VERSION = 'solution-map-2026-09-13-v1';
+export const MESSAGE_SOLUTION_MAP_VERSION = 'solution-map-2026-09-13-v2';
 export const MESSAGE_SOLUTION_MAP = Object.freeze([
   {
     "id": "homeowner_referral",
@@ -66,8 +66,8 @@ export const MESSAGE_SOLUTION_MAP = Object.freeze([
     "title": "Construction plans or other documents",
     "trigger": "An installer or work contact asks for plans, a drawing, engineering letter, quote or job document.",
     "evidence": "Exact sender and job; current calendar assignment when applicable; verified live folder; correct document and lot coverage; recipient; file and revision evidence. For technical clarification, verify the exact page/revision and the responsible qualified reviewer.",
-    "draft_step": "Identify the requested document and any missing retrieval step. For plans, follow the owner's preferred PDF attachment workflow through Outlook on the wired iPad after verification. Receiving a letter or image does not establish its contents or engineering approval.",
-    "owner_review": "Wrong or grouped lot coverage, unverified document/revision, missing recipient, sign-in block, oversized attachment or uncertain send result. Structural interpretation or requested technical approval needs the qualified reviewer.",
+    "draft_step": "Identify the requested document and any missing retrieval step. For plans, follow the owner's preferred PDF attachment workflow through the existing approved native Outlook session on the wired iPad after verification. For downloaded PDFs use Other Locations > iCloud Drive & Device > On My iPad. Do not initiate a new Microsoft login. Receiving a letter or image does not establish its contents or engineering approval.",
+    "owner_review": "Wrong or grouped lot coverage, unverified document/revision, missing recipient, unavailable approved session, oversized attachment or uncertain send result. Structural interpretation or requested technical approval needs the qualified reviewer.",
     "completion": "The exact file is accepted as an attachment and the intended message is verified sent; recipient arrival is a separate check.",
     "current_support": "Document-request guidance only. Automatic retrieval, local iPad control, Outlook attachment handling and sending are not connected to this draft worker."
   },
