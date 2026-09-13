@@ -88,7 +88,7 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
     const scan=await api.ProbuildReportScan.create({start_date:start,end_date:end,projects,cursor:0,posts:[],errors:[],started_at:at,finished:projects.length===0,checked_at:at});
     return json(scanView(scan));
    }
-   if(action==='daily_next'   if(action==='daily_next'){
+   if(action==='daily_next'){
     const scan=await api.ProbuildReportScan.get(validId(input.scan_id));if(!scan)fail('Source scan not found.',404);
     if(input.offset!==scan.cursor)return json(scanView(scan));
     const legacyRetry=scan.cursor===scan.projects.length&&(scan.errors||[]).length>0;
@@ -120,7 +120,7 @@ export function createProbuildControlHandler({getClient,getToken,fetchImpl=fetch
     const saved=await api.ProbuildReportScan.update(scan.id,{cursor,posts:[...byId.values()],errors,finished:cursor===scan.projects.length&&!errors.length,retry_state:{cursor,attempts:0,exhausted:false,next_retry_at:null},checked_at:at});
     return json(scanView(saved));
    }
-
+   if(action==='link_job'){
     const p=await oneProject(input.project_id),job=input.job_id?await api.Jobs.get(validId(input.job_id)):null;
     if(input.job_id&&!job)fail('Choose an existing job.');
     const prior=(await links({project_id:p.id}))[0],row={project_id:p.id,project_name:p.name,job_id:job?.id||'',job_name:job?.canonical_name||''};
