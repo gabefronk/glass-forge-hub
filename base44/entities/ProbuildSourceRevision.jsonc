@@ -1,0 +1,38 @@
+{
+  "name": "ProbuildSourceRevision",
+  "type": "object",
+  "properties": {
+    "revision_key": {
+      "type": "string"
+    },
+    "source_key": {
+      "type": "string"
+    },
+    "source_hash": {
+      "type": "string"
+    },
+    "source_snapshot": {
+      "type": "object"
+    },
+    "observed_at": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "revision_key",
+    "source_key",
+    "source_hash",
+    "source_snapshot",
+    "observed_at",
+    "run_id"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
