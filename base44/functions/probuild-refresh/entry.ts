@@ -1,3 +1,4 @@
+// ProBuild recovery revision probuild-refresh-20260913-r1.
 // base44/functions/probuild-refresh/entry.ts
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.48";
 
