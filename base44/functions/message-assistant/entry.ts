@@ -1,4 +1,5 @@
 import {createClientFromRequest} from "npm:@base44/sdk";
+// Deployment recovery 2026-09-13: restore the existing draft-only worker.
 // Source workbook values remain intact. Matching creates associations, never edits jobs.
 export const norm = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
 export const phoneKey = value => { const d=String(value||'').replace(/\D/g,''); return d.length===10?'+1'+d:d.length===11&&d[0]==='1'?'+'+d:''; };
