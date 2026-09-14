@@ -1,4 +1,5 @@
 import { MESSAGE_DRAFT_POLICY_VERSION, MESSAGE_DRAFT_GUIDANCE } from './messageDraftPolicy.mjs';
+import { combineServiceRisks, latestIncomingTurn, gabeReviewNote, checkDayBeforeAppointment } from './messageSafety.mjs';
 
 /**
  * Deterministic, dependency-free planning only: no I/O, model calls, or sending.
@@ -287,6 +288,17 @@ export function buildReplyRequest({ conversation, messages, policy, now, observe
     gate = fixedPlan('owner_needed', 'The latest message has no readable text; the owner must review its content.');
   }
 
+  if (!gate) {
+    const risk = combineServiceRisks(goal, ...latestIncomingTurn(actual).map(m => m.text));
+    if (risk.owner_review_required) gate = fixedPlan('owner_needed', gabeReviewNote(risk));
+    else if (/day[ -]before|confirm.*(?:tomorrow|appointment)|(?:tomorrow|appointment).*confirm/iu.test(goal)) {
+      const check = checkDayBeforeAppointment({ appointment: policy.verified_appointment, jobId: conversation.job_id, recipient: scope.participants.length === 1 ? scope.participants[0] : null, now: clock.iso });
+      if (!check.eligible) gate = fixedPlan('owner_needed', check.reason + ' No confirmation is proposed; no reminder has been scheduled.');
+    } else if (/(?:photo|picture|image).*(?:update|send|share)|(?:update|send|share).*(?:photo|picture|image)/iu.test(goal)) {
+      gate = fixedPlan('owner_needed', 'Gabe must review the actual job-specific photos and attributed update before a photo-update draft is used. This worker has attachment metadata, not verified image contents.');
+    }
+  }
+
   const safeActual = actual.filter(message => !message.sensitive);
   const selected = [];
   let selectedCharacters = 0;
@@ -404,6 +416,10 @@ export function validateReplyPlan(result, context) {
     fail('INVALID_PLAN', 'Wait and owner-needed plans must have no reply or citations and must explain why.');
   }
   if (claimsSent(result.reply_text) || claimsSent(result.owner_note)) fail('FALSE_SEND_CLAIM', 'A preview cannot claim a message has been sent.');
+  if (result.decision === 'reply') {
+    const risk = combineServiceRisks(result.reply_text, result.owner_note);
+    if (risk.owner_review_required) return validateReplyPlan(fixedPlan('owner_needed', gabeReviewNote(risk)), context);
+  }
   return freeze({
     decision: result.decision,
     intent: result.intent,
