@@ -4,6 +4,7 @@ import { buildJobReplyFacts } from './jobReplyContext.mjs';
 import { MESSAGE_DRAFT_POLICY_VERSION } from './messageDraftPolicy.mjs';
 export { MESSAGE_DRAFT_POLICY_VERSION, MESSAGE_DRAFT_GUIDANCE } from './messageDraftPolicy.mjs';
 export { MESSAGE_SOLUTION_MAP_VERSION, MESSAGE_SOLUTION_MAP } from './messageSolutionMap.mjs';
+export { combineServiceRisks, latestIncomingTurn, gabeReviewNote, CUSTOMER_SERVICE_RULES, MESSAGE_SAFETY_VERSION, MICROSOFT_ACCESS_ROUTE } from './messageSafety.mjs';
 export const REPLY_MODEL = DEFAULT_MODEL;
 
 const previewResult = (body, status = 200) => ({
