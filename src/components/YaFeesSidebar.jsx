@@ -3,12 +3,14 @@ import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { Bot, MessageSquare, Users, FileText, Network, Search } from "lucide-react";
+import { Bot, MessageSquare, Users, FileText, Network, Search, CheckSquare } from "lucide-react";
+import { useTodoAccess } from '@/hooks/use-todo-access';
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr } from "@/lib/feeMath";
 
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
+  { label: "To-do", to: "/todos", icon: CheckSquare, todoOnly: true },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Reports", to: "/report-library", icon: FileText, ownerOnly: true },
@@ -29,6 +31,7 @@ export default function YaFeesSidebar() {
   const { pathname } = useLocation();
   const [unbilled, setUnbilled] = useState({ total: 0, count: 0 });
   const [user, setUser] = useState(null);
+  const todoAccess = useTodoAccess(user);
   const [billingRevision, setBillingRevision] = useState(0);
   useEffect(() => { const update = () => setBillingRevision(n => n + 1); window.addEventListener("billing-updated", update); return () => window.removeEventListener("billing-updated", update); }, []);
   const [signingOut, setSigningOut] = useState(false);
@@ -89,7 +92,7 @@ export default function YaFeesSidebar() {
 
       {/* Nav */}
       <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-3 space-y-0.5 overflow-y-auto obsidian-scroll">
-        {NAV_ITEMS.filter(item => !item.ownerOnly || isAgentCenterOwner(user)).map((item) => {
+        {NAV_ITEMS.filter(item => (!item.ownerOnly || isAgentCenterOwner(user)) && (!item.todoOnly || todoAccess)).map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"));
           return (
