@@ -52,7 +52,10 @@ const notes = event => norm(String(event.scope_notes || "").replace(/<[^>]+>/g, 
 const name = event => norm(String(event.job_name || "").replace(/^(?:(?:YA|W|Wes|MDS|AP|BB|HP|SP)\s*-\s*)?(?:(?:#[1-9]\s*)|(?:\([^)]*\)\s*)){0,3}/i, ""));
 const sameOrder = (a,b) => ["oe_number", "po_number"].some(key => order(a[key]) && order(a[key]) === order(b[key]));
 function sameVisit(a, b) {
-  if (a.event_date !== b.event_date || a.ownership.job_keys.join("\n") !== b.ownership.job_keys.join("\n")) return false;
+  if (a.event_date !== b.event_date) return false;
+  // Unmatched events (no ownership) never merge with other visits; they display as-is.
+  if (!a.ownership || !b.ownership) return false;
+  if (a.ownership.job_keys.join("\n") !== b.ownership.job_keys.join("\n")) return false;
   if (["oe_number", "po_number"].some(key => order(a[key]) && order(b[key]) && order(a[key]) !== order(b[key]))) return false;
   if (a.source === b.source && ((a.google_event_id && a.google_event_id === b.google_event_id) || (a.source_occurrence_key && a.source_occurrence_key === b.source_occurrence_key) || (a.id && a.id === b.id))) return true;
   if (name(a) !== name(b) || (norm(a.address) && norm(b.address) && norm(a.address) !== norm(b.address))) return false;
@@ -70,7 +73,7 @@ export function filterOwnedCalendar(source, rows) {
     const counts = byMonth[month] ||= {source_events:0, unmatched_events:0, duplicate_events:0, visible_events:0, removed_events:0};
     totals.source_events++; counts.source_events++;
     const ownership = match(original);
-    if (!ownership) {totals.unmatched_events++; counts.unmatched_events++; rejected.push({id:original.id,source:original.source,event_date:original.event_date,job_name:original.job_name,start_time:original.start_time||null,end_time:original.end_time||null,end_date:original.end_date||null,address:original.address||null,created_by:original.created_by||null}); continue;}
+    if (!ownership) {totals.unmatched_events++; counts.unmatched_events++; rejected.push({id:original.id,source:original.source,event_date:original.event_date,job_name:original.job_name,start_time:original.start_time||null,end_time:original.end_time||null,end_date:original.end_date||null,address:original.address||null,created_by:original.created_by||null}); groups.push([{...original, ownership: null}]); continue;}
     const event = {...original, ownership};
     // Timed copies anchor the visit. An untimed placeholder cannot bridge distinct start times.
     const existing = groups.find(group => group.some(member => sameVisit(member,event)) && group.every(member => !member.start_time || !event.start_time || member.start_time === event.start_time));
@@ -81,4 +84,3 @@ export function filterOwnedCalendar(source, rows) {
   for (const group of groups) group.sort((a,b) => Number(!!b.start_time)-Number(!!a.start_time) || (a.source === "outlook" ? 1 : 0)-(b.source === "outlook" ? 1 : 0));
   return {groups,counts:totals,by_month:byMonth,rejected};
 }
-

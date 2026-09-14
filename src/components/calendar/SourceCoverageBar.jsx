@@ -16,7 +16,7 @@ export default function SourceCoverageBar({ outlook, partialOutlook, ownership, 
         <span className="text-[13px]" style={{ color: "#89511A" }}>{ownershipError} <button className="underline ml-1" onClick={onReload}>Reload</button></span>
       ) : (
         <span className="text-[13px]" style={{ color: C.textSecondary }}>
-          <span style={{ color: C.accent }}>●</span> Sales Tracker verified · {ownershipCounts?.visible_events || 0} visits · {ownershipCounts?.unmatched_events || 0} excluded
+          <span style={{ color: C.accent }}>●</span> Sales Tracker verified · {ownershipCounts?.visible_events || 0} visits · {ownershipCounts?.unmatched_events || 0} unmatched (shown)
         </span>
       )}
 
