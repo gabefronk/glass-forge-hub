@@ -140,9 +140,14 @@ export function createMessageAssistantHandler({getClient,loadDirectory,now=()=>n
    const [currentConversations,currentRecords,currentCaptures]=await Promise.all([api.MessageConversation.filter({conversation_key:conversationKey},'-created_date',1),api.MessageRecord.filter({conversation_key:conversationKey},'-sent_at',251),api.MessageAssistantCapture.filter({conversation_key:conversationKey},'-created_date',1)]);
    if(binding(currentConversations[0])!==binding(convo)||messageSnapshot(currentRecords.slice(0,250).filter(m=>!m.retracted_at))!==messageSnapshot(messages)||Boolean(currentCaptures[0]?.history_complete&&currentRecords.length<=250)!==historyComplete)return reply({error:'The conversation, job link or history changed during review. Review the current conversation again. No texts were sent.'},409);
    if(!validated.is_service_request&&!validated.owner_review_required)return reply({no_service_request:true,summary:validated.summary,drafting_policy_version:MESSAGE_DRAFT_POLICY_VERSION});
-   const caseKey=await hash(conversationKey+':'+trim(validated.source_request_guid));
-   const previous=(await api.MessageServiceCase.filter({case_key:caseKey},'-created_date',1))[0];
-   if(previous&&['dispatched','scheduled','completed'].includes(previous.status))return reply({case:previous,unchanged:true});
+   let caseKey=await hash(conversationKey+':'+trim(validated.source_request_guid));
+   let previous=(await api.MessageServiceCase.filter({case_key:caseKey},'-created_date',1))[0];
+   if(previous&&['dispatched','scheduled','completed'].includes(previous.status)){
+    if(!validated.owner_review_required)return reply({case:previous,unchanged:true});
+    // Preserve dispatched/completed history; save a separate, retry-safe owner hold.
+    caseKey=await hash(caseKey+':gabe_hold:'+digest);
+    previous=(await api.MessageServiceCase.filter({case_key:caseKey},'-created_date',1))[0];
+   }
    const row={case_key:caseKey,conversation_key:conversationKey,source_request_guid:trim(validated.source_request_guid),source_digest:digest,reviewed_at:at,status:validated.missing_info.length?'needs_context':'draft',result:validated,source_message_guids:validated.source_message_guids,destination_chat_guid:validated.owner_review_required?'':SERVICE_ROUTE.chat_guid,recipients:validated.owner_review_required?[]:SERVICE_ROUTE.recipients,history_complete:historyComplete,recorded_by:device?.device_id||user.email};
    const saved=previous?await api.MessageServiceCase.update(previous.id,row):await api.MessageServiceCase.create(row);
    return reply({case:saved,mode:'draft_only'});
