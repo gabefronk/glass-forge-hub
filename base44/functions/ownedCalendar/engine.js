@@ -70,7 +70,7 @@ export function filterOwnedCalendar(source, rows) {
     const counts = byMonth[month] ||= {source_events:0, unmatched_events:0, duplicate_events:0, visible_events:0, removed_events:0};
     totals.source_events++; counts.source_events++;
     const ownership = match(original);
-    if (!ownership) {totals.unmatched_events++; counts.unmatched_events++; rejected.push({id:original.id,source:original.source,event_date:original.event_date,job_name:original.job_name}); continue;}
+    if (!ownership) {totals.unmatched_events++; counts.unmatched_events++; rejected.push({id:original.id,source:original.source,event_date:original.event_date,job_name:original.job_name,start_time:original.start_time||null,end_time:original.end_time||null,end_date:original.end_date||null,address:original.address||null,created_by:original.created_by||null}); continue;}
     const event = {...original, ownership};
     // Timed copies anchor the visit. An untimed placeholder cannot bridge distinct start times.
     const existing = groups.find(group => group.some(member => sameVisit(member,event)) && group.every(member => !member.start_time || !event.start_time || member.start_time === event.start_time));
@@ -81,3 +81,4 @@ export function filterOwnedCalendar(source, rows) {
   for (const group of groups) group.sort((a,b) => Number(!!b.start_time)-Number(!!a.start_time) || (a.source === "outlook" ? 1 : 0)-(b.source === "outlook" ? 1 : 0));
   return {groups,counts:totals,by_month:byMonth,rejected};
 }
+
