@@ -31,6 +31,7 @@ import ProbuildReports from '@/pages/ProbuildReports';
 import ReportLibrary from '@/pages/ReportLibrary';
 import SystemMap from "@/pages/SystemMap";
 import ResearchQueue from "@/pages/ResearchQueue";
+import Todos from '@/pages/Todos';
 // Add page imports here
 
 const AuthenticatedApp = () => {
@@ -69,6 +70,7 @@ const AuthenticatedApp = () => {
           <Route path="/" element={<Invoicing />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/todos" element={<Todos />} />
           <Route path="/window-quotes" element={<WindowQuotes />} />
           <Route path="/sales-tracker" element={<SalesTracker />} />
           <Route path="/admin/agents" element={<AdminAgentCenter />} />
