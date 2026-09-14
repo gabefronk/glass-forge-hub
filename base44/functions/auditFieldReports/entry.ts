@@ -91,9 +91,17 @@ export default async function(req) {
     const dateSummaries = [];
     const offsetCounts = { '0': 0, '1': 0, '-1': 0, '2': 0, 'null': 0 };
 
-    // Step 1: identify no_source_data dates and mark those events
+    // Step 1: identify no_source_data dates and mark those events.
+    // Horizon guard: no_source_data means "the pull had every chance to
+    // deliver reports around D and produced nothing". Today and future
+    // dates still have open report windows (crews post on D evening or
+    // D+1 morning), so zero reports there is expected, not a sync failure.
+    // Without this guard, month-range audits (refreshMonth) stamp future
+    // dates no_source_data and light up the "Probuild sync incomplete" banner.
+    const todayDenver = toDenverDateString(new Date());
     const noSourceDates = new Set();
     for (const denverDate of datesToAudit) {
+      if (denverDate >= todayDenver) continue;
       const nearCount =
         (reportsByDate.get(addDays(denverDate, -1)) || []).length +
         (reportsByDate.get(denverDate) || []).length +
