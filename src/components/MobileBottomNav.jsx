@@ -2,16 +2,18 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Bot, X } from "lucide-react";
 import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { FileText, MessageSquare, Users, Network } from "lucide-react";
+import { FileText, MessageSquare, Users, Network, CheckSquare } from "lucide-react";
+import { useTodoAccess } from '@/hooks/use-todo-access';
 
 const PRIMARY_NAV = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
+  { label: "To-do", to: "/todos", icon: CheckSquare, todoOnly: true },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Calendar", to: "/calendar", icon: Calendar },
-  { label: "Invoicing", to: "/", icon: Receipt },
 ];
 
 const SECONDARY_NAV = [
+  { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Tracker", ariaLabel: "Sales Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Brands", ariaLabel: "Product Brands & Specifications", to: "/brands-specs", icon: Library },
@@ -24,6 +26,7 @@ const SECONDARY_NAV = [
 export default function MobileBottomNav({ user }) {
   const { pathname } = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
+  const todoAccess = useTodoAccess(user);
 
   useEffect(() => { setMoreOpen(false); }, [pathname]);
 
@@ -99,7 +102,7 @@ export default function MobileBottomNav({ user }) {
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        {PRIMARY_NAV.map((item) => {
+        {PRIMARY_NAV.filter(item => !item.todoOnly || todoAccess).map((item) => {
           const Icon = item.icon;
           const active = isPrimaryActive(item.to);
           return (
