@@ -1,5 +1,5 @@
 // Reusable planning guidance only; no customer records, source values, URLs or actions.
-export const MESSAGE_SOLUTION_MAP_VERSION = 'solution-map-2026-09-13-v2';
+export const MESSAGE_SOLUTION_MAP_VERSION = 'solution-map-2026-09-14-v3';
 export const MESSAGE_SOLUTION_MAP = Object.freeze([
   {
     "id": "homeowner_referral",
@@ -17,9 +17,9 @@ export const MESSAGE_SOLUTION_MAP = Object.freeze([
     "trigger": "A door or window is damaged, sticking, leaking, not locking, or a prior repair did not resolve the issue.",
     "evidence": "Current incoming request; exact job and affected opening; each symptom; original photos and prior service history when available.",
     "draft_step": "Preserve every reported issue, distinguish a new issue from a repeat, and prepare a short acknowledgment plus a detailed internal service handoff.",
-    "owner_review": "Conflicting lots, missing opening identity, unviewed photos, safety concern, warranty/cost decision or disputed responsibility.",
+    "owner_review": "Conflicting lots, missing opening identity, unviewed photos, safety concern, warranty/cost decision or disputed responsibility. Money, warranty disputes and upset customers go directly to Gabe, not the service group.",
     "completion": "A verified dispatch is followed separately by scheduling and a technician report; an acknowledgment is not completion.",
-    "current_support": "Saved service drafts, photo references and duplicate-acknowledgment checks. No visual inspection, diagnosis, warranty decision or dispatch."
+    "current_support": "Saved drafts, photo references, duplicate-acknowledgment checks and conservative Gabe-review holds. No visual inspection, diagnosis, warranty decision or dispatch."
   },
   {
     "id": "replacement_parts",
@@ -66,7 +66,7 @@ export const MESSAGE_SOLUTION_MAP = Object.freeze([
     "title": "Construction plans or other documents",
     "trigger": "An installer or work contact asks for plans, a drawing, engineering letter, quote or job document.",
     "evidence": "Exact sender and job; current calendar assignment when applicable; verified live folder; correct document and lot coverage; recipient; file and revision evidence. For technical clarification, verify the exact page/revision and the responsible qualified reviewer.",
-    "draft_step": "Identify the requested document and any missing retrieval step. For plans, follow the owner's preferred PDF attachment workflow through the existing approved native Outlook session on the wired iPad after verification. For downloaded PDFs use Other Locations > iCloud Drive & Device > On My iPad. Do not initiate a new Microsoft login. Receiving a letter or image does not establish its contents or engineering approval.",
+    "draft_step": "Use the mandatory iPad > MacBook path for existing native Outlook and OneDrive sessions. No direct Microsoft connector, Graph request, browser login or new OAuth connection is permitted. Identify the requested document and any missing retrieval step. For plans, follow the owner's preferred PDF attachment workflow through the existing approved native Outlook session on the wired iPad after verification. For downloaded PDFs use Other Locations > iCloud Drive & Device > On My iPad. Do not initiate a new Microsoft login. Receiving a letter or image does not establish its contents or engineering approval.",
     "owner_review": "Wrong or grouped lot coverage, unverified document/revision, missing recipient, unavailable approved session, oversized attachment or uncertain send result. Structural interpretation or requested technical approval needs the qualified reviewer.",
     "completion": "The exact file is accepted as an attachment and the intended message is verified sent; recipient arrival is a separate check.",
     "current_support": "Document-request guidance only. Automatic retrieval, local iPad control, Outlook attachment handling and sending are not connected to this draft worker."
@@ -110,6 +110,36 @@ export const MESSAGE_SOLUTION_MAP = Object.freeze([
     "owner_review": "Expired or ambiguous dates, unmatched alternate contacts, permanent reassignment assumptions or any recipient outside the bound conversation.",
     "completion": "The owner verifies the effective and expiry dates of a routing record. Expired coverage stops applying; later coordination is a separate action.",
     "current_support": "Draft summaries only. Automated contact reassignment, recipient changes and private messaging are not connected."
+  },
+  {
+    "id": "day_before_confirmation",
+    "title": "Day-before appointment confirmation",
+    "trigger": "A confirmation is being prepared on the day before an appointment.",
+    "evidence": "Fresh confirmed appointment, exact job and recipient, time and timezone, and explicit current cancellation check. Tomorrow is a local calendar date, not a fixed 24-hour offset.",
+    "draft_step": "Prepare a brief confirmation for owner review only after every required appointment field is verified. Give plain access or preparation steps only when supplied.",
+    "owner_review": "Missing structured appointment evidence, stale capture, ambiguous recipient or lot, cancellation uncertainty, reschedule or new commitment.",
+    "completion": "Gabe reviews the draft and handles the external communication separately. A preview is not a sent confirmation.",
+    "current_support": "Conservative preflight hold and a tested date/identity validator. The current reply endpoint does not supply the required structured appointment, so this workflow remains held. No reminder scheduler or sends."
+  },
+  {
+    "id": "photo_update",
+    "title": "Customer photo update",
+    "trigger": "A customer needs progress photos or a short visual update.",
+    "evidence": "Actual job-specific photos, exact source references and dates, authorized recipients, and verified or attributed progress notes.",
+    "draft_step": "Prepare a plain next-step update after Gabe reviews the photos. Do not infer image contents, repairs, diagnosis or completion from attachment names.",
+    "owner_review": "Wrong job or lot, unviewed image, missing import, sensitive access detail or unsupported completion claim.",
+    "completion": "Reviewed draft and verified attachments are ready; delivery remains separate.",
+    "current_support": "Photo references and an explicit photo-update hold. The draft worker cannot visually inspect or send the photos."
+  },
+  {
+    "id": "gabe_escalation",
+    "title": "Money, warranty or upset customer",
+    "trigger": "Money, pricing, payments, warranty disputes or an upset customer; uncertain warranty questions are held conservatively.",
+    "evidence": "Current incoming turn and exact selected service incident; source references, not unrelated older jobs.",
+    "draft_step": "Hold for Gabe. Suppress customer reply and service dispatch text; remove the routine service recipients from the held draft case.",
+    "owner_review": "Gabe decides personally. Never invent warranty coverage, negotiate, promise compensation or auto-handle the situation.",
+    "completion": "Gabe explicitly reviews and decides. A screen hold does not mean he was texted or emailed.",
+    "current_support": "Deterministic lexical holds, model-reported owner-review holds in service analysis, blank dispatch fields and visible Gabe-review status. All outputs remain drafts."
   }
 ].map(scenario => Object.freeze(scenario)));
 
