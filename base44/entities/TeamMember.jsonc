@@ -1,0 +1,62 @@
+{
+  "name": "TeamMember",
+  "type": "object",
+  "properties": {
+    "member_key": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "auth_user_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "revision": {
+      "type": "integer",
+      "default": 0
+    },
+    "management_lock": {
+      "type": "string",
+      "default": ""
+    },
+    "seed_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "complete",
+        "needs_review"
+      ],
+      "default": "pending"
+    },
+    "seed_completed_at": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "required": [
+    "member_key",
+    "display_name",
+    "auth_user_ids",
+    "active",
+    "revision",
+    "management_lock",
+    "seed_state"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

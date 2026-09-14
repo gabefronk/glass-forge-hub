@@ -1,0 +1,84 @@
+{
+  "name": "TodoTask",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "details": {
+      "type": "string",
+      "maxLength": 5000,
+      "default": ""
+    },
+    "assignee_member_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_progress",
+        "done"
+      ],
+      "default": "open"
+    },
+    "progress_note": {
+      "type": "string",
+      "maxLength": 3000,
+      "default": ""
+    },
+    "due_date": {
+      "type": "string",
+      "default": ""
+    },
+    "created_by_user_id": {
+      "type": "string"
+    },
+    "assigned_by_user_id": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string",
+      "default": ""
+    },
+    "completed_by_user_id": {
+      "type": "string",
+      "default": ""
+    },
+    "archived_at": {
+      "type": "string",
+      "default": ""
+    },
+    "revision": {
+      "type": "integer",
+      "default": 0
+    },
+    "request_key": {
+      "type": "string"
+    },
+    "seed_key": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "assignee_member_id",
+    "status",
+    "created_by_user_id",
+    "assigned_by_user_id",
+    "revision"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
