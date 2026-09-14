@@ -1,11 +1,12 @@
 import { invoicingStats } from "@/lib/invoicingStats";
 import { denverDate } from "../../base44/shared/billingCore.js";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { formatMoney } from "@/lib/feeMath";
 import { C } from "@/lib/feeUI";
-import { Download, Plus, Check } from "lucide-react";
+import { useTodoAccess } from "@/hooks/use-todo-access";
+import { Download, Plus, Check, ListTodo } from "lucide-react";
 import OutstandingReports from "@/components/dashboard/OutstandingReports";
 import ComplianceSettings from "@/components/dashboard/ComplianceSettings";
 
@@ -55,6 +56,7 @@ export default function Dashboard() {
   const [tomorrowEvents, setTomorrowEvents] = useState([]);
   const [feeLines, setFeeLines] = useState([]);
   const [allCalendarEvents, setAllCalendarEvents] = useState([]);
+  const [unmatchedEvents, setUnmatchedEvents] = useState([]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checked, setChecked] = useState(new Set());
@@ -77,6 +79,7 @@ export default function Dashboard() {
       // The run sheet is operational only: the reconciliation function returns
       // sales-tracker-verified jobs and leaves unmatched source events in review.
       setCalendarError(reconciliation?.data?.error || "");
+      setUnmatchedEvents(Array.isArray(reconciliation?.data?.excluded_events) ? reconciliation.data.excluded_events : []);
       const allEvents = (reconciliation?.data?.groups || []).map(group => group[0]).filter(Boolean);
       setReportStatusMap(new Map(calSource.filter(e => e.google_event_id).map(e => [e.google_event_id, e.report_status])));
       setProfits(Array.isArray(mp) ? mp : []);
@@ -114,6 +117,12 @@ export default function Dashboard() {
   const sortedToday = useMemo(() => {
     return [...todayEvents].sort((a, b) => (a.start_time || "99").localeCompare(b.start_time || "99"));
   }, [todayEvents]);
+
+  const unmatchedToday = useMemo(() => {
+    return unmatchedEvents
+      .filter((e) => (e.event_date || "").slice(0, 10) === today)
+      .sort((a, b) => (a.start_time || "99").localeCompare(b.start_time || "99"));
+  }, [unmatchedEvents, today]);
 
   const firstUp = sortedToday[0] || null;
   const doneCount = sortedToday.filter((e) => checked.has(e.id)).length;
@@ -201,7 +210,7 @@ export default function Dashboard() {
               <div className="h-full transition-all duration-300" style={{ width: `${sortedToday.length ? (doneCount / sortedToday.length) * 100 : 0}%`, backgroundColor: C.accent }} />
             </div>
             <div>
-              {sortedToday.length === 0 && (
+              {sortedToday.length === 0 && unmatchedToday.length === 0 && (
                 <div className="px-5 py-12 text-center">
                   <div className="mono-label mb-1">Nothing scheduled</div>
                   <p className="text-[13px]" style={{ color: C.textMuted }}>No calendar events for today.</p>
@@ -263,6 +272,46 @@ export default function Dashboard() {
                   </div>
                 );
               })}
+
+              {/* Events synced from the calendars that did not verify against the Sales Tracker.
+                  Shown for review instead of hidden, so Today matches the real calendar. */}
+              {unmatchedToday.length > 0 && (
+                <div>
+                  <div className="px-3 sm:px-5 py-2" style={{ borderTop: `1px solid ${C.rowBorder}`, backgroundColor: C.amberLight }}>
+                    <span className="mono-label-sm" style={{ color: C.amber }}>
+                      Also on today&apos;s calendar &mdash; not matched to the Sales Tracker
+                    </span>
+                  </div>
+                  {unmatchedToday.map((ev) => (
+                    <div
+                      key={ev.id}
+                      className="flex items-center gap-0 px-3 sm:px-5 py-3"
+                      style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
+                    >
+                      <div className="w-[48px] sm:w-[58px] shrink-0 text-right pr-2 sm:pr-3">
+                        <span className="font-mono-num text-[13px]" style={{ color: C.textSecondary }}>
+                          {ev.start_time || "All day"}
+                        </span>
+                      </div>
+                      <div className="w-px self-stretch shrink-0" style={{ backgroundColor: C.border }} />
+                      <div className="flex-1 min-w-0 px-2 sm:px-4">
+                        <div className="text-[14px] font-medium break-words" style={{ color: C.text }}>
+                          {ev.job_name || "(untitled)"}
+                        </div>
+                        {ev.address && (
+                          <div className="text-[12px] break-words" style={{ color: C.textMuted }}>{ev.address}</div>
+                        )}
+                      </div>
+                      <span
+                        className="text-[9px] font-semibold tracking-[0.01em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
+                        style={{ backgroundColor: C.tagReview.bg, border: `1px solid ${C.tagReview.border}`, color: C.tagReview.text }}
+                      >
+                        REVIEW
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -295,6 +344,9 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+
+            {/* To-do list (server-side access enforced by the todos function; hidden unless this login is allowed) */}
+            <DashboardTodos user={user} navigate={navigate} />
 
             {/* Mini bar chart */}
             <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
@@ -347,6 +399,101 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardTodos({ user, navigate }) {
+  // Access is enforced server-side by the todos function; useTodoAccess only
+  // decides whether this card renders. Other logins never receive the data.
+  const allowed = useTodoAccess(user);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState("");
+
+  const load = useCallback(async () => {
+    if (!allowed) return;
+    try {
+      const r = await base44.functions.invoke("todos", { action: "list", member_id: "mine", offset: 0 });
+      if (r.data?.error) throw new Error(r.data.error);
+      setData(r.data);
+      setError("");
+    } catch (e2) {
+      setError(e2?.response?.data?.error || e2?.message || "To-do list could not load.");
+    }
+  }, [allowed]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (!allowed) return null;
+
+  const tasks = (data?.tasks || []).filter((t) => t.status !== "done" && !t.archived_at);
+  const shown = tasks.slice(0, 6);
+
+  const markDone = async (t) => {
+    setBusyId(t.id);
+    setError("");
+    try {
+      const r = await base44.functions.invoke("todos", { action: "update_task", id: t.id, expected_revision: t.revision, patch: { status: "done" } });
+      if (r.data?.error) throw new Error(r.data.error);
+      await load();
+    } catch (e2) {
+      setError(e2?.response?.data?.error || e2?.message || "Could not update the task. Reload before retrying.");
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  return (
+    <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+      <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
+        <h3 className="font-heading text-[13px] font-semibold flex items-center gap-2" style={{ color: C.text }}>
+          <ListTodo className="h-4 w-4" />
+          To-do
+        </h3>
+        <button
+          onClick={() => navigate("/todos")}
+          className="text-[11px] font-semibold"
+          style={{ color: C.accent }}
+        >
+          Open full list
+        </button>
+      </div>
+      <div className="px-5 py-3">
+        {error && <p role="alert" className="mb-2 text-[12px] text-red-700">{error}</p>}
+        {!data && !error && <p className="text-[12px] py-2" style={{ color: C.textMuted }}>Loading tasks...</p>}
+        {data && shown.length === 0 && (
+          <p className="text-[12px] py-2" style={{ color: C.textMuted }}>No open tasks. Add one from the full list.</p>
+        )}
+        <div className="space-y-1">
+          {shown.map((t) => (
+            <div key={t.id} className="flex items-start gap-2.5 py-1.5">
+              <button
+                onClick={() => markDone(t)}
+                disabled={busyId === t.id}
+                aria-label={`Mark ${t.title} done`}
+                className="mt-0.5 h-5 w-5 rounded-full shrink-0 flex items-center justify-center transition-all disabled:opacity-40"
+                style={{ border: `1.5px solid ${C.borderStrong}`, backgroundColor: "transparent" }}
+              >
+                {busyId === t.id && <div className="h-2.5 w-2.5 border rounded-full animate-spin" style={{ borderColor: C.borderStrong, borderTopColor: C.accent }} />}
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-medium break-words" style={{ color: C.text }}>{t.title}</div>
+                {(t.due_date || t.status === "in_progress") && (
+                  <div className="text-[11px]" style={{ color: C.textMuted }}>
+                    {t.status === "in_progress" ? "In progress" : ""}{t.status === "in_progress" && t.due_date ? " · " : ""}{t.due_date ? `Due ${t.due_date}` : ""}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        {data && tasks.length > shown.length && (
+          <button onClick={() => navigate("/todos")} className="mt-1 text-[11px] font-medium" style={{ color: C.textSecondary }}>
+            +{tasks.length - shown.length} more on the full list
+          </button>
+        )}
       </div>
     </div>
   );
