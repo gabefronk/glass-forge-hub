@@ -49,7 +49,8 @@ export function checkDayBeforeAppointment({ appointment, jobId, recipient, now, 
   const a = appointment;
   if (!a || !jobId || !recipient || a.job_id !== jobId || a.recipient !== recipient ||
       a.status !== 'confirmed' || a.cancelled !== false || !a.source_key || !a.time_zone ||
-      !Number.isFinite(Date.parse(a.starts_at)) || !Number.isFinite(Date.parse(a.checked_at)) || !Number.isFinite(Date.parse(now))) {
+      !Number.isFinite(Date.parse(a.starts_at)) || !Number.isFinite(Date.parse(a.checked_at)) || !Number.isFinite(Date.parse(now)) ||
+      ![a.starts_at,a.checked_at,now].every(v => typeof v === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(v))) {
     return { eligible: false, reason: 'Verify the exact job, recipient, confirmed appointment, timezone and current cancellation status.' };
   }
   const age = Date.parse(now) - Date.parse(a.checked_at);
