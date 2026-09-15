@@ -28,7 +28,7 @@ import ProbuildDailyPreview from "@/pages/ProbuildDailyPreview";
 import MessagesInbox from "@/pages/MessagesInbox";
 import ContactsDirectory from "@/pages/ContactsDirectory";
 import ProbuildReports from '@/pages/ProbuildReports';
-import ReportLibrary from '@/pages/ReportLibrary';
+import ReportLibraryRedirect from '@/components/ReportLibraryRedirect';
 import SystemMap from "@/pages/SystemMap";
 import ResearchQueue from "@/pages/ResearchQueue";
 import Todos from '@/pages/Todos';
@@ -79,7 +79,7 @@ const AuthenticatedApp = () => {
           <Route path="/messages" element={<MessagesInbox />} />
           <Route path="/contacts" element={<ContactsDirectory />} />
           <Route path="/reports" element={<ProbuildReports />} />
-          <Route path="/report-library" element={<ReportLibrary />} />
+          <Route path="/report-library" element={<ReportLibraryRedirect />} />
           <Route path="/jobs" element={<JobsHub />} />
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/match-debug" element={<MatchDebug />} />

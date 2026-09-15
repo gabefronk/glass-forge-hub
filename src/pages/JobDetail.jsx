@@ -146,7 +146,7 @@ export default function JobDetail() {
       </div>
 
       {/* Mobile sticky Add field report action */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2" style={{ backgroundColor: C.pageBg, borderTop: `1px solid ${C.border}` }}>
+      <div className="lg:hidden fixed left-0 right-0 z-30 px-4 pt-2 pb-3" style={{ bottom: "calc(68px + env(safe-area-inset-bottom))", backgroundColor: C.pageBg, borderTop: `1px solid ${C.border}` }}>
         <button type="button" onClick={() => setShowReport(true)} className="w-full inline-flex items-center justify-center gap-1.5 min-h-[48px] rounded-full text-[13px] font-semibold" style={{ backgroundColor: C.accent, color: C.accentDark }}>
           <Camera className="h-4 w-4" />Add field report
         </button>
