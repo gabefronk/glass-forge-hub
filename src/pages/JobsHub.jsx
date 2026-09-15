@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
-import { C, jobStatus, jobTotals } from "@/lib/feeUI";
+import { C, jobStatus, jobTotals, formatShort } from "@/lib/feeUI";
 import JobListRow, { refsLabel } from "@/components/jobs/JobListRow";
 
 export default function JobsHub() {
