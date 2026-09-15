@@ -1,10 +1,7 @@
 import { Link } from "react-router-dom";
 import { formatShort } from "@/lib/feeUI";
-import { formatMoney } from "@/lib/feeMath";
 
-export const COLS = "minmax(220px,1fr) 120px 45px 75px 100px 100px 110px 20px";
-
-const money = (n) => `$${formatMoney(n)}`;
+export const COLS = "minmax(220px,1fr) 130px 120px 130px 20px";
 
 export function refsLabel(pos, oes) {
   const total = pos.length + oes.length;
@@ -18,8 +15,6 @@ export function refsLabel(pos, oes) {
 
 export default function JobListRow({ job, stats }) {
   const status = stats.status;
-  const isZero = stats.labor === 0;
-  const statusStr = status.key === "complete" ? "Complete" : status.key === "needs_report" ? "Needs report" : "Active";
   const isComplete = status.key === "complete";
   const isNeedsReport = status.key === "needs_report";
 
@@ -40,10 +35,7 @@ export default function JobListRow({ job, stats }) {
       </div>
       <span style={{ minWidth: 0, fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "13px", color: "#53615B",
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.builder || "—"}</span>
-      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#182422" }}>{stats.visits}</span>
       <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#53615B", whiteSpace: "nowrap" }}>{stats.lastReport ? formatShort(stats.lastReport) : "—"}</span>
-      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13.5px", color: "#182422", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.labor)}</span>
-      <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 700, fontSize: "13.5px", color: isZero ? "#53615B" : "#166447", whiteSpace: "nowrap" }}>{isZero ? "—" : money(stats.fee)}</span>
       <span style={{ minWidth: 0 }}>
         <span style={{
           display: "inline-block", fontFamily: "'Archivo',sans-serif", fontWeight: 600, fontSize: "9.5px", letterSpacing: ".01em",
@@ -51,7 +43,7 @@ export default function JobListRow({ job, stats }) {
           backgroundColor: isComplete ? "#EAF5EE" : isNeedsReport ? "#FCEDEC" : "#F0F1ED",
           border: isComplete ? "1px solid #C7E4D2" : isNeedsReport ? "1px solid #F0C9C5" : "1px solid #DDE0DA",
           color: isComplete ? "#166447" : isNeedsReport ? "#A43432" : "#53615B",
-        }}>{statusStr}</span>
+        }}>{status.label}</span>
       </span>
       <span style={{ display: "flex", justifyContent: "flex-end", color: "#8A958F" }}>›</span>
     </Link>

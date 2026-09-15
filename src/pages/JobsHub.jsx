@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Upload, Plus } from "lucide-react";
+import { Search } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
-import { C, jobTotals, jobStatus } from "@/lib/feeUI";
-import { formatMoney } from "@/lib/feeMath";
-import JobListRow, { COLS, refsLabel } from "@/components/jobs/JobListRow";
+import { C, jobStatus, jobTotals } from "@/lib/feeUI";
+import JobListRow, { refsLabel } from "@/components/jobs/JobListRow";
 
 export default function JobsHub() {
   const [jobs, setJobs] = useState([]);
@@ -37,8 +36,7 @@ export default function JobsHub() {
     const m = {};
     for (const r of feeLines) {
       if (!r.job_id) continue;
-      if (!m[r.job_id]) m[r.job_id] = [];
-      m[r.job_id].push(r);
+      (m[r.job_id] ||= []).push(r);
     }
     return m;
   }, [feeLines]);
@@ -47,26 +45,23 @@ export default function JobsHub() {
     const m = {};
     for (const job of jobs) {
       const rows = feeLinesByJob[job.id] || [];
-      const totals = jobTotals(rows);
       const status = jobStatus(rows);
       const probuildDates = rows.filter(r => r.source === "probuild" || r.source === "both").map(r => r.job_date).filter(Boolean).sort();
       const lastReport = probuildDates.length ? probuildDates[probuildDates.length - 1] : null;
-      const unbilled = rows.some(r => !r.billed_to_bfs && Number(r.labor_amt) > 0);
-      m[job.id] = { ...totals, status, lastReport, unbilled };
+      m[job.id] = { status, lastReport };
     }
     return m;
   }, [jobs, feeLinesByJob]);
 
   const counts = useMemo(() => {
-    let needsReport = 0, unbilled = 0, active = 0, complete = 0;
+    let needsReport = 0, active = 0, complete = 0;
     for (const job of jobs) {
       const s = jobStats[job.id]?.status.key;
       if (s === "needs_report") needsReport++;
-      if (jobStats[job.id]?.unbilled) unbilled++;
       if (s === "active") active++;
       if (s === "complete") complete++;
     }
-    return { needsReport, unbilled, active, complete };
+    return { needsReport, active, complete };
   }, [jobs, jobStats]);
 
   const filtered = useMemo(() => {
@@ -82,7 +77,6 @@ export default function JobsHub() {
     if (segment === "active") base = base.filter(j => ["active", "needs_report"].includes(jobStats[j.id]?.status.key));
     if (segment === "complete") base = base.filter(j => jobStats[j.id]?.status.key === "complete");
     if (segment === "needs_report") base = base.filter(j => jobStats[j.id]?.status.key === "needs_report");
-    if (segment === "unbilled") base = base.filter(j => jobStats[j.id]?.unbilled);
     return [...base].sort((a, b) => {
       const da = jobStats[a.id]?.lastReport || "";
       const db = jobStats[b.id]?.lastReport || "";
@@ -105,27 +99,16 @@ export default function JobsHub() {
     { key: "active", label: "Active", count: counts.active },
     { key: "complete", label: "Complete", count: counts.complete },
     { key: "needs_report", label: "Needs report", count: counts.needsReport },
-    { key: "unbilled", label: "Unbilled", count: counts.unbilled },
   ];
 
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
-        {/* Header */}
         <div className="flex flex-wrap items-center gap-3 mb-5">
           <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Jobs</h1>
           <span className="font-mono-num text-[14px]" style={{ color: C.textMuted }}>({jobs.length.toLocaleString()})</span>
-          <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
-              <Upload className="h-3.5 w-3.5" />Import
-            </button>
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
-              <Plus className="h-3.5 w-3.5" />New job
-            </button>
-          </div>
         </div>
 
-        {/* Search + filters */}
         <div className="flex flex-col gap-3 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: C.textFaint }} />
@@ -158,27 +141,21 @@ export default function JobsHub() {
           </div>
         </div>
 
-        {/* Desktop table */}
         <div className="hidden xl:block rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
           <div className="overflow-x-auto obsidian-scroll" role="region" aria-label="Jobs table" tabIndex={0}>
-          <div className="min-w-[1010px]">
-          {/* Header */}
+          <div className="min-w-[620px]">
           <div style={{
-            display: "grid", gridTemplateColumns: COLS, alignItems: "center",
+            display: "grid", gridTemplateColumns: JobListRow.COLS, alignItems: "center",
             gap: 12, padding: "12px 16px", background: C.headerBg,
             fontFamily: "'Archivo',sans-serif", fontSize: 10, fontWeight: 600,
             letterSpacing: ".01em", color: C.headerText, whiteSpace: "nowrap",
           }}>
             <span>JOB</span>
             <span>BUILDER</span>
-            <span style={{ textAlign: "right" }}>VISITS</span>
-            <span style={{ textAlign: "right" }}>REPORT</span>
-            <span style={{ textAlign: "right" }}>LABOR</span>
-            <span style={{ textAlign: "right" }}>FEE</span>
+            <span style={{ textAlign: "right" }}>LATEST VISIT</span>
             <span>STATUS</span>
             <span />
           </div>
-          {/* Rows */}
           <div>
             {visibleJobs.map((job) => (
               <JobListRow key={job.id} job={job} stats={jobStats[job.id]} />
@@ -189,7 +166,6 @@ export default function JobsHub() {
           </div>
           </div>
           </div>
-          {/* Footer */}
           {filtered.length > visibleCount && (
             <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}` }}>
               <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textMuted }}>Showing {visibleCount} of {filtered.length.toLocaleString()}</span>
@@ -198,11 +174,9 @@ export default function JobsHub() {
           )}
         </div>
 
-        {/* Mobile cards */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
           {visibleJobs.map((job) => {
             const stats = jobStats[job.id];
-            const isZero = stats?.labor === 0;
             const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
             return (
               <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
@@ -210,12 +184,8 @@ export default function JobsHub() {
                 <div className="text-[11px] break-words mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${job.builder} · ` : ""}{job.address || ""}</div>
                 <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
                   <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, border: `1px solid ${stats?.status.border || C.border}`, color: stats?.status.text }}>{stats?.status.label}</span>
-                  <span className="text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>{stats?.visits || 0} visits</span>
+                  {stats?.lastReport && <span className="text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>Last {formatShort(stats.lastReport)}</span>}
                   {refs && <span className="max-w-full break-all text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>{refs}</span>}
-                </div>
-                <div className="flex flex-col items-end mt-2.5">
-                  <span className="font-mono-num-bold text-[16px]" style={{ color: isZero ? C.textMuted : C.accent, letterSpacing: "-0.02em" }}>{isZero ? "—" : `$${formatMoney(stats.fee)}`}</span>
-                  {!isZero && <span className="font-mono-num text-[11px] mt-0.5" style={{ color: C.textMuted }}>${formatMoney(stats.labor)} labor</span>}
                 </div>
               </Link>
             );
