@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Bot, X } from "lucide-react";
 import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { MessageSquare, Users, Network, CheckSquare } from "lucide-react";
+import { MessageSquare, Users, Network, CheckSquare, FileText } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 
 const PRIMARY_NAV = [
@@ -16,6 +16,7 @@ const SECONDARY_NAV = [
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Tracker", ariaLabel: "Sales Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
+  { label: "Reports", ariaLabel: "ProBuild & field photos", to: "/reports", icon: FileText, ownerOnly: true },
   { label: "Brands", ariaLabel: "Product Brands & Specifications", to: "/brands-specs", icon: Library },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
   { label: "Messages", to: "/messages", icon: MessageSquare, ownerOnly: true },

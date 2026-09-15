@@ -3,7 +3,7 @@ import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { Bot, MessageSquare, Users, Network, Search, CheckSquare } from "lucide-react";
+import { Bot, MessageSquare, Users, Network, Search, CheckSquare, FileText } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr } from "@/lib/feeMath";
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { label: "To-do", to: "/todos", icon: CheckSquare, todoOnly: true },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
+  { label: "Reports", to: "/reports", icon: FileText, ownerOnly: true },
   { label: "Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },

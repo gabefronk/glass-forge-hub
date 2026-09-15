@@ -7,6 +7,7 @@ import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
 import JobFactsRail from "@/components/jobs/JobFactsRail";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
+import FeedImage from "@/components/jobs/FeedImage";
 import { fetchAllPages } from "@/lib/pagination";
 
 export default function JobDetail() {
@@ -158,7 +159,7 @@ export default function JobDetail() {
 
       {lightbox && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,.85)" }} onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="photo" className="max-w-full max-h-full rounded-[12px]" />
+          <FeedImage src={lightbox} alt="photo" className="max-w-full max-h-full rounded-[12px]" />
         </div>
       )}
     </div>

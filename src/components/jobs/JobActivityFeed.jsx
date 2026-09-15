@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { C, formatShort, formatDateGroup, crewName } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
+import ClampedText from "./ClampedText";
+import FeedImage from "./FeedImage";
 import { RefreshCw, Plus, Camera, StickyNote, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
@@ -53,7 +55,7 @@ function PhotoGrid({ urls, onPhotoClick }) {
     <div className="grid grid-cols-2 gap-1.5 mt-2 sm:grid-cols-3">
       {urls.map((url, i) => (
         <button key={i} type="button" onClick={() => onPhotoClick(url)} className="aspect-square rounded-md overflow-hidden shrink-0" style={{ border: `1px solid ${C.border}` }}>
-          <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />
+          <FeedImage src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />
         </button>
       ))}
     </div>
@@ -75,7 +77,7 @@ function ReportBlock({ report, onPhotoClick }) {
         <div className="text-[11px]" style={{ color: C.textMuted }}>{crewName(report.author)} · {report.created_at ? formatShort(String(report.created_at).slice(0, 10)) : ""}</div>
       ) : null}
       {report.message ? (
-        <p className="text-[12.5px] whitespace-pre-wrap break-words mt-0.5" style={{ color: C.text }}>{sanitizeText(report.message)}</p>
+        <ClampedText text={report.message} maxLines={5} className="text-[12.5px] whitespace-pre-wrap break-words mt-0.5" style={{ color: C.text }} />
       ) : null}
       <PhotoGrid urls={report.photos} onPhotoClick={onPhotoClick} />
     </div>
@@ -104,7 +106,7 @@ function VisitCard({ ev, reports, onPhotoClick }) {
         ))
       ) : (
         ev.scope_notes ? (
-          <p className="text-[12.5px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }}>{sanitizeText(ev.scope_notes)}</p>
+          <ClampedText text={ev.scope_notes} maxLines={5} className="text-[12.5px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }} />
         ) : null
       )}
       {crew ? <div className="text-[11px] mt-1.5" style={{ color: C.textMuted }}>Crew: {crew}</div> : null}

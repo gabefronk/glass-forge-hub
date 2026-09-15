@@ -3,7 +3,8 @@ import { base44 } from "@/api/base44Client";
 import { Pencil, Trash2 } from "lucide-react";
 import JobNoteForm from "./JobNoteForm";
 import { C } from "@/lib/feeUI";
-import { sanitizeText } from "@/lib/jobsSanitize";
+import ClampedText from "./ClampedText";
+import FeedImage from "./FeedImage";
 
 export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClick, embedded }) {
   const [editing, setEditing] = useState(false);
@@ -45,12 +46,12 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
           </div>
         )}
       </div>
-      <p className="text-[13px] whitespace-pre-wrap break-words" style={{ color: C.text }}>{sanitizeText(note.body)}</p>
+      <ClampedText text={note.body} maxLines={5} className="text-[13px] whitespace-pre-wrap break-words" style={{ color: C.text }} />
       {note.attachments && note.attachments.length > 0 && (
         <div className="grid grid-cols-2 gap-1.5 mt-2 sm:grid-cols-3">
           {note.attachments.map((url, i) => (
             <button key={i} type="button" onClick={() => onPhotoClick(url)} className="aspect-square rounded-md overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
-              <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+              <FeedImage src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
             </button>
           ))}
         </div>
