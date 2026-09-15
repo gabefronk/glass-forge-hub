@@ -37,6 +37,17 @@
       "title": "Edited",
       "default": false,
       "description": "True once the note body or date has been changed after creation"
+    },
+    "completion": {
+      "type": "string",
+      "enum": [
+        "",
+        "complete",
+        "incomplete"
+      ],
+      "title": "Completion answer",
+      "default": "",
+      "description": "Crew completion answer captured before a field-report upload: 'complete' or 'incomplete'. Empty for plain notes and legacy uploads."
     }
   },
   "required": [
