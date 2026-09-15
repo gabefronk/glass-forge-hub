@@ -47,6 +47,7 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
     const matches=matchingContacts(directory.contacts,c.participants);const builderKeys=new Set(matches.map(c=>c.builder_key).filter(Boolean));
     return response({contacts:matches,jobs:directory.jobs.filter(j=>builderKeys.has(j.builder_key)||matches.some(c=>c.job_ids.includes(j.id))),source:directory.source});
    }
+   if(input.action==='job'){const dj=directory.jobs.find(j=>j.id===input.job_id);if(!dj)return response({error:'Job not found.'},404);const contacts=directory.contacts.filter(c=>c.job_ids.includes(input.job_id));return response({contacts,job:{id:dj.id,name:dj.name,builder:dj.builder,address:dj.address}});}
    if(input.action==='directory')return response(directory);
    return response({error:'Unsupported action.'},400);
   }catch(error){console.error('Contacts directory failed',error?.name||'Error');return response({error:'Contacts could not be loaded. Please retry.'},500);}
