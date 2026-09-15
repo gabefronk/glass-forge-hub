@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
 import { C, jobTotals, formatShort } from "@/lib/feeUI";
 import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
 import JobListRow, { refsLabel } from "@/components/jobs/JobListRow";
+import ProbuildReports from "@/pages/ProbuildReports";
+import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 
 export default function JobsHub() {
   const [jobs, setJobs] = useState([]);
@@ -14,6 +16,9 @@ export default function JobsHub() {
   const [segment, setSegment] = useState("all");
   const [loading, setLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(20);
+  const [owner, setOwner] = useState(false);
+  const [view, setView] = useState("jobs");
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     const load = async () => {
@@ -30,6 +35,22 @@ export default function JobsHub() {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    base44.auth.me().then((u) => setOwner(isAgentCenterOwner(u))).catch(() => setOwner(false));
+    if (searchParams.get("report") || searchParams.get("project") || searchParams.get("conversation")) setView("reports");
+  }, []);
+
+  const switchView = (k) => {
+    setView(k);
+    if (k === "jobs") {
+      const p = new URLSearchParams(searchParams);
+      p.delete("report");
+      p.delete("project");
+      p.delete("conversation");
+      setSearchParams(p, { replace: true });
+    }
+  };
 
   useEffect(() => { setVisibleCount(20); }, [search, segment]);
 
@@ -86,6 +107,24 @@ export default function JobsHub() {
     });
   }, [jobs, search, segment, jobStats]);
 
+  if (view === "reports" && owner) {
+    return (
+      <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
+        <div className="px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px]">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Field reports</h1>
+            <div className="inline-flex items-center gap-1 p-1 rounded-full" style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}>
+              {[["jobs", "Jobs"], ["reports", "Field reports"]].map(([k, label]) => (
+                <button key={k} onClick={() => switchView(k)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors" style={view === k ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>{label}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <ProbuildReports />
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.pageBg }}>
@@ -105,9 +144,18 @@ export default function JobsHub() {
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
-        <div className="flex flex-wrap items-center gap-3 mb-5">
-          <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Jobs</h1>
-          <span className="font-mono-num text-[14px]" style={{ color: C.textMuted }}>({jobs.length.toLocaleString()})</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Jobs</h1>
+            <span className="font-mono-num text-[14px]" style={{ color: C.textMuted }}>({jobs.length.toLocaleString()})</span>
+          </div>
+          {owner && (
+            <div className="inline-flex items-center gap-1 p-1 rounded-full" style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}>
+              {[["jobs", "Jobs"], ["reports", "Field reports"]].map(([k, label]) => (
+                <button key={k} onClick={() => switchView(k)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors" style={view === k ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>{label}</button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-3 mb-4">
