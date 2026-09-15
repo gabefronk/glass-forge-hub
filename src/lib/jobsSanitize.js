@@ -99,6 +99,19 @@ export function sanitizeText(input) {
   return out;
 }
 
+// Feed-specific cleaning for long operational text (scope notes, report
+// messages, note bodies). Runs sanitizeText first, then strips <mailto:...>
+// angle-bracket artifacts (keeping the bare address), de-duplicates adjacent
+// repeated emails, and collapses 3+ consecutive newlines down to 2.
+export function cleanFeedText(input) {
+  let s = sanitizeText(input);
+  if (!s) return "";
+  s = s.replace(/<mailto:([^>]+)>/gi, "$1");
+  s = s.replace(/([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})([\s,;]*)\1/gi, "$1");
+  s = s.replace(/\n{3,}/g, "\n\n");
+  return s.trim();
+}
+
 // Wrapper that never returns the "No charge" status — zero-labor jobs read as Active.
 export function jobsStatus(rows) {
   const s = jobStatus(rows);
