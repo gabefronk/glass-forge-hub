@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Camera, Plus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
-import JobOperationalInfo from "@/components/jobs/JobOperationalInfo";
+import JobFactsRail from "@/components/jobs/JobFactsRail";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
+import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
 import { fetchAllPages } from "@/lib/pagination";
 
 export default function JobDetail() {
@@ -20,6 +21,7 @@ export default function JobDetail() {
   const [currentUser, setCurrentUser] = useState("");
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
+  const [showReport, setShowReport] = useState(false);
   const loadVersion = useRef(0);
 
   const loadAll = async () => {
@@ -39,9 +41,8 @@ export default function JobDetail() {
 
     const calIds = new Set(fl.filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
     const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
-    if (version === loadVersion.current) setCalEvents(allCal.filter((e) => e.job_id ? e.job_id === id : Boolean(e.google_event_id) && calIds.has(e.google_event_id)));
+    if (version === loadVersion.current) setCalEvents(allCal.filter((e) => (e.job_id ? e.job_id === id : Boolean(e.google_event_id) && calIds.has(e.google_event_id))));
 
-    // Field-report photos live on FieldReports (linked to FeeLines via probuild_post_id).
     const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
     if (postIds.size) {
       const allReports = await fetchAllPages(base44.entities.FieldReports, "-created_date", 2000);
@@ -50,12 +51,10 @@ export default function JobDetail() {
       setFieldReports([]);
     }
 
-    // Contacts (owner-only; omit cleanly when unavailable)
     base44.functions.invoke("contacts-directory", { action: "job", job_id: id })
       .then((r) => { if (version === loadVersion.current) setContacts(r.data?.contacts || []); })
       .catch(() => {});
 
-    // Plans / documents (admin-only; omit cleanly when unavailable)
     base44.entities.PlanIntake.list("-created_date", 200)
       .then((all) => {
         if (version !== loadVersion.current) return;
@@ -72,20 +71,12 @@ export default function JobDetail() {
     let current = true;
     setLoading(true);
     (async () => {
-      try {
-        await loadAll();
-      } finally {
-        if (current) setLoading(false);
-      }
+      try { await loadAll(); } finally { if (current) setLoading(false); }
     })();
     return () => { current = false; loadVersion.current++; };
   }, [id]);
 
   const status = useMemo(() => jobsStatus(rows), [rows]);
-  const dates = useMemo(() => {
-    const ds = rows.map((r) => r.job_date).filter(Boolean).sort();
-    return { first: ds[0], last: ds[ds.length - 1], visits: new Set(ds).size };
-  }, [rows]);
 
   if (loading) {
     return (
@@ -96,7 +87,7 @@ export default function JobDetail() {
   }
   if (!job) {
     return (
-      <div className="px-[26px] pt-16 text-center" style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
+      <div className="px-6 pt-16 text-center" style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
         <p className="text-[14px]" style={{ color: C.textMuted }}>Job not found.</p>
         <Link to="/jobs" style={{ color: C.accent }} className="text-[13px] mt-2 inline-block">← Back to Jobs</Link>
       </div>
@@ -105,46 +96,65 @@ export default function JobDetail() {
 
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-      <div className="px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-16 max-w-3xl">
-        <Link to="/jobs" className="inline-flex items-center gap-1 text-[13px] mb-4 transition-colors hover:opacity-80" style={{ color: C.accentText }}>
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to jobs
-        </Link>
-
-        {/* Job name + status */}
-        <div className="mb-5">
-          <div className="mono-label-sm mb-1 break-words">{sanitizeText(job.builder || "—")}</div>
-          <h1 className="break-words font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{sanitizeText(job.canonical_name)}</h1>
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            {dates.first && (
-              <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>
-                {dates.first === dates.last ? dates.first : `${dates.first} → ${dates.last}`}
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ backgroundColor: status.bg, color: status.text }}>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: status.text }} />
-              <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em]">{status.label}</span>
-            </span>
+      <div className="job-page px-5 max-[699px]:px-4 pt-5 max-[699px]:pt-4 pb-24 lg:pb-10">
+        {/* Compact header */}
+        <div className="max-w-[1240px] mx-auto">
+          <Link to="/jobs" className="inline-flex items-center gap-1 text-[13px] mb-3 transition-colors hover:opacity-80" style={{ color: C.accentText }}>
+            <ArrowLeft className="h-3.5 w-3.5" />Back to jobs
+          </Link>
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div className="min-w-0 flex-1">
+              <div className="mono-label-sm mb-1 break-words">{sanitizeText(job.builder || "—")}</div>
+              <h1 className="break-words font-heading text-[28px] sm:text-[30px] font-semibold leading-tight" style={{ color: C.text, letterSpacing: "-0.03em" }}>{sanitizeText(job.canonical_name)}</h1>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                {job.address && <span className="text-[12px] break-words" style={{ color: C.textMuted }}>{sanitizeText(job.address)}</span>}
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ backgroundColor: status.bg, color: status.text }}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: status.text }} />
+                  <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em]">{status.label}</span>
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button type="button" onClick={() => setShowReport(true)} className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
+                <Camera className="h-3.5 w-3.5" />Add field report
+              </button>
+              <a href="#add-note" className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+                <Plus className="h-3.5 w-3.5" />Add note
+              </a>
+            </div>
           </div>
         </div>
 
-        {/* Operational info */}
-        <div className="mb-6">
-          <JobOperationalInfo job={job} contacts={contacts} plans={plans} />
+        {/* Body: facts rail + activity feed */}
+        <div className="max-w-[1240px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <aside className="lg:col-span-4 lg:sticky lg:top-6 self-start">
+            <JobFactsRail job={job} contacts={contacts} plans={plans} />
+          </aside>
+          <div className="lg:col-span-8 min-w-0" id="add-note">
+            <JobActivityFeed
+              jobId={id}
+              events={calEvents}
+              rows={rows}
+              notes={notes}
+              fieldReports={fieldReports}
+              currentUser={currentUser}
+              onChanged={loadAll}
+              onPhotoClick={setLightbox}
+            />
+          </div>
         </div>
-
-        {/* Activity feed */}
-        <JobActivityFeed
-          jobId={id}
-          events={calEvents}
-          rows={rows}
-          notes={notes}
-          fieldReports={fieldReports}
-          currentUser={currentUser}
-          onChanged={loadAll}
-          onPhotoClick={setLightbox}
-        />
       </div>
+
+      {/* Mobile sticky Add field report action */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2" style={{ backgroundColor: C.pageBg, borderTop: `1px solid ${C.border}` }}>
+        <button type="button" onClick={() => setShowReport(true)} className="w-full inline-flex items-center justify-center gap-1.5 min-h-[48px] rounded-full text-[13px] font-semibold" style={{ backgroundColor: C.accent, color: C.accentDark }}>
+          <Camera className="h-4 w-4" />Add field report
+        </button>
+      </div>
+
+      {showReport && (
+        <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); loadAll(); }} />
+      )}
 
       {lightbox && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,.85)" }} onClick={() => setLightbox(null)}>
