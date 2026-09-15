@@ -16,6 +16,7 @@ export default function JobDetail() {
   const [calEvents, setCalEvents] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [plans, setPlans] = useState([]);
+  const [fieldReports, setFieldReports] = useState([]);
   const [currentUser, setCurrentUser] = useState("");
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
@@ -39,6 +40,15 @@ export default function JobDetail() {
     const calIds = new Set(fl.filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
     const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
     if (version === loadVersion.current) setCalEvents(allCal.filter((e) => e.job_id ? e.job_id === id : Boolean(e.google_event_id) && calIds.has(e.google_event_id)));
+
+    // Field-report photos live on FieldReports (linked to FeeLines via probuild_post_id).
+    const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
+    if (postIds.size) {
+      const allReports = await fetchAllPages(base44.entities.FieldReports, "-created_date", 2000);
+      if (version === loadVersion.current) setFieldReports(allReports.filter((r) => r.post_id && postIds.has(r.post_id)));
+    } else if (version === loadVersion.current) {
+      setFieldReports([]);
+    }
 
     // Contacts (owner-only; omit cleanly when unavailable)
     base44.functions.invoke("contacts-directory", { action: "job", job_id: id })
@@ -129,6 +139,7 @@ export default function JobDetail() {
           events={calEvents}
           rows={rows}
           notes={notes}
+          fieldReports={fieldReports}
           currentUser={currentUser}
           onChanged={loadAll}
           onPhotoClick={setLightbox}

@@ -27,11 +27,14 @@ function Photos({ urls, onPhotoClick }) {
   );
 }
 
-function VisitEntry({ ev, reports, onPhotoClick }) {
+function VisitEntry({ ev, reports, frByPostId, onPhotoClick }) {
   const badge = visitBadge(ev);
   const crew = crewName(ev.created_by);
   const reportNotes = sanitizeText(reports.flatMap((r) => [r.note_text, r.probuild_note_text].filter(Boolean)).join("\n\n"));
-  const reportPhotos = reports.flatMap((r) => r.photo_urls || []);
+  const reportPhotos = [
+    ...reports.flatMap((r) => r.photo_urls || []),
+    ...reports.flatMap((r) => (frByPostId[r.probuild_post_id] || []).flatMap((fr) => fr.photo_urls || [])),
+  ];
   return (
     <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -62,14 +65,18 @@ function VisitEntry({ ev, reports, onPhotoClick }) {
   );
 }
 
-function ReportEntry({ row, onPhotoClick }) {
+function ReportEntry({ row, frByPostId, onPhotoClick }) {
   const notes = [row.note_text, row.probuild_note_text].filter(Boolean).join("\n\n");
+  const photos = [
+    ...(row.photo_urls || []),
+    ...((frByPostId[row.probuild_post_id] || []).flatMap((fr) => fr.photo_urls || [])),
+  ];
   return (
     <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#E2EEEB", color: C.accentText }}>Field report</span>
       {row.line_description && <div className="text-[13px] font-medium break-words mt-1.5" style={{ color: C.text }}>{sanitizeText(row.line_description)}</div>}
       {notes && <div className="text-[12px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }}>{sanitizeText(notes)}</div>}
-      <Photos urls={row.photo_urls} onPhotoClick={onPhotoClick} />
+      <Photos urls={photos} onPhotoClick={onPhotoClick} />
     </div>
   );
 }
@@ -85,8 +92,16 @@ function RescheduleEntry({ ev }) {
   );
 }
 
-export default function JobActivityFeed({ jobId, events, rows, notes, currentUser, onChanged, onPhotoClick }) {
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, currentUser, onChanged, onPhotoClick }) {
   const [showForm, setShowForm] = useState(false);
+
+  const frByPostId = useMemo(() => {
+    const m = {};
+    for (const fr of fieldReports || []) {
+      if (fr.post_id) (m[fr.post_id] ||= []).push(fr);
+    }
+    return m;
+  }, [fieldReports]);
 
   const days = useMemo(() => {
     const eventDates = new Set(events.map((e) => e.event_date).filter(Boolean));
@@ -150,8 +165,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, currentUse
             </div>
             <div className="space-y-2.5">
               {items.map((it, i) => {
-                if (it.kind === "visit") return <VisitEntry key={`v-${i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} />;
-                if (it.kind === "report") return <ReportEntry key={`r-${i}`} row={it.row} onPhotoClick={onPhotoClick} />;
+                if (it.kind === "visit") return <VisitEntry key={`v-${i}`} ev={it.ev} reports={it.reports} frByPostId={frByPostId} onPhotoClick={onPhotoClick} />;
+                if (it.kind === "report") return <ReportEntry key={`r-${i}`} row={it.row} frByPostId={frByPostId} onPhotoClick={onPhotoClick} />;
                 if (it.kind === "reschedule") return <RescheduleEntry key={`s-${i}`} ev={it.ev} />;
                 return <JobNoteEntry key={it.note.id} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} />;
               })}
