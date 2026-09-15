@@ -5,7 +5,7 @@ import JobNoteForm from "./JobNoteForm";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 
-export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClick }) {
+export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClick, embedded }) {
   const [editing, setEditing] = useState(false);
   const isAuthor = !!currentUser && note.author === currentUser;
 
@@ -27,19 +27,19 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
     onChanged();
   };
 
-  return (
-    <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <div className="flex items-center gap-2 mb-2">
+  const body = (
+    <>
+      <div className="flex items-center gap-2 mb-1.5">
         {note.edited && (
           <span className="font-mono text-[10px] uppercase tracking-[0.13em] italic" style={{ color: C.textMuted }}>edited</span>
         )}
         <span className="font-mono text-[11px] truncate ml-auto" style={{ color: C.textSecondary }}>{note.author}</span>
         {isAuthor && (
-          <div className="flex items-center gap-2 shrink-0">
-            <button type="button" aria-label="Edit note" onClick={() => setEditing(true)} style={{ color: C.textMuted }} className="p-2 hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 shrink-0">
+            <button type="button" aria-label="Edit note" onClick={() => setEditing(true)} style={{ color: C.textMuted }} className="p-1.5 hover:opacity-100 transition-opacity">
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <button type="button" aria-label="Delete note" onClick={handleDelete} style={{ color: C.textMuted }} className="p-2 hover:opacity-100 transition-opacity">
+            <button type="button" aria-label="Delete note" onClick={handleDelete} style={{ color: C.textMuted }} className="p-1.5 hover:opacity-100 transition-opacity">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -47,14 +47,19 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
       </div>
       <p className="text-[13px] whitespace-pre-wrap break-words" style={{ color: C.text }}>{sanitizeText(note.body)}</p>
       {note.attachments && note.attachments.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="grid grid-cols-2 gap-1.5 mt-2 sm:grid-cols-3">
           {note.attachments.map((url, i) => (
-            <button key={i} type="button" onClick={() => onPhotoClick(url)} className="h-14 w-14 rounded border overflow-hidden" style={{ borderColor: C.border }}>
-              <img src={url} alt="" className="h-full w-full object-cover" />
+            <button key={i} type="button" onClick={() => onPhotoClick(url)} className="aspect-square rounded-md overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+              <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
             </button>
           ))}
         </div>
       )}
-    </div>
+    </>
+  );
+
+  if (embedded) return <div className="mt-1.5">{body}</div>;
+  return (
+    <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>{body}</div>
   );
 }
