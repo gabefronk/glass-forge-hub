@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { C, jobStatus } from "@/lib/feeUI";
+import { C } from "@/lib/feeUI";
+import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
 import JobOperationalInfo from "@/components/jobs/JobOperationalInfo";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import { fetchAllPages } from "@/lib/pagination";
@@ -70,7 +71,7 @@ export default function JobDetail() {
     return () => { current = false; loadVersion.current++; };
   }, [id]);
 
-  const status = useMemo(() => jobStatus(rows), [rows]);
+  const status = useMemo(() => jobsStatus(rows), [rows]);
   const dates = useMemo(() => {
     const ds = rows.map((r) => r.job_date).filter(Boolean).sort();
     return { first: ds[0], last: ds[ds.length - 1], visits: new Set(ds).size };
@@ -102,8 +103,8 @@ export default function JobDetail() {
 
         {/* Job name + status */}
         <div className="mb-5">
-          <div className="mono-label-sm mb-1 break-words">{job.builder || "—"}</div>
-          <h1 className="break-words font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{job.canonical_name}</h1>
+          <div className="mono-label-sm mb-1 break-words">{sanitizeText(job.builder || "—")}</div>
+          <h1 className="break-words font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{sanitizeText(job.canonical_name)}</h1>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             {dates.first && (
               <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>

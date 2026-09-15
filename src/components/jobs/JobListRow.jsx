@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { formatShort } from "@/lib/feeUI";
+import { sanitizeText } from "@/lib/jobsSanitize";
 
 export const COLS = "minmax(220px,1fr) 130px 120px 130px 20px";
 
@@ -29,12 +30,12 @@ export default function JobListRow({ job, stats }) {
     >
       <div style={{ minWidth: 0 }}>
         <div style={{ fontFamily: "'Archivo',sans-serif", fontWeight: 700, fontSize: "14px", color: "#182422",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.canonical_name}</div>
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sanitizeText(job.canonical_name)}</div>
         <div style={{ fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "12px", color: "#53615B",
-          marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.address || ""}</div>
+          marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sanitizeText(job.address || "")}</div>
       </div>
       <span style={{ minWidth: 0, fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "13px", color: "#53615B",
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.builder || "—"}</span>
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sanitizeText(job.builder || "—")}</span>
       <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#53615B", whiteSpace: "nowrap" }}>{stats.lastReport ? formatShort(stats.lastReport) : "—"}</span>
       <span style={{ minWidth: 0 }}>
         <span style={{

@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
-import { C, jobStatus, jobTotals, formatShort } from "@/lib/feeUI";
+import { C, jobTotals, formatShort } from "@/lib/feeUI";
+import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
 import JobListRow, { refsLabel } from "@/components/jobs/JobListRow";
 
 export default function JobsHub() {
@@ -45,7 +46,7 @@ export default function JobsHub() {
     const m = {};
     for (const job of jobs) {
       const rows = feeLinesByJob[job.id] || [];
-      const status = jobStatus(rows);
+      const status = jobsStatus(rows);
       const probuildDates = rows.filter(r => r.source === "probuild" || r.source === "both").map(r => r.job_date).filter(Boolean).sort();
       const lastReport = probuildDates.length ? probuildDates[probuildDates.length - 1] : null;
       m[job.id] = { status, lastReport };
@@ -180,8 +181,8 @@ export default function JobsHub() {
             const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
             return (
               <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-                <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{job.canonical_name}</div>
-                <div className="text-[11px] break-words mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${job.builder} · ` : ""}{job.address || ""}</div>
+                <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{sanitizeText(job.canonical_name)}</div>
+                <div className="text-[11px] break-words mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${sanitizeText(job.builder)} · ` : ""}{sanitizeText(job.address || "")}</div>
                 <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
                   <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, border: `1px solid ${stats?.status.border || C.border}`, color: stats?.status.text }}>{stats?.status.label}</span>
                   {stats?.lastReport && <span className="text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>Last {formatShort(stats.lastReport)}</span>}

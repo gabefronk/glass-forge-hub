@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Pencil, Trash2 } from "lucide-react";
 import JobNoteForm from "./JobNoteForm";
 import { C } from "@/lib/feeUI";
+import { sanitizeText } from "@/lib/jobsSanitize";
 
 export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClick }) {
   const [editing, setEditing] = useState(false);
@@ -44,7 +45,7 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
           </div>
         )}
       </div>
-      <p className="text-[13px] whitespace-pre-wrap break-words" style={{ color: C.text }}>{note.body}</p>
+      <p className="text-[13px] whitespace-pre-wrap break-words" style={{ color: C.text }}>{sanitizeText(note.body)}</p>
       {note.attachments && note.attachments.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
           {note.attachments.map((url, i) => (

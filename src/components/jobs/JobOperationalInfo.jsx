@@ -1,11 +1,12 @@
 import { Phone, Mail, MapPin, Building2, User, FileText, ExternalLink } from "lucide-react";
 import { C } from "@/lib/feeUI";
+import { sanitizeText } from "@/lib/jobsSanitize";
 
 function ContactRow({ contact }) {
   const hasContact = contact.phone || contact.email;
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
-      <span className="text-[13px] font-medium break-words" style={{ color: C.text }}>{contact.name}</span>
+      <span className="text-[13px] font-medium break-words" style={{ color: C.text }}>{sanitizeText(contact.name)}</span>
       {contact.company && contact.company !== contact.builder && (
         <span className="text-[11px] break-words" style={{ color: C.textMuted }}>{contact.company}</span>
       )}
@@ -51,7 +52,7 @@ export default function JobOperationalInfo({ job, contacts, plans }) {
         <Building2 className="h-4 w-4 shrink-0 mt-0.5" style={{ color: C.textMuted }} />
         <div className="min-w-0 flex-1">
           <div className="mono-label-sm mb-1.5">Builder</div>
-          <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{job.builder || "—"}</div>
+          <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{sanitizeText(job.builder || "—")}</div>
           {builderContacts.length > 0 && (
             <div className="mt-2 space-y-2">
               {builderContacts.map((c) => <ContactRow key={c.key} contact={c} />)}
@@ -63,7 +64,7 @@ export default function JobOperationalInfo({ job, contacts, plans }) {
       {/* Address */}
       {job.address && (
         <Section icon={MapPin} label="Job address">
-          <span className="text-[13px] break-words" style={{ color: C.text }}>{job.address}</span>
+          <span className="text-[13px] break-words" style={{ color: C.text }}>{sanitizeText(job.address)}</span>
         </Section>
       )}
 
@@ -81,7 +82,7 @@ export default function JobOperationalInfo({ job, contacts, plans }) {
                 style={{ color: C.accentText }}
               >
                 <ExternalLink className="h-3 w-3 shrink-0" />
-                <span className="break-words">{p.file_name}</span>
+                <span className="break-words">{sanitizeText(p.file_name)}</span>
                 {p.page_count > 0 && <span style={{ color: C.textMuted }}>· {p.page_count}p</span>}
               </a>
             ))}

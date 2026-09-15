@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { C, formatShort, formatDateGroup, crewName } from "@/lib/feeUI";
+import { sanitizeText } from "@/lib/jobsSanitize";
 import { Check, Clock, X, RefreshCw, Plus, Camera } from "lucide-react";
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
@@ -29,7 +30,7 @@ function Photos({ urls, onPhotoClick }) {
 function VisitEntry({ ev, reports, onPhotoClick }) {
   const badge = visitBadge(ev);
   const crew = crewName(ev.created_by);
-  const reportNotes = reports.flatMap((r) => [r.note_text, r.probuild_note_text].filter(Boolean)).join("\n\n");
+  const reportNotes = sanitizeText(reports.flatMap((r) => [r.note_text, r.probuild_note_text].filter(Boolean)).join("\n\n"));
   const reportPhotos = reports.flatMap((r) => r.photo_urls || []);
   return (
     <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
@@ -42,12 +43,12 @@ function VisitEntry({ ev, reports, onPhotoClick }) {
           <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#F6F8FC", color: C.textMuted }}>Rescheduled ×{ev.reschedule_count}</span>
         )}
       </div>
-      <div className="text-[13px] font-medium break-words" style={{ color: C.text }}>{ev.job_name}</div>
+      <div className="text-[13px] font-medium break-words" style={{ color: C.text }}>{sanitizeText(ev.job_name)}</div>
       {ev.address && ev.scope_notes && (
-        <div className="text-[11px] break-words mt-0.5" style={{ color: C.textMuted }}>{ev.address}</div>
+        <div className="text-[11px] break-words mt-0.5" style={{ color: C.textMuted }}>{sanitizeText(ev.address)}</div>
       )}
       {ev.scope_notes && (
-        <div className="text-[12px] whitespace-pre-wrap break-words mt-1.5 rounded p-2" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{ev.scope_notes}</div>
+        <div className="text-[12px] whitespace-pre-wrap break-words mt-1.5 rounded p-2" style={{ backgroundColor: C.mutedBg, color: C.textSecondary }}>{sanitizeText(ev.scope_notes)}</div>
       )}
       {reportNotes && (
         <div className="text-[12px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.text }}>
@@ -66,8 +67,8 @@ function ReportEntry({ row, onPhotoClick }) {
   return (
     <div className="rounded-[12px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#E2EEEB", color: C.accentText }}>Field report</span>
-      {row.line_description && <div className="text-[13px] font-medium break-words mt-1.5" style={{ color: C.text }}>{row.line_description}</div>}
-      {notes && <div className="text-[12px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }}>{notes}</div>}
+      {row.line_description && <div className="text-[13px] font-medium break-words mt-1.5" style={{ color: C.text }}>{sanitizeText(row.line_description)}</div>}
+      {notes && <div className="text-[12px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }}>{sanitizeText(notes)}</div>}
       <Photos urls={row.photo_urls} onPhotoClick={onPhotoClick} />
     </div>
   );
