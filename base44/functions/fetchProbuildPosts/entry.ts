@@ -12,18 +12,56 @@ import { parseServiceBilling } from '../../shared/serviceBilling.ts';
 // (no deletedAt). Posts fetched per-project, createdAt converted UTC → America/Denver
 // before deriving job_date. LLM extracts man_hours/trip_charges from the verbatim
 // note (never inferred). Upserts on probuild_post_id; never overwrites a
-// manually_adjusted row.
+// manually_adjusted row. photo_urls are merged, never wiped: existing archived
+// URLs survive re-syncs, and posts with attachments but no URLs get their bytes
+// archived into Base44 file storage (no ProBuild link dependency).
 //
 // The pull window extends through TODAY (not yesterday) so that D+1 posts
 // (crew posts the morning after the job) are always captured.
 const DB_BASE = 'https://probuild-prod.firebaseio.com';
 const TEAM_ID = '-O7aXXhvthc41u60Koc6';
+const STORAGE_BUCKET = 'https://firebasestorage.googleapis.com/v0/b/probuild-prod.appspot.com/o/';
 
 function toDenverDateString(utcIso) {
   const d = new Date(utcIso);
   if (isNaN(d.getTime())) return null;
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' });
   return fmt.format(d); // YYYY-MM-DD
+}
+
+
+// Photo archiving: download original attachment bytes from Firebase Storage
+// (same layout as the official web client's FileReference.PostAttachments) and
+// store them in Base44 file storage, so the Hub never depends on ProBuild links.
+async function downloadAttachment(idToken, projectId, postId, attachmentId, attachment) {
+  const generation = String(attachment?.generation || '');
+  const path = `teams/${TEAM_ID}/posts/${projectId}/${postId}/attachments/${attachmentId}`;
+  const url = STORAGE_BUCKET + encodeURIComponent(path) + '?alt=media' + (generation ? '&generation=' + encodeURIComponent(generation) : '');
+  const res = await fetch(url, { headers: { Authorization: 'Firebase ' + idToken } });
+  if (!res.ok) return null;
+  const mime = res.headers.get('content-type') || attachment?.mimeType || 'image/jpeg';
+  if (/text\/html|application\/json/.test(mime)) return null;
+  const buf = await res.arrayBuffer();
+  if (!buf.byteLength) return null;
+  const name = attachment?.fileMetadata?.name || `${attachmentId}.${mime.includes('png') ? 'png' : 'jpg'}`;
+  return { buf, mime, name };
+}
+
+async function archivePostPhotos(base44, idToken, projectId, postId, attachments) {
+  const urls = [];
+  for (const [attId, att] of Object.entries(attachments || {})) {
+    if (!att || !['photo', 'file'].includes(att.type)) continue;
+    try {
+      const dl = await downloadAttachment(idToken, projectId, postId, attId, att);
+      if (!dl) continue;
+      const file = new File([dl.buf], dl.name, { type: dl.mime });
+      const up = await base44.asServiceRole.integrations.Core.UploadFile({ file });
+      if (up?.file_url) urls.push(up.file_url);
+    } catch (e) {
+      // A single photo failure must not fail the whole pull.
+    }
+  }
+  return urls;
 }
 
 // Find an existing calendar-sourced FeeLine for the same job within ±3 days
@@ -110,14 +148,25 @@ export default async function(req) {
     for (const r of existingReports) if (r.post_id) reportByPostId.set(r.post_id, r);
     const frToCreate = [];
     const frToUpdate = [];
+    const photoUrlByPost = new Map();
     for (const { b, normName, m } of matched) {
       const post = b.post;
       const ext = extractionMap.get(b.postId) || { needs_review: true };
+      const exRep = reportByPostId.get(b.postId);
+      const extractedPhotos = extractPhotoUrls(post);
+      // Merge, never wipe: keep previously archived photo_urls when the source
+      // extraction has none. Archive bytes into Base44 storage only when we have
+      // no URLs at all, so re-syncs never depend on ProBuild links again.
+      let photoUrls = extractedPhotos.length ? extractedPhotos : (exRep?.photo_urls || []);
+      if (!photoUrls.length && countAttachments(post.attachments) > 0) {
+        photoUrls = await archivePostPhotos(base44, idToken, b.projectId, b.postId, post.attachments);
+      }
+      photoUrlByPost.set(b.postId, photoUrls);
       const reportRow = {
         job_date: b.jobDate,
         job_name: b.projectName,
         message: post.message || '',
-        photo_urls: extractPhotoUrls(post),
+        photo_urls: photoUrls,
         attachment_count: countAttachments(post.attachments),
         post_id: b.postId,
         project_id: b.projectId,
@@ -125,7 +174,6 @@ export default async function(req) {
         man_hours: ext.man_hours != null ? Number(ext.man_hours) : null,
         trip_charges: ext.trip_charges != null ? Number(ext.trip_charges) : null,
       };
-      const exRep = reportByPostId.get(b.postId);
       if (exRep) frToUpdate.push({ id: exRep.id, ...reportRow });
       else frToCreate.push(reportRow);
     }
@@ -166,7 +214,7 @@ export default async function(req) {
         pricing_review_reason: ext.reason || service.reason || null,
         man_hours: ext.man_hours != null ? Number(ext.man_hours) : null,
         trip_charges: ext.trip_charges != null ? Number(ext.trip_charges) : null,
-        photo_urls: extractPhotoUrls(post),
+        photo_urls: photoUrlByPost.get(b.postId) || [],
         fee_pct: 0.1,
         billable: true,
         source: 'probuild',
@@ -189,6 +237,7 @@ export default async function(req) {
         if (ex.manually_adjusted || ex.billed_to_bfs || lockedMonths.has(ex.invoice_month)) { skipped++; continue; }
         // Update report-derived fields without overwriting calendar identity or billing date.
         const combined = { ...ex, ...row, fee_pct: ex.fee_pct ?? row.fee_pct, billable: ex.billable ?? row.billable };
+        if (!(row.photo_urls || []).length && (ex.photo_urls || []).length) combined.photo_urls = ex.photo_urls;
         if (ex.calendar_event_id) {
           for (const key of ['job_date','invoice_month','job_name_raw','job_name_norm','calendar_event_id','calendar_labor_amt','calendar_note_text','calendar_creator','calendar_organizer','po_number','oe_number','fee_type','sale_price','cost','split_pct','ticket_sequence']) combined[key] = ex[key];
           combined.source = 'both';
@@ -207,6 +256,7 @@ export default async function(req) {
           calRow._mergeReserved = true;
           const mergedRow = { ...calRow };
           for (const key of ['man_hours','trip_charges','probuild_post_id','probuild_project_id','probuild_note_text','probuild_job_date','photo_urls','service_material','service_rate','service_labor_amount','service_trip_amount','service_total','service_calculation_source','service_review_status','pricing_review_reason']) mergedRow[key] = row[key];
+          if (!(row.photo_urls || []).length && (calRow.photo_urls || []).length) mergedRow.photo_urls = calRow.photo_urls;
           mergedRow.source = 'both';
           mergedRow.calendar_note_text = calRow.calendar_note_text || calRow.note_text || '';
           mergedRow.note_text = [mergedRow.calendar_note_text, 'ProBuild:\n' + row.note_text].filter(Boolean).join('\n\n');
