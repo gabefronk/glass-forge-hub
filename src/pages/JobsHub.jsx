@@ -200,8 +200,8 @@ export default function JobsHub() {
         </div>
       </header>
 
-      {/* Desktop split workspace */}
-      <div className="hidden md:flex flex-1 min-h-0 px-[26px] max-[699px]:px-[18px] pb-6 gap-5 items-stretch">
+      {/* Desktop split workspace — large desktop only */}
+      <div className="hidden xl:flex flex-1 min-h-0 px-[26px] max-[699px]:px-[18px] pb-6 gap-5 items-stretch">
         <aside className="w-[340px] shrink-0 min-h-0 flex flex-col rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
           <div className="shrink-0 px-3.5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.headerText }}>{filtered.length} job{filtered.length === 1 ? "" : "s"}</span>
@@ -228,8 +228,8 @@ export default function JobsHub() {
         </section>
       </div>
 
-      {/* Mobile card list + detail navigation */}
-      <div className="md:hidden px-[18px] pt-4 pb-10">
+      {/* Mobile/tablet card list + detail navigation */}
+      <div className="xl:hidden px-[18px] pt-4 pb-10">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {visibleJobs.map((job) => {
             const stats = jobStats[job.id];
