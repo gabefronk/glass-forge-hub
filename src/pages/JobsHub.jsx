@@ -3,9 +3,11 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
-import { C, jobTotals, formatShort } from "@/lib/feeUI";
+import { C, formatShort } from "@/lib/feeUI";
 import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
-import JobListRow, { refsLabel } from "@/components/jobs/JobListRow";
+import { refsLabel } from "@/components/jobs/JobListRow";
+import JobBrowserRow from "@/components/jobs/JobBrowserRow";
+import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
 import ProbuildReports from "@/pages/ProbuildReports";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 
@@ -15,9 +17,10 @@ export default function JobsHub() {
   const [search, setSearch] = useState("");
   const [segment, setSegment] = useState("all");
   const [loading, setLoading] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(20);
+  const [visibleCount, setVisibleCount] = useState(40);
   const [owner, setOwner] = useState(false);
   const [view, setView] = useState("jobs");
+  const [selectedJobId, setSelectedJobId] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
@@ -52,7 +55,7 @@ export default function JobsHub() {
     }
   };
 
-  useEffect(() => { setVisibleCount(20); }, [search, segment]);
+  useEffect(() => { setVisibleCount(40); }, [search, segment]);
 
   const feeLinesByJob = useMemo(() => {
     const m = {};
@@ -107,17 +110,39 @@ export default function JobsHub() {
     });
   }, [jobs, search, segment, jobStats]);
 
+  // Auto-select the first visible job for the desktop workspace.
+  useEffect(() => {
+    if (!filtered.length) { setSelectedJobId(null); return; }
+    if (!selectedJobId || !filtered.some(j => j.id === selectedJobId)) {
+      setSelectedJobId(filtered[0].id);
+    }
+  }, [filtered]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pills = [
+    { key: "all", label: "All", count: jobs.length },
+    { key: "active", label: "Active", count: counts.active },
+    { key: "complete", label: "Complete", count: counts.complete },
+    { key: "needs_report", label: "Needs report", count: counts.needsReport },
+  ];
+
+  const renderToggle = (onDark) => (
+    <div className="inline-flex items-center gap-1 p-1 rounded-full" style={{ backgroundColor: onDark ? "rgba(255,255,255,.06)" : C.cardAlt, border: `1px solid ${onDark ? "rgba(255,255,255,.1)" : C.border}` }}>
+      {[["jobs", "Jobs"], ["reports", "Field reports"]].map(([k, label]) => (
+        <button key={k} onClick={() => switchView(k)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors"
+          style={view === k
+            ? (onDark ? { backgroundColor: "var(--gf-brass-400)", color: "var(--gf-on-brass)" } : { backgroundColor: C.accent, color: "#fff" })
+            : (onDark ? { color: "var(--gf-sidebar-text)" } : { color: C.textSecondary })}>{label}</button>
+      ))}
+    </div>
+  );
+
   if (view === "reports" && owner) {
     return (
-      <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-        <div className="px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px]">
-          <div className="flex items-center justify-between gap-3 mb-4">
+      <div style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }}>
+        <div className="px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-4">
+          <div className="flex items-center justify-between gap-3">
             <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Field reports</h1>
-            <div className="inline-flex items-center gap-1 p-1 rounded-full" style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}>
-              {[["jobs", "Jobs"], ["reports", "Field reports"]].map(([k, label]) => (
-                <button key={k} onClick={() => switchView(k)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors" style={view === k ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>{label}</button>
-              ))}
-            </div>
+            {renderToggle(false)}
           </div>
         </div>
         <ProbuildReports />
@@ -127,49 +152,36 @@ export default function JobsHub() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.pageBg }}>
-        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "#DDE0DA", borderTopColor: C.accent }} />
+      <div className="flex items-center justify-center" style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }}>
+        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: C.border, borderTopColor: C.accent }} />
       </div>
     );
   }
 
   const visibleJobs = filtered.slice(0, visibleCount);
-  const pills = [
-    { key: "all", label: "All", count: jobs.length },
-    { key: "active", label: "Active", count: counts.active },
-    { key: "complete", label: "Complete", count: counts.complete },
-    { key: "needs_report", label: "Needs report", count: counts.needsReport },
-  ];
 
   return (
-    <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-      <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+    <div style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }} className="flex flex-col">
+      {/* Dark-green hero */}
+      <header className="shrink-0 px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-5" style={{ background: "linear-gradient(180deg, var(--gf-sidebar-top), var(--gf-sidebar-bottom))", color: "var(--gf-sidebar-text-on)" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Jobs</h1>
-            <span className="font-mono-num text-[14px]" style={{ color: C.textMuted }}>({jobs.length.toLocaleString()})</span>
+            <h1 className="font-heading text-[24px] font-semibold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.03em" }}>Jobs</h1>
+            <span className="font-mono-num text-[14px]" style={{ color: "var(--gf-sidebar-muted)" }}>({jobs.length.toLocaleString()})</span>
           </div>
-          {owner && (
-            <div className="inline-flex items-center gap-1 p-1 rounded-full" style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}>
-              {[["jobs", "Jobs"], ["reports", "Field reports"]].map(([k, label]) => (
-                <button key={k} onClick={() => switchView(k)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors" style={view === k ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>{label}</button>
-              ))}
-            </div>
-          )}
+          {owner && renderToggle(true)}
         </div>
-
-        <div className="flex flex-col gap-3 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: C.textFaint }} />
+        <div className="flex flex-col gap-3">
+          <div className="relative flex-1 max-w-[560px]">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--gf-sidebar-muted)" }} />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, alias, address, PO or OE"
-              className="w-full pl-10 pr-16 rounded-[12px] text-[13px] focus:outline-none transition-colors"
-              style={{ height: "40px", border: `1px solid ${C.border}`, backgroundColor: C.card, color: C.text }}
+              className="w-full pl-10 pr-4 rounded-[10px] text-[13px] focus:outline-none transition-colors placeholder:text-[#8F999B]"
+              style={{ height: "40px", border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)" }}
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: C.mutedBg, color: C.textFaint }}>⌘K</span>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto obsidian-scroll" style={{ scrollbarWidth: "none" }}>
             {pills.map((p) => (
@@ -177,58 +189,53 @@ export default function JobsHub() {
                 key={p.key}
                 onClick={() => setSegment(p.key)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap shrink-0 transition-colors"
-                style={
-                  segment === p.key
-                    ? { backgroundColor: C.accent, color: C.accentDark }
-                    : { backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, color: C.textSecondary }
-                }
+                style={segment === p.key
+                  ? { backgroundColor: "var(--gf-brass-400)", color: "var(--gf-on-brass)" }
+                  : { backgroundColor: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)", color: "var(--gf-sidebar-text)" }}
               >
-                {p.label}
-                <span className="font-mono-num text-[11px]" style={{ opacity: 0.7 }}>{p.count}</span>
+                {p.label}<span className="font-mono-num text-[11px]" style={{ opacity: 0.7 }}>{p.count}</span>
               </button>
             ))}
           </div>
         </div>
+      </header>
 
-        <div className="hidden xl:block rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-          <div className="overflow-x-auto obsidian-scroll" role="region" aria-label="Jobs table" tabIndex={0}>
-          <div className="min-w-[620px]">
-          <div style={{
-            display: "grid", gridTemplateColumns: JobListRow.COLS, alignItems: "center",
-            gap: 12, padding: "12px 16px", background: C.headerBg,
-            fontFamily: "'Archivo',sans-serif", fontSize: 10, fontWeight: 600,
-            letterSpacing: ".01em", color: C.headerText, whiteSpace: "nowrap",
-          }}>
-            <span>JOB</span>
-            <span>BUILDER</span>
-            <span style={{ textAlign: "right" }}>LATEST VISIT</span>
-            <span>STATUS</span>
-            <span />
+      {/* Desktop split workspace */}
+      <div className="hidden md:flex flex-1 min-h-0 px-[26px] max-[699px]:px-[18px] pb-6 gap-5 items-stretch">
+        <aside className="w-[340px] shrink-0 min-h-0 flex flex-col rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+          <div className="shrink-0 px-3.5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.headerText }}>{filtered.length} job{filtered.length === 1 ? "" : "s"}</span>
           </div>
-          <div>
+          <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll">
             {visibleJobs.map((job) => (
-              <JobListRow key={job.id} job={job} stats={jobStats[job.id]} />
+              <JobBrowserRow key={job.id} job={job} stats={jobStats[job.id]} selected={job.id === selectedJobId} onSelect={() => setSelectedJobId(job.id)} />
             ))}
             {!visibleJobs.length && (
               <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No jobs match "{search}".</div>
             )}
+            {filtered.length > visibleCount && (
+              <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}` }}>
+                <span className="font-mono-num text-[11px]" style={{ color: C.textMuted }}>{visibleCount} of {filtered.length}</span>
+                <button onClick={() => setVisibleCount(c => c + 40)} className="px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
+              </div>
+            )}
           </div>
-          </div>
-          </div>
-          {filtered.length > visibleCount && (
-            <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}` }}>
-              <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textMuted }}>Showing {visibleCount} of {filtered.length.toLocaleString()}</span>
-              <button onClick={() => setVisibleCount(c => c + 20)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
-            </div>
+        </aside>
+        <section className="flex-1 min-h-0 flex flex-col rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+          {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} /> : (
+            <div className="flex items-center justify-center h-full text-[13px]" style={{ color: C.textMuted }}>Select a job to view its activity.</div>
           )}
-        </div>
+        </section>
+      </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+      {/* Mobile card list + detail navigation */}
+      <div className="md:hidden px-[18px] pt-4 pb-10">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {visibleJobs.map((job) => {
             const stats = jobStats[job.id];
             const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
             return (
-              <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+              <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors hover:bg-[#F6F3EC]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
                 <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{sanitizeText(job.canonical_name)}</div>
                 <div className="text-[11px] break-words mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${sanitizeText(job.builder)} · ` : ""}{sanitizeText(job.address || "")}</div>
                 <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
