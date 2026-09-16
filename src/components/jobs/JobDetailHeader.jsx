@@ -22,7 +22,7 @@ export default function JobDetailHeader({ job, status, totals, dates, stage, che
       {/* Title row */}
       <div className="px-5 pt-5 pb-4">
         <div className="mono-label-sm mb-1 break-words">GF-2026 · {job.builder || "—"}</div>
-        <h1 className="break-words font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{job.canonical_name}</h1>
+        <h1 className="break-words font-heading text-[26px] sm:text-[30px] font-bold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{job.canonical_name}</h1>
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           {job.address && <span className="min-w-0 break-words text-[13px]" style={{ color: C.textMuted }}>{job.address}</span>}
           {dates.first && (
