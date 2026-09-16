@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { C, formatDateGroup } from "@/lib/feeUI";
+import { denverDate } from "../../../base44/shared/billingCore.js";
 import { AlertTriangle } from "lucide-react";
 
 function statusLabel(event) {
@@ -35,9 +36,14 @@ export default function OutstandingReports({ events, user, onChanged, compliance
   const [waiveReason, setWaiveReason] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const todayDenver = denverDate();
   const outstanding = (events || [])
     .filter((e) => e.report_required !== false &&
       ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"].includes(e.report_status))
+    // Future visits are not outstanding reports: crews cannot have reported
+    // on work that has not happened yet. Only today and past dates belong
+    // in this list.
+    .filter((e) => (e.event_date || "") <= todayDenver)
     .filter((e) => !complianceStartDate || (e.event_date || "") >= complianceStartDate)
     .sort((a, b) => {
       const aRes = a.report_status === "rescheduled" ? 1 : 0;
