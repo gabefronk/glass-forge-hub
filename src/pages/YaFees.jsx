@@ -146,8 +146,14 @@ export default function YaFees() {
   };
 
   const handleDelete = async (id) => {
+    const row = feeLines.find((r) => r.id === id);
     setFeeLines((prev) => prev.filter((r) => r.id !== id));
-    await base44.entities.FeeLines.delete(id);
+    try {
+      await base44.entities.FeeLines.delete(id);
+    } catch (err) {
+      if (row) setFeeLines((prev) => [...prev, row]);
+      alert(`Delete failed: ${err?.message || err}. The line was restored.`);
+    }
   };
 
   const handleAccept = async (id) => {
