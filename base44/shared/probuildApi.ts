@@ -79,21 +79,50 @@ export async function fetchProbuildProjects(idToken) {
   return entries;
 }
 
-// Fetch all posts for a single project. Returns array of { projectId, postId, post }.
-export async function fetchProbuildPostsForProject(idToken, projectId) {
+// Fetch posts for a single project in key-ordered chunks.
+// A project's full history can be large enough to OOM the worker in a single
+// response (this killed every pull whose window covered 2026-09-01..09-04).
+// Chunking bounds each response; Firebase push IDs are chronological, so once
+// a chunk's oldest post is past the window everything after it is newer and
+// the scan stops. opts: { startStr, endStr } - only posts whose createdAt
+// parses within [startStr-2d, endStr+2d] (plus posts with no createdAt) are
+// returned; the caller re-filters exactly by Denver date.
+export async function fetchProbuildPostsForProject(idToken, projectId, opts = {}) {
+  const CHUNK = 200;
+  const MAX_CHUNKS = 60;
+  const marginMs = 2 * 86400000;
+  const startMs = opts.startStr ? Date.parse(opts.startStr + 'T00:00:00Z') - marginMs : null;
+  const endMs = opts.endStr ? Date.parse(opts.endStr + 'T23:59:59Z') + marginMs : null;
+  const out = [];
+  let lastKey = null;
   try {
-    const r = await fetch(`${DB_BASE}/teams/${TEAM_ID}/posts/${projectId}.json?auth=${idToken}`);
-    if (!r.ok) throw new Error('posts_fetch_failed: project ' + projectId + ', HTTP ' + r.status);
-    const j = await r.json();
-    if (!j) return [];
-    const out = [];
-    for (const [postId, post] of Object.entries(j)) {
-      if (!post) continue;
-      out.push({ projectId, postId, post });
+    for (let n = 0; n < MAX_CHUNKS; n++) {
+      let url = `${DB_BASE}/teams/${TEAM_ID}/posts/${projectId}.json?auth=${idToken}&orderBy="$key"&limitToFirst=${lastKey ? CHUNK + 1 : CHUNK}`;
+      if (lastKey) url += `&startAt=${encodeURIComponent(JSON.stringify(lastKey))}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('posts_fetch_failed: project ' + projectId + ', HTTP ' + r.status);
+      const j = await r.json();
+      if (!j) break;
+      let keys = Object.keys(j).sort();
+      if (lastKey && keys[0] === lastKey) keys = keys.slice(1);
+      if (!keys.length) break;
+      let oldestMs = null;
+      for (const postId of keys) {
+        const post = j[postId];
+        if (!post) continue;
+        const ms = toMs(post.createdAt);
+        if (oldestMs == null && ms != null) oldestMs = ms;
+        if (ms != null && startMs != null && ms < startMs) continue;
+        if (ms != null && endMs != null && ms > endMs) continue;
+        out.push({ projectId, postId, post });
+      }
+      lastKey = keys[keys.length - 1];
+      if (keys.length < CHUNK) break;
+      if (endMs != null && oldestMs != null && oldestMs > endMs) break;
     }
     return out;
   } catch (error) {
-    throw new Error('ProBuild posts unavailable for project ' + projectId + ': ' + error.message.replace(/auth=[^&\\s]+/g, 'auth=[redacted]'));
+    throw new Error('ProBuild posts unavailable for project ' + projectId + ': ' + error.message.replace(/auth=[^&\s]+/g, 'auth=[redacted]'));
   }
 }
 
