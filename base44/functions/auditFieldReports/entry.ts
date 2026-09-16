@@ -237,7 +237,10 @@ export default async function(req) {
         for (const ld of laterDates) {
           const datePosts = (postsByDate.get(ld) || []).filter((p) => !claimedPostIds.has(p.post_id));
           if (datePosts.length > 0) {
-            dateAssignments.set(date, { posts: datePosts, offset: 'late' });
+            // report_date_offset is an integer column - store the real day
+            // offset (e.g. 11 for a Sep 15 report covering a Sep 4 visit).
+            const lateOffset = Math.round((Date.parse(ld + 'T00:00:00Z') - Date.parse(date + 'T00:00:00Z')) / 86400000);
+            dateAssignments.set(date, { posts: datePosts, offset: lateOffset });
             for (const p of datePosts) claimedPostIds.add(p.post_id);
             break;
           }
