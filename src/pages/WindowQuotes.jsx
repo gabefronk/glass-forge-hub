@@ -305,6 +305,9 @@ export default function WindowQuotes() {
   const convert = (data) => operate(async () => {
     await api("convert_won", { quote_id: selectedID, ...data }); setWonOpen(false); setTab("result");
   });
+  const savePricing = (data) => operate(async () => {
+    await api("pricing_overrides", { quote_id: selectedID, ...data });
+  });
   const retryFailed = (data) => operate(async () => {
     const result = await api("retry_failed", data);
     if (result.quote?.id !== data.quote_id) throw new Error("The retry was not confirmed. Keep this review open and retry to check the same attempt.");
@@ -347,7 +350,7 @@ export default function WindowQuotes() {
             {!progress && !["ready", "failed"].includes(quote.worker_status) && quote.sales_status !== "won" && <form onSubmit={send} className="border-t border-[#ECEEEA] bg-[#F0F1ED] p-4">
               <label htmlFor="quote-message" className="sr-only">Reply to this quote request</label><div className="flex items-end gap-2"><textarea id="quote-message" className={inputClass + " min-h-[76px] resize-y"} value={message} maxLength={18000} onChange={(e) => { setMessage(e.target.value); messageID.current = null; }} placeholder={needsRetryReview ? "Review and retry the previous attempt to continue this request." : locked ? quote.sales_status === "won" ? "Accepted revision — start a new request for changes." : "The request is being quoted. Replies reopen when input is needed." : "Reply in your own words — add details or tell us what to change…"} disabled={locked || needsRetryReview || busy} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(e); }} /><button type="submit" aria-label="Send message" className={primaryClass + " min-h-11 shrink-0 px-3"} disabled={!message.trim() || locked || needsRetryReview || busy}>{busy ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}</button></div><p className="mt-2 text-[11px] text-[#8A958F]">{locked ? "We’ll let you know here if we need a detail or your quote is ready." : "The AI reviews your reply with the rest of this request, then checks whether quoting can continue."}</p>
             </form>}
-          </> : <div className="p-4 sm:p-5">{tab === "schedule" ? <ScheduleView quote={quote} /> : <WindowQuoteResults quote={quote} onWon={() => setWonOpen(true)} busy={busy} />}</div>}
+          </> : <div className="p-4 sm:p-5">{tab === "schedule" ? <ScheduleView quote={quote} /> : <WindowQuoteResults quote={quote} onWon={() => setWonOpen(true)} onPricingSave={savePricing} busy={busy} />}</div>}
           {quote.job_id && tab !== "result" && <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between border-t border-[#ECEEEA] p-4 text-sm font-semibold text-[#166447]"><span className="flex items-center gap-2"><BriefcaseBusiness size={16} />Open linked job</span><ArrowUpRight size={15} /></Link>}
         </> : <div className="p-10 text-center text-sm text-[#53615B]">This request is unavailable. Choose another request or refresh.</div>}
       </section>}
