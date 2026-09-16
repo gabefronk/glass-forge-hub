@@ -141,7 +141,7 @@ export default function JobsHub() {
       <div style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }}>
         <div className="px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-4">
           <div className="flex items-center justify-between gap-3">
-            <h1 className="font-heading text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Field reports</h1>
+            <h1 className="font-heading text-[30px] font-bold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Field reports</h1>
             {renderToggle(false)}
           </div>
         </div>
@@ -166,7 +166,7 @@ export default function JobsHub() {
       <header className="shrink-0 px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-5" style={{ background: "linear-gradient(180deg, var(--gf-sidebar-top), var(--gf-sidebar-bottom))", color: "var(--gf-sidebar-text-on)" }}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-[24px] font-semibold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.03em" }}>Jobs</h1>
+            <h1 className="font-heading text-[30px] font-bold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.03em" }}>Jobs</h1>
             <span className="font-mono-num text-[14px]" style={{ color: "var(--gf-sidebar-muted)" }}>({jobs.length.toLocaleString()})</span>
           </div>
           {owner && renderToggle(true)}
@@ -236,7 +236,7 @@ export default function JobsHub() {
             const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
             return (
               <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors hover:bg-[#F6F3EC]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-                <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{sanitizeText(job.canonical_name)}</div>
+                <div className="text-[15px] font-bold break-words" style={{ color: C.text }}>{sanitizeText(job.canonical_name)}</div>
                 <div className="text-[11px] break-words mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${sanitizeText(job.builder)} · ` : ""}{sanitizeText(job.address || "")}</div>
                 <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
                   <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, border: `1px solid ${stats?.status.border || C.border}`, color: stats?.status.text }}>{stats?.status.label}</span>
