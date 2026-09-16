@@ -52,9 +52,9 @@ function visitBadge(ev) {
 function PhotoGrid({ urls, onPhotoClick }) {
   if (!urls || !urls.length) return null;
   return (
-    <div className="grid grid-cols-2 gap-1.5 mt-2 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-2 mt-2.5 sm:grid-cols-3">
       {urls.map((url, i) => (
-        <button key={i} type="button" onClick={() => onPhotoClick(url)} className="aspect-square rounded-md overflow-hidden shrink-0" style={{ border: `1px solid ${C.border}` }}>
+        <button key={i} type="button" onClick={() => onPhotoClick(url)} className="aspect-[4/3] rounded-[10px] overflow-hidden shrink-0" style={{ border: `1px solid ${C.border}` }}>
           <FeedImage src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />
         </button>
       ))}
@@ -64,7 +64,7 @@ function PhotoGrid({ urls, onPhotoClick }) {
 
 function TypeLabel({ icon: Icon, children, color }) {
   return (
-    <span className="inline-flex items-center gap-1 font-mono text-[9px] font-semibold uppercase tracking-[0.1em]" style={{ color }}>
+    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color }}>
       <Icon className="h-3 w-3" />{children}
     </span>
   );
@@ -77,7 +77,7 @@ function ReportBlock({ report, onPhotoClick }) {
         <div className="text-[11px]" style={{ color: C.textMuted }}>{crewName(report.author)} · {report.created_at ? formatShort(String(report.created_at).slice(0, 10)) : ""}</div>
       ) : null}
       {report.message ? (
-        <ClampedText text={report.message} maxLines={5} className="text-[12.5px] whitespace-pre-wrap break-words mt-0.5" style={{ color: C.text }} />
+        <ClampedText text={report.message} maxLines={5} className="text-[13.5px] whitespace-pre-wrap break-words mt-1" style={{ color: C.text }} />
       ) : null}
       <PhotoGrid urls={report.photos} onPhotoClick={onPhotoClick} />
     </div>
@@ -88,7 +88,7 @@ function VisitCard({ ev, reports, onPhotoClick }) {
   const badge = visitBadge(ev);
   const crew = crewName(ev.created_by);
   return (
-    <div className="rounded-[10px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+    <div className="rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="flex flex-wrap items-center gap-2">
         <TypeLabel icon={Clock} color={C.textSecondary}>Appointment</TypeLabel>
         <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textSecondary }}>
@@ -96,7 +96,7 @@ function VisitCard({ ev, reports, onPhotoClick }) {
         </span>
         <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span>
       </div>
-      <div className="text-[13px] font-medium break-words mt-1" style={{ color: C.text }}>{sanitizeText(ev.job_name)}</div>
+      <div className="text-[14px] font-semibold break-words mt-1.5" style={{ color: C.text }}>{sanitizeText(ev.job_name)}</div>
       {reports.length > 0 ? (
         reports.map((r, i) => (
           <div key={r.post_id || i} className="mt-2 pt-2" style={{ borderTop: i > 0 ? `1px solid ${C.rowBorder}` : "none" }}>
@@ -106,7 +106,7 @@ function VisitCard({ ev, reports, onPhotoClick }) {
         ))
       ) : (
         ev.scope_notes ? (
-          <ClampedText text={ev.scope_notes} maxLines={5} className="text-[12.5px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }} />
+          <ClampedText text={ev.scope_notes} maxLines={5} className="text-[13.5px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }} />
         ) : null
       )}
       {crew ? <div className="text-[11px] mt-1.5" style={{ color: C.textMuted }}>Crew: {crew}</div> : null}
@@ -116,7 +116,7 @@ function VisitCard({ ev, reports, onPhotoClick }) {
 
 function ReportCard({ report, onPhotoClick }) {
   return (
-    <div className="rounded-[10px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+    <div className="rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <TypeLabel icon={Camera} color={C.accentText}>Field report</TypeLabel>
       <ReportBlock report={report} onPhotoClick={onPhotoClick} />
     </div>
@@ -148,7 +148,7 @@ function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
     badges.push(<TypeLabel key="i" icon={AlertCircle} color="#A43432">Incomplete</TypeLabel>);
   }
   return (
-    <div className="rounded-[10px] p-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+    <div className="rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="flex items-center gap-2 flex-wrap">{badges}</div>
       <JobNoteEntry note={note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} embedded />
     </div>
@@ -203,7 +203,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-3">
-        <h2 className="font-heading text-[16px] font-semibold" style={{ color: C.text }}>Activity</h2>
+        <h2 className="font-heading text-[20px] font-bold" style={{ color: C.text }}>Activity</h2>
         <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap min-h-[32px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
           <Plus className="h-3 w-3" />Add note
         </button>
@@ -222,7 +222,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         {days.map(({ date, items }) => (
           <div key={date}>
             <div className="sticky top-0 z-10 py-1 mb-2" style={{ backgroundColor: C.pageBg }}>
-              <span className="font-mono-num text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: C.textMuted }}>{formatDateGroup(date)}</span>
+              <span className="font-mono-num text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: C.textMuted }}>{formatDateGroup(date)}</span>
             </div>
             <div className="space-y-2">
               {items.map((it, i) => {
