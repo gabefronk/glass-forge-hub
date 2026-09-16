@@ -173,12 +173,18 @@ export default function Invoicing() {
     await base44.entities.FeeLines.update(id, rest);
   }, [feeLines]);
 
-  const handleDelete = useCallback((id) => {
+  const handleDelete = useCallback(async (id) => {
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
     const { id: _id, created_date, updated_date, created_by_id, ...rest } = row;
     setFeeLines((prev) => prev.filter((r) => r.id !== id));
-    base44.entities.FeeLines.delete(id);
+    try {
+      await base44.entities.FeeLines.delete(id);
+    } catch (err) {
+      setFeeLines((prev) => [...prev, row]);
+      performAction(`Delete failed: ${err?.message || err}`, () => {}, () => {});
+      return;
+    }
     performAction("Line deleted", () => {}, async () => { const restored = await base44.entities.FeeLines.create(rest); setFeeLines((prev) => [...prev, restored]); });
     setDetailRow(null);
   }, [feeLines, performAction]);
@@ -223,12 +229,18 @@ export default function Invoicing() {
     });
   }, [feeLines, selectedIds, performAction]);
 
-  const handleDeleteSelected = useCallback(() => {
+  const handleDeleteSelected = useCallback(async () => {
     const selected = feeLines.filter((r) => selectedIds.has(r.id));
     if (!selected.length) return;
     const deletedData = selected.map((r) => { const { id, created_date, updated_date, created_by_id, ...rest } = r; return rest; });
     setFeeLines((prev) => prev.filter((r) => !selectedIds.has(r.id)));
-    Promise.all(selected.map((r) => base44.entities.FeeLines.delete(r.id)));
+    try {
+      await Promise.all(selected.map((r) => base44.entities.FeeLines.delete(r.id)));
+    } catch (err) {
+      setFeeLines((prev) => [...prev, ...selected]);
+      performAction(`Delete failed: ${err?.message || err}`, () => {}, () => {});
+      return;
+    }
     performAction(`${selected.length} lines deleted`, () => {}, async () => { const restored = await base44.entities.FeeLines.bulkCreate(deletedData); setFeeLines((prev) => [...prev, ...restored]); });
     clearSelection();
   }, [feeLines, selectedIds, performAction, clearSelection]);
