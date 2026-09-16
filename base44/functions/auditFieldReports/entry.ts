@@ -73,8 +73,10 @@ export default async function(req) {
     const reportRangeEnd = addDays(maxAuditDate, 2);
     const reportsInRange = allReports.filter((r) => r.job_date >= reportRangeStart && r.job_date <= reportRangeEnd);
 
-    // Build project groups from ALL reports in the expanded range
-    const projects = buildProjectGroups(reportsInRange);
+    // Build project groups from ALL reports (not just the audit range), so
+    // late-filed reports can clear a visit. Gabriel 2026-09-16: any report
+    // filed on the project after the visit date counts, however late.
+    const projects = buildProjectGroups(allReports);
 
     // Reports by date (for no_source_data check)
     const reportsByDate = new Map();
@@ -222,6 +224,23 @@ export default async function(req) {
         if (datePosts.length > 0) {
           dateAssignments.set(date, { posts: datePosts, offset: 2 });
           for (const p of datePosts) claimedPostIds.add(p.post_id);
+        }
+      }
+
+      // Phase 5: late-filed (offset 'late') — Gabriel 2026-09-16: any report
+      // filed on the project after the visit date clears the flag, even when
+      // it was posted days later (e.g. a Sep 15 post covering a Sep 4 visit).
+      // Claim the earliest unclaimed post date after D+2.
+      for (const date of [...eventsByDate.keys()].sort()) {
+        if (dateAssignments.has(date)) continue;
+        const laterDates = [...postsByDate.keys()].filter((d) => d > addDays(date, 2)).sort();
+        for (const ld of laterDates) {
+          const datePosts = (postsByDate.get(ld) || []).filter((p) => !claimedPostIds.has(p.post_id));
+          if (datePosts.length > 0) {
+            dateAssignments.set(date, { posts: datePosts, offset: 'late' });
+            for (const p of datePosts) claimedPostIds.add(p.post_id);
+            break;
+          }
         }
       }
 
