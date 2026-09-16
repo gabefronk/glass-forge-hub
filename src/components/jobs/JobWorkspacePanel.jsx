@@ -109,10 +109,10 @@ export default function JobWorkspacePanel({ jobId }) {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="shrink-0 px-5 pt-5 pb-4" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.card }}>
+      <div className="shrink-0 px-5 pt-6 pb-5" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.card }}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="font-heading text-[22px] font-semibold break-words leading-tight" style={{ color: C.text, letterSpacing: "-0.03em" }}>{sanitizeText(job.canonical_name)}</h2>
+            <h2 className="font-heading text-[28px] font-bold break-words leading-tight" style={{ color: C.text, letterSpacing: "-0.03em" }}>{sanitizeText(job.canonical_name)}</h2>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: status.bg, color: status.text }}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: status.text }} />
@@ -129,7 +129,7 @@ export default function JobWorkspacePanel({ jobId }) {
             </Link>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3 text-[12.5px]" style={{ color: C.textSecondary }}>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3.5 text-[13px]" style={{ color: C.textSecondary }}>
           <span className="inline-flex items-center gap-1.5 min-w-0">
             <Building2 className="h-3.5 w-3.5 shrink-0" style={{ color: C.textMuted }} />
             <span className="truncate">{sanitizeText(job.builder || "—")}</span>
