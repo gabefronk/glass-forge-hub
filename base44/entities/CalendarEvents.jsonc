@@ -81,6 +81,11 @@
       "title": "Google Event Id",
       "description": "full calendar event id"
     },
+    "google_calendar_id": {
+      "type": "string",
+      "title": "Google Calendar Id",
+      "description": "The Google Calendar this event was imported from (e.g. iryedra@gmail.com or the GF Jobs group calendar id). Lets the Calendar page toggle each Google source independently."
+    },
     "installer_event_id": {
       "type": "string",
       "title": "Installer Event Id",

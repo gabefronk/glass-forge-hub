@@ -13,6 +13,10 @@ import { reportDueAtWithGrace } from '../../shared/reportMatching.ts';
 // sourceGoogleEventId stored in extendedProperties).
 const CAL_API = 'https://www.googleapis.com/calendar/v3';
 const FULL_CAL = 'iryedra@gmail.com';
+const GF_JOBS_CAL = '0236b85aa32e6358ebe5a232e970e6c9c2c47142f8c3f22cadd5b5b0eb34bf67@group.calendar.google.com';
+// Read-only Google Calendar sources. The Israel calendar is also pushed to the
+// installer calendar; the GF Jobs calendar is display-only (never written to).
+const SOURCES = [{ id: FULL_CAL, pushToInstaller: true }, { id: GF_JOBS_CAL, pushToInstaller: false }];
 
 export default async function(req) {
   try {
@@ -32,18 +36,20 @@ export default async function(req) {
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('googlecalendar');
     const headers = { Authorization: `Bearer ${accessToken}` };
 
-    const baseUrl = `${CAL_API}/calendars/${encodeURIComponent(FULL_CAL)}/events?maxResults=100&singleEvents=true&showDeleted=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
     const allItems = [];
-    let pageToken = null;
-    do {
-      let url = baseUrl;
-      if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
-      const res = await fetch(url, { headers });
-      if (!res.ok) return Response.json({ error: 'calendar_api_error', detail: await res.text() }, { status: 502 });
-      const data = await res.json();
-      allItems.push(...(data.items || []));
-      pageToken = data.nextPageToken || null;
-    } while (pageToken);
+    for (const cal of SOURCES) {
+      const baseUrl = `${CAL_API}/calendars/${encodeURIComponent(cal.id)}/events?maxResults=100&singleEvents=true&showDeleted=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
+      let pageToken = null;
+      do {
+        let url = baseUrl;
+        if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
+        const res = await fetch(url, { headers });
+        if (!res.ok) return Response.json({ error: 'calendar_api_error', detail: await res.text() }, { status: 502 });
+        const data = await res.json();
+        for (const item of (data.items || [])) allItems.push({ ...item, _calendarId: cal.id });
+        pageToken = data.nextPageToken || null;
+      } while (pageToken);
+    }
 
     const existing = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 1000);
     const byGoogleId = new Map();
@@ -82,6 +88,7 @@ export default async function(req) {
         crew: null,
         prerequisites: null,
         google_event_id: ev.id,
+        google_calendar_id: ev._calendarId,
         installer_event_id: null,
         sanitize_flagged: false,
         created_by: ev.creator?.email || 'google',
@@ -127,9 +134,11 @@ export default async function(req) {
     // Pass { force_repush: true } to re-push all events (for repairs).
     const forceRepush = !!body.force_repush;
     const changed = (e) => { const before = byGoogleId.get(e.google_event_id); return before && ['event_date','start_time','end_time','end_date','job_name','scope_notes','address'].some(k => (before[k] ?? '') !== (e[k] ?? '')); };
-    const pushCandidates = body.pull_only ? [] : forceRepush
+    const baseCandidates = forceRepush
       ? [...createdRecords, ...toUpdate]
       : [...createdRecords, ...toUpdate.filter(e => e.source_status !== 'cancelled' && (!e.installer_event_id || changed(e)))];
+    // GF Jobs is read-only display — never push its events to the installer calendar.
+    const pushCandidates = body.pull_only ? [] : baseCandidates.filter(e => e.google_calendar_id !== GF_JOBS_CAL);
 
     const installerMap = pushCandidates.length ? await fetchInstallerEventMap(headers) : new Map();
 

@@ -2,7 +2,7 @@ import { C } from "@/lib/feeUI";
 
 const OUTLOOK_COLOR = "#7042A1";
 
-export default function SourceCoverageBar({ outlook, partialOutlook, ownership, ownershipCounts, ownershipError, loading, excludedEvents, month, user, showIsrael, setShowIsrael, showOutlook, setShowOutlook, onReload }) {
+export default function SourceCoverageBar({ outlook, partialOutlook, ownership, ownershipCounts, ownershipError, loading, excludedEvents, month, user, showIsrael, setShowIsrael, showGfJobs, setShowGfJobs, showOutlook, setShowOutlook, onReload }) {
   const monthExcluded = excludedEvents.filter((e) => e.event_date?.startsWith(month));
   const outlookAgeHours = outlook ? (Date.now() - new Date(outlook.captured_at).getTime()) / 3600000 : null;
   const isStale = outlookAgeHours != null && outlookAgeHours > 26;
@@ -61,6 +61,7 @@ export default function SourceCoverageBar({ outlook, partialOutlook, ownership, 
           {user?.role === "admin" && (
             <div className="flex flex-wrap gap-3 pt-2 border-t" style={{ borderColor: C.border }}>
               <label className="flex items-center gap-1.5"><input type="checkbox" checked={showIsrael} onChange={(e) => setShowIsrael(e.target.checked)} /> Israel calendar</label>
+              <label className="flex items-center gap-1.5"><input type="checkbox" checked={showGfJobs} onChange={(e) => setShowGfJobs(e.target.checked)} /> GF Jobs calendar</label>
               <label className="flex items-center gap-1.5" style={{ color: OUTLOOK_COLOR }}><input type="checkbox" checked={showOutlook} onChange={(e) => setShowOutlook(e.target.checked)} /> Outlook installs</label>
               <button type="button" className="underline" onClick={onReload}>Reload imports</button>
             </div>

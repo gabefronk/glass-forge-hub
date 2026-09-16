@@ -24,6 +24,7 @@ function formatMonth(m) {
 const INSTALL_COLOR = "#0B3F3B";
 const SERVICE_COLOR = "#A43432";
 const OUTLOOK_COLOR = "#7042A1";
+const GF_JOBS_CAL_ID = "0236b85aa32e6358ebe5a232e970e6c9c2c47142f8c3f22cadd5b5b0eb34bf67@group.calendar.google.com";
 
 export default function CalendarPage() {
   const [events, setEvents] = useState([]);
@@ -38,6 +39,7 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [partialOutlook, setPartialOutlook] = useState(null);
   const [showIsrael, setShowIsrael] = useState(true);
+  const [showGfJobs, setShowGfJobs] = useState(true);
   const [showOutlook, setShowOutlook] = useState(true);
   const [jobs, setJobs] = useState([]);
   const [month, setMonth] = useState(currentMonthStr);
@@ -84,8 +86,12 @@ export default function CalendarPage() {
 
   // Every group has verified tracker ownership. Choose one visible source per visit.
   const combined = useMemo(() => ({
-    events: events.map(group => group.find(event => event.source === "outlook" ? showOutlook : showIsrael)).filter(Boolean),
-  }), [events, showIsrael, showOutlook]);
+    events: events.map(group => group.find(event => {
+      if (event.source === "outlook") return showOutlook;
+      if (event.google_calendar_id === GF_JOBS_CAL_ID) return showGfJobs;
+      return showIsrael;
+    })).filter(Boolean),
+  }), [events, showIsrael, showOutlook, showGfJobs]);
   const ownershipCounts = ownership?.by_month?.[month];
   const monthEvents = useMemo(() => {
     let filtered = combined.events.filter((e) => (e.event_date || "").slice(0, 7) === month);
@@ -207,6 +213,8 @@ export default function CalendarPage() {
           user={user}
           showIsrael={showIsrael}
           setShowIsrael={setShowIsrael}
+          showGfJobs={showGfJobs}
+          setShowGfJobs={setShowGfJobs}
           showOutlook={showOutlook}
           setShowOutlook={setShowOutlook}
           onReload={load}
