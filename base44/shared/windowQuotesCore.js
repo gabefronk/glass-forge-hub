@@ -6,7 +6,7 @@ import { calculateInstall, validateInstallBudget, quoteInstallSummary } from './
 const installInput = value => { try { return validateInstallBudget(value); } catch (error) { throw new HttpError(400, error.message); } };
 
 const LEASE_MS = 10 * 60 * 1000;
-const USER_ACTIONS = new Set(["list", "detail", "create", "message", "update", "queue", "retry_failed", "convert_won", "delete", "update_install", "install_list", "install_detail", "install_save"]);
+const USER_ACTIONS = new Set(["list", "detail", "create", "message", "update", "queue", "retry_failed", "convert_won", "delete", "update_install", "install_list", "install_detail", "install_save", "pricing_overrides"]);
 const WORKER_ACTIONS = new Set(["worker_poll", "worker_update", "worker_heartbeat"]);
 const TERMINAL = new Set(["needs_details", "needs_sign_in", "failed", "ready"]);
 const PRODUCT_SETTINGS = new Set(["color", "glass", "series", "altitude", "screen", "spacer", "tempered", "options", "finish", "grid", "hardware"]);
@@ -391,6 +391,29 @@ export function createQuoteHandler({ getClient, now = () => new Date(), uuid = (
         if (own(body, "source")) patch.source = jsonValue(object(body.source, "source"), "source", 150000);
         if (!["title", "settings", "lines", "source"].some(k => own(body, k))) fail(400, "No changes supplied");
         if (Object.entries(patch).some(([key, value]) => stable(value) !== stable(q[key]))) q = await cas(q, { ...patch, ...await advanceReviewedRestart(q, q.input_revision + 1, sha256), input_revision: q.input_revision + 1, worker_status: "draft", last_worker_event_id: "", last_worker_lease_token: "", history: history(q, "edited", { schedule_changed: own(patch, "lines") && stable(patch.lines) !== stable(q.lines) }), missing_details: [] });
+        output = { quote: publicQuote(q) };
+      } else if (action === "pricing_overrides") {
+        // Presentation rates only (approved build 2026-09-16): margin and tax
+        // saved per quote without bumping input_revision or touching the
+        // worker pipeline - the pricing panel reprices from saved dealer costs.
+        let q = await getQuote(body.quote_id);
+        if (["queued", "running"].includes(q.worker_status)) fail(409, "Wait for the current quote run before changing pricing rates");
+        const settings = { ...(q.settings || {}) };
+        let supplied = false;
+        if (own(body, "gross_margin")) {
+          supplied = true;
+          const margin = body.gross_margin;
+          if (typeof margin !== "number" || !Number.isFinite(margin) || margin < 0 || margin >= 100) fail(400, "Gross margin must be a number from 0 to less than 100");
+          settings.gross_margin = margin;
+        }
+        if (own(body, "tax_pct")) {
+          supplied = true;
+          const tax = body.tax_pct;
+          if (typeof tax !== "number" || !Number.isFinite(tax) || tax < 0 || tax > 25) fail(400, "Tax rate must be a number from 0 to 25");
+          settings.tax_pct = tax;
+        }
+        if (!supplied) fail(400, "No changes supplied");
+        if (stable(settings) !== stable(q.settings || {})) q = await cas(q, { settings, history: history(q, "pricing_overrides") });
         output = { quote: publicQuote(q) };
       } else if (action === "retry_failed") {
         if (!executionService || executionService.provider !== 'deterministic') fail(409, 'Reviewed retries are unavailable for this quoting service');
