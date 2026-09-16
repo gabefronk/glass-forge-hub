@@ -106,12 +106,28 @@ export default async function(req) {
     const windowEndMs = new Date(endStr + 'T23:59:59Z').getTime();
     const { qualifying, stats: projectStats } = filterProjectsByWindow(projectEntries, windowStartMs, windowEndMs);
 
-    // 3. Fetch posts per qualifying project (parallel)
-    const postResults = await Promise.all(qualifying.map(async (p) => {
-      const posts = await fetchProbuildPostsForProject(idToken, p.id);
-      return posts.map(post => ({ ...post, projectName: p.name || p.title || '' }));
-    }));
-    const allPosts = postResults.flat();
+    // 3. Fetch posts per qualifying project (pooled).
+    // A handful of projects carry very large post histories; fetching every
+    // qualifying project concurrently spiked worker memory and killed
+    // month-wide runs (500s on any window covering 2026-09-01..09-04).
+    // Fetch at most POOL projects at a time, and degrade a single failing
+    // project to an error entry instead of killing the whole run.
+    const POOL = 5;
+    const allPosts = [];
+    const projectErrors = [];
+    for (let i = 0; i < qualifying.length; i += POOL) {
+      const batch = qualifying.slice(i, i + POOL);
+      const results = await Promise.all(batch.map(async (p) => {
+        try {
+          const posts = await fetchProbuildPostsForProject(idToken, p.id);
+          return posts.map(post => ({ ...post, projectName: p.name || p.title || '' }));
+        } catch (e) {
+          projectErrors.push({ project_id: p.id, project_name: p.name || p.title || '', error: String((e && e.message) || e).slice(0, 200) });
+          return [];
+        }
+      }));
+      for (const r of results) allPosts.push(...r);
+    }
 
     // 4. Filter posts by Denver-derived job_date within window
     const inWindowPosts = [];
@@ -288,6 +304,7 @@ export default async function(req) {
       project_scan: projectStats,
       projects_qualifying: qualifying.length,
       posts_fetched: allPosts.length,
+      project_errors: projectErrors,
       posts_in_window: inWindowPosts.length,
       created: toCreate.length,
       updated: toUpdate.length,
