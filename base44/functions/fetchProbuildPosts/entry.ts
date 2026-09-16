@@ -119,7 +119,7 @@ export default async function(req) {
       const batch = qualifying.slice(i, i + POOL);
       const results = await Promise.all(batch.map(async (p) => {
         try {
-          const posts = await fetchProbuildPostsForProject(idToken, p.id);
+          const posts = await fetchProbuildPostsForProject(idToken, p.id, { startStr, endStr });
           return posts.map(post => ({ ...post, projectName: p.name || p.title || '' }));
         } catch (e) {
           projectErrors.push({ project_id: p.id, project_name: p.name || p.title || '', error: String((e && e.message) || e).slice(0, 200) });
