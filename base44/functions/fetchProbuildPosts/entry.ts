@@ -148,6 +148,8 @@ export default async function(req) {
     for (const r of existingReports) if (r.post_id) reportByPostId.set(r.post_id, r);
     const frToCreate = [];
     const frToUpdate = [];
+    let frSkippedExisting = 0;
+    let frPhotosFilled = 0;
     const photoUrlByPost = new Map();
     for (const { b, normName, m } of matched) {
       const post = b.post;
@@ -174,7 +176,16 @@ export default async function(req) {
         man_hours: ext.man_hours != null ? Number(ext.man_hours) : null,
         trip_charges: ext.trip_charges != null ? Number(ext.trip_charges) : null,
       };
-      if (exRep) frToUpdate.push({ id: exRep.id, ...reportRow });
+      if (exRep) {
+        // Append-only (Gabriel 2026-09-15): never overwrite an existing field report.
+        // The only permitted write is additive: fill photo_urls when the report has none.
+        if (!(exRep.photo_urls || []).length && photoUrls.length) {
+          frToUpdate.push({ id: exRep.id, photo_urls: photoUrls });
+          frPhotosFilled++;
+        } else {
+          frSkippedExisting++;
+        }
+      }
       else frToCreate.push(reportRow);
     }
     if (frToCreate.length) await base44.asServiceRole.entities.FieldReports.bulkCreate(frToCreate);
@@ -191,6 +202,7 @@ export default async function(req) {
     const toUpdate = [];
     let skipped = 0;
     let merged_count = 0;
+    let feePhotosFilled = 0;
     const flagged = [];
     const phillipGrover = [];
     for (const { b, normName, m } of matched) {
@@ -234,38 +246,29 @@ export default async function(req) {
       row.fee_amt = computeFeeAmt(row);
       const ex = existingByPostId.get(b.postId);
       if (ex) {
-        if (ex.manually_adjusted || ex.billed_to_bfs || lockedMonths.has(ex.invoice_month)) { skipped++; continue; }
-        // Update report-derived fields without overwriting calendar identity or billing date.
-        const combined = { ...ex, ...row, fee_pct: ex.fee_pct ?? row.fee_pct, billable: ex.billable ?? row.billable };
-        if (!(row.photo_urls || []).length && (ex.photo_urls || []).length) combined.photo_urls = ex.photo_urls;
-        if (ex.calendar_event_id) {
-          for (const key of ['job_date','invoice_month','job_name_raw','job_name_norm','calendar_event_id','calendar_labor_amt','calendar_note_text','calendar_creator','calendar_organizer','po_number','oe_number','fee_type','sale_price','cost','split_pct','ticket_sequence']) combined[key] = ex[key];
-          combined.source = 'both';
-          combined.note_text = [ex.calendar_note_text || '', 'ProBuild:\n' + row.note_text].filter(Boolean).join('\n\n');
-          if (ex.pricing_review_reason) combined.pricing_review_reason = ex.pricing_review_reason;
+        // Append-only (Gabriel 2026-09-15): an existing fee line is never overwritten.
+        // Only permitted write: additive photo_urls fill when the line has none.
+        if (!(ex.photo_urls || []).length && (row.photo_urls || []).length) {
+          toUpdate.push({ id: ex.id, photo_urls: row.photo_urls });
+          feePhotosFilled++;
+        } else {
+          skipped++;
         }
-        combined.needs_review = !!combined.pricing_review_reason || !!row.needs_review;
-        combined.labor_amt = computeLaborAmt(combined); combined.fee_amt = computeFeeAmt(combined);
-        const merged = mergeReviewFlags(ex, combined);
-        const { id, created_date, updated_date, created_by_id, ...patch } = combined;
-        toUpdate.push({ id: ex.id, ...patch, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
+        continue;
       } else {
         if (lockedMonths.has(row.invoice_month)) { skipped++; continue; }
         const calRow = findCalendarRowToMerge(existingFees.filter(f => !lockedMonths.has(f.invoice_month)), jobId, b.jobDate);
         if (calRow) {
+          // Append-only (Gabriel 2026-09-15): a matching calendar row is already tracked
+          // history - never overwrite it, and never create a duplicate billing line.
+          // Only permitted write: additive photo_urls fill when the line has none.
           calRow._mergeReserved = true;
-          const mergedRow = { ...calRow };
-          for (const key of ['man_hours','trip_charges','probuild_post_id','probuild_project_id','probuild_note_text','probuild_job_date','photo_urls','service_material','service_rate','service_labor_amount','service_trip_amount','service_total','service_calculation_source','service_review_status','pricing_review_reason']) mergedRow[key] = row[key];
-          if (!(row.photo_urls || []).length && (calRow.photo_urls || []).length) mergedRow.photo_urls = calRow.photo_urls;
-          mergedRow.source = 'both';
-          mergedRow.calendar_note_text = calRow.calendar_note_text || calRow.note_text || '';
-          mergedRow.note_text = [mergedRow.calendar_note_text, 'ProBuild:\n' + row.note_text].filter(Boolean).join('\n\n');
-          mergedRow.needs_review = !!row.needs_review || !!calRow.pricing_review_reason;
-          mergedRow.labor_amt = computeLaborAmt(mergedRow);
-          mergedRow.fee_amt = computeFeeAmt(mergedRow);
-          const merged = mergeReviewFlags(calRow, mergedRow);
-          const { id, created_date, updated_date, created_by_id, _mergeReserved, ...patch } = mergedRow;
-          toUpdate.push({ id: calRow.id, ...patch, needs_review: merged.needs_review, match_confidence: merged.match_confidence });
+          if (!(calRow.photo_urls || []).length && (row.photo_urls || []).length) {
+            toUpdate.push({ id: calRow.id, photo_urls: row.photo_urls });
+            feePhotosFilled++;
+          } else {
+            skipped++;
+          }
           merged_count++;
         } else {
           toCreate.push(row);
@@ -288,6 +291,10 @@ export default async function(req) {
       posts_in_window: inWindowPosts.length,
       created: toCreate.length,
       updated: toUpdate.length,
+      append_only: true,
+      fr_skipped_existing: frSkippedExisting,
+      fr_photos_filled: frPhotosFilled,
+      fee_photos_filled: feePhotosFilled,
       merged_into_calendar: merged_count,
       skipped_manually_adjusted: skipped,
       auto_created_jobs: autoCreateNames,
@@ -298,3 +305,4 @@ export default async function(req) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
+
