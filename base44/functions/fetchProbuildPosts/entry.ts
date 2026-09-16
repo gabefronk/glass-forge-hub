@@ -37,11 +37,39 @@ async function downloadAttachment(idToken, projectId, postId, attachmentId, atta
   const generation = String(attachment?.generation || '');
   const path = `teams/${TEAM_ID}/posts/${projectId}/${postId}/attachments/${attachmentId}`;
   const url = STORAGE_BUCKET + encodeURIComponent(path) + '?alt=media' + (generation ? '&generation=' + encodeURIComponent(generation) : '');
+  // Size guard: a giant attachment (e.g. a long video) buffered whole OOMs the
+  // worker - this killed every pull whose window covered 2026-09-01..09-04 even
+  // with chunked post fetching. Skip anything over the cap; archiving is
+  // best-effort and a skipped file must never fail the pull.
+  const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+  const head = await fetch(url, { method: 'HEAD', headers: { Authorization: 'Firebase ' + idToken } }).catch(() => null);
+  if (head && head.ok) {
+    const len = Number(head.headers.get('content-length') || 0);
+    if (len > MAX_ATTACHMENT_BYTES) return null;
+  }
   const res = await fetch(url, { headers: { Authorization: 'Firebase ' + idToken } });
   if (!res.ok) return null;
   const mime = res.headers.get('content-type') || attachment?.mimeType || 'image/jpeg';
   if (/text\/html|application\/json/.test(mime)) return null;
-  const buf = await res.arrayBuffer();
+  let buf;
+  const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+  if (reader) {
+    const chunks = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_ATTACHMENT_BYTES) { await reader.cancel().catch(() => {}); return null; }
+      chunks.push(value);
+    }
+    buf = new Uint8Array(total);
+    let off = 0;
+    for (const c of chunks) { buf.set(c, off); off += c.byteLength; }
+  } else {
+    buf = await res.arrayBuffer();
+    if (buf.byteLength > MAX_ATTACHMENT_BYTES) return null;
+  }
   if (!buf.byteLength) return null;
   const name = attachment?.fileMetadata?.name || `${attachmentId}.${mime.includes('png') ? 'png' : 'jpg'}`;
   return { buf, mime, name };
