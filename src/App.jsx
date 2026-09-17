@@ -32,7 +32,14 @@ import ReportsRedirect from '@/components/ReportsRedirect';
 import SystemMap from "@/pages/SystemMap";
 import ResearchQueue from "@/pages/ResearchQueue";
 import Todos from '@/pages/Todos';
+import { isWindowQuotesOnly } from '@/lib/agentCenterAccess';
 // Add page imports here
+
+const QuotesOnlyRedirect = ({ children }) => {
+  const { user } = useAuth();
+  if (isWindowQuotesOnly(user)) return <Navigate to="/window-quotes" replace />;
+  return children;
+};
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -67,24 +74,24 @@ const AuthenticatedApp = () => {
       <Route path="/oauth/consent" element={<OAuthConsent />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
-          <Route path="/" element={<Invoicing />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/todos" element={<Todos />} />
+          <Route path="/" element={<QuotesOnlyRedirect><Invoicing /></QuotesOnlyRedirect>} />
+          <Route path="/calendar" element={<QuotesOnlyRedirect><CalendarPage /></QuotesOnlyRedirect>} />
+          <Route path="/dashboard" element={<QuotesOnlyRedirect><Dashboard /></QuotesOnlyRedirect>} />
+          <Route path="/todos" element={<QuotesOnlyRedirect><Todos /></QuotesOnlyRedirect>} />
           <Route path="/window-quotes" element={<WindowQuotes />} />
-          <Route path="/sales-tracker" element={<SalesTracker />} />
-          <Route path="/admin/agents" element={<AdminAgentCenter />} />
-          <Route path="/system-map" element={<SystemMap />} />
-          <Route path="/admin/probuild-daily" element={<ProbuildDailyPreview />} />
-          <Route path="/messages" element={<MessagesInbox />} />
-          <Route path="/contacts" element={<ContactsDirectory />} />
-          <Route path="/reports" element={<ReportsRedirect />} />
-          <Route path="/report-library" element={<ReportLibraryRedirect />} />
-          <Route path="/jobs" element={<JobsHub />} />
-          <Route path="/jobs/:id" element={<JobDetail />} />
-          <Route path="/match-debug" element={<MatchDebug />} />
-          <Route path="/brands-specs" element={<BrandsSpecs />} />
-          <Route path="/research-queue" element={<ResearchQueue />} />
+          <Route path="/sales-tracker" element={<QuotesOnlyRedirect><SalesTracker /></QuotesOnlyRedirect>} />
+          <Route path="/admin/agents" element={<QuotesOnlyRedirect><AdminAgentCenter /></QuotesOnlyRedirect>} />
+          <Route path="/system-map" element={<QuotesOnlyRedirect><SystemMap /></QuotesOnlyRedirect>} />
+          <Route path="/admin/probuild-daily" element={<QuotesOnlyRedirect><ProbuildDailyPreview /></QuotesOnlyRedirect>} />
+          <Route path="/messages" element={<QuotesOnlyRedirect><MessagesInbox /></QuotesOnlyRedirect>} />
+          <Route path="/contacts" element={<QuotesOnlyRedirect><ContactsDirectory /></QuotesOnlyRedirect>} />
+          <Route path="/reports" element={<QuotesOnlyRedirect><ReportsRedirect /></QuotesOnlyRedirect>} />
+          <Route path="/report-library" element={<QuotesOnlyRedirect><ReportLibraryRedirect /></QuotesOnlyRedirect>} />
+          <Route path="/jobs" element={<QuotesOnlyRedirect><JobsHub /></QuotesOnlyRedirect>} />
+          <Route path="/jobs/:id" element={<QuotesOnlyRedirect><JobDetail /></QuotesOnlyRedirect>} />
+          <Route path="/match-debug" element={<QuotesOnlyRedirect><MatchDebug /></QuotesOnlyRedirect>} />
+          <Route path="/brands-specs" element={<QuotesOnlyRedirect><BrandsSpecs /></QuotesOnlyRedirect>} />
+          <Route path="/research-queue" element={<QuotesOnlyRedirect><ResearchQueue /></QuotesOnlyRedirect>} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
