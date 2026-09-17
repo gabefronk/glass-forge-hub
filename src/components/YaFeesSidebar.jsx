@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { Bot, MessageSquare, Users, Network, Search, CheckSquare } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
@@ -56,6 +56,8 @@ export default function YaFeesSidebar() {
   useEffect(() => {
     (async () => {
       try {
+        const me = await base44.auth.me();
+        if (isWindowQuotesOnly(me)) { setUnbilled({ total: 0, count: 0 }); return; }
         const month = currentMonthStr();
         const [rows, calEvents] = await Promise.all([
           base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000),
@@ -91,7 +93,7 @@ export default function YaFeesSidebar() {
 
       {/* Nav */}
       <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-3 space-y-0.5 overflow-y-auto obsidian-scroll">
-        {NAV_ITEMS.filter(item => (!item.ownerOnly || isAgentCenterOwner(user)) && (!item.todoOnly || todoAccess)).map((item) => {
+        {NAV_ITEMS.filter(item => (!item.ownerOnly || isAgentCenterOwner(user)) && (!item.todoOnly || todoAccess) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes")).map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"));
           return (
@@ -171,7 +173,7 @@ export default function YaFeesSidebar() {
       </nav>
 
       {/* Unbilled mini card */}
-      <div className="px-3 pb-3">
+      {!isWindowQuotesOnly(user) && <div className="px-3 pb-3">
         <div className="rounded-xl px-3.5 py-3" style={{ backgroundColor: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)" }}>
           <div className="text-[11px] font-medium mb-1.5" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.01em" }}>Ready to bill · {monthLabel(currentMonthStr())}</div>
           <div className="flex flex-wrap items-baseline gap-1.5 break-all">
@@ -183,7 +185,7 @@ export default function YaFeesSidebar() {
             </span>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* User chip */}
       <div className="px-3 pb-4">
