@@ -107,6 +107,19 @@ export function formatShort(dateStr) {
   return new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// "Added" timestamp for job list rows: time of day when the job was added
+// today (Denver), otherwise a short date. Mirrors ProBuild's job list.
+export function addedTimestamp(createdDate) {
+  if (!createdDate) return "";
+  const denverFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit" });
+  const todayDenver = denverFmt.format(new Date());
+  const createdDenver = denverFmt.format(new Date(createdDate));
+  if (createdDenver === todayDenver) {
+    return new Date(createdDate).toLocaleTimeString("en-US", { timeZone: "America/Denver", hour: "numeric", minute: "2-digit" });
+  }
+  return formatShort(createdDenver);
+}
+
 export function jobTotals(rows) {
   const labor = rows.reduce((s, r) => s + (Number(r.labor_amt) || 0), 0);
   const fee = rows.reduce((s, r) => s + (Number(r.fee_amt) || 0), 0);

@@ -1,6 +1,5 @@
-import { formatShort } from "@/lib/feeUI";
+import { addedTimestamp, C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
-import { C } from "@/lib/feeUI";
 
 // Refined light row for the desktop job browser: flush, hairline-divided,
 // 3px left accent when selected, status dot + label, last-visit date.
@@ -22,7 +21,7 @@ export default function JobBrowserRow({ job, stats, selected, onSelect }) {
         </div>
       </div>
       <div className="text-right shrink-0">
-        <div className="font-mono-num text-[11px] whitespace-nowrap" style={{ color: C.textMuted }}>{st?.lastReport ? formatShort(st.lastReport) : "—"}</div>
+        <div className="font-mono-num text-[11px] whitespace-nowrap" style={{ color: C.textMuted }}>{addedTimestamp(job.created_date)}</div>
         <div className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] mt-0.5" style={{ color: st?.text || C.textMuted }}>{st?.label}</div>
       </div>
     </button>

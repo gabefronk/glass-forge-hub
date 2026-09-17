@@ -3,9 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
-import { C, formatShort } from "@/lib/feeUI";
+import { C, addedTimestamp } from "@/lib/feeUI";
 import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
-import { refsLabel } from "@/components/jobs/JobListRow";
 import JobBrowserRow from "@/components/jobs/JobBrowserRow";
 import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
 import ProbuildReports from "@/pages/ProbuildReports";
@@ -102,12 +101,7 @@ export default function JobsHub() {
     if (segment === "active") base = base.filter(j => ["active", "needs_report"].includes(jobStats[j.id]?.status.key));
     if (segment === "complete") base = base.filter(j => jobStats[j.id]?.status.key === "complete");
     if (segment === "needs_report") base = base.filter(j => jobStats[j.id]?.status.key === "needs_report");
-    return [...base].sort((a, b) => {
-      const da = jobStats[a.id]?.lastReport || "";
-      const db = jobStats[b.id]?.lastReport || "";
-      if (da !== db) return db.localeCompare(da);
-      return (b.created_date || "").localeCompare(a.created_date || "");
-    });
+    return [...base].sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""));
   }, [jobs, search, segment, jobStats]);
 
   // Auto-select the first visible job for the desktop workspace.
@@ -230,27 +224,28 @@ export default function JobsHub() {
 
       {/* Mobile/tablet card list + detail navigation */}
       <div className="xl:hidden px-[18px] pt-4 pb-10">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-2.5">
           {visibleJobs.map((job) => {
             const stats = jobStats[job.id];
-            const refs = refsLabel(job.po_numbers || [], job.oe_numbers || []);
             return (
-              <Link key={job.id} to={`/jobs/${job.id}`} className="block rounded-[14px] p-4 transition-colors hover:bg-[#F6F3EC]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-                <div className="text-[15px] font-bold break-words" style={{ color: C.text }}>{sanitizeText(job.canonical_name)}</div>
-                <div className="text-[11px] break-words mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${sanitizeText(job.builder)} · ` : ""}{sanitizeText(job.address || "")}</div>
-                <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                  <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, border: `1px solid ${stats?.status.border || C.border}`, color: stats?.status.text }}>{stats?.status.label}</span>
-                  {stats?.lastReport && <span className="text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>Last {formatShort(stats.lastReport)}</span>}
-                  {refs && <span className="max-w-full break-all text-[9px] tracking-[0.01em] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.mutedBg, border: `1px solid ${C.border}`, color: C.textSecondary }}>{refs}</span>}
+              <Link key={job.id} to={`/jobs/${job.id}`} className="flex items-center gap-3 rounded-[14px] p-4 transition-colors hover:bg-[#F6F3EC]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stats?.status.text || C.textFaint }} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-bold break-words" style={{ color: C.text }}>{sanitizeText(job.canonical_name)}</div>
+                  <div className="text-[12px] break-words mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${sanitizeText(job.builder)} · ` : ""}{sanitizeText(job.address || "")}</div>
+                  <span className="inline-block mt-2 text-[10px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, border: `1px solid ${stats?.status.border || C.border}`, color: stats?.status.text }}>{stats?.status.label}</span>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textSecondary }}>{addedTimestamp(job.created_date)}</div>
                 </div>
               </Link>
             );
           })}
           {!visibleJobs.length && (
-            <div className="col-span-full py-10 text-center text-[13px] break-words" style={{ color: C.textMuted }}>No jobs match "{search}".</div>
+            <div className="py-10 text-center text-[13px] break-words" style={{ color: C.textMuted }}>No jobs match "{search}".</div>
           )}
           {filtered.length > visibleCount && (
-            <div className="col-span-full pt-2 text-center">
+            <div className="pt-2 text-center">
               <button onClick={() => setVisibleCount(c => c + 20)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
             </div>
           )}
