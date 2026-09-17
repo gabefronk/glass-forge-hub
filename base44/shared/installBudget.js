@@ -1,6 +1,8 @@
 import { INSTALL_CATALOG } from './installCatalog.js';
 
 export { INSTALL_CATALOG };
+export const INSTALL_TRIP_MINIMUM = 275;
+export const INSTALL_TRIP_NOTE = 'Minimum $275 for the trip out for the job.';
 export const INSTALL_DEFAULTS = Object.freeze({ enabled: false, material: 'vinyl', method: 'standard', selections: {}, extras: [], finance: { tax_rate: 7.45, material_margin: 30, labor_margin: 27, labor_mode: 'rates', overhead_mode: 'workbook', product_cost: null, extra_material: 0, equipment: 0 } });
 const object = v => v && typeof v === 'object' && !Array.isArray(v);
 const present = v => v !== undefined && v !== null && v !== '';
@@ -142,6 +144,10 @@ export function calculateInstall(lines = [], raw = INSTALL_DEFAULTS, context = {
   out.complete = !out.issues.length;
   if (!out.complete) { out.cost = null; out.sell = null; out.rate_sell = null; return out; }
   out.cost = roundMoney(out.cost); out.sell = roundMoney(out.sell); out.rate_sell = roundMoney(out.rate_sell);
+  if (out.sell > 0 && out.sell < INSTALL_TRIP_MINIMUM) {
+    out.trip_minimum = { minimum: INSTALL_TRIP_MINIMUM, sale_before_minimum: out.sell, added: roundMoney(INSTALL_TRIP_MINIMUM - out.sell), note: INSTALL_TRIP_NOTE };
+    out.sell = INSTALL_TRIP_MINIMUM;
+  }
   out.margin = out.sell ? (out.sell - out.cost) / out.sell : null;
   const f = config.finance;
   const productCost = f.product_cost ?? (numeric(context.product_cost) ? Number(context.product_cost) : null);
@@ -171,3 +177,4 @@ export function quoteInstallSummary(quote) {
   const totals = quote?.result?.totals || {};
   return calculateInstall(quote?.lines || [], quote?.install_budget || INSTALL_DEFAULTS, { linked: true, settings: quote?.settings, product_cost: totals.dealer_total ?? totals.dealer_cost, product_sell: quote?.worker_status === 'ready' && quote?.result?.verified === true ? totals.total ?? totals.customer_total : null });
 }
+
