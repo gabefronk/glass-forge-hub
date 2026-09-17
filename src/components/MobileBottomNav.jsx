@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Bot, X } from "lucide-react";
-import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { MessageSquare, Users, Network, CheckSquare } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 
@@ -31,8 +31,11 @@ export default function MobileBottomNav({ user }) {
 
   const isPrimaryActive = (to) => pathname === to || (to === "/jobs" && pathname.startsWith("/jobs/"));
   const isSecondaryActive = (to) => pathname === to;
-  const visibleSecondary = SECONDARY_NAV.filter((s) => !s.ownerOnly || isAgentCenterOwner(user));
+  const quotesOnly = isWindowQuotesOnly(user);
+  const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV.filter(item => !item.todoOnly || todoAccess);
+  const visibleSecondary = quotesOnly ? [] : SECONDARY_NAV.filter((s) => !s.ownerOnly || isAgentCenterOwner(user));
   const moreActive = pathname === "/admin/agents" || visibleSecondary.some((s) => isSecondaryActive(s.to));
+  const showMore = visibleSecondary.length > 0 || canViewAgentCenter(user);
 
   const navItemStyle = (active) => ({
     backgroundColor: active ? "#2A3A35" : "transparent",
@@ -101,7 +104,7 @@ export default function MobileBottomNav({ user }) {
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        {PRIMARY_NAV.filter(item => !item.todoOnly || todoAccess).map((item) => {
+        {visiblePrimary.map((item) => {
           const Icon = item.icon;
           const active = isPrimaryActive(item.to);
           return (
@@ -114,13 +117,13 @@ export default function MobileBottomNav({ user }) {
             </Link>
           );
         })}
-        <button onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen} aria-label="More navigation" aria-current={moreActive ? "page" : undefined}
+        {showMore && <button onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen} aria-label="More navigation" aria-current={moreActive ? "page" : undefined}
           className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1" style={{ minHeight: "44px", background: "none", border: "none", cursor: "pointer" }}>
           <MoreHorizontal className="h-5 w-5" style={{ color: moreActive ? "#146556" : "#8A958F" }} />
           <span className="text-[12px] font-medium whitespace-nowrap" style={{ color: moreActive ? "#E8EAE5" : "#8A958F" }}>
             More
           </span>
-        </button>
+        </button>}
       </nav>
     </>
   );
