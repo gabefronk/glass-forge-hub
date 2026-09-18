@@ -133,8 +133,21 @@ function StatusDot({ label, dot, text, onClick, clickable }) {
 export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, editRequested, onEditRequestHandled }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuUp, setMenuUp] = useState(false);
   const [editing, setEditing] = useState(false);
   const menuRef = useRef(null);
+  const menuRefMobile = useRef(null);
+
+  // Flip the menu upward when the trigger sits near the bottom of the viewport,
+  // otherwise the popover renders off-screen (clipped at the page bottom).
+  const toggleMenu = (e) => {
+    e.stopPropagation();
+    if (!menuOpen) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setMenuUp(window.innerHeight - rect.bottom < 300);
+    }
+    setMenuOpen(!menuOpen);
+  };
 
   // The details drawer's Edit button asks the row to open its inline editor.
   useEffect(() => {
@@ -145,7 +158,11 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
   useEffect(() => {
     if (!menuOpen) return;
-    const handler = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
+    const handler = (e) => {
+      const inDesktop = menuRef.current && menuRef.current.contains(e.target);
+      const inMobile = menuRefMobile.current && menuRefMobile.current.contains(e.target);
+      if (!inDesktop && !inMobile) setMenuOpen(false);
+    };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
@@ -282,7 +299,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
         <div data-no-open ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
             data-no-open
-            onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+            onClick={toggleMenu}
             aria-label="Invoice line actions"
             aria-expanded={menuOpen}
             style={{ width: "28px", height: "28px", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "var(--gf-ink-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -290,7 +307,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
             <MoreHorizontal style={{ width: "16px", height: "16px" }} />
           </button>
           {menuOpen && (
-            <div style={{ position: "absolute", right: 0, top: "100%", zIndex: 30, backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "var(--shadow-float)" }}>
+            <div style={{ position: "absolute", right: 0, ...(menuUp ? { bottom: "100%", marginBottom: "4px" } : { top: "100%" }), zIndex: 30, backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "var(--shadow-float)" }}>
               <MenuItem icon={ExternalLink} label="Open details" onClick={() => { onOpenDetails(row); setMenuOpen(false); }} />
               <MenuItem icon={Pencil} label="Edit line" onClick={() => { setEditing(true); setMenuOpen(false); }} />
               {row.job_id && <MenuItem icon={ExternalLink} label="Open job ↗" onClick={() => { navigate(`/jobs/${row.job_id}`); setMenuOpen(false); }} />}
@@ -360,10 +377,10 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           </div>
 
           {/* Menu */}
-          <div data-no-open ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
+          <div data-no-open ref={menuRefMobile} style={{ position: "relative", flexShrink: 0 }}>
             <button
               data-no-open
-              onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+              onClick={toggleMenu}
               aria-label="Invoice line actions"
               aria-expanded={menuOpen}
               style={{ width: "36px", height: "36px", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "var(--gf-ink-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -371,7 +388,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
               <MoreHorizontal style={{ width: "18px", height: "18px" }} />
             </button>
             {menuOpen && (
-              <div style={{ position: "absolute", right: 0, top: "100%", zIndex: 30, backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "var(--shadow-float)" }}>
+              <div style={{ position: "absolute", right: 0, ...(menuUp ? { bottom: "100%", marginBottom: "4px" } : { top: "100%" }), zIndex: 30, backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "var(--shadow-float)" }}>
                 <MenuItem icon={ExternalLink} label="Open details" onClick={() => { onOpenDetails(row); setMenuOpen(false); }} />
                 <MenuItem icon={Pencil} label="Edit line" onClick={() => { setEditing(true); setMenuOpen(false); }} />
                 {row.job_id && <MenuItem icon={ExternalLink} label="Open job ↗" onClick={() => { navigate(`/jobs/${row.job_id}`); setMenuOpen(false); }} />}
