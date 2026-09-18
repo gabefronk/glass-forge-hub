@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { Search, RefreshCw, Play, Pause, Ban, ChevronDown, ChevronRight, LockKeyhole, FlaskConical, AlertCircle, CheckCircle2, Clock3 } from "lucide-react";
+import { RefreshCw, Play, Pause, Ban, ChevronDown, ChevronRight, LockKeyhole, FlaskConical, AlertCircle, CheckCircle2, Clock3 } from "lucide-react";
 
 const STATUS_TONE = {
   queued: { bg: "var(--gf-tile-slate)", ink: "var(--gf-tile-slate-ink)", label: "Queued" },

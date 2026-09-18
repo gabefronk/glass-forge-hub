@@ -33,11 +33,17 @@ export default function MatchDebug() {
     base44.auth.me().then((me) => { if (me) setUser(me); }).catch(() => {});
   }, []);
 
+  const [error, setError] = useState("");
+  // functions.invoke resolves to { data, ... }; the function body (and any `error`) is in .data.
   const load = async () => {
     setLoading(true);
     try {
       const result = await base44.functions.invoke("matchDebug", { start_date: startDate, end_date: endDate });
-      setData(result);
+      if (result?.data?.error) throw new Error(result.data.error);
+      setData(result?.data || null);
+      setError("");
+    } catch (e) {
+      setError("Match data could not load. " + (e?.response?.data?.error || e?.message || ""));
     } finally {
       setLoading(false);
     }
@@ -56,8 +62,11 @@ export default function MatchDebug() {
         end_date: endDate,
         force: true,
       });
-      setRerunResult(result);
+      if (result?.data?.error) throw new Error(result.data.error);
+      setRerunResult(result?.data || null);
       await load();
+    } catch (e) {
+      setError("Re-run failed. " + (e?.response?.data?.error || e?.message || ""));
     } finally {
       setRerunLoading(false);
     }
@@ -101,6 +110,8 @@ export default function MatchDebug() {
           </div>
         </div>
 
+        {error && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-[13px] text-red-700 break-words">{error}</p>}
+
         {/* Re-run result */}
         {rerunResult && (
           <div className="rounded-[14px] px-4 py-3 mb-4" style={{ backgroundColor: "#E7EEFA", border: `1px solid #C3D4EE` }}>
@@ -131,9 +142,9 @@ export default function MatchDebug() {
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-              <ScanCard label="Offset -1 (day before)" value={data.offset_distribution['-1'] || 0} valueColor={C.amber} />
-              <ScanCard label="Offset 0 (exact)" value={data.offset_distribution['0'] || 0} valueColor={C.accent} />
-              <ScanCard label="Offset +1 (next day)" value={data.offset_distribution['1'] || 0} valueColor={C.accent} />
+              <ScanCard label="Offset -1 (day before)" value={data.offset_distribution?.['-1'] || 0} valueColor={C.amber} />
+              <ScanCard label="Offset 0 (exact)" value={data.offset_distribution?.['0'] || 0} valueColor={C.accent} />
+              <ScanCard label="Offset +1 (next day)" value={data.offset_distribution?.['1'] || 0} valueColor={C.accent} />
             </div>
           </>
         )}

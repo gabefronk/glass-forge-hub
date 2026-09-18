@@ -3,9 +3,11 @@ import { denverDate } from "../../base44/shared/billingCore.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { formatMoney } from "@/lib/feeMath";
+import { formatMoney, withComputedAmounts } from "@/lib/feeMath";
+import { buildSupersededSet, isReady, withCompanions } from "@/lib/invoicingFilters";
 import { C } from "@/lib/feeUI";
 import { useTodoAccess } from "@/hooks/use-todo-access";
+import { dueState, laneKey, laneLabel, sortByUrgency } from "@/lib/todoBoard";
 import { Download, Plus, Check, ListTodo } from "lucide-react";
 import OutstandingReports from "@/components/dashboard/OutstandingReports";
 import ComplianceSettings from "@/components/dashboard/ComplianceSettings";
@@ -50,6 +52,7 @@ function crewForEvent(ev) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [calendarError, setCalendarError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [profits, setProfits] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
@@ -79,28 +82,56 @@ export default function Dashboard() {
       // The run sheet is operational only: the reconciliation function returns
       // sales-tracker-verified jobs and leaves unmatched source events in review.
       setCalendarError(reconciliation?.data?.error || "");
-      setUnmatchedEvents(Array.isArray(reconciliation?.data?.excluded_events) ? reconciliation.data.excluded_events : []);
+      // Groups include unverified events (ownership: null) as their own groups; admins also get
+      // them again as excluded_events. Split on ownership so each event appears exactly once:
+      // verified visits on the run sheet, unverified ones in the review list (for every role).
       const allEvents = (reconciliation?.data?.groups || []).map(group => group[0]).filter(Boolean);
+      const verified = allEvents.filter((e) => e.ownership);
+      setUnmatchedEvents(allEvents.filter((e) => !e.ownership));
       setReportStatusMap(new Map(calSource.filter(e => e.google_event_id).map(e => [e.google_event_id, e.report_status])));
       setProfits(Array.isArray(mp) ? mp : []);
-      setAllCalendarEvents(Array.isArray(allEvents) ? allEvents : []);
-      setTodayEvents((Array.isArray(allEvents) ? allEvents : []).filter((e) => (e.event_date || "").slice(0, 10) === today));
-      setTomorrowEvents((Array.isArray(allEvents) ? allEvents : []).filter((e) => (e.event_date || "").slice(0, 10) === tomorrow));
-      setFeeLines(Array.isArray(fl) ? fl : []);
+      setAllCalendarEvents(allEvents);
+      setTodayEvents(verified.filter((e) => (e.event_date || "").slice(0, 10) === today));
+      setTomorrowEvents(allEvents.filter((e) => (e.event_date || "").slice(0, 10) === tomorrow));
+      // Same display rows as Invoicing (companion lines resolved) so the totals agree.
+      setFeeLines(withCompanions(withComputedAmounts(fl), calSource));
       if (me) setUser(me);
       if (Array.isArray(settings) && settings.length > 0) setComplianceStartDate(settings[0].compliance_start_date);
+      setLoadError("");
+    } catch (e) {
+      setLoadError("Dashboard data could not load; figures below may be incomplete. " + (e?.message || ""));
     } finally {
       setLoading(false);
     }
   };
   useEffect(() => { load(); }, []);
 
+  // Year to date: only this calendar year's months (the list holds every month on record).
+  const ytdMonths = useMemo(() => profits.filter((p) => String(p.month || "").startsWith(currentMonth.slice(0, 4))), [profits, currentMonth]);
   const ytdProfit = useMemo(() => {
-    return profits.reduce((s, p) => s + (Number(p.ya_windows_profit) || 0) + (Number(p.glass_forge_profit) || 0), 0);
-  }, [profits]);
+    return ytdMonths.reduce((s, p) => s + (Number(p.ya_windows_profit) || 0) + (Number(p.glass_forge_profit) || 0), 0);
+  }, [ytdMonths]);
 
   const billing = useMemo(() => invoicingStats(feeLines, reportStatusMap), [feeLines, reportStatusMap]);
   const unbilled = { total: billing.readyTotal, count: billing.readyCount };
+
+  // Exports the same population as the "Ready to bill" KPI (this month's ready lines).
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const exportStatement = async () => {
+    setExporting(true);
+    setExportError("");
+    try {
+      const { exportInvoicePdf } = await import("@/lib/exportInvoicePdf");
+      const superseded = buildSupersededSet(feeLines);
+      const rows = feeLines.filter((r) => isReady(r, reportStatusMap, superseded));
+      await exportInvoicePdf(currentMonth, rows);
+    } catch (e) {
+      setExportError("Statement export failed. " + (e?.message || ""));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const onHold = useMemo(() => {
     // Jobs with needs_report status — approximate from fee lines
@@ -138,7 +169,7 @@ export default function Dashboard() {
 
   // Mini bar chart data — last 8 months
   const chartData = useMemo(() => {
-    const sorted = [...profits].sort((a, b) => a.month.localeCompare(b.month));
+    const sorted = profits.filter((p) => p.month).sort((a, b) => String(a.month).localeCompare(String(b.month)));
     return sorted.slice(-8).map((p) => ({
       month: p.month,
       value: (Number(p.ya_windows_profit) || 0) + (Number(p.glass_forge_profit) || 0),
@@ -168,9 +199,9 @@ export default function Dashboard() {
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+            <button type="button" onClick={exportStatement} disabled={exporting} title={`PDF of ${currentMonth} lines that are ready to bill`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6] disabled:opacity-60" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <Download className="h-3.5 w-3.5" />
-              Export statement
+              {exporting ? "Generating…" : "Export statement"}
             </button>
             <button onClick={() => navigate("/window-quotes?new=1")} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
               <Plus className="h-3.5 w-3.5" />
@@ -181,8 +212,8 @@ export default function Dashboard() {
 
         {/* KPI row */}
         <div className="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-4 gap-3">
-          <KpiCard label="Profit YTD" value={`$${formatMoney(ytdProfit)}`} sub="+11.56% share" subColor={C.accent} />
-          <KpiCard label={`${currentMonth} recorded fees`} value={`${formatMoney(billing.monthEarnedTotal)}`} valueColor={C.accent} sub={`${formatMoney(billing.heldTotal)} held · excludes scheduled`} />
+          <KpiCard label="Profit YTD" value={`$${formatMoney(ytdProfit)}`} sub={`${ytdMonths.length} ${ytdMonths.length === 1 ? "month" : "months"} recorded in ${currentMonth.slice(0, 4)}`} />
+          <KpiCard label={`${currentMonth} recorded fees`} value={`$${formatMoney(billing.monthEarnedTotal)}`} valueColor={C.accent} sub={`${formatMoney(billing.heldTotal)} held · excludes scheduled`} />
           <KpiCard label="Ready to bill" value={`$${formatMoney(unbilled.total)}`} sub={`${unbilled.count} eligible lines this month`} />
           <KpiCard label="On hold" value={String(onHold.count)} valueColor={C.amber} sub={onHold.name || "—"} subColor={C.amber} />
         </div>
@@ -191,6 +222,8 @@ export default function Dashboard() {
       {/* Body */}
       <div className="px-[26px] max-[699px]:px-[18px] pb-10">
         {calendarError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{calendarError}</p>}
+        {loadError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{loadError}</p>}
+        {exportError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{exportError}</p>}
         <OutstandingReports events={allCalendarEvents} user={user} onChanged={load} complianceStartDate={complianceStartDate} />
         {user?.role === "admin" && (
           <ComplianceSettings value={complianceStartDate} onChanged={load} />
@@ -259,6 +292,7 @@ export default function Dashboard() {
                     {/* Checkbox */}
                     <button
                       onClick={() => toggleCheck(ev.id)}
+                      title="Checkmarks are for this screen only and are not saved"
                       aria-label={`Mark ${ev.job_name || "event"} ${isDone ? "incomplete" : "done"}`}
                       aria-pressed={isDone}
                       className="ml-1 sm:ml-3 h-10 w-10 rounded-full shrink-0 flex items-center justify-center transition-all"
@@ -329,9 +363,11 @@ export default function Dashboard() {
                   {crewForEvent(firstUp) ? `Crew: ${crewForEvent(firstUp)}` : ""}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                <button disabled title="Checklist feature not available yet" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.45)", cursor: "not-allowed" }}>
-                  Open checklist
-                </button>
+                {firstUp.job_id && (
+                  <button type="button" onClick={() => navigate(`/jobs/${firstUp.job_id}`)} className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "#FFFFFF" }}>
+                    Open job
+                  </button>
+                )}
                 {firstUp.address ? (
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(firstUp.address)}`} target="_blank" rel="noreferrer" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#FFFFFF", color: C.accent }}>
                     Directions
@@ -415,7 +451,7 @@ function DashboardTodos({ user, navigate }) {
   const load = useCallback(async () => {
     if (!allowed) return;
     try {
-      const r = await base44.functions.invoke("todos", { action: "list", member_id: "mine", offset: 0 });
+      const r = await base44.functions.invoke("todos", { action: "board", member_id: "mine" });
       if (r.data?.error) throw new Error(r.data.error);
       setData(r.data);
       setError("");
@@ -428,7 +464,10 @@ function DashboardTodos({ user, navigate }) {
 
   if (!allowed) return null;
 
-  const tasks = (data?.tasks || []).filter((t) => t.status !== "done" && !t.archived_at);
+  // Same urgency order as the board: overdue, due today, due soon, then oldest first.
+  const todoToday = denverDate();
+  const tasks = sortByUrgency((data?.tasks || []).filter((t) => t.status !== "done" && !t.archived_at), todoToday);
+  const overdueCount = tasks.filter((t) => dueState(t, todoToday) === "overdue").length;
   const shown = tasks.slice(0, 6);
 
   const markDone = async (t) => {
@@ -451,6 +490,7 @@ function DashboardTodos({ user, navigate }) {
         <h3 className="font-heading text-[13px] font-semibold flex items-center gap-2" style={{ color: C.text }}>
           <ListTodo className="h-4 w-4" />
           To-do
+          {overdueCount > 0 && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: "#A43432" }}>{overdueCount} overdue</span>}
         </h3>
         <button
           onClick={() => navigate("/todos")}
@@ -480,11 +520,9 @@ function DashboardTodos({ user, navigate }) {
               </button>
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] font-medium break-words" style={{ color: C.text }}>{t.title}</div>
-                {(t.due_date || t.status === "in_progress") && (
-                  <div className="text-[11px]" style={{ color: C.textMuted }}>
-                    {t.status === "in_progress" ? "In progress" : ""}{t.status === "in_progress" && t.due_date ? " · " : ""}{t.due_date ? `Due ${t.due_date}` : ""}
-                  </div>
-                )}
+                <div className="text-[11px]" style={{ color: dueState(t, todoToday) === "overdue" ? "#A43432" : C.textMuted }}>
+                  {[laneLabel(laneKey(t)), t.status === "in_progress" ? "In progress" : "", t.due_date ? `${dueState(t, todoToday) === "overdue" ? "Overdue · was due" : "Due"} ${t.due_date}` : ""].filter(Boolean).join(" · ")}
+                </div>
               </div>
             </div>
           ))}

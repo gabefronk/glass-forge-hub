@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { Outlet, Link } from "react-router-dom";
+import { Outlet, Link, useLocation } from "react-router-dom";
 import YaFeesSidebar from "@/components/YaFeesSidebar";
+import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { Bot, Diamond, LogOut, MessageSquare, Users } from "lucide-react";
 
 export default function Layout() {
+  const { pathname } = useLocation();
   const [user, setUser] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
   const handleSignOut = async () => {
@@ -32,7 +34,9 @@ export default function Layout() {
         </div>
       </header>
       <main className="app-main lg:ml-[232px] min-w-0">
-        <Outlet />
+        <RouteErrorBoundary key={pathname}>
+          <Outlet />
+        </RouteErrorBoundary>
       </main>
       <MobileBottomNav user={user} />
     </div>

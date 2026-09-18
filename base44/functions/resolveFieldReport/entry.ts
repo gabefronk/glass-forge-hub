@@ -1,4 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { createJobIndex, canonicalJob } from '../../shared/jobIdentity.js';
+import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Resolve a field report flag from the Dashboard / Calendar / Job page action.
 // Actions:
@@ -75,8 +77,20 @@ export default async function(req) {
       }
       if (!jobId) return Response.json({ error: 'missing_job' }, { status: 200 });
 
+      // File the report on the canonical (oldest) record of the job's customer +
+      // address, so a report opened from a duplicate record lands on the job that
+      // ingest attaches new visits to. Doubtful groups keep the given record.
+      let job = null;
+      try {
+        const jobs = await fetchAllPages(api.Jobs, '-created_date', 1000);
+        const index = createJobIndex(jobs);
+        job = canonicalJob(index.byId.get(jobId), index);
+      } catch (_) {
+        job = null;
+      }
+      if (job) jobId = job.id;
       if (!jobName) {
-        const job = await api.Jobs.get(jobId).catch(() => null);
+        if (!job) job = await api.Jobs.get(jobId).catch(() => null);
         jobName = job?.canonical_name || '';
       }
 
@@ -122,6 +136,7 @@ export default async function(req) {
               status: 'open',
               progress_note: '',
               due_date: '',
+              category: 'follow_up',
               created_by_user_id: user.id,
               assigned_by_user_id: user.id,
               completed_at: '',
@@ -137,7 +152,7 @@ export default async function(req) {
         }
       }
 
-      return Response.json({ ok: true, action: 'upload', completion: completionValue });
+      return Response.json({ ok: true, action: 'upload', completion: completionValue, job_id: jobId });
     }
 
     return Response.json({ error: 'unknown_action' }, { status: 200 });

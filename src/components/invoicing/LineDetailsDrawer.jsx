@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { X, Pencil, Trash2, Check, ExternalLink } from "lucide-react";
 import { computeFeeAmt, computeLaborAmt, formatMoney, feeMathString } from "@/lib/feeMath";
 import { crewName } from "@/lib/feeUI";
+import { isMatchBlocked } from "@/lib/invoicingFilters";
 
 const TILES = [
   { bg: "var(--gf-tile-teal)", ink: "var(--gf-tile-teal-ink)" },
@@ -105,7 +106,8 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
   const labor = computeLaborAmt(row);
   const isBilled = !!row.billed_to_bfs;
   const isProfitSplit = row.fee_type === "profit_split";
-  const needsReview = row.needs_review && !row.manually_adjusted;
+  const needsReview = isMatchBlocked(row);
+  const reviewReason = (!row.manually_adjusted && row._companion_review) || row.pricing_review_reason;
   const photoCount = Array.isArray(row.photo_urls) ? row.photo_urls.length : 0;
   const builderName = builderFromName(row.job_name_raw || row.job_name_norm || "");
   const tile = builderTile(builderName || row.job_name_raw || row.job_name_norm || "?");
@@ -201,7 +203,7 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
               {needsReview && (
                 <div className="flex items-baseline justify-between gap-2" style={{ padding: "10px 14px", borderBottom: "1px solid var(--gf-hairline)", backgroundColor: "var(--gf-amber-row)" }}>
                   <span className="text-[13px] whitespace-nowrap" style={{ color: "var(--gf-amber-700)" }}>Held for review</span>
-                  <span className="text-[12px] text-right min-w-0" style={{ color: "var(--gf-amber-700)" }}>{row.pricing_review_reason || "Pricing needs confirmation"}</span>
+                  <span className="text-[12px] text-right min-w-0" style={{ color: "var(--gf-amber-700)" }}>{reviewReason || "Pricing needs confirmation"}</span>
                 </div>
               )}
               <div className="flex items-center justify-between" style={{ padding: "10px 14px", whiteSpace: "nowrap", backgroundColor: "var(--gf-card-band)" }}>
@@ -215,10 +217,10 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
           </div>
 
           {/* Review reason */}
-          {row.pricing_review_reason && (
+          {reviewReason && (
             <div className="rounded-[10px] p-3" style={{ backgroundColor: "var(--gf-amber-050)", border: "1px solid var(--gf-amber-100)" }}>
               <div className="text-[11px] font-semibold uppercase mb-1" style={{ color: "var(--gf-amber-700)", letterSpacing: "0.08em" }}>Review reason</div>
-              <div className="text-[13px]" style={{ color: "var(--gf-amber-700)" }}>{row.pricing_review_reason}</div>
+              <div className="text-[13px]" style={{ color: "var(--gf-amber-700)" }}>{reviewReason}</div>
               {row.split_candidate_amt != null && <div className="text-[12px] mt-1" style={{ color: "var(--gf-amber-700)" }}>Candidate split: ${formatMoney(row.split_candidate_amt)} (excluded from totals).</div>}
             </div>
           )}
@@ -234,6 +236,7 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
             {row.calendar_organizer && <FactRow label="Calendar organizer">{row.calendar_organizer}</FactRow>}
             {row.probuild_project_id && <FactRow label="ProBuild project"><span className="font-ref">{row.probuild_project_id}</span></FactRow>}
             {row.probuild_post_id && <FactRow label="ProBuild post"><span className="font-ref">{row.probuild_post_id}</span></FactRow>}
+            {row._companion_ids?.length > 0 && <FactRow label="ProBuild report lines">{row._companion_ids.length} $0 {row._companion_ids.length === 1 ? "line" : "lines"} shown with this visit, not billed separately</FactRow>}
           </div>
 
           {/* Notes */}

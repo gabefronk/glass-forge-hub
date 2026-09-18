@@ -37,16 +37,24 @@ export function extractLaborAmount(description) {
     let tail = lines[i].slice(hit.index + hit[0].length).trim();
     if (!tail && /^\s*\$/.test(lines[i + 1] || "")) tail = lines[i + 1].trim();
     if (tail.includes("$")) tail = tail.slice(tail.indexOf("$"));
-    // A leading minus is ambiguous in imported notes; surface it for review.
-    const amount = tail.match(/^\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?=\s|$|[-–—,;]|\.(?!\d)|\/win\d*\b)/i);
+    // "Labor$-3,168-win" is the ticket notation (dash as separator, like "Labor-$18,000-win").
+    // Only accepted with the win suffix; any other leading minus stays ambiguous (review).
+    const separator = tail.match(/^\$\s*[-–—]\s*(?=\d)/);
+    if (separator) tail = "$" + tail.slice(separator[0].length);
+    // The amount ends at a space, separator, sentence stop or win suffix; a comma
+    // followed by a digit is a thousands separator, never the end ("$3,168" is not $3).
+    const amount = tail.match(/^\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?=\s|$|[-–—;]|,(?!\d)|\.(?!\d)|\/?win\d*\b)/i);
     if (!amount || /\b(?:man\s*)?(?:hours?|hrs?)\b/i.test(tail.slice(amount[0].length, amount[0].length + 20))) continue;
+    if (separator && !/^\s*(?:[-–—/]\s*)?win\d*\b/i.test(tail.slice(amount[0].length))) continue;
     return Number(amount[1].replace(/,/g, ""));
   }
   return null;
 }
 export function extractExplicitService(note) {
   const text = String(note || "").toLowerCase();
-  const quantities = [...text.matchAll(/(?:^|[^\w.-])(\d+(?:\.\d+)?)\s*(?:(?:vinyl|composite|alumini?um|wood)\s+)?(?:man[\s-]*(?:hours?|hrs?)|(?<=vinyl\s|composite\s|aluminum\s|aluminium\s|wood\s)(?:hours?|hrs?))\b/g)];
+  // "2 vinyl man hours", "1 vinyl hour", and the crew shorthand "2 man vinyl hours" /
+  // "5 man vinyl man hour" (quantity, "man", material, hours).
+  const quantities = [...text.matchAll(/(?:^|[^\w.-])(\d+(?:\.\d+)?)\s*(?:(?:vinyl|composite|alumini?um|wood)\s+)?(?:man[\s-]*(?:hours?|hrs?)|man[\s-]+(?:vinyl|composite|alumini?um|wood)[\s-]+(?:man[\s-]*)?(?:hours?|hrs?)|(?<=vinyl\s|composite\s|aluminum\s|aluminium\s|wood\s)(?:hours?|hrs?))\b/g)];
   const hours = quantities.length === 1 ? Number(quantities[0][1]) : null;
   const tripMatches = [...text.matchAll(/\b(?:(\d+(?:\.\d+)?)\s+)?trip\s+charges?\b/g)];
   let trips = tripMatches.length === 1 ? Number(tripMatches[0][1] || 1) : null;
@@ -79,7 +87,9 @@ export function parseServiceBilling(note, manHours, tripCharges) {
 }
 export function pricingReview(description) {
   const text = String(description || "");
-  if (/\b(?:sub\s*pay|sub\s*labor|labor)\b[^\n]*\$\s*[-–—]\s*\d/i.test(text)) return { reason: "Labor amount contains a minus or separator; confirm the amount." };
+  const minusLine = text.split(/\r?\n/).find(line => /\b(?:sub\s*pay|sub\s*labor|labor)\b[^\n]*\$\s*[-–—]\s*\d/i.test(line));
+  // The "Labor$-N-win" ticket notation is read by extractLaborAmount; any other minus is ambiguous.
+  if (minusLine && extractLaborAmount(minusLine) == null) return { reason: "Labor amount contains a minus or separator; confirm the amount." };
   const explicit = text.match(/\b(?:profit\s+)?split\s*[:=]?\s*\$?\s*([\d,]+\.\d{2})\b/i);
   const profit = text.match(/\bprofit\s*[:=]?\s*\$?\s*([\d,]+\.\d{2})\b/i);
   if (explicit || /\bsale\s+price\b|\bprofit\b.*\d/i.test(text)) return {
@@ -130,6 +140,72 @@ export function duplicatePostIds(rows) {
         (Number(row.man_hours) > 0 || Number(row.trip_charges) > 0)) ids.add(row.id);
   }
   return ids;
+}
+
+// Companion lines. A standalone ProBuild line (source "probuild", no calendar event
+// of its own) often reports on a visit whose calendar line already carries the
+// labor. It is paired with calendar lines by identity first: the same post merged
+// into the calendar line, or the post the report audit matched to that line's
+// event (eventPosts: Map<google_event_id, matched_post_ids>). Only without an
+// identity link does it pair by the same job within ±3 days (the ingest merge window).
+//   folded: $0 twins with no open quantity question. Hidden from billing lists and
+//           totals (money-neutral); the calendar labor line is the one shown.
+//   held:   priced ProBuild lines beside calendar notes labor. They may bill the same
+//           work twice, so they are held for review until someone adjusts them.
+// Manually adjusted, billed, superseded, duplicate-post and profit-split lines are
+// never folded or held. companionOf: folded id -> calendar line id, or null when
+// several calendar lines are equally close (folding is still safe: the twin is $0).
+export const COMPANION_WINDOW_DAYS = 3;
+export function eventPostIndex(events) {
+  const index = new Map();
+  for (const e of events || []) if (e?.google_event_id && (e.matched_post_ids || []).length) index.set(e.google_event_id, e.matched_post_ids);
+  return index;
+}
+const dayGap = (a, b) => Math.abs(Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 86400000;
+const notesLabor = r => (r.calendar_labor_amt == null || r.calendar_labor_amt === "" ? 0 : Number(r.calendar_labor_amt) || 0);
+function add(map, key, value) {
+  if (!map.has(key)) map.set(key, []);
+  map.get(key).push(value);
+}
+export function feeCompanions(rows, { eventPosts } = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const byPost = new Map(), byEvent = new Map(), byJob = new Map(), postEvents = new Map();
+  for (const r of list) {
+    if (!r.calendar_event_id || (r.source !== "calendar" && r.source !== "both") || r.billable === false || r.superseded_by) continue;
+    if (r.probuild_post_id) add(byPost, r.probuild_post_id, r);
+    add(byEvent, r.calendar_event_id, r);
+    if (r.job_id && r.job_date) add(byJob, r.job_id, r);
+  }
+  for (const [eventId, posts] of eventPosts || []) for (const post of posts || []) add(postEvents, post, eventId);
+  const duplicates = duplicatePostIds(list);
+  const folded = new Set(), held = new Map(), companionOf = new Map(), companionsByCalendar = new Map();
+  for (const p of list) {
+    if (p.source !== "probuild" || p.calendar_event_id || p.superseded_by || p.fee_type === "profit_split") continue;
+    if (p.manually_adjusted || p.billed_to_bfs || duplicates.has(p.id)) continue;
+    const identity = new Set(byPost.get(p.probuild_post_id) || []);
+    for (const eventId of (p.probuild_post_id && postEvents.get(p.probuild_post_id)) || []) for (const c of byEvent.get(eventId) || []) identity.add(c);
+    const calendar = identity.size ? [...identity]
+      : p.job_id && p.job_date ? (byJob.get(p.job_id) || []).filter(c => dayGap(c.job_date, p.job_date) <= COMPANION_WINDOW_DAYS) : [];
+    if (!calendar.length) continue;
+    if (computeLaborAmt(p) === 0) {
+      // A quantity the parser could not read may be billable work: keep it visible.
+      if (p.service_review_status === "review" || p.pricing_review_reason || Number(p.man_hours) > 0 || Number(p.trip_charges) > 0) continue;
+      const gap = c => (c.job_date && p.job_date ? dayGap(c.job_date, p.job_date) : 0);
+      const priced = calendar.filter(c => computeLaborAmt(c) > 0).sort((a, b) => gap(a) - gap(b));
+      if (!priced.length) continue;
+      folded.add(p.id);
+      const owner = priced.length === 1 || gap(priced[0]) < gap(priced[1]) ? priced[0] : null;
+      companionOf.set(p.id, owner ? owner.id : null);
+      if (owner) add(companionsByCalendar, owner.id, p.id);
+      continue;
+    }
+    // A calendar amount that is only a trip charge does not cover service hours.
+    const covering = calendar.filter(c => notesLabor(c) > 0 && !(/\btrip\s+charge/i.test(c.calendar_note_text || c.note_text || "") && isTripChargeAmount(notesLabor(c))));
+    if (!covering.length) continue;
+    const amounts = covering.map(c => `$${roundMoney(notesLabor(c))} on ${c.job_date || "the visit date"}`).join(", ");
+    held.set(p.id, `Calendar labor (${amounts}) is already recorded for this visit. Confirm this ProBuild charge is separate work before billing.`);
+  }
+  return { folded, held, companionOf, companionsByCalendar };
 }
 
 export function denverMidnight(date) {

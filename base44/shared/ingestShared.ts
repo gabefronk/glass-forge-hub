@@ -1,5 +1,6 @@
 import { computeLaborAmt, computeFeeAmt, extractLaborAmount } from "./billingCore.js";
-export { computeLaborAmt, computeFeeAmt, extractLaborAmount };
+import { createJobIndex, resolveJob, planJobMatches, pendingIdResolver, draftRecord } from "./jobIdentity.js";
+export { computeLaborAmt, computeFeeAmt, extractLaborAmount, pendingIdResolver, draftRecord };
 // Shared ingest helpers used by both fetchCalendarEvents and fetchProbuildPosts.
 // Never copy this logic into a function — import it.
 
@@ -125,62 +126,16 @@ export function extractAddress(location, description) {
 // dash, after stripping "YA -". e.g. "X3 Homes - 29 Skyridge" → "X3 Homes".
 export function extractBuilder(jobName) {
   if (!jobName) return null;
-  let s = String(jobName).replace(/^ya\b\s*[-–—]?\s*/, "").trim();
+  // Case-insensitive: "YA - Pulte Home - …" must yield "Pulte Home", not "YA".
+  let s = String(jobName).replace(/^ya\b\s*[-–—]?\s*/i, "").trim();
   const m = s.match(/^([A-Z][A-Za-z0-9&\s.'-]+?)\s*[-–—]\s*/);
   if (m && m[1].trim()) return m[1].trim();
   return null;
 }
 
-// jobs: array of Jobs records (id, canonical_name, aliases, po_numbers, oe_numbers, address)
-// Match hierarchy: 1) PO number, 2) OE number, 3) Address, 4) Name normalization + alias.
-// poNumber/oeNumber/address are optional — pass null/undefined for name-only matching.
-// returns { job_id, match_confidence, needs_review, autoCreate }
-export function matchJob(normName, jobs, poNumber, oeNumber, address) {
-  // 1. PO number match — hard identifier, highest confidence
-  if (poNumber) {
-    for (const j of jobs) {
-      if ((j.po_numbers || []).includes(poNumber)) {
-        return { job_id: j.id, match_confidence: "high", needs_review: false, autoCreate: false };
-      }
-    }
-  }
-  // 2. OE number match — hard identifier
-  if (oeNumber) {
-    for (const j of jobs) {
-      if ((j.oe_numbers || []).includes(oeNumber)) {
-        return { job_id: j.id, match_confidence: "high", needs_review: false, autoCreate: false };
-      }
-    }
-  }
-  // 3. Address match — a job's address doesn't change even when its name
-  //    is written five different ways. Normalized comparison.
-  if (address) {
-    const normAddr = normalizeAddress(address);
-    if (normAddr) {
-      for (const j of jobs) {
-        if (j.address && normalizeAddress(j.address) === normAddr) {
-          return { job_id: j.id, match_confidence: "high", needs_review: false, autoCreate: false };
-        }
-      }
-    }
-  }
-  // 4. Name normalization + alias matching
-  if (!normName) {
-    return { job_id: null, match_confidence: "unmatched", needs_review: true, autoCreate: false };
-  }
-  for (const j of jobs) {
-    const candidates = [j.canonical_name, ...(j.aliases || [])].map(normalizeJobName).filter(Boolean);
-    if (candidates.includes(normName)) {
-      return { job_id: j.id, match_confidence: "high", needs_review: false, autoCreate: false };
-    }
-  }
-  // If we have a hard identifier (PO/OE/address) that didn't match any job,
-  // it's a new job — auto-create. Don't let name similarity to a *different*
-  // lot/unit in the same neighborhood block creation.
-  if (poNumber || oeNumber || address) {
-    return { job_id: null, match_confidence: "unmatched", needs_review: false, autoCreate: true };
-  }
-  // No hard identifier — use name similarity to decide
+// No identity match and no address/PO/OE: a near-identical name to an existing
+// job is flagged for review; anything else is a new job.
+function nameSimilarityMatch(normName, jobs) {
   let best = 0;
   for (const j of jobs) {
     const candidates = [j.canonical_name, ...(j.aliases || [])].map(normalizeJobName).filter(Boolean);
@@ -190,9 +145,34 @@ export function matchJob(normName, jobs, poNumber, oeNumber, address) {
     }
   }
   if (best >= 0.85) {
-    return { job_id: null, match_confidence: "unmatched", needs_review: true, autoCreate: false };
+    return { job_id: null, match_confidence: "unmatched", needs_review: true, autoCreate: false, reason: "similar_name", candidate_job_ids: [] };
   }
-  return { job_id: null, match_confidence: "unmatched", needs_review: false, autoCreate: true };
+  return { job_id: null, match_confidence: "unmatched", needs_review: false, autoCreate: true, reason: "new_name", candidate_job_ids: [] };
+}
+
+// jobs: array of Jobs records (id, created_date, canonical_name, aliases, builder,
+// po_numbers, oe_numbers, address). Match hierarchy (see jobIdentity.js):
+// 1) ProBuild project link / PO / OE, 2) customer + normalized address,
+// 3) exact name or alias, 4) new identity or name similarity. A match always
+// resolves to the canonical (oldest) record of its customer + address.
+// extra: { rawName, builder, linkedJobId }.
+// returns { job_id, match_confidence, needs_review, autoCreate, reason, candidate_job_ids }
+export function matchJob(normName, jobs, poNumber, oeNumber, address, extra = {}) {
+  const index = createJobIndex(jobs, normalizeJobName);
+  return resolveJob({ normName, poNumber, oeNumber, address, ...extra }, index) || nameSimilarityMatch(normName, index.list);
+}
+
+// One ingestion batch: every item resolved in order against existing jobs plus
+// the jobs this batch will create, so repeats of a new customer + address (or
+// name / PO) create one job. items: [{ key, normName, rawName, builder, address,
+// poNumber, oeNumber, linkedJobId, currentJobId, noCreate }] (see planJobMatches).
+// Returns { results: Map(key -> match), drafts: [pending job records] }.
+export function planIngestJobs(items, jobs, draftFor) {
+  return planJobMatches(items, jobs, {
+    normalizeName: normalizeJobName,
+    fallback: (item, index) => nameSimilarityMatch(item.normName, index.list),
+    draftFor,
+  });
 }
 
 export const MAN_HOUR_RATE = 100;

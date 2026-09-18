@@ -7,7 +7,7 @@ export const builderKey = value => {
 };
 const orderKey = value => String(value||'').trim().replace(/-\d{2}$/, '');
 const starts = (text,key) => text===key||text.startsWith(key+' ');
-const tokens = text => norm(text).split(' ').filter(t=>t&&!['lot','bldg','building','unit','res','residence'].includes(t));
+export const tokens = text => norm(text).split(' ').filter(t=>t&&!['lot','bldg','building','unit','res','residence'].includes(t));
 export function buildDirectory(data, rawJobs, manualLinks=[]) {
  const builderNames=[...new Set([...data.job_references.map(r=>r.builder),...data.contacts.map(c=>c.builder)].filter(Boolean))].sort((a,b)=>a.localeCompare(b));
  const aliases=builderNames.map(name=>({name,key:builderKey(name)})).sort((a,b)=>b.key.length-a.key.length);

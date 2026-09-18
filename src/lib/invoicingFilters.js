@@ -1,5 +1,22 @@
-import { duplicatePostIds } from "../../base44/shared/billingCore.js";
+import { duplicatePostIds, feeCompanions, eventPostIndex } from "../../base44/shared/billingCore.js";
 import { isFutureRow, isTripChargeAmount } from "@/lib/feeMath";
+
+// Companion lines (see feeCompanions in billingCore.js), for display only: a copy of
+// each row with _companion_folded (a $0 ProBuild twin of a calendar labor line),
+// _companion_of, _companion_ids (the twins folded into a calendar line) and
+// _companion_review (a priced ProBuild line that may bill the calendar labor twice).
+// Never write these rows back: the underscore fields are not FeeLines fields.
+// events: CalendarEvents (optional), for the audit's matched posts.
+export function withCompanions(rows, events) {
+  const list = Array.isArray(rows) ? rows : [];
+  const c = feeCompanions(list, { eventPosts: eventPostIndex(events) });
+  return list.map((r) => {
+    if (c.folded.has(r.id)) return { ...r, _companion_folded: true, _companion_of: c.companionOf.get(r.id) || null };
+    if (c.held.has(r.id)) return { ...r, _companion_review: c.held.get(r.id) };
+    if (c.companionsByCalendar.has(r.id)) return { ...r, _companion_ids: c.companionsByCalendar.get(r.id) };
+    return r;
+  });
+}
 
 // Report statuses that are considered "ok" — no report blocking.
 // no_source_data is clear for billing: it means the Probuild pull failed that
@@ -7,10 +24,11 @@ import { isFutureRow, isTripChargeAmount } from "@/lib/feeMath";
 // in the UI so the user knows data is incomplete without it eating the invoice total.
 const OK_REPORT_STATUSES = ["ok", "waived", "pre_compliance", "no_source_data"];
 
-// Match-confidence block: the row's job match is uncertain.
+// Review block: the row's job match or pricing is uncertain, or it is a priced
+// ProBuild companion that may repeat calendar labor (see withCompanions).
 // This is NOT the same as a missing field report — keep them separate.
 export const isMatchBlocked = (r) =>
-  r.needs_review && !r.manually_adjusted;
+  (r.needs_review || !!r._companion_review) && !r.manually_adjusted;
 
 // Field-report block: the crew hasn't uploaded photos/notes for the source
 // CalendarEvent. Requires a reportStatusMap: Map<calendar_event_id, report_status>.
@@ -62,7 +80,9 @@ export function resolveSupersession(r, rowById) {
 
 // Build a set of row IDs that should be excluded from totals due to supersession.
 // Call this once per render with the full month's rows, then pass the set to isReady.
-export function buildSupersededSet(rows) {
+// $0 ProBuild twins of a calendar labor line are excluded too (money-neutral), so
+// lists show the calendar line. events: CalendarEvents (optional, see withCompanions).
+export function buildSupersededSet(rows, events) {
   const rowById = new Map();
   for (const r of rows) rowById.set(r.id, r);
   const excluded = duplicatePostIds(rows);
@@ -71,6 +91,8 @@ export function buildSupersededSet(rows) {
     const ex = resolveSupersession(r, rowById);
     if (ex) excluded.add(ex);
   }
+  for (const id of feeCompanions(rows, { eventPosts: eventPostIndex(events) }).folded) excluded.add(id);
+  for (const r of rows) if (r._companion_folded) excluded.add(r.id);
   return excluded;
 }
 

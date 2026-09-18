@@ -1,4 +1,4 @@
-import { duplicatePostIds } from "./billingCore.js";
+import { duplicatePostIds, feeCompanions, eventPostIndex } from "./billingCore.js";
 // Shared supersession + provenance logic used by both the frontend
 // (invoicingFilters.js) and the backend (closeMonthSnapshot). Keeping this
 // in one place ensures the snapshot and the UI agree on which rows count.
@@ -56,7 +56,9 @@ export function resolveSupersession(
   return null;
 }
 
-export function buildSupersededSet(rows: any[]): Set<string> {
+// events (optional): CalendarEvents, so audit-matched posts pair companion lines by
+// identity. $0 ProBuild twins of a calendar labor line are excluded (money-neutral).
+export function buildSupersededSet(rows: any[], events?: any[]): Set<string> {
   const rowById = new Map<string, any>();
   for (const r of rows) rowById.set(r.id, r);
   const excluded = duplicatePostIds(rows);
@@ -65,5 +67,6 @@ export function buildSupersededSet(rows: any[]): Set<string> {
     const ex = resolveSupersession(r, rowById);
     if (ex) excluded.add(ex);
   }
+  for (const id of feeCompanions(rows, { eventPosts: eventPostIndex(events) }).folded) excluded.add(id);
   return excluded;
 }

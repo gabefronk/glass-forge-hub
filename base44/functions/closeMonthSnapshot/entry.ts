@@ -1,4 +1,4 @@
-import { computeLaborAmt, computeFeeAmt, denverDate } from "../../shared/billingCore.js";
+import { computeLaborAmt, computeFeeAmt, denverDate, feeCompanions, eventPostIndex } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { fetchAllPages } from '../../shared/pagination.ts';
 import { buildSupersededSet } from '../../shared/supersession.ts';
@@ -60,14 +60,15 @@ export default async function(req) {
       }
     }
 
-    // Conditional supersession — same logic as the Invoicing UI
-    const supersededSet = buildSupersededSet(allFees);
+    // Conditional supersession and companion lines — same logic as the Invoicing UI
+    const supersededSet = buildSupersededSet(allFees, allCalEvents);
+    const companionHolds = feeCompanions(allFees, { eventPosts: eventPostIndex(allCalEvents) }).held;
 
     const todayStr = denverDate();
     const OK_REPORT_STATUSES = ['ok', 'waived', 'pre_compliance', 'no_source_data'];
 
     const isFuture = (f) => !!(f.job_date && f.job_date > todayStr);
-    const isMatchBlocked = (f) => f.needs_review && !f.manually_adjusted;
+    const isMatchBlocked = (f) => (f.needs_review || companionHolds.has(f.id)) && !f.manually_adjusted;
     const isReportBlocked = (f) => {
       if (!f.calendar_event_id) return false;
       const status = reportStatusMap.get(f.calendar_event_id);
@@ -103,7 +104,7 @@ export default async function(req) {
       source: f.source || null,
       superseded_by: f.superseded_by || null,
       superseded: supersededSet.has(f.id),
-      needs_review: !!f.needs_review,
+      needs_review: !!f.needs_review || companionHolds.has(f.id),
       match_confidence: f.match_confidence || null,
       calendar_event_id: f.calendar_event_id || null,
       report_status: f.calendar_event_id ? (reportStatusMap.get(f.calendar_event_id) || null) : null,
@@ -124,8 +125,9 @@ export default async function(req) {
       'Superseded rows are excluded from all totals via conditional supersession',
       '(calendar_labor_amt present → probuild suppressed only for trip-charge case;',
       'else merge-case: calendar labor > 0 → probuild suppressed; calendar $0 + probuild hours → calendar suppressed).',
+      'A $0 standalone ProBuild line paired with a calendar labor line (same post, audit-matched event, or same job within 3 days) is superseded.',
       'invoiced_subtotal: rows that are billable, not billed_to_bfs, not future, not match-blocked',
-      '(needs_review && !manually_adjusted), not report-blocked (report_status not in',
+      '((needs_review, or a priced ProBuild line beside calendar notes labor for the same visit) && !manually_adjusted), not report-blocked (report_status not in',
       'ok/waived/pre_compliance/no_source_data), not superseded, labor_amt > 0 or fee_type = profit_split.',
       'earned_total: billable, non-superseded, non-future, labor_amt > 0 or fee_type = profit_split; includes provisional held amounts.',
       'total_rows: count of all month rows including superseded.',

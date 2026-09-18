@@ -8,9 +8,13 @@ const MAX_LIST_LIMIT = 500;
 const MAX_USERS = 200;
 const KEY_RE = /^[A-Za-z0-9:_-]+$/;
 const STATUSES = new Set(["open", "in_progress", "done"]);
-const OWNER_PATCH_FIELDS = new Set(["title", "details", "due_date", "assignee_member_id", "status", "progress_note"]);
-const CREW_PATCH_FIELDS = new Set(["status", "progress_note"]);
-const CREATE_FIELDS = new Set(["action", "title", "details", "assignee_member_id", "due_date", "request_key"]);
+// Board lanes. "" is a valid stored value (tasks created before categories existed)
+// and is shown in its own "Needs a category" lane so nothing is hidden.
+const CATEGORIES = new Set(["", "quote_request", "odd_end", "order", "follow_up"]);
+const BOARD_DONE_LIMIT = 50;
+const OWNER_PATCH_FIELDS = new Set(["title", "details", "due_date", "assignee_member_id", "status", "progress_note", "category"]);
+const CREW_PATCH_FIELDS = new Set(["status", "progress_note", "category"]);
+const CREATE_FIELDS = new Set(["action", "title", "details", "assignee_member_id", "due_date", "request_key", "category"]);
 
 function fail(status, message) {
   throw Object.assign(new Error(message), { status });
@@ -47,6 +51,12 @@ function dueDate(value) {
 function statusValue(value) {
   const v = text(value, 20, { required: true });
   if (!STATUSES.has(v)) fail(400, "Invalid status.");
+  return v;
+}
+
+function categoryValue(value) {
+  const v = text(value, 40);
+  if (!CATEGORIES.has(v)) fail(400, "Invalid category.");
   return v;
 }
 
@@ -95,9 +105,9 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
       headers: { "content-type": "application/json", "Cache-Control": "no-store" },
     });
 
-  async function listTasks(api, caller, owner, input) {
+  // Which list the caller may see: their own, one person's (owner), or everyone's (owner).
+  async function resolveView(api, caller, owner, input) {
     const view = input.member_id === undefined || input.member_id === "" ? "mine" : idText(input.member_id);
-    const offset = offsetValue(input.offset);
     const allMembers = await api.TeamMember.list("id", MAX_LIST_LIMIT, 0);
     let targetId = caller.id;
     if (view === "all") {
@@ -110,6 +120,20 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
       targetId = target.id;
     }
     const query = targetId === null ? { archived_at: "" } : { assignee_member_id: targetId, archived_at: "" };
+    return { view, allMembers, query };
+  }
+
+  function teamSummary(allMembers, tasks) {
+    return allMembers.map((m) => {
+      const mine = tasks.filter((t) => t.assignee_member_id === m.id);
+      const p = publicMember(m);
+      return { id: p.id, member_key: p.member_key, display_name: p.display_name, active: p.active, pending_account: p.pending_account, counts: countsOf(mine) };
+    });
+  }
+
+  async function listTasks(api, caller, owner, input) {
+    const offset = offsetValue(input.offset);
+    const { view, allMembers, query } = await resolveView(api, caller, owner, input);
     const tasks = await api.TodoTask.filter(query, "created_at", MAX_LIST_LIMIT, 0);
     const counts = countsOf(tasks);
     const page = tasks.slice(offset, offset + PAGE_SIZE);
@@ -123,13 +147,32 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
       has_more: offset + page.length < counts.total,
       offset,
     };
-    if (view === "all") {
-      body.team_summary = allMembers.map((m) => {
-        const mine = tasks.filter((t) => t.assignee_member_id === m.id);
-        const p = publicMember(m);
-        return { id: p.id, member_key: p.member_key, display_name: p.display_name, active: p.active, pending_account: p.pending_account, counts: countsOf(mine) };
-      });
-    }
+    if (view === "all") body.team_summary = teamSummary(allMembers, tasks);
+    return body;
+  }
+
+  // Board view: every open and in-progress task (no paging, so nothing active is
+  // pushed off the page by old completed tasks) plus the most recently finished ones.
+  async function boardTasks(api, caller, owner, input) {
+    const { view, allMembers, query } = await resolveView(api, caller, owner, input);
+    const [open, inProgress, done] = await Promise.all([
+      api.TodoTask.filter({ ...query, status: "open" }, "created_at", MAX_LIST_LIMIT, 0),
+      api.TodoTask.filter({ ...query, status: "in_progress" }, "created_at", MAX_LIST_LIMIT, 0),
+      api.TodoTask.filter({ ...query, status: "done" }, "-completed_at", BOARD_DONE_LIMIT, 0),
+    ]);
+    const active = [...open, ...inProgress];
+    const body = {
+      ok: true,
+      owner,
+      member: owner ? ownerMember(caller) : publicMember(caller),
+      members: owner ? allMembers.map(ownerMember) : [publicMember(caller)],
+      tasks: active,
+      recent_done: done,
+      counts: { open: open.length, in_progress: inProgress.length, recent_done: done.length },
+      // Hitting a limit means the board may be incomplete; the UI says so.
+      truncated: open.length >= MAX_LIST_LIMIT || inProgress.length >= MAX_LIST_LIMIT,
+    };
+    if (view === "all") body.team_summary = teamSummary(allMembers, active);
     return body;
   }
 
@@ -153,6 +196,7 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     const title = text(input.title, 200, { required: true });
     const details = text(input.details, 5000);
     const due_date = dueDate(input.due_date);
+    const category = categoryValue(input.category);
     const members = await api.TeamMember.list("id", MAX_LIST_LIMIT, 0);
     let assigneeId;
     const wanted = idText(input.assignee_member_id);
@@ -169,7 +213,7 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     const duplicates = await api.TodoTask.filter({ request_key: key }, "id", 2, 0);
     if (duplicates.length) {
       const existing = duplicates[0];
-      const same = existing.title === title && (existing.details || "") === details && (existing.due_date || "") === due_date && existing.assignee_member_id === assigneeId;
+      const same = existing.title === title && (existing.details || "") === details && (existing.due_date || "") === due_date && existing.assignee_member_id === assigneeId && (existing.category || "") === category;
       if (!same) fail(409, "This request key was already used for a different task.");
       return { ok: true, task: existing, duplicate: true };
     }
@@ -182,6 +226,7 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
       status: "open",
       progress_note: "",
       due_date,
+      category,
       created_by_user_id: user.id,
       assigned_by_user_id: user.id,
       completed_at: "",
@@ -232,6 +277,7 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     if ("details" in patch) set.details = text(patch.details, 5000);
     if ("due_date" in patch) set.due_date = dueDate(patch.due_date);
     if ("progress_note" in patch) set.progress_note = text(patch.progress_note, 3000);
+    if ("category" in patch) set.category = categoryValue(patch.category);
     if ("status" in patch) {
       const s = statusValue(patch.status);
       set.status = s;
@@ -387,6 +433,8 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
           return reply({ ok: true, allowed: true, owner, member_id: caller.id });
         case "list":
           return reply(await listTasks(api, caller, owner, body));
+        case "board":
+          return reply(await boardTasks(api, caller, owner, body));
         case "get":
           return reply(await getTask(api, caller, owner, body));
         case "create":

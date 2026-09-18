@@ -7,8 +7,11 @@ import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
 import JobFactsRail from "@/components/jobs/JobFactsRail";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
-import FeedImage from "@/components/jobs/FeedImage";
+import { AttachmentViewer } from "@/components/jobs/FeedImage";
 import { fetchAllPages } from "@/lib/pagination";
+import { useJobContacts } from "@/hooks/use-job-contacts";
+import { loadJobGroup, loadJobActivity, jobEventsAndEvidence } from "@/lib/jobGroupData";
+import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -16,11 +19,14 @@ export default function JobDetail() {
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
   const [calEvents, setCalEvents] = useState([]);
-  const [contacts, setContacts] = useState([]);
+  const jobContacts = useJobContacts(id);
   const [plans, setPlans] = useState([]);
   const [fieldReports, setFieldReports] = useState([]);
+  const [group, setGroup] = useState(null);
+  const [evidence, setEvidence] = useState(null);
   const [currentUser, setCurrentUser] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const loadVersion = useRef(0);
@@ -28,21 +34,29 @@ export default function JobDetail() {
   const loadAll = async () => {
     const version = ++loadVersion.current;
     setCalEvents([]);
-    const [jb, fl, nt, me] = await Promise.all([
+    setEvidence(null);
+    const [jb, grp, me] = await Promise.all([
       base44.entities.Jobs.get(id),
-      base44.entities.FeeLines.filter({ job_id: id }, "-job_date", 5000),
-      base44.entities.JobNotes.filter({ job_id: id }, "-note_date", 500),
+      loadJobGroup(id),
       base44.auth.me().catch(() => null),
     ]);
     if (version !== loadVersion.current) return;
+    // Duplicate records of this job (same customer and address) are read together.
+    const memberIds = [id, ...grp.memberIds.filter((m) => m !== id)];
+    const { rows: fl, notes: nt } = await loadJobActivity(memberIds);
+    if (version !== loadVersion.current) return;
     setJob(jb);
+    setGroup(grp);
     setRows(fl);
     setNotes(nt);
     if (me) setCurrentUser(me.email || me.full_name || "");
 
-    const calIds = new Set(fl.filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
     const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
-    if (version === loadVersion.current) setCalEvents(allCal.filter((e) => (e.job_id ? e.job_id === id : Boolean(e.google_event_id) && calIds.has(e.google_event_id))));
+    if (version === loadVersion.current) {
+      const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt);
+      setCalEvents(shown.events);
+      setEvidence(shown.evidence);
+    }
 
     const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
     if (postIds.size) {
@@ -51,10 +65,6 @@ export default function JobDetail() {
     } else if (version === loadVersion.current) {
       setFieldReports([]);
     }
-
-    base44.functions.invoke("contacts-directory", { action: "job", job_id: id })
-      .then((r) => { if (version === loadVersion.current) setContacts(r.data?.contacts || []); })
-      .catch(() => {});
 
     base44.entities.PlanIntake.list("-created_date", 200)
       .then((all) => {
@@ -71,13 +81,19 @@ export default function JobDetail() {
   useEffect(() => {
     let current = true;
     setLoading(true);
+    setLoadError("");
     (async () => {
-      try { await loadAll(); } finally { if (current) setLoading(false); }
+      try { await loadAll(); }
+      catch (e) {
+        // A missing record is "not found"; anything else is a load failure worth retrying.
+        if (current && e?.response?.status !== 404) setLoadError(e?.response?.data?.message || e?.message || "Unknown error");
+      }
+      finally { if (current) setLoading(false); }
     })();
     return () => { current = false; loadVersion.current++; };
   }, [id]);
 
-  const status = useMemo(() => jobsStatus(rows), [rows]);
+  const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
 
   if (loading) {
     return (
@@ -89,7 +105,14 @@ export default function JobDetail() {
   if (!job) {
     return (
       <div className="px-6 pt-16 text-center" style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-        <p className="text-[14px]" style={{ color: C.textMuted }}>Job not found.</p>
+        {loadError ? (
+          <>
+            <p role="alert" className="text-[14px] break-words" style={{ color: "#A43432" }}>This job could not load. {loadError}</p>
+            <button type="button" onClick={() => window.location.reload()} className="mt-3 text-[13px] underline" style={{ color: C.accent }}>Reload</button>
+          </>
+        ) : (
+          <p className="text-[14px]" style={{ color: C.textMuted }}>Job not found.</p>
+        )}
         <Link to="/jobs" style={{ color: C.accent }} className="text-[13px] mt-2 inline-block">← Back to Jobs</Link>
       </div>
     );
@@ -103,6 +126,7 @@ export default function JobDetail() {
           <Link to="/jobs" className="inline-flex items-center gap-1 text-[13px] mb-3 transition-colors hover:opacity-80" style={{ color: C.accentText }}>
             <ArrowLeft className="h-3.5 w-3.5" />Back to jobs
           </Link>
+          {loadError && <p role="alert" className="mb-3 rounded-lg border bg-white p-3 text-[13px] break-words" style={{ color: "#A43432" }}>Some job activity could not load and may be incomplete. {loadError}</p>}
           <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div className="min-w-0 flex-1">
               <div className="mono-label-sm mb-1 break-words">{sanitizeText(job.builder || "—")}</div>
@@ -124,12 +148,13 @@ export default function JobDetail() {
               </a>
             </div>
           </div>
+          <DuplicateJobNotice group={group} currentId={id} className="mb-4" />
         </div>
 
         {/* Body: facts rail + activity feed */}
         <div className="max-w-[1240px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
           <aside className="lg:col-span-4 lg:sticky lg:top-6 self-start">
-            <JobFactsRail job={job} contacts={contacts} plans={plans} />
+            <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} />
           </aside>
           <div className="lg:col-span-8 min-w-0" id="add-note">
             <JobActivityFeed
@@ -157,11 +182,7 @@ export default function JobDetail() {
         <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); loadAll(); }} />
       )}
 
-      {lightbox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,.85)" }} onClick={() => setLightbox(null)}>
-          <FeedImage src={lightbox} alt="photo" className="max-w-full max-h-full rounded-[12px]" />
-        </div>
-      )}
+      {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   );
 }

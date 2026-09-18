@@ -1,10 +1,11 @@
 import { isFutureRow } from "@/lib/feeMath";
 import { useMemo } from "react";
 import { computeFeeAmt } from "@/lib/feeMath";
+import { isMatchBlocked } from "@/lib/invoicingFilters";
 import DayHeader from "./DayHeader";
 import LineRow from "./LineRow";
 
-export default function LineList({ rows, sort, selectedIds, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, reportAttached, onToggleDay, onClearFilters }) {
+export default function LineList({ rows, sort, selectedIds, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, reportAttached, onToggleDay, onClearFilters, editRequestId, onEditRequestHandled }) {
   const grouped = useMemo(() => {
     if (sort === "fee") {
       return [{ date: null, rows: [...rows].sort((a, b) => computeFeeAmt(b) - computeFeeAmt(a)) }];
@@ -63,7 +64,7 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
               key={row.id}
               row={row}
               selected={selectedIds.has(row.id)}
-              blocked={(row.needs_review && !row.manually_adjusted) || row._reportBlocked}
+              blocked={isMatchBlocked(row) || row._reportBlocked}
               reportAttached={reportAttached.has(row.id)}
               isFuture={isFutureRow(row)}
               isBilled={!!row.billed_to_bfs}
@@ -76,6 +77,8 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
               onMarkBilled={onMarkBilled}
               onOpenJob={onOpenJob}
               onOpenDetails={onOpenDetails}
+              editRequested={editRequestId === row.id}
+              onEditRequestHandled={onEditRequestHandled}
             />
           ))}
         </div>

@@ -1,5 +1,6 @@
 import { refreshMonth } from "@/lib/refreshMonth";
-import { currentMonthStr } from "@/lib/feeMath";
+import { currentMonthStr, shiftMonthStr } from "@/lib/feeMath";
+import { denverDate } from "../../base44/shared/billingCore.js";
 import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
@@ -49,7 +50,8 @@ export default function CalendarPage() {
   });
   const [creating, setCreating] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [selectedDay, setSelectedDay] = useState(() => new Date().toISOString().slice(0, 10));
+  // Denver calendar day, matching currentMonthStr(); UTC would roll to tomorrow in the evening.
+  const [selectedDay, setSelectedDay] = useState(() => denverDate());
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [unreportedOnly, setUnreportedOnly] = useState(false);
@@ -71,9 +73,11 @@ export default function CalendarPage() {
       setPartialOutlook(response.data.partial_outlook || null);
       setJobs(jobsArr);
       setUser(me);
-    } catch {
+    } catch (e) {
       setEvents([]); setOwnership(null);
-      setOwnershipError("Calendar ownership could not be verified against Sales Tracker. Reload to try again.");
+      setOwnershipError(e?.response?.status === 403
+        ? "This account does not have calendar access. Ask an admin to grant the manager role."
+        : "Calendar ownership could not be verified against Sales Tracker. Reload to try again.");
     } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
@@ -106,8 +110,7 @@ export default function CalendarPage() {
   }, [monthEvents, selectedDay]);
 
   const shiftMonth = (delta) => {
-    const [y, m] = month.split("-").map(Number);
-    const newMonth = new Date(y, m - 1 + delta, 1).toISOString().slice(0, 7);
+    const newMonth = shiftMonthStr(month, delta);
     setMonth(newMonth);
     setSelectedDay(`${newMonth}-01`);
   };
@@ -121,10 +124,16 @@ export default function CalendarPage() {
         job_id: f.job_id || null,
       };
       if (selected?.id) payload.id = selected.id;
-      await base44.functions.invoke("pushCalendarEvent", payload);
+      const res = await base44.functions.invoke("pushCalendarEvent", payload);
+      // The function reports failures as HTTP 200 + `error`. When `record` is present the
+      // event was saved but a later step failed; close the form so it is not saved twice.
+      if (res?.data?.error && !res.data.record) throw new Error(res.data.error);
       setCreating(null);
       setSelected(null);
       await load();
+      if (res?.data?.error) setSyncMessage(`Event saved, but a later step failed (${res.data.error}). Check the installer calendar.`);
+    } catch (error) {
+      setSyncMessage("Event was not saved. " + (error?.response?.data?.error || error?.message || ""));
     } finally { setSaving(false); }
   };
 
@@ -132,9 +141,12 @@ export default function CalendarPage() {
     if (!selected || !confirm("Delete this event from both calendars?")) return;
     setSaving(true);
     try {
-      await base44.functions.invoke("deleteCalendarEvent", { id: selected.id });
+      const res = await base44.functions.invoke("deleteCalendarEvent", { id: selected.id });
+      if (res?.data?.error) throw new Error(res.data.error);
       setSelected(null);
       await load();
+    } catch (error) {
+      setSyncMessage("Event was not deleted. " + (error?.response?.data?.error || error?.message || ""));
     } finally { setSaving(false); }
   };
 
@@ -188,7 +200,7 @@ export default function CalendarPage() {
           <h1 className="font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
           <div className="flex items-center gap-1" aria-label="Choose calendar month">
             <button type="button" onClick={() => shiftMonth(-1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></button>
-            <button type="button" onClick={() => { const today = new Date(); const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`; setMonth(day.slice(0, 7)); setSelectedDay(day); }} className="min-h-11 rounded-full px-3 text-xs font-medium hover:bg-[#F8F9F6]" style={{ color: C.textSecondary }}>Today</button>
+            <button type="button" onClick={() => { const day = denverDate(); setMonth(day.slice(0, 7)); setSelectedDay(day); }} className="min-h-11 rounded-full px-3 text-xs font-medium hover:bg-[#F8F9F6]" style={{ color: C.textSecondary }}>Today</button>
             <button type="button" onClick={() => shiftMonth(1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Next month"><ChevronRight className="h-4 w-4" /></button>
           </div>
           <div className="flex items-center gap-3 text-[11px]">
@@ -274,7 +286,7 @@ export default function CalendarPage() {
         ) : (
           <div className="rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
             {monthEvents.length === 0 && <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No events this month.</div>}
-            {monthEvents.sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "")).map((e) => {
+            {[...monthEvents].sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "")).map((e) => {
               const isInstall = e.source === "app";
               const color = e.source === "outlook" ? OUTLOOK_COLOR : isInstall ? INSTALL_COLOR : SERVICE_COLOR;
               const bg = e.source === "outlook" ? "#F0E9FA" : isInstall ? "#EAF5EE" : "#FCEDEC";

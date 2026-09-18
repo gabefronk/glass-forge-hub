@@ -1,9 +1,10 @@
 import { refreshMonth } from "@/lib/refreshMonth";
 import { invoicingStats } from "@/lib/invoicingStats";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { computeFeeAmt, computeLaborAmt, currentMonthStr } from "@/lib/feeMath";
-import { isReady, isMatchBlocked, isReportBlocked, buildSupersededSet } from "@/lib/invoicingFilters";
+import { computeFeeAmt, computeLaborAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
+import { isReady, isMatchBlocked, isReportBlocked, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import InvoiceHeader from "@/components/invoicing/InvoiceHeader";
 import InvoiceSummary from "@/components/invoicing/InvoiceSummary";
 import InvoiceToolbar from "@/components/invoicing/InvoiceToolbar";
@@ -14,6 +15,7 @@ import UnprocessedEventsBanner from "@/components/invoicing/UnprocessedEventsBan
 import LineDetailsDrawer from "@/components/invoicing/LineDetailsDrawer";
 
 export default function Invoicing() {
+  const navigate = useNavigate();
   const [month, setMonth] = useState(currentMonthStr());
   const [feeLines, setFeeLines] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +34,9 @@ export default function Invoicing() {
   const [monthClosed, setMonthClosed] = useState(null);
   const [closing, setClosing] = useState(false);
   const [detailRow, setDetailRow] = useState(null);
+  const [editRequestId, setEditRequestId] = useState(null);
   const [reportStatusMap, setReportStatusMap] = useState(new Map());
+  const [billingEvents, setBillingEvents] = useState([]);
   const [reportAttached, setReportAttached] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("inv_reportAttached") || "[]")); } catch { return new Set(); }
   });
@@ -45,19 +49,25 @@ export default function Invoicing() {
   useEffect(() => { localStorage.setItem("inv_hideZeros", String(hideZeros)); }, [hideZeros]);
   useEffect(() => { localStorage.setItem("inv_reportAttached", JSON.stringify([...reportAttached])); }, [reportAttached]);
 
+  // Ignore responses from an older load (e.g. after quickly switching months).
+  const loadSeq = useRef(0);
   const load = async () => {
+    const seq = ++loadSeq.current;
+    const stale = () => seq !== loadSeq.current;
     setLoading(true);
     try {
       const [fl, calEvents] = await Promise.all([
         base44.entities.FeeLines.list("-job_date", 5000),
         base44.entities.CalendarEvents.list("-event_date", 5000),
       ]);
+      if (stale()) return;
       const rsm = new Map();
       for (const e of (Array.isArray(calEvents) ? calEvents : [])) {
         if (e.google_event_id) rsm.set(e.google_event_id, e.report_status);
       }
       setReportStatusMap(rsm);
-      setFeeLines(Array.isArray(fl) ? fl.map(r => ({...r, labor_amt: computeLaborAmt(r), fee_amt: computeFeeAmt(r)})) : []);
+      setBillingEvents(Array.isArray(calEvents) ? calEvents : []);
+      setFeeLines(withComputedAmounts(fl));
       setLoadError("");
       window.dispatchEvent(new Event("billing-updated"));
       const feeEventIds = new Set((Array.isArray(fl) ? fl : []).map((f) => f.calendar_event_id).filter(Boolean));
@@ -68,18 +78,21 @@ export default function Invoicing() {
       try {
         const snapshots = await base44.entities.MonthCloseSnapshot.list("-created_date", 100);
         const snap = (Array.isArray(snapshots) ? snapshots : []).find((s) => s.month === month);
-        setMonthClosed(snap || null);
-      } catch { setMonthClosed(null); }
+        if (!stale()) setMonthClosed(snap || null);
+      } catch { if (!stale()) setMonthClosed(null); }
     } catch (e) {
-      setLoadError("Could not load billing data. " + (e.message || "Try refresh."));
+      if (!stale()) setLoadError("Could not load billing data. " + (e.message || "Try refresh."));
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   };
   useEffect(() => { load(); }, [month]);
 
-  const monthRows = useMemo(() => feeLines.filter((r) => r.invoice_month === month), [feeLines, month]);
-  const supersededSet = useMemo(() => buildSupersededSet(feeLines), [feeLines]);
+  // Display copies: $0 ProBuild twins fold into their calendar labor line and priced
+  // companions are held for review. Writes always start from the raw feeLines rows.
+  const billingRows = useMemo(() => withCompanions(feeLines, billingEvents), [feeLines, billingEvents]);
+  const monthRows = useMemo(() => billingRows.filter((r) => r.invoice_month === month), [billingRows, month]);
+  const supersededSet = useMemo(() => buildSupersededSet(billingRows, billingEvents), [billingRows, billingEvents]);
 
   const filteredRows = useMemo(() => {
     let rows = monthRows.filter((r) => !supersededSet.has(r.id));
@@ -99,13 +112,17 @@ export default function Invoicing() {
     return rows;
   }, [monthRows, filter, hideZeros, search, reportStatusMap, supersededSet]);
 
-  const filterCounts = useMemo(() => ({
-    all: monthRows.filter((r) => !supersededSet.has(r.id)).length,
-    ready: monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet)).length,
-    needs_review: monthRows.filter(isMatchBlocked).length,
-    needs_report: monthRows.filter((r) => isReportBlocked(r, reportStatusMap)).length,
-    billed: monthRows.filter((r) => r.billed_to_bfs).length,
-  }), [monthRows, reportStatusMap, supersededSet]);
+  // Counted over the rows the lists show (superseded and folded twins are hidden).
+  const filterCounts = useMemo(() => {
+    const shown = monthRows.filter((r) => !supersededSet.has(r.id));
+    return {
+      all: shown.length,
+      ready: shown.filter((r) => isReady(r, reportStatusMap, supersededSet)).length,
+      needs_review: shown.filter(isMatchBlocked).length,
+      needs_report: shown.filter((r) => isReportBlocked(r, reportStatusMap)).length,
+      billed: shown.filter((r) => r.billed_to_bfs).length,
+    };
+  }, [monthRows, reportStatusMap, supersededSet]);
 
   const heroStats = useMemo(() => invoicingStats(monthRows, reportStatusMap, supersededSet), [monthRows, reportStatusMap, supersededSet]);
 
@@ -144,6 +161,7 @@ export default function Invoicing() {
   }, [selectedIds]);
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const clearEditRequest = useCallback(() => setEditRequestId(null), []);
 
   const handleSelectAllReady = useCallback(() => {
     setSelectedIds(new Set(monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet)).map((r) => r.id)));
@@ -152,7 +170,8 @@ export default function Invoicing() {
   const handleEdit = useCallback(async (id, patch) => {
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
-    const merged = { ...row, ...patch, manually_adjusted: true };
+    // A patch may carry manually_adjusted explicitly (undo restores the prior value).
+    const merged = { ...row, manually_adjusted: true, ...patch };
     const isProfitSplit = merged.fee_type === "profit_split";
     const recomputeTriggers = isProfitSplit
       ? (patch.sale_price !== undefined || patch.cost !== undefined || patch.split_pct !== undefined || patch.fee_type !== undefined)
@@ -170,8 +189,21 @@ export default function Invoicing() {
     }
     setFeeLines((prev) => prev.map((r) => (r.id === id ? merged : r)));
     const { id: _id, created_date, updated_date, created_by_id, ...rest } = merged;
-    await base44.entities.FeeLines.update(id, rest);
+    try {
+      await base44.entities.FeeLines.update(id, rest);
+    } catch (err) {
+      setFeeLines((prev) => prev.map((r) => (r.id === id ? row : r)));
+      setSyncMessage(`Save failed; the line was restored. ${err?.message || ""}`.trim());
+    }
   }, [feeLines]);
+
+  // Optimistic bulk writes: restore the previous values if the save fails.
+  const persistBulk = useCallback((updates, restore) => {
+    base44.entities.FeeLines.bulkUpdate(updates).catch((err) => {
+      setFeeLines((prev) => prev.map((r) => { const u = restore.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
+      setSyncMessage(`Save failed; the lines were restored. ${err?.message || ""}`.trim());
+    });
+  }, []);
 
   const handleDelete = useCallback(async (id) => {
     const row = feeLines.find((r) => r.id === id);
@@ -189,45 +221,43 @@ export default function Invoicing() {
     setDetailRow(null);
   }, [feeLines, performAction]);
 
-  const handleAddReport = useCallback(() => { window.location.assign("/calendar"); }, []);
+  const handleAddReport = useCallback(() => { navigate("/calendar"); }, [navigate]);
 
   const handleMarkBilled = useCallback((id, value = true) => {
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
-    const prev = row.billed_to_bfs;
+    const prev = { billed_to_bfs: row.billed_to_bfs, manually_adjusted: !!row.manually_adjusted };
     handleEdit(id, { billed_to_bfs: value });
-    performAction(value ? "Line marked billed" : "Line reopened", () => {}, () => handleEdit(id, { billed_to_bfs: prev }));
+    performAction(value ? "Line marked billed" : "Line reopened", () => {}, () => handleEdit(id, prev));
   }, [feeLines, handleEdit, performAction]);
 
   const handleMarkBilledSelected = useCallback(() => {
     const selected = feeLines.filter((r) => selectedIds.has(r.id));
     if (!selected.length) return;
     const updates = selected.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
-    const prevStates = selected.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs }));
+    const prevStates = selected.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs, manually_adjusted: !!r.manually_adjusted }));
     setFeeLines((prev) => prev.map((r) => { const u = updates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-    base44.entities.FeeLines.bulkUpdate(updates);
+    persistBulk(updates, prevStates);
     performAction(`${selected.length} lines marked billed`, () => {}, () => {
-      const restore = prevStates.map((s) => ({ id: s.id, billed_to_bfs: s.billed_to_bfs }));
-      setFeeLines((prev) => prev.map((r) => { const u = restore.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-      base44.entities.FeeLines.bulkUpdate(restore);
+      setFeeLines((prev) => prev.map((r) => { const u = prevStates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
+      persistBulk(prevStates, updates);
     });
     clearSelection();
-  }, [feeLines, selectedIds, performAction, clearSelection]);
+  }, [feeLines, selectedIds, performAction, clearSelection, persistBulk]);
 
   const handleSetFeePctSelected = useCallback((pct) => {
     const selected = feeLines.filter((r) => selectedIds.has(r.id));
     if (!selected.length) return;
     const feePct = pct / 100;
     const updates = selected.map((r) => ({ id: r.id, fee_pct: feePct, fee_amt: Math.round((Number(r.labor_amt) || 0) * feePct * 100) / 100, manually_adjusted: true }));
-    const prevStates = selected.map((r) => ({ id: r.id, fee_pct: r.fee_pct, fee_amt: r.fee_amt }));
+    const prevStates = selected.map((r) => ({ id: r.id, fee_pct: r.fee_pct, fee_amt: r.fee_amt, manually_adjusted: !!r.manually_adjusted }));
     setFeeLines((prev) => prev.map((r) => { const u = updates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-    base44.entities.FeeLines.bulkUpdate(updates);
+    persistBulk(updates, prevStates);
     performAction(`Fee set to ${pct}%`, () => {}, () => {
-      const restore = prevStates.map((s) => ({ id: s.id, fee_pct: s.fee_pct, fee_amt: s.fee_amt }));
-      setFeeLines((prev) => prev.map((r) => { const u = restore.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-      base44.entities.FeeLines.bulkUpdate(restore);
+      setFeeLines((prev) => prev.map((r) => { const u = prevStates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
+      persistBulk(prevStates, updates);
     });
-  }, [feeLines, selectedIds, performAction]);
+  }, [feeLines, selectedIds, performAction, persistBulk]);
 
   const handleDeleteSelected = useCallback(async () => {
     const selected = feeLines.filter((r) => selectedIds.has(r.id));
@@ -256,17 +286,21 @@ export default function Invoicing() {
     const a = document.createElement("a"); a.href = url; a.download = `selected-lines-${month}.csv`; a.click(); URL.revokeObjectURL(url);
   }, [feeLines, selectedIds, month]);
 
+  // Only lines that are ready to bill; held, scheduled, superseded and excluded lines stay put.
+  const isLineReady = useCallback((r) => isReady(r, reportStatusMap, supersededSet), [reportStatusMap, supersededSet]);
+
   const handleBillJob = useCallback((job) => {
-    const updates = job.lines.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
-    const prevStates = job.lines.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs }));
+    const lines = job.lines.filter(isLineReady);
+    if (!lines.length) return;
+    const updates = lines.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
+    const prevStates = lines.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs, manually_adjusted: !!r.manually_adjusted }));
     setFeeLines((prev) => prev.map((r) => { const u = updates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-    base44.entities.FeeLines.bulkUpdate(updates);
-    performAction(`Job "${job.name}" billed`, () => {}, () => {
-      const restore = prevStates.map((s) => ({ id: s.id, billed_to_bfs: s.billed_to_bfs }));
-      setFeeLines((prev) => prev.map((r) => { const u = restore.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-      base44.entities.FeeLines.bulkUpdate(restore);
+    persistBulk(updates, prevStates);
+    performAction(`Job "${job.name}" billed (${lines.length} ready ${lines.length === 1 ? "line" : "lines"})`, () => {}, () => {
+      setFeeLines((prev) => prev.map((r) => { const u = prevStates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
+      persistBulk(prevStates, updates);
     });
-  }, [performAction]);
+  }, [performAction, persistBulk, isLineReady]);
 
   const handleExportJob = useCallback((job) => {
     const cols = ["job_date", "line_description", "labor_amt", "fee_pct", "fee_amt", "billed_to_bfs"];
@@ -300,11 +334,17 @@ export default function Invoicing() {
     setClosing(true);
     try {
       const res = await base44.functions.invoke("closeMonthSnapshot", { month, force: !!monthClosed });
-      if (res?.error === "already_closed") { window.alert(`Already closed on ${new Date(res.closed_at).toLocaleDateString()}.`); }
+      // The function reports failures as HTTP 200 with an `error` field.
+      const result = res?.data || {};
+      if (result.error === "already_closed") window.alert(`Already closed on ${new Date(result.closed_at).toLocaleDateString()}.`);
+      else if (result.error) window.alert(`Month was not closed: ${result.error}`);
       const snapshots = await base44.entities.MonthCloseSnapshot.list("-created_date", 100);
       const snap = (Array.isArray(snapshots) ? snapshots : []).find((s) => s.month === month);
       setMonthClosed(snap || null);
-    } catch (e) { console.error("Close month error:", e); }
+    } catch (e) {
+      console.error("Close month error:", e);
+      window.alert(`Month was not closed: ${e?.response?.data?.error || e?.message || "unknown error"}`);
+    }
     finally { setClosing(false); }
   };
 
@@ -316,13 +356,18 @@ export default function Invoicing() {
         .filter((r) => isReady(r, reportStatusMap, supersededSet))
         .map((r) => ({ ...r, labor_amt: computeLaborAmt(r), fee_amt: computeFeeAmt(r) }));
       await exportInvoicePdf(month, exportRows);
-    } catch (e) { console.error("PDF export error:", e); }
+    } catch (e) {
+      console.error("PDF export error:", e);
+      setSyncMessage(`PDF export failed. ${e?.message || ""}`.trim());
+    }
     finally { setExporting(false); }
   };
 
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e) => {
+      // Leave typing alone: Ctrl+A / Ctrl+Enter / Escape inside a field belong to that field.
+      if (e.target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); searchRef.current?.focus(); return; }
       if ((e.metaKey || e.ctrlKey) && e.key === "a") { e.preventDefault(); setSelectedIds(new Set(filteredRows.map((r) => r.id))); return; }
       if (e.key === "Escape") { setSelectedIds(new Set()); setDetailRow(null); return; }
@@ -420,10 +465,13 @@ export default function Invoicing() {
                 reportAttached={reportAttached}
                 onToggleDay={toggleDay}
                 onClearFilters={() => { setFilter("all"); setSearch(""); setHideZeros(false); }}
+                editRequestId={editRequestId}
+                onEditRequestHandled={clearEditRequest}
               />
             ) : (
               <JobsView
                 rows={filteredRows}
+                isLineReady={isLineReady}
                 onBillJob={handleBillJob}
                 onExportJob={handleExportJob}
                 onOpenJob={() => {}}
@@ -450,10 +498,10 @@ export default function Invoicing() {
         <LineDetailsDrawer
           row={detailRow}
           onClose={() => setDetailRow(null)}
-          onEdit={(id) => { setDetailRow(null); handleEdit(id, {}); }}
+          onEdit={(id) => { setDetailRow(null); setView("lines"); setEditRequestId(id); }}
           onDelete={handleDelete}
           onMarkBilled={handleMarkBilled}
-          onOpenJob={(jobId) => { setDetailRow(null); window.location.assign(`/jobs/${jobId}`); }}
+          onOpenJob={(jobId) => { setDetailRow(null); navigate(`/jobs/${jobId}`); }}
         />
       )}
 

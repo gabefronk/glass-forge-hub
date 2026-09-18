@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { resolveFieldReport } from "@/lib/fieldReports";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { Camera, Loader2, X, CheckCircle2, AlertCircle } from "lucide-react";
@@ -21,6 +22,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
   const [completion, setCompletion] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const requestKey = useRef(`field-report:${jobId}:${crypto.randomUUID()}`);
 
   const canSubmit = (photos.length > 0 || notes.trim()) && completion && !saving;
 
@@ -46,19 +48,19 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
     setSaving(true);
     setError("");
     try {
-      const request_key = `field-report:${jobId}:${crypto.randomUUID()}`;
-      await base44.functions.invoke("resolveFieldReport", {
+      await resolveFieldReport({
         action: "upload",
         event_id: selected || undefined,
         job_id: jobId,
         photos,
         notes: notes.trim(),
         completion,
-        request_key,
+        // One key per opened form, so a retried submit cannot raise a second to-do.
+        request_key: requestKey.current,
       });
       onDone();
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || "Submit failed. Try again.");
+      setError(e?.message || "Submit failed. Try again.");
     } finally {
       setSaving(false);
     }

@@ -1,40 +1,37 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Camera, ArrowUpRight, Building2, HardHat, MapPin, ExternalLink } from "lucide-react";
+import { Camera, ArrowUpRight, Building2, HardHat, MapPin, ExternalLink, AlertTriangle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
 import { fetchAllPages } from "@/lib/pagination";
+import { ROLE_LABELS } from "@/lib/jobContacts";
+import { useJobContacts } from "@/hooks/use-job-contacts";
+import { loadJobActivity, jobEventsAndEvidence } from "@/lib/jobGroupData";
+import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
-import FeedImage from "@/components/jobs/FeedImage";
+import { AttachmentViewer } from "@/components/jobs/FeedImage";
 
-const PM_RE = /\b(pm|superintendent|project manager|construction manager|field manager|lead)\b/i;
-
-function qualifierOf(c) {
-  const b = c.builder || "";
-  const co = c.company || "";
-  if (b && co.startsWith(b)) return co.slice(b.length).replace(/^\s*[-–—:]\s*/, "").trim();
-  return co;
-}
-
-function pickPm(contacts) {
-  for (const c of contacts || []) {
-    if (PM_RE.test(qualifierOf(c))) return c;
-  }
-  return null;
+// Superintendent first, then project manager, from the read-only job contacts join.
+function pickLead(linked) {
+  return linked.find((c) => c.role === "superintendent") || linked.find((c) => c.role === "project_manager") || null;
 }
 
 // Right panel of the desktop Jobs workspace: compact facts header (builder, PM,
 // address, status, actions) + the unified activity feed (clamped notes, auth
-// photos). Reuses the same feed as the Job Detail page.
-export default function JobWorkspacePanel({ jobId }) {
+// photos). Reuses the same feed as the Job Detail page. `group` is the read-only
+// duplicate group from lib/jobDedupe.js; activity of every member record is shown.
+export default function JobWorkspacePanel({ jobId, group = null }) {
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
   const [calEvents, setCalEvents] = useState([]);
+  const [evidence, setEvidence] = useState(null);
   const [fieldReports, setFieldReports] = useState([]);
-  const [contacts, setContacts] = useState([]);
+  const memberKey = [jobId, ...(group?.memberIds || []).filter((m) => m !== jobId)].join(",");
+  const memberIds = memberKey.split(",");
+  const jobContacts = useJobContacts(jobId);
   const [currentUser, setCurrentUser] = useState("");
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
@@ -47,28 +44,30 @@ export default function JobWorkspacePanel({ jobId }) {
 
   const load = async () => {
     if (!jobId) {
-      setJob(null); setRows([]); setNotes([]); setCalEvents([]); setFieldReports([]); setContacts([]);
+      setJob(null); setRows([]); setNotes([]); setCalEvents([]); setEvidence(null); setFieldReports([]);
       setLoading(false);
       return;
     }
     const ver = ++v.current;
     setLoading(true);
     setCalEvents([]);
+    setEvidence(null);
     try {
-      const [jb, fl, nt] = await Promise.all([
+      const [jb, activity] = await Promise.all([
         base44.entities.Jobs.get(jobId),
-        base44.entities.FeeLines.filter({ job_id: jobId }, "-job_date", 5000),
-        base44.entities.JobNotes.filter({ job_id: jobId }, "-note_date", 500),
+        loadJobActivity(memberIds),
       ]);
       if (ver !== v.current) return;
+      const { rows: fl, notes: nt } = activity;
       setJob(jb);
       setRows(fl);
       setNotes(nt);
 
-      const calIds = new Set(fl.filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
       const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
       if (ver !== v.current) return;
-      setCalEvents(allCal.filter((e) => (e.job_id ? e.job_id === jobId : Boolean(e.google_event_id) && calIds.has(e.google_event_id))));
+      const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt);
+      setCalEvents(shown.events);
+      setEvidence(shown.evidence);
 
       const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
       if (postIds.size) {
@@ -77,10 +76,6 @@ export default function JobWorkspacePanel({ jobId }) {
       } else if (ver === v.current) {
         setFieldReports([]);
       }
-
-      base44.functions.invoke("contacts-directory", { action: "job", job_id: jobId })
-        .then((r) => { if (ver === v.current) setContacts(r.data?.contacts || []); })
-        .catch(() => {});
     } finally {
       if (ver === v.current) setLoading(false);
     }
@@ -89,11 +84,12 @@ export default function JobWorkspacePanel({ jobId }) {
   useEffect(() => {
     (async () => { await load(); })();
     return () => { v.current++; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId]);
+  }, [jobId, memberKey]);
 
-  const status = useMemo(() => jobsStatus(rows), [rows]);
-  const pm = pickPm(contacts);
+  const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
+  const contactView = jobContacts.view?.job?.id === jobId ? jobContacts.view : null;
+  const pm = pickLead(contactView?.linked || []);
+  const missingSuper = Boolean(contactView?.status?.missing_superintendent);
   const mapHref = job?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
 
   if (loading) {
@@ -135,11 +131,18 @@ export default function JobWorkspacePanel({ jobId }) {
             <span className="truncate">{sanitizeText(job.builder || "—")}</span>
           </span>
           {pm && (
-            <span className="inline-flex items-center gap-1.5 min-w-0">
+            <span className="inline-flex items-center gap-1.5 min-w-0" title={ROLE_LABELS[pm.role]}>
               <HardHat className="h-3.5 w-3.5 shrink-0" style={{ color: C.textMuted }} />
               <span className="truncate">{sanitizeText(pm.name)}</span>
-              {pm.phone && <a href={`tel:${String(pm.phone).replace(/\s/g, "")}`} className="hover:underline shrink-0" style={{ color: C.accentText }}>{pm.phone}</a>}
+              {pm.phone && <a href={`tel:${pm.phone_key || String(pm.phone).replace(/\s/g, "")}`} className="hover:underline shrink-0" style={{ color: C.accentText }}>{pm.phone}</a>}
             </span>
+          )}
+          {missingSuper && (
+            <Link to={`/jobs/${jobId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium" style={{ backgroundColor: C.amberLight, color: C.amber }} title="Open the job page to review suggested contacts">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              {contactView.status.missing_contact ? "No contacts linked" : "No super linked"}
+              {contactView.status.suggestions > 0 ? ` · ${contactView.status.suggestions} suggested` : ""}
+            </Link>
           )}
           {job.address && (
             <a href={mapHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 min-w-0 hover:underline" style={{ color: C.accentText }}>
@@ -149,6 +152,7 @@ export default function JobWorkspacePanel({ jobId }) {
             </a>
           )}
         </div>
+        <DuplicateJobNotice group={group} currentId={jobId} className="mt-3" />
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll px-5 py-5">
@@ -168,11 +172,7 @@ export default function JobWorkspacePanel({ jobId }) {
         <JobFieldReportModal jobId={jobId} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); load(); }} />
       )}
 
-      {lightbox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,.85)" }} onClick={() => setLightbox(null)}>
-          <FeedImage src={lightbox} alt="photo" className="max-w-full max-h-full rounded-[12px]" />
-        </div>
-      )}
+      {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   );
 }

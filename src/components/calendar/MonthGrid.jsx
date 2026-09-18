@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { C } from "@/lib/feeUI";
+import { denverDate } from "../../../base44/shared/billingCore.js";
 
 function buildWeeks(month) {
   const [y, m] = month.split("-").map(Number);
@@ -63,7 +64,7 @@ function DesktopEventBlock({ event, onClick }) {
 
 export default function MonthGrid({ month, events, onSelect, onCreateForDate, selectedDate, onSelectDay }) {
   const weeks = useMemo(() => buildWeeks(month), [month]);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = denverDate();
 
   return (
     <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>

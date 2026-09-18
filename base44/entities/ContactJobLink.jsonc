@@ -10,6 +10,10 @@
     },
     "source": {
       "type": "string"
+    },
+    "role": {
+      "type": "string",
+      "description": "Optional per-job role confirmed by the owner: superintendent, project_manager, homeowner or site. Empty uses the workbook company label."
     }
   },
   "required": [

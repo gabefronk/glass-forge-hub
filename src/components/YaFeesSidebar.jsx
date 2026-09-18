@@ -5,8 +5,8 @@ import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { Bot, MessageSquare, Users, Network, Search, CheckSquare } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
-import { isReady, buildSupersededSet } from "@/lib/invoicingFilters";
-import { formatMoney, computeFeeAmt, currentMonthStr } from "@/lib/feeMath";
+import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
+import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
@@ -59,15 +59,17 @@ export default function YaFeesSidebar() {
         const me = await base44.auth.me();
         if (isWindowQuotesOnly(me)) { setUnbilled({ total: 0, count: 0 }); return; }
         const month = currentMonthStr();
-        const [rows, calEvents] = await Promise.all([
+        const [rawRows, calEvents] = await Promise.all([
           base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000),
           base44.entities.CalendarEvents.list("-event_date", 5000),
         ]);
+        const events = Array.isArray(calEvents) ? calEvents : [];
+        const rows = withCompanions(withComputedAmounts(rawRows), events);
         const rsm = new Map();
-        for (const e of (Array.isArray(calEvents) ? calEvents : [])) {
+        for (const e of events) {
           if (e.google_event_id) rsm.set(e.google_event_id, e.report_status);
         }
-        const ss = buildSupersededSet(rows);
+        const ss = buildSupersededSet(rows, events);
         const readyRows = rows.filter((r) => isReady(r, rsm, ss));
         const total = readyRows.reduce((s, r) => s + computeFeeAmt(r), 0);
         setUnbilled({ total, count: readyRows.length });

@@ -32,6 +32,11 @@
       "type": "string",
       "default": ""
     },
+    "category": {
+      "type": "string",
+      "default": "",
+      "description": "Board lane: quote_request, odd_end, order, follow_up, or empty (uncategorized; shown in its own lane)"
+    },
     "created_by_user_id": {
       "type": "string"
     },

@@ -1,4 +1,8 @@
 import {buildDirectory,matchingContacts} from './contactMatching.js';
+import {jobContactsView,jobContactCoverage,LINK_ROLES} from './jobContacts.js';
+import {CONTACT_LINK_SEEDS} from './contactLinkSeeds.js';
+const JOB_VIEWS=new Set(['job_contacts','job_contact_coverage']);
+const EMPTY_DIRECTORY={source:null,contacts:[],job_references:[]};
 const owners=new Set(['gabefronk@gmail.com','gabriel.fronk.wd@gmail.com']);
 const owner=u=>u?.role==='admin'&&owners.has(String(u.email||'').toLowerCase().trim());
 const hash=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),b=>b.toString(16).padStart(2,'0')).join('');
@@ -31,17 +35,31 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
     await api.ContactDirectorySnapshot.create({filename:data.source.filename,source_location:data.source.location,captured_at:data.source.captured_at,workbook_sha256:data.source.workbook_sha256,content_sha256:digest,data_file_uri:file_uri,contact_count:data.contacts.length,job_reference_count:data.job_references.length});
     cache.clear();cache.set(digest,data);return response({ok:true,contacts:data.contacts.length,source:data.source.filename});
    }
-   const snapshot=(await api.ContactDirectorySnapshot.list('-created_date',1))[0];if(!snapshot)return response({empty:true,contacts:[],jobs:[],builders:[],summary:{contacts:0}});
-   const data=await load(client,snapshot);
+   const snapshot=(await api.ContactDirectorySnapshot.list('-created_date',1))[0];if(!snapshot&&!JOB_VIEWS.has(input.action))return response({empty:true,contacts:[],jobs:[],builders:[],summary:{contacts:0}});
+   // Job views still report missing contacts and owner notes before any directory is imported.
+   const data=snapshot?await load(client,snapshot):EMPTY_DIRECTORY;
    if(input.action==='contact'){const contact=data.contacts.find(c=>c.key===input.contact_key);return contact?response({contact}):response({error:'Contact not found.'},404);}
    if(input.action==='link'){
     if(!data.contacts.some(c=>c.key===input.contact_key))return response({error:'Contact not found.'},404);
     const job=String(input.job_id||'').startsWith('workbook:')?buildDirectory(data,await all(api.Jobs)).jobs.find(j=>j.id===input.job_id):await api.Jobs.get(input.job_id).catch(()=>null);if(!job)return response({error:'Select an existing job.'},400);
+    // Optional per-job role (e.g. superintendent) and provenance of an owner-confirmed suggestion.
+    const role=input.role?String(input.role):'';if(role&&!LINK_ROLES.includes(role))return response({error:'Unsupported contact role.'},400);
     const query={contact_key:input.contact_key,job_id:job.id};const prior=(await api.ContactJobLink.filter(query,'-created_date',1))[0];
-    if(input.remove===true){if(prior)await api.ContactJobLink.delete(prior.id);}else if(!prior)await api.ContactJobLink.create({...query,source:'manual'});
+    if(input.remove===true){if(prior)await api.ContactJobLink.delete(prior.id);}
+    else if(!prior)await api.ContactJobLink.create({...query,source:input.source==='suggestion'?'suggestion':'manual',...(role?{role}:{})});
+    else if(role&&prior.role!==role)await api.ContactJobLink.update(prior.id,{role});
     return response({ok:true});
    }
    const [jobs,links]=await Promise.all([all(api.Jobs),all(api.ContactJobLink)]);const directory=buildDirectory(data,jobs,links);
+   if(JOB_VIEWS.has(input.action)){
+    const one=input.action==='job_contacts',rawJob=one?jobs.find(j=>j.id===input.job_id):null;
+    if(one&&!rawJob)return response({error:'Job not found.'},404);
+    // Message threads are optional evidence; a failure only hides that source of suggestions.
+    let conversations=[],messages='available';
+    try{conversations=one?await api.MessageConversation.filter({job_id:rawJob.id},'-last_message_at',50):(await all(api.MessageConversation)).filter(c=>c.job_id);}catch{messages='unavailable';}
+    if(one)return response(jobContactsView({directory,job:directory.jobs.find(j=>j.id===rawJob.id),rawJob,links,conversations,messages,seeds:CONTACT_LINK_SEEDS}));
+    return response(jobContactCoverage({directory,rawJobs:jobs,links,conversations,messages,seeds:CONTACT_LINK_SEEDS}));
+   }
    if(input.action==='conversation'){
     const c=(await api.MessageConversation.filter({conversation_key:String(input.conversation_key||'')},'-created_date',1))[0];if(!c)return response({error:'Conversation not found.'},404);
     const matches=matchingContacts(directory.contacts,c.participants);const builderKeys=new Set(matches.map(c=>c.builder_key).filter(Boolean));

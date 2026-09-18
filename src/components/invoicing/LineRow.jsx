@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, MoreHorizontal, ExternalLink, Trash2, Pencil } from "lucide-react";
 import { computeFeeAmt, formatMoney } from "@/lib/feeMath";
 import { crewName, noteTokens } from "@/lib/feeUI";
+import { isMatchBlocked } from "@/lib/invoicingFilters";
 
 const TILES = [
   { bg: "var(--gf-tile-teal)", ink: "var(--gf-tile-teal-ink)" },
@@ -129,11 +130,18 @@ function StatusDot({ label, dot, text, onClick, clickable }) {
   );
 }
 
-export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero }) {
+export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, editRequested, onEditRequestHandled }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const menuRef = useRef(null);
+
+  // The details drawer's Edit button asks the row to open its inline editor.
+  useEffect(() => {
+    if (!editRequested) return;
+    setEditing(true);
+    onEditRequestHandled?.();
+  }, [editRequested, onEditRequestHandled]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -180,7 +188,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   // Status info
   let statusInfo = null;
   if (blocked) {
-    const isMatch = row.needs_review && !row.manually_adjusted;
+    const isMatch = isMatchBlocked(row);
     if (isMatch) {
       statusInfo = { label: "Review pricing", dot: "var(--gf-amber-500)", text: "var(--gf-amber-700)", onClick: (e) => { e.stopPropagation(); setEditing(true); }, clickable: true };
     } else {

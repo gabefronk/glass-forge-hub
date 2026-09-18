@@ -1,6 +1,6 @@
 import { extractExplicitService, extractPhotoUrls, canonicalPostRows, denverDate } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { normalizeJobName, matchJob, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, mergeReviewFlags } from '../../shared/ingestShared.ts';
+import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, mergeReviewFlags } from '../../shared/ingestShared.ts';
 import { countAttachments } from '../../shared/reportMatching.ts';
 import { toMs, getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject, filterProjectsByWindow } from '../../shared/probuildApi.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
@@ -11,10 +11,11 @@ import { parseServiceBilling } from '../../shared/serviceBilling.ts';
 // Data: Firebase RTDB. Projects filtered by lastModifiedAt within 21-day window
 // (no deletedAt). Posts fetched per-project, createdAt converted UTC → America/Denver
 // before deriving job_date. LLM extracts man_hours/trip_charges from the verbatim
-// note (never inferred). Upserts on probuild_post_id; never overwrites a
-// manually_adjusted row. photo_urls are merged, never wiped: existing archived
-// URLs survive re-syncs, and posts with attachments but no URLs get their bytes
-// archived into Base44 file storage (no ProBuild link dependency).
+// note (never inferred). Existing lines are append-only (photo and explicit
+// service-quantity fills only, see serviceFill); never overwrites a manually
+// adjusted, billed or locked row. photo_urls are merged, never wiped: existing
+// archived URLs survive re-syncs, and posts with attachments but no URLs get their
+// bytes archived into Base44 file storage (no ProBuild link dependency).
 //
 // The pull window extends through TODAY (not yesterday) so that D+1 posts
 // (crew posts the morning after the job) are always captured.
@@ -71,7 +72,8 @@ async function downloadAttachment(idToken, projectId, postId, attachmentId, atta
     if (buf.byteLength > MAX_ATTACHMENT_BYTES) return null;
   }
   if (!buf.byteLength) return null;
-  const name = attachment?.fileMetadata?.name || `${attachmentId}.${mime.includes('png') ? 'png' : 'jpg'}`;
+  // 'file' attachments are usually PDFs; keep their extension so the job page can embed them.
+  const name = attachment?.fileMetadata?.name || `${attachmentId}.${mime.includes('pdf') ? 'pdf' : mime.includes('png') ? 'png' : 'jpg'}`;
   return { buf, mime, name };
 }
 
@@ -113,6 +115,36 @@ function findCalendarRowToMerge(existingFees, jobId, postDate) {
     }
   }
   return best;
+}
+
+// Additive service fill. A standalone ProBuild line stored at $0 because its note's
+// quantity could not be read (e.g. "2 man vinyl hours") gets the explicit quantity
+// and the configured material rate, but only when the line is untouched: not
+// manually adjusted, billed, superseded, merged into a calendar line or in a locked
+// month, with no quantity recorded yet. The note must now read as exactly one
+// explicit quantity and one material; anything ambiguous stays in review. A line
+// that already has a nonzero amount is never changed.
+function serviceFill(ex, row, ext, lockedMonths) {
+  if (ex.source !== 'probuild' || ex.calendar_event_id || ex.manually_adjusted || ex.billed_to_bfs || ex.superseded_by) return null;
+  if (lockedMonths.has(ex.invoice_month) || ex.man_hours != null || computeLaborAmt(ex) !== 0) return null;
+  if (!(Number(row.man_hours) > 0) || ext.needs_review || row.service_review_status !== 'ready') return null;
+  if (ex.trip_charges != null && Number(ex.trip_charges) !== Number(row.trip_charges || 0)) return null;
+  const patch = {
+    man_hours: row.man_hours,
+    trip_charges: row.trip_charges,
+    service_material: row.service_material,
+    service_rate: row.service_rate,
+    service_labor_amount: row.service_labor_amount,
+    service_trip_amount: row.service_trip_amount,
+    service_total: row.service_total,
+    service_calculation_source: row.service_calculation_source,
+    service_review_status: 'ready',
+    pricing_review_reason: null,
+    // The quantity question is answered; an unlinked job still needs review.
+    needs_review: !ex.job_id,
+  };
+  const filled = { ...ex, ...patch };
+  return { ...patch, labor_amt: computeLaborAmt(filled), fee_amt: computeFeeAmt(filled) };
 }
 
 export default async function(req) {
@@ -171,20 +203,48 @@ export default async function(req) {
     // Parse only explicit quantities; ambiguous notes stay in review.
     const extractionMap = new Map(inWindowPosts.map(b => [b.postId, extractExplicitService(b.post.message || '')]));
 
-    // 6. Jobs: match, auto-create missing
+    // Existing billing lines and locked months (needed before job matching).
+    const existingFees = await fetchAllPages(base44.asServiceRole.entities.FeeLines, '-created_date', 1000);
+    const existingByPostId = canonicalPostRows(existingFees);
+    const lockedMonths = new Set(existingFees.filter(f => f.source === 'sheet-import').map(f => f.invoice_month));
+    for (const snap of await fetchAllPages(base44.asServiceRole.entities.MonthCloseSnapshot, '-created_date', 1000)) lockedMonths.add(snap.month);
+
+    // 6. Jobs: resolve each post to its canonical existing job (owner-confirmed
+    // project link, then customer + address parsed from the project name, then
+    // name). One job is created per new identity per run; ambiguous posts stay
+    // unlinked and flagged for review.
     const jobsArr = await fetchAllPages(base44.asServiceRole.entities.Jobs, '-created_date', 1000);
-    const matched = inWindowPosts.map((b) => {
-      const normName = normalizeJobName(b.projectName);
-      const m = matchJob(normName, jobsArr);
-      return { b, normName, m };
-    });
-    const autoCreateNames = [...new Set(matched.filter((x) => x.m.autoCreate).map((x) => x.normName).filter(Boolean))];
-    const newJobs = autoCreateNames.length
-      ? await base44.asServiceRole.entities.Jobs.bulkCreate(autoCreateNames.map((n) => ({ canonical_name: n, aliases: [n] })))
+    const projectJob = new Map();
+    try {
+      for (const l of await fetchAllPages(base44.asServiceRole.entities.ProbuildProjectLink, '-updated_date', 1000)) {
+        if (l.project_id && l.job_id && !projectJob.has(l.project_id)) projectJob.set(l.project_id, l.job_id);
+      }
+    } catch (_) {
+      // Links are a hint only; matching still works from the project name.
+    }
+    inWindowPosts.sort((x, y) => x.jobDate.localeCompare(y.jobDate) || String(x.postId).localeCompare(String(y.postId)));
+    const matched = inWindowPosts.map((b) => ({ b, normName: normalizeJobName(b.projectName) }));
+    const plan = planIngestJobs(matched.map(({ b, normName }) => {
+      const ex = existingByPostId.get(b.postId);
+      return {
+        key: b.postId, normName, rawName: b.projectName,
+        linkedJobId: projectJob.get(b.projectId) || '',
+        currentJobId: ex?.job_id || '',
+        // Existing lines are append-only and locked months are skipped: no job.
+        noCreate: !!ex || lockedMonths.has(invoiceMonthFromDate(b.jobDate)),
+      };
+    }), jobsArr, (item) => ({ canonical_name: item.normName, aliases: [item.normName] }));
+    const newJobs = plan.drafts.length
+      ? await base44.asServiceRole.entities.Jobs.bulkCreate(plan.drafts.map(draftRecord))
       : [];
-    const jobByNorm = new Map();
-    for (const j of newJobs) jobByNorm.set(j.canonical_name, j);
-    for (const j of jobsArr) { const n = normalizeJobName(j.canonical_name); if (n) jobByNorm.set(n, j); }
+    const realJobId = pendingIdResolver(plan.drafts, newJobs);
+    for (const x of matched) {
+      const m = plan.results.get(x.b.postId);
+      const jobId = realJobId(m.job_id);
+      x.m = m.job_id && !jobId ? { ...m, job_id: null, match_confidence: 'unmatched', needs_review: true, reason: 'job_create_unconfirmed' } : { ...m, job_id: jobId };
+    }
+    const jobReviews = matched.filter((x) => !x.m.job_id && x.m.needs_review)
+      .map((x) => ({ post_id: x.b.postId, job_name: x.b.projectName, reason: x.m.reason, candidate_job_ids: x.m.candidate_job_ids || [] }));
 
     // 8. Write FieldReports (upsert on post_id)
     const existingReports = await fetchAllPages(base44.asServiceRole.entities.FieldReports, '-created_date', 1000);
@@ -237,23 +297,18 @@ export default async function(req) {
 
 
     // 7. Build FeeLines rows + upsert on probuild_post_id
-    const existingFees = await fetchAllPages(base44.asServiceRole.entities.FeeLines, '-created_date', 1000);
-    const existingByPostId = canonicalPostRows(existingFees);
-    const lockedMonths = new Set(existingFees.filter(f => f.source === 'sheet-import').map(f => f.invoice_month));
-    for (const snap of await fetchAllPages(base44.asServiceRole.entities.MonthCloseSnapshot, '-created_date', 1000)) lockedMonths.add(snap.month);
-
     const toCreate = [];
     const toUpdate = [];
     let skipped = 0;
     let merged_count = 0;
     let feePhotosFilled = 0;
+    const serviceFilled = [];
     const flagged = [];
     const phillipGrover = [];
     for (const { b, normName, m } of matched) {
       const post = b.post;
       const ext = extractionMap.get(b.postId) || { needs_review: true };
-      let jobId = m.job_id;
-      if (m.autoCreate) jobId = jobByNorm.get(normName)?.id || null;
+      const jobId = m.job_id;
       const service = parseServiceBilling(post.message || '', ext.man_hours, ext.trip_charges);
       const row = {
         job_id: jobId,
@@ -291,13 +346,20 @@ export default async function(req) {
       const ex = existingByPostId.get(b.postId);
       if (ex) {
         // Append-only (Gabriel 2026-09-15): an existing fee line is never overwritten.
-        // Only permitted write: additive photo_urls fill when the line has none.
+        // Permitted additive writes: photo_urls when the line has none, and an explicit
+        // service quantity on an untouched $0 line (see serviceFill).
+        const patch = {};
         if (!(ex.photo_urls || []).length && (row.photo_urls || []).length) {
-          toUpdate.push({ id: ex.id, photo_urls: row.photo_urls });
+          patch.photo_urls = row.photo_urls;
           feePhotosFilled++;
-        } else {
-          skipped++;
         }
+        const fill = serviceFill(ex, row, ext, lockedMonths);
+        if (fill) {
+          Object.assign(patch, fill);
+          serviceFilled.push({ id: ex.id, post_id: b.postId, job_date: ex.job_date, labor_amt: fill.labor_amt });
+        }
+        if (Object.keys(patch).length) toUpdate.push({ id: ex.id, ...patch });
+        else skipped++;
         continue;
       } else {
         if (lockedMonths.has(row.invoice_month)) { skipped++; continue; }
@@ -340,9 +402,11 @@ export default async function(req) {
       fr_skipped_existing: frSkippedExisting,
       fr_photos_filled: frPhotosFilled,
       fee_photos_filled: feePhotosFilled,
+      service_quantity_filled: serviceFilled,
       merged_into_calendar: merged_count,
       skipped_manually_adjusted: skipped,
-      auto_created_jobs: autoCreateNames,
+      auto_created_jobs: newJobs.map((j) => j.canonical_name),
+      job_match_reviews: jobReviews,
       flagged_for_review: flagged,
       phillip_grover_rows: phillipGrover,
     });

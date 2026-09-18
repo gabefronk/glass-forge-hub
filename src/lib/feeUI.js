@@ -1,4 +1,6 @@
 import { isFutureRow } from "@/lib/feeMath";
+import { denverDate } from "../../base44/shared/billingCore.js";
+import { visitsMissingReport, hasUpcomingVisit } from "@/lib/jobReports";
 
 // ── Glass Forge Design Refresh palette ──────────────────────────────────
 // Warm off-white canvas, opaque white surfaces, graphite nav, teal primary.
@@ -82,7 +84,7 @@ export function statusTag(row) {
   if (isFutureRow(row)) return { label: "Scheduled", bg: C.tagCal.bg, text: C.tagCal.text };
   if (row.fee_type === "profit_split") return { label: "Split", bg: C.tagSplit.bg, text: C.tagSplit.text };
   if (isZeroRow(row)) return { label: "No charge", bg: C.tagNoCharge.bg, text: C.tagNoCharge.text };
-  if (row.needs_review && !row.manually_adjusted) return { label: "Review", bg: C.tagReview.bg, text: C.tagReview.text };
+  if ((row.needs_review || row._companion_review) && !row.manually_adjusted) return { label: "Review", bg: C.tagReview.bg, text: C.tagReview.text };
   if (row.billed_to_bfs) return { label: "Billed", bg: C.tagBillable.bg, text: C.tagBillable.text };
   return { label: "Ready", bg: C.tagBillable.bg, text: C.tagBillable.text };
 }
@@ -127,20 +129,20 @@ export function jobTotals(rows) {
   return { labor, fee, visits };
 }
 
-export function jobStatus(rows) {
+// evidence (optional): buildReportEvidence() from jobReports.js. With it, a visit whose
+// own calendar event shows the report complete/waived no longer reads "Needs report".
+export function jobStatus(rows, evidence = null, today = denverDate()) {
   if (!rows.length) return { label: "Active", bg: C.tagCal.bg, text: C.tagCal.text, key: "active" };
-  const today = new Date().toISOString().slice(0, 10);
   const labor = rows.reduce((s, r) => s + (Number(r.labor_amt) || 0), 0);
   if (labor === 0) return { label: "No charge", bg: C.tagNoCharge.bg, text: C.tagNoCharge.text, key: "no_charge" };
-  const calendarRows = rows.filter(r => r.source === "calendar" || r.source === "both");
   const probuildRows = rows.filter(r => r.source === "probuild" || r.source === "both");
-  const futureEvents = calendarRows.filter(r => (r.job_date || "") > today);
-  const pastEvents = calendarRows.filter(r => (r.job_date || "") <= today);
-  const hasNeedsReview = rows.some(r => r.needs_review);
-  const pastWithNoReport = pastEvents.filter(r => !probuildRows.some(p => (p.job_date || "") === (r.job_date || "")));
-  if (hasNeedsReview || pastWithNoReport.length > 0) return { label: "Needs report", bg: C.tagReview.bg, text: C.tagReview.text, key: "needs_report" };
-  if (futureEvents.length > 0) return { label: "Active", bg: C.tagCal.bg, text: C.tagCal.text, key: "active" };
-  if (probuildRows.length > 0) return { label: "Complete", bg: C.tagBillable.bg, text: C.tagBillable.text, key: "complete" };
+  if (visitsMissingReport(rows, evidence, today).length > 0) return { label: "Needs report", bg: C.tagReview.bg, text: C.tagReview.text, key: "needs_report" };
+  // A job-match review hold (same rule as isMatchBlocked) is not a missing report.
+  if (rows.some(r => r.needs_review && !r.manually_adjusted)) return { label: "Needs review", bg: C.tagBlocked.bg, text: C.tagBlocked.text, key: "needs_review" };
+  if (hasUpcomingVisit(rows, evidence, today)) return { label: "Active", bg: C.tagCal.bg, text: C.tagCal.text, key: "active" };
+  // Past visits with nothing missing (reported, waived or not required) are done too.
+  const hasPastVisit = rows.some(r => r.source === "calendar" || r.source === "both");
+  if (probuildRows.length > 0 || hasPastVisit) return { label: "Complete", bg: C.tagBillable.bg, text: C.tagBillable.text, key: "complete" };
   return { label: "Active", bg: C.tagCal.bg, text: C.tagCal.text, key: "active" };
 }
 

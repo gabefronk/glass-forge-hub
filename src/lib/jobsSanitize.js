@@ -15,6 +15,7 @@
 //   4. Clean orphaned separator punctuation and collapse whitespace.
 
 import { jobStatus, C } from "@/lib/feeUI";
+import { protectUrls, urlPathWords } from "@/lib/fileLinks";
 
 // Tier 2: "install" as a billing/ticket marker.
 // Requires a separator after install AND that only a ticket/amount marker (or
@@ -77,6 +78,12 @@ export function sanitizeText(input) {
   let str = String(input);
   if (!str) return "";
 
+  // 0. Hold links aside so hosts like "cloudfront.net" or commas in a link never
+  //    trigger clause drops or splits. A link whose own path names a billing
+  //    concept (e.g. ".../Price-Sheet.pdf") is left in place and filtered as before.
+  const links = protectUrls(str, (url) => !BILLING_CONCEPT_RE.test(urlPathWords(url)));
+  str = links.text;
+
   // 1. Remove install ticket/amount markers as units.
   str = str.replace(INSTALL_MARKER_RE, " ");
 
@@ -96,7 +103,7 @@ export function sanitizeText(input) {
     .replace(/^[ \t]+|[ \t]+$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return out;
+  return links.restore(out);
 }
 
 // Feed-specific cleaning for long operational text (scope notes, report
@@ -113,8 +120,10 @@ export function cleanFeedText(input) {
 }
 
 // Wrapper that never returns the "No charge" status — zero-labor jobs read as Active.
-export function jobsStatus(rows) {
-  const s = jobStatus(rows);
+// evidence: optional field-report evidence, see jobReports.buildReportEvidence.
+// today: optional YYYY-MM-DD override (tests); defaults to the Denver date.
+export function jobsStatus(rows, evidence, today) {
+  const s = jobStatus(rows, evidence, today);
   if (s.key === "no_charge") {
     return { label: "Active", key: "active", bg: C.tagCal.bg, text: C.tagCal.text };
   }

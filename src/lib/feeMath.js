@@ -7,6 +7,12 @@
 import { computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount, laborRate, denverDate } from "../../base44/shared/billingCore.js";
 export { computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount };
 
+// Rows as the Invoicing page sees them: labor/fee recomputed from source fields.
+// Every "ready to bill" view (Invoicing, Dashboard, sidebar) must use this so their totals agree.
+export function withComputedAmounts(rows) {
+  return (Array.isArray(rows) ? rows : []).map((r) => ({ ...r, labor_amt: computeLaborAmt(r), fee_amt: computeFeeAmt(r) }));
+}
+
 // Profit = sale_price − cost (display only, never stored).
 export function computeProfit(row) {
   if (row.fee_type !== 'profit_split') return 0;
@@ -189,6 +195,14 @@ export function filterRows(rows, filter) {
 
 export function currentMonthStr() {
   return denverDate().slice(0, 7);
+}
+
+// "YYYY-MM" shifted by whole months, without Date/UTC conversion
+// (toISOString() on local midnight can land in the previous month east of UTC).
+export function shiftMonthStr(monthStr, delta) {
+  const [y, m] = monthStr.split("-").map(Number);
+  const index = y * 12 + (m - 1) + delta;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
 }
 
 export function monthLabel(monthStr) {

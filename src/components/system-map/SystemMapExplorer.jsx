@@ -1,6 +1,6 @@
 import React, { useId, useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import './system-map.css';
-import { ZoomIn, ZoomOut, Maximize, RotateCcw } from 'lucide-react';
+import { Maximize, RotateCcw } from 'lucide-react';
 
 const STATUS = {
   working: { label: 'Recorded working', color: '#175652' },

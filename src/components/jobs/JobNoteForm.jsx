@@ -3,9 +3,10 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Paperclip, X, Loader2 } from "lucide-react";
 import { C } from "@/lib/feeUI";
+import { denverDate } from "../../../base44/shared/billingCore.js";
 
 export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = denverDate();
   const [noteDate, setNoteDate] = useState(editing?.note_date || today);
   const [body, setBody] = useState(editing?.body || "");
   const [attachments, setAttachments] = useState(editing?.attachments || []);

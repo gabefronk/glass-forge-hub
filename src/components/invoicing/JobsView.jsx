@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { computeFeeAmt, formatMoney } from "@/lib/feeMath";
 
-export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
+export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob, isLineReady = () => true }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(null);
 
@@ -30,6 +30,8 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
       {jobs.map((job) => {
         const key = job.id || job.name;
         const isOpen = expanded === key;
+        const readyLines = job.lines.filter(isLineReady);
+        const readyFee = readyLines.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0);
         return (
           <div key={key} style={{ borderBottom: "1px solid #ECEEEA" }}>
             <button
@@ -53,8 +55,8 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob }) {
                   </div>
                 ))}
                 <div className="flex gap-2 mt-3 flex-wrap">
-                  <button onClick={() => onBillJob(job)} className="min-h-10 rounded-lg px-3.5 text-[13px] font-semibold whitespace-nowrap" style={{ border: "1px solid #104E44", backgroundColor: "#146556", color: "#FFFFFF", cursor: "pointer" }}>
-                    Bill this job · ${formatMoney(job.fee)}
+                  <button onClick={() => onBillJob(job)} disabled={readyLines.length === 0} title={readyLines.length === job.lines.length ? undefined : `${job.lines.length - readyLines.length} line(s) are held, scheduled, excluded or already billed and will not be billed`} className="min-h-10 rounded-lg px-3.5 text-[13px] font-semibold whitespace-nowrap disabled:opacity-50" style={{ border: "1px solid #104E44", backgroundColor: "#146556", color: "#FFFFFF", cursor: readyLines.length ? "pointer" : "not-allowed" }}>
+                    {readyLines.length ? `Bill ${readyLines.length} ready ${readyLines.length === 1 ? "line" : "lines"} · $${formatMoney(readyFee)}` : "Nothing ready to bill"}
                   </button>
                   <button onClick={() => onExportJob(job)} className="min-h-10 rounded-lg px-3.5 text-[13px] font-medium whitespace-nowrap" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#182422", cursor: "pointer" }}>
                     Export CSV

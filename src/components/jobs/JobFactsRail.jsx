@@ -1,67 +1,11 @@
-import { Phone, Mail, MapPin, Building2, User, FileText, ExternalLink, HardHat } from "lucide-react";
+import { MapPin, Building2, FileText, ExternalLink } from "lucide-react";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
+import { ContactRow, JobContactRows, JobContactSuggestionsRow, Row } from "@/components/jobs/JobContacts";
 
-function qualifierOf(contact) {
-  const builder = contact.builder || "";
-  const company = contact.company || "";
-  if (builder && company.startsWith(builder)) {
-    return company.slice(builder.length).replace(/^\s*[-–—:]\s*/, "").trim();
-  }
-  return company;
-}
-
-const PM_RE = /\b(pm|superintendent|project manager|construction manager|field manager|lead)\b/i;
-const HOMEOWNER_RE = /\b(homeowner|home owner|owner|buyer|customer|resident)\b/i;
-
-function classify(contacts) {
-  const builder = [], pm = [], homeowner = [], site = [];
-  for (const c of contacts || []) {
-    const q = qualifierOf(c);
-    if (!q) builder.push(c);
-    else if (PM_RE.test(q)) pm.push(c);
-    else if (HOMEOWNER_RE.test(q)) homeowner.push(c);
-    else site.push(c);
-  }
-  return { builder, pm, homeowner, site };
-}
-
-function ContactRow({ contact }) {
-  const phone = contact.phone;
-  const email = contact.email;
-  return (
-    <div className="min-w-0">
-      <div className="text-[13px] font-medium break-words" style={{ color: C.text }}>{sanitizeText(contact.name)}</div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-        {phone && (
-          <a href={`tel:${String(phone).replace(/\s/g, "")}`} className="inline-flex items-center gap-1 text-[12px] py-0.5 break-words hover:underline" style={{ color: C.accentText }}>
-            <Phone className="h-3 w-3 shrink-0" />{phone}
-          </a>
-        )}
-        {email && (
-          <a href={`mailto:${email}`} className="inline-flex items-center gap-1 text-[12px] py-0.5 break-all hover:underline" style={{ color: C.accentText }}>
-            <Mail className="h-3 w-3 shrink-0" />{email}
-          </a>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Row({ icon: Icon, label, children }) {
-  return (
-    <div className="flex items-start gap-2.5 py-2.5" style={{ borderTop: `1px solid ${C.rowBorder}` }}>
-      <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: C.textMuted }} />
-      <div className="min-w-0 flex-1">
-        <div className="mono-label-sm mb-1">{label}</div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-export default function JobFactsRail({ job, contacts, plans }) {
-  const { builder, pm, homeowner, site } = classify(contacts);
+// jobContacts is the useJobContacts() result: the read-only Jobs ⇄ ContactJobLink ⇄ directory join.
+export default function JobFactsRail({ job, jobContacts, plans }) {
+  const builder = (jobContacts?.view?.linked || []).filter((c) => c.role === "builder");
   const jobPlans = plans || [];
   const mapHref = job.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
 
@@ -76,23 +20,7 @@ export default function JobFactsRail({ job, contacts, plans }) {
         </div>
       </div>
 
-      {pm.length > 0 && (
-        <Row icon={HardHat} label="Project manager">
-          <div className="space-y-1.5">{pm.map((c) => <ContactRow key={c.key} contact={c} />)}</div>
-        </Row>
-      )}
-
-      {homeowner.length > 0 && (
-        <Row icon={User} label="Homeowner">
-          <div className="space-y-1.5">{homeowner.map((c) => <ContactRow key={c.key} contact={c} />)}</div>
-        </Row>
-      )}
-
-      {site.length > 0 && (
-        <Row icon={User} label="Site contact">
-          <div className="space-y-1.5">{site.map((c) => <ContactRow key={c.key} contact={c} />)}</div>
-        </Row>
-      )}
+      <JobContactRows jobId={job.id} jobContacts={jobContacts} />
 
       {job.address && (
         <Row icon={MapPin} label="Job address">
@@ -110,16 +38,28 @@ export default function JobFactsRail({ job, contacts, plans }) {
       {jobPlans.length > 0 && (
         <Row icon={FileText} label="Plans & documents">
           <div className="space-y-1">
-            {jobPlans.map((p, i) => (
-              <a key={i} href={p.page_urls?.[0] || "#"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12px] py-0.5 break-words hover:underline" style={{ color: C.accentText }}>
-                <ExternalLink className="h-3 w-3 shrink-0" />
-                <span className="break-words">{sanitizeText(p.file_name)}</span>
-                {p.page_count > 0 && <span style={{ color: C.textMuted }}>· {p.page_count}p</span>}
-              </a>
-            ))}
+            {jobPlans.map((p, i) => {
+              // Open the whole plan set (Drive file), not just the first split page.
+              const href = p.drive_file_id ? `https://drive.google.com/file/d/${encodeURIComponent(p.drive_file_id)}/view` : p.page_urls?.[0];
+              const label = (
+                <>
+                  <span className="break-words">{sanitizeText(p.file_name) || "Plan document"}</span>
+                  {p.page_count > 0 && <span style={{ color: C.textMuted }}>· {p.page_count}p</span>}
+                </>
+              );
+              return href ? (
+                <a key={p.id || i} href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12px] py-0.5 break-words hover:underline" style={{ color: C.accentText }}>
+                  <ExternalLink className="h-3 w-3 shrink-0" />{label}
+                </a>
+              ) : (
+                <span key={p.id || i} className="inline-flex items-center gap-1.5 text-[12px] py-0.5 break-words" style={{ color: C.textMuted }} title="No file link recorded for this plan">{label}</span>
+              );
+            })}
           </div>
         </Row>
       )}
+
+      <JobContactSuggestionsRow jobContacts={jobContacts} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { C, formatDateGroup } from "@/lib/feeUI";
 import { denverDate } from "../../../base44/shared/billingCore.js";
 import { AlertTriangle } from "lucide-react";
+import { resolveFieldReport } from "@/lib/fieldReports";
 
 function statusLabel(event) {
   if (event.report_status === "rescheduled") {
@@ -35,6 +36,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
   const [uploadNotes, setUploadNotes] = useState("");
   const [waiveReason, setWaiveReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   const todayDenver = denverDate();
   const outstanding = (events || [])
@@ -72,37 +74,43 @@ export default function OutstandingReports({ events, user, onChanged, compliance
   const isManager = user?.role === "manager" || isAdmin;
 
   const handleUpload = async () => {
-    setBusy(true);
+    setBusy(true); setActionError("");
     try {
       const photoUrls = [];
       for (const file of uploadPhotos) {
         const { file_url } = await base44.integrations.Core.UploadFile({ file });
         photoUrls.push(file_url);
       }
-      await base44.functions.invoke("resolveFieldReport", {
-        event_id: uploading.id, action: "upload", photos: photoUrls, notes: uploadNotes,
+      await resolveFieldReport({
+        event_id: uploading.id, job_id: uploading.job_id || undefined, action: "upload", photos: photoUrls, notes: uploadNotes,
       });
       setUploading(null); setUploadPhotos([]); setUploadNotes("");
       if (onChanged) await onChanged();
+    } catch (e) {
+      setActionError(e?.message || "Upload failed. Try again.");
     } finally { setBusy(false); }
   };
 
   const handleMarkReported = async (event) => {
-    setBusy(true);
+    setBusy(true); setActionError("");
     try {
-      await base44.functions.invoke("resolveFieldReport", { event_id: event.id, action: "mark_reported" });
+      await resolveFieldReport({ event_id: event.id, action: "mark_reported" });
       if (onChanged) await onChanged();
+    } catch (e) {
+      setActionError(e?.message || "Could not mark the report. Try again.");
     } finally { setBusy(false); }
   };
 
   const handleWaive = async () => {
-    setBusy(true);
+    setBusy(true); setActionError("");
     try {
-      await base44.functions.invoke("resolveFieldReport", {
+      await resolveFieldReport({
         event_id: waiving.id, action: "waive", reason: waiveReason,
       });
       setWaiving(null); setWaiveReason("");
       if (onChanged) await onChanged();
+    } catch (e) {
+      setActionError(e?.message || "Could not waive the report. Try again.");
     } finally { setBusy(false); }
   };
 
@@ -125,6 +133,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
           <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Field reports outstanding</h2>
           <span className="font-mono-num-bold text-[20px]" style={{ color: C.amber }}>{outstanding.length}</span>
         </div>
+        {actionError && !uploading && !waiving && <p role="alert" className="px-4 sm:px-5 py-2 text-[12px] break-words" style={{ color: "#A43432" }}>{actionError}</p>}
         <div>
           {outstanding.map((event) => {
             const label = statusLabel(event);
@@ -147,12 +156,12 @@ export default function OutstandingReports({ events, user, onChanged, compliance
                       {event.job_id && (
                         <Link to={`/jobs/${event.job_id}`} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Open job</Link>
                       )}
-                      <button onClick={() => setUploading(event)} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Upload here</button>
+                      <button onClick={() => { setActionError(""); setUploading(event); }} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Upload here</button>
                       {isManager && (
                         <button onClick={() => handleMarkReported(event)} disabled={busy} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Mark reported</button>
                       )}
                       {isAdmin && (
-                        <button onClick={() => setWaiving(event)} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Waive</button>
+                        <button onClick={() => { setActionError(""); setWaiving(event); }} className="text-[10px] font-semibold tracking-[0.01em] px-2.5 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Waive</button>
                       )}
                     </div>
                   </div>
@@ -171,6 +180,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
             <p className="text-[12px] mb-3 break-words" style={{ color: C.textMuted }}>{uploading.job_name}</p>
             <input type="file" multiple accept="image/*" onChange={(e) => setUploadPhotos([...e.target.files])} className="mb-3 w-full text-[12px]" style={{ color: C.textSecondary }} />
             <textarea value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} placeholder="Notes..." className="w-full rounded-[10px] p-2.5 text-[13px] mb-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} rows={3} />
+            {actionError && <p role="alert" className="mb-3 text-[12px] break-words" style={{ color: "#A43432" }}>{actionError}</p>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setUploading(null)} className="px-3 py-1.5 rounded-full text-[12px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Cancel</button>
               <button onClick={handleUpload} disabled={busy} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={{ backgroundColor: C.accent, color: C.accentDark }}>{busy ? "Uploading..." : "Upload"}</button>
@@ -185,6 +195,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Waive report requirement</h3>
             <p className="text-[12px] mb-3 break-words" style={{ color: C.textMuted }}>{waiving.job_name}</p>
             <textarea value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} placeholder="Reason for waiving..." className="w-full rounded-[10px] p-2.5 text-[13px] mb-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} rows={3} />
+            {actionError && <p role="alert" className="mb-3 text-[12px] break-words" style={{ color: "#A43432" }}>{actionError}</p>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setWaiving(null)} className="px-3 py-1.5 rounded-full text-[12px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Cancel</button>
               <button onClick={handleWaive} disabled={busy || !waiveReason.trim()} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={{ backgroundColor: C.amber, color: "#FFFFFF", opacity: busy || !waiveReason.trim() ? 0.5 : 1 }}>{busy ? "Waiving..." : "Waive"}</button>
