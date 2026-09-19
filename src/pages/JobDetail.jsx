@@ -154,7 +154,7 @@ export default function JobDetail() {
         {/* Body: facts rail + activity feed */}
         <div className="max-w-[1240px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
           <aside className="lg:col-span-4 lg:sticky lg:top-6 self-start">
-            <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} />
+            <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} />
           </aside>
           <div className="lg:col-span-8 min-w-0" id="add-note">
             <JobActivityFeed

@@ -12,6 +12,7 @@ import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
 import { AttachmentViewer } from "@/components/jobs/FeedImage";
+import JobEventDocuments, { eventAttachments } from "@/components/jobs/JobEventDocuments";
 
 // Superintendent first, then project manager, from the read-only job contacts join.
 function pickLead(linked) {
@@ -153,6 +154,12 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
           )}
         </div>
         <DuplicateJobNotice group={group} currentId={jobId} className="mt-3" />
+        {eventAttachments(calEvents).length > 0 && (
+          <div className="mt-3 rounded-[10px] px-3.5 py-2.5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
+            <div className="mono-label-sm mb-1.5">Event documents</div>
+            <JobEventDocuments events={calEvents} />
+          </div>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll px-5 py-5">

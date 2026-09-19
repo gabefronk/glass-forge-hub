@@ -91,6 +91,26 @@
       "title": "Installer Event Id",
       "description": "sanitized installer calendar event id"
     },
+    "event_attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "file_url": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          }
+        }
+      },
+      "title": "Event Attachments",
+      "default": [],
+      "description": "Documents/files attached to the source Google Calendar event (added to the invite from Gmail or Drive). Surfaced in the job detail so the crew can open them. Gmail-sourced attachment links require the owner's Google session to open."
+    },
     "sanitize_flagged": {
       "type": "boolean",
       "title": "Sanitize Flagged",
@@ -137,7 +157,7 @@
       ],
       "title": "Report Status",
       "default": "pending",
-      "description": "Current field-report audit status. pending = within grace period (not yet late). no_source_data = Probuild pull found zero reports for D-1/D/D+1 (sync incomplete, flags suppressed). pre_compliance = event scheduled before COMPLIANCE_START_DATE \u2014 suppressed from Today tab, never red, never accrues days_late."
+      "description": "Current field-report audit status. pending = within grace period (not yet late). no_source_data = Probuild pull found zero reports for D-1/D/D+1 (sync incomplete, flags suppressed). pre_compliance = event scheduled before COMPLIANCE_START_DATE \u2014 suppressed from Today tab, never red, never accrue days_late."
     },
     "report_status_raw": {
       "type": "string",

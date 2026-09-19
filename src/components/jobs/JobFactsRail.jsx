@@ -2,9 +2,10 @@ import { MapPin, Building2, FileText, ExternalLink } from "lucide-react";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { ContactRow, JobContactRows, JobContactSuggestionsRow, Row } from "@/components/jobs/JobContacts";
+import JobEventDocuments, { eventAttachments } from "@/components/jobs/JobEventDocuments";
 
 // jobContacts is the useJobContacts() result: the read-only Jobs ⇄ ContactJobLink ⇄ directory join.
-export default function JobFactsRail({ job, jobContacts, plans }) {
+export default function JobFactsRail({ job, jobContacts, plans, events }) {
   const builder = (jobContacts?.view?.linked || []).filter((c) => c.role === "builder");
   const jobPlans = plans || [];
   const mapHref = job.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
@@ -21,6 +22,12 @@ export default function JobFactsRail({ job, jobContacts, plans }) {
       </div>
 
       <JobContactRows jobId={job.id} jobContacts={jobContacts} />
+
+      {eventAttachments(events).length > 0 && (
+        <Row icon={FileText} label="Event documents">
+          <JobEventDocuments events={events} />
+        </Row>
+      )}
 
       {job.address && (
         <Row icon={MapPin} label="Job address">

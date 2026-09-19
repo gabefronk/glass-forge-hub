@@ -51,6 +51,13 @@ export default async function(req) {
       } while (pageToken);
     }
 
+    // The same Google event id can appear on both sourced calendars (an event
+    // shared with the GF Jobs calendar reuses the id). The CalendarEvents model
+    // stores one record per google_event_id, so dedupe by id — first calendar
+    // (iryedra, pushToInstaller: true) wins.
+    const seenIds = new Set();
+    const items = allItems.filter((it) => (seenIds.has(it.id) ? false : (seenIds.add(it.id), true)));
+
     const existing = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 1000);
     const byGoogleId = new Map();
     for (const e of existing) if (e.google_event_id) byGoogleId.set(e.google_event_id, e);
@@ -58,7 +65,7 @@ export default async function(req) {
     const toUpdate = [];
     const toCreate = [];
     let skippedApp = 0;
-    for (const ev of allItems) {
+    for (const ev of items) {
       if (ev.extendedProperties?.private?.appSource === 'glassforge') { skippedApp++; continue; }
       if (ev.status === 'cancelled') {
         const ex = byGoogleId.get(ev.id);
@@ -84,6 +91,7 @@ export default async function(req) {
         address: extractAddress(ev.location, ev.description),
         source_location: ev.location || null,
         scope_notes: ev.description || '',
+        event_attachments: (ev.attachments || []).map((a) => ({ title: a.title || '', file_url: a.fileUrl || '', mime_type: a.mimeType || '' })).filter((a) => a.file_url),
         labor_amt: extractLaborAmount(htmlToText(ev.description || '')) || 0,
         crew: null,
         prerequisites: null,
