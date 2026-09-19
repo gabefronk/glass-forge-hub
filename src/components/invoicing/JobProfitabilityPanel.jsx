@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, MailCheck } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, CircleDollarSign } from "lucide-react";
 import { aggregateProfitSplitSummaries, calculateJobProfitability, moneyOrDash, percentOrDash } from "@/lib/jobProfitability";
 
 const C = { ink: "#182422", muted: "#53615B", line: "#DDE0DA", soft: "#F5F6F3", good: "#166447", warn: "#8A5A10" };
@@ -22,59 +22,62 @@ function costStatus(job) {
   return { label: `${count} cost input${count === 1 ? "" : "s"} missing`, color: C.warn };
 }
 
-function SplitSummary({ records }) {
-  const splitJobs = records.filter((job) => job.profit_split?.lines?.length);
-  if (!splitJobs.length) return null;
+function SplitTotalsStrip({ records }) {
   const totals = aggregateProfitSplitSummaries(records);
+  if (!totals.count) return null;
+  const items = [
+    ["customer sell", totals.customer_sell],
+    ["Y.A. cost basis", totals.ya_cost_basis],
+    ["product profit", totals.product_profit],
+    ["Y.A. share", totals.ya_share],
+    ["Glass Forge share", totals.glass_forge_share],
+    ["invoice amt", totals.invoice_amount],
+  ];
   return (
-    <div className="px-4 py-3" style={{ borderBottom: `1px solid ${C.line}`, backgroundColor: "#FBFCFA" }}>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="text-[12px] font-semibold" style={{ color: C.ink }}>Profit split economics</div>
-        <div className="text-[11px]" style={{ color: C.muted }}>{totals.count} split job{totals.count === 1 ? "" : "s"} · product profit split only</div>
+    <div className="grid gap-3 px-4 py-3 sm:grid-cols-3 xl:grid-cols-6" style={{ borderBottom: `1px solid ${C.line}`, backgroundColor: "#FBFCFA" }}>
+      {items.map(([label, value]) => (
+        <div key={label} className="min-w-0">
+          <div className="truncate text-[10px] uppercase" style={{ color: C.muted }}>{label}</div>
+          <div className="font-mono-num-bold text-[13px]" style={{ color: label === "Glass Forge share" ? C.good : C.ink }}>{moneyOrDash(value)}</div>
+        </div>
+      ))}
+      <div className="sm:col-span-3 xl:col-span-6 text-[11px]" style={{ color: totals.missing_inputs.length ? C.warn : C.muted }}>
+        {totals.count} profit-split job{totals.count === 1 ? "" : "s"} in the current filter · product profit split only{totals.missing_inputs.length ? ` · missing ${totals.missing_inputs.join(", ")}` : ""}
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-[920px] w-full border-collapse text-[11px]">
-          <thead style={{ color: C.muted }}>
-            <tr className="text-left uppercase">
-              <th className="py-1 pr-3 font-medium">Job</th>
-              <th className="py-1 pr-3 text-right font-medium">Sell price</th>
-              <th className="py-1 pr-3 text-right font-medium">Y.A. cost basis</th>
-              <th className="py-1 pr-3 text-right font-medium">Product profit</th>
-              <th className="py-1 pr-3 text-right font-medium">Y.A. share</th>
-              <th className="py-1 pr-3 text-right font-medium">Glass Forge share</th>
-              <th className="py-1 pr-3 text-right font-medium">Invoice amt</th>
-              <th className="py-1 pr-3 font-medium">Status</th>
+    </div>
+  );
+}
+
+function SourceLines({ job }) {
+  if (job.lines.length <= 1 && !(job.profit_split?.lines?.length)) return null;
+  return (
+    <div className="mt-3 overflow-x-auto rounded-md" style={{ border: `1px solid ${C.line}` }}>
+      <table className="min-w-[760px] w-full border-collapse text-[11px]">
+        <thead style={{ backgroundColor: "#FBFCFA", color: C.muted }}>
+          <tr className="text-left uppercase">
+            <th className="px-3 py-2 font-medium">Source line</th>
+            <th className="px-3 py-2 text-right font-medium">Sell</th>
+            <th className="px-3 py-2 text-right font-medium">Cost</th>
+            <th className="px-3 py-2 text-right font-medium">Product profit</th>
+            <th className="px-3 py-2 text-right font-medium">Y.A. share</th>
+            <th className="px-3 py-2 text-right font-medium">GF share</th>
+            <th className="px-3 py-2 text-right font-medium">Invoice</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(job.profit_split?.lines || []).map((line) => (
+            <tr key={line.id} style={{ borderTop: `1px solid ${C.line}` }}>
+              <td className="px-3 py-2"><span className="block font-medium" style={{ color: C.ink }}>{line.job_name}</span><span style={{ color: C.muted }}>{line.source_label}{line.calendar_event_id ? ` · ${line.calendar_event_id}` : ""}</span></td>
+              <td className="px-3 py-2 text-right font-mono-num">{moneyOrDash(line.customer_sell)}</td>
+              <td className="px-3 py-2 text-right font-mono-num">{moneyOrDash(line.ya_cost_basis)}</td>
+              <td className="px-3 py-2 text-right font-mono-num">{moneyOrDash(line.product_profit)}</td>
+              <td className="px-3 py-2 text-right font-mono-num">{moneyOrDash(line.ya_share)}</td>
+              <td className="px-3 py-2 text-right font-mono-num-bold" style={{ color: C.good }}>{moneyOrDash(line.glass_forge_share)}</td>
+              <td className="px-3 py-2 text-right font-mono-num">{moneyOrDash(line.invoice_amount)}</td>
             </tr>
-          </thead>
-          <tbody>
-            {splitJobs.map((job) => {
-              const split = job.profit_split;
-              return (
-                <tr key={`split-${job.key}`} style={{ borderTop: `1px solid ${C.line}` }}>
-                  <td className="py-2 pr-3"><span className="block max-w-[220px] truncate font-medium" style={{ color: C.ink }}>{job.name}</span><span style={{ color: C.muted }}>{split.lines[0]?.source_label || "FeeLine"}</span></td>
-                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.customer_sell)}</td>
-                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.ya_cost_basis)}</td>
-                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.product_profit)}</td>
-                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.ya_share)}</td>
-                  <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.good }}>{moneyOrDash(split.glass_forge_share)}</td>
-                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.invoice_amount)}</td>
-                  <td className="py-2 pr-3" style={{ color: split.missing_inputs.length ? C.warn : C.good }}>{split.missing_inputs.length ? `Missing ${split.missing_inputs.join(", ")}` : split.lines[0]?.invoice_status || "ready"}</td>
-                </tr>
-              );
-            })}
-            <tr style={{ borderTop: `2px solid ${C.line}` }}>
-              <td className="py-2 pr-3 font-semibold" style={{ color: C.ink }}>Filtered total</td>
-              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.customer_sell)}</td>
-              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.ya_cost_basis)}</td>
-              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.product_profit)}</td>
-              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.ya_share)}</td>
-              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.good }}>{moneyOrDash(totals.glass_forge_share)}</td>
-              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.invoice_amount)}</td>
-              <td className="py-2 pr-3" style={{ color: totals.missing_inputs.length ? C.warn : C.good }}>{totals.missing_inputs.length ? `Missing ${totals.missing_inputs.join(", ")}` : "complete"}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -99,7 +102,7 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
         <div className="text-[11px]" style={{ color: C.muted }}>{records.length} jobs · {provisionalCount} with cost gaps</div>
       </div>
 
-      <SplitSummary records={records} />
+      <SplitTotalsStrip records={records} />
 
       <div className="divide-y" style={{ borderColor: C.line }}>
         {visible.map((job) => {
@@ -140,6 +143,7 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
                     <DetailPair label="Allocated overhead">{moneyOrDash(job.allocated_overhead)}</DetailPair>
                     <DetailPair label="EBIT contribution">{moneyOrDash(job.ebit_contribution)}</DetailPair>
                   </div>
+                  <SourceLines job={job} />
                   <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px]" style={{ color: C.muted }}>
                     <span>Material source: {job.material_source?.source_label || "not linked"}</span>
                     {job.planned_material_cost != null && <span>Roll plan: {job.material_roll_use.toFixed(2)} roll{job.material_roll_use === 1 ? "" : "s"} · {job.material_roll_mode === "whole_roll" ? "whole-roll purchase" : "fractional use"}</span>}
