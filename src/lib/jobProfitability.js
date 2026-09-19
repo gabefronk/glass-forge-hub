@@ -139,11 +139,11 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
     const plannedMaterialCost = plannedRollUse !== null ? round2(plannedRollUse * rollPrice) : null;
     const installMaterialCost = directInstallMaterialCost ?? plannedMaterialCost;
     const installationProfit = laborCost !== null && installMaterialCost !== null ? round2(installationRevenue - laborCost - installMaterialCost) : null;
-    const totalRevenue = round2((productSell || 0) + (installationRevenue || 0));
+    const knownRevenue = round2((productSell || 0) + (installationRevenue || 0));
     const knownProductContribution = productProfitContribution ?? 0;
     const knownInstallationProfit = installationProfit ?? 0;
     const grossProfit = productProfitContribution !== null && installationProfit !== null ? round2(knownProductContribution + knownInstallationProfit) : null;
-    const grossMargin = grossProfit !== null && totalRevenue > 0 ? grossProfit / totalRevenue : null;
+    const grossMargin = grossProfit !== null && knownRevenue > 0 ? grossProfit / knownRevenue : null;
     const overhead = num(input?.allocated_overhead);
     const ebit = grossProfit !== null && overhead !== null ? round2(grossProfit - overhead) : null;
     const missing = [];
@@ -158,7 +158,8 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
       route_label: JOB_PROFIT_ROUTES[route] || route,
       input,
       material_source: material,
-      customer_revenue: totalRevenue,
+      customer_revenue: productSell,
+      known_revenue: knownRevenue,
       product_sell: productSell,
       product_cost: productCost,
       product_profit: productProfit,
