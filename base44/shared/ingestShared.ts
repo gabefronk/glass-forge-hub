@@ -235,30 +235,45 @@ export function htmlToText(html) {
   return s.trim();
 }
 
-// Detect a profit-split pattern in the event description: a "Project Total"
-// line (sale price) and a "Package Cost" / "Material Cost" line (cost).
-// Returns { sale_price, cost } when both are found and sale_price > cost,
-// indicating a side job where profit is split 50/50 with YA.
+// Detect a profit-split pattern in the event description. A confirmed split
+// needs either explicit sale/cost labels, or total/profit/split labels where the
+// split matches half of product profit. Ambiguous profit notes stay in review.
 export function extractProfitSplit(description) {
   if (!description) return null;
   const lines = String(description).split(/\r?\n/);
   const moneyRe = /\$\s?([\d,]+(?:\.\d{1,2})?)/;
   let salePrice = null;
   let cost = null;
+  let profit = null;
+  let split = null;
+  const roundMoney = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  const nearlyEqual = (a, b) => Math.abs(roundMoney(a) - roundMoney(b)) <= 0.01;
+
   for (const line of lines) {
-    const lower = line.toLowerCase();
+    const label = line.toLowerCase().trim();
     const m = line.match(moneyRe);
     if (!m) continue;
     const amt = Number(m[1].replace(/,/g, ''));
-    if (lower.includes('project total') && salePrice === null) {
+    if (/^(?:project\s+total|sale\s+price|total)\b/.test(label) && salePrice === null) {
       salePrice = amt;
     }
-    if ((lower.includes('package cost') || lower.includes('material cost')) && cost === null) {
+    if (/^(?:package\s+cost|material\s+cost|cost)\b/.test(label) && cost === null) {
       cost = amt;
     }
+    if (/^profit\b/.test(label) && profit === null) {
+      profit = amt;
+    }
+    if (/^(?:profit\s+)?split\b/.test(label) && split === null) {
+      split = amt;
+    }
   }
+
   if (salePrice !== null && cost !== null && salePrice > cost) {
     return { sale_price: salePrice, cost };
+  }
+  if (salePrice !== null && profit !== null && split !== null && profit > 0 && nearlyEqual(split, profit * 0.5)) {
+    const derivedCost = roundMoney(salePrice - profit);
+    if (derivedCost >= 0) return { sale_price: salePrice, cost: derivedCost };
   }
   return null;
 }
