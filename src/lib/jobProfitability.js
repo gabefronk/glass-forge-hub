@@ -222,6 +222,12 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
     const knownProductContribution = productProfitContribution ?? 0;
     const knownInstallationProfit = installationProfit ?? 0;
     const grossProfit = productProfitContribution !== null && installationProfit !== null ? round2(knownProductContribution + knownInstallationProfit) : null;
+    const splitProductProfit = split?.product_profit ?? null;
+    const totalJobProfit = splitProductProfit !== null
+      ? (installationProfit !== null ? round2(splitProductProfit + installationProfit) : splitProductProfit)
+      : grossProfit;
+    const glassForgeProfit = split ? (installationProfit !== null ? round2((split.glass_forge_share ?? 0) + installationProfit) : split.glass_forge_share) : grossProfit;
+    const yaWindowsProfit = split?.ya_share ?? null;
     const grossMargin = grossProfit !== null && knownRevenue > 0 ? grossProfit / knownRevenue : null;
     const overhead = num(input?.allocated_overhead);
     const knownCostTotal = [productCost, laborCost, installMaterialCost, overhead].reduce((total, value) => total + (value ?? 0), 0);
@@ -257,6 +263,9 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
       material_roll_use: plannedRollUse,
       material_roll_mode: rollMode,
       installation_profit: installationProfit,
+      total_job_profit: totalJobProfit,
+      ya_windows_profit: yaWindowsProfit,
+      glass_forge_profit: glassForgeProfit,
       total_gross_profit: grossProfit,
       gross_margin: grossMargin,
       allocated_overhead: overhead,
