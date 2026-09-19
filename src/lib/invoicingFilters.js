@@ -33,8 +33,27 @@ export const isMatchBlocked = (r) =>
 // Field-report block: the crew hasn't uploaded photos/notes for the source
 // CalendarEvent. Requires a reportStatusMap: Map<calendar_event_id, report_status>.
 // A row with no calendar_event_id (probuild-only or app-authored) is not blocked.
+export const hasFeeLineReportEvidence = (r) => {
+  if (!r) return false;
+  return !!(
+    r.probuild_post_id &&
+    (r.probuild_note_text || r.note_text || Number(r.man_hours) > 0 || Number(r.trip_charges) > 0 || (Array.isArray(r.photo_urls) && r.photo_urls.length > 0))
+  );
+};
+
+export const hasInvoiceSheetSourceEvidence = (r) => {
+  if (!r || r.source !== "calendar" || r.probuild_post_id) return false;
+  if (r.calendar_labor_amt == null || r.calendar_labor_amt === "" || Number(r.calendar_labor_amt) <= 0) return false;
+  const text = [r.calendar_note_text, r.note_text, r.line_description].filter(Boolean).join("\n").toLowerCase();
+  const hasInstallSource = /\b(?:amsco\s+direct|(?:andersen|pella|windor)\s+del\s+to\s+bfs|bfs\s+to\s+will\s+call|bfs\s+to\s+pick\s+up)\b/.test(text);
+  const hasOrderDetail = /\bqty\.?\s*\d+\b/.test(text) && (/\boe\s*\d{6,}/.test(text) || /\bpo\s*#?:?\s*\d{5,}/.test(text) || /\border\s*#?:?\s*[\w-]+/.test(text));
+  const hasLabor = /\blabor\s*\$?\s*\d/i.test(text);
+  return hasInstallSource && hasOrderDetail && hasLabor;
+};
+
 export const isReportBlocked = (r, reportStatusMap) => {
   if (!r.calendar_event_id || !reportStatusMap) return false;
+  if (hasFeeLineReportEvidence(r) || hasInvoiceSheetSourceEvidence(r)) return false;
   const status = reportStatusMap.get(r.calendar_event_id);
   if (!status) return false;
   return !OK_REPORT_STATUSES.includes(status);
