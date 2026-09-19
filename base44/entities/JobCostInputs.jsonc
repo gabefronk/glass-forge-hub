@@ -1,0 +1,140 @@
+{
+  "name": "JobCostInputs",
+  "type": "object",
+  "properties": {
+    "month": {
+      "type": "string",
+      "title": "Month",
+      "description": "YYYY-MM"
+    },
+    "job_id": {
+      "type": "string",
+      "title": "Job Id"
+    },
+    "job_name_norm": {
+      "type": "string",
+      "title": "Job Name"
+    },
+    "route": {
+      "type": "string",
+      "enum": [
+        "bfs_installed_sale",
+        "bfs_supply_ya_install",
+        "bfs_to_ya_turnkey",
+        "direct_manufacturer_turnkey"
+      ],
+      "default": "bfs_installed_sale",
+      "description": "Business route for profitability only; invoice readiness remains evidence-driven."
+    },
+    "quote_request_id": {
+      "type": "string",
+      "description": "Optional link to QuoteRequests when product cost/sell should come from a saved quote."
+    },
+    "quote_number": {
+      "type": "string",
+      "description": "Optional saved manufacturer quote number/title used to match uploaded quote costs."
+    },
+    "material_source": {
+      "type": "string",
+      "enum": [
+        "linked_quote",
+        "uploaded_roll_list",
+        "manual"
+      ],
+      "default": "linked_quote",
+      "description": "Where product or consumable cost came from. Do not duplicate the uploaded material list here."
+    },
+    "product_sell": {
+      "type": "number",
+      "description": "Manual customer product revenue override, when not available from the linked quote."
+    },
+    "product_cost": {
+      "type": "number",
+      "description": "Manual product/material cost override, when not available from the linked quote."
+    },
+    "product_split_pct": {
+      "type": "number",
+      "default": 0.5,
+      "description": "Product-profit split only; never applies to installation profit."
+    },
+    "installation_revenue": {
+      "type": "number",
+      "description": "Manual install revenue override. Blank uses fee-line labor amounts."
+    },
+    "actual_labor_cost": {
+      "type": "number",
+      "description": "Israel-entered actual piece-rate/crew cost. Authoritative when present."
+    },
+    "worker_count": {
+      "type": "number",
+      "description": "Fallback labor workers. Used only when actual_labor_cost is blank."
+    },
+    "workday_count": {
+      "type": "number",
+      "default": 1,
+      "description": "Fallback labor days. Fallback = worker_count \u00d7 workday_count \u00d7 $200."
+    },
+    "installation_material_cost": {
+      "type": "number",
+      "description": "Actual install material/consumable cost. Blank may use the roll plan estimate."
+    },
+    "material_list_item_id": {
+      "type": "string",
+      "description": "Optional reference to the existing uploaded material list item, when available."
+    },
+    "material_roll_price": {
+      "type": "number",
+      "description": "Roll price from the existing uploaded material list or manual reference."
+    },
+    "expected_windows_per_roll": {
+      "type": "number",
+      "description": "Planning assumption: expected completed windows per roll."
+    },
+    "job_window_count": {
+      "type": "number",
+      "description": "Job window count used for planned material consumption."
+    },
+    "material_roll_mode": {
+      "type": "string",
+      "enum": [
+        "fractional",
+        "whole_roll"
+      ],
+      "default": "fractional",
+      "description": "fractional estimates consumed cost; whole_roll estimates purchase requirement."
+    },
+    "allocated_overhead": {
+      "type": "number",
+      "description": "Allocated overhead when known. EBIT is provisional until present."
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "month",
+    "route"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
