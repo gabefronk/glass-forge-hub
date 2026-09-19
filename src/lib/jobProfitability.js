@@ -182,13 +182,14 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
   return buildGroups(rows).map((group) => {
     const job = group.job_id ? jobById.get(group.job_id) : null;
     const input = inputByKey.get(group.job_id) || inputByKey.get(group.name) || null;
-    const route = input?.route || "bfs_installed_sale";
+    const split = profitSplitSummary(group.lines);
+    const route = input?.route || (split ? "direct_manufacturer_turnkey" : "bfs_installed_sale");
     const material = matchedMaterialSource(job, input, quotes);
-    const productSell = num(input?.product_sell) ?? material?.product_sell ?? null;
-    const productCost = num(input?.product_cost) ?? material?.product_cost ?? null;
+    const productSell = num(input?.product_sell) ?? material?.product_sell ?? split?.customer_sell ?? null;
+    const productCost = num(input?.product_cost) ?? material?.product_cost ?? split?.ya_cost_basis ?? null;
     const productProfit = productSell !== null && productCost !== null ? round2(productSell - productCost) : null;
-    const productSplitPct = num(input?.product_split_pct) ?? (splitRoutes.has(route) ? 0.5 : 1);
-    const productProfitContribution = productProfit === null ? null : round2(productProfit * productSplitPct);
+    const productSplitPct = num(input?.product_split_pct) ?? (split?.lines.length === 1 ? split.lines[0].split_pct : null) ?? (splitRoutes.has(route) ? 0.5 : 1);
+    const productProfitContribution = split ? split.glass_forge_share : productProfit === null ? null : round2(productProfit * productSplitPct);
     const installationRevenue = num(input?.installation_revenue) ?? sum(group.lines, (r) => r.fee_type === "profit_split" ? 0 : r.labor_amt);
     const actualLabor = num(input?.actual_labor_cost);
     const workerCount = num(input?.worker_count);
@@ -233,6 +234,9 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
       product_profit: productProfit,
       product_split_pct: productSplitPct,
       product_profit_contribution: productProfitContribution,
+      profit_split: split,
+      ya_profit_share: split?.ya_share ?? (productProfit === null ? null : round2(productProfit - (productProfitContribution ?? 0))),
+      glass_forge_profit_share: productProfitContribution,
       installation_revenue: installationRevenue,
       installation_labor_cost: laborCost,
       installation_labor_estimated: laborEstimated,
