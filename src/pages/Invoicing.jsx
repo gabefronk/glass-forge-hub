@@ -13,6 +13,7 @@ import JobsView from "@/components/invoicing/JobsView";
 import FloatingActionBar from "@/components/invoicing/FloatingActionBar";
 import UnprocessedEventsBanner from "@/components/invoicing/UnprocessedEventsBanner";
 import LineDetailsDrawer from "@/components/invoicing/LineDetailsDrawer";
+import JobProfitabilityPanel from "@/components/invoicing/JobProfitabilityPanel";
 
 export default function Invoicing() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function Invoicing() {
   const [editRequestId, setEditRequestId] = useState(null);
   const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [billingEvents, setBillingEvents] = useState([]);
+  const [profitabilityInputs, setProfitabilityInputs] = useState({ jobs: [], quotes: [], costs: [] });
   const [reportAttached, setReportAttached] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("inv_reportAttached") || "[]")); } catch { return new Set(); }
   });
@@ -56,9 +58,12 @@ export default function Invoicing() {
     const stale = () => seq !== loadSeq.current;
     setLoading(true);
     try {
-      const [fl, calEvents] = await Promise.all([
+      const [fl, calEvents, jobs, quotes, costs] = await Promise.all([
         base44.entities.FeeLines.list("-job_date", 5000),
         base44.entities.CalendarEvents.list("-event_date", 5000),
+        base44.entities.Jobs.list("canonical_name", 5000).catch(() => []),
+        base44.entities.QuoteRequests.list("-updated_date", 5000).catch(() => []),
+        base44.entities.JobCostInputs?.filter ? base44.entities.JobCostInputs.filter({ month }, "job_name_norm", 5000).catch(() => []) : Promise.resolve([]),
       ]);
       if (stale()) return;
       const rsm = new Map();
@@ -68,6 +73,7 @@ export default function Invoicing() {
       setReportStatusMap(rsm);
       setBillingEvents(Array.isArray(calEvents) ? calEvents : []);
       setFeeLines(withComputedAmounts(fl));
+      setProfitabilityInputs({ jobs: Array.isArray(jobs) ? jobs : [], quotes: Array.isArray(quotes) ? quotes : [], costs: Array.isArray(costs) ? costs : [] });
       setLoadError("");
       window.dispatchEvent(new Event("billing-updated"));
       const feeEventIds = new Set((Array.isArray(fl) ? fl : []).map((f) => f.calendar_event_id).filter(Boolean));
@@ -431,7 +437,15 @@ export default function Invoicing() {
               onFilterBlocked={() => setFilter("needs_report")}
               onFilterMatchBlocked={() => setFilter("needs_review")}
             />
-            <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "2px" }}>
+            <JobProfitabilityPanel
+              rows={monthRows.filter((r) => !supersededSet.has(r.id))}
+              jobs={profitabilityInputs.jobs}
+              quotes={profitabilityInputs.quotes}
+              costInputs={profitabilityInputs.costs}
+              reportStatusMap={reportStatusMap}
+              supersededSet={supersededSet}
+            />
+            <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "16px" }}>
             <InvoiceToolbar
               search={search}
               onSearchChange={setSearch}
