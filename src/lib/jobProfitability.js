@@ -91,6 +91,17 @@ function sum(arr, fn) {
   return round2(arr.reduce((total, item) => total + (Number(fn(item)) || 0), 0));
 }
 
+function sumComplete(arr, fn) {
+  if (!arr.length) return null;
+  let total = 0;
+  for (const item of arr) {
+    const value = fn(item);
+    if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return null;
+    total += Number(value);
+  }
+  return round2(total);
+}
+
 function invoiceAmount(row) {
   const stored = num(row?.fee_amt);
   return stored ?? computeFeeAmt(row);
@@ -134,11 +145,11 @@ function profitSplitSummary(lines) {
   if (!splitLines.length) return null;
   return {
     lines: splitLines,
-    customer_sell: sum(splitLines, (r) => r.customer_sell),
-    ya_cost_basis: sum(splitLines, (r) => r.ya_cost_basis),
-    product_profit: sum(splitLines, (r) => r.product_profit),
-    ya_share: sum(splitLines, (r) => r.ya_share),
-    glass_forge_share: sum(splitLines, (r) => r.glass_forge_share),
+    customer_sell: sumComplete(splitLines, (r) => r.customer_sell),
+    ya_cost_basis: sumComplete(splitLines, (r) => r.ya_cost_basis),
+    product_profit: sumComplete(splitLines, (r) => r.product_profit),
+    ya_share: sumComplete(splitLines, (r) => r.ya_share),
+    glass_forge_share: sumComplete(splitLines, (r) => r.glass_forge_share),
     invoice_amount: sum(splitLines, (r) => r.invoice_amount),
     missing_inputs: [...new Set(splitLines.flatMap((r) => r.missing_inputs))],
   };
@@ -148,11 +159,11 @@ export function aggregateProfitSplitSummaries(records = []) {
   const lines = records.flatMap((r) => r.profit_split?.lines || []);
   return {
     count: lines.length,
-    customer_sell: sum(lines, (r) => r.customer_sell),
-    ya_cost_basis: sum(lines, (r) => r.ya_cost_basis),
-    product_profit: sum(lines, (r) => r.product_profit),
-    ya_share: sum(lines, (r) => r.ya_share),
-    glass_forge_share: sum(lines, (r) => r.glass_forge_share),
+    customer_sell: sumComplete(lines, (r) => r.customer_sell),
+    ya_cost_basis: sumComplete(lines, (r) => r.ya_cost_basis),
+    product_profit: sumComplete(lines, (r) => r.product_profit),
+    ya_share: sumComplete(lines, (r) => r.ya_share),
+    glass_forge_share: sumComplete(lines, (r) => r.glass_forge_share),
     invoice_amount: sum(lines, (r) => r.invoice_amount),
     missing_inputs: [...new Set(lines.flatMap((r) => r.missing_inputs))],
   };
