@@ -1,0 +1,180 @@
+import { computeFeeAmt, formatMoney } from "@/lib/feeMath";
+import { isReady } from "@/lib/invoicingFilters";
+
+export const JOB_PROFIT_ROUTES = Object.freeze({
+  bfs_installed_sale: "BFS installed sale",
+  bfs_supply_ya_install: "BFS supply-only + Y.A. install",
+  bfs_to_ya_turnkey: "BFS-to-Y.A. turnkey",
+  direct_manufacturer_turnkey: "Direct manufacturer turnkey",
+});
+
+const splitRoutes = new Set(["bfs_to_ya_turnkey", "direct_manufacturer_turnkey"]);
+const num = (v) => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+const key = (v) => String(v || "").trim().toLowerCase();
+
+function quoteTotalsFromSnapshot(snapshot) {
+  const result = snapshot?.result || snapshot;
+  const totals = result?.totals || {};
+  const productCost = num(totals.dealer_cost ?? totals.dealer_total ?? totals.product_cost);
+  const productSell = num(totals.customer_total ?? totals.total ?? totals.product_sell);
+  if (productCost === null && productSell === null) return null;
+  return {
+    product_cost: productCost,
+    product_sell: productSell,
+    source_label: snapshot?.native_quote_number || result?.native_quote_number || snapshot?.quote_number || "accepted quote",
+    source_type: "quote_snapshot",
+  };
+}
+
+function quoteTotalsFromRequest(quote) {
+  if (!quote) return null;
+  const accepted = quote.accepted_snapshot;
+  const fromAccepted = quoteTotalsFromSnapshot(accepted);
+  if (fromAccepted) return { ...fromAccepted, quote_id: quote.id, source_label: quote.title || fromAccepted.source_label };
+  const result = quote.result;
+  const totals = result?.totals || {};
+  const productCost = num(totals.dealer_cost ?? totals.dealer_total ?? totals.product_cost);
+  const productSell = quote.worker_status === "ready" && result?.verified === true ? num(totals.customer_total ?? totals.total ?? totals.product_sell) : null;
+  if (productCost === null && productSell === null) return null;
+  return { product_cost: productCost, product_sell: productSell, quote_id: quote.id, source_label: quote.title || result?.native_quote_number || "QuoteRequests", source_type: "quote_request" };
+}
+
+function quoteIndex(quotes = []) {
+  const byId = new Map();
+  const byJob = new Map();
+  const byName = new Map();
+  for (const q of quotes || []) {
+    if (q.id) byId.set(q.id, q);
+    if (q.job_id) byJob.set(q.job_id, q);
+    if (q.title) byName.set(key(q.title), q);
+    const native = q.result?.native_quote_number || q.accepted_snapshot?.result?.native_quote_number;
+    if (native) byName.set(key(native), q);
+  }
+  return { byId, byJob, byName };
+}
+
+function matchedMaterialSource(job, input, quotes) {
+  if (input?.material_source === "manual") {
+    return { product_cost: num(input.product_cost), product_sell: num(input.product_sell), source_label: "manual job cost input", source_type: "manual" };
+  }
+  const fromJob = quoteTotalsFromSnapshot(job?.accepted_quote_snapshot);
+  if (fromJob) return { ...fromJob, job_id: job?.id, source_label: `Job accepted quote${fromJob.source_label ? ` · ${fromJob.source_label}` : ""}` };
+  const idx = quoteIndex(quotes);
+  const q = input?.quote_request_id ? idx.byId.get(input.quote_request_id) : null;
+  const byJob = job?.source_window_quote_id ? idx.byId.get(job.source_window_quote_id) : job?.id ? idx.byJob.get(job.id) : null;
+  const byName = input?.quote_number ? idx.byName.get(key(input.quote_number)) : null;
+  const matched = q || byJob || byName;
+  const totals = quoteTotalsFromRequest(matched);
+  return totals ? { ...totals, matched_by: q ? "quote_request_id" : byJob ? "job quote link" : "quote number/title" } : null;
+}
+
+function jobKey(row) {
+  return row.job_id || row.job_name_norm || row.job_name_raw || "unmatched";
+}
+
+function buildGroups(rows = []) {
+  const groups = new Map();
+  for (const row of rows) {
+    const id = jobKey(row);
+    if (!groups.has(id)) groups.set(id, { key: id, job_id: row.job_id || "", name: row.job_name_norm || row.job_name_raw || "Unnamed job", lines: [] });
+    groups.get(id).lines.push(row);
+  }
+  return [...groups.values()];
+}
+
+function inputKey(input) {
+  return input.job_id || input.job_name_norm || input.job_name_raw || "";
+}
+
+function sum(arr, fn) {
+  return round2(arr.reduce((total, item) => total + (Number(fn(item)) || 0), 0));
+}
+
+function completionChain(group, reportStatusMap, supersededSet) {
+  const billableLines = group.lines.filter((r) => r.billable && !(supersededSet && supersededSet.has(r.id)));
+  const evidenceReceived = billableLines.some((r) => {
+    const status = reportStatusMap?.get?.(r.calendar_event_id);
+    return ["ok", "waived", "pre_compliance", "no_source_data"].includes(status) || !!r.probuild_post_id || (Array.isArray(r.photo_urls) && r.photo_urls.length > 0);
+  });
+  const readyLines = billableLines.filter((r) => isReady(r, reportStatusMap, supersededSet));
+  const billedLines = billableLines.filter((r) => r.billed_to_bfs);
+  const paidLines = billableLines.filter((r) => r.paid_to_ya);
+  return {
+    evidence_received: evidenceReceived,
+    ready_to_invoice: readyLines.length > 0,
+    ready_count: readyLines.length,
+    billing_email_sent: billedLines.length > 0,
+    billed_or_paid: billedLines.length > 0 || paidLines.length > 0,
+  };
+}
+
+export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], costInputs = [], reportStatusMap, supersededSet } = {}) {
+  const jobById = new Map((jobs || []).filter((j) => j.id).map((j) => [j.id, j]));
+  const inputByKey = new Map((costInputs || []).map((i) => [inputKey(i), i]).filter(([k]) => k));
+  return buildGroups(rows).map((group) => {
+    const job = group.job_id ? jobById.get(group.job_id) : null;
+    const input = inputByKey.get(group.job_id) || inputByKey.get(group.name) || null;
+    const route = input?.route || "bfs_installed_sale";
+    const material = matchedMaterialSource(job, input, quotes);
+    const productSell = num(input?.product_sell) ?? material?.product_sell ?? null;
+    const productCost = num(input?.product_cost) ?? material?.product_cost ?? null;
+    const productProfit = productSell !== null && productCost !== null ? round2(productSell - productCost) : null;
+    const productSplitPct = num(input?.product_split_pct) ?? (splitRoutes.has(route) ? 0.5 : 1);
+    const productProfitContribution = productProfit === null ? null : round2(productProfit * productSplitPct);
+    const installationRevenue = num(input?.installation_revenue) ?? sum(group.lines, (r) => r.fee_type === "profit_split" ? 0 : r.labor_amt);
+    const actualLabor = num(input?.actual_labor_cost);
+    const workerCount = num(input?.worker_count);
+    const laborCost = actualLabor ?? (workerCount !== null ? round2(workerCount * 200) : null);
+    const laborEstimated = actualLabor === null && workerCount !== null;
+    const installMaterialCost = num(input?.installation_material_cost) ?? null;
+    const installationProfit = laborCost !== null && installMaterialCost !== null ? round2(installationRevenue - laborCost - installMaterialCost) : null;
+    const totalRevenue = round2((productSell || 0) + (installationRevenue || 0));
+    const knownProductContribution = productProfitContribution ?? 0;
+    const knownInstallationProfit = installationProfit ?? 0;
+    const grossProfit = productProfitContribution !== null && installationProfit !== null ? round2(knownProductContribution + knownInstallationProfit) : null;
+    const grossMargin = grossProfit !== null && totalRevenue > 0 ? grossProfit / totalRevenue : null;
+    const overhead = num(input?.allocated_overhead);
+    const ebit = grossProfit !== null && overhead !== null ? round2(grossProfit - overhead) : null;
+    const missing = [];
+    if (productSell === null) missing.push("product sell/revenue");
+    if (productCost === null) missing.push("product/material cost");
+    if (laborCost === null) missing.push("actual labor or worker count");
+    if (installMaterialCost === null) missing.push("installation material/consumables");
+    if (overhead === null) missing.push("allocated overhead");
+    return {
+      ...group,
+      route,
+      route_label: JOB_PROFIT_ROUTES[route] || route,
+      input,
+      material_source: material,
+      customer_revenue: totalRevenue,
+      product_sell: productSell,
+      product_cost: productCost,
+      product_profit: productProfit,
+      product_split_pct: productSplitPct,
+      product_profit_contribution: productProfitContribution,
+      installation_revenue: installationRevenue,
+      installation_labor_cost: laborCost,
+      installation_labor_estimated: laborEstimated,
+      installation_material_cost: installMaterialCost,
+      installation_profit: installationProfit,
+      total_gross_profit: grossProfit,
+      gross_margin: grossMargin,
+      allocated_overhead: overhead,
+      ebit_contribution: ebit,
+      provisional: missing.length > 0 || laborEstimated,
+      missing_inputs: missing,
+      completion_chain: completionChain(group, reportStatusMap, supersededSet),
+      invoice_fee_total: sum(group.lines, computeFeeAmt),
+    };
+  }).sort((a, b) => (b.total_gross_profit ?? b.invoice_fee_total ?? 0) - (a.total_gross_profit ?? a.invoice_fee_total ?? 0));
+}
+
+export function moneyOrDash(value) {
+  return value === null || value === undefined ? "-" : `$${formatMoney(value)}`;
+}
+
+export function percentOrDash(value) {
+  return value === null || value === undefined ? "-" : `${(value * 100).toFixed(1)}%`;
+}
