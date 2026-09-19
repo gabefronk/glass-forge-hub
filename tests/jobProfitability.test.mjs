@@ -85,15 +85,24 @@ test("confirmed profit split jobs expose per-party economics and filtered totals
   const byId = new Map(records.map((job) => [job.job_id, job]));
 
   assert.equal(byId.get("larco").product_profit, 21025.10);
+  assert.equal(byId.get("larco").total_job_profit, 21025.10);
+  assert.equal(byId.get("larco").ya_windows_profit, 10512.55);
+  assert.equal(byId.get("larco").glass_forge_profit, 10512.55);
   assert.equal(byId.get("larco").ya_profit_share, 10512.55);
   assert.equal(byId.get("larco").glass_forge_profit_share, 10512.55);
   assert.equal(byId.get("larco").profit_split.lines[0].source_label, "Google Calendar FeeLine");
 
   assert.equal(byId.get("thurman").product_profit, 4605.81);
+  assert.equal(byId.get("thurman").total_job_profit, 4605.81);
+  assert.equal(byId.get("thurman").ya_windows_profit, 2302.90);
+  assert.equal(byId.get("thurman").glass_forge_profit, 2302.91);
   assert.equal(byId.get("thurman").ya_profit_share, 2302.90);
   assert.equal(byId.get("thurman").glass_forge_profit_share, 2302.91);
 
   assert.equal(byId.get("sierra").product_profit, 6312.93);
+  assert.equal(byId.get("sierra").total_job_profit, 6312.93);
+  assert.equal(byId.get("sierra").ya_windows_profit, 3156.46);
+  assert.equal(byId.get("sierra").glass_forge_profit, 3156.47);
   assert.equal(byId.get("sierra").ya_profit_share, 3156.46);
   assert.equal(byId.get("sierra").glass_forge_profit_share, 3156.47);
   assert.equal(byId.get("sierra").profit_split.lines[0].source_label, "confirmed FeeLine note");
@@ -106,6 +115,34 @@ test("confirmed profit split jobs expose per-party economics and filtered totals
   assert.equal(totals.ya_share, 15971.91);
   assert.equal(totals.glass_forge_share, 15971.93);
   assert.equal(totals.invoice_amount, 15971.93);
+  assert.deepEqual([...byId.keys()].sort(), ["larco", "sierra", "thurman"]);
+});
+
+test("canonical grouping keeps one job row while preserving contributing source lines", () => {
+  const rows = [
+    { ...baseLine, id: "split", job_id: "same-job", job_name_raw: "Same Job", fee_type: "profit_split", sale_price: 10000, cost: 7000, split_pct: 0.5, fee_amt: 1500, labor_amt: 0, calendar_event_id: "split-event" },
+    { ...baseLine, id: "install", job_id: "same-job", job_name_raw: "Same Job", fee_type: "labor_pct", labor_amt: 800, fee_amt: 80, calendar_event_id: "install-event" },
+  ];
+  const records = calculateJobProfitability({ rows });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].name, "Same Job");
+  assert.equal(records[0].lines.length, 2);
+  assert.equal(records[0].profit_split.lines.length, 1);
+  assert.equal(records[0].invoice_fee_total, 1580);
+  const totals = aggregateProfitSplitSummaries(records);
+  assert.equal(totals.count, 1);
+  assert.equal(totals.product_profit, 3000);
+  assert.equal(totals.glass_forge_share, 1500);
+});
+
+test("unlinked source ids prevent unrelated same-name rows from being merged", () => {
+  const rows = [
+    { ...baseLine, id: "a", job_id: "", job_name_norm: "same normalized name", job_name_raw: "Same Normalized Name", calendar_event_id: "event-a", labor_amt: 100, fee_amt: 10 },
+    { ...baseLine, id: "b", job_id: "", job_name_norm: "same normalized name", job_name_raw: "Same Normalized Name", calendar_event_id: "event-b", labor_amt: 200, fee_amt: 20 },
+  ];
+  const records = calculateJobProfitability({ rows });
+  assert.equal(records.length, 2);
+  assert.equal(aggregateProfitSplitSummaries(records).count, 0);
 });
 
 test("profit split rows report missing source numbers instead of fabricating zeroes", () => {
