@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateJobProfitability } from "../src/lib/jobProfitability.js";
+import { aggregateProfitSplitSummaries, calculateJobProfitability } from "../src/lib/jobProfitability.js";
 
 const baseLine = {
   id: "line-1",
@@ -73,6 +73,47 @@ test("missing costs do not block invoice readiness or fabricate EBIT", () => {
   assert.equal(job.product_cost, null);
   assert.equal(job.ebit_contribution, null);
   assert.ok(job.missing_inputs.includes("product/material cost"));
+});
+
+test("confirmed profit split jobs expose per-party economics and filtered totals", () => {
+  const rows = [
+    { ...baseLine, id: "larco", job_id: "larco", job_name_raw: "Larco Dimple Del 16 - Deliver and Install", fee_type: "profit_split", sale_price: 30906.03, cost: 9880.93, split_pct: 0.5, fee_amt: 10512.55, labor_amt: 0, calendar_event_id: "3nej5btkg7m2fs0gt3m646ehme" },
+    { ...baseLine, id: "thurman", job_id: "thurman", job_name_raw: "YA - Thurman", fee_type: "profit_split", sale_price: 15269.60, cost: 10663.79, split_pct: 0.5, fee_amt: 2302.91, labor_amt: 0, calendar_event_id: "6tcm8g717ppvqrg3dfkdjm7gks" },
+    { ...baseLine, id: "sierra", job_id: "sierra", job_name_raw: "Sierra Builders - Timp Lane Spec Lot 224", fee_type: "profit_split", sale_price: 18445.33, cost: 12132.40, split_pct: 0.5, fee_amt: 3156.47, labor_amt: 0, calendar_event_id: null, note_text: "Add to September GF invoice: Timp Lane Spec Lot 224 50/50 profit split, confirmed by Gabriel 2026-09-18." },
+  ];
+  const records = calculateJobProfitability({ rows });
+  const byId = new Map(records.map((job) => [job.job_id, job]));
+
+  assert.equal(byId.get("larco").product_profit, 21025.10);
+  assert.equal(byId.get("larco").ya_profit_share, 10512.55);
+  assert.equal(byId.get("larco").glass_forge_profit_share, 10512.55);
+  assert.equal(byId.get("larco").profit_split.lines[0].source_label, "Google Calendar FeeLine");
+
+  assert.equal(byId.get("thurman").product_profit, 4605.81);
+  assert.equal(byId.get("thurman").ya_profit_share, 2302.90);
+  assert.equal(byId.get("thurman").glass_forge_profit_share, 2302.91);
+
+  assert.equal(byId.get("sierra").product_profit, 6312.93);
+  assert.equal(byId.get("sierra").ya_profit_share, 3156.46);
+  assert.equal(byId.get("sierra").glass_forge_profit_share, 3156.47);
+  assert.equal(byId.get("sierra").profit_split.lines[0].source_label, "confirmed FeeLine note");
+
+  const totals = aggregateProfitSplitSummaries(records);
+  assert.equal(totals.count, 3);
+  assert.equal(totals.customer_sell, 64620.96);
+  assert.equal(totals.ya_cost_basis, 32677.12);
+  assert.equal(totals.product_profit, 31943.84);
+  assert.equal(totals.ya_share, 15971.91);
+  assert.equal(totals.glass_forge_share, 15971.93);
+  assert.equal(totals.invoice_amount, 15971.93);
+});
+
+test("profit split rows report missing source numbers instead of fabricating zeroes", () => {
+  const [job] = calculateJobProfitability({ rows: [{ ...baseLine, fee_type: "profit_split", sale_price: 5000, cost: null, split_pct: 0.5, fee_amt: 0, labor_amt: 0 }] });
+  assert.equal(job.product_cost, null);
+  assert.deepEqual(job.profit_split.missing_inputs, ["Y.A. cost basis"]);
+  assert.equal(job.profit_split.product_profit, 0);
+  assert.equal(job.glass_forge_profit_share, 0);
 });
 
 test("BFS installed sales keep labor basis, FeeLine invoice amount and product revenue distinct", () => {
