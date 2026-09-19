@@ -125,9 +125,19 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
     const installationRevenue = num(input?.installation_revenue) ?? sum(group.lines, (r) => r.fee_type === "profit_split" ? 0 : r.labor_amt);
     const actualLabor = num(input?.actual_labor_cost);
     const workerCount = num(input?.worker_count);
-    const laborCost = actualLabor ?? (workerCount !== null ? round2(workerCount * 200) : null);
+    const workdayCount = num(input?.workday_count) ?? 1;
+    const laborCost = actualLabor ?? (workerCount !== null ? round2(workerCount * workdayCount * 200) : null);
     const laborEstimated = actualLabor === null && workerCount !== null;
-    const installMaterialCost = num(input?.installation_material_cost) ?? null;
+    const directInstallMaterialCost = num(input?.installation_material_cost);
+    const rollPrice = num(input?.material_roll_price);
+    const expectedWindowsPerRoll = num(input?.expected_windows_per_roll);
+    const jobWindowCount = num(input?.job_window_count);
+    const rollMode = input?.material_roll_mode || "fractional";
+    const plannedRollUse = rollPrice !== null && expectedWindowsPerRoll > 0 && jobWindowCount !== null
+      ? (rollMode === "whole_roll" ? Math.ceil(jobWindowCount / expectedWindowsPerRoll) : jobWindowCount / expectedWindowsPerRoll)
+      : null;
+    const plannedMaterialCost = plannedRollUse !== null ? round2(plannedRollUse * rollPrice) : null;
+    const installMaterialCost = directInstallMaterialCost ?? plannedMaterialCost;
     const installationProfit = laborCost !== null && installMaterialCost !== null ? round2(installationRevenue - laborCost - installMaterialCost) : null;
     const totalRevenue = round2((productSell || 0) + (installationRevenue || 0));
     const knownProductContribution = productProfitContribution ?? 0;
@@ -139,8 +149,8 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
     const missing = [];
     if (productSell === null) missing.push("product sell/revenue");
     if (productCost === null) missing.push("product/material cost");
-    if (laborCost === null) missing.push("actual labor or worker count");
-    if (installMaterialCost === null) missing.push("installation material/consumables");
+    if (laborCost === null) missing.push("actual labor or worker/day count");
+    if (installMaterialCost === null) missing.push("installation material/consumables or roll plan");
     if (overhead === null) missing.push("allocated overhead");
     return {
       ...group,
@@ -157,7 +167,11 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
       installation_revenue: installationRevenue,
       installation_labor_cost: laborCost,
       installation_labor_estimated: laborEstimated,
+      workday_count: workdayCount,
       installation_material_cost: installMaterialCost,
+      planned_material_cost: plannedMaterialCost,
+      material_roll_use: plannedRollUse,
+      material_roll_mode: rollMode,
       installation_profit: installationProfit,
       total_gross_profit: grossProfit,
       gross_margin: grossMargin,
