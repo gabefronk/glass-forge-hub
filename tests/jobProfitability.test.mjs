@@ -74,3 +74,28 @@ test("missing costs do not block invoice readiness or fabricate EBIT", () => {
   assert.equal(job.ebit_contribution, null);
   assert.ok(job.missing_inputs.includes("product/material cost"));
 });
+
+test("BFS installed sales keep labor basis, FeeLine invoice amount and product revenue distinct", () => {
+  const rows = [
+    { ...baseLine, id: "pulte", job_id: "pulte", job_name_norm: "pulte home - bldg 18 the peaks 131-135", labor_amt: 6425, fee_amt: 642.5, calendar_event_id: "pulte-event" },
+    { ...baseLine, id: "ivory", job_id: "ivory", job_name_norm: "ivory - 217 christensen farms", labor_amt: 2493, fee_amt: 249.3, calendar_event_id: "ivory-event" },
+    { ...baseLine, id: "holmes", job_id: "holmes", job_name_norm: "holmes homes - 214-216", labor_amt: 1800, fee_amt: 180, calendar_event_id: "holmes-event" },
+  ];
+  const reportStatusMap = new Map(rows.map((row) => [row.calendar_event_id, "ok"]));
+  const records = calculateJobProfitability({ rows, reportStatusMap });
+  const byId = new Map(records.map((job) => [job.job_id, job]));
+
+  assert.equal(byId.get("pulte").installation_revenue, 6425);
+  assert.equal(byId.get("pulte").invoice_fee_total, 642.5);
+  assert.equal(byId.get("pulte").customer_revenue, null);
+  assert.equal(byId.get("pulte").product_sell, null);
+  assert.equal(byId.get("pulte").product_profit, null);
+  assert.equal(byId.get("pulte").total_gross_profit, null);
+  assert.equal(byId.get("pulte").ebit_contribution, null);
+  assert.equal(byId.get("pulte").completion_chain.ready_to_invoice, true);
+
+  assert.equal(byId.get("ivory").invoice_fee_total, 249.3);
+  assert.equal(byId.get("ivory").customer_revenue, null);
+  assert.equal(byId.get("holmes").invoice_fee_total, 180);
+  assert.equal(byId.get("holmes").customer_revenue, null);
+});
