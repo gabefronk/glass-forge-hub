@@ -121,11 +121,10 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
                     <StatusDot done={job.completion_chain.billing_email_sent} label="billing sent" />
                   </span>
                 </span>
-                <span className="grid min-w-0 gap-3" style={{ gridTemplateColumns: "repeat(5,minmax(0,1fr))" }}>
-                  <MoneyCell label="labor basis" value={job.installation_revenue} />
-                  <MoneyCell label="invoice amt" value={job.invoice_fee_total} />
-                  <MoneyCell label="known cost" value={job.known_cost_total} estimated={job.installation_labor_estimated} />
-                  <MoneyCell label="gross profit" value={job.total_gross_profit} />
+                <span className="grid min-w-0 gap-3" style={{ gridTemplateColumns: "repeat(4,minmax(0,1fr))" }}>
+                  <MoneyCell label="total job profit" value={job.total_job_profit} />
+                  <MoneyCell label="Y.A. profit" value={job.ya_windows_profit} />
+                  <MoneyCell label="Glass Forge profit" value={job.glass_forge_profit} />
                   <span className="min-w-0"><span className="block text-[10px] uppercase" style={{ color: C.muted }}>status</span><span className="block truncate text-[12px] font-medium" style={{ color: status.color }}>{status.label}</span></span>
                 </span>
               </button>
@@ -135,11 +134,14 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
                     <DetailPair label="Customer sell price">{moneyOrDash(job.customer_revenue)}</DetailPair>
                     <DetailPair label="Y.A. cost basis">{moneyOrDash(job.product_cost)}</DetailPair>
                     <DetailPair label="Total product profit">{moneyOrDash(job.product_profit)}</DetailPair>
-                    <DetailPair label="Glass Forge profit share">{moneyOrDash(job.glass_forge_profit_share)}</DetailPair>
-                    <DetailPair label="Y.A. profit share">{moneyOrDash(job.ya_profit_share)}</DetailPair>
-                    <DetailPair label="Gross margin">{percentOrDash(job.gross_margin)}</DetailPair>
+                    <DetailPair label="Split percentage">{percentOrDash(job.product_split_pct)}</DetailPair>
+                    <DetailPair label="Glass Forge product share">{moneyOrDash(job.glass_forge_profit_share)}</DetailPair>
+                    <DetailPair label="Y.A. product share">{moneyOrDash(job.ya_profit_share)}</DetailPair>
+                    <DetailPair label="Invoice amount/status">{moneyOrDash(job.invoice_fee_total)} · {job.completion_chain.billed_or_paid ? "billed/paid" : job.completion_chain.ready_to_invoice ? "ready" : "not ready"}</DetailPair>
+                    <DetailPair label="Install revenue">{moneyOrDash(job.installation_revenue)}</DetailPair>
                     <DetailPair label="Install labor cost">{moneyOrDash(job.installation_labor_cost)}{job.installation_labor_estimated ? " estimated" : ""}</DetailPair>
                     <DetailPair label="Install material cost">{moneyOrDash(job.installation_material_cost)}</DetailPair>
+                    <DetailPair label="Install profit">{moneyOrDash(job.installation_profit)}</DetailPair>
                     <DetailPair label="Allocated overhead">{moneyOrDash(job.allocated_overhead)}</DetailPair>
                     <DetailPair label="EBIT contribution">{moneyOrDash(job.ebit_contribution)}</DetailPair>
                   </div>
