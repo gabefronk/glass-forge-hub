@@ -77,8 +77,16 @@ export default function Invoicing() {
       setLoadError("");
       window.dispatchEvent(new Event("billing-updated"));
       const feeEventIds = new Set((Array.isArray(fl) ? fl : []).map((f) => f.calendar_event_id).filter(Boolean));
+      // A profit-split event is billable even with $0 labor (fee from sale price − cost),
+      // so only exclude zero-labor events whose notes carry no profit-split markers.
+      const hasProfitSplitMarker = (notes) => /\$\s?\d/i.test(String(notes || "")) && /(sale\s+price|project\s+total|package\s+cost|material\s+cost|\bprofit\b|\bsplit\b)/i.test(String(notes || ""));
+      const isExcludedFromBanner = (e) => {
+        if (e.source_status === "cancelled") return true; // canceled recurring placeholders never bill
+        if ((Number(e.labor_amt) || 0) === 0 && !hasProfitSplitMarker(e.scope_notes)) return true; // non-billing zero-labor (e.g. jobsite walks)
+        return false;
+      };
       const unprocessed = (Array.isArray(calEvents) ? calEvents : []).filter(
-        (e) => (e.event_date || "").startsWith(month) && e.source === "google" && e.google_event_id && !feeEventIds.has(e.google_event_id)
+        (e) => (e.event_date || "").startsWith(month) && e.source === "google" && e.google_event_id && !feeEventIds.has(e.google_event_id) && !isExcludedFromBanner(e)
       );
       setUnprocessedCount(unprocessed.length);
       try {
