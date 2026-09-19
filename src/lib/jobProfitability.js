@@ -70,14 +70,17 @@ function matchedMaterialSource(job, input, quotes) {
 }
 
 function jobKey(row) {
-  return row.job_id || row.job_name_norm || row.job_name_raw || "unmatched";
+  if (row.job_id) return `job:${row.job_id}`;
+  if (row.calendar_event_id) return `calendar:${row.calendar_event_id}`;
+  if (row.probuild_post_id) return `probuild:${row.probuild_post_id}`;
+  return `name:${row.job_name_norm || row.job_name_raw || "unmatched"}`;
 }
 
 function buildGroups(rows = []) {
   const groups = new Map();
   for (const row of rows) {
     const id = jobKey(row);
-    if (!groups.has(id)) groups.set(id, { key: id, job_id: row.job_id || "", name: row.job_name_norm || row.job_name_raw || "Unnamed job", lines: [] });
+    if (!groups.has(id)) groups.set(id, { key: id, job_id: row.job_id || "", name: row.job_name_raw || row.job_name_norm || "Unnamed job", lines: [] });
     groups.get(id).lines.push(row);
   }
   return [...groups.values()];
