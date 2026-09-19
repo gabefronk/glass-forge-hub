@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, MailCheck } from "lucide-react";
-import { calculateJobProfitability, moneyOrDash, percentOrDash } from "@/lib/jobProfitability";
+import { aggregateProfitSplitSummaries, calculateJobProfitability, moneyOrDash, percentOrDash } from "@/lib/jobProfitability";
 
 const C = { ink: "#182422", muted: "#53615B", line: "#DDE0DA", soft: "#F5F6F3", good: "#166447", warn: "#8A5A10" };
 
@@ -22,6 +22,63 @@ function costStatus(job) {
   return { label: `${count} cost input${count === 1 ? "" : "s"} missing`, color: C.warn };
 }
 
+function SplitSummary({ records }) {
+  const splitJobs = records.filter((job) => job.profit_split?.lines?.length);
+  if (!splitJobs.length) return null;
+  const totals = aggregateProfitSplitSummaries(records);
+  return (
+    <div className="px-4 py-3" style={{ borderBottom: `1px solid ${C.line}`, backgroundColor: "#FBFCFA" }}>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-[12px] font-semibold" style={{ color: C.ink }}>Profit split economics</div>
+        <div className="text-[11px]" style={{ color: C.muted }}>{totals.count} split job{totals.count === 1 ? "" : "s"} · product profit split only</div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[920px] w-full border-collapse text-[11px]">
+          <thead style={{ color: C.muted }}>
+            <tr className="text-left uppercase">
+              <th className="py-1 pr-3 font-medium">Job</th>
+              <th className="py-1 pr-3 text-right font-medium">Sell price</th>
+              <th className="py-1 pr-3 text-right font-medium">Y.A. cost basis</th>
+              <th className="py-1 pr-3 text-right font-medium">Product profit</th>
+              <th className="py-1 pr-3 text-right font-medium">Y.A. share</th>
+              <th className="py-1 pr-3 text-right font-medium">Glass Forge share</th>
+              <th className="py-1 pr-3 text-right font-medium">Invoice amt</th>
+              <th className="py-1 pr-3 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {splitJobs.map((job) => {
+              const split = job.profit_split;
+              return (
+                <tr key={`split-${job.key}`} style={{ borderTop: `1px solid ${C.line}` }}>
+                  <td className="py-2 pr-3"><span className="block max-w-[220px] truncate font-medium" style={{ color: C.ink }}>{job.name}</span><span style={{ color: C.muted }}>{split.lines[0]?.source_label || "FeeLine"}</span></td>
+                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.customer_sell)}</td>
+                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.ya_cost_basis)}</td>
+                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.product_profit)}</td>
+                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.ya_share)}</td>
+                  <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.good }}>{moneyOrDash(split.glass_forge_share)}</td>
+                  <td className="py-2 pr-3 text-right font-mono-num" style={{ color: C.ink }}>{moneyOrDash(split.invoice_amount)}</td>
+                  <td className="py-2 pr-3" style={{ color: split.missing_inputs.length ? C.warn : C.good }}>{split.missing_inputs.length ? `Missing ${split.missing_inputs.join(", ")}` : split.lines[0]?.invoice_status || "ready"}</td>
+                </tr>
+              );
+            })}
+            <tr style={{ borderTop: `2px solid ${C.line}` }}>
+              <td className="py-2 pr-3 font-semibold" style={{ color: C.ink }}>Filtered total</td>
+              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.customer_sell)}</td>
+              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.ya_cost_basis)}</td>
+              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.product_profit)}</td>
+              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.ya_share)}</td>
+              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.good }}>{moneyOrDash(totals.glass_forge_share)}</td>
+              <td className="py-2 pr-3 text-right font-mono-num-bold" style={{ color: C.ink }}>{moneyOrDash(totals.invoice_amount)}</td>
+              <td className="py-2 pr-3" style={{ color: totals.missing_inputs.length ? C.warn : C.good }}>{totals.missing_inputs.length ? `Missing ${totals.missing_inputs.join(", ")}` : "complete"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, reportStatusMap, supersededSet }) {
   const [expandedList, setExpandedList] = useState(false);
   const [open, setOpen] = useState(new Set());
@@ -41,6 +98,8 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
         </div>
         <div className="text-[11px]" style={{ color: C.muted }}>{records.length} jobs · {provisionalCount} with cost gaps</div>
       </div>
+
+      <SplitSummary records={records} />
 
       <div className="divide-y" style={{ borderColor: C.line }}>
         {visible.map((job) => {
@@ -70,9 +129,11 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
               {isOpen && (
                 <div className="px-4 pb-4 pl-12">
                   <div className="grid gap-4 rounded-md p-3 sm:grid-cols-2 lg:grid-cols-4" style={{ backgroundColor: C.soft, border: `1px solid ${C.line}` }}>
-                    <DetailPair label="Product/customer revenue">{moneyOrDash(job.customer_revenue)}</DetailPair>
-                    <DetailPair label="Product cost">{moneyOrDash(job.product_cost)}</DetailPair>
-                    <DetailPair label="Product profit contribution">{moneyOrDash(job.product_profit_contribution)}</DetailPair>
+                    <DetailPair label="Customer sell price">{moneyOrDash(job.customer_revenue)}</DetailPair>
+                    <DetailPair label="Y.A. cost basis">{moneyOrDash(job.product_cost)}</DetailPair>
+                    <DetailPair label="Total product profit">{moneyOrDash(job.product_profit)}</DetailPair>
+                    <DetailPair label="Glass Forge profit share">{moneyOrDash(job.glass_forge_profit_share)}</DetailPair>
+                    <DetailPair label="Y.A. profit share">{moneyOrDash(job.ya_profit_share)}</DetailPair>
                     <DetailPair label="Gross margin">{percentOrDash(job.gross_margin)}</DetailPair>
                     <DetailPair label="Install labor cost">{moneyOrDash(job.installation_labor_cost)}{job.installation_labor_estimated ? " estimated" : ""}</DetailPair>
                     <DetailPair label="Install material cost">{moneyOrDash(job.installation_material_cost)}</DetailPair>
