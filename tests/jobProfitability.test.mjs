@@ -112,8 +112,8 @@ test("profit split rows report missing source numbers instead of fabricating zer
   const [job] = calculateJobProfitability({ rows: [{ ...baseLine, fee_type: "profit_split", sale_price: 5000, cost: null, split_pct: 0.5, fee_amt: 0, labor_amt: 0 }] });
   assert.equal(job.product_cost, null);
   assert.deepEqual(job.profit_split.missing_inputs, ["Y.A. cost basis"]);
-  assert.equal(job.profit_split.product_profit, 0);
-  assert.equal(job.glass_forge_profit_share, 0);
+  assert.equal(job.profit_split.product_profit, null);
+  assert.equal(job.glass_forge_profit_share, null);
 });
 
 test("BFS installed sales keep labor basis, FeeLine invoice amount and product revenue distinct", () => {
