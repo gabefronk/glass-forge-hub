@@ -91,6 +91,11 @@ function sum(arr, fn) {
   return round2(arr.reduce((total, item) => total + (Number(fn(item)) || 0), 0));
 }
 
+function invoiceAmount(row) {
+  const stored = num(row?.fee_amt);
+  return stored ?? computeFeeAmt(row);
+}
+
 function completionChain(group, reportStatusMap, supersededSet) {
   const billableLines = group.lines.filter((r) => r.billable && !(supersededSet && supersededSet.has(r.id)));
   const evidenceReceived = billableLines.some((r) => {
@@ -183,7 +188,7 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
       provisional: missing.length > 0 || laborEstimated,
       missing_inputs: missing,
       completion_chain: completionChain(group, reportStatusMap, supersededSet),
-      invoice_fee_total: sum(group.lines, computeFeeAmt),
+      invoice_fee_total: sum(group.lines, invoiceAmount),
     };
   }).sort((a, b) => (b.total_gross_profit ?? b.invoice_fee_total ?? 0) - (a.total_gross_profit ?? a.invoice_fee_total ?? 0));
 }
