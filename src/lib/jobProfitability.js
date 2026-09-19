@@ -96,6 +96,68 @@ function invoiceAmount(row) {
   return stored ?? computeFeeAmt(row);
 }
 
+function splitShare(totalProfit, pct) {
+  if (totalProfit === null || pct === null) return { glass_forge_share: null, ya_share: null };
+  const glassForgeShare = round2(totalProfit * pct);
+  return { glass_forge_share: glassForgeShare, ya_share: round2(totalProfit - glassForgeShare) };
+}
+
+function profitSplitLine(row) {
+  if (row?.fee_type !== "profit_split") return null;
+  const customerSell = num(row.sale_price);
+  const yaCostBasis = num(row.cost);
+  const splitPct = num(row.split_pct) ?? 0.5;
+  const productProfit = customerSell !== null && yaCostBasis !== null ? round2(customerSell - yaCostBasis) : null;
+  const shares = splitShare(productProfit, splitPct);
+  const missing = [];
+  if (customerSell === null) missing.push("customer sell price");
+  if (yaCostBasis === null) missing.push("Y.A. cost basis");
+  return {
+    id: row.id,
+    job_name: row.job_name_raw || row.job_name_norm || "Profit split job",
+    calendar_event_id: row.calendar_event_id || null,
+    source_label: row.calendar_event_id ? "Google Calendar FeeLine" : row.note_text ? "confirmed FeeLine note" : "FeeLine",
+    customer_sell: customerSell,
+    ya_cost_basis: yaCostBasis,
+    product_profit: productProfit,
+    split_pct: splitPct,
+    ya_share: shares.ya_share,
+    glass_forge_share: shares.glass_forge_share,
+    invoice_amount: invoiceAmount(row),
+    invoice_status: row.paid_to_ya ? "paid" : row.billed_to_bfs ? "billed" : row.needs_review ? "review" : "ready",
+    missing_inputs: missing,
+  };
+}
+
+function profitSplitSummary(lines) {
+  const splitLines = lines.map(profitSplitLine).filter(Boolean);
+  if (!splitLines.length) return null;
+  return {
+    lines: splitLines,
+    customer_sell: sum(splitLines, (r) => r.customer_sell),
+    ya_cost_basis: sum(splitLines, (r) => r.ya_cost_basis),
+    product_profit: sum(splitLines, (r) => r.product_profit),
+    ya_share: sum(splitLines, (r) => r.ya_share),
+    glass_forge_share: sum(splitLines, (r) => r.glass_forge_share),
+    invoice_amount: sum(splitLines, (r) => r.invoice_amount),
+    missing_inputs: [...new Set(splitLines.flatMap((r) => r.missing_inputs))],
+  };
+}
+
+export function aggregateProfitSplitSummaries(records = []) {
+  const lines = records.flatMap((r) => r.profit_split?.lines || []);
+  return {
+    count: lines.length,
+    customer_sell: sum(lines, (r) => r.customer_sell),
+    ya_cost_basis: sum(lines, (r) => r.ya_cost_basis),
+    product_profit: sum(lines, (r) => r.product_profit),
+    ya_share: sum(lines, (r) => r.ya_share),
+    glass_forge_share: sum(lines, (r) => r.glass_forge_share),
+    invoice_amount: sum(lines, (r) => r.invoice_amount),
+    missing_inputs: [...new Set(lines.flatMap((r) => r.missing_inputs))],
+  };
+}
+
 function completionChain(group, reportStatusMap, supersededSet) {
   const billableLines = group.lines.filter((r) => r.billable && !(supersededSet && supersededSet.has(r.id)));
   const evidenceReceived = billableLines.some((r) => {
