@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, Package } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Calendar", to: "/calendar", icon: Calendar },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
+  { label: "Products", to: "/products", icon: Package },
   { label: "System map", to: "/system-map", icon: Network, ownerOnly: true },
   { label: "Research Queue", to: "/research-queue", icon: Search, ownerOnly: true },
 ];
@@ -95,7 +96,7 @@ export default function YaFeesSidebar() {
 
       {/* Nav */}
       <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-3 space-y-0.5 overflow-y-auto obsidian-scroll">
-        {NAV_ITEMS.filter(item => (!item.ownerOnly || isAgentCenterOwner(user)) && (!item.todoOnly || todoAccess) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes")).map((item) => {
+        {NAV_ITEMS.filter(item => (!item.ownerOnly || isAgentCenterOwner(user)) && (!item.todoOnly || todoAccess) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes" || item.to === "/products")).map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"));
           return (

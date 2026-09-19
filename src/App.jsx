@@ -24,6 +24,7 @@ import OAuthConsent from '@/pages/OAuthConsent';
 import SalesTracker from '@/pages/SalesTracker';
 import AdminAgentCenter from "@/pages/AdminAgentCenter";
 import BrandsSpecs from "@/pages/BrandsSpecs";
+import Products from "@/pages/Products";
 import ProbuildDailyPreview from "@/pages/ProbuildDailyPreview";
 import MessagesInbox from "@/pages/MessagesInbox";
 import ContactsDirectory from "@/pages/ContactsDirectory";
@@ -91,6 +92,7 @@ const AuthenticatedApp = () => {
           <Route path="/jobs/:id" element={<QuotesOnlyRedirect><JobDetail /></QuotesOnlyRedirect>} />
           <Route path="/match-debug" element={<QuotesOnlyRedirect><MatchDebug /></QuotesOnlyRedirect>} />
           <Route path="/brands-specs" element={<QuotesOnlyRedirect><BrandsSpecs /></QuotesOnlyRedirect>} />
+          <Route path="/products" element={<Products />} />
           <Route path="/research-queue" element={<QuotesOnlyRedirect><ResearchQueue /></QuotesOnlyRedirect>} />
         </Route>
       </Route>
