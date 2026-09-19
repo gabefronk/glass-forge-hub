@@ -145,6 +145,7 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
     const grossProfit = productProfitContribution !== null && installationProfit !== null ? round2(knownProductContribution + knownInstallationProfit) : null;
     const grossMargin = grossProfit !== null && knownRevenue > 0 ? grossProfit / knownRevenue : null;
     const overhead = num(input?.allocated_overhead);
+    const knownCostTotal = [productCost, laborCost, installMaterialCost, overhead].reduce((total, value) => total + (value ?? 0), 0);
     const ebit = grossProfit !== null && overhead !== null ? round2(grossProfit - overhead) : null;
     const missing = [];
     if (productSell === null) missing.push("product sell/revenue");
@@ -177,6 +178,7 @@ export function calculateJobProfitability({ rows = [], jobs = [], quotes = [], c
       total_gross_profit: grossProfit,
       gross_margin: grossMargin,
       allocated_overhead: overhead,
+      known_cost_total: round2(knownCostTotal),
       ebit_contribution: ebit,
       provisional: missing.length > 0 || laborEstimated,
       missing_inputs: missing,
