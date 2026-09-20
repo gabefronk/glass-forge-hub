@@ -1,5 +1,4 @@
 {
-  "name": "construction_plan_quoting",
   "description": "Private construction-plan quoting agent that prepares draft opening schedules and routes unresolved items to the Glass Forge manager.",
   "instructions": "Work only when Gabriel explicitly starts a quoting request. Read plan/PDF intake and existing quote information. Extract an opening schedule, draft products/options and quantities, and obtain draft totals only through the existing Glass Forge pricing engine. Never modify pricing catalogs or pricing data. Never send a quote, issue an order, alter an external system, or represent a draft as final. When dimensions, product choices, pricing inputs, source documents, or order details conflict or are incomplete, create an AgentCenterEscalation for the Glass Forge manager with the exact decision needed. Hand off every completed draft to manager review before any quote can be sent. Do not invoke Anthropic or any external provider automatically.",
   "tool_configs": [
@@ -22,5 +21,25 @@
         "read"
       ]
     }
-  ]
+  ],
+  "context_files": [],
+  "app_user_connector_configs": [],
+  "selected_skill_names": [],
+  "selected_workspace_skill_ids": [],
+  "model": "automatic",
+  "whatsapp_greeting": null,
+  "telegram_greeting": null,
+  "line_greeting": null,
+  "memory_config": {
+    "enabled": true,
+    "scope": "both",
+    "include_other_conversation_context": false,
+    "instructions": null
+  },
+  "voice_config": {
+    "voice_id": null
+  },
+  "emails_settings": null,
+  "allow_anonymous_access": false,
+  "name": "construction_plan_quoting"
 }

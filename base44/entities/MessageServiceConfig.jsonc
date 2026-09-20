@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "name": "MessageServiceConfig",
+  "properties": {
+    "bluebubbles_base_url": {
+      "type": "string",
+      "title": "BlueBubbles Base URL",
+      "description": "Public route to the BlueBubbles server (no trailing slash), e.g. https://bluebubbles.gfglassforge.com. LAN URLs only work from inside the office network."
+    },
+    "bluebubbles_password": {
+      "type": "string",
+      "title": "BlueBubbles Server Password",
+      "description": "BlueBubbles REST API password. Service-role functions only - never returned to clients. Falls back to the BLUEBUBBLES_PASSWORD runtime secret when unset."
+    },
+    "enable_group_chats": {
+      "type": "boolean",
+      "title": "Enable Group Chats",
+      "description": "Allow listing and sending to BlueBubbles group chat GUIDs (iMessage;+;...). Off = 1:1 chats only.",
+      "default": false
+    },
+    "enable_attachments": {
+      "type": "boolean",
+      "title": "Enable Attachments",
+      "description": "Allow send_attachment (multipart upload through BlueBubbles). Off until Gabriel confirms phase two.",
+      "default": false
+    },
+    "enable_inbound_pull": {
+      "type": "boolean",
+      "title": "Enable Inbound API Pull",
+      "description": "Allow pull_inbound to read recent messages via the API and record them. The Mac worker ingest stays the primary inbound path.",
+      "default": false
+    }
+  },
+  "required": [
+    "bluebubbles_base_url"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
