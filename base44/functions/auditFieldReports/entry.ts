@@ -111,7 +111,7 @@ export default async function(req) {
         (reportsByDate.get(addDays(denverDate, 2)) || []).length;
       if (nearCount === 0) {
         noSourceDates.add(denverDate);
-        const events = allEvents.filter((e) => e.event_date === denverDate && e.report_required !== false && e.report_status !== 'waived');
+        const events = allEvents.filter((e) => e.event_date === denverDate && e.report_required !== false && e.report_status !== 'waived' && e.report_status !== 'superseded');
         for (const event of events) {
           toUpdate.push({
             id: event.id,
@@ -140,6 +140,7 @@ export default async function(req) {
       if (noSourceDates.has(e.event_date)) return false;
       if (e.report_required === false) return false;
       if (e.report_status === 'waived') return false;
+      if (e.report_status === 'superseded') return false;
       if (!force && e.report_status === 'ok' && ['manual', 'project_date', 'manual-reconcile', 'auto-reconcile'].includes(e.match_method)) return false;
       return true;
     });
@@ -374,7 +375,7 @@ export default async function(req) {
     // Date summaries for audited dates (not no_source_data)
     for (const denverDate of datesToAudit) {
       if (noSourceDates.has(denverDate)) continue;
-      const events = allEvents.filter((e) => e.event_date === denverDate && e.report_required !== false && e.report_status !== 'waived');
+      const events = allEvents.filter((e) => e.event_date === denverDate && e.report_required !== false && e.report_status !== 'waived' && e.report_status !== 'superseded');
       const reports = (reportsByDate.get(denverDate) || []).length;
       dateSummaries.push({ date: denverDate, events: events.length, reports_available: reports, result: 'audited' });
     }
@@ -384,7 +385,7 @@ export default async function(req) {
       if (body.start_date && body.end_date && !datesToAudit.includes(event.event_date)) continue;
       if (updatedIds.has(event.id)) continue;
       if (event.report_required === false) continue;
-      if (['ok', 'waived', 'rescheduled', 'no_source_data', 'pre_compliance'].includes(event.report_status)) continue;
+      if (['ok', 'waived', 'rescheduled', 'no_source_data', 'pre_compliance', 'superseded'].includes(event.report_status)) continue;
 
       // Mark events that should be pre_compliance but aren't yet
       if (complianceStartDate && event.event_date && event.event_date < complianceStartDate) {
