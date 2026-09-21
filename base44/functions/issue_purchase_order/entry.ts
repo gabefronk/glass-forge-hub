@@ -38,6 +38,11 @@ export default async function(req) {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    const OWNER_EMAILS = ['gabefronk@gmail.com', 'gabriel.fronk.wd@gmail.com'];
+    const callerEmail = String(user.email || '').trim().toLowerCase();
+    if (user.role !== 'admin' || !OWNER_EMAILS.includes(callerEmail)) {
+      return Response.json({ error: 'forbidden: purchase orders are owner-only' }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
     const api = base44.asServiceRole.entities;
