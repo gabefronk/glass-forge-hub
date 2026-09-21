@@ -161,6 +161,30 @@ export default function CalendarPage() {
     } finally { setSaving(false); }
   };
 
+  // Two-way move: drag writes the REAL Google calendar via moveCalendarEvent.
+  // Optimistic UI; on any failure the snapshot is restored and the error shown.
+  const handleMoveEvent = async (id, newDate, fromDate) => {
+    const snapshot = events;
+    const label = events.flat().find((e) => e.id === id)?.job_name || "Event";
+    setEvents(events.map((group) => group.map((e) => (e.id === id ? { ...e, event_date: newDate } : e))));
+    setSyncMessage(`Moving ${label} to ${dayLabel(newDate)} on Google Calendar...`);
+    try {
+      const res = await base44.functions.invoke("moveCalendarEvent", { id, new_date: newDate });
+      if (res?.data?.error) {
+        setEvents(snapshot);
+        const detail = res.data.detail ? ` ${res.data.detail}` : "";
+        setSyncMessage(`Move failed - Google Calendar was NOT changed.${detail}`);
+        return;
+      }
+      setSyncMessage(`Moved ${label} from ${dayLabel(fromDate)} to ${dayLabel(newDate)} - Google Calendar updated for everyone.` +
+        (res?.data?.installer_warning ? ` (Installer calendar copy needs a refresh: ${res.data.installer_warning})` : ""));
+      await load();
+    } catch (error) {
+      setEvents(snapshot);
+      setSyncMessage("Move failed - Google Calendar was NOT changed. " + (error?.response?.data?.error || error?.message || ""));
+    }
+  };
+
   const handleSync = async () => {
     setSyncing(true);
     try {
@@ -289,6 +313,7 @@ export default function CalendarPage() {
               onCreateForDate={(d) => { setSelected(null); setCreating({ event_date: d }); }}
               selectedDate={selectedDay}
               onSelectDay={setSelectedDay}
+              onMoveEvent={handleMoveEvent}
             />
             {/* Selected day panel */}
             <div className="mt-4 rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>

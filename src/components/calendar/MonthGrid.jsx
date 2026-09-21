@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { C } from "@/lib/feeUI";
 import { denverDate } from "../../../base44/shared/billingCore.js";
@@ -34,19 +34,32 @@ function isFlagged(ev) {
     ["pending", "missing_photos", "missing_notes", "missing_all"].includes(ev.report_status);
 }
 
+function isMovable(ev) {
+  const gid = ev.google_event_id || "";
+  return Boolean(gid) && !gid.startsWith("gfjobs");
+}
+
 function DesktopEventBlock({ event, onClick }) {
   const { bg, text } = eventColors(event);
   const flagged = isFlagged(event);
   const rescheduled = event.report_status === "rescheduled";
+  const movable = isMovable(event);
   return (
     <button
       type="button"
       onClick={onClick}
+      draggable={movable}
+      onDragStart={movable ? (e) => {
+        e.dataTransfer.setData("text/plain", JSON.stringify({ id: event.id, from: (event.event_date || "").slice(0, 10) }));
+        e.dataTransfer.effectAllowed = "move";
+      } : undefined}
+      title={movable ? "Drag to another day to move this on Google Calendar" : undefined}
       className="block w-full text-left rounded-[4px] px-1.5 py-1 text-[11px] leading-tight truncate transition-opacity hover:opacity-80"
       style={{
         backgroundColor: bg,
         color: text,
         borderLeft: flagged ? "2px solid #A43432" : rescheduled ? "2px solid #C9CCC4" : "none",
+        cursor: movable ? "grab" : undefined,
       }}
     >
       {event.start_time && (
@@ -62,9 +75,10 @@ function DesktopEventBlock({ event, onClick }) {
   );
 }
 
-export default function MonthGrid({ month, events, onSelect, onCreateForDate, selectedDate, onSelectDay }) {
+export default function MonthGrid({ month, events, onSelect, onCreateForDate, selectedDate, onSelectDay, onMoveEvent }) {
   const weeks = useMemo(() => buildWeeks(month), [month]);
   const today = denverDate();
+  const [dropTarget, setDropTarget] = useState(null);
 
   return (
     <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
@@ -85,6 +99,7 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
           const dayEvents = dateStr ? events.filter((e) => (e.event_date || "").slice(0, 10) === dateStr) : [];
           const isToday = dateStr === today;
           const isSelected = dateStr === selectedDate;
+          const isDropTarget = dateStr && dropTarget === dateStr;
 
           return (
             <div
@@ -94,11 +109,27 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                 "min-h-[84px] md:min-h-[110px]",
                 !day && "opacity-30",
               )}
+              onDragOver={dateStr ? (e) => {
+                if (e.dataTransfer.types.includes("text/plain")) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (dropTarget !== dateStr) setDropTarget(dateStr);
+                }
+              } : undefined}
+              onDragLeave={dateStr ? () => { if (dropTarget === dateStr) setDropTarget(null); } : undefined}
+              onDrop={dateStr ? (e) => {
+                e.preventDefault();
+                setDropTarget(null);
+                try {
+                  const payload = JSON.parse(e.dataTransfer.getData("text/plain") || "{}");
+                  if (payload.id && payload.from && payload.from !== dateStr) onMoveEvent?.(payload.id, dateStr, payload.from);
+                } catch { /* not a calendar drag */ }
+              } : undefined}
               style={{
                 borderTop: `1px solid ${C.rowBorder}`,
                 borderRight: (i % 7) !== 6 ? `1px solid ${C.rowBorder}` : "none",
-                backgroundColor: isSelected ? "#EAF5EE" : "transparent",
-                boxShadow: isSelected ? "inset 0 0 0 2px #146556" : "none",
+                backgroundColor: isDropTarget ? "#DFF0E6" : isSelected ? "#EAF5EE" : "transparent",
+                boxShadow: isDropTarget ? "inset 0 0 0 2px #166447" : isSelected ? "inset 0 0 0 2px #146556" : "none",
               }}
             >
               {day && (
