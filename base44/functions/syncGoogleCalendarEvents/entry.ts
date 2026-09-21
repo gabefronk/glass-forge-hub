@@ -189,6 +189,40 @@ export default async function(req) {
     }
     for (const batch of chunk(toSupersede, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
 
+    // Report-match sweep: outstanding rows whose field report (ProBuild post)
+    // was filed but never linked get cleared here. Conservative match: exact
+    // normalized job_name, report job_date within [event_date - 3d, today].
+    const normName = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const allReports = await fetchAllPages(base44.asServiceRole.entities.FieldReports, '-job_date', 1000);
+    const reportsByJob = new Map();
+    for (const r of allReports) {
+      if (!r.job_name || !r.job_date) continue;
+      const k = normName(r.job_name);
+      if (!reportsByJob.has(k)) reportsByJob.set(k, []);
+      reportsByJob.get(k).push(r);
+    }
+    const todayStr = denverDate(new Date().toISOString());
+    const supersededIds = new Set(toSupersede.map((x) => x.id));
+    const toReportMatch = [];
+    for (const e of existing) {
+      if (supersededIds.has(e.id)) continue;
+      if (e.report_required === false || !OUT_RECONCILE.includes(e.report_status)) continue;
+      if (!e.event_date || e.event_date > todayStr) continue;
+      const lo = new Date(Date.parse(e.event_date + 'T12:00:00Z') - 3 * 86400000).toISOString().slice(0, 10);
+      const cands = (reportsByJob.get(normName(e.job_name)) || []).filter((r) => r.job_date >= lo && r.job_date <= todayStr);
+      if (!cands.length) continue;
+      toReportMatch.push({
+        id: e.id,
+        report_status: 'ok',
+        matched_post_ids: [...new Set([...(e.matched_post_ids || []), ...cands.map((r) => r.post_id).filter(Boolean)])],
+        match_method: 'auto-reconcile',
+        match_confidence: 1,
+        report_checked_at: new Date().toISOString(),
+        scope_notes: ((e.scope_notes || '') + ` | Auto-reconciled: field report filed ${cands.map((r) => r.job_date).join(', ')}.`).slice(0, 4000),
+      });
+    }
+    for (const batch of chunk(toReportMatch, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
+
     for (const batch of chunk(installerIdUpdates, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
 
     return Response.json({
@@ -203,6 +237,7 @@ export default async function(req) {
       installer_failed: installerFailed,
       installer_skipped: installerSkipped,
       superseded: toSupersede.length,
+      report_matched: toReportMatch.length,
       installer_failures: installerFailures.slice(0, 20),
     });
   } catch (error) {
