@@ -14,7 +14,7 @@ only when the branch is merged and Gabriel says go.
 > notify me and the customer. I still need to play with this more to figure out
 > what all it needs to trigger but you get the general idea."
 
-Plus the follow-up: an **unpaid jobs tracker** ΓÇö every ordered-but-unpaid vendor
+Plus the follow-up: an **unpaid jobs tracker** - every ordered-but-unpaid vendor
 order with order number, vendor, amount, payment route (ACH link from the vendor's
 system, paid by Israel on Gabriel's ok), and status
 `ordered -> ETA -> ACH link received -> paid -> reconciled`.
@@ -37,31 +37,31 @@ system, paid by Israel on Gabriel's ok), and status
 
 ## End-to-end flow (built on this branch)
 
-1. **Drop** ΓÇö Job Budgets page (`/job-budgets`, owner-only nav). Multi-PDF drag
+1. **Drop** - Job Budgets page (`/job-budgets`, owner-only nav). Multi-PDF drag
    drop or picker. Each file uploads to Base44 storage, then `jobBudgetIngest`.
-2. **Extract** ΓÇö deterministic AMSCO text parse when text is available, else
+2. **Extract** - deterministic AMSCO text parse when text is available, else
    `InvokeLLM` against the PDF with a strict schema (nulls, never guesses).
    Output: vendor, quote #/name, builder, bill/ship-to, openings qty, dealer
    cost, customer total, tax.
-3. **Budget** ΓÇö `computeJobBudget()` runs the workbook math. The page also shows
+3. **Budget** - `computeJobBudget()` runs the workbook math. The page also shows
    a live "quick margin check" scratchpad with the same math.
-4. **Match** ΓÇö quote tokens (quote name, builder, address) are scored against
+4. **Match** - quote tokens (quote name, builder, address) are scored against
    Jobs records with the Hub's existing normalized-customer rules. Exactly one
    confident match links the job; zero or split evidence lands in
-   `needs_review` with candidates ΓÇö nothing attaches on weak evidence, matching
+   `needs_review` with candidates - nothing attaches on weak evidence, matching
    the Hub's job-identity philosophy.
-5. **File** ΓÇö find-or-create `Glass Forge Jobs/<Builder>/<Job>` in Drive (the
+5. **File** - find-or-create `Glass Forge Jobs/<Builder>/<Job>` in Drive (the
    same root the plans pipeline uses). Unmatched quotes go to
    `Glass Forge Jobs/_Unmatched Quote Drops/<Quote Name>` so nothing fabricates
    a builder folder. Uploads: the original quote PDF, a **filled copy of his
    real workbook** (`Window Budget Sheet - <job>.xlsx`, template embedded, yellow
    cells in, formula results cached so any viewer shows numbers), and a CSV
    summary for quick preview.
-6. **Records** ΓÇö a `JobBudgets` entity row (extraction, inputs, computed budget,
+6. **Records** - a `JobBudgets` entity row (extraction, inputs, computed budget,
    Drive ids/paths, job link, glass-ETA fields). On a confident match, this
    month's `JobCostInputs` is upserted with product cost/sell + quote number,
    which is exactly what the Invoicing page reads for job profitability.
-7. **Unpaid orders** ΓÇö `VendorOrders` entity + the tracker section on the same
+7. **Unpaid orders** - `VendorOrders` entity + the tracker section on the same
    page. Log an order (or it can be created from a budget), then advance it
    down the chain; every transition is stamped in `status_history`. "Reconciled"
    is the only state that leaves the open-payables list; the header keeps a
@@ -87,7 +87,7 @@ Design: **one watcher, one write path, drafts for anything customer-facing.**
     Customer-facing automation on his behalf is a representation risk he has
     consistently kept draft-only.
 
-## Where his trigger ideas have gaps ΓÇö and the simpler shape
+## Where his trigger ideas have gaps - and the simpler shape
 
 His instinct ("figure out what all it needs to trigger") points at several loose
 ends. Gaps, with the simpler answer:
@@ -101,7 +101,7 @@ ends. Gaps, with the simpler answer:
    Gap: auto-creating folders for every unmatched quote would litter Drive.
    Answer: `_Unmatched Quote Drops` + needs_review list on the page; filing a
    review item re-runs filing into the right job folder.
-3. **Invoicing update scope.** He said "updates our invoicing page" ΓÇö the
+3. **Invoicing update scope.** He said "updates our invoicing page" - the
    unambiguous part is the cost basis (JobCostInputs, built). What he may also
    mean is ready-to-bill fee lines from budgets, which is *not* built: billing
    routes (BFS vs YA vs direct) decide that, and auto-creating charges would
@@ -139,19 +139,24 @@ One upsert seeds the known open order:
     "order_number": "09-3900", "vendor": "AMSCO",
     "po_name": "YA Windows 3 Strings", "billed_account": "Brian Beitzel",
     "payment_route": "ach_link", "payer": "Israel", "status": "ordered",
-    "note": "ACH link pending; Israel pays on Gabriel's ok"
+    "amount": 3254.77,
+    "notes": "ACH link pending; Israel pays on Gabriel's ok"
   }
 }
 ```
 
+## PO numbers
+
+Current YA PO assignments: **3 Strings = YA-0001**, **Baxter = YA-0002**. Use these when filing quotes/orders for those jobs.
+
 ## Files on this branch
 
-- `base44/shared/jobBudgetMath.js` ΓÇö workbook math, verified against the template
-- `base44/shared/vendorQuoteParse.js` ΓÇö AMSCO dealer-quote parser + normalizer
-- `base44/shared/jobBudgetSheet.js` + `jobBudgetTemplateXlsx.js` ΓÇö filled workbook
+- `base44/shared/jobBudgetMath.js` - workbook math, verified against the template
+- `base44/shared/vendorQuoteParse.js` - AMSCO dealer-quote parser + normalizer
+- `base44/shared/jobBudgetSheet.js` + `jobBudgetTemplateXlsx.js` - filled workbook
   (his real template embedded) + CSV summary
 - `base44/entities/JobBudgets.jsonc`, `base44/entities/VendorOrders.jsonc`
-- `base44/functions/jobBudgetIngest/entry.ts` ΓÇö process / upsert_order /
+- `base44/functions/jobBudgetIngest/entry.ts` - process / upsert_order /
   advance_order_status / set_glass_eta
 - `src/pages/JobBudgets.jsx` + route + owner-only nav (desktop + mobile)
 - `tests/jobBudgetMath.test.mjs`, `vendorQuoteParse.test.mjs`,

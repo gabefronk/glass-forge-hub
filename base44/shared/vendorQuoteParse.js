@@ -1,7 +1,7 @@
 // Deterministic parser for vendor quote text (pdftotext-style output), plus a
 // normalizer for LLM-extracted quote JSON. Pure functions, no I/O.
 //
-// First supported format: AMSCO "Dealer Total Pricing" quote PDF ΓÇö the exact
+// First supported format: AMSCO "Dealer Total Pricing" quote PDF - the exact
 // layout Gabriel budgets from (quote 3517590, "BAXTER - GLASS"). Other vendors
 // (Andersen, Pella, Milgard...) go through the LLM schema and normalizeVendorQuote;
 // add deterministic parsers here as their layouts prove out.

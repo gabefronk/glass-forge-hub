@@ -50,7 +50,7 @@ export default function JobBudgets() {
   const [jobs, setJobs] = useState([]);
   const [processing, setProcessing] = useState([]); // per-drop progress lines
   const [dragOver, setDragOver] = useState(false);
-  const [newOrder, setNewOrder] = useState({ order_number: "", vendor: "", po_name: "", amount: "", payer: "", payment_route: "ach_link", billed_account: "" });
+  const [newOrder, setNewOrder] = useState({ order_number: "", vendor: "", po_name: "", amount: "", payer: "", payment_route: "ach_link", billed_account: "", notes: "" });
   const [showOrderForm, setShowOrderForm] = useState(false);
   const fileInput = useRef(null);
 
@@ -90,7 +90,7 @@ export default function JobBudgets() {
       amount: newOrder.amount === "" ? undefined : Number(newOrder.amount),
     };
     await base44.functions.invoke("jobBudgetIngest", { action: "upsert_order", order: payload });
-    setNewOrder({ order_number: "", vendor: "", po_name: "", amount: "", payer: "", payment_route: "ach_link", billed_account: "" });
+    setNewOrder({ order_number: "", vendor: "", po_name: "", amount: "", payer: "", payment_route: "ach_link", billed_account: "", notes: "" });
     setShowOrderForm(false);
     load();
   }
@@ -186,7 +186,7 @@ export default function JobBudgets() {
                   <tr key={b.id} style={{ borderBottom: `1px solid ${C.rowBorder}` }}>
                     <td className="px-4 py-3">
                       <div className="font-medium" style={{ color: C.text }}>{b.title}</div>
-                      <div className="text-[11px]" style={{ color: C.textFaint }}>{[b.quoted_by && `by ${b.quoted_by}`, b.openings_qty && `${b.openings_qty} openings`].filter(Boolean).join(" ┬╖ ")}</div>
+                      <div className="text-[11px]" style={{ color: C.textFaint }}>{[b.quoted_by && `by ${b.quoted_by}`, b.openings_qty && `${b.openings_qty} openings`].filter(Boolean).join(" - ")}</div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.cost_material_tax)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.actual_total_sell)}</td>
@@ -211,7 +211,7 @@ export default function JobBudgets() {
         {/* Unpaid jobs tracker */}
         <Section
           title="Unpaid vendor orders"
-          sub={`${openPayables.length} open ┬╖ ${money(openPayableTotal)} outstanding ┬╖ ordered ΓåÆ ETA ΓåÆ ACH link ΓåÆ paid ΓåÆ reconciled`}>
+          sub={`${openPayables.length} open - ${money(openPayableTotal)} outstanding - ordered -> ETA -> ACH link -> paid -> reconciled`}>
           {orders.length === 0 && <p className="text-[13px]" style={{ color: C.textMuted }}>No vendor orders logged yet.</p>}
           {orders.map((o) => {
             const idx = ORDER_CHAIN.indexOf(o.status);
@@ -231,9 +231,11 @@ export default function JobBudgets() {
                 </div>
                 <div className="text-[12px] flex flex-wrap gap-x-4 gap-y-1" style={{ color: C.textMuted }}>
                   {o.order_number && <span>Order {o.order_number}</span>}
-                  {o.po_name && <span>PO ΓÇ£{o.po_name}ΓÇ¥</span>}
+                  {o.po_name && <span>PO "{o.po_name}"</span>}
                   {o.billed_account && <span>billed under {o.billed_account}</span>}
                   {o.payer && <span>pays: {o.payer}</span>}
+                  {o.payment_route && o.payment_route !== "unknown" && <span>via {o.payment_route.replace(/_/g, " ")}</span>}
+                  {o.notes && <span>note: {o.notes}</span>}
                   {o.eta_date && <span>ETA {o.eta_date}</span>}
                   {o.ach_link && <a href={o.ach_link} target="_blank" rel="noreferrer" className="font-medium" style={{ color: C.accentText }}>ACH link</a>}
                   {o.job_id && jobName(o.job_id) && <span>job: {jobName(o.job_id)}</span>}
@@ -254,6 +256,8 @@ export default function JobBudgets() {
                 ["billed_account", "Billed under account"],
                 ["amount", "Amount"],
                 ["payer", "Who pays (e.g. Israel)"],
+                ["payment_route", "Payment route (ach_link, card, check...)"],
+                ["notes", "Note (e.g. ACH link pending; Israel pays on Gabriel's ok)"],
               ].map(([key, ph]) => (
                 <input key={key} value={newOrder[key]} placeholder={ph}
                   onChange={(e) => setNewOrder((o) => ({ ...o, [key]: e.target.value }))}

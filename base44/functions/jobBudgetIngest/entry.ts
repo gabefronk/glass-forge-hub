@@ -74,7 +74,7 @@ async function ensureFolder(token, name, parentId) {
   return made.id;
 }
 
-// Glass Forge Jobs / <Builder> / <Job> ΓÇö find or create both levels.
+// Glass Forge Jobs / <Builder> / <Job> - find or create both levels.
 async function ensureJobFolder(token, builderRaw, jobRaw, unmatched) {
   const builder = cleanName(builderRaw, 'Unknown Builder');
   const jobName = cleanName(jobRaw, 'Unnamed Job');
