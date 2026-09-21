@@ -57,11 +57,11 @@ export default async function(req) {
     }
 
     const jobId = clean(body.job_id);
-    let job = null;
-    if (jobId) {
-      job = await api.Jobs.get(jobId).catch(() => null);
-      if (!job) return Response.json({ error: 'job_not_found', job_id: jobId }, { status: 200 });
-    }
+    // A PO always belongs to a real job: no job_id, no number. Guards against
+    // burning sequence numbers on empty/accidental calls.
+    if (!jobId) return Response.json({ error: 'job_id_required' }, { status: 400 });
+    const job = await api.Jobs.get(jobId).catch(() => null);
+    if (!job) return Response.json({ error: 'job_not_found', job_id: jobId }, { status: 200 });
 
     const existing = await fetchAllPages(api.PurchaseOrders, 'created_date');
     const po_number = nextPoNumber(existing);
@@ -75,32 +75,28 @@ export default async function(req) {
       const v = clean(body[f]);
       if (v) row[f] = v;
     }
-    if (jobId) {
-      row.job_id = jobId;
-      if (!row.job_name && job.canonical_name) row.job_name = job.canonical_name;
-      if (!row.builder && job.builder) row.builder = job.builder;
-      if (!row.customer_name && job.customer_name) row.customer_name = job.customer_name;
-    }
+    row.job_id = jobId;
+    if (!row.job_name && job.canonical_name) row.job_name = job.canonical_name;
+    if (!row.builder && job.builder) row.builder = job.builder;
+    if (!row.customer_name && job.customer_name) row.customer_name = job.customer_name;
     if (amount_dealer !== undefined) row.amount_dealer = amount_dealer;
     if (amount_customer !== undefined) row.amount_customer = amount_customer;
 
     const created = await api.PurchaseOrders.create(row);
 
+    // Re-read right before writing so a concurrent edit to the job's PO list is not lost.
+    const fresh = (await api.Jobs.get(jobId).catch(() => null)) || job;
+    const current = Array.isArray(fresh.po_numbers) ? fresh.po_numbers : [];
     let job_update = null;
-    if (jobId) {
-      // Re-read right before writing so a concurrent edit to the job's PO list is not lost.
-      const fresh = (await api.Jobs.get(jobId).catch(() => null)) || job;
-      const current = Array.isArray(fresh.po_numbers) ? fresh.po_numbers : [];
-      if (current.includes(po_number)) {
-        job_update = { ok: true, already_present: true };
-      } else {
-        try {
-          await api.Jobs.update(jobId, { po_numbers: [...current, po_number] });
-          job_update = { ok: true };
-        } catch (e) {
-          // The PO exists either way; surface the link failure instead of hiding it.
-          job_update = { ok: false, error: String(e?.message || e) };
-        }
+    if (current.includes(po_number)) {
+      job_update = { ok: true, already_present: true };
+    } else {
+      try {
+        await api.Jobs.update(jobId, { po_numbers: [...current, po_number] });
+        job_update = { ok: true };
+      } catch (e) {
+        // The PO exists either way; surface the link failure instead of hiding it.
+        job_update = { ok: false, error: String(e?.message || e) };
       }
     }
 
