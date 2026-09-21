@@ -105,7 +105,7 @@ const HUD_MARKUP = `<header>
     <div class="panel" id="vupanel"><div class="ptitle">Voice Uplink <span class="tag" id="vutag">probing</span></div>
       <div class="vu">
         <div class="vu-row">
-          <button class="vu-btn" id="vumic"<button class="vu-btn" id="vuspkr" title="speaker on/off" style="font-size:.7rem;letter-spacing:.1em">SPKR ON</button> title="Push to talk">&#127908;</button>
+          <button class="vu-btn" id="vumic" title="Push to talk">&#127908;</button><button class="vu-btn" id="vuspkr" title="speaker on/off" style="font-size:.7rem;letter-spacing:.1em">SPKR ON</button>
           <div class="vu-state" id="vustate">VOICE LINK <b>CHECKING</b></div>
         </div>
         <div class="vu-log" id="vulog"><div class="who">SYSTEM</div><div class="agent">Voice channel standing by.</div></div>
