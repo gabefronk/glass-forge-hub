@@ -103,7 +103,8 @@ export default async function(req) {
         organizer: ev.organizer?.email || null,
         po_number: extractPO(ev.description || '') || null,
         oe_number: extractOE(ev.description || '') || null,
-        report_required: true,
+        // Admin items (COI requests etc.) are not field work - no report obligation.
+        report_required: !/\bcoi\b/i.test(ev.summary || ''),
         report_due_at: reportDueAtWithGrace(event_date),
       };
       const ex = byGoogleId.get(ev.id);
@@ -202,6 +203,17 @@ export default async function(req) {
       reportsByJob.get(k).push(r);
     }
     const todayStr = denverDate(new Date().toISOString());
+    const ADMIN_RE = /\bcoi\b/i;
+    const toAdminExempt = [];
+    for (const e of existing) {
+      if (e.report_required === false || !ADMIN_RE.test(e.job_name || '')) continue;
+      toAdminExempt.push({
+        id: e.id,
+        report_required: false,
+        scope_notes: ((e.scope_notes || '') + ' | Auto-exempted: admin item (COI), not field work.').slice(0, 4000),
+      });
+    }
+    for (const batch of chunk(toAdminExempt, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
     const supersededIds = new Set(toSupersede.map((x) => x.id));
     const toReportMatch = [];
     for (const e of existing) {
@@ -238,6 +250,7 @@ export default async function(req) {
       installer_skipped: installerSkipped,
       superseded: toSupersede.length,
       report_matched: toReportMatch.length,
+      admin_exempted: toAdminExempt.length,
       installer_failures: installerFailures.slice(0, 20),
     });
   } catch (error) {
