@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Package, Bot, X, DollarSign } from "lucide-react";
 import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { MessageSquare, Users, Network, CheckSquare } from "lucide-react";
+import { MessageSquare, Users, Network, CheckSquare, Mic } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 
 const PRIMARY_NAV = [
@@ -22,6 +22,7 @@ const SECONDARY_NAV = [
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
   { label: "Messages", to: "/messages", icon: MessageSquare, ownerOnly: true },
   { label: "System map", to: "/system-map", icon: Network, ownerOnly: true },
+  { label: "HUD", ariaLabel: "Command HUD", to: "/command-hud", icon: Mic, ownerOnly: true },
 ];
 
 export default function MobileBottomNav({ user }) {
