@@ -14,6 +14,9 @@
       "default": "unknown"
     },
     "ach_link": { "type": "string", "description": "ACH payment link from the vendor's system, when received." },
+    "ach_link_received_at": { "type": "string", "description": "ISO date the ACH link arrived (from Steve/Brian email or portal)." },
+    "delivery_method": { "type": "string", "description": "e.g. will_call or delivery." },
+    "picked_up_at": { "type": "string", "description": "ISO date will-call material was picked up." },
     "payer": { "type": "string", "description": "Who pays it, e.g. Israel (on Gabriel's ok)." },
     "status": {
       "type": "string",
