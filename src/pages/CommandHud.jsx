@@ -150,7 +150,9 @@ function bootHud(base44) {
     const active=events.filter(e=>e.event_date>=today);
     const todayQ=events.filter(e=>e.event_date===today).sort((a,b)=>(a.start_time||'99')<(b.start_time||'99')?-1:1);
     const tmrQ=events.filter(e=>e.event_date===tmr);
-    const outstanding=events.filter(e=>e.report_required!==false && OUT_STATUSES.includes(e.report_status) && e.event_date<=today && e.event_date>='2026-09-01')
+    // Gabriel 2026-09-21: missing reports surface at 8 AM Denver the morning after the job, never same-day
+    const yst=addDays(today,-1), dh=parseInt(new Intl.DateTimeFormat('en-US',{timeZone:'America/Denver',hour:'2-digit',hourCycle:'h23'}).format(new Date()),10);
+    const outstanding=events.filter(e=>e.report_required!==false && OUT_STATUSES.includes(e.report_status) && (e.event_date<yst||(e.event_date===yst&&dh>=8)) && e.event_date>='2026-09-01')
       .sort((a,b)=>a.event_date<b.event_date?-1:1);
     const ok=events.filter(e=>e.report_status==='ok');
     // cleared per day (14d)

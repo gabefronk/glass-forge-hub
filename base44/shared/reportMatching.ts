@@ -188,22 +188,28 @@ export function addDays(dateStr, n) {
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 }
 
-// Report due at = end of the grace day (event_date + 1) in Denver.
-// The grace day is the full day after the scheduled day. The report is
-// not considered late until this time has passed.
+// Report due at = 8:00 AM Denver on the morning after the job (event_date + 1).
+// Gabriel 2026-09-21: crews upload reports at night, so a missing report
+// flags the next morning at 8:00 AM - not same-day, not end of grace day.
 export function reportDueAtWithGrace(dateStr) {
   if (!dateStr) return null;
-  return endOfDayDenver(addDays(dateStr, 1));
+  const graceDay = addDays(dateStr, 1);
+  const [y, m, d] = graceDay.split('-').map(Number);
+  const test = new Date(graceDay + 'T12:00:00Z');
+  const denverHour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', hour: '2-digit', hour12: false }).format(test), 10);
+  const offset = 12 - denverHour; // 6 (MDT) or 7 (MST)
+  return new Date(Date.UTC(y, m - 1, d, 8 + offset, 0, 0)).toISOString();
 }
 
-// Days late counting from the grace day (event_date + 1).
-// Returns 0 while within the grace period, then 1, 2, 3... after.
+// Days late counting 8:00 AM Denver deadlines (due = morning after the job).
+// 0 while within grace, 1 from the first missed 8 AM deadline, +1 per day.
 export function computeDaysLateWithGrace(eventDateStr) {
   if (!eventDateStr) return 0;
-  const nowDenver = toDenverDateString(new Date());
-  const graceDay = addDays(eventDateStr, 1);
-  const diff = Math.floor((new Date(nowDenver + 'T00:00:00Z').getTime() - new Date(graceDay + 'T00:00:00Z').getTime()) / 86400000);
-  return Math.max(0, diff);
+  const dueAt = reportDueAtWithGrace(eventDateStr);
+  if (!dueAt) return 0;
+  const diffMs = new Date().getTime() - new Date(dueAt).getTime();
+  if (diffMs < 0) return 0;
+  return Math.floor(diffMs / 86400000) + 1;
 }
 
 // True if the current time is within the grace period (report not yet due).

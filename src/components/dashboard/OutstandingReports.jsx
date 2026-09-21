@@ -39,13 +39,21 @@ export default function OutstandingReports({ events, user, onChanged, compliance
   const [actionError, setActionError] = useState("");
 
   const todayDenver = denverDate();
+  const denverHour = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: "America/Denver", hour: "2-digit", hourCycle: "h23" }).format(new Date()), 10);
   const outstanding = (events || [])
     .filter((e) => e.report_required !== false &&
       ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"].includes(e.report_status))
     // Future visits are not outstanding reports: crews cannot have reported
-    // on work that has not happened yet. Only today and past dates belong
-    // in this list.
-    .filter((e) => (e.event_date || "") <= todayDenver)
+    // on work that has not happened yet.
+    // Gabriel 2026-09-21: crews file reports at night, so a job's missing
+    // report pops up here at 8:00 AM Denver the morning AFTER the job date -
+    // never on the same day. The hourly audit flips it to missing then.
+    .filter((e) => {
+      if (!e.event_date) return true;
+      const [yy, mm, dd] = e.event_date.split("-").map(Number);
+      const surfaceDate = new Date(Date.UTC(yy, mm - 1, dd + 1)).toISOString().slice(0, 10);
+      return todayDenver > surfaceDate || (todayDenver === surfaceDate && denverHour >= 8);
+    })
     .filter((e) => !complianceStartDate || (e.event_date || "") >= complianceStartDate)
     .sort((a, b) => {
       const aRes = a.report_status === "rescheduled" ? 1 : 0;
