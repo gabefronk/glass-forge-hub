@@ -355,7 +355,17 @@ export default async function(req) {
     const createdRows = [];
     for (const batch of chunk(toCreate, 500)) createdRows.push(...await base44.asServiceRole.entities.FeeLines.bulkCreate(batch));
     const createdByEvent = new Map(createdRows.map(r => [r.calendar_event_id, r]));
-    for (const batch of chunk(toUpdate, 500)) await base44.asServiceRole.entities.FeeLines.bulkUpdate(batch);
+    // Defensive: Base44 rejects bulkUpdate payloads containing the same entity
+    // id twice. Duplicate calendar rows sharing one google_event_id can map to
+    // the same FeeLine; keep the last patch per id.
+    const seenUpdateIds = new Set();
+    const toUpdateDeduped = [];
+    for (let i = toUpdate.length - 1; i >= 0; i--) {
+      if (!toUpdate[i].id || seenUpdateIds.has(toUpdate[i].id)) continue;
+      seenUpdateIds.add(toUpdate[i].id);
+      toUpdateDeduped.unshift(toUpdate[i]);
+    }
+    for (const batch of chunk(toUpdateDeduped, 500)) await base44.asServiceRole.entities.FeeLines.bulkUpdate(batch);
 
     // Supersede Probuild rows that were reverse-merged into calendar rows.
     // The calendar row now owns the labor data; the Probuild row is suppressed.

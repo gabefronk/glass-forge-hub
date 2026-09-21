@@ -3,7 +3,7 @@ import { currentMonthStr, shiftMonthStr } from "@/lib/feeMath";
 import { denverDate } from "../../base44/shared/billingCore.js";
 import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, RefreshCw, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchAllPages } from "@/lib/pagination";
 import { C } from "@/lib/feeUI";
@@ -55,6 +55,7 @@ export default function CalendarPage() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [unreportedOnly, setUnreportedOnly] = useState(false);
+  const [query, setQuery] = useState("");
   const [user, setUser] = useState(null);
 
   const load = async () => {
@@ -105,6 +106,16 @@ export default function CalendarPage() {
     }
     return filtered;
   }, [combined, month, unreportedOnly]);
+  // Quick search across every loaded event (all months), like the job tracker.
+  const searchMatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return combined.events
+      .filter((e) => [e.job_name, e.builder, e.address, e.crew, e.po_number, e.oe_number]
+        .filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
+      .sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "") || (a.start_time || "").localeCompare(b.start_time || ""))
+      .slice(0, 50);
+  }, [combined, query]);
   const selectedDayEvents = useMemo(() => {
     return monthEvents.filter((e) => (e.event_date || "").slice(0, 10) === selectedDay).sort((a, b) => (a.start_time || "99").localeCompare(b.start_time || "99"));
   }, [monthEvents, selectedDay]);
@@ -185,6 +196,16 @@ export default function CalendarPage() {
               <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "list" ? "" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
             </div>
             <button type="button" onClick={() => setUnreportedOnly(!unreportedOnly)} className="px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] whitespace-nowrap transition-colors" style={unreportedOnly ? { backgroundColor: C.amber, color: "#FFFFFF" } : { border: `1px solid ${C.border}`, color: C.textSecondary }}>Unreported only</button>
+            <div className="relative inline-flex items-center">
+              <Search className="absolute left-3 h-3.5 w-3.5 pointer-events-none" style={{ color: C.textSecondary }} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search jobs, builders, addresses"
+                className="pl-8 pr-3 py-2 rounded-full text-[12px] w-56 max-w-full focus:outline-none"
+                style={{ border: `1px solid ${C.border}`, color: C.text }}
+              />
+            </div>
             <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
               <RefreshCw className="h-3.5 w-3.5" />{syncing ? "Syncing…" : "Refresh whole month"}
             </button>
@@ -195,6 +216,24 @@ export default function CalendarPage() {
         </div>
 
         {syncMessage && <p role="status" className="mb-4 rounded-lg border bg-white p-3 text-sm">{syncMessage}</p>}
+
+        {query.trim().length >= 2 && (
+          <div className="mb-4 rounded-lg border bg-white p-3">
+            <div className="mono-label-sm mb-2">{searchMatches.length} match{searchMatches.length === 1 ? "" : "es"}{searchMatches.length === 50 ? " (first 50 - narrow the search)" : ""}</div>
+            {searchMatches.length === 0 && <p className="text-sm" style={{ color: C.textSecondary }}>No events match "{query.trim()}".</p>}
+            <div className="flex flex-col gap-1">
+              {searchMatches.map((m) => {
+                const d = m.event_date || "";
+                return (
+                  <button key={m.id} type="button" onClick={() => { setMonth(d.slice(0, 7)); setSelectedDay(d.slice(0, 10)); setSelected(m); }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-[#F8F9F6]">
+                    <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: C.textSecondary }}>{d.slice(5, 10)} {m.start_time || ""}</span>
+                    <span className="truncate" style={{ color: C.text }}>{m.job_name || "(untitled)"}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-4">
           <h1 className="font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
