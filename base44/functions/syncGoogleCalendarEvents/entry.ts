@@ -162,6 +162,33 @@ export default async function(req) {
       installerPushed++;
       if (result.id !== ev.installer_event_id) installerIdUpdates.push({ id: ev.id, installer_event_id: result.id });
     }
+    // Reconcile jobs-import duplicates: those rows carry synthetic gfjobs*
+    // google_event_ids and duplicate the live Google row for the same job. The
+    // live row resolves the due date from the actual event; supersede the
+    // synthetic duplicate so a reschedule stops leaving a stale late entry.
+    const OUT_RECONCILE = ['pending', 'missing_photos', 'missing_notes', 'missing_all', 'rescheduled'];
+    const liveByJob = new Map();
+    for (const e of existing) {
+      const gid = e.google_event_id || '';
+      if (!gid || gid.startsWith('gfjobs') || !e.job_name) continue;
+      const cur = liveByJob.get(e.job_name);
+      if (!cur || String(e.event_date || '') > String(cur.event_date || '')) liveByJob.set(e.job_name, e);
+    }
+    const toSupersede = [];
+    for (const e of existing) {
+      const gid = e.google_event_id || '';
+      if (!gid.startsWith('gfjobs')) continue;
+      if (e.report_required === false || !OUT_RECONCILE.includes(e.report_status)) continue;
+      const live = liveByJob.get(e.job_name);
+      if (!live) continue;
+      toSupersede.push({
+        id: e.id,
+        report_required: false,
+        scope_notes: ((e.scope_notes || '') + ` | Superseded by live Google event ${live.google_event_id} (${live.event_date}); live row carries the report.`).slice(0, 4000),
+      });
+    }
+    for (const batch of chunk(toSupersede, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
+
     for (const batch of chunk(installerIdUpdates, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
 
     return Response.json({
@@ -175,6 +202,7 @@ export default async function(req) {
       installer_pushed: installerPushed,
       installer_failed: installerFailed,
       installer_skipped: installerSkipped,
+      superseded: toSupersede.length,
       installer_failures: installerFailures.slice(0, 20),
     });
   } catch (error) {
