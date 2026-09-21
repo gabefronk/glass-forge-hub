@@ -140,7 +140,7 @@ export default async function(req) {
       if (noSourceDates.has(e.event_date)) return false;
       if (e.report_required === false) return false;
       if (e.report_status === 'waived') return false;
-      if (!force && e.report_status === 'ok' && (e.match_method === 'manual' || e.match_method === 'project_date')) return false;
+      if (!force && e.report_status === 'ok' && ['manual', 'project_date', 'manual-reconcile', 'auto-reconcile'].includes(e.match_method)) return false;
       return true;
     });
 
