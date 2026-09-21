@@ -35,6 +35,7 @@ import ResearchQueue from "@/pages/ResearchQueue";
 import Todos from '@/pages/Todos';
 import CommandHud from '@/pages/CommandHud';
 import JobBudgets from '@/pages/JobBudgets';
+import PurchaseOrders from '@/pages/PurchaseOrders';
 import { isWindowQuotesOnly } from '@/lib/agentCenterAccess';
 // Add page imports here
 
@@ -98,6 +99,7 @@ const AuthenticatedApp = () => {
           <Route path="/products" element={<Products />} />
           <Route path="/research-queue" element={<QuotesOnlyRedirect><ResearchQueue /></QuotesOnlyRedirect>} />
           <Route path="/job-budgets" element={<QuotesOnlyRedirect><JobBudgets /></QuotesOnlyRedirect>} />
+          <Route path="/purchase-orders" element={<QuotesOnlyRedirect><PurchaseOrders /></QuotesOnlyRedirect>} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />

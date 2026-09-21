@@ -1,0 +1,31 @@
+{
+  "name": "PurchaseOrders",
+  "type": "object",
+  "properties": {
+    "po_number": { "type": "string", "title": "PO number, e.g. YA-0001", "description": "YA Windows and Doors sequence. Assigned by issue_purchase_order (max existing + 1, zero-padded to 4); never reused or renumbered." },
+    "job_id": { "type": "string", "description": "Linked Jobs record. The PO number is appended to that job's po_numbers." },
+    "job_name": { "type": "string" },
+    "builder": { "type": "string" },
+    "customer_name": { "type": "string" },
+    "vendor": { "type": "string", "description": "Supplier the order is placed with, e.g. AMSCO." },
+    "vendor_quote_ref": { "type": "string", "description": "Vendor quote number the PO orders against, e.g. Amsco 3517590." },
+    "amount_dealer": { "type": "number", "description": "Dealer cost (what Glass Forge pays the vendor)." },
+    "amount_customer": { "type": "number", "description": "Customer sell price for the same scope." },
+    "status": {
+      "type": "string",
+      "enum": ["issued", "emailed", "ordered", "confirmed", "received", "cancelled"],
+      "default": "issued",
+      "description": "issued = number assigned; emailed = order sent to vendor; ordered/confirmed = vendor accepted; received = material in hand."
+    },
+    "order_email_ref": { "type": "string", "description": "Reference to the order email sent to the vendor (Gmail message/thread id or subject)." },
+    "notes": { "type": "string" },
+    "created_by_email": { "type": "string" }
+  },
+  "required": ["po_number", "status"],
+  "rls": {
+    "read": { "user_condition": { "role": "admin" } },
+    "create": { "user_condition": { "role": "admin" } },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}
