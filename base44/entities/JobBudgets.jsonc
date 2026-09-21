@@ -1,0 +1,49 @@
+{
+  "name": "JobBudgets",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string", "title": "Budget title, e.g. BAXTER - GLASS (Amsco 3517590)" },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "filed", "needs_review"],
+      "default": "draft",
+      "description": "filed = budget sheet + quote PDF are in the Drive job folder; needs_review = job match or extraction uncertain."
+    },
+    "builder": { "type": "string" },
+    "job_name": { "type": "string" },
+    "job_id": { "type": "string", "description": "Linked Jobs record when the match is confident." },
+    "job_match": { "type": "object", "description": "Match evidence: tokens, candidate job ids, why review is needed." },
+    "manufacturer": { "type": "string" },
+    "vendor": { "type": "string" },
+    "quote_number": { "type": "string" },
+    "quote_name": { "type": "string" },
+    "quoted_by": { "type": "string" },
+    "openings_qty": { "type": "integer" },
+    "quote": { "type": "object", "description": "Normalized vendor quote extraction (parse source, bill/ship to, totals)." },
+    "inputs": { "type": "object", "description": "Workbook inputs: material_true_cost, labor fields, extras, actual_total_sell." },
+    "computed": { "type": "object", "description": "jobBudgetMath output: cost basis, target sells, margin %." },
+    "source_pdf_url": { "type": "string", "description": "Base44 storage URL of the dropped quote PDF." },
+    "source_pdf_name": { "type": "string" },
+    "drive_job_folder_id": { "type": "string" },
+    "drive_job_folder_path": { "type": "string", "description": "Glass Forge Jobs/<Builder>/<Job>" },
+    "drive_quote_file_id": { "type": "string" },
+    "drive_budget_xlsx_file_id": { "type": "string" },
+    "drive_budget_csv_file_id": { "type": "string" },
+    "glass_eta_date": { "type": "string", "description": "ETA for the glass from the supplier (Steve), ISO date." },
+    "glass_eta_status": {
+      "type": "string",
+      "enum": ["none", "waiting", "eta_set", "ready", "picked_up"],
+      "default": "none"
+    },
+    "glass_eta_source": { "type": "string", "description": "Where the ETA came from (Steve text/email, manual)." },
+    "notes": { "type": "string" },
+    "created_by_email": { "type": "string" }
+  },
+  "required": ["title", "status"],
+  "rls": {
+    "read": { "user_condition": { "role": "admin" } },
+    "create": { "user_condition": { "role": "admin" } },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}

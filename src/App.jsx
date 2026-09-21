@@ -33,6 +33,7 @@ import ReportsRedirect from '@/components/ReportsRedirect';
 import SystemMap from "@/pages/SystemMap";
 import ResearchQueue from "@/pages/ResearchQueue";
 import Todos from '@/pages/Todos';
+import JobBudgets from '@/pages/JobBudgets';
 import { isWindowQuotesOnly } from '@/lib/agentCenterAccess';
 // Add page imports here
 
@@ -94,6 +95,7 @@ const AuthenticatedApp = () => {
           <Route path="/brands-specs" element={<QuotesOnlyRedirect><BrandsSpecs /></QuotesOnlyRedirect>} />
           <Route path="/products" element={<Products />} />
           <Route path="/research-queue" element={<QuotesOnlyRedirect><ResearchQueue /></QuotesOnlyRedirect>} />
+          <Route path="/job-budgets" element={<QuotesOnlyRedirect><JobBudgets /></QuotesOnlyRedirect>} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />

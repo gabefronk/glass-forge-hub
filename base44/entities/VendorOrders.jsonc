@@ -1,0 +1,49 @@
+{
+  "name": "VendorOrders",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string", "title": "Display title, e.g. AMSCO 09-3900 - YA Windows 3 Strings" },
+    "order_number": { "type": "string", "description": "Vendor order/confirmation number, e.g. 09-3900." },
+    "vendor": { "type": "string" },
+    "po_name": { "type": "string", "description": "PO name on the order, e.g. 'YA Windows 3 Strings'." },
+    "billed_account": { "type": "string", "description": "Customer account the order bills under, e.g. Brian Beitzel." },
+    "amount": { "type": "number", "description": "Order total owed to the vendor." },
+    "payment_route": {
+      "type": "string",
+      "enum": ["ach_link", "vendor_portal", "card", "check", "other", "unknown"],
+      "default": "unknown"
+    },
+    "ach_link": { "type": "string", "description": "ACH payment link from the vendor's system, when received." },
+    "payer": { "type": "string", "description": "Who pays it, e.g. Israel (on Gabriel's ok)." },
+    "status": {
+      "type": "string",
+      "enum": ["ordered", "eta_set", "ach_link_received", "paid", "reconciled"],
+      "default": "ordered",
+      "description": "ordered -> eta_set -> ach_link_received -> paid -> reconciled. Anything not reconciled is an open payable."
+    },
+    "status_history": {
+      "type": "array",
+      "items": { "type": "object", "description": "{status, at, by, note}" },
+      "default": []
+    },
+    "eta_date": { "type": "string", "description": "Vendor ETA for the material/glass, ISO date." },
+    "eta_source": { "type": "string", "description": "Where the ETA came from (Steve text/email, vendor portal, manual)." },
+    "job_id": { "type": "string", "description": "Linked Jobs record." },
+    "budget_id": { "type": "string", "description": "Linked JobBudgets record (cost basis for reconciliation)." },
+    "job_name": { "type": "string" },
+    "builder": { "type": "string" },
+    "paid_at": { "type": "string" },
+    "paid_reference": { "type": "string", "description": "ACH confirmation, check number, card ref." },
+    "reconciled_at": { "type": "string" },
+    "reconcile_note": { "type": "string", "description": "How payment ties to budget cost basis and builder funds." },
+    "notes": { "type": "string" },
+    "created_by_email": { "type": "string" }
+  },
+  "required": ["title", "vendor", "status"],
+  "rls": {
+    "read": { "user_condition": { "role": "admin" } },
+    "create": { "user_condition": { "role": "admin" } },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}

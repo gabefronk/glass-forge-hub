@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, Package } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, Package, DollarSign } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Invoicing", to: "/", icon: Receipt },
+  { label: "Job Budgets", to: "/job-budgets", icon: DollarSign, ownerOnly: true },
   { label: "Calendar", to: "/calendar", icon: Calendar },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Products", to: "/products", icon: Package },
