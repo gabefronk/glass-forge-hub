@@ -111,6 +111,9 @@ export default async function(req) {
       if (ex) {
         if (ex.source === 'app') continue;
         const updateRow = { id: ex.id, ...row, installer_event_id: ex.installer_event_id || null };
+        // report_required is create-only: manual waivers, audit retirements and
+        // supersessions set it false deliberately - never re-derive it on update.
+        delete updateRow.report_required;
         // Detect reschedule: date changed while report is still outstanding
         if (ex.event_date !== event_date) {
           updateRow.report_status = 'rescheduled';
