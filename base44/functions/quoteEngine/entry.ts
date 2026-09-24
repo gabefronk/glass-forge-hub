@@ -29,7 +29,10 @@ function priceAmsco(line, gridRows, adders, tiers, seriesRows){
   const fa = frameArea(cw, ch);
   const applied = {};
   const add = (key, rate, unit) => { if(!rate) return; applied[key] = unit==='sf' ? rnd01(fa*rate) : rate; };
-  if(line.tempered) add('tempered', (adders.find(a=>a.name==='tempered')||{}).rate ?? 14.60, 'sf');
+  // Patio doors: tempered glass is standard and priced into the grid base ($0 adder).
+  // Verified offline: L300 Heritage PD 71.5x95.5 = 1942.20 x 1.05 = 2039.40 EXACT (no adder);
+  // L1600 quad door 117.5x95.5 = 4813.90 x 1.05 = 5054.60 EXACT (no adder).
+  if(line.tempered && series.product_type !== 'patio-door') add('tempered', (adders.find(a=>a.name==='tempered')||{}).rate ?? 14.60, 'sf');
   if(line.debris && line.debris!=='None'){
     const d = adders.find(a=>a.name==='debris_protect');
     const rate = d && d.notes ? (JSON.parse(d.notes)[line.debris] ?? 0) : ({Both:3.70,Inside:1.90,Outside:1.90}[line.debris] ?? 0);
