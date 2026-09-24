@@ -1,0 +1,38 @@
+{
+  "name": "ValidationRule",
+  "type": "object",
+  "properties": {
+    "vendor": {
+      "type": "string",
+      "title": "Vendor",
+      "description": "Vendor this rule applies to (or 'all')"
+    },
+    "rule_type": {
+      "type": "string",
+      "title": "Rule Type",
+      "description": "Category of validation (e.g. 'size_limit', 'option_conflict', 'required_option')"
+    },
+    "rule": {
+      "type": "object",
+      "title": "Rule",
+      "default": {},
+      "description": "Structured rule definition (conditions, thresholds, etc.) interpreted by the quoting engine"
+    },
+    "message": {
+      "type": "string",
+      "title": "Message",
+      "description": "Human-readable message shown when the rule is violated"
+    },
+    "severity": {
+      "type": "string",
+      "title": "Severity",
+      "description": "How a violation should be surfaced (e.g. 'error', 'warning', 'info')"
+    }
+  },
+  "required": [
+    "vendor",
+    "rule_type",
+    "rule",
+    "severity"
+  ]
+}

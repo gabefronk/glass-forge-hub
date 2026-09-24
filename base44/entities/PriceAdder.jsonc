@@ -1,0 +1,37 @@
+{
+  "name": "PriceAdder",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "Adder / option name (e.g. 'Grilles', 'Obscure Glass', 'Argon')"
+    },
+    "applies_to": {
+      "type": "string",
+      "title": "Applies To",
+      "description": "What the adder applies to (e.g. series, price_code, product_type, or 'all')"
+    },
+    "rate": {
+      "type": "number",
+      "title": "Rate",
+      "description": "Adder rate; interpretation depends on unit (flat dollars or multiplier)"
+    },
+    "unit": {
+      "type": "string",
+      "title": "Unit",
+      "description": "How the rate is applied (e.g. 'flat', 'factor', 'per_unit')"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes",
+      "description": "Optional clarifying notes about the adder"
+    }
+  },
+  "required": [
+    "name",
+    "applies_to",
+    "rate",
+    "unit"
+  ]
+}

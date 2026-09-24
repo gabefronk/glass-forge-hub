@@ -1,0 +1,59 @@
+{
+  "name": "PellaEmpiricalPrice",
+  "type": "object",
+  "properties": {
+    "series": {
+      "type": "string",
+      "title": "Series",
+      "description": "Pella series name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description",
+      "description": "Configuration / option description captured with the price point"
+    },
+    "width": {
+      "type": "number",
+      "title": "Width",
+      "description": "Unit width in inches"
+    },
+    "height": {
+      "type": "number",
+      "title": "Height",
+      "description": "Unit height in inches"
+    },
+    "qty": {
+      "type": "number",
+      "title": "Qty",
+      "description": "Quantity the list price reflects"
+    },
+    "list_price": {
+      "type": "number",
+      "title": "List Price",
+      "description": "Observed list price for this configuration"
+    },
+    "source_anchor": {
+      "type": "string",
+      "title": "Source Anchor",
+      "description": "Reference to where the price was observed (URL, doc, quote number)"
+    },
+    "evidence": {
+      "type": "string",
+      "title": "Evidence",
+      "description": "Supporting evidence / notes justifying the price point"
+    },
+    "estimated": {
+      "type": "boolean",
+      "title": "Estimated",
+      "default": false,
+      "description": "True if the price is interpolated/estimated rather than directly observed"
+    }
+  },
+  "required": [
+    "series",
+    "width",
+    "height",
+    "qty",
+    "list_price"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "TierDiscount",
+  "type": "object",
+  "properties": {
+    "tier_code": {
+      "type": "string",
+      "title": "Tier Code",
+      "description": "Discount tier identifier (e.g. 'dealer', 'builder', 'retail')"
+    },
+    "factor": {
+      "type": "number",
+      "title": "Factor",
+      "description": "Multiplier applied to list price (e.g. 0.70 = 30% off)"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description",
+      "description": "Human-readable description of the discount tier"
+    }
+  },
+  "required": [
+    "tier_code",
+    "factor"
+  ]
+}

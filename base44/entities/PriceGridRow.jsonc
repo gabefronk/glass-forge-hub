@@ -1,0 +1,38 @@
+{
+  "name": "PriceGridRow",
+  "type": "object",
+  "properties": {
+    "price_code": {
+      "type": "string",
+      "title": "Price Code",
+      "description": "Code linking this row to a CatalogSeries"
+    },
+    "max_width": {
+      "type": "number",
+      "title": "Max Width",
+      "description": "Upper bound of the width bracket this row prices (inches)"
+    },
+    "max_height": {
+      "type": "number",
+      "title": "Max Height",
+      "description": "Upper bound of the height bracket this row prices (inches)"
+    },
+    "base_price": {
+      "type": "number",
+      "title": "Base Price",
+      "description": "Base list price for this size bracket before adders/discounts"
+    },
+    "price_book": {
+      "type": "string",
+      "title": "Price Book",
+      "description": "Price book / edition this row belongs to (e.g. 2025-amsco)"
+    }
+  },
+  "required": [
+    "price_code",
+    "max_width",
+    "max_height",
+    "base_price",
+    "price_book"
+  ]
+}
