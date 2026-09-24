@@ -23,9 +23,14 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
  return async req=>{
   if(req.method!=='POST')return response({error:'Use POST.'},405);
   try{
-   const client=await getClient(req);if(!owner(await client.auth.me().catch(()=>null)))return response({error:'Owner access required.'},403);
+   const client=await getClient(req),user=await client.auth.me().catch(()=>null);if(!user)return response({error:'Sign in required.'},401);
    const text=await req.text();if(text.length>5000000)return response({error:'Directory file is too large.'},413);
    const input=JSON.parse(text),api=client.asServiceRole.entities;
+   // Crew can only search the minimum contact card fields needed by Add job and
+   // explicitly save a chosen job link. The private directory workspace and all
+   // import, coverage, message, and suggestion actions remain owner-only.
+   const crewAction=input.action==='picker'||input.action==='link';
+   if(!owner(user)&&!crewAction)return response({error:'Owner access required.'},403);
    if(input.action==='import'){
     let data;try{data=validateDirectory(input.directory);}catch{return response({error:'This is not a valid contacts directory export.'},400);}
     const content=canonicalJson(data),digest=await hash(content);
@@ -38,6 +43,7 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
    const snapshot=(await api.ContactDirectorySnapshot.list('-created_date',1))[0];if(!snapshot&&!JOB_VIEWS.has(input.action))return response({empty:true,contacts:[],jobs:[],builders:[],summary:{contacts:0}});
    // Job views still report missing contacts and owner notes before any directory is imported.
    const data=snapshot?await load(client,snapshot):EMPTY_DIRECTORY;
+   if(input.action==='picker')return response({contacts:data.contacts.map(({key,name,company,email,phone})=>({key,name,company,email,phone}))});
    if(input.action==='contact'){const contact=data.contacts.find(c=>c.key===input.contact_key);return contact?response({contact}):response({error:'Contact not found.'},404);}
    if(input.action==='link'){
     if(!data.contacts.some(c=>c.key===input.contact_key))return response({error:'Contact not found.'},404);
