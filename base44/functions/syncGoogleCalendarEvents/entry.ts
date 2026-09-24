@@ -110,6 +110,18 @@ export default async function(req) {
       const ex = byGoogleId.get(ev.id);
       if (ex) {
         if (ex.source === 'app') continue;
+        const existingAttachments = new Map(
+          (ex.event_attachments || []).filter((a) => a?.file_url).map((a) => [a.file_url, a]),
+        );
+        row.event_attachments = row.event_attachments.map((attachment) => {
+          const existingAttachment = existingAttachments.get(attachment.file_url);
+          if (!existingAttachment) return attachment;
+          const rehostFields = {};
+          for (const field of ['drive_file_id', 'drive_url', 'rehosted_at']) {
+            if (existingAttachment[field]) rehostFields[field] = existingAttachment[field];
+          }
+          return { ...attachment, ...rehostFields };
+        });
         const updateRow = { id: ex.id, ...row, installer_event_id: ex.installer_event_id || null };
         // report_required is create-only: manual waivers, audit retirements and
         // supersessions set it false deliberately - never re-derive it on update.
