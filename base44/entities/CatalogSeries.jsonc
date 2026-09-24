@@ -1,0 +1,44 @@
+{
+  "name": "CatalogSeries",
+  "type": "object",
+  "properties": {
+    "vendor": {
+      "type": "string",
+      "title": "Vendor",
+      "description": "Manufacturer / vendor name (e.g. Amsco, Pella, Milgard)"
+    },
+    "series_name": {
+      "type": "string",
+      "title": "Series Name",
+      "description": "Product series / collection name"
+    },
+    "product_type": {
+      "type": "string",
+      "title": "Product Type",
+      "description": "Product category (e.g. window, patio-door, front-door)"
+    },
+    "price_code": {
+      "type": "string",
+      "title": "Price Code",
+      "description": "Code that links this series to its PriceGridRow(s)"
+    },
+    "color_factors": {
+      "type": "object",
+      "title": "Color Factors",
+      "default": {},
+      "description": "Per-color multiplier map (e.g. { 'bronze': 1.05, 'black': 1.08 })"
+    },
+    "active": {
+      "type": "boolean",
+      "title": "Active",
+      "default": true,
+      "description": "Whether this series is available for new quotes"
+    }
+  },
+  "required": [
+    "vendor",
+    "series_name",
+    "product_type",
+    "price_code"
+  ]
+}
