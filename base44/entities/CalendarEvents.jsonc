@@ -104,6 +104,16 @@
           },
           "mime_type": {
             "type": "string"
+          },
+          "drive_file_id": {
+            "type": "string"
+          },
+          "drive_url": {
+            "type": "string"
+          },
+          "rehosted_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
