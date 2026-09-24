@@ -128,6 +128,24 @@ export function createMessagesBridgeHandler({getClient, fetchFile = fetch, now =
     if(!device)return response({error:'Connection not found.'},404);
     return response({device:publicDevice(await api.MessageBridgeDevice.update(device.id,{enabled:input.enabled===true}))});
    }
+   if (action === 'purge_message') {
+    const id=clean(input.message_id,100);
+    if(!id)return response({error:'Message id is required.'},400);
+    const row=await api.MessageRecord.get(id).catch(()=>null);
+    if(!row)return response({error:'Message not found.'},404);
+    const convKey=row.conversation_key;
+    await api.MessageRecord.delete(id);
+    const conv=(await api.MessageConversation.filter({conversation_key:convKey},'-created_date',1))[0];
+    let conversation_updated=false;
+    if(conv){
+     const rest=await api.MessageRecord.filter({conversation_key:convKey},'-sent_at',1);
+     const latest=rest[0];
+     const patch=latest?{last_message_at:latest.sent_at,last_text:latest.retracted_at?'Message was unsent':(latest.text||'').slice(0,180)||((latest.attachments||[]).length?'Attachment':'Message')}:{last_message_at:'',last_text:'Message deleted'};
+     await api.MessageConversation.update(conv.id,patch);
+     conversation_updated=true;
+    }
+    return response({ok:true,deleted:id,conversation_updated,checked_at:at});
+   }
    return response({error:'Unsupported action.'},400);
   } catch (error) {
    // Never return provider URLs, device keys, or private file references in errors.
