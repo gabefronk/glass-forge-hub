@@ -99,13 +99,23 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
     const lines = body.lines || [];
-    const [seriesRows, gridRows, adders, tiers, pellaAnchors] = await Promise.all([
+    const [seriesRows, adders, tiers] = await Promise.all([
       base44.asServiceRole.entities.CatalogSeries.list('-created_date', 500),
-      base44.asServiceRole.entities.PriceGridRow.list('-created_date', 5000),
       base44.asServiceRole.entities.PriceAdder.list('-created_date', 200),
       base44.asServiceRole.entities.TierDiscount.list('-created_date', 50),
-      base44.asServiceRole.entities.PellaEmpiricalPrice.list('-created_date', 2000),
     ]);
+    const amscoLines = lines.filter(l => l.vendor === 'AMSCO');
+    const neededCodes = [...new Set(amscoLines.map(l => {
+      const s = seriesRows.find(x => x.vendor==='AMSCO' && x.series_name===l.product);
+      return s ? s.price_code : null;
+    }).filter(Boolean))];
+    const gridChunks = await Promise.all(neededCodes.map(c =>
+      base44.asServiceRole.entities.PriceGridRow.filter({ price_code: c }, '-created_date', 1000)));
+    const gridRows = gridChunks.flat();
+    const pellaSeries = [...new Set(lines.filter(l => l.vendor !== 'AMSCO').map(l => String(l.series||'')))];
+    const pellaChunks = await Promise.all(pellaSeries.map(s =>
+      base44.asServiceRole.entities.PellaEmpiricalPrice.filter({ series: s }, '-created_date', 2000)));
+    const pellaAnchors = pellaChunks.flat();
     const results = lines.map(line =>
       line.vendor === 'AMSCO'
         ? { ...line, pricing: priceAmsco(line, gridRows, adders, tiers, seriesRows) }
