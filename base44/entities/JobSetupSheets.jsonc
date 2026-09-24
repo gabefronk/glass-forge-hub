@@ -1,0 +1,27 @@
+{
+  "name": "JobSetupSheets",
+  "type": "object",
+  "properties": {
+    "job_id": { "type": "string", "description": "Unique linked Jobs record; the UI maintains one setup sheet per job." },
+    "status": { "type": "string", "enum": ["draft", "sent_for_approval", "approved"], "default": "draft" },
+    "customer": { "type": "object" },
+    "scope_lines": { "type": "array", "items": { "type": "object" } },
+    "scope_notes": { "type": "string" },
+    "inclusions": { "type": "string" },
+    "exclusions": { "type": "string" },
+    "costs": { "type": "object" },
+    "pricing": { "type": "object" },
+    "sources": { "type": "object" },
+    "terms": { "type": "object" },
+    "approved_date": { "type": "string" },
+    "approver_name": { "type": "string" },
+    "created_by_email": { "type": "string" }
+  },
+  "required": ["job_id", "status"],
+  "rls": {
+    "read": { "user_condition": { "role": "admin" } },
+    "create": { "user_condition": { "role": "admin" } },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}
