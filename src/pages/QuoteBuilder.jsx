@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Calculator, Save, Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,7 @@ export default function QuoteBuilder() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [error, setError] = useState("");
+  const saveMsgTimer = useRef(null);
 
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -161,7 +162,9 @@ export default function QuoteBuilder() {
         lines,
         result: { ok: true, results: priced },
       });
-      setSaveMsg(`Saved as draft ${request_id}.`);
+      setSaveMsg("Draft saved to quote pipeline");
+      if (saveMsgTimer.current) clearTimeout(saveMsgTimer.current);
+      saveMsgTimer.current = setTimeout(() => setSaveMsg(""), 4000);
     } catch (e) {
       setError(`Save failed: ${e?.message || "unknown error"}`);
     } finally {
@@ -181,7 +184,7 @@ export default function QuoteBuilder() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <div className="col-span-1">
             <Label className="text-[12px] mb-1" style={{ color: "var(--muted-foreground)" }}>Vendor</Label>
-            <Select value={form.vendor} onValueChange={(v) => setField("vendor", v)}>
+            <Select value={form.vendor} onValueChange={(v) => setForm((f) => ({ ...f, vendor: v, product_or_series: "" }))}>
               <SelectTrigger className="h-9 text-[13px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="AMSCO">AMSCO</SelectItem>
@@ -222,10 +225,12 @@ export default function QuoteBuilder() {
             <Label className="text-[12px] mb-1" style={{ color: "var(--muted-foreground)" }}>Grille IGAI</Label>
             <Input type="number" value={form.grille_igai} onChange={(e) => setField("grille_igai", e.target.value)} placeholder="0" className="h-9 text-[13px]" />
           </div>
-          <div className="col-span-2 sm:col-span-3 lg:col-span-2">
-            <Label className="text-[12px] mb-1" style={{ color: "var(--muted-foreground)" }}>Description (Pella)</Label>
-            <Input value={form.description} onChange={(e) => setField("description", e.target.value)} placeholder="Configuration / option notes" className="h-9 text-[13px]" />
-          </div>
+          {form.vendor !== "AMSCO" && (
+            <div className="col-span-2 sm:col-span-3 lg:col-span-2">
+              <Label className="text-[12px] mb-1" style={{ color: "var(--muted-foreground)" }}>Description (Pella)</Label>
+              <Input value={form.description} onChange={(e) => setField("description", e.target.value)} placeholder="Configuration / option notes" className="h-9 text-[13px]" />
+            </div>
+          )}
           <div className="col-span-1 flex items-end gap-2 pb-0.5">
             <Checkbox id="tempered" checked={form.tempered} onCheckedChange={(v) => setField("tempered", !!v)} className="h-4 w-4" />
             <Label htmlFor="tempered" className="text-[13px] cursor-pointer" style={{ color: "var(--foreground)" }}>Tempered</Label>
@@ -330,7 +335,9 @@ export default function QuoteBuilder() {
                       <td className="px-3 py-2 align-top text-right whitespace-nowrap font-mono-num">{money(unitList)}{p.estimated ? "*" : ""}</td>
                       <td className="px-3 py-2 align-top text-right whitespace-nowrap font-mono-num">{p.unit_dealer != null ? money(p.unit_dealer) : "—"}</td>
                       <td className="px-3 py-2 align-top text-right whitespace-nowrap font-mono-num-bold">{money(lineList)}</td>
-                      <td className="px-3 py-2 align-top">{p.error ? <span className="text-[12px]" style={{ color: "var(--destructive)" }}>{p.error}</span> : confidenceBadge(p.confidence)}</td>
+                      <td className="px-3 py-2 align-top">{p.error ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold break-words whitespace-normal max-w-[240px]" style={{ backgroundColor: "var(--error-bg)", color: "var(--error)" }}>{p.error}</span>
+                    ) : confidenceBadge(p.confidence)}</td>
                       <td className="px-3 py-2 align-top text-[12px]" style={{ color: "var(--muted-foreground)" }}>{p.evidence || "—"}</td>
                     </tr>
                   );
