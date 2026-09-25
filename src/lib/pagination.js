@@ -10,13 +10,16 @@
  * loops on a bug.
  */
 export async function fetchAllPages(entity, sort = '-created_date', pageSize = 1000) {
+  if (!entity || typeof entity.list !== 'function') throw new TypeError('A listable entity is required.');
+  if (!Number.isInteger(pageSize) || pageSize < 1) throw new TypeError('Invalid pagination page size.');
   const all = [];
   let skip = 0;
   for (let i = 0; i < 50; i++) {
     const batch = await entity.list(sort, pageSize, skip);
+    if (!Array.isArray(batch) || batch.length > pageSize) throw new Error('Entity pagination returned an invalid page.');
     all.push(...batch);
-    if (batch.length < pageSize) break;
+    if (batch.length < pageSize) return all;
     skip += pageSize;
   }
-  return all;
+  throw new Error('Entity pagination reached 50 pages; completeness could not be verified.');
 }

@@ -6,6 +6,7 @@ import { buildBudgetCsv, fillBudgetXlsx } from '../../shared/jobBudgetSheet.js';
 import { BUDGET_TEMPLATE_XLSX_B64 } from '../../shared/jobBudgetTemplateXlsx.js';
 import { normalizeCustomer } from '../../shared/jobIdentity.js';
 import { denverDate } from '../../shared/billingCore.js';
+import { fetchCompleteEntity, matchJobTokens } from '../../shared/jobCatalog.js';
 
 // Job Budgets ingest.
 // Gabriel drops one or more vendor quote PDFs on the Job Budgets page. For each:
@@ -110,18 +111,10 @@ async function uploadFile(token, name, bytes, mimeType, parentId) {
 async function matchJob(db, quote) {
   const tokens = quoteMatchTokens(quote);
   if (!tokens.length) return { status: 'needs_review', reason: 'no usable match tokens on quote', candidates: [] };
-  const jobs = await db.Jobs.list('-created_date', 1000).catch(() => []);
-  const scored = [];
-  for (const job of jobs || []) {
-    const hay = normalizeCustomer([job.canonical_name, job.builder, job.customer_name, job.address].filter(Boolean).join(' '));
-    const hits = tokens.filter((t) => hay.includes(t));
-    if (hits.length) scored.push({ id: job.id, name: job.canonical_name, hits, score: hits.length });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  if (scored.length && scored[0].score >= 1 && (scored.length === 1 || scored[0].score > scored[1].score)) {
-    return { status: 'matched', job_id: scored[0].id, job_name: scored[0].name, hits: scored[0].hits, candidates: scored.slice(0, 5) };
-  }
-  return { status: 'needs_review', reason: scored.length ? 'several jobs match the quote tokens' : 'no Hub job matches the quote tokens', candidates: scored.slice(0, 5) };
+  // Matching is a uniqueness decision. Never match against a partial catalog and
+  // never convert a failed read into an apparently complete empty result.
+  const jobs = await fetchCompleteEntity(db.Jobs);
+  return matchJobTokens(jobs, tokens, normalizeCustomer);
 }
 
 async function processQuote(base44, db, core, accessToken, body, userEmail) {
