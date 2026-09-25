@@ -35,7 +35,14 @@ const SPECIALIZED_LINKS = [
 ];
 
 const BRANDS = [
-  { name: "Amsco", website: "https://www.amscowindows.com/", series: "Studio", tier: "$" },
+  {
+    name: "Amsco",
+    website: "https://www.amscowindows.com/",
+    series: "Studio",
+    tier: "$",
+    logo: AMSCO_LOGO_URL,
+    logoAlt: "AMSCO Windows logo",
+  },
   { name: "Andersen", website: "https://www.andersenwindows.com/", series: "100 Series", tier: "$$" },
   { name: "Bonelli", website: "https://www.bonelli.com/", series: "Volume Doors", tier: "$$" },
   { name: "French Steel", website: "https://frenchsteel.com/", series: "Classic Series", tier: "$$$$$" },
@@ -68,16 +75,32 @@ function SpecializedLink({ link }) {
 }
 
 function BrandTile({ brand, showPricing }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+
   return (
     <li className="flex min-h-48 flex-col rounded-[18px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
       <div className="flex items-start justify-between gap-3">
-        <h3 className="font-heading text-[18px] font-bold leading-tight" style={{ color: C.text }}>{brand.name}</h3>
+        <div className="flex min-h-20 min-w-0 flex-1 items-center justify-center px-2">
+          {brand.logo && !logoFailed ? (
+            <img
+              src={brand.logo}
+              alt={brand.logoAlt}
+              width={224}
+              height={80}
+              className="h-20 w-full max-w-56 object-contain"
+              loading="lazy"
+              onError={() => setLogoFailed(true)}
+            />
+          ) : (
+            <h3 className="font-heading text-center text-[18px] font-bold leading-tight" style={{ color: C.text }}>{brand.name}</h3>
+          )}
+        </div>
         <a href={brand.website} target="_blank" rel="noopener noreferrer" aria-label={`${brand.name} official website — opens in a new tab`}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ color: "var(--gf-teal-600)", backgroundColor: C.headerBg }}>
           <ExternalLink className="h-4 w-4" />
         </a>
       </div>
-      <div className="mt-auto pt-8">
+      <div className="mt-auto pt-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: C.textMuted }}>Known series</p>
         <p className="mt-1 text-[14px] font-medium" style={{ color: brand.series ? C.textSecondary : C.textFaint }}>
           {brand.series || "Not specified in the current reference"}
