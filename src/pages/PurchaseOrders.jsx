@@ -67,7 +67,8 @@ function PurchaseOrdersPage() {
     const [o, j, sheets] = await Promise.all([
       base44.entities.PurchaseOrders.list("-created_date", 500).catch(() => []),
       base44.entities.Jobs.list("-created_date", 1000).catch(() => []),
-      // PR #3 supplies this entity. Until it lands, the adapter is a no-op.
+      // PR #3 supplies this entity. Its approved sheet can establish job context,
+      // but its whole-job totals are intentionally never copied into this PO.
       base44.entities.JobSetupSheets?.list?.("-created_date", 1000)?.catch(() => []) ?? Promise.resolve([]),
     ]);
     setOrders(o || []);
@@ -199,16 +200,16 @@ function PurchaseOrdersPage() {
                   <option key={j.id} value={j.id}>{[j.canonical_name || j.id, j.builder].filter(Boolean).join(" - ")}</option>
                 ))}
               </select>
-              {form.job_id && prefillState !== "ready" && (
+              {form.job_id && prefillState !== "approved_manual" && (
                 <p className="col-span-2 max-[699px]:col-span-1 text-[12px]" role="status" style={{ color: C.textMuted }}>
                   {prefillState === "ambiguous"
-                    ? "More than one confirmed Job Setup Sheet matches this job. No vendor or amount was prefilled."
-                    : "No confirmed Job Setup Sheet matches this job. Enter only owner-reviewed vendor and price details."}
+                    ? "More than one owner-approved Job Setup Sheet matches this job. No vendor or amount was prefilled."
+                    : "No owner-approved Job Setup Sheet with an approver and approval date matches this job. Enter only owner-reviewed vendor and price details."}
                 </p>
               )}
-              {prefillState === "ready" && (
+              {prefillState === "approved_manual" && (
                 <p className="col-span-2 max-[699px]:col-span-1 text-[12px]" role="status" style={{ color: C.accentText }}>
-                  Drafted from the job's single confirmed Job Setup Sheet. Review every value before issuing.
+                  Approved setup sheet found but no vendor-specific PO values; enter manually. Job totals were not copied.
                 </p>
               )}
               {[

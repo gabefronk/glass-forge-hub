@@ -1,0 +1,27 @@
+{
+  "id": "setup-sheet-1",
+  "job_id": "job-1",
+  "status": "approved",
+  "approved_by": "owner@example.com",
+  "approved_at": "2026-09-24T18:30:00.000Z",
+  "costs": {
+    "material_product": 10250,
+    "labor": 2400,
+    "install_materials": 575,
+    "equipment": 325,
+    "other": 100
+  },
+  "pricing": {
+    "sell_price": 18400,
+    "tax": 1295,
+    "contract_total": 19695
+  },
+  "sources": [
+    { "label": "Window quote", "reference": "Q-100" },
+    { "label": "Door allowance", "reference": "D-200" }
+  ],
+  "scope_lines": [
+    { "description": "Windows", "quantity": 12 },
+    { "description": "Entry door", "quantity": 1 }
+  ]
+}
