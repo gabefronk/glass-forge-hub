@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, X, ArrowUpDown, Building2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
-import { C, addedTimestamp } from "@/lib/feeUI";
+import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
-import JobBrowserRow, { DuplicateTags } from "@/components/jobs/JobBrowserRow";
+import JobBrowserRow, { DuplicateTags, StatusChip, VisitInfo } from "@/components/jobs/JobBrowserRow";
 import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
 import ProbuildReports from "@/pages/ProbuildReports";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { buildJobsOverview } from "@/lib/jobsOverview";
+import { buildJobsOverview, sortJobGroups, builderOptions, JOB_SORTS } from "@/lib/jobsOverview";
 import AddJobDialog from "@/components/jobs/AddJobDialog";
 import { jobMatchesSearch } from "@/lib/jobSearch";
 
@@ -18,15 +18,28 @@ export default function JobsHub() {
   const [feeLines, setFeeLines] = useState([]);
   const [calEvents, setCalEvents] = useState(null);
   const [jobNotes, setJobNotes] = useState(null);
-  const [search, setSearch] = useState("");
-  const [segment, setSegment] = useState("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Search, view, sort and builder live in the URL so Back and shared links keep them.
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
+  const [segment, setSegment] = useState(() => searchParams.get("show") || "all");
+  const [sort, setSort] = useState(() => (JOB_SORTS.some((o) => o.key === searchParams.get("sort")) ? searchParams.get("sort") : "recent"));
+  const [builder, setBuilder] = useState(() => searchParams.get("builder") || "");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [visibleCount, setVisibleCount] = useState(40);
   const [owner, setOwner] = useState(false);
   const [view, setView] = useState("jobs");
   const [selectedJobId, setSelectedJobId] = useState(null);
-  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const p = new URLSearchParams(searchParams);
+    const put = (k, v, dflt) => { if (v && v !== dflt) p.set(k, v); else p.delete(k); };
+    put("q", search.trim(), "");
+    put("show", segment, "all");
+    put("sort", sort, "recent");
+    put("builder", builder, "");
+    if (p.toString() !== searchParams.toString()) setSearchParams(p, { replace: true });
+  }, [search, segment, sort, builder]);
 
   useEffect(() => {
     const load = async () => {
@@ -68,7 +81,7 @@ export default function JobsHub() {
     }
   };
 
-  useEffect(() => { setVisibleCount(40); }, [search, segment]);
+  useEffect(() => { setVisibleCount(40); }, [search, segment, sort, builder]);
 
   // Duplicate records (same customer + address) are shown as one job; weaker
   // matches stay separate and are flagged for review. Read-only, see jobDedupe.js.
@@ -88,10 +101,14 @@ export default function JobsHub() {
     if (segment === "needs_report") base = base.filter(g => key(g) === "needs_report");
     if (segment === "needs_review") base = base.filter(g => key(g) === "needs_review");
     if (segment === "duplicates") base = base.filter(g => g.review.length > 0);
-    // Newest record in the group first, so a freshly added duplicate stays near the top.
-    const newest = (g) => g.members.reduce((d, m) => ((m.created_date || "") > d ? m.created_date : d), "");
-    return [...base].sort((a, b) => newest(b).localeCompare(newest(a)));
-  }, [groups, search, segment, jobStats]);
+    if (segment === "this_week") base = base.filter(g => jobStats[g.id]?.thisWeek);
+    if (builder) base = base.filter(g => sanitizeText(String(g.job?.builder || "").trim()) === builder);
+    return sortJobGroups(base, jobStats, sort);
+  }, [groups, search, segment, jobStats, sort, builder]);
+
+  const builders = useMemo(() => builderOptions(groups, sanitizeText), [groups]);
+  const filtersActive = Boolean(search.trim() || segment !== "all" || builder);
+  const clearFilters = () => { setSearch(""); setSegment("all"); setBuilder(""); };
 
   // Auto-select the first visible job for the desktop workspace.
   useEffect(() => {
@@ -103,6 +120,7 @@ export default function JobsHub() {
 
   const pills = [
     { key: "all", label: "All", count: groups.length },
+    { key: "this_week", label: "Visits this week", count: counts.this_week },
     // The Active view also lists jobs that need a report or a match review, so its count includes them.
     { key: "active", label: "Active", count: counts.active + counts.needs_report + counts.needs_review },
     { key: "complete", label: "Complete", count: counts.complete },
@@ -113,8 +131,7 @@ export default function JobsHub() {
   const selectedGroup = selectedJobId ? groupByJobId.get(selectedJobId) || null : null;
   const handleJobCreated = (job) => {
     setJobs((current) => [job, ...current]);
-    setSearch("");
-    setSegment("all");
+    clearFilters();
     setSelectedJobId(job.id);
   };
 
@@ -153,18 +170,21 @@ export default function JobsHub() {
 
   const visibleJobs = filtered.slice(0, visibleCount);
   const emptyMessage = loadError ? "Jobs could not load."
-    : search.trim() ? `No jobs match "${search}".`
-    : segment !== "all" ? "No jobs in this view."
+    : search.trim() ? `No jobs match "${search.trim()}".`
+    : segment !== "all" || builder ? "No jobs match these filters."
     : "No jobs yet.";
+
+  const darkField = { height: "40px", border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)" };
+  const summary = `${filtered.length.toLocaleString()} ${filtered.length === 1 ? "job" : "jobs"}${builder ? ` · ${builder}` : ""}`;
 
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }} className="flex flex-col">
-      {/* Dark-green hero */}
+      {/* Graphite header: title, search, filters */}
       <header className="shrink-0 px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-5" style={{ background: "linear-gradient(180deg, var(--gf-sidebar-top), var(--gf-sidebar-bottom))", color: "var(--gf-sidebar-text-on)" }}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-baseline gap-3">
             <h1 className="font-heading text-[30px] font-bold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.03em" }}>Jobs</h1>
-            <span className="font-mono-num text-[14px]" style={{ color: "var(--gf-sidebar-muted)" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>({groups.length.toLocaleString()})</span>
+            <span className="font-mono-num text-[14px]" style={{ color: "var(--gf-sidebar-muted)" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>{groups.length.toLocaleString()} total</span>
           </div>
           <div className="flex items-center gap-2">
             {owner && renderToggle(true)}
@@ -172,57 +192,91 @@ export default function JobsHub() {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <div className="relative flex-1 max-w-[560px]">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--gf-sidebar-muted)" }} />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, alias, address, PO, OE or ID"
-              className="w-full pl-10 pr-4 rounded-[10px] text-[13px] focus:outline-none transition-colors placeholder:text-[#8F999B]"
-              style={{ height: "40px", border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)" }}
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px] max-w-[560px]">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: "var(--gf-sidebar-muted)" }} />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name, alias, address, PO, OE or ID"
+                aria-label="Search jobs"
+                className="w-full pl-10 pr-9 rounded-[10px] text-[13px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8955A] transition-colors placeholder:text-[#8F999B]"
+                style={darkField}
+              />
+              {search && (
+                <button type="button" onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full" style={{ color: "var(--gf-sidebar-muted)" }}>
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <label className="relative inline-flex items-center">
+              <span className="sr-only">Builder</span>
+              <Building2 className="absolute left-3 h-3.5 w-3.5 pointer-events-none" style={{ color: "var(--gf-sidebar-muted)" }} />
+              <select value={builder} onChange={(e) => setBuilder(e.target.value)} className="pl-8 pr-3 rounded-[10px] text-[13px] max-w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8955A]" style={darkField}>
+                <option value="" style={{ color: "#101617" }}>All builders</option>
+                {builders.map((b) => <option key={b.name} value={b.name} style={{ color: "#101617" }}>{b.name} ({b.count})</option>)}
+              </select>
+            </label>
+            <label className="relative inline-flex items-center">
+              <span className="sr-only">Sort</span>
+              <ArrowUpDown className="absolute left-3 h-3.5 w-3.5 pointer-events-none" style={{ color: "var(--gf-sidebar-muted)" }} />
+              <select value={sort} onChange={(e) => setSort(e.target.value)} className="pl-8 pr-3 rounded-[10px] text-[13px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8955A]" style={darkField}>
+                {JOB_SORTS.map((o) => <option key={o.key} value={o.key} style={{ color: "#101617" }}>{o.label}</option>)}
+              </select>
+            </label>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto obsidian-scroll" style={{ scrollbarWidth: "none" }}>
             {pills.map((p) => (
               <button
                 key={p.key}
+                type="button"
                 onClick={() => setSegment(p.key)}
+                aria-pressed={segment === p.key}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap shrink-0 transition-colors"
                 style={segment === p.key
                   ? { backgroundColor: "var(--gf-brass-400)", color: "var(--gf-on-brass)" }
                   : { backgroundColor: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)", color: "var(--gf-sidebar-text)" }}
               >
-                {p.label}<span className="font-mono-num text-[11px]" style={{ opacity: 0.7 }}>{p.count}</span>
+                {p.label}<span className="font-mono-num text-[11px]" style={{ opacity: 0.75 }}>{p.count}</span>
               </button>
             ))}
+            {filtersActive && (
+              <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap shrink-0 underline-offset-2 hover:underline" style={{ color: "var(--gf-brass-300)" }}>
+                <X className="h-3 w-3" />Clear filters
+              </button>
+            )}
           </div>
         </div>
       </header>
       {loadError && <p role="alert" className="mx-[26px] max-[699px]:mx-[18px] mt-4 rounded-lg border bg-white p-3 text-[13px] text-red-700">{loadError}</p>}
       {!loadError && !evidenceAvailable && jobs.length > 0 && (
         <p role="note" className="mx-[26px] max-[699px]:mx-[18px] mt-4 rounded-lg p-3 text-[13px]" style={{ backgroundColor: C.amberLight, color: C.amber }}>
-          Calendar report statuses could not load, so &quot;Needs report&quot; is based on billing lines only and may include visits whose report is already complete.
+          Calendar report statuses could not load, so &quot;Needs report&quot; is based on billing lines only and may include visits whose report is already complete. Visit dates come from billing lines only.
         </p>
       )}
 
       {/* Desktop split workspace — large desktop only */}
-      <div className="hidden xl:flex flex-1 min-h-0 px-[26px] max-[699px]:px-[18px] pb-6 gap-5 items-stretch">
-        <aside className="w-[340px] shrink-0 min-h-0 flex flex-col rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-          <div className="shrink-0 px-3.5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
-            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.headerText }}>{filtered.length} job{filtered.length === 1 ? "" : "s"}</span>
+      <div className="hidden xl:flex flex-1 min-h-0 px-[26px] pt-5 pb-6 gap-5 items-stretch">
+        <aside className="w-[380px] shrink-0 min-h-0 flex flex-col rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+          <div className="shrink-0 px-4 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
+            <span className="text-[12px] font-medium" style={{ color: C.headerText }}>{summary}</span>
+            <span className="text-[11px]" style={{ color: C.textMuted }}>{JOB_SORTS.find((o) => o.key === sort)?.label}</span>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll">
             {visibleJobs.map((g) => (
               <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} selected={g.id === selectedJobId} onSelect={() => setSelectedJobId(g.id)} />
             ))}
             {!visibleJobs.length && (
-              <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{emptyMessage}</div>
+              <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>
+                {emptyMessage}
+                {filtersActive && !loadError && <div className="mt-3"><button type="button" onClick={clearFilters} className="px-3 py-1.5 rounded-full text-[12px] font-medium" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Clear filters</button></div>}
+              </div>
             )}
             {filtered.length > visibleCount && (
               <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}` }}>
                 <span className="font-mono-num text-[11px]" style={{ color: C.textMuted }}>{visibleCount} of {filtered.length}</span>
-                <button onClick={() => setVisibleCount(c => c + 40)} className="px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
+                <button type="button" onClick={() => setVisibleCount(c => c + 40)} className="px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
               </div>
             )}
           </div>
@@ -235,37 +289,38 @@ export default function JobsHub() {
       </div>
 
       {/* Mobile/tablet card list + detail navigation */}
-      <div className="xl:hidden px-[18px] pt-4 pb-10">
-        <div className="flex flex-col gap-2.5">
+      <div className="xl:hidden px-[26px] max-[699px]:px-[18px] pt-4 pb-10">
+        <div className="mb-2.5 text-[12px] font-medium" style={{ color: C.textMuted }}>{summary}</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
           {visibleJobs.map((g) => {
             const job = g.job;
             const stats = jobStats[g.id];
             return (
-              <Link key={job.id} to={`/jobs/${job.id}`} className="flex items-center gap-3 rounded-[14px] p-4 transition-colors hover:bg-[#F6F3EC]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stats?.status.text || C.textFaint }} />
+              <Link key={job.id} to={`/jobs/${job.id}`} className="flex items-start gap-3 rounded-[12px] p-4 transition-colors hover:bg-[#F6F3EC] card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-bold break-words" style={{ color: C.text }}>{sanitizeText(job.canonical_name)}</div>
-                  <div className="text-[12px] break-words mt-0.5" style={{ color: C.textMuted }}>{job.builder ? `${sanitizeText(job.builder)} · ` : ""}{sanitizeText(job.address || "")}</div>
+                  <div className="text-[15px] font-semibold break-words" style={{ color: C.text, letterSpacing: "-0.01em" }}>{sanitizeText(job.canonical_name)}</div>
+                  <div className="text-[12px] break-words mt-0.5" style={{ color: C.textMuted }}>{[job.builder && sanitizeText(job.builder), job.address && sanitizeText(job.address)].filter(Boolean).join(" · ") || "No builder or address"}</div>
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <span className="inline-block text-[10px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: stats?.status.bg, border: `1px solid ${stats?.status.border || C.border}`, color: stats?.status.text }}>{stats?.status.label}</span>
+                    <StatusChip status={stats?.status} />
                     <DuplicateTags group={g} />
                   </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <div className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textSecondary }}>{addedTimestamp(job.created_date)}</div>
-                </div>
+                <div className="shrink-0 pt-0.5"><VisitInfo stats={stats} /></div>
               </Link>
             );
           })}
-          {!visibleJobs.length && (
-            <div className="py-10 text-center text-[13px] break-words" style={{ color: C.textMuted }}>{emptyMessage}</div>
-          )}
-          {filtered.length > visibleCount && (
-            <div className="pt-2 text-center">
-              <button onClick={() => setVisibleCount(c => c + 20)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
-            </div>
-          )}
         </div>
+        {!visibleJobs.length && (
+          <div className="py-10 text-center text-[13px] break-words" style={{ color: C.textMuted }}>
+            {emptyMessage}
+            {filtersActive && !loadError && <div className="mt-3"><button type="button" onClick={clearFilters} className="min-h-11 px-4 rounded-full text-[13px] font-medium" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Clear filters</button></div>}
+          </div>
+        )}
+        {filtered.length > visibleCount && (
+          <div className="pt-3 text-center">
+            <button type="button" onClick={() => setVisibleCount(c => c + 20)} className="min-h-11 px-4 rounded-full text-[13px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary, backgroundColor: C.card }}>Load more · {visibleCount} of {filtered.length}</button>
+          </div>
+        )}
       </div>
     </div>
   );
