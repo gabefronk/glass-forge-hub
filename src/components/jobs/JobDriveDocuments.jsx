@@ -7,7 +7,7 @@ import { canReadJobDocuments } from "../../../base44/shared/jobDocumentsAccess.m
 import { Row } from "@/components/jobs/JobContacts";
 
 // The full job rail and Jobs list panel share the same verified folder and file list.
-// Read access is currently for signed-in Hub users; folder writes remain owner-only.
+// Read access is currently for signed-in Hub users; link writes use the shared access predicate.
 export default function JobDriveDocuments({ job, compact = false }) {
   const { user } = useAuth();
   const canRead = canReadJobDocuments(user);
@@ -16,7 +16,7 @@ export default function JobDriveDocuments({ job, compact = false }) {
   const [error, setError] = useState("");
   useEffect(() => {
     setResult(null); setError("");
-    if (!canRead || !job?.drive_job_folder_id) return;
+    if (!canRead || !job?.id) return;
     let active = true;
     setBusy(true);
     base44.functions.invoke("job-documents", { action: "list", job_id: job.id })
@@ -25,9 +25,10 @@ export default function JobDriveDocuments({ job, compact = false }) {
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
   }, [job?.id, job?.drive_job_folder_id, canRead]);
-  if (!canRead || !job?.drive_job_folder_id) return null;
+  if (!canRead || !job?.id) return null;
+  if (!busy && !error && !result?.folder) return null;
   const content = <div className="space-y-2 text-xs">
-    <p><a href={result?.folder?.url || job.drive_job_folder_url} target="_blank" rel="noreferrer" className="underline">Open verified job folder</a></p>
+    {result?.folder?.url && <p><a href={result.folder.url} target="_blank" rel="noreferrer" className="underline">Open verified job folder</a></p>}
     {busy && <p>Loading current files…</p>}
     {error && <p role="alert">{error}</p>}
     {result?.files?.length > 0 && <ul className="space-y-1">{result.files.map(f => <li key={f.id}><a className="break-all underline" href={f.url} target="_blank" rel="noreferrer">{sanitizeText(f.name)}</a></li>)}</ul>}
