@@ -31,3 +31,5 @@ test('owner creates a current contact without a workbook, then explicitly links 
  const d=await(await s.call({action:'directory'})).json();assert.equal(d.contacts.find(c=>c.key===created.key).manual_job_ids[0],'job1');
  s.setUser({role:'user',email:'crew@example.com'});assert.equal((await s.call({action:'create_contact',contact:{name:'Crew'}})).status,403);
 });
+
+test('explicit customer and builder roles are accepted for saved contact links',async()=>{for(const role of ['customer','builder']){const s=await setup();await s.call({action:'import',directory:data});const r=await s.call({action:'link',contact_key:'a'.repeat(64),job_id:'job1',role});assert.equal(r.status,200);assert.equal(s.tables.ContactJobLink[0].role,role);}});

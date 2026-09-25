@@ -2,14 +2,17 @@
 import { contactRole, highConfidenceSingleCandidateLinks } from "../../base44/shared/jobContacts.js";
 export { highConfidenceSingleCandidateLinks };
 
+export const ASSIGNABLE_CONTACT_ROLES = ["customer", "homeowner", "builder", "superintendent", "project_manager", "site"];
+
 export const ROLE_LABELS = {
   superintendent: "Superintendent",
   project_manager: "Project manager",
   site: "Site contact",
   homeowner: "Homeowner",
+  customer: "Customer",
   builder: "Builder contact",
 };
-const ROLE_ORDER = ["superintendent", "project_manager", "site", "homeowner", "builder"];
+const ROLE_ORDER = ["superintendent", "project_manager", "site", "customer", "homeowner", "builder"];
 
 export const CONFIDENCE_LABELS = { high: "Strong match", medium: "Likely", low: "Check first" };
 
@@ -43,4 +46,4 @@ export function suggestionTitle(s) {
 }
 
 // Preserve any supported role that the owner explicitly confirms with a suggestion.
-export const confirmRoleOf = (s) => (["superintendent", "project_manager", "homeowner", "site"].includes(s.role) ? s.role : undefined);
+export const confirmRoleOf = (s) => (["superintendent", "project_manager", "homeowner", "site", "customer", "builder"].includes(s.role) ? s.role : undefined);

@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { confirmContactLink } from "@/hooks/use-job-contacts";
 import { findDuplicateJobs, newJobPayload } from "@/lib/newJob";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import { ASSIGNABLE_CONTACT_ROLES, ROLE_LABELS } from "@/lib/jobContacts";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const blank = { canonical_name: "", builder: "", address: "", po_number: "", oe_number: "", source_window_quote_id: "", initial_note: "" };
@@ -18,6 +19,8 @@ export default function AddJobDialog({ jobs, onCreated }) {
   const [owner, setOwner] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [selected, setSelected] = useState([]);
+  const [contactRoles, setContactRoles] = useState({});
+  const [newContactRole, setNewContactRole] = useState("");
   const [newContact, setNewContact] = useState({name:"",email:"",phone:"",company:"",builder:""});
   const [contactsError, setContactsError] = useState("");
   const [error, setError] = useState("");
@@ -36,7 +39,7 @@ export default function AddJobDialog({ jobs, onCreated }) {
   }, [open]);
 
   const reset = () => {
-    setValues(blank); setContactSearch(""); setSelected([]); setError("");
+    setValues(blank); setContactSearch(""); setSelected([]); setContactRoles({}); setNewContactRole(""); setError("");
     setDuplicates([]); setDuplicateApproved(false); setContactsError(""); setContacts([]); setCreatedState(null); setNewContact({name:"",email:"",phone:"",company:"",builder:""});
   };
   const change = (key, value) => {
@@ -63,6 +66,7 @@ export default function AddJobDialog({ jobs, onCreated }) {
       try { const q=await base44.entities.QuoteRequests.get(values.source_window_quote_id.trim()); if (!q) throw Error("Quote not found"); }
       catch { setError("Source quote ID was not found. Leave it blank or choose a verified quote."); return; }
     }
+    if (selected.some(key => !contactRoles[key]) || (newContact.name.trim() && !newContactRole)) { setError("Choose a role for each contact before creating the job."); return; }
     setSaving(true); setError("");
     try {
       // Create the job first. If it succeeds, never invite a duplicate job write
@@ -80,7 +84,7 @@ export default function AddJobDialog({ jobs, onCreated }) {
         } catch { result.contact = "failed"; }
       }
       const selectedKeys = [...new Set([...selected,...(newContactKey?[newContactKey]:[])])];
-      const linkResults = await Promise.allSettled(selectedKeys.map((contactKey) => confirmContactLink({ jobId: created.id, contactKey })));
+      const linkResults = await Promise.allSettled(selectedKeys.map((contactKey) => confirmContactLink({ jobId: created.id, contactKey, role: contactKey === newContactKey ? newContactRole : contactRoles[contactKey] })));
       result.contactLinks = linkResults.map((r,i) => ({ key: selectedKeys[i], status: r.status }));
       try {
         if (!owner) throw Error("Owner must link Drive folder");
@@ -135,10 +139,10 @@ export default function AddJobDialog({ jobs, onCreated }) {
             {(contactSearch || selected.length > 0) && filteredContacts.length > 0 && <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-xl border p-1.5">
               {filteredContacts.map((contact) => {
                 const checked = selected.includes(contact.key);
-                return <label key={contact.key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 hover:bg-slate-50"><input type="checkbox" checked={checked} onChange={() => setSelected((current) => checked ? current.filter((key) => key !== contact.key) : [...current, contact.key])} /><span className="min-w-0"><strong className="block truncate text-sm">{contact.name}</strong><span className="block truncate text-xs text-slate-500">{contact.company || contact.email || contact.phone}</span></span></label>;
+                return <div key={contact.key} className="rounded-lg px-2.5 py-2 hover:bg-slate-50"><label className="flex min-h-11 cursor-pointer items-center gap-3"><input type="checkbox" checked={checked} onChange={() => setSelected((current) => checked ? current.filter((key) => key !== contact.key) : [...current, contact.key])} /><span className="min-w-0"><strong className="block truncate text-sm">{contact.name}</strong><span className="block truncate text-xs text-slate-500">{contact.company || contact.email || contact.phone}</span></span></label>{checked && <label className="mt-1 block text-xs">Role for {contact.name}<select className={inputClass} value={contactRoles[contact.key] || ""} onChange={e => setContactRoles(v => ({...v, [contact.key]: e.target.value}))}><option value="">Choose role</option>{ASSIGNABLE_CONTACT_ROLES.map(role => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}</select></label>}</div>;
               })}
             </div>}
-            {owner && <details className="mt-2 rounded-xl border p-3"><summary className="cursor-pointer text-sm">Add new contact for this job (owner only)</summary><div className="mt-2 grid gap-2 sm:grid-cols-2">{[["name","Name"],["email","Email"],["phone","Phone"],["company","Company"],["builder","Builder"]].map(([key,label])=><label key={key} className="text-xs">{label}<input className={inputClass} type={key==='email'?'email':'text'} value={newContact[key]} onChange={e=>setNewContact(v=>({...v,[key]:e.target.value}))}/></label>)}</div><p className="mt-2 text-xs">An existing email or phone must be selected from the picker instead of creating a duplicate.</p></details>}
+            {owner && <details className="mt-2 rounded-xl border p-3"><summary className="cursor-pointer text-sm">Add new contact for this job (owner only)</summary><div className="mt-2 grid gap-2 sm:grid-cols-2">{[["name","Name"],["email","Email"],["phone","Phone"],["company","Company"],["builder","Builder"]].map(([key,label])=><label key={key} className="text-xs">{label}<input className={inputClass} type={key==='email'?'email':'text'} value={newContact[key]} onChange={e=>setNewContact(v=>({...v,[key]:e.target.value}))}/></label>)}</div><label className="mt-2 block text-xs">Role for new contact<select className={inputClass} value={newContactRole} onChange={e=>setNewContactRole(e.target.value)}><option value="">Choose role</option>{ASSIGNABLE_CONTACT_ROLES.map(role=><option key={role} value={role}>{ROLE_LABELS[role]}</option>)}</select></label><p className="mt-2 text-xs">An existing email or phone must be selected from the picker instead of creating a duplicate.</p></details>}
           {selected.length > 0 && <p className="mt-2 flex items-center gap-1 text-xs text-emerald-800"><Link2 className="h-3.5 w-3.5" />{selected.length} contact{selected.length === 1 ? "" : "s"} selected</p>}
           </div>
           {duplicates.length > 0 && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">

@@ -3,7 +3,7 @@
 // confirms it through the contacts-directory `link` action.
 import {norm,phoneKey,builderKey,tokens} from './contactMatching.js';
 
-export const LINK_ROLES=['superintendent','project_manager','homeowner','site'];
+export const LINK_ROLES=['superintendent','project_manager','homeowner','site','builder','customer'];
 const ROLE_RULES=[{role:'superintendent',re:/\b(super|supers|superintendent|superintendant|supt)\b/},{role:'project_manager',re:/\b(pm|project manager|construction manager|field manager|lead)\b/},{role:'homeowner',re:/\b(homeowner|home owner|owner|buyer|customer|resident)\b/}];
 const ROLE_WORDS=new Set(['super','supers','superintendent','superintendant','supt','site','field','area','and','for','over','the']);
 const RANK={high:3,medium:2,low:1};

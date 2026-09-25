@@ -144,7 +144,7 @@ test('frontend helpers group roles and adapt the older job response',()=>{
  assert.deepEqual(legacy.linked.map(c=>[c.role,c.link]),[['superintendent','saved'],['site','workbook']]);
  assert.equal(legacy.status.missing_superintendent,false);assert.equal(legacy.legacy,true);
  assert.deepEqual(statusOf([]),{linked:0,superintendents:0,missing_contact:true,missing_superintendent:true,suggestions:0});
- assert.equal(confirmRoleOf({role:'superintendent'}),'superintendent');assert.equal(confirmRoleOf({role:'site'}),'site');assert.equal(confirmRoleOf({role:'builder'}),undefined);
+ assert.equal(confirmRoleOf({role:'superintendent'}),'superintendent');assert.equal(confirmRoleOf({role:'site'}),'site');assert.equal(confirmRoleOf({role:'builder'}),'builder');assert.equal(confirmRoleOf({role:'customer'}),'customer');
 });
 
 async function setup({conversationsFail=false}={}){
@@ -193,3 +193,5 @@ test('confirming a suggestion writes one link with its role; unsupported roles a
  await s.call({action:'link',contact_key:DAVIES.key,job_id:'j395',role:'superintendent',source:'suggestion'});
  assert.deepEqual(s.tables.ContactJobLink.map(l=>[l.contact_key[0],l.job_id,l.source,l.role]),[['a','j607','manual','superintendent'],['b','j395','suggestion','superintendent']]);
 });
+
+test('saved customer role overrides a generic builder company label',()=>{const links=[{contact_key:MAKAY.key,job_id:'j607',role:'customer'}];const v=view('j607',{links});assert.equal(v.linked.find(c=>c.key===MAKAY.key)?.role,'customer');});
