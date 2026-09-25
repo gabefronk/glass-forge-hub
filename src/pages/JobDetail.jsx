@@ -14,9 +14,12 @@ import { loadJobGroup, loadJobActivity, jobEventsAndEvidence, reportsForJob, loa
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
 import JobMessageThreads from "@/components/jobs/JobMessageThreads";
+import { useAuth } from "@/lib/AuthContext";
+import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 
 export default function JobDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -141,6 +144,7 @@ export default function JobDetail() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {isPurchaseOrderOwner(user) && <Link to={`/jobs/${id}/setup`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Setup sheet</Link>}
               <button type="button" onClick={() => setShowReport(true)} className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
                 <Camera className="h-3.5 w-3.5" />Add field report
               </button>
