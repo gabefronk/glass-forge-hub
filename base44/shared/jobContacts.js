@@ -15,6 +15,24 @@ export const qualifierOf=c=>{const b=String(c?.builder||''),co=String(c?.company
 // The role comes from the workbook's company label ("Holmes Homes - Daybreak Super"), never from free-text notes.
 export function contactRole(c){const q=norm(qualifierOf(c));for(const [role,re] of ROLE_RULES)if(re.test(q))return role;return q?'site':'builder';}
 const publicContact=c=>({key:c.key,name:c.name,company:c.company||'',builder:c.builder||'',phone:c.phone||'',phone_key:c.phone_key||'',email:c.email||'',email_key:c.email_key||''});
+
+// A stored job_id is an explicit owner association and is always authoritative. An
+// unlinked one-to-one thread may be associated only when its sole participant maps
+// through the verified directory to exactly one job. Group threads deliberately
+// fail closed: cached participant overlap cannot prove that every participant's
+// conversation belongs on the job page.
+export function conversationJobMatch(conversation,jobId,directoryContacts=[]){
+ if(!conversation||!jobId)return {matched:false,basis:'none'};
+ if(conversation.job_id)return conversation.job_id===jobId?{matched:true,basis:'explicit'}:{matched:false,basis:'explicit_other_job'};
+ const participants=Array.isArray(conversation.participants)?conversation.participants.filter(p=>typeof p==='string'&&p.trim()):[];
+ if(participants.length!==1)return {matched:false,basis:participants.length>1?'group_requires_explicit_link':'participant_scope_unverified'};
+ const participant=participants[0],phone=phoneKey(participant),email=String(participant).trim().toLowerCase();
+ const contacts=directoryContacts.filter(c=>(phone&&c.phone_key===phone)||(email.includes('@')&&c.email_key===email));
+ const possibleJobs=new Set(contacts.flatMap(c=>Array.isArray(c.job_ids)?c.job_ids:[]).filter(Boolean));
+ if(possibleJobs.size!==1)return {matched:false,basis:possibleJobs.size?'ambiguous_contact_jobs':'no_verified_contact_job'};
+ return possibleJobs.has(jobId)?{matched:true,basis:'verified_direct_contact'}:{matched:false,basis:'verified_other_job'};
+}
+export const conversationsForJob=(conversations,jobId,directoryContacts=[])=>(conversations||[]).filter(c=>conversationJobMatch(c,jobId,directoryContacts).matched);
 // One adjacent swap ("Dvais" for "Davis") is the only fuzziness allowed; other variants must be listed.
 function transposed(a,b){if(a.length!==b.length||a.length<4)return false;const i=[...a].findIndex((ch,k)=>ch!==b[k]);return i>=0&&i<a.length-1&&a[i]===b[i+1]&&a[i+1]===b[i]&&a.slice(i+2)===b.slice(i+2);}
 export function nameMatchesSeed(name,seed){const variants=[seed.name,...(seed.name_variants||[])].map(norm).filter(Boolean);return words(name).some(w=>variants.some(v=>w===v||transposed(w,v)));}
@@ -43,6 +61,7 @@ export function seedJobMatch(seed,facts){
 const seedInfo=seed=>({id:seed.id,name:seed.name,phone:seed.phone||'',role:seed.role,label:seed.label||'',note:seed.note||'',name_verified:Boolean(seed.name_verified)});
 
 export function jobContactsView({directory,job,rawJob=null,links=[],conversations=[],messages='available',seeds=[],index=indexDirectory(directory,links)}){
+ conversations=conversationsForJob(conversations,job.id,directory.contacts);
  const facts=jobFacts(job,rawJob);
  const linked=(index.byJob.get(job.id)||[]).map(c=>({...publicContact(c),role:index.linkRole.get(c.key+'|'+job.id)||contactRole(c),link:(c.manual_job_ids||[]).includes(job.id)?'saved':'workbook'}));
  const linkedByKey=new Map(linked.map(c=>[c.key,c])),proposals=new Map(),open=[],unknown=new Map(),seedIds=[];
@@ -72,15 +91,17 @@ export function jobContactsView({directory,job,rawJob=null,links=[],conversation
   open.push({id:'seed:'+seed.id,seed:seedInfo(seed),role:seed.role,confidence:named.length?'medium':'low',reasons,sources:['owner_note'],candidates:named.map(c=>({...publicContact(c),already_linked:linkedByKey.has(c.key)})),needs:named.length?'choose_contact':'add_contact'});
  }
  for(const convo of conversations){
-  if(convo.job_id!==job.id)continue;
+  const match=conversationJobMatch(convo,job.id,directory.contacts);
+  if(!match.matched)continue;
   const title=String(convo.title||'').trim()||'a message thread';
+  const association=match.basis==='explicit'?'which you explicitly linked to this job':'a one-to-one thread whose sole verified contact is linked only to this job';
   for(const p of convo.participants||[]){
    const phone=phoneKey(p),email=String(p||'').includes('@')?String(p).trim().toLowerCase():'';
    const matches=[...(phone?index.byPhone.get(phone)||[]:[]),...(email?index.byEmail.get(email)||[]:[])];
-   if(matches.length){for(const c of matches)propose(c,{role:contactRole(c),confidence:'medium',reason:`In the message thread "${title}", which is linked to this job.`,source:'messages'});continue;}
+   if(matches.length){for(const c of matches)propose(c,{role:contactRole(c),confidence:'medium',reason:`In the message thread "${title}", ${association}.`,source:'messages'});continue;}
    const id=phone||email;if(!id)continue;
    const u=unknown.get(id)||{id:'participant:'+id,participant:{phone,email},role:'',confidence:'low',reasons:[],sources:['messages'],candidates:[],needs:'add_contact'};
-   const reason=`In the message thread "${title}", which is linked to this job. This number or email is not in the contacts directory.`;
+   const reason=`In the message thread "${title}", ${association}. This number or email is not in the contacts directory.`;
    if(!u.reasons.includes(reason))u.reasons.push(reason);
    unknown.set(id,u);
   }
@@ -103,10 +124,9 @@ export function jobContactsView({directory,job,rawJob=null,links=[],conversation
 
 // Every Glass Forge job (workbook-only references excluded): link coverage, missing counts and proposals.
 export function jobContactCoverage({directory,rawJobs=[],links=[],conversations=[],messages='available',seeds=[]}){
- const index=indexDirectory(directory,links),raw=new Map(rawJobs.map(j=>[j.id,j])),byJob=new Map(),matchedSeeds=new Set();
- for(const c of conversations)if(c.job_id)push(byJob,c.job_id,c);
+ const index=indexDirectory(directory,links),raw=new Map(rawJobs.map(j=>[j.id,j])),matchedSeeds=new Set();
  const rows=directory.jobs.filter(j=>!j.is_workbook).map(job=>{
-  const v=jobContactsView({directory,job,rawJob:raw.get(job.id),links,conversations:byJob.get(job.id)||[],messages,seeds,index});
+  const v=jobContactsView({directory,job,rawJob:raw.get(job.id),links,conversations,messages,seeds,index});
   for(const id of v.seed_ids)matchedSeeds.add(id);
   return {...v.job,status:v.status,superintendents:v.linked.filter(c=>c.role==='superintendent').map(c=>c.name),suggestions:v.suggestions};
  });
