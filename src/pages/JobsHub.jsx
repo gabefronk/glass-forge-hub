@@ -10,6 +10,7 @@ import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
 import ProbuildReports from "@/pages/ProbuildReports";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { buildJobsOverview } from "@/lib/jobsOverview";
+import AddJobDialog from "@/components/jobs/AddJobDialog";
 
 export default function JobsHub() {
   const [jobs, setJobs] = useState([]);
@@ -116,6 +117,12 @@ export default function JobsHub() {
     ...(counts.duplicates ? [{ key: "duplicates", label: "Possible duplicates", count: counts.duplicates }] : []),
   ];
   const selectedGroup = selectedJobId ? groupByJobId.get(selectedJobId) || null : null;
+  const handleJobCreated = (job) => {
+    setJobs((current) => [job, ...current]);
+    setSearch("");
+    setSegment("all");
+    setSelectedJobId(job.id);
+  };
 
   const renderToggle = (onDark) => (
     <div className="inline-flex items-center gap-1 p-1 rounded-full" style={{ backgroundColor: onDark ? "rgba(255,255,255,.06)" : C.cardAlt, border: `1px solid ${onDark ? "rgba(255,255,255,.1)" : C.border}` }}>
@@ -165,7 +172,10 @@ export default function JobsHub() {
             <h1 className="font-heading text-[30px] font-bold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.03em" }}>Jobs</h1>
             <span className="font-mono-num text-[14px]" style={{ color: "var(--gf-sidebar-muted)" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>({groups.length.toLocaleString()})</span>
           </div>
-          {owner && renderToggle(true)}
+          <div className="flex items-center gap-2">
+            {owner && renderToggle(true)}
+            <AddJobDialog jobs={jobs} onCreated={handleJobCreated} />
+          </div>
         </div>
         <div className="flex flex-col gap-3">
           <div className="relative flex-1 max-w-[560px]">
