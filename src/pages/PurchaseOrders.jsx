@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { C } from "@/lib/feeUI";
 import PageNotFound from "@/lib/PageNotFound";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import { canSubmitPurchaseOrder, selectJobSetupSheetPrefill } from "@/lib/jobSetupSheetPurchaseOrder";
 import { ClipboardList, Plus, CheckCircle2, AlertTriangle } from "lucide-react";
 
 // Purchase Orders (owner only): YA-#### numbers for material orders. Numbers are
@@ -53,19 +54,25 @@ export default function PurchaseOrders() {
 function PurchaseOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [setupSheets, setSetupSheets] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [jobFilter, setJobFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [ownerConfirmed, setOwnerConfirmed] = useState(false);
+  const [prefillState, setPrefillState] = useState("unselected");
   const [result, setResult] = useState(null); // { ok, text }
 
   const load = useCallback(async () => {
-    const [o, j] = await Promise.all([
+    const [o, j, sheets] = await Promise.all([
       base44.entities.PurchaseOrders.list("-created_date", 500).catch(() => []),
       base44.entities.Jobs.list("-created_date", 1000).catch(() => []),
+      // PR #3 supplies this entity. Until it lands, the adapter is a no-op.
+      base44.entities.JobSetupSheets?.list?.("-created_date", 1000)?.catch(() => []) ?? Promise.resolve([]),
     ]);
     setOrders(o || []);
     setJobs(j || []);
+    setSetupSheets(sheets || []);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -73,14 +80,26 @@ function PurchaseOrdersPage() {
   const jobOptions = useMemo(() => {
     const q = jobFilter.trim().toLowerCase();
     return jobs
-      .filter((j) => !q || [j.canonical_name, j.builder, j.customer_name].some((v) => String(v || "").toLowerCase().includes(q)) || j.id === form.job_id)
+      .filter((j) => !q || [j.id, j.canonical_name, j.builder, j.customer_name, ...(j.po_numbers || []), ...(j.oe_numbers || [])].some((v) => String(v || "").toLowerCase().includes(q)) || j.id === form.job_id)
       .sort((a, b) => String(a.canonical_name || "").localeCompare(String(b.canonical_name || "")));
   }, [jobs, jobFilter, form.job_id]);
 
   const jobName = (id) => jobs.find((j) => j.id === id)?.canonical_name || "";
 
+  function selectJob(jobId) {
+    const prefill = selectJobSetupSheetPrefill(setupSheets, jobId);
+    setPrefillState(prefill.state);
+    setOwnerConfirmed(false);
+    setForm((current) => ({
+      ...EMPTY_FORM,
+      job_id: jobId,
+      ...(prefill.draft || {}),
+      notes: current.job_id === jobId ? current.notes : "",
+    }));
+  }
+
   async function issue() {
-    if (saving) return;
+    if (!canSubmitPurchaseOrder({ saving, jobId: form.job_id, ownerConfirmed })) return;
     setSaving(true);
     setResult(null);
     try {
@@ -99,6 +118,8 @@ function PurchaseOrdersPage() {
       const linkNote = data.job_update && !data.job_update.ok ? ` (job link failed: ${data.job_update.error})` : "";
       setResult({ ok: !linkNote, text: `Issued ${data.po_number}${linkNote}` });
       setForm(EMPTY_FORM);
+      setOwnerConfirmed(false);
+      setPrefillState("unselected");
       setJobFilter("");
       setShowForm(false);
       load();
@@ -168,16 +189,28 @@ function PurchaseOrdersPage() {
           </button>
           {showForm && (
             <div className="grid grid-cols-2 max-[699px]:grid-cols-1 gap-2 rounded-[12px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-              <input value={jobFilter} placeholder="Filter jobs (name, builder, customer)"
+              <input value={jobFilter} placeholder="Filter jobs (name, ID, BFS PO, OE, YA PO)"
                 onChange={(e) => setJobFilter(e.target.value)}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle} />
-              <select value={form.job_id} onChange={(e) => setForm((f) => ({ ...f, job_id: e.target.value }))}
+              <select value={form.job_id} onChange={(e) => selectJob(e.target.value)}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle}>
                 <option value="">No job linked</option>
                 {jobOptions.map((j) => (
                   <option key={j.id} value={j.id}>{[j.canonical_name || j.id, j.builder].filter(Boolean).join(" - ")}</option>
                 ))}
               </select>
+              {form.job_id && prefillState !== "ready" && (
+                <p className="col-span-2 max-[699px]:col-span-1 text-[12px]" role="status" style={{ color: C.textMuted }}>
+                  {prefillState === "ambiguous"
+                    ? "More than one confirmed Job Setup Sheet matches this job. No vendor or amount was prefilled."
+                    : "No confirmed Job Setup Sheet matches this job. Enter only owner-reviewed vendor and price details."}
+                </p>
+              )}
+              {prefillState === "ready" && (
+                <p className="col-span-2 max-[699px]:col-span-1 text-[12px]" role="status" style={{ color: C.accentText }}>
+                  Drafted from the job's single confirmed Job Setup Sheet. Review every value before issuing.
+                </p>
+              )}
               {[
                 ["vendor", "Vendor (e.g. AMSCO)"],
                 ["vendor_quote_ref", "Vendor quote ref (e.g. 3517590)"],
@@ -194,7 +227,11 @@ function PurchaseOrdersPage() {
               <input value={form.notes} placeholder="Notes"
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 className="text-[13px] px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1" style={inputStyle} />
-              <button onClick={issue} disabled={saving} className="text-[13px] font-semibold px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1 disabled:opacity-60"
+              <label className="col-span-2 max-[699px]:col-span-1 flex items-start gap-2 text-[12px]" style={{ color: C.textSecondary }}>
+                <input type="checkbox" checked={ownerConfirmed} onChange={(e) => setOwnerConfirmed(e.target.checked)} className="mt-0.5" />
+                I reviewed the job, vendor, quote reference, and amounts. Issue this PO only when I submit.
+              </label>
+              <button onClick={issue} disabled={!canSubmitPurchaseOrder({ saving, jobId: form.job_id, ownerConfirmed })} className="text-[13px] font-semibold px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1 disabled:opacity-60"
                 style={{ backgroundColor: C.accent, color: "#fff" }}>{saving ? "Issuing..." : "Issue PO number"}</button>
             </div>
           )}

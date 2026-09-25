@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Package, Bot, X, DollarSign, Mountain } from "lucide-react";
+import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Package, Bot, X, DollarSign, Mountain, Search, Settings2, ChevronDown } from "lucide-react";
 import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { MessageSquare, Users, Network, CheckSquare, Mic } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
@@ -29,16 +29,25 @@ const SECONDARY_NAV = [
 export default function MobileBottomNav({ user }) {
   const { pathname } = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
+  const operationsActive = pathname === "/admin/agents" || pathname === "/research-queue";
+  const [operationsOpen, setOperationsOpen] = useState(operationsActive);
   const todoAccess = useTodoAccess(user);
 
   useEffect(() => { setMoreOpen(false); }, [pathname]);
+  useEffect(() => { if (operationsActive) setOperationsOpen(true); }, [operationsActive]);
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const closeOnEscape = (event) => { if (event.key === "Escape") setMoreOpen(false); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [moreOpen]);
 
   const isPrimaryActive = (to) => pathname === to || (to === "/jobs" && pathname.startsWith("/jobs/"));
   const isSecondaryActive = (to) => pathname === to;
   const quotesOnly = isWindowQuotesOnly(user);
   const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV.filter(item => !item.todoOnly || todoAccess);
   const visibleSecondary = quotesOnly ? SECONDARY_NAV.filter((s) => s.to === "/products" || s.to === "/summit") : SECONDARY_NAV.filter((s) => !s.ownerOnly || isAgentCenterOwner(user));
-  const moreActive = pathname === "/admin/agents" || visibleSecondary.some((s) => isSecondaryActive(s.to));
+  const moreActive = operationsActive || visibleSecondary.some((s) => isSecondaryActive(s.to));
   const showMore = visibleSecondary.length > 0 || canViewAgentCenter(user);
 
   const navItemStyle = (active) => ({
@@ -84,13 +93,20 @@ export default function MobileBottomNav({ user }) {
                   </Link>
                 );
               })}
-              {canViewAgentCenter(user) && (
-                <Link to="/admin/agents" aria-label="Agent Center" aria-current={pathname === "/admin/agents" ? "page" : undefined}
-                  className="flex min-h-[44px] flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-2.5"
-                  style={navItemStyle(pathname === "/admin/agents")}>
-                  <Bot className="h-5 w-5" style={{ color: pathname === "/admin/agents" ? "#146556" : "#8A958F" }} />
-                  <span className="text-[12px] font-medium whitespace-nowrap" style={{ color: pathname === "/admin/agents" ? "#E8EAE5" : "#8A958F" }}>Agents</span>
-                </Link>
+              {(canViewAgentCenter(user) || isAgentCenterOwner(user)) && (
+                <div className="col-span-3 rounded-xl" style={navItemStyle(operationsActive)}>
+                  <button type="button" aria-expanded={operationsOpen} aria-controls="mobile-operations-navigation"
+                    onClick={() => setOperationsOpen((open) => !open)}
+                    className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 text-left">
+                    <Settings2 className="h-5 w-5" style={{ color: operationsActive ? "#146556" : "#8A958F" }} aria-hidden="true" />
+                    <span className="flex-1 text-[12px] font-medium" style={{ color: operationsActive ? "#E8EAE5" : "#8A958F" }}>Operations</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${operationsOpen ? "rotate-180" : ""}`} style={{ color: "#8A958F" }} aria-hidden="true" />
+                  </button>
+                  {operationsOpen && <div id="mobile-operations-navigation" className="grid grid-cols-2 gap-2 px-2 pb-2">
+                    {canViewAgentCenter(user) && <MobileOperationsLink to="/admin/agents" label="Agent Center" icon={Bot} active={pathname === "/admin/agents"} />}
+                    {isAgentCenterOwner(user) && <MobileOperationsLink to="/research-queue" label="Research Queue" icon={Search} active={pathname === "/research-queue"} />}
+                  </div>}
+                </div>
               )}
             </div>
           </div>
@@ -130,5 +146,16 @@ export default function MobileBottomNav({ user }) {
         </button>}
       </nav>
     </>
+  );
+}
+
+function MobileOperationsLink({ to, label, icon: Icon, active }) {
+  return (
+    <Link to={to} aria-current={active ? "page" : undefined}
+      className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-2"
+      style={{ backgroundColor: active ? "#2A3A35" : "rgba(255,255,255,.03)" }}>
+      <Icon className="h-4 w-4" style={{ color: active ? "#146556" : "#8A958F" }} aria-hidden="true" />
+      <span className="text-[12px] font-medium" style={{ color: active ? "#E8EAE5" : "#8A958F" }}>{label}</span>
+    </Link>
   );
 }
