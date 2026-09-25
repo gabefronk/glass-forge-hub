@@ -55,10 +55,13 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
     const one=input.action==='job_contacts',rawJob=one?jobs.find(j=>j.id===input.job_id):null;
     if(one&&!rawJob)return response({error:'Job not found.'},404);
     // Message threads are optional evidence; a failure only hides that source of suggestions.
-    let conversations=[],messages='available';
+    let conversations=[],messages='available',notes=[],events=[],sourceQuotes=[];
     try{conversations=one?await api.MessageConversation.filter({job_id:rawJob.id},'-last_message_at',50):(await all(api.MessageConversation)).filter(c=>c.job_id);}catch{messages='unavailable';}
-    if(one)return response(jobContactsView({directory,job:directory.jobs.find(j=>j.id===rawJob.id),rawJob,links,conversations,messages,seeds:CONTACT_LINK_SEEDS}));
-    return response(jobContactCoverage({directory,rawJobs:jobs,links,conversations,messages,seeds:CONTACT_LINK_SEEDS}));
+    try{notes=one?await api.JobNotes.filter({job_id:rawJob.id},'-note_date',100):await all(api.JobNotes);}catch{}
+    try{events=one?await api.CalendarEvents.filter({job_id:rawJob.id},'-event_date',100):(await all(api.CalendarEvents)).filter(e=>e.job_id);}catch{}
+    try{if(one&&rawJob.source_window_quote_id)sourceQuotes=await api.QuoteRequests.filter({id:rawJob.source_window_quote_id},'-created_date',1);else if(!one)sourceQuotes=await all(api.QuoteRequests);}catch{}
+    if(one)return response(jobContactsView({directory,job:directory.jobs.find(j=>j.id===rawJob.id),rawJob,links,conversations,messages,seeds:CONTACT_LINK_SEEDS,notes,events,sourceQuote:sourceQuotes[0]||null}));
+    return response(jobContactCoverage({directory,rawJobs:jobs,links,conversations,messages,seeds:CONTACT_LINK_SEEDS,notes,events,sourceQuotes}));
    }
    if(input.action==='conversation'){
     const c=(await api.MessageConversation.filter({conversation_key:String(input.conversation_key||'')},'-created_date',1))[0];if(!c)return response({error:'Conversation not found.'},404);
