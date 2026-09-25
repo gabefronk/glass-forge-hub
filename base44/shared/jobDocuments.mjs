@@ -1,0 +1,69 @@
+const ROOT='1F_PgUPEuvyvzCk92tdaFiwioLSack4iS';
+const OWNERS=new Set(['gabefronk@gmail.com','gabriel.fronk.wd@gmail.com']);
+const DRIVE='https://www.googleapis.com/drive/v3';
+const JSON_HEADERS={'Content-Type':'application/json'};
+const reply=(body,status=200)=>Response.json(body,{status});
+const clean=value=>String(value||'').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim().slice(0,140);
+const escaped=value=>value.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+export function folderName(job){return clean([job.canonical_name,job.address].filter(Boolean).join(' - '))||'';}
+export function createJobDocumentsHandler({getClient,request=fetch}={}){
+ return async req=>{
+  if(req.method!=='POST')return reply({error:'POST required.'},405);
+  try{
+   const client=await getClient(req),user=await client.auth.me().catch(()=>null);
+   if(!user)return reply({error:'Sign in required.'},401);
+   if(user.role!=='admin'||!OWNERS.has(String(user.email||'').toLowerCase().trim()))return reply({error:'Owner access required.'},403);
+   const input=await req.json(),jobId=String(input.job_id||'');if(!jobId)return reply({error:'Select a job.'},400);
+   const api=client.asServiceRole.entities,job=await api.Jobs.get(jobId).catch(()=>null);
+   if(!job)return reply({error:'Job not found.'},404);
+   if(!['ensure_folder','attach_folder','list'].includes(input.action))return reply({error:'Unsupported action.'},400);
+   const {accessToken}=await client.asServiceRole.connectors.getConnection('googledrive');
+   if(!accessToken)return reply({error:'Google Drive is not connected.'},503);
+   const drive=async(path,init={})=>{
+    const r=await request(DRIVE+path,{...init,headers:{Authorization:'Bearer '+accessToken,...init.headers}});
+    if(!r.ok)throw Error('Drive request failed ('+r.status+').');return r.json();
+   };
+   const folder=async id=>drive('/files/'+encodeURIComponent(id)+'?fields=id,name,mimeType,parents,webViewLink,trashed');
+   const children=async(parent,name)=>{
+    const q=`'${escaped(parent)}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`+(name?` and name='${escaped(name)}'`:'');
+    return (await drive('/files?q='+encodeURIComponent(q)+'&fields=nextPageToken,files(id,name,mimeType,parents,webViewLink,trashed)&pageSize=100')).files||[];
+   };
+   const validParent=async f=>{
+    if(f.trashed||f.mimeType!=='application/vnd.google-apps.folder')return false;
+    if(f.parents?.includes(ROOT))return true;
+    for(const parent of f.parents||[]){const p=await folder(parent);if(p.parents?.includes(ROOT))return true;}
+    return false;
+   };
+   const save=async f=>{
+    if(!await validParent(f))return reply({error:'Choose a folder directly in Glass Forge Jobs or a builder folder beneath it.'},400);
+    if(!f.webViewLink)return reply({error:'Drive did not return a usable folder link.'},502);
+    await api.Jobs.update(job.id,{drive_job_folder_id:f.id,drive_job_folder_url:f.webViewLink});
+    return reply({ok:true,folder:{id:f.id,name:f.name,url:f.webViewLink}});
+   };
+   if(input.action==='attach_folder'){
+    const id=String(input.folder_id||'');if(!/^[\w-]{10,100}$/.test(id))return reply({error:'Enter a valid Drive folder ID.'},400);
+    return save(await folder(id));
+   }
+   if(input.action==='ensure_folder'){
+    if(job.drive_job_folder_id)return save(await folder(job.drive_job_folder_id));
+    const name=folderName(job);if(!name)return reply({error:'Enter a job name.'},400);
+    // Never adopt a customer-name-only folder: it could belong to a different job.
+    const builder=clean(job.builder)||'Unassigned';
+    const bs=await children(ROOT,builder);if(bs.length>1)return reply({error:'Multiple builder folders have this name. Review in Drive.'},409);
+    let builderFolder=bs[0];if(!builderFolder){builderFolder=await drive('/files?fields=id,name,mimeType,parents,webViewLink',{method:'POST',headers:JSON_HEADERS,body:JSON.stringify({name:builder,mimeType:'application/vnd.google-apps.folder',parents:[ROOT]})});}
+    const exact=await children(builderFolder.id,name);if(exact.length>1)return reply({error:'Multiple matching job folders. Choose one in Drive.'},409);
+    const f=exact[0]||await drive('/files?fields=id,name,mimeType,parents,webViewLink',{method:'POST',headers:JSON_HEADERS,body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:[builderFolder.id]})});
+    return save(f);
+   }
+   if(!job.drive_job_folder_id)return reply({folder:null,files:[],status:'unlinked'});
+   const f=await folder(job.drive_job_folder_id);if(!await validParent(f))return reply({error:'Stored folder is no longer in Glass Forge Jobs.'},409);
+   const q=`'${escaped(f.id)}' in parents and trashed=false`;
+   const files=[],seen=new Set();let page='';do{
+    const r=await drive('/files?q='+encodeURIComponent(q)+'&fields=nextPageToken,files(id,name,mimeType,webViewLink,modifiedTime,parents)&pageSize=100'+(page?'&pageToken='+encodeURIComponent(page):''));
+    for(const item of r.files||[])if(item.mimeType!=='application/vnd.google-apps.folder'&&item.webViewLink&&!seen.has(item.id)){files.push({id:item.id,name:item.name,mime_type:item.mimeType,url:item.webViewLink,modified_at:item.modifiedTime});seen.add(item.id);}
+    page=r.nextPageToken||'';if(files.length>=500)break;
+   }while(page);
+   return reply({folder:{id:f.id,name:f.name,url:f.webViewLink},files,complete:!page});
+  }catch(error){console.error('job documents',error?.name||'Error');return reply({error:'Job documents could not be loaded. Check the Drive connection and folder permissions.'},502);}
+ };
+}
