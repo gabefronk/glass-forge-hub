@@ -75,11 +75,11 @@ export const DOC = {
 // PhotoSlot renders a neutral "photo coming" placeholder. No stock or AI images —
 // only real photos of the actual hardware.
 export const SUMMIT_PHOTOS = {
-  dip_switch_bank: { label: "DIP switch bank", caption: "Control board DIP switch bank — Rev 4 layout. Match positions to SA-0078 before changing anything.", url: "" },
-  potentiometer_row: { label: "Potentiometer row", caption: "Potentiometer row on the control board. Do not adjust from memory — refer to SA-0089.", url: "" },
-  motor_hub_ports: { label: "Motor hub ports with cables", caption: "Motor hub ports with cables. Use this view for the port-swap vs cable-swap decision.", url: "" },
-  touchscreen: { label: "Wall touchscreen control", caption: "Wall-mounted touchscreen control (9-in-1 / 12-in-1). Confirm the screen responds before deeper checks.", url: "" },
-  motion_sensor: { label: "Motion sensor faceplate", caption: "Motion sensor faceplate. Check alignment and that the lens is clean and unobstructed.", url: "" },
+  dip_switch_bank: { label: "DIP switch bank", caption: "Control board DIP switch bank (CTS 206-8) with green power + blue status LEDs. Match positions to SA-0078 before changing anything.", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/a9177da86_dip-bank.jpg" },
+  potentiometer_row: { label: "Potentiometer row", caption: "Potentiometer row — ACCEL, DECEL, MAX SPEED, SPEED, FORCE, FINE FORCE. Do not adjust from memory — refer to SA-0089.", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/2c4879682_pots-row.jpg" },
+  motor_hub_ports: { label: "Motor hub ports with cables", caption: "Motor hub / control board ports — ENCODER, CLUTCH, BRAKE, AUX OUT, SENSOR, SUPER CABLE. Use this view for the port-swap vs cable-swap decision.", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/a1cc73344_motor-hub-ports.jpg" },
+  touchscreen: { label: "12-in-1 touchscreen soft-reset page", caption: "12-in-1 touchscreen soft-reset page — move the door fully closed, then press CLOSE.", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/ae79362ba_touchscreen-reset.jpg" },
+  motion_sensor: { label: "Motion sensor faceplate", caption: "Motion sensor faceplate (Summit). Check alignment and that the lens is clean and unobstructed.", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/79a5a8028_motion-sensor.jpg" },
 };
 
 // Stronger card shadow for the Summit section — gives cards pop in bright daylight.
