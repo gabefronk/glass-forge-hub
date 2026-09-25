@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Camera, Plus } from "lucide-react";
+import { ArrowLeft, Camera, CheckSquare, Plus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
@@ -12,6 +12,7 @@ import { fetchAllPages } from "@/lib/pagination";
 import { useJobContacts } from "@/hooks/use-job-contacts";
 import { loadJobGroup, loadJobActivity, jobEventsAndEvidence } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
+import { matchExactJob } from "../../base44/shared/jobLinking.js";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -66,12 +67,13 @@ export default function JobDetail() {
       setFieldReports([]);
     }
 
-    base44.entities.PlanIntake.list("-created_date", 200)
-      .then((all) => {
+    Promise.all([base44.entities.PlanIntake.list("-created_date", 200), base44.entities.Jobs.list("-created_date", 1000)])
+      .then(([all, allJobs]) => {
         if (version !== loadVersion.current) return;
         const linked = all.filter((p) =>
+          memberIds.includes(p.job_id) ||
           (jb.source_window_quote_id && p.quote_id === jb.source_window_quote_id) ||
-          (p.job_name && jb.canonical_name && p.job_name.toLowerCase() === jb.canonical_name.toLowerCase())
+          memberIds.includes(matchExactJob({ job_name: p.job_name, builder: p.builder, quote_id: p.quote_id }, allJobs).job_id)
         );
         setPlans(linked);
       })
@@ -140,6 +142,9 @@ export default function JobDetail() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <Link to={`/todos?job_id=${encodeURIComponent(id)}`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+                <CheckSquare className="h-3.5 w-3.5" />Job to-dos
+              </Link>
               <button type="button" onClick={() => setShowReport(true)} className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
                 <Camera className="h-3.5 w-3.5" />Add field report
               </button>

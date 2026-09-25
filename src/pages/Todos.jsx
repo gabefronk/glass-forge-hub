@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {AlertTriangle,CalendarClock,Check,CheckSquare,Clock,Hourglass,Play,Plus,RefreshCw,RotateCcw,Users,X} from 'lucide-react';
+import {AlertTriangle,CalendarClock,Check,CheckSquare,Clock,Hourglass,Play,Plus,RefreshCw,RotateCcw,Search,Users,X} from 'lucide-react';
+import {Link,useSearchParams} from 'react-router-dom';
 import {base44} from '@/api/base44Client';
 import {useAuth} from '@/lib/AuthContext';
 import {BOARD_LANES,UNCATEGORIZED_LANE,buildBoard,daysBetween,dueState,isStale,laneKey,laneLabel} from '@/lib/todoBoard';
@@ -16,7 +17,7 @@ const smallBtn='inline-flex min-h-9 items-center gap-1 rounded-lg border border-
 const field='mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm';
 const statuses=[['open','Open'],['in_progress','In progress'],['done','Done']];
 const laneOptions=[...BOARD_LANES,UNCATEGORIZED_LANE];
-const emptyTask=(id,category)=>({title:'',details:'',assignee_member_id:id||'',due_date:'',category:category||''});
+const emptyTask=(id,category,jobId='')=>({title:'',details:'',assignee_member_id:id||'',due_date:'',category:category||'',job_id:jobId});
 const fmt=v=>v?new Date(v).toLocaleString():'';
 const shortDate=ymd=>ymd?new Date(ymd+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}):'';
 const DUE_STYLE={overdue:'border-red-300 bg-red-50 text-red-800',today:'border-amber-300 bg-amber-50 text-amber-900',soon:'border-sky-200 bg-sky-50 text-sky-900',later:'border-slate-200 bg-slate-50 text-slate-700'};
@@ -26,7 +27,7 @@ function Stat({icon:Icon,label,value,alert}){
  return <div className={'rounded-xl border px-4 py-3 '+(alert&&value?'border-red-300 bg-red-50 text-red-900':'border-white/10 bg-white/5')}><div className="flex items-center gap-1.5 text-xs uppercase tracking-wider opacity-80"><Icon className="h-3.5 w-3.5"/>{label}</div><div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div></div>;
 }
 
-function TaskCard({task,today,busy,assignee,showAssignee,onOpen,onStatus,onMove,onDragStart,onDragEnd}){
+function TaskCard({task,today,busy,assignee,showAssignee,onOpen,onStatus,onMove,onDragStart,onDragEnd,nameJob}){
  const state=dueState(task,today),stale=isStale(task,today),age=daysBetween(task.created_at,today);
  return <article draggable={!busy} onDragStart={e=>onDragStart(e,task)} onDragEnd={onDragEnd} className={'rounded-xl border bg-white p-3 shadow-sm '+(state==='overdue'?'border-red-300 ring-1 ring-red-200':'border-slate-200')}>
   <button type="button" className="block w-full min-w-0 text-left" onClick={()=>onOpen(task)}>
@@ -39,6 +40,7 @@ function TaskCard({task,today,busy,assignee,showAssignee,onOpen,onStatus,onMove,
    {task.progress_note&&<p className="mt-1 line-clamp-2 break-words text-xs text-slate-600">{task.progress_note}</p>}
    {(showAssignee||(!stale&&age!==null&&age>=1))&&<p className="mt-1.5 text-[11px] text-slate-500">{showAssignee?assignee:''}{showAssignee&&age!==null?' · ':''}{age!==null?(age===0?'Added today':`Added ${age}d ago`):''}</p>}
   </button>
+  {task.job_id&&<Link to={`/jobs/${encodeURIComponent(task.job_id)}`} className="mt-2 block truncate text-xs font-medium text-teal-800" onClick={e=>e.stopPropagation()}>Job: {nameJob(task.job_id)||task.job_id}</Link>}
   <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
    {task.status==='open'&&<button type="button" className={smallBtn} disabled={busy} onClick={()=>onStatus(task,'in_progress')}><Play className="h-3 w-3"/>Start</button>}
    <button type="button" className={smallBtn+' border-emerald-300 text-emerald-800'} disabled={busy} onClick={()=>onStatus(task,'done')} aria-label={'Mark '+task.title+' done'}><Check className="h-3 w-3"/>Done</button>
@@ -67,10 +69,12 @@ function Lane({lane,today,busy,canAdd,wide,memberName,showAssignee,onQuickAdd,on
 
 export default function Todos(){
  const {user}=useAuth();
+ const [searchParams]=useSearchParams();
  const [data,setData]=useState(null),[person,setPerson]=useState('mine'),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[creating,setCreating]=useState(false),[form,setForm]=useState(emptyTask('',''));
  const [selected,setSelected]=useState(null),[edit,setEdit]=useState(null),[teamOpen,setTeamOpen]=useState(false),[accounts,setAccounts]=useState([]);
  const [memberForm,setMemberForm]=useState({id:'',display_name:'',active:true,auth_user_ids:[],revision:0});
+ const [jobs,setJobs]=useState([]),[query,setQuery]=useState(''),[jobFilter,setJobFilter]=useState(searchParams.get('job_id')||'');
  const request=useRef(0),createKey=useRef(crypto.randomUUID()),memberKey=useRef(crypto.randomUUID()),identity=useRef(user?.id),dragged=useRef(null);
  identity.current=user?.id;
  const today=denverDate();
@@ -85,6 +89,7 @@ export default function Todos(){
   finally{if(sequence===request.current&&uid===identity.current)setLoading(false);}
  },[person,user?.id]);
  useEffect(()=>{request.current++;setData(null);setSelected(null);setEdit(null);setCreating(false);setTeamOpen(false);setAccounts([]);setNotice('');},[user?.id]);
+ useEffect(()=>{base44.entities.Jobs.list('-created_date',1000).then(setJobs).catch(()=>setJobs([]));},[user?.id]);
  useEffect(()=>{
   refresh();
   const timer=setInterval(()=>{if(!document.hidden)refresh({quiet:true});},20000);
@@ -107,14 +112,15 @@ export default function Todos(){
   finally{if(uid===identity.current)setBusy(false);}
  };
  const owner=data?.owner===true,members=data?.members||[],tasks=data?.tasks||[],recentDone=data?.recent_done||[],me=data?.member;
- const board=useMemo(()=>buildBoard(tasks,today),[tasks,today]);
+ const visibleTasks=useMemo(()=>tasks.filter(t=>(!jobFilter||t.job_id===jobFilter)&&(!query.trim()||[t.title,t.details,t.progress_note,jobs.find(j=>j.id===t.job_id)?.canonical_name].some(v=>String(v||'').toLowerCase().includes(query.trim().toLowerCase())))),[tasks,jobFilter,query,jobs]);
+ const board=useMemo(()=>buildBoard(visibleTasks,today),[visibleTasks,today]);
  const shownMember=members.find(m=>m.id===(person==='mine'?me?.id:person));
  const targetMemberId=person==='all'||person==='mine'?me?.id:person;
  const canAdd=shownMember?.active!==false;
  const nameOf=t=>members.find(m=>m.id===t.assignee_member_id)?.display_name||me?.display_name||'';
  const openTask=t=>{setSelected(t);setEdit({...t,category:laneKey(t)});setNotice('');setCreating(false);};
  const changeView=id=>{request.current++;setData(null);setLoading(true);setPerson(id);setCreating(false);};
- const add=(category='')=>{setForm(emptyTask(targetMemberId,category));createKey.current=crypto.randomUUID();setCreating(true);setSelected(null);setEdit(null);};
+ const add=(category='')=>{setForm(emptyTask(targetMemberId,category,jobFilter));createKey.current=crypto.randomUUID();setCreating(true);setSelected(null);setEdit(null);};
  const create=async e=>{e.preventDefault();const saved=await mutate({action:'create',...form,request_key:createKey.current},`Task added to ${laneLabel(form.category)}.`);if(saved){setCreating(false);createKey.current=crypto.randomUUID();}};
  const quickAdd=async(category,title,key)=>Boolean(await mutate({action:'create',title,details:'',assignee_member_id:targetMemberId||'',due_date:'',category,request_key:key},`Added to ${laneLabel(category)}.`));
  const setStatus=(t,status)=>mutate({action:'update_task',id:t.id,expected_revision:t.revision,patch:{status}},status==='done'?`Done: ${t.title}`:status==='open'?'Task reopened.':'Marked in progress.');
@@ -123,7 +129,7 @@ export default function Todos(){
  const onDragEnd=()=>{dragged.current=null;};
  // Dropping on "Needs a category" would clear a lane; the Move menu does not allow that either.
  const onDropTask=(e,category)=>{const t=dragged.current;dragged.current=null;if(t&&category&&!busy)move(t,category);};
- const save=async e=>{e.preventDefault();if(!selected)return;const patch=owner?{title:edit.title,details:edit.details,due_date:edit.due_date,assignee_member_id:edit.assignee_member_id,status:edit.status,progress_note:edit.progress_note,category:edit.category}:{status:edit.status,progress_note:edit.progress_note,category:edit.category};await mutate({action:'update_task',id:selected.id,expected_revision:selected.revision,patch},'Task saved.');};
+ const save=async e=>{e.preventDefault();if(!selected)return;const patch=owner?{title:edit.title,details:edit.details,due_date:edit.due_date,assignee_member_id:edit.assignee_member_id,status:edit.status,progress_note:edit.progress_note,category:edit.category,job_id:edit.job_id||''}:{status:edit.status,progress_note:edit.progress_note,category:edit.category,job_id:edit.job_id||''};await mutate({action:'update_task',id:selected.id,expected_revision:selected.revision,patch},'Task saved.');};
  const manage=async()=>{setError('');try{const r=await call({action:'account_options'});setAccounts(r.accounts||[]);setTeamOpen(true);}catch(e){setError(errorText(e));}};
  const saveMember=async e=>{e.preventDefault();const r=await mutate({action:'manage_member',...memberForm,request_key:memberKey.current},'Team member saved.');if(r){setTeamOpen(false);setMemberForm({id:'',display_name:'',active:true,auth_user_ids:[],revision:0});memberKey.current=crypto.randomUUID();}};
  const memberEdit=m=>{setMemberForm(m?{id:m.id,display_name:m.display_name,active:m.active,auth_user_ids:[...(m.auth_user_ids||[])],revision:m.revision}:{id:'',display_name:'',active:true,auth_user_ids:[],revision:0});memberKey.current=crypto.randomUUID();};
@@ -131,7 +137,8 @@ export default function Todos(){
  const stale=selected&&(!current||current.revision!==selected.revision);
  // Most overdue = earliest due date (urgency order would put in-progress work first instead).
  const s=board.summary,firstOverdue=tasks.filter(t=>dueState(t,today)==='overdue').reduce((a,t)=>!a||String(t.due_date).slice(0,10)<String(a.due_date).slice(0,10)?t:a,null);
- const cardProps={onOpen:openTask,onStatus:setStatus,onMove:move,onDragStart,onDragEnd,nameOf};
+ const nameJob=id=>jobs.find(j=>j.id===id)?.canonical_name||'';
+ const cardProps={onOpen:openTask,onStatus:setStatus,onMove:move,onDragStart,onDragEnd,nameOf,nameJob};
  const showAssignee=person==='all';
  const laneProps={today,busy,canAdd,memberName:owner&&person!=='mine'&&shownMember?shownMember.display_name:'',showAssignee,onQuickAdd:quickAdd,onDropTask,cardProps};
  return <div className="mx-auto max-w-[1600px] space-y-4 p-4 pb-32 sm:p-6" style={{color:'var(--gf-ink)'}}>
@@ -152,6 +159,10 @@ export default function Todos(){
     {owner?<label className="min-w-56 text-sm font-medium">Whose board<select aria-label="Choose a person's board" className={field} value={person} disabled={busy} onChange={e=>changeView(e.target.value)}><option value="mine">My board - {me?.display_name}</option><option value="all">Everyone</option>{members.filter(m=>m.id!==me?.id).map(m=><option key={m.id} value={m.id}>{m.display_name}{m.active?'':' (inactive)'}{m.pending_account?' - account pending':''}</option>)}</select></label>:<h2 className="text-lg font-semibold">{me?.display_name}&apos;s board</h2>}
     <div className="flex flex-wrap items-center gap-2"><p className="text-xs text-slate-500">Drag a card to another lane, or use its Move menu.</p>{owner&&<button type="button" className={btn+' flex items-center gap-2'} disabled={busy} onClick={manage}><Users className="h-4 w-4"/>Team</button>}</div>
    </section>
+   <section aria-label="Find tasks" className="grid gap-3 rounded-2xl border bg-white p-3 sm:grid-cols-2">
+    <label className="text-sm font-medium">Search tasks<div className="relative"><Search className="absolute left-3 top-4 h-4 w-4 text-slate-400"/><input className={field+' pl-9'} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Title, details, note, or job"/></div></label>
+    <label className="text-sm font-medium">Job<select className={field} value={jobFilter} onChange={e=>setJobFilter(e.target.value)}><option value="">All jobs</option>{jobs.map(j=><option key={j.id} value={j.id}>{j.canonical_name} [{j.id}]</option>)}</select></label>
+   </section>
    {person==='all'&&owner&&<section aria-label="Team progress" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{(data.team_summary||[]).map(m=><button type="button" key={m.id} className="rounded-xl border bg-white p-3 text-left" onClick={()=>changeView(m.id)}><h2 className="font-semibold">{m.display_name}</h2><p className="mt-1 text-sm">{m.counts.open} open · {m.counts.in_progress} in progress</p><p className="mt-0.5 text-xs text-slate-500">{m.pending_account?'Account link pending':''}{m.active?'':' · Inactive'}</p></button>)}</section>}
    {shownMember?.pending_account&&<p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{shownMember.display_name}&apos;s board is ready for assignments. Only Gabriel can access it until a verified sign-in account is linked.</p>}
    {board.uncategorized&&<Lane lane={board.uncategorized} wide {...laneProps}/>}
@@ -164,10 +175,11 @@ export default function Todos(){
   </>}
   {(creating||(selected&&edit))&&<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:items-center" onClick={()=>{if(!busy){setCreating(false);setSelected(null);setEdit(null);}}}>
    <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl" onClick={e=>e.stopPropagation()}>
-    {creating&&<form onSubmit={create} className="space-y-4" aria-label="New task"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">New task</h2><button type="button" aria-label="Close" className="p-2" onClick={()=>setCreating(false)}><X className="h-4 w-4"/></button></div><label className="block text-sm">Lane<select className={field} required value={form.category} disabled={busy} onChange={e=>{setForm({...form,category:e.target.value});createKey.current=crypto.randomUUID();}}><option value="" disabled>Choose a lane</option>{BOARD_LANES.map(l=><option key={l.key} value={l.key}>{l.label}</option>)}</select></label><label className="block text-sm">Title<input autoFocus required maxLength={200} className={field} value={form.title} disabled={busy} onChange={e=>{setForm({...form,title:e.target.value});createKey.current=crypto.randomUUID();}}/></label><label className="block text-sm">Instructions<textarea maxLength={5000} rows={4} className={field} value={form.details} disabled={busy} onChange={e=>{setForm({...form,details:e.target.value});createKey.current=crypto.randomUUID();}}/></label>{owner&&<label className="block text-sm">Assign to<select className={field} value={form.assignee_member_id} required disabled={busy} onChange={e=>{setForm({...form,assignee_member_id:e.target.value});createKey.current=crypto.randomUUID();}}>{members.filter(m=>m.active).map(m=><option key={m.id} value={m.id}>{m.display_name}{m.pending_account?' - account pending':''}</option>)}</select></label>}<label className="block max-w-xs text-sm">Due date (optional)<input type="date" className={field} value={form.due_date} disabled={busy} onChange={e=>{setForm({...form,due_date:e.target.value});createKey.current=crypto.randomUUID();}}/></label><div className="flex gap-2"><button className={btn} disabled={busy||!form.title.trim()||!form.category}>{busy?'Saving...':'Create task'}</button><button type="button" className={btn} disabled={busy} onClick={()=>setCreating(false)}>Cancel</button></div></form>}
+    {creating&&<form onSubmit={create} className="space-y-4" aria-label="New task"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">New task</h2><button type="button" aria-label="Close" className="p-2" onClick={()=>setCreating(false)}><X className="h-4 w-4"/></button></div><label className="block text-sm">Lane<select className={field} required value={form.category} disabled={busy} onChange={e=>{setForm({...form,category:e.target.value});createKey.current=crypto.randomUUID();}}><option value="" disabled>Choose a lane</option>{BOARD_LANES.map(l=><option key={l.key} value={l.key}>{l.label}</option>)}</select></label><label className="block text-sm">Title<input autoFocus required maxLength={200} className={field} value={form.title} disabled={busy} onChange={e=>{setForm({...form,title:e.target.value});createKey.current=crypto.randomUUID();}}/></label><label className="block text-sm">Instructions<textarea maxLength={5000} rows={4} className={field} value={form.details} disabled={busy} onChange={e=>{setForm({...form,details:e.target.value});createKey.current=crypto.randomUUID();}}/></label><label className="block text-sm">Job (optional)<select className={field} value={form.job_id} disabled={busy} onChange={e=>{setForm({...form,job_id:e.target.value});createKey.current=crypto.randomUUID();}}><option value="">No job</option>{jobs.map(j=><option key={j.id} value={j.id}>{j.canonical_name} [{j.id}]</option>)}</select></label>{owner&&<label className="block text-sm">Assign to<select className={field} value={form.assignee_member_id} required disabled={busy} onChange={e=>{setForm({...form,assignee_member_id:e.target.value});createKey.current=crypto.randomUUID();}}>{members.filter(m=>m.active).map(m=><option key={m.id} value={m.id}>{m.display_name}{m.pending_account?' - account pending':''}</option>)}</select></label>}<label className="block max-w-xs text-sm">Due date (optional)<input type="date" className={field} value={form.due_date} disabled={busy} onChange={e=>{setForm({...form,due_date:e.target.value});createKey.current=crypto.randomUUID();}}/></label><div className="flex gap-2"><button className={btn} disabled={busy||!form.title.trim()||!form.category}>{busy?'Saving...':'Create task'}</button><button type="button" className={btn} disabled={busy} onClick={()=>setCreating(false)}>Cancel</button></div></form>}
     {selected&&edit&&<form onSubmit={save} className="space-y-4" aria-label="Task details"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Task details</h2><button type="button" aria-label="Close" className="p-2" onClick={()=>{setSelected(null);setEdit(null);}}><X className="h-4 w-4"/></button></div>{stale&&<p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">This task changed or moved to another list. Close it and open the current version before saving.</p>}
      {owner?<><label className="block text-sm">Title<input required maxLength={200} className={field} value={edit.title} disabled={busy||stale} onChange={e=>setEdit({...edit,title:e.target.value})}/></label><label className="block text-sm">Instructions<textarea rows={5} maxLength={5000} className={field} value={edit.details||''} disabled={busy||stale} onChange={e=>setEdit({...edit,details:e.target.value})}/></label><label className="block text-sm">Assign to<select className={field} value={edit.assignee_member_id} disabled={busy||stale} onChange={e=>setEdit({...edit,assignee_member_id:e.target.value})}>{members.filter(m=>m.active||m.id===edit.assignee_member_id).map(m=><option key={m.id} value={m.id}>{m.display_name}{m.pending_account?' - account pending':''}{m.active?'':' - inactive'}</option>)}</select></label><label className="block max-w-xs text-sm">Due date<input type="date" className={field} value={edit.due_date||''} disabled={busy||stale} onChange={e=>setEdit({...edit,due_date:e.target.value})}/></label></>:<><h3 className="text-lg font-semibold">{selected.title}</h3><p className="whitespace-pre-wrap break-words text-sm">{selected.details||'No additional instructions.'}</p>{selected.due_date&&<p className="text-sm">Due {selected.due_date}</p>}</>}
      <label className="block text-sm">Lane<select className={field} value={edit.category} disabled={busy||stale} onChange={e=>setEdit({...edit,category:e.target.value})}>{laneOptions.filter(l=>l.key||!laneKey(selected)).map(l=><option key={l.key||'none'} value={l.key}>{l.key?l.label:'Needs a category'}</option>)}</select></label>
+     <label className="block text-sm">Job (optional)<select className={field} value={edit.job_id||''} disabled={busy||stale} onChange={e=>setEdit({...edit,job_id:e.target.value})}><option value="">No job</option>{jobs.map(j=><option key={j.id} value={j.id}>{j.canonical_name} [{j.id}]</option>)}</select></label>
      <label className="block text-sm">Status<select className={field} value={edit.status} disabled={busy||stale} onChange={e=>setEdit({...edit,status:e.target.value})}>{statuses.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><label className="block text-sm">Progress note<textarea rows={3} maxLength={3000} className={field} value={edit.progress_note||''} disabled={busy||stale} onChange={e=>setEdit({...edit,progress_note:e.target.value})}/></label>{selected.completed_at&&<p className="text-xs text-slate-500">Completed {fmt(selected.completed_at)}</p>}<div className="flex flex-wrap gap-2"><button className={btn} disabled={busy||stale}>{busy?'Saving...':'Save changes'}</button>{owner&&<button type="button" className={btn} disabled={busy||stale} onClick={()=>{if(window.confirm('Archive this task? It will leave the board, but its record will be retained.'))mutate({action:'archive',id:selected.id,expected_revision:selected.revision},'Task archived; its record was retained.');}}>Archive task</button>}</div>
     </form>}
    </div>

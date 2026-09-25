@@ -84,7 +84,8 @@ export default function JobsHub() {
       const addr = (j.address || "").toLowerCase();
       const pos = (j.po_numbers || []).join(" ").toLowerCase();
       const oes = (j.oe_numbers || []).join(" ").toLowerCase();
-      return [name, aliases, addr, pos, oes].some((s) => s.includes(q));
+      const yaPos = (j.ya_po_numbers || []).join(" ").toLowerCase();
+      return [name, aliases, addr, String(j.id || "").toLowerCase(), pos, oes, yaPos].some((s) => s.includes(q));
     };
     let base = !q ? groups : groups.filter((g) => g.members.some(matches));
     const key = (g) => jobStats[g.id]?.status.key;

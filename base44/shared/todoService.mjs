@@ -12,9 +12,9 @@ const STATUSES = new Set(["open", "in_progress", "done"]);
 // and is shown in its own "Needs a category" lane so nothing is hidden.
 const CATEGORIES = new Set(["", "quote_request", "odd_end", "order", "follow_up"]);
 const BOARD_DONE_LIMIT = 50;
-const OWNER_PATCH_FIELDS = new Set(["title", "details", "due_date", "assignee_member_id", "status", "progress_note", "category"]);
-const CREW_PATCH_FIELDS = new Set(["status", "progress_note", "category"]);
-const CREATE_FIELDS = new Set(["action", "title", "details", "assignee_member_id", "due_date", "request_key", "category"]);
+const OWNER_PATCH_FIELDS = new Set(["title", "details", "due_date", "assignee_member_id", "status", "progress_note", "category", "job_id"]);
+const CREW_PATCH_FIELDS = new Set(["status", "progress_note", "category", "job_id"]);
+const CREATE_FIELDS = new Set(["action", "title", "details", "assignee_member_id", "due_date", "request_key", "category", "job_id"]);
 
 function fail(status, message) {
   throw Object.assign(new Error(message), { status });
@@ -197,6 +197,10 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     const details = text(input.details, 5000);
     const due_date = dueDate(input.due_date);
     const category = categoryValue(input.category);
+    const job_id = idText(input.job_id);
+    if (job_id) {
+      try { await api.Jobs.get(job_id); } catch { fail(400, "Job not found."); }
+    }
     const members = await api.TeamMember.list("id", MAX_LIST_LIMIT, 0);
     let assigneeId;
     const wanted = idText(input.assignee_member_id);
@@ -213,7 +217,7 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     const duplicates = await api.TodoTask.filter({ request_key: key }, "id", 2, 0);
     if (duplicates.length) {
       const existing = duplicates[0];
-      const same = existing.title === title && (existing.details || "") === details && (existing.due_date || "") === due_date && existing.assignee_member_id === assigneeId && (existing.category || "") === category;
+      const same = existing.title === title && (existing.details || "") === details && (existing.due_date || "") === due_date && existing.assignee_member_id === assigneeId && (existing.category || "") === category && (existing.job_id || "") === job_id;
       if (!same) fail(409, "This request key was already used for a different task.");
       return { ok: true, task: existing, duplicate: true };
     }
@@ -227,6 +231,7 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
       progress_note: "",
       due_date,
       category,
+      job_id,
       created_by_user_id: user.id,
       assigned_by_user_id: user.id,
       completed_at: "",
@@ -278,6 +283,13 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     if ("due_date" in patch) set.due_date = dueDate(patch.due_date);
     if ("progress_note" in patch) set.progress_note = text(patch.progress_note, 3000);
     if ("category" in patch) set.category = categoryValue(patch.category);
+    if ("job_id" in patch) {
+      const jobId = idText(patch.job_id);
+      if (jobId) {
+        try { await api.Jobs.get(jobId); } catch { fail(400, "Job not found."); }
+      }
+      set.job_id = jobId;
+    }
     if ("status" in patch) {
       const s = statusValue(patch.status);
       set.status = s;

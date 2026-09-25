@@ -58,6 +58,14 @@
     "builder": {
       "type": "string"
     },
+    "job_id": {
+      "type": "string",
+      "description": "Optional permanent Jobs id; set automatically only for one exact match."
+    },
+    "job_match": {
+      "type": "object",
+      "description": "Exact-match evidence and candidate job ids retained when owner review is needed."
+    },
     "final_lines": {
       "type": "array",
       "items": {
