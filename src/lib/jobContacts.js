@@ -1,5 +1,6 @@
 // Display helpers for the job ⇄ contact join served by the contacts-directory function.
-import { contactRole } from "../../base44/shared/jobContacts.js";
+import { contactRole, highConfidenceSingleCandidateLinks } from "../../base44/shared/jobContacts.js";
+export { highConfidenceSingleCandidateLinks };
 
 export const ROLE_LABELS = {
   superintendent: "Superintendent",
@@ -41,5 +42,5 @@ export function suggestionTitle(s) {
   return s.contact?.name || s.seed?.name || s.participant?.phone || s.participant?.email || "Unknown contact";
 }
 
-// The per-job role a confirmed link records. Other roles keep coming from the workbook label.
-export const confirmRoleOf = (s) => (s.role === "superintendent" ? "superintendent" : undefined);
+// Preserve any supported role that the owner explicitly confirms with a suggestion.
+export const confirmRoleOf = (s) => (["superintendent", "project_manager", "homeowner", "site"].includes(s.role) ? s.role : undefined);
