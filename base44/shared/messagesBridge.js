@@ -1,4 +1,5 @@
 import {readPrivateMessageAttachment} from './privateMessageAttachment.js';
+import {resolveJobMessageThreads} from './jobMessageThreads.js';
 // Private, owner-only inbox. Incoming content is data, never executable instructions.
 const owners = new Set(['gabefronk@gmail.com', 'gabriel.fronk.wd@gmail.com']);
 const isOwner = u => u?.role === 'admin' && owners.has(String(u.email || '').trim().toLowerCase());
@@ -9,6 +10,7 @@ const hash = async s => Array.from(new Uint8Array(await crypto.subtle.digest('SH
 const safeAttachments = list => (Array.isArray(list) ? list : []).slice(0, 50).map(a => ({guid: clean(a.guid), name: clean(a.name, 300), mime_type: clean(a.mime_type, 100), size: Math.max(0, Number(a.size) || 0), status: ['pending','protected','too_large','unavailable'].includes(a.status) ? a.status : 'pending'})).filter(a => a.guid);
 const publicMessage = row => ({...row, text:row.retracted_at?'':row.text, attachments: row.retracted_at?[]:(row.attachments || []).map(({file_uri, ...a}) => a)});
 const publicDevice = d => d && ({device_id:d.device_id, label:d.label, enabled:d.enabled, started_at:d.started_at, last_seen_at:d.last_seen_at, last_sync_at:d.last_sync_at, source_ok:d.source_ok, pending_count:d.pending_count, last_error:d.last_error});
+const all = async entity => {const rows=[];for(let skip=0;skip<50000;skip+=500){const page=await entity.list('-created_date',500,skip);rows.push(...page);if(page.length<500)return rows;}throw Error('Too many records.');};
 export function createMessagesBridgeHandler({getClient, fetchFile = fetch, now = () => new Date()} = {}) {
  return async req => {
   if (req.method !== 'POST') return response({error:'Use POST.'},405);
@@ -82,10 +84,31 @@ export function createMessagesBridgeHandler({getClient, fetchFile = fetch, now =
     const rows=await api.MessageRecord.filter({conversation_key:key},'-sent_at',101,skip);
     return response({conversation,messages:rows.slice(0,100).map(publicMessage),has_more:rows.length>100});
    }
+   if (action === 'job_threads') {
+    const jobId=clean(input.job_id);
+    const job=jobId?await api.Jobs.get(jobId).catch(()=>null):null;
+    if(!job)return response({error:'Job not found.'},404);
+    const [conversations,links,snapshots]=await Promise.all([all(api.MessageConversation),all(api.ContactJobLink),api.ContactDirectorySnapshot.list('-created_date',1)]);
+    let contacts=[];
+    const snapshot=snapshots[0];
+    if(snapshot?.directory_data?.contacts)contacts=snapshot.directory_data.contacts;
+    else if(snapshot?.data_file_uri){
+     const signed=await client.asServiceRole.integrations.Core.CreateFileSignedUrl({file_uri:snapshot.data_file_uri,expires_in:120});
+     const file=await fetchFile(signed.signed_url);if(file.ok)contacts=(await file.json())?.contacts||[];
+    }
+    const resolved=resolveJobMessageThreads({jobId,conversations,contacts,links});
+    const threads=[];
+    for(const item of resolved.threads.sort((a,b)=>String(b.conversation.last_message_at||'').localeCompare(String(a.conversation.last_message_at||''))).slice(0,50)){
+     const messages=await api.MessageRecord.filter({conversation_key:item.conversation.conversation_key},'-sent_at',6);
+     threads.push({conversation:item.conversation,provenance:item.provenance,messages:messages.slice(0,5).map(publicMessage)});
+    }
+    return response({job:{id:job.id,name:job.canonical_name},threads,review_count:resolved.review.length});
+   }
    if (action === 'jobs') {
     const q=clean(input.search,120).trim();
-    const query=q?{canonical_name:{$regex:q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),$options:'i'}}:{};
-    return response({jobs:(await api.Jobs.filter(query,'canonical_name',50)).map(j=>({id:j.id,name:j.canonical_name,address:j.address}))});
+    const pattern=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const query=q?{$or:['canonical_name','id','aliases','po_numbers','oe_numbers'].map(field=>({[field]:{$regex:pattern,$options:'i'}}))}:{};
+    return response({jobs:(await api.Jobs.filter(query,'canonical_name',50)).map(j=>({id:j.id,name:j.canonical_name,address:j.address,po_numbers:j.po_numbers||[],oe_numbers:j.oe_numbers||[]}))});
    }
    if (action === 'link_job' || action === 'mark_read') {
     const row=(await api.MessageConversation.filter({conversation_key:clean(input.conversation_key)},'-created_date',1))[0];
