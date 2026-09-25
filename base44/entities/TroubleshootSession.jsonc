@@ -2,6 +2,21 @@
   "name": "TroubleshootSession",
   "type": "object",
   "properties": {
+    "system_type": {
+      "type": "string",
+      "title": "System Type",
+      "description": "Door/system type selected at the start of the walkthrough (e.g. Multi-slide, Pivot)."
+    },
+    "motor": {
+      "type": "string",
+      "title": "Motor",
+      "description": "Motor model selected at the start of the walkthrough (Peak, Sierra, Everest, Tahoe, or Not sure)."
+    },
+    "control_type": {
+      "type": "string",
+      "title": "Control Type",
+      "description": "Wall control selected at the start of the walkthrough (3-in-1, 6-in-1, 9-in-1, 12-in-1, RF fob, or Not sure)."
+    },
     "symptom": {
       "type": "string",
       "title": "Symptom",
