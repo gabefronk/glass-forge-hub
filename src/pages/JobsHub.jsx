@@ -10,6 +10,8 @@ import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
 import ProbuildReports from "@/pages/ProbuildReports";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { buildJobsOverview } from "@/lib/jobsOverview";
+import { jobMatchesSearch } from "@/lib/jobNameReview";
+import JobDataReview from "@/components/jobs/JobDataReview";
 
 export default function JobsHub() {
   const [jobs, setJobs] = useState([]);
@@ -79,12 +81,7 @@ export default function JobsHub() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const matches = (j) => {
-      const name = (j.canonical_name || "").toLowerCase();
-      const aliases = (j.aliases || []).join(" ").toLowerCase();
-      const addr = (j.address || "").toLowerCase();
-      const pos = (j.po_numbers || []).join(" ").toLowerCase();
-      const oes = (j.oe_numbers || []).join(" ").toLowerCase();
-      return [name, aliases, addr, pos, oes].some((s) => s.includes(q));
+      return jobMatchesSearch(j, q);
     };
     let base = !q ? groups : groups.filter((g) => g.members.some(matches));
     const key = (g) => jobStats[g.id]?.status.key;
@@ -119,7 +116,7 @@ export default function JobsHub() {
 
   const renderToggle = (onDark) => (
     <div className="inline-flex items-center gap-1 p-1 rounded-full" style={{ backgroundColor: onDark ? "rgba(255,255,255,.06)" : C.cardAlt, border: `1px solid ${onDark ? "rgba(255,255,255,.1)" : C.border}` }}>
-      {[["jobs", "Jobs"], ["reports", "Field reports"]].map(([k, label]) => (
+      {[["jobs", "Jobs"], ["reports", "Field reports"], ...(owner ? [["review", "Data review"]] : [])].map(([k, label]) => (
         <button key={k} onClick={() => switchView(k)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors"
           style={view === k
             ? (onDark ? { backgroundColor: "var(--gf-brass-400)", color: "var(--gf-on-brass)" } : { backgroundColor: C.accent, color: "#fff" })
@@ -140,6 +137,10 @@ export default function JobsHub() {
         <ProbuildReports />
       </div>
     );
+  }
+
+  if (view === "review" && owner) {
+    return <div style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }}><header className="px-[26px] pt-[26px] pb-5 flex items-center justify-between" style={{ background: "var(--gf-sidebar-top)" }}><h1 className="font-heading text-[30px] font-bold" style={{ color: "var(--gf-sidebar-text-on)" }}>Jobs</h1>{renderToggle(true)}</header><JobDataReview jobs={jobs} onJobsChange={setJobs} /></div>;
   }
 
   if (loading) {
@@ -174,7 +175,7 @@ export default function JobsHub() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, alias, address, PO or OE"
+              placeholder="Search name, alias, job ID, BFS PO, OE or YA PO"
               className="w-full pl-10 pr-4 rounded-[10px] text-[13px] focus:outline-none transition-colors placeholder:text-[#8F999B]"
               style={{ height: "40px", border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)" }}
             />
