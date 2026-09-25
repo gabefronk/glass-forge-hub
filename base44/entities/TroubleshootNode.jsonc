@@ -1,0 +1,124 @@
+{
+  "name": "TroubleshootNode",
+  "type": "object",
+  "properties": {
+    "node_id": {
+      "type": "string",
+      "title": "Node Id",
+      "description": "Stable key identifying this node in the tree (e.g. 'root', 'flashing_3')."
+    },
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "node_type": {
+      "type": "string",
+      "enum": [
+        "symptom_picker",
+        "blink_count",
+        "leaf",
+        "info"
+      ],
+      "title": "Node Type",
+      "default": "leaf",
+      "description": "symptom_picker = entry options; blink_count = count-the-blinks branch; leaf = resolution; info = intermediate branch."
+    },
+    "prompt": {
+      "type": "string",
+      "title": "Prompt",
+      "description": "Question or instruction shown at this node."
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "next_node_id": {
+            "type": "string"
+          }
+        }
+      },
+      "default": [],
+      "description": "Branch options for symptom_picker / blink_count / info nodes. label is the button text; next_node_id is the target node_id."
+    },
+    "likely_cause": {
+      "type": "string",
+      "title": "Likely Cause",
+      "description": "Leaf only \u2014 the probable fault."
+    },
+    "field_fix": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Step-by-step field fix (leaf only)."
+    },
+    "escalation_note": {
+      "type": "string",
+      "title": "Escalation Note",
+      "description": "When/how to escalate (leaf only)."
+    },
+    "doc_links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "default": [],
+      "description": "Reference doc links shown at this leaf."
+    },
+    "meta_dip_switches": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "DIP switch numbers relevant to this fault (shown in the node meta panel)."
+    },
+    "meta_blink_codes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Blink codes relevant to this fault (shown in the node meta panel)."
+    },
+    "meta_pot_settings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Potentiometer settings relevant to this fault (shown in the node meta panel)."
+    },
+    "placeholder": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if content is TBD \u2014 render as a clearly marked 'content coming' block, do not invent procedures."
+    },
+    "version": {
+      "type": "string",
+      "default": "v1.1"
+    },
+    "order": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "node_id",
+    "title",
+    "node_type"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "TroubleshootSession",
+  "type": "object",
+  "properties": {
+    "symptom": {
+      "type": "string",
+      "title": "Symptom",
+      "description": "Top-level symptom selected from the entry picker."
+    },
+    "node_path": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Ordered list of node_ids visited during the walkthrough."
+    },
+    "resolution": {
+      "type": "string",
+      "enum": [
+        "resolved",
+        "escalated",
+        "abandoned",
+        ""
+      ],
+      "default": "",
+      "title": "Resolution"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes",
+      "description": "Optional tech notes from the walkthrough."
+    },
+    "tech_support_answer": {
+      "type": "string",
+      "title": "Tech Support Answer",
+      "description": "Verbatim answer from Summit tech support, if called."
+    }
+  },
+  "required": [
+    "node_path"
+  ]
+}
