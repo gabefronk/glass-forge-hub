@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, Package, DollarSign, Mountain } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, Package, DollarSign, Mountain, ChevronDown, Settings2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
@@ -22,7 +22,6 @@ const NAV_ITEMS = [
   { label: "Products", to: "/products", icon: Package },
   { label: "Summit", to: "/summit", icon: Mountain },
   { label: "System map", to: "/system-map", icon: Network, ownerOnly: true },
-  { label: "Research Queue", to: "/research-queue", icon: Search, ownerOnly: true },
 ];
 
 function monthLabel(m) {
@@ -38,6 +37,12 @@ export default function YaFeesSidebar() {
   const [billingRevision, setBillingRevision] = useState(0);
   useEffect(() => { const update = () => setBillingRevision(n => n + 1); window.addEventListener("billing-updated", update); return () => window.removeEventListener("billing-updated", update); }, []);
   const [signingOut, setSigningOut] = useState(false);
+  const operationsActive = pathname === "/admin/agents" || pathname === "/research-queue";
+  const [operationsOpen, setOperationsOpen] = useState(operationsActive);
+
+  useEffect(() => {
+    if (operationsActive) setOperationsOpen(true);
+  }, [operationsActive]);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -158,23 +163,27 @@ export default function YaFeesSidebar() {
             Messages
           </Link>
         )}
-        {canViewAgentCenter(user) && (
-          <Link
-            to="/admin/agents"
-            aria-current={pathname === "/admin/agents" ? "page" : undefined}
-            className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
-            style={{
-              minHeight: "36px",
-              backgroundColor: pathname === "/admin/agents" ? "rgba(184,149,90,.14)" : "transparent",
-              color: pathname === "/admin/agents" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
-              boxShadow: pathname === "/admin/agents" ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
-            }}
-            onMouseEnter={(e) => { if (pathname !== "/admin/agents") e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
-            onMouseLeave={(e) => { if (pathname !== "/admin/agents") e.currentTarget.style.backgroundColor = "transparent"; }}
-          >
-            <Bot className="h-4 w-4 shrink-0" style={{ color: pathname === "/admin/agents" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
-            Agent Center
-          </Link>
+        {(canViewAgentCenter(user) || isAgentCenterOwner(user)) && (
+          <div>
+            <button
+              type="button"
+              aria-expanded={operationsOpen}
+              aria-controls="desktop-operations-navigation"
+              onClick={() => setOperationsOpen((open) => !open)}
+              className="flex w-full items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
+              style={{ minHeight: "36px", color: operationsActive ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)", backgroundColor: operationsActive ? "rgba(184,149,90,.08)" : "transparent" }}
+            >
+              <Settings2 className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+              <span className="flex-1 text-left">Operations</span>
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${operationsOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+            </button>
+            {operationsOpen && (
+              <div id="desktop-operations-navigation" className="ml-4 border-l pl-2" style={{ borderColor: "rgba(255,255,255,.08)" }}>
+                {canViewAgentCenter(user) && <OperationsLink to="/admin/agents" label="Agent Center" icon={Bot} pathname={pathname} />}
+                {isAgentCenterOwner(user) && <OperationsLink to="/research-queue" label="Research Queue" icon={Search} pathname={pathname} />}
+              </div>
+            )}
+          </div>
         )}
       </nav>
 
@@ -224,5 +233,17 @@ export default function YaFeesSidebar() {
         </div>
       </div>
     </aside>
+  );
+}
+
+function OperationsLink({ to, label, icon: Icon, pathname }) {
+  const active = pathname === to;
+  return (
+    <Link to={to} aria-current={active ? "page" : undefined}
+      className="flex items-center gap-3 px-3 text-[13px] font-medium rounded-lg"
+      style={{ minHeight: "34px", color: active ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)", backgroundColor: active ? "rgba(184,149,90,.14)" : "transparent" }}>
+      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: active ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} aria-hidden="true" />
+      {label}
+    </Link>
   );
 }
