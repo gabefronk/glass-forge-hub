@@ -4,6 +4,9 @@ import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmoun
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 import { reportDueAtWithGrace } from '../../shared/reportMatching.ts';
+import { preserveAttachmentMetadata } from '../../shared/eventAttachments.js';
+import { rehostEventAttachments } from '../../shared/rehostEventAttachments.js';
+import { resolveJobLink } from '../../shared/jobLinkResolver.js';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
@@ -59,6 +62,7 @@ export default async function(req) {
     const items = allItems.filter((it) => (seenIds.has(it.id) ? false : (seenIds.add(it.id), true)));
 
     const existing = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 1000);
+    const jobs = await fetchAllPages(base44.asServiceRole.entities.Jobs, '-created_date', 1000);
     const byGoogleId = new Map();
     for (const e of existing) if (e.google_event_id) byGoogleId.set(e.google_event_id, e);
 
@@ -108,20 +112,14 @@ export default async function(req) {
         report_due_at: reportDueAtWithGrace(event_date),
       };
       const ex = byGoogleId.get(ev.id);
+      // New rows may carry an exact identity; never backfill an existing event during sync.
+      if (!ex) {
+        const link = resolveJobLink({ job_name: row.job_name, po_number: row.po_number, oe_number: row.oe_number }, jobs);
+        if (link.job_id) Object.assign(row, { job_id: link.job_id, job_link_source: link.source, job_linked_at: new Date().toISOString() });
+      }
       if (ex) {
         if (ex.source === 'app') continue;
-        const existingAttachments = new Map(
-          (ex.event_attachments || []).filter((a) => a?.file_url).map((a) => [a.file_url, a]),
-        );
-        row.event_attachments = row.event_attachments.map((attachment) => {
-          const existingAttachment = existingAttachments.get(attachment.file_url);
-          if (!existingAttachment) return attachment;
-          const rehostFields = {};
-          for (const field of ['drive_file_id', 'drive_url', 'rehosted_at']) {
-            if (existingAttachment[field]) rehostFields[field] = existingAttachment[field];
-          }
-          return { ...attachment, ...rehostFields };
-        });
+        row.event_attachments = preserveAttachmentMetadata(row.event_attachments, ex.event_attachments || []);
         const updateRow = { id: ex.id, ...row, installer_event_id: ex.installer_event_id || null };
         // report_required is create-only: manual waivers, audit retirements and
         // supersessions set it false deliberately - never re-derive it on update.
@@ -251,6 +249,17 @@ export default async function(req) {
     for (const batch of chunk(toReportMatch, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
 
     for (const batch of chunk(installerIdUpdates, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
+
+    try {
+      const eventIds = createdRecords
+        .filter(event => event.source_status !== 'cancelled' && event.event_attachments?.some(a => !a.hub_file_uri))
+        .map(event => event.id)
+        .filter(Boolean);
+      if (eventIds.length) await rehostEventAttachments({ client: base44, eventIds, limit: 20 });
+    } catch (error) {
+      // Rehosting is best effort: calendar data must remain successfully synced.
+      console.error('post-sync attachment rehost failed', error);
+    }
 
     return Response.json({
       ok: installerFailed === 0,
