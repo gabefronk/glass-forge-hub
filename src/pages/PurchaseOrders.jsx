@@ -5,9 +5,11 @@ import { useAuth } from "@/lib/AuthContext";
 import { C } from "@/lib/feeUI";
 import PageNotFound from "@/lib/PageNotFound";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
-import { fetchAllPages } from "@/lib/pagination";
-import { approvedSetupSheetContext, jobMatchesPurchaseOrderSearch, purchaseOrderSubmission } from "@/lib/purchaseOrderSetup";
+
+import { approvedSetupSheetContext, purchaseOrderSubmission } from "@/lib/purchaseOrderSetup";
 import { ClipboardList, Plus, CheckCircle2, AlertTriangle } from "lucide-react";
+import { fetchAllPages } from "@/lib/pagination";
+import { filterJobPickerOptions } from "../../base44/shared/jobCatalog.js";
 
 // Purchase Orders (owner only): YA-#### numbers for material orders. Numbers are
 // assigned server-side by issue_purchase_order, which also appends the PO to the
@@ -65,6 +67,7 @@ function PurchaseOrdersPage() {
   const [reviewed, setReviewed] = useState(false);
   const [useSetupSheet, setUseSetupSheet] = useState(false);
   const [result, setResult] = useState(null); // { ok, text }
+  const [jobsError, setJobsError] = useState("");
 
   const load = useCallback(async () => {
     const [o, j, s] = await Promise.all([
@@ -76,14 +79,19 @@ function PurchaseOrdersPage() {
     setJobs(j || []);
     setSetupSheets(s.rows);
     setSetupSheetsComplete(s.complete);
+    setJobsError("");
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const loadSafely = useCallback(async () => {
+    try { await load(); }
+    catch (error) { setJobs([]); setJobsError(`The complete jobs list could not be loaded. Issuing a linked PO is disabled. ${error?.message || ""}`); }
+  }, [load]);
+
+  useEffect(() => { loadSafely(); }, [loadSafely]);
 
   const jobOptions = useMemo(() => {
     const q = jobFilter.trim().toLowerCase();
-    return jobs
-      .filter((j) => jobMatchesPurchaseOrderSearch(j, q) || j.id === form.job_id)
+    return filterJobPickerOptions(jobs, q, { selectedId: form.job_id })
       .sort((a, b) => String(a.canonical_name || "").localeCompare(String(b.canonical_name || "")));
   }, [jobs, jobFilter, form.job_id]);
 
@@ -95,6 +103,7 @@ function PurchaseOrdersPage() {
     setSaving(true);
     setResult(null);
     try {
+      if (jobsError) throw new Error("The complete jobs list has not loaded. Refresh before issuing a PO.");
       const job = jobs.find((j) => j.id === form.job_id);
       const payload = purchaseOrderSubmission({form: {...form, job_name: job?.canonical_name, builder: job?.builder, customer_name: job?.customer_name}, context: useSetupSheet ? setupApproval.context : null, reviewed});
       if (!payload || (useSetupSheet && !setupApproval.ok)) throw new Error("Select a job, or confirm the approved setup sheet if using it");
@@ -108,7 +117,7 @@ function PurchaseOrdersPage() {
       setReviewed(false);
       setUseSetupSheet(false);
       setShowForm(false);
-      load();
+      loadSafely();
     } catch (e) {
       setResult({ ok: false, text: String(e?.message || e) });
     } finally {
@@ -132,6 +141,7 @@ function PurchaseOrdersPage() {
       </header>
 
       <div className="px-[26px] max-[699px]:px-[18px] py-6 flex flex-col gap-6 max-w-[1080px]">
+        {jobsError && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{jobsError}</p>}
         <Section title="Purchase orders" sub={`${orders.length} on record`}>
           {result && (
             <div className="flex items-center gap-2 text-[13px] font-medium" style={{ color: result.ok ? C.accentText : C.amber }}>
@@ -178,7 +188,7 @@ function PurchaseOrdersPage() {
               <input value={jobFilter} aria-label="Search jobs" placeholder="Search name, ID, BFS PO, OE, or YA PO"
                 onChange={(e) => setJobFilter(e.target.value)}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle} />
-              <select aria-label="Job" value={form.job_id} onChange={(e) => { setForm((f) => ({ ...f, job_id: e.target.value })); setReviewed(false); setUseSetupSheet(false); }}
+              <select aria-label="Job" value={form.job_id} disabled={Boolean(jobsError)} onChange={(e) => { setForm((f) => ({ ...f, job_id: e.target.value })); setReviewed(false); setUseSetupSheet(false); }}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle}>
                 <option value="">Select a job</option>
                 {jobOptions.map((j) => (
@@ -221,7 +231,7 @@ function PurchaseOrdersPage() {
                 <input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} />
                 I reviewed the sheet and every manual PO field. This checkbox does not approve a vendor purchase; issue only when I press submit.
               </label>}
-              <button onClick={issue} disabled={saving || !form.job_id || (useSetupSheet && (!reviewed || !setupApproval.ok))} className="text-[13px] font-semibold px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1 disabled:opacity-60"
+              <button onClick={issue} disabled={saving || Boolean(jobsError) || !form.job_id || (useSetupSheet && (!reviewed || !setupApproval.ok))} className="text-[13px] font-semibold px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1 disabled:opacity-60"
                 style={{ backgroundColor: C.accent, color: "#fff" }}>{saving ? "Issuing..." : useSetupSheet ? "Review complete - submit and issue PO" : "Issue PO number"}</button>
             </div>
           )}

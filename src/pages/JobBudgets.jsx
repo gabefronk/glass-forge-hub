@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { computeJobBudget } from "../../base44/shared/jobBudgetMath.js";
 import { UploadCloud, FileText, FolderOpen, DollarSign, AlertTriangle, CheckCircle2, Truck, Plus } from "lucide-react";
+import { fetchAllPages } from "@/lib/pagination";
 
 // Job Budgets: drop vendor quote PDFs -> cost basis + margins -> Drive filing ->
 // invoicing cost inputs. Plus the unpaid-jobs tracker (ordered -> ETA -> ACH link
@@ -52,20 +53,27 @@ export default function JobBudgets() {
   const [dragOver, setDragOver] = useState(false);
   const [newOrder, setNewOrder] = useState({ order_number: "", vendor: "", po_name: "", amount: "", payer: "", payment_route: "ach_link", billed_account: "", notes: "" });
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [jobsError, setJobsError] = useState("");
   const fileInput = useRef(null);
 
   const load = useCallback(async () => {
-    const [b, o, j] = await Promise.all([
-      base44.entities.JobBudgets.list("-created_date", 200).catch(() => []),
-      base44.entities.VendorOrders.list("-created_date", 200).catch(() => []),
-      base44.entities.Jobs.list("-created_date", 1000).catch(() => []),
+    const [b, o, j] = await Promise.allSettled([
+      base44.entities.JobBudgets.list("-created_date", 200),
+      base44.entities.VendorOrders.list("-created_date", 200),
+      fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
     ]);
-    setBudgets(b || []);
-    setOrders(o || []);
-    setJobs(j || []);
+    if (b.status === "fulfilled") setBudgets(b.value || []);
+    if (o.status === "fulfilled") setOrders(o.value || []);
+    if (j.status === "fulfilled") { setJobs(j.value || []); setJobsError(""); }
+    else { setJobs([]); setJobsError(`The complete jobs list could not be loaded. Job links are unavailable. ${j.reason?.message || ""}`); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const loadSafely = useCallback(async () => {
+    try { await load(); }
+    catch (error) { setJobs([]); setJobsError(`The complete jobs list could not be loaded. Job links are unavailable. ${error?.message || ""}`); }
+  }, [load]);
+
+  useEffect(() => { loadSafely(); }, [loadSafely]);
 
   async function processFiles(files) {
     const pdfs = [...files].filter((f) => /\.pdf$/i.test(f.name));
@@ -81,7 +89,7 @@ export default function JobBudgets() {
         setProcessing((p) => p.map((x) => x.name === file.name ? { ...x, state: "error", detail: String(e?.message || e) } : x));
       }
     }
-    load();
+    loadSafely();
   }
 
   async function logOrder() {
@@ -92,7 +100,7 @@ export default function JobBudgets() {
     await base44.functions.invoke("jobBudgetIngest", { action: "upsert_order", order: payload });
     setNewOrder({ order_number: "", vendor: "", po_name: "", amount: "", payer: "", payment_route: "ach_link", billed_account: "", notes: "" });
     setShowOrderForm(false);
-    load();
+    loadSafely();
   }
 
   async function advanceOrder(order) {
@@ -115,7 +123,7 @@ export default function JobBudgets() {
       extra.eta_date = eta;
     }
     await base44.functions.invoke("jobBudgetIngest", { action: "advance_order_status", order_id: order.id, status: next, ...extra });
-    load();
+    loadSafely();
   }
 
   const openPayables = orders.filter((o) => o.status !== "reconciled");
@@ -137,6 +145,7 @@ export default function JobBudgets() {
       </header>
 
       <div className="px-[26px] max-[699px]:px-[18px] py-6 flex flex-col gap-6 max-w-[1080px]">
+        {jobsError && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{jobsError}</p>}
 
         {/* Drop zone */}
         <Section title="Drop quote PDFs" sub="Amsco dealer quotes parse automatically; other vendors are read by the document model. Multiple files at once are fine.">
