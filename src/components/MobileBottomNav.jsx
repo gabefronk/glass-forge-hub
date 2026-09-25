@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Bot, X, DollarSign, Mountain } from "lucide-react";
+import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Bot, X, DollarSign, Mountain, Search, ClipboardList } from "lucide-react";
 import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { MessageSquare, Users, Network, CheckSquare, Mic } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
@@ -23,6 +23,8 @@ const SECONDARY_NAV = [
   { label: "Messages", to: "/messages", icon: MessageSquare, ownerOnly: true },
   { label: "System map", to: "/system-map", icon: Network, ownerOnly: true },
   { label: "HUD", ariaLabel: "Command HUD", to: "/command-hud", icon: Mic, ownerOnly: true },
+  { label: "Research", ariaLabel: "Research Queue", to: "/research-queue", icon: Search, ownerOnly: true, operations: true },
+  { label: "POs", ariaLabel: "Purchase Orders", to: "/purchase-orders", icon: ClipboardList, ownerOnly: true, operations: true },
 ];
 
 export default function MobileBottomNav({ user }) {
@@ -31,6 +33,12 @@ export default function MobileBottomNav({ user }) {
   const todoAccess = useTodoAccess(user);
 
   useEffect(() => { setMoreOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const closeOnEscape = event => { if (event.key === "Escape") setMoreOpen(false); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [moreOpen]);
 
   const isPrimaryActive = (to) => pathname === to || (to === "/jobs" && pathname.startsWith("/jobs/"));
   const isSecondaryActive = (to) => pathname === to;
@@ -92,6 +100,7 @@ export default function MobileBottomNav({ user }) {
                 </Link>
               )}
             </div>
+            {canViewAgentCenter(user) && <div className="px-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: "#8A958F" }}>Operations: Agent Center and Research Queue</div>}
           </div>
         </>
       )}

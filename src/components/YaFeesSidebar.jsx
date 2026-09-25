@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, ClipboardList } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
@@ -21,7 +21,6 @@ const NAV_ITEMS = [
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", to: "/summit", icon: Mountain },
   { label: "System map", to: "/system-map", icon: Network, ownerOnly: true },
-  { label: "Research Queue", to: "/research-queue", icon: Search, ownerOnly: true },
 ];
 
 function monthLabel(m) {
@@ -158,6 +157,8 @@ export default function YaFeesSidebar() {
           </Link>
         )}
         {canViewAgentCenter(user) && (
+          <div role="group" aria-labelledby="operations-navigation" className="mt-3 pt-3 space-y-0.5" style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
+            <div id="operations-navigation" className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--gf-sidebar-muted)" }}>Operations</div>
           <Link
             to="/admin/agents"
             aria-current={pathname === "/admin/agents" ? "page" : undefined}
@@ -174,6 +175,17 @@ export default function YaFeesSidebar() {
             <Bot className="h-4 w-4 shrink-0" style={{ color: pathname === "/admin/agents" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
             Agent Center
           </Link>
+          {isAgentCenterOwner(user) && <Link to="/research-queue" aria-current={pathname === "/research-queue" ? "page" : undefined}
+            className="flex min-h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium"
+            style={{ color: pathname === "/research-queue" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)", backgroundColor: pathname === "/research-queue" ? "rgba(184,149,90,.14)" : "transparent" }}>
+            <Search className="h-4 w-4" />Research Queue
+          </Link>}
+          {isAgentCenterOwner(user) && <Link to="/purchase-orders" aria-current={pathname === "/purchase-orders" ? "page" : undefined}
+            className="flex min-h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium"
+            style={{ color: pathname === "/purchase-orders" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)", backgroundColor: pathname === "/purchase-orders" ? "rgba(184,149,90,.14)" : "transparent" }}>
+            <ClipboardList className="h-4 w-4" />Purchase Orders
+          </Link>}
+          </div>
         )}
       </nav>
 

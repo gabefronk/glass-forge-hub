@@ -19,7 +19,11 @@
     },
     "order_email_ref": { "type": "string", "description": "Reference to the order email sent to the vendor (Gmail message/thread id or subject)." },
     "notes": { "type": "string" },
-    "created_by_email": { "type": "string" }
+    "created_by_email": { "type": "string" },
+    "setup_sheet_id": { "type": "string", "description": "Approved JobSetupSheets record used only to establish job context." },
+    "setup_sheet_approver_name": { "type": "string", "description": "Approval audit snapshot from JobSetupSheets.approver_name." },
+    "setup_sheet_approved_date": { "type": "string", "description": "Approval audit snapshot from JobSetupSheets.approved_date." },
+    "owner_reviewed_at": { "type": "string", "description": "Timestamp of the owner's explicit PO review and submit." }
   },
   "required": ["po_number", "status"],
   "rls": {
