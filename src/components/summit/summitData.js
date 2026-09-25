@@ -84,3 +84,81 @@ export const SUMMIT_PHOTOS = {
 
 // Stronger card shadow for the Summit section — gives cards pop in bright daylight.
 export const SUMMIT_CARD_SHADOW = "0 1px 3px rgba(21,24,26,.08), 0 12px 28px -14px rgba(21,24,26,.22)";
+
+// Summit field troubleshooter meta (v1.1) — golden rules, DIP functions, blink codes,
+// potentiometers, and the light-pattern decoder. Source of truth for the DIP page,
+// potentiometer page, and per-node reference panels.
+export const SUMMIT_META = {
+  name: "Summit Automation Field Troubleshooter",
+  version: "1.1",
+  summit_tech_phone: "480-500-5468",
+  provenance_levels: {
+    factory: "From a published Summit document (SA-sheet cited)",
+    field_verified: "Confirmed working on a real BFS job",
+    unconfirmed: "Best-practice inference - verify with Summit before relying on it",
+  },
+  golden_rules: [
+    "Try the factory SOFT RESET before anything else - it is Summit's published first fix for flashing lights, stopping short, and not moving. [factory: SA-0037]",
+    "UNLOCK is the ONLY stop button during limit programming. Outside programming, holding STOP 10 sec is the reset trigger - that is normal. [field_verified + SA-0037]",
+    "Never hard reset a programmed door - hard reset = memory wipe of open/close limits and current limits. [factory: SA-0037 term definitions]",
+    "DIP 8 = Memory Reset (factory name, SA-0078). Flipping it wipes programming. Only touch it when you intend to reprogram.",
+    "12-in-1 touchscreen NEVER plugs direct to the motor hub - daughter board required or permanent damage. [factory: SA-0032]",
+    "Red 2nd battery lead stays disconnected until permanent power / final trim. [factory: SA-0015]",
+    "Awning/tilt-up: mandatory 18-minute dwell time between full cycles - warranty item. [factory: SA-0090]",
+  ],
+  dip_switch_functions: {
+    source: "factory: SA-0078 (06/24/2025) - Peak/Everest. Function is active when the switch is flipped RIGHT. Does not apply to Mesa or Pivot systems.",
+    1: "Current Limit Bypass",
+    2: "Everest Motor",
+    3: "Eyeball Sensor Bypass",
+    4: "Battery Fault Bypass",
+    5: "Desensitize current trip - Stage 1",
+    6: "Desensitize current trip - Stage 2",
+    7: "90-Degree Master Control Box",
+    8: "Memory Reset (wipes programming - the factory name for what we call DIP 8 programming mode)",
+  },
+  blink_codes: {
+    source: "factory: SA-0078 - Wall switch RED LED / control box battery switch GREEN LED. Count blinks between pauses. Does not apply to Mesa or Pivot.",
+    1: "Door Unlocked",
+    2: "Eyeball/Beam sensors blocked, or eyeball sensor failure",
+    3: "Encoder fault",
+    4: "Motion sensor fault - shorted sensor wire, wireless device failure, or wireless device dead battery",
+    5: "Potential battery failure - allow 24 hours with system programmed to verify",
+  },
+  potentiometers: {
+    source: "factory: SA-0089 (03/03/2026) - 2017 / 2019 / 2019 Fast+ control boxes",
+    functions: "Acceleration, Deceleration, Max Speed, Fast Speed, Forward Crawl Speed, Reverse Crawl Speed, Force (Gross), Fine-tune Force (+/-10%)",
+    note: "Ships at 20% force, ~1.2 Amp (fine tune 1.18-1.22A). Layouts differ by box year - see SA-0089 before touching. Adjust for slamming, stalling on heavy panels, or crawl-speed complaints.",
+  },
+  light_decoder: [
+    { pattern: "SLOW flashing red + blue after power-up", meaning: "Soft-reset prompt - board lost position", action: "Manually close, press CLOSE", source: "factory: SA-0037" },
+    { pattern: "RAPID flashing red + blue", meaning: "Confirmation: programming mode entered, password accepted, or feature toggled", action: "Continue your sequence", source: "factory: SA-0037" },
+    { pattern: "Red + blue together ~5 sec after a button combo", meaning: "Auto-Open or Self-Close just toggled (press 1-4 in that window = 2/4/6/8 hr timer)", action: "Repeat combo to toggle back off if accidental", source: "factory: SA-0037" },
+    { pattern: "RAPID red + SLOW blue", meaning: "Wrong password entered", action: "Re-enter; factory code 1234", source: "factory: SA-0037" },
+    { pattern: "FLASHING red only", meaning: "ERROR state - COUNT the blinks between pauses to identify it (SA-0078 blink codes)", action: "1=unlocked, 2=eyeball sensor blocked/failed, 3=encoder, 4=motion sensor, 5=battery", source: "factory: SA-0078" },
+    { pattern: "SOLID red, buttons ignored", meaning: "Passcode-armed switch waiting for code, OR dead data pair / wrong port", action: "Enter 1234 first, then wiring chain", source: "field_verified + factory: SA-0037" },
+  ],
+};
+
+// Door-type diagram registry. URLs empty until the six diagrams arrive.
+export const SUMMIT_DIAGRAMS = {
+  biparting: { label: "Bi-parting", caption: "Bi-parting door diagram.", url: "" },
+  pocketing: { label: "Pocketing", caption: "Pocketing door diagram.", url: "" },
+  stacking_multislide: { label: "Stacking / Multi-slide", caption: "Stacking / multi-slide door diagram.", url: "" },
+  "90_degree": { label: "90-Degree Cornerless", caption: "90-degree cornerless door diagram.", url: "" },
+  pivot: { label: "Pivot", caption: "Pivot door diagram.", url: "" },
+  awning: { label: "Tilt-Up Awning Window", caption: "Tilt-up awning window diagram.", url: "" },
+};
+
+export function diagramKeyForSystemType(systemType) {
+  const map = {
+    "Bi-parting": "biparting",
+    "Pocketing": "pocketing",
+    "Multi-slide": "stacking_multislide",
+    "Stacking": "stacking_multislide",
+    "90-Degree Cornerless": "90_degree",
+    "Pivot": "pivot",
+    "Tilt-Up Awning Window": "awning",
+  };
+  return map[systemType] || null;
+}

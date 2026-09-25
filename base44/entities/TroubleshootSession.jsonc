@@ -5,22 +5,22 @@
     "system_type": {
       "type": "string",
       "title": "System Type",
-      "description": "Door/system type selected at the start of the walkthrough (e.g. Multi-slide, Pivot)."
+      "description": "Door/system type selected at the start of the walkthrough."
     },
     "motor": {
       "type": "string",
       "title": "Motor",
-      "description": "Motor model selected at the start of the walkthrough (Peak, Sierra, Everest, Tahoe, or Not sure)."
+      "description": "Motor model selected at the start of the walkthrough."
     },
     "control_type": {
       "type": "string",
       "title": "Control Type",
-      "description": "Wall control selected at the start of the walkthrough (3-in-1, 6-in-1, 9-in-1, 12-in-1, RF fob, or Not sure)."
+      "description": "Wall control selected at the start of the walkthrough."
     },
     "symptom": {
       "type": "string",
       "title": "Symptom",
-      "description": "Top-level symptom selected from the entry picker."
+      "description": "Entry branch / top-level symptom for the walkthrough."
     },
     "node_path": {
       "type": "array",
@@ -32,14 +32,8 @@
     },
     "resolution": {
       "type": "string",
-      "enum": [
-        "resolved",
-        "escalated",
-        "abandoned",
-        ""
-      ],
-      "default": "",
-      "title": "Resolution"
+      "title": "Resolution",
+      "description": "Free-text resolution (e.g. 'Soft reset', 'Escalated to Summit')."
     },
     "notes": {
       "type": "string",
@@ -49,7 +43,7 @@
     "tech_support_answer": {
       "type": "string",
       "title": "Tech Support Answer",
-      "description": "Verbatim answer from Summit tech support, if called."
+      "description": "Verbatim answer from Summit tech support, recorded at a call node."
     }
   },
   "required": [

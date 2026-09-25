@@ -5,28 +5,47 @@
     "node_id": {
       "type": "string",
       "title": "Node Id",
-      "description": "Stable key identifying this node in the tree (e.g. 'root', 'flashing_3')."
+      "description": "Stable key identifying this node in the tree."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "question",
+        "steps",
+        "info",
+        "resolved",
+        "call"
+      ],
+      "title": "Type",
+      "description": "question = options branch; steps = numbered procedure + follow-up; info = informational branch; resolved = session end + log; call = call Summit script."
+    },
+    "text": {
+      "type": "string",
+      "title": "Text",
+      "description": "Question text (question) or body text (info)."
     },
     "title": {
       "type": "string",
-      "title": "Title"
+      "title": "Title",
+      "description": "Heading for steps / info nodes."
     },
-    "node_type": {
+    "source": {
       "type": "string",
-      "enum": [
-        "symptom_picker",
-        "blink_count",
-        "leaf",
-        "info"
-      ],
-      "title": "Node Type",
-      "default": "leaf",
-      "description": "symptom_picker = entry options; blink_count = count-the-blinks branch; leaf = resolution; info = intermediate branch."
+      "title": "Source",
+      "description": "Provenance tag (factory: SA-xxxx, field_verified, unconfirmed)."
     },
-    "prompt": {
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Numbered procedure steps (steps nodes)."
+    },
+    "question": {
       "type": "string",
-      "title": "Prompt",
-      "description": "Question or instruction shown at this node."
+      "title": "Question",
+      "description": "Follow-up question after a steps procedure."
     },
     "options": {
       "type": "array",
@@ -36,76 +55,29 @@
           "label": {
             "type": "string"
           },
-          "next_node_id": {
-            "type": "string"
+          "next": {
+            "type": "string",
+            "description": "Target node_id."
           }
         }
       },
       "default": [],
-      "description": "Branch options for symptom_picker / blink_count / info nodes. label is the button text; next_node_id is the target node_id."
+      "description": "Branch options for question / steps / info nodes."
     },
-    "likely_cause": {
+    "resolution": {
       "type": "string",
-      "title": "Likely Cause",
-      "description": "Leaf only \u2014 the probable fault."
+      "title": "Resolution",
+      "description": "Resolved-node outcome label (e.g. 'Soft reset')."
     },
-    "field_fix": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": [],
-      "description": "Step-by-step field fix (leaf only)."
-    },
-    "escalation_note": {
+    "log_prompt": {
       "type": "string",
-      "title": "Escalation Note",
-      "description": "When/how to escalate (leaf only)."
+      "title": "Log Prompt",
+      "description": "What to log at a resolved node."
     },
-    "doc_links": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "label": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          }
-        }
-      },
-      "default": [],
-      "description": "Reference doc links shown at this leaf."
-    },
-    "meta_dip_switches": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": [],
-      "description": "DIP switch numbers relevant to this fault (shown in the node meta panel)."
-    },
-    "meta_blink_codes": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": [],
-      "description": "Blink codes relevant to this fault (shown in the node meta panel)."
-    },
-    "meta_pot_settings": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": [],
-      "description": "Potentiometer settings relevant to this fault (shown in the node meta panel)."
-    },
-    "placeholder": {
-      "type": "boolean",
-      "default": false,
-      "description": "True if content is TBD \u2014 render as a clearly marked 'content coming' block, do not invent procedures."
+    "script": {
+      "type": "string",
+      "title": "Call Script",
+      "description": "What to read to Summit tech support at a call node."
     },
     "version": {
       "type": "string",
@@ -118,7 +90,6 @@
   },
   "required": [
     "node_id",
-    "title",
-    "node_type"
+    "type"
   ]
 }

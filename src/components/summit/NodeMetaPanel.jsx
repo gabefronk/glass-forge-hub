@@ -1,75 +1,78 @@
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { C } from "@/lib/feeUI";
-import { DIP_SWITCHES } from "./summitData";
+import { SUMMIT_META } from "./summitData";
 
-// Renders the DIP switches, blink codes, and pot settings relevant to a fault node.
-// Shown on every node so the tech has the board context at hand.
+// Collapsible "Summit reference" panel shown on question / steps / info nodes.
+// Reads golden rules, blink codes, DIP switch functions, and potentiometers
+// from SUMMIT_META so the tech has the board context at hand without switching tabs.
 export default function NodeMetaPanel({ node }) {
+  const [open, setOpen] = useState(false);
   if (!node) return null;
-  const dips = (node.meta_dip_switches || []).map((n) => Number(n)).filter((n) => Number.isFinite(n));
-  const dipsResolved = dips.map((n) => DIP_SWITCHES.find((d) => d.number === n)).filter(Boolean);
-  const blinks = node.meta_blink_codes || [];
-  const pots = node.meta_pot_settings || [];
+  if (node.type === "resolved" || node.type === "call") return null;
 
-  if (!dipsResolved.length && !blinks.length && !pots.length) return null;
+  const { golden_rules, blink_codes, dip_switch_functions, potentiometers } = SUMMIT_META;
+  const blinkEntries = Object.keys(blink_codes).filter((k) => k !== "source").map((k) => ({ n: k, v: blink_codes[k] }));
+  const dipEntries = Object.keys(dip_switch_functions).filter((k) => k !== "source").map((k) => ({ n: k, v: dip_switch_functions[k] }));
 
   return (
-    <div
-      className="rounded-[12px] p-4 mt-4"
-      style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}
-    >
-      <div className="font-mono text-[10px] font-bold uppercase tracking-[0.13em] mb-3" style={{ color: C.textMuted }}>
-        Board context
-      </div>
+    <div className="rounded-[12px] mt-4 overflow-hidden" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex items-center justify-between w-full px-4 py-3 text-left"
+        style={{ color: C.textSecondary }}
+      >
+        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.13em]" style={{ color: C.textMuted }}>Summit reference</span>
+        <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} style={{ color: C.textMuted }} />
+      </button>
 
-      {dipsResolved.length > 0 && (
-        <div className="mb-3">
-          <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.textSecondary }}>DIP switches</div>
-          <div className="flex flex-wrap gap-2">
-            {dipsResolved.map((d) => (
-              <div
-                key={d.number}
-                className="flex items-start gap-2 rounded-[8px] px-2.5 py-2"
-                style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, minWidth: "0" }}
-              >
-                <span
-                  className="flex items-center justify-center rounded-full font-mono-num text-[12px] font-bold shrink-0"
-                  style={{ width: "26px", height: "26px", backgroundColor: C.accent, color: C.accentDark }}
-                >
-                  {d.number}
-                </span>
-                <div className="min-w-0">
-                  <div className="text-[12.5px] font-semibold leading-tight" style={{ color: C.text }}>{d.name}</div>
-                  <div className="text-[11px] mt-0.5 leading-snug" style={{ color: C.textMuted }}>{d.warning}</div>
-                </div>
-              </div>
-            ))}
+      {open && (
+        <div className="px-4 pb-4 flex flex-col gap-4">
+          <div>
+            <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.textSecondary }}>Golden rules</div>
+            <ul className="space-y-1.5">
+              {golden_rules.map((g, i) => (
+                <li key={i} className="text-[12.5px] leading-snug flex gap-2" style={{ color: C.textSecondary }}>
+                  <span className="font-mono-num font-bold shrink-0" style={{ color: C.accent }}>•</span>
+                  <span>{g}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
-      )}
 
-      {blinks.length > 0 && (
-        <div className="mb-3">
-          <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.textSecondary }}>Blink codes</div>
-          <ul className="space-y-1">
-            {blinks.map((b, i) => (
-              <li key={i} className="text-[12.5px] leading-snug" style={{ color: C.textSecondary }}>
-                <span className="font-mono-num font-semibold" style={{ color: C.text }}>•</span> {b}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+          <div>
+            <div className="text-[11px] font-semibold mb-1" style={{ color: C.textSecondary }}>Blink codes</div>
+            <p className="text-[11px] leading-snug mb-2" style={{ color: C.textMuted }}>{blink_codes.source}</p>
+            <ul className="space-y-1">
+              {blinkEntries.map((b) => (
+                <li key={b.n} className="text-[12.5px] leading-snug flex gap-2" style={{ color: C.textSecondary }}>
+                  <span className="font-mono-num font-bold shrink-0" style={{ color: C.accent, minWidth: "14px" }}>{b.n}</span>
+                  <span>{b.v}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-      {pots.length > 0 && (
-        <div>
-          <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.textSecondary }}>Pot settings</div>
-          <ul className="space-y-1">
-            {pots.map((p, i) => (
-              <li key={i} className="text-[12.5px] leading-snug" style={{ color: C.textSecondary }}>
-                <span className="font-mono-num font-semibold" style={{ color: C.text }}>•</span> {p}
-              </li>
-            ))}
-          </ul>
+          <div>
+            <div className="text-[11px] font-semibold mb-1" style={{ color: C.textSecondary }}>DIP switch functions</div>
+            <p className="text-[11px] leading-snug mb-2" style={{ color: C.textMuted }}>{dip_switch_functions.source}</p>
+            <ul className="space-y-1">
+              {dipEntries.map((d) => (
+                <li key={d.n} className="text-[12.5px] leading-snug flex gap-2" style={{ color: C.textSecondary }}>
+                  <span className="font-mono-num font-bold shrink-0" style={{ color: C.accent, minWidth: "14px" }}>{d.n}</span>
+                  <span>{d.v}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-semibold mb-1" style={{ color: C.textSecondary }}>Potentiometers</div>
+            <p className="text-[11px] leading-snug mb-1" style={{ color: C.textMuted }}>{potentiometers.source}</p>
+            <p className="text-[12.5px] leading-snug" style={{ color: C.text }}>{potentiometers.functions}</p>
+            <p className="text-[12px] leading-snug mt-1" style={{ color: C.textSecondary }}>{potentiometers.note}</p>
+          </div>
         </div>
       )}
     </div>
