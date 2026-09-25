@@ -1,3 +1,4 @@
-// Temporary Hub policy: verified job documents are readable by signed-in users.
-// Keep all folder writes owner-only in the job-documents handler.
+// Temporary Hub policy: all signed-in users may read and link verified job folders.
+// Tighten this predicate at crew onboarding for folder-link writes.
 export const canReadJobDocuments = user => Boolean(user);
+export const canWriteJobDocuments = user => Boolean(user);

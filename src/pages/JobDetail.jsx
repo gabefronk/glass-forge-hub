@@ -16,6 +16,7 @@ import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
 import JobMessageThreads from "@/components/jobs/JobMessageThreads";
 import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -32,7 +33,6 @@ export default function JobDetail() {
   const [fieldReports, setFieldReports] = useState([]);
   const [group, setGroup] = useState(null);
   const [evidence, setEvidence] = useState(null);
-  const [currentUser, setCurrentUser] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [lightbox, setLightbox] = useState(null);
@@ -45,14 +45,20 @@ export default function JobDetail() {
     catch(e){setFolderError(e.message||"Drive folder could not be linked.");}
     finally{setLinkingFolder(false);}
   };
+  const unlinkFolder = async () => {
+    if (!window.confirm("Unlink this job's Drive folder? Files in Drive will not be deleted.")) return;
+    setLinkingFolder(true); setFolderError("");
+    try { const r = (await base44.functions.invoke("job-documents", { action: "unlink_folder", job_id: id })).data; if (r?.error) throw Error(r.error); setFolderId(""); await loadAll(); }
+    catch (e) { setFolderError(e.message || "Drive folder could not be unlinked."); }
+    finally { setLinkingFolder(false); }
+  };
   const loadAll = async () => {
     const version = ++loadVersion.current;
     setCalEvents([]);
     setEvidence(null);
-    const [jb, grp, me] = await Promise.all([
+    const [jb, grp] = await Promise.all([
       base44.entities.Jobs.get(id),
       loadJobGroup(id),
-      base44.auth.me().catch(() => null),
     ]);
     if (version !== loadVersion.current) return;
     // Duplicate records of this job (same customer and address) are read together.
@@ -63,7 +69,6 @@ export default function JobDetail() {
     setGroup(grp);
     setRows(fl);
     setNotes(nt);
-    if (me) setCurrentUser(me.email || me.full_name || "");
 
     const [allCal, legacyNames] = await Promise.all([
       fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000),
@@ -169,7 +174,7 @@ export default function JobDetail() {
         <div className="max-w-[1240px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
           <aside className="lg:col-span-4 lg:sticky lg:top-6 self-start">
             <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} />
-      {currentUser && ["gabefronk@gmail.com","gabriel.fronk.wd@gmail.com"].includes(currentUser.toLowerCase()) && !job.drive_job_folder_id && <section className="rounded-xl border bg-white p-3 text-xs"><strong>Link Drive job folder</strong><p className="mt-1">Paste the ID of the verified folder inside Glass Forge Jobs. A matching name alone is not enough.</p><div className="mt-2 flex gap-2"><input className="min-w-0 flex-1 rounded border p-2" aria-label="Drive folder ID" value={folderId} onChange={e=>setFolderId(e.target.value)}/><button disabled={linkingFolder||!folderId.trim()} className="rounded bg-teal-900 px-3 text-white disabled:opacity-50" onClick={attachFolder}>Link folder</button></div>{folderError&&<p role="alert" className="mt-2 text-red-700">{folderError}</p>}</section>}
+      {canWriteJobDocuments(user) && <section className="rounded-xl border bg-white p-3 text-xs"><strong>Drive job folder linking</strong><p className="mt-1">Paste the ID of a verified folder inside Glass Forge Jobs. A matching name alone is not enough. {job.drive_job_folder_id ? "Linking a new folder replaces the current link." : ""}</p><div className="mt-2 flex gap-2"><input className="min-w-0 flex-1 rounded border p-2" aria-label="Drive folder ID" value={folderId} onChange={e=>setFolderId(e.target.value)}/><button disabled={linkingFolder||!folderId.trim()} className="rounded bg-teal-900 px-3 text-white disabled:opacity-50" onClick={attachFolder}>{job.drive_job_folder_id ? "Replace folder link" : "Link folder"}</button></div>{job.drive_job_folder_id && <button type="button" disabled={linkingFolder} className="mt-2 underline disabled:opacity-50" onClick={unlinkFolder}>Unlink folder</button>}{folderError&&<p role="alert" className="mt-2 text-red-700">{folderError}</p>}</section>}
             <JobMoneyPanel jobId={id} />
           </aside>
           <div className="lg:col-span-8 min-w-0" id="add-note">
@@ -179,7 +184,7 @@ export default function JobDetail() {
               rows={rows}
               notes={notes}
               fieldReports={fieldReports}
-              currentUser={currentUser}
+              currentUser={user?.email || user?.full_name || ""}
               onChanged={loadAll}
               onPhotoClick={setLightbox}
             />
