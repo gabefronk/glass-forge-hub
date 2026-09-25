@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { computeJobBudget } from "../../base44/shared/jobBudgetMath.js";
+import { ownerConfirmedJobPatch } from "../../base44/shared/jobLinking.js";
 import { UploadCloud, FileText, FolderOpen, DollarSign, AlertTriangle, CheckCircle2, Truck, Plus } from "lucide-react";
 
 // Job Budgets: drop vendor quote PDFs -> cost basis + margins -> Drive filing ->
@@ -52,6 +54,7 @@ export default function JobBudgets() {
   const [dragOver, setDragOver] = useState(false);
   const [newOrder, setNewOrder] = useState({ order_number: "", vendor: "", po_name: "", amount: "", payer: "", payment_route: "ach_link", billed_account: "", notes: "" });
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [linking, setLinking] = useState("");
   const fileInput = useRef(null);
 
   const load = useCallback(async () => {
@@ -116,6 +119,16 @@ export default function JobBudgets() {
     }
     await base44.functions.invoke("jobBudgetIngest", { action: "advance_order_status", order_id: order.id, status: next, ...extra });
     load();
+  }
+
+  async function confirmBudgetJob(budget, jobId) {
+    if (!jobId) return;
+    setLinking(budget.id);
+    try {
+      const selected = jobs.find((job) => job.id === jobId);
+      await base44.entities.JobBudgets.update(budget.id, ownerConfirmedJobPatch(budget, selected, new Date().toISOString()));
+      await load();
+    } finally { setLinking(""); }
   }
 
   const openPayables = orders.filter((o) => o.status !== "reconciled");
@@ -191,7 +204,9 @@ export default function JobBudgets() {
                     <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.cost_material_tax)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.actual_total_sell)}</td>
                     <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: (b.computed?.actual_margin_pct ?? 0) >= 0.3 ? C.accentText : C.amber }}>{pct(b.computed?.actual_margin_pct)}</td>
-                    <td className="px-4 py-3 text-[12px]" style={{ color: C.textSecondary }}>{b.job_id ? (jobName(b.job_id) || b.job_name) : b.job_name || "-"}</td>
+                    <td className="px-4 py-3 text-[12px]" style={{ color: C.textSecondary }}>
+                      {b.job_id ? <Link className="font-medium underline" to={`/jobs/${encodeURIComponent(b.job_id)}`}>{jobName(b.job_id) || b.job_name || b.job_id}</Link> : <BudgetLinkReview budget={b} jobs={jobs} busy={linking === b.id} onConfirm={confirmBudgetJob} />}
+                    </td>
                     <td className="px-4 py-3">
                       {b.drive_job_folder_id && (
                         <a href={`https://drive.google.com/drive/folders/${b.drive_job_folder_id}`} target="_blank" rel="noreferrer"
@@ -274,6 +289,31 @@ export default function JobBudgets() {
       </div>
     </div>
   );
+}
+
+function BudgetLinkReview({ budget, jobs, busy, onConfirm }) {
+  const [choice, setChoice] = useState("");
+  const rawCandidates = budget.job_match?.candidates || budget.job_match?.candidate_job_ids || [];
+  const candidateIds = rawCandidates.map((candidate) => typeof candidate === "string" ? candidate : candidate?.id).filter(Boolean);
+  const candidates = candidateIds.length ? jobs.filter((job) => candidateIds.includes(job.id)) : jobs;
+  const evidence = [
+    ...(budget.job_match?.hits || []),
+    ...(budget.job_match?.evidence || []),
+    budget.job_match?.reason,
+  ].filter(Boolean);
+  return <div className="min-w-[220px] space-y-1.5">
+    <div className="font-medium">{budget.job_name || "Unlinked budget"}</div>
+    <div className="text-[11px]" style={{ color: C.amber }}>{evidence.length ? evidence.join(" · ") : "No confident job match"}</div>
+    {candidateIds.length > 0 && <div className="text-[10px] break-all" style={{ color: C.textFaint }}>Candidate IDs: {candidateIds.join(", ")}</div>}
+    <div className="flex gap-1.5">
+      <select aria-label={`Choose job for ${budget.title}`} value={choice} onChange={(e) => setChoice(e.target.value)} disabled={busy}
+        className="min-w-0 flex-1 rounded border px-2 py-1 text-[11px]" style={{ borderColor: C.border, backgroundColor: C.card }}>
+        <option value="">Owner review…</option>
+        {candidates.map((job) => <option key={job.id} value={job.id}>{job.canonical_name} [{job.id}]</option>)}
+      </select>
+      <button type="button" disabled={!choice || busy} onClick={() => onConfirm(budget, choice)} className="rounded px-2 py-1 text-[11px] font-semibold disabled:opacity-50" style={{ backgroundColor: C.accent, color: "white" }}>Confirm</button>
+    </div>
+  </div>;
 }
 
 function Scratchpad() {

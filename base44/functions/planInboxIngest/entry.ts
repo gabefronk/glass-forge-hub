@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
 import { PDFDocument } from 'npm:pdf-lib@1.17.1';
 import { validateLines } from '../../shared/windowQuotesCore.js';
+import { matchExactJob } from '../../shared/jobLinking.js';
 
 // Plans Inbox ingest.
 // Watches the Google Drive folder "Glass Forge Plans Inbox / 1 - Drop Plans Here".
@@ -363,6 +364,8 @@ export default async function planInboxIngest(req) {
       const pages = (intake.page_results || []).filter(isDone).map(p => ({ page: p.page, page_type: p.page_type, sheet_id: p.sheet_id, sheet_title: p.sheet_title, level: p.level, job_name: p.job_name, builder: p.builder, window_spec_notes: p.window_spec_notes, openings: (p.openings || []).filter(o => o && o.kind !== 'interior_door') }));
       const merged = await core.InvokeLLM({ prompt: MERGE_PROMPT + '\n\nPages:\n' + JSON.stringify(pages).slice(0, 180000), response_json_schema: MERGE_SCHEMA, add_context_from_internet: false });
       const jobName = merged.job_name || intake.file_name.replace(/\.pdf$/i, '');
+      const jobs = await db.Jobs.list('-created_date', 1000).catch(() => []);
+      const jobMatch = matchExactJob({ job_name: jobName, builder: merged.builder || '', quote_id: intake.quote_id || '' }, jobs);
       const lines = [];
       const csvRows = [];
       let idx = 0;
@@ -432,7 +435,7 @@ export default async function planInboxIngest(req) {
       if (quote && jobFolder) {
         try { await db.QuoteRequests.update(quote.id, { source: { ...(quote.source || {}), drive_job_folder_id: jobFolder.id, drive_job_folder_path: jobFolder.path, drive_csv_file_id: csvId } }); } catch { /* non-fatal */ }
       }
-      await logSave(`draft ${quote.id} created with ${safeLines.length} lines; filed to ${jobFolder ? jobFolder.path : 'Processed'}`, { status: 'done', job_name: jobFolder ? jobFolder.jobName : jobName, builder: merged.builder || '', final_lines: csvRows, quote_id: quote.id, csv_file_id: csvId, job_folder_id: jobFolder ? jobFolder.id : '', job_folder_path: jobFolder ? jobFolder.path : '', finished_at: new Date().toISOString(), error: '' });
+      await logSave(`draft ${quote.id} created with ${safeLines.length} lines; filed to ${jobFolder ? jobFolder.path : 'Processed'}`, { status: 'done', job_name: jobFolder ? jobFolder.jobName : jobName, builder: merged.builder || '', ...(jobMatch.status === 'matched' ? { job_id: jobMatch.job_id } : {}), job_match: jobMatch, final_lines: csvRows, quote_id: quote.id, csv_file_id: csvId, job_folder_id: jobFolder ? jobFolder.id : '', job_folder_path: jobFolder ? jobFolder.path : '', finished_at: new Date().toISOString(), error: '' });
       out.status = 'done'; out.quote_id = quote.id; out.lines = safeLines.length;
       return Response.json(out);
     }

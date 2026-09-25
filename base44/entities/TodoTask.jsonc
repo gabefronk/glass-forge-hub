@@ -11,6 +11,10 @@
       "maxLength": 5000,
       "default": ""
     },
+    "job_id": {
+      "type": "string",
+      "description": "Optional permanent Jobs id associated with this task."
+    },
     "assignee_member_id": {
       "type": "string"
     },
