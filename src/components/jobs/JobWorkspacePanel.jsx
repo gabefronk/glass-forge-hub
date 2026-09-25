@@ -13,8 +13,7 @@ import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
 import { AttachmentViewer } from "@/components/jobs/FeedImage";
 import JobEventDocuments, { eventAttachments } from "@/components/jobs/JobEventDocuments";
-import { useAuth } from "@/lib/AuthContext";
-import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import JobDriveDocuments from "@/components/jobs/JobDriveDocuments";
 
 // Superintendent first, then project manager, from the read-only job contacts join.
 function pickLead(linked) {
@@ -26,8 +25,6 @@ function pickLead(linked) {
 // photos). Reuses the same feed as the Job Detail page. `group` is the read-only
 // duplicate group from lib/jobDedupe.js; activity of every member record is shown.
 export default function JobWorkspacePanel({ jobId, group = null }) {
-  const { user } = useAuth();
-  const owner = isAgentCenterOwner(user);
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -156,7 +153,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
             </a>
           )}
         </div>
-        {owner && job.drive_job_folder_url && <a href={job.drive_job_folder_url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs underline" style={{color:C.accentText}}>Open verified Drive job folder</a>}
+        <JobDriveDocuments job={job} compact />
         <DuplicateJobNotice group={group} currentId={jobId} className="mt-3" />
         {eventAttachments(calEvents).length > 0 && (
           <div className="mt-3 rounded-[10px] px-3.5 py-2.5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
