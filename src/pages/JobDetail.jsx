@@ -26,6 +26,9 @@ export default function JobDetail() {
   const [calEvents, setCalEvents] = useState([]);
   const jobContacts = useJobContacts(id);
   const [plans, setPlans] = useState([]);
+  const [folderId, setFolderId] = useState("");
+  const [folderError, setFolderError] = useState("");
+  const [linkingFolder, setLinkingFolder] = useState(false);
   const [fieldReports, setFieldReports] = useState([]);
   const [group, setGroup] = useState(null);
   const [evidence, setEvidence] = useState(null);
@@ -36,6 +39,12 @@ export default function JobDetail() {
   const [showReport, setShowReport] = useState(false);
   const loadVersion = useRef(0);
 
+  const attachFolder = async () => {
+    setLinkingFolder(true);setFolderError("");
+    try { const r=(await base44.functions.invoke("job-documents",{action:"attach_folder",job_id:id,folder_id:folderId.trim()})).data;if(r?.error)throw Error(r.error);setFolderId("");await loadAll(); }
+    catch(e){setFolderError(e.message||"Drive folder could not be linked.");}
+    finally{setLinkingFolder(false);}
+  };
   const loadAll = async () => {
     const version = ++loadVersion.current;
     setCalEvents([]);
@@ -159,7 +168,8 @@ export default function JobDetail() {
         {/* Body: facts rail + activity feed */}
         <div className="max-w-[1240px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
           <aside className="lg:col-span-4 lg:sticky lg:top-6 self-start">
-            <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} />
+            <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} owner={isPurchaseOrderOwner(user)} />
+      {currentUser && ["gabefronk@gmail.com","gabriel.fronk.wd@gmail.com"].includes(currentUser.toLowerCase()) && !job.drive_job_folder_id && <section className="rounded-xl border bg-white p-3 text-xs"><strong>Link Drive job folder</strong><p className="mt-1">Paste the ID of the verified folder inside Glass Forge Jobs. A matching name alone is not enough.</p><div className="mt-2 flex gap-2"><input className="min-w-0 flex-1 rounded border p-2" aria-label="Drive folder ID" value={folderId} onChange={e=>setFolderId(e.target.value)}/><button disabled={linkingFolder||!folderId.trim()} className="rounded bg-teal-900 px-3 text-white disabled:opacity-50" onClick={attachFolder}>Link folder</button></div>{folderError&&<p role="alert" className="mt-2 text-red-700">{folderError}</p>}</section>}
             <JobMoneyPanel jobId={id} />
           </aside>
           <div className="lg:col-span-8 min-w-0" id="add-note">

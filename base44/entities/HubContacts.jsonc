@@ -1,0 +1,20 @@
+{
+  "name": "HubContacts",
+  "type": "object",
+  "description": "Current, manually entered contacts independent of the legacy workbook snapshot; links to jobs are stored separately.",
+  "properties": {
+    "key": { "type": "string" },
+    "name": { "type": "string" },
+    "company": { "type": "string" },
+    "builder": { "type": "string" },
+    "phone": { "type": "string" },
+    "phone_key": { "type": "string" },
+    "email": { "type": "string" },
+    "email_key": { "type": "string" },
+    "note": { "type": "string" },
+    "review_note": { "type": "string" },
+    "source": { "type": "string" }
+  },
+  "required": ["key", "name"],
+  "rls": { "create": false, "read": false, "update": false, "delete": false }
+}
