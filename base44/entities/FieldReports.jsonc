@@ -2,6 +2,19 @@
   "name": "FieldReports",
   "type": "object",
   "properties": {
+    "job_id": {
+      "type": "string",
+      "title": "Job Id",
+      "description": "Stable Jobs record link (nullable)"
+    },
+    "job_link_source": {
+      "type": "string",
+      "enum": ["probuild_project", "po_oe", "name_exact", "owner"]
+    },
+    "job_linked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "job_date": {
       "type": "string",
       "format": "date",

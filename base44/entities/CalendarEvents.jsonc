@@ -10,6 +10,14 @@
       "title": "Job Id",
       "description": "link to Jobs (nullable)"
     },
+    "job_link_source": {
+      "type": "string",
+      "enum": ["probuild_project", "po_oe", "name_exact", "owner"]
+    },
+    "job_linked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "source": {
       "type": "string",
       "enum": [
