@@ -81,6 +81,35 @@
     "customer_name": {
       "type": "string",
       "description": "Customer supplied when a window sale is won."
+    },
+    "ya_po_numbers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "YA PO Numbers",
+      "default": []
+    },
+    "duplicate_exclusions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Confirmed Separate Job IDs",
+      "default": [],
+      "description": "Owner-reviewed job IDs confirmed not to be duplicates. Does not merge, delete, reparent, or change either job ID.",
+      "rls": {
+        "read": {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     }
   },
   "required": [
