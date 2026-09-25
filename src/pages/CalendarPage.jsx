@@ -122,14 +122,14 @@ export default function CalendarPage() {
   }), [events, showIsrael, showOutlook, showGfJobs]);
   const ownershipCounts = ownership?.by_month?.[month];
   const monthAll = useMemo(() => combined.events.filter((e) => (e.event_date || "").slice(0, 7) === month), [combined, month]);
-  const counts = useMemo(() => kindCounts(monthAll, today), [monthAll, today]);
   const monthEvents = useMemo(() => filterEvents(monthAll, filter, today), [monthAll, filter, today]);
   // The week can cross into the next or previous month, so it filters every loaded event.
-  const filteredAll = useMemo(() => filterEvents(combined.events, filter, today), [combined, filter, today]);
-  const weekCount = useMemo(() => {
+  const weekAll = useMemo(() => {
     const days = new Set(weekDays(selectedDay));
-    return filteredAll.filter((e) => days.has((e.event_date || "").slice(0, 10))).length;
-  }, [filteredAll, selectedDay]);
+    return combined.events.filter((e) => days.has((e.event_date || "").slice(0, 10)));
+  }, [combined, selectedDay]);
+  const weekEvents = useMemo(() => filterEvents(weekAll, filter, today), [weekAll, filter, today]);
+  const counts = useMemo(() => kindCounts(view === "week" ? weekAll : monthAll, today), [view, weekAll, monthAll, today]);
   // Quick search across every loaded event (all months), like the job tracker.
   const searchMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -231,9 +231,9 @@ export default function CalendarPage() {
   if (isAdmin && tool === "install") return <ToolView title="Installation calendar" onBack={() => setTool(null)}><CleanCalendar /></ToolView>;
 
   const periodLabel = view === "week" ? weekLabel(weekDays(selectedDay)) : formatMonth(month);
-  const periodCount = view === "week" ? weekCount : monthEvents.length;
+  const periodCount = view === "week" ? weekEvents.length : monthEvents.length;
   const filterChips = [
-    { key: "all", label: view === "week" ? "Everything" : "All this month", count: counts.all },
+    { key: "all", label: view === "week" ? "All this week" : "All this month", count: counts.all },
     { key: "install", label: "Installs", count: counts.install, dot: KIND.install.bar },
     { key: "service", label: "Service", count: counts.service, dot: KIND.service.bar },
     ...(counts.outlook ? [{ key: "outlook", label: "Outlook", count: counts.outlook, dot: KIND.outlook.bar }] : []),
@@ -405,7 +405,7 @@ export default function CalendarPage() {
             </div>
           </>
         ) : view === "week" ? (
-          <WeekView day={selectedDay} events={filteredAll} today={today} onSelect={setSelected} onSelectDay={setSelectedDay} onCreateForDate={openCreate} selectedDay={selectedDay} />
+          <WeekView day={selectedDay} events={weekEvents} today={today} onSelect={setSelected} onSelectDay={goToDay} onCreateForDate={openCreate} selectedDay={selectedDay} />
         ) : (
           <AgendaList events={monthEvents} today={today} onSelect={setSelected} emptyText={filter === "all" ? "No events this month." : "No events in this filter this month."} />
         )}
