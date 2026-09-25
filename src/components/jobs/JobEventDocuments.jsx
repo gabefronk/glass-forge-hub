@@ -2,6 +2,7 @@ import { FileText, Image as ImageIcon, Video, File, ExternalLink } from "lucide-
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { eventAttachments, isGmailAttachmentUrl } from "@/lib/eventDocuments";
+import { base44 } from "@/api/base44Client";
 
 export { eventAttachments, isGmailAttachmentUrl };
 
@@ -16,7 +17,28 @@ function iconFor(title) {
 export default function JobEventDocuments({ events }) {
   const atts = eventAttachments(events);
   if (!atts.length) return null;
-  const gmailOnlyCount = atts.filter((a) => !a.drive_url && isGmailAttachmentUrl(a.file_url)).length;
+  const gmailOnlyCount = atts.filter((a) => !a.hub_file_uri && !a.drive_url && (a.hub_error === "gmail_only" || isGmailAttachmentUrl(a.file_url))).length;
+  const openAttachment = async (attachment) => {
+    const tab = window.open("about:blank", "_blank");
+    try {
+      if (attachment.hub_file_uri) {
+        const response = await base44.functions.invoke("eventAttachmentUrl", {
+          event_id: attachment.event_id,
+          attachment_index: attachment.attachment_index,
+        });
+        const url = response.data?.url;
+        if (!url) throw new Error("No signed URL returned");
+        if (tab) tab.location.href = url; else window.location.assign(url);
+        return;
+      }
+      const fallback = attachment.drive_url || attachment.file_url;
+      if (tab) tab.location.href = fallback; else window.location.assign(fallback);
+    } catch {
+      if (tab) tab.close();
+      const fallback = attachment.drive_url || attachment.file_url;
+      if (fallback && !isGmailAttachmentUrl(fallback)) window.open(fallback, "_blank", "noopener,noreferrer");
+    }
+  };
   return (
     <div className="space-y-1">
       {gmailOnlyCount > 0 && (
@@ -26,7 +48,7 @@ export default function JobEventDocuments({ events }) {
       )}
       {atts.map((a, i) => {
         const Icon = iconFor(a.title);
-        const gmailOnly = !a.drive_url && isGmailAttachmentUrl(a.file_url);
+        const gmailOnly = !a.hub_file_uri && !a.drive_url && (a.hub_error === "gmail_only" || isGmailAttachmentUrl(a.file_url));
         if (gmailOnly) {
           return (
             <div
@@ -44,11 +66,12 @@ export default function JobEventDocuments({ events }) {
           );
         }
         return (
-          <a key={i} href={a.drive_url || a.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12px] py-0.5 break-words hover:underline" style={{ color: C.accentText }} title={a.title}>
+          <button key={i} type="button" onClick={() => openAttachment(a)} className="inline-flex items-center gap-1.5 text-left text-[12px] py-0.5 break-words hover:underline" style={{ color: C.accentText }} title={a.title}>
             <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: C.textMuted }} />
             <span className="break-words">{sanitizeText(a.title)}</span>
+            {a.hub_file_uri && <span className="rounded px-1 py-0.5 text-[10px] bg-emerald-50 text-emerald-700 whitespace-nowrap">Hub copy</span>}
             <ExternalLink className="h-3 w-3 shrink-0" />
-          </a>
+          </button>
         );
       })}
     </div>
