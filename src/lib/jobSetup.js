@@ -13,7 +13,17 @@ export function contractTermsReady(sheet = {}) {
   const t = sheet.terms || {};
   const deposit = Number(t.deposit_pct);
   const validity = Number(t.quote_valid_days);
-  return t.deposit_pct !== "" && Number.isFinite(deposit) && deposit >= 0 && deposit <= 100 &&
+  const customer = sheet.customer || {};
+  const pricing = sheet.pricing || {};
+  const requiredCustomer = ["name", "job_site_address"].every(k => String(customer[k] || "").trim());
+  const requiredPricing = ["sell_price", "contract_total"].every(k =>
+    pricing[k] !== "" && pricing[k] !== null && pricing[k] !== undefined && Number.isFinite(Number(pricing[k])) && Number(pricing[k]) >= 0);
+  const taxExplicit = pricing.tax !== "" && pricing.tax !== null && pricing.tax !== undefined && Number.isFinite(Number(pricing.tax)) && Number(pricing.tax) >= 0;
+  const scopeReady = Array.isArray(sheet.scope_lines) && sheet.scope_lines.length > 0 &&
+    sheet.scope_lines.every(line => String(line.product || line.description || "").trim() && Number(line.qty) > 0 &&
+      line.customer_price !== "" && Number.isFinite(Number(line.customer_price)));
+  return requiredCustomer && requiredPricing && taxExplicit && scopeReady &&
+    t.deposit_pct !== "" && Number.isFinite(deposit) && deposit >= 0 && deposit <= 100 &&
     t.quote_valid_days !== "" && Number.isInteger(validity) && validity > 0 &&
     ["payment_schedule", "estimated_lead_time", "warranty_text"].every(k => String(t[k] || "").trim() && !/placeholder|confirm|tbd/i.test(String(t[k])));
 }

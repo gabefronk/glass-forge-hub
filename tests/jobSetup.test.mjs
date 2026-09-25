@@ -47,7 +47,14 @@ test("contract terms start blank and require job-specific completion", () => {
   assert.equal(sheet.terms.quote_valid_days, "");
   assert.equal(contractTermsReady(sheet), false);
   sheet.terms = { deposit_pct: 50, quote_valid_days: 14, payment_schedule: "50% at signing, balance at completion", estimated_lead_time: "6 weeks", warranty_text: "See attached manufacturer warranty" };
+  assert.equal(contractTermsReady(sheet), false); // Terms alone never make an empty customer contract ready.
+  sheet.customer = { name: "Ada", job_site_address: "123 Main St" };
+  sheet.scope_lines = [{ qty: 1, product: "Window", customer_price: 1000 }];
+  sheet.pricing = { sell_price: 1000, tax: 0, contract_total: 1000 };
   assert.equal(contractTermsReady(sheet), true);
+  sheet.pricing.tax = "";
+  assert.equal(contractTermsReady(sheet), false); // Internal use tax cannot fill customer tax.
+  sheet.pricing.tax = 0;
   sheet.terms.warranty_text = "PLACEHOLDER - add warranty";
   assert.equal(contractTermsReady(sheet), false);
 });
