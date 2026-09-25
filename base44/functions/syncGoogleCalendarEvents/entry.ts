@@ -4,6 +4,8 @@ import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmoun
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 import { reportDueAtWithGrace } from '../../shared/reportMatching.ts';
+import { preserveAttachmentMetadata } from '../../shared/eventAttachments.js';
+import { rehostEventAttachments } from '../../shared/rehostEventAttachments.js';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
@@ -110,18 +112,7 @@ export default async function(req) {
       const ex = byGoogleId.get(ev.id);
       if (ex) {
         if (ex.source === 'app') continue;
-        const existingAttachments = new Map(
-          (ex.event_attachments || []).filter((a) => a?.file_url).map((a) => [a.file_url, a]),
-        );
-        row.event_attachments = row.event_attachments.map((attachment) => {
-          const existingAttachment = existingAttachments.get(attachment.file_url);
-          if (!existingAttachment) return attachment;
-          const rehostFields = {};
-          for (const field of ['drive_file_id', 'drive_url', 'rehosted_at']) {
-            if (existingAttachment[field]) rehostFields[field] = existingAttachment[field];
-          }
-          return { ...attachment, ...rehostFields };
-        });
+        row.event_attachments = preserveAttachmentMetadata(row.event_attachments, ex.event_attachments || []);
         const updateRow = { id: ex.id, ...row, installer_event_id: ex.installer_event_id || null };
         // report_required is create-only: manual waivers, audit retirements and
         // supersessions set it false deliberately - never re-derive it on update.
@@ -251,6 +242,17 @@ export default async function(req) {
     for (const batch of chunk(toReportMatch, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
 
     for (const batch of chunk(installerIdUpdates, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
+
+    try {
+      const eventIds = [...createdRecords, ...toUpdate]
+        .filter(event => event.source_status !== 'cancelled' && event.event_attachments?.some(a => !a.hub_file_uri))
+        .map(event => event.id)
+        .filter(Boolean);
+      if (eventIds.length) await rehostEventAttachments({ client: base44, eventIds, limit: 20 });
+    } catch (error) {
+      // Rehosting is best effort: calendar data must remain successfully synced.
+      console.error('post-sync attachment rehost failed', error);
+    }
 
     return Response.json({
       ok: installerFailed === 0,

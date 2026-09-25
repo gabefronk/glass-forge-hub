@@ -15,17 +15,27 @@ export function eventAttachments(events) {
   const seen = new Set();
   const out = [];
   for (const ev of events || []) {
-    for (const attachment of ev.event_attachments || []) {
+    for (let attachmentIndex = 0; attachmentIndex < (ev.event_attachments || []).length; attachmentIndex++) {
+      const attachment = ev.event_attachments[attachmentIndex];
       if (!attachment?.file_url || seen.has(attachment.file_url)) continue;
       seen.add(attachment.file_url);
-      out.push({
+      const view = {
         title: attachment.title || "Attachment",
         file_url: attachment.file_url,
         mime_type: attachment.mime_type || "",
         drive_file_id: attachment.drive_file_id || "",
         drive_url: attachment.drive_url || "",
-      });
+      };
+      if (attachment.hub_file_uri) Object.assign(view, { hub_file_uri: attachment.hub_file_uri, event_id: ev.id, attachment_index: attachmentIndex });
+      if (attachment.hub_error) view.hub_error = attachment.hub_error;
+      out.push(view);
     }
   }
   return out;
+}
+
+export function preferredAttachmentSource(attachment) {
+  if (attachment?.hub_file_uri) return "hub";
+  if (attachment?.drive_url) return "drive";
+  return attachment?.file_url ? "file" : "";
 }

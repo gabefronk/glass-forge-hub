@@ -10,6 +10,7 @@ import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
 import ProbuildReports from "@/pages/ProbuildReports";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { buildJobsOverview } from "@/lib/jobsOverview";
+import { jobMatchesSearch } from "@/lib/jobSearch";
 
 export default function JobsHub() {
   const [jobs, setJobs] = useState([]);
@@ -78,14 +79,7 @@ export default function JobsHub() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const matches = (j) => {
-      const name = (j.canonical_name || "").toLowerCase();
-      const aliases = (j.aliases || []).join(" ").toLowerCase();
-      const addr = (j.address || "").toLowerCase();
-      const pos = (j.po_numbers || []).join(" ").toLowerCase();
-      const oes = (j.oe_numbers || []).join(" ").toLowerCase();
-      return [name, aliases, addr, pos, oes].some((s) => s.includes(q));
-    };
+    const matches = (j) => jobMatchesSearch(j, q);
     let base = !q ? groups : groups.filter((g) => g.members.some(matches));
     const key = (g) => jobStats[g.id]?.status.key;
     if (segment === "active") base = base.filter(g => ["active", "needs_report", "needs_review"].includes(key(g)));

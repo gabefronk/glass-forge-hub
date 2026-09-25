@@ -114,12 +114,29 @@
           "rehosted_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "hub_file_uri": {
+            "type": "string",
+            "description": "Private Base44 file URI. Never expose this value to the browser."
+          },
+          "hub_uploaded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hub_size": {
+            "type": "number"
+          },
+          "hub_sha256": {
+            "type": "string"
+          },
+          "hub_error": {
+            "type": "string"
           }
         }
       },
       "title": "Event Attachments",
       "default": [],
-      "description": "Documents/files attached to the source Google Calendar event (added to the invite from Gmail or Drive). Surfaced in the job detail so the crew can open them. Gmail-sourced attachment links require the owner's Google session to open."
+      "description": "Documents/files attached to the source Google Calendar event. Hub copies are kept in private Base44 storage and opened through short-lived signed URLs."
     },
     "sanitize_flagged": {
       "type": "boolean",
