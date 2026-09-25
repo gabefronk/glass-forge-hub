@@ -142,12 +142,12 @@ export const SUMMIT_META = {
 
 // Door-type diagram registry. URLs empty until the six diagrams arrive.
 export const SUMMIT_DIAGRAMS = {
-  biparting: { label: "Bi-parting", caption: "Bi-parting door diagram.", url: "" },
-  pocketing: { label: "Pocketing", caption: "Pocketing door diagram.", url: "" },
-  stacking_multislide: { label: "Stacking / Multi-slide", caption: "Stacking / multi-slide door diagram.", url: "" },
-  "90_degree": { label: "90-Degree Cornerless", caption: "90-degree cornerless door diagram.", url: "" },
-  pivot: { label: "Pivot", caption: "Pivot door diagram.", url: "" },
-  awning: { label: "Tilt-Up Awning Window", caption: "Tilt-up awning window diagram.", url: "" },
+  biparting: { label: "Bi-Parting (Lift & Slide motor)", caption: "Bi-parting doors with Lift & Slide motor — motor placement in the in-wall pocket.", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/1968ce750_ill-biparting.jpg" },
+  pocketing: { label: "Pocketing", caption: "Pocketing doors — automation motor placement within the in-wall pocket (SA-0049).", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/b0067f4da_ill-pocketing.jpg" },
+  stacking_multislide: { label: "Stacking / Multi-slide", caption: "Stacking doors — automation motor placement within the stub bay (SA-0052).", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/518c2c982_ill-stacking-multislide.jpg" },
+  "90_degree": { label: "90-Degree Cornerless", caption: "90-degree stacking cornerless doors — motor placement within the stud bay (SA-0040).", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/60b154391_ill-90-degree.jpg" },
+  pivot: { label: "Pivot", caption: "Above-header pivot door — automation motor placement within the stub bay (SA-0047).", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/557591e34_ill-pivot.jpg" },
+  awning: { label: "Tilt-Up Awning Window", caption: "Tilt-up awning window — gas-strut actuator layout.", url: "https://media.base44.com/images/public/6a7f0d7a4a5f825c724273e9/0d9a96c53_ill-awning.jpg" },
 };
 
 export function diagramKeyForSystemType(systemType) {
