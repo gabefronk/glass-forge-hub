@@ -4,17 +4,21 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { confirmContactLink } from "@/hooks/use-job-contacts";
 import { findDuplicateJobs, newJobPayload } from "@/lib/newJob";
+import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
-const blank = { canonical_name: "", builder: "", address: "", po_number: "", oe_number: "" };
+const blank = { canonical_name: "", builder: "", address: "", po_number: "", oe_number: "", source_window_quote_id: "", initial_note: "" };
 const inputClass = "mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base focus:border-emerald-700 focus:outline-none sm:text-sm";
 
 export default function AddJobDialog({ jobs, onCreated }) {
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState(blank);
   const [contacts, setContacts] = useState([]);
+  const [createdState, setCreatedState] = useState(null);
+  const [owner, setOwner] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [selected, setSelected] = useState([]);
+  const [newContact, setNewContact] = useState({name:"",email:"",phone:"",company:"",builder:""});
   const [contactsError, setContactsError] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -24,6 +28,7 @@ export default function AddJobDialog({ jobs, onCreated }) {
   useEffect(() => {
     if (!open) return;
     let active = true;
+    base44.auth.me().then(u=>{if(active)setOwner(isAgentCenterOwner(u));}).catch(()=>{});
     base44.functions.invoke("contacts-directory", { action: "picker" })
       .then((r) => { if (active) setContacts(r.data?.contacts || []); })
       .catch(() => { if (active) setContactsError("Contacts could not load. You can still create the job."); });
@@ -32,7 +37,7 @@ export default function AddJobDialog({ jobs, onCreated }) {
 
   const reset = () => {
     setValues(blank); setContactSearch(""); setSelected([]); setError("");
-    setDuplicates([]); setDuplicateApproved(false); setContactsError(""); setContacts([]);
+    setDuplicates([]); setDuplicateApproved(false); setContactsError(""); setContacts([]); setCreatedState(null); setNewContact({name:"",email:"",phone:"",company:"",builder:""});
   };
   const change = (key, value) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -49,17 +54,50 @@ export default function AddJobDialog({ jobs, onCreated }) {
     event.preventDefault();
     const payload = newJobPayload(values);
     if (!payload.canonical_name) { setError("Job name is required."); return; }
+    if (createdState?.jobId) { setError("This job was already created. Open it instead of submitting twice."); return; }
     const matches = findDuplicateJobs(jobs, values);
     if (matches.length && !duplicateApproved) { setDuplicates(matches); return; }
+    if (newContact.name.trim() && !owner) { setError("Only the owner can add a contact here. Ask them to create it in Contacts."); return; }
+    if (values.source_window_quote_id.trim() && !owner) { setError("Only the owner can link a source quote. Leave this blank."); return; }
+    if (values.source_window_quote_id.trim()) {
+      try { const q=await base44.entities.QuoteRequests.get(values.source_window_quote_id.trim()); if (!q) throw Error("Quote not found"); }
+      catch { setError("Source quote ID was not found. Leave it blank or choose a verified quote."); return; }
+    }
     setSaving(true); setError("");
+    let newContactKey = "";
+    if (newContact.name.trim()) {
+      try { const r=(await base44.functions.invoke("contacts-directory",{action:"create_contact",contact:newContact})).data;
+        if(r?.error)throw Error(r.error);newContactKey=r.contact.key;
+      } catch(e) { setError(e?.response?.data?.error||e.message||"Contact could not be saved. Choose an existing contact or check its details."); setSaving(false); return; }
+    }
     try {
+      // A job exists once this write succeeds. Every subsequent operation is tracked
+      // separately; a failed link or Drive operation must not be called a failed create.
       const created = await base44.entities.Jobs.create(payload);
-      const linkResults = await Promise.allSettled(selected.map((contactKey) => confirmContactLink({ jobId: created.id, contactKey })));
-      const failedLinks = linkResults.filter((result) => result.status === "rejected").length;
+      const result = { jobId: created.id, contactLinks: [], folder: "pending", note: "skipped" };
+      setCreatedState(result);
+      const selectedKeys = [...new Set([...selected,...(newContactKey?[newContactKey]:[])])];
+      const linkResults = await Promise.allSettled(selectedKeys.map((contactKey) => confirmContactLink({ jobId: created.id, contactKey })));
+      result.contactLinks = linkResults.map((r,i) => ({ key: selectedKeys[i], status: r.status }));
+      try {
+        if (!owner) throw Error("Owner must link Drive folder");
+        const folder = (await base44.functions.invoke("job-documents", { action: "ensure_folder", job_id: created.id })).data;
+        if (folder?.error) throw Error(folder.error);
+        result.folder = folder.folder?.url || "unavailable";
+      } catch { result.folder = "failed"; }
+      if (values.initial_note.trim()) {
+        try {
+          const author = (await base44.auth.me()).email || "Hub user";
+          if (!owner) throw Error("Owner must save initial note");
+          await base44.entities.JobNotes.create({ job_id: created.id, note_date: new Date().toISOString().slice(0,10), body: values.initial_note.trim(), author });
+          result.note = "saved";
+        } catch { result.note = "failed"; }
+      }
+      setCreatedState({...result});
       onCreated(created);
-      setOpen(false);
-      reset();
-      if (failedLinks) window.setTimeout(() => window.alert(`Job created, but ${failedLinks} contact link${failedLinks === 1 ? "" : "s"} could not be saved.`), 0);
+      const failures = result.contactLinks.filter(x=>x.status==='rejected').length;
+      if (!failures && result.folder !== "failed" && result.folder !== "unavailable" && result.note !== "failed") { setOpen(false); reset(); }
+      else setError(`Job created. ${failures ? `${failures} contact link(s) failed. ` : ""}${result.folder === "failed" || result.folder === "unavailable" ? "Drive folder was not linked. " : ""}${result.note === "failed" ? "Initial note was not saved. " : ""}Open the job and finish those steps; do not create it again.`);
     } catch (cause) {
       setError(cause?.response?.data?.error || cause?.message || "The job could not be created. Please try again.");
     } finally { setSaving(false); }
@@ -85,6 +123,8 @@ export default function AddJobDialog({ jobs, onCreated }) {
             <label className="block text-sm font-medium">PO number <span className="font-normal text-slate-500">(optional)</span><input className={inputClass} value={values.po_number} onChange={(e) => change("po_number", e.target.value)} /></label>
             <label className="block text-sm font-medium">OE number <span className="font-normal text-slate-500">(optional)</span><input className={inputClass} value={values.oe_number} onChange={(e) => change("oe_number", e.target.value)} /></label>
           </div>
+          {owner && <label className="block text-sm font-medium">Source Window Quote ID <span className="font-normal text-slate-500">(only if known)</span><input className={inputClass} value={values.source_window_quote_id} onChange={(e) => change("source_window_quote_id", e.target.value)} /></label>}
+          {owner && <label className="block text-sm font-medium">Initial activity note <span className="font-normal text-slate-500">(optional, visible to the job team)</span><textarea className={inputClass} value={values.initial_note} onChange={(e) => change("initial_note", e.target.value)} /></label>}
           <div>
             <label className="block text-sm font-medium" htmlFor="new-job-contact-search">Contacts <span className="font-normal text-slate-500">(optional)</span></label>
             <div className="relative mt-1.5"><Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" /><input id="new-job-contact-search" className={`${inputClass} mt-0 pl-9`} placeholder="Search people" value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} /></div>
@@ -95,17 +135,19 @@ export default function AddJobDialog({ jobs, onCreated }) {
                 return <label key={contact.key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 hover:bg-slate-50"><input type="checkbox" checked={checked} onChange={() => setSelected((current) => checked ? current.filter((key) => key !== contact.key) : [...current, contact.key])} /><span className="min-w-0"><strong className="block truncate text-sm">{contact.name}</strong><span className="block truncate text-xs text-slate-500">{contact.company || contact.email || contact.phone}</span></span></label>;
               })}
             </div>}
-            {selected.length > 0 && <p className="mt-2 flex items-center gap-1 text-xs text-emerald-800"><Link2 className="h-3.5 w-3.5" />{selected.length} contact{selected.length === 1 ? "" : "s"} selected</p>}
+            {owner && <details className="mt-2 rounded-xl border p-3"><summary className="cursor-pointer text-sm">Add new contact for this job (owner only)</summary><div className="mt-2 grid gap-2 sm:grid-cols-2">{[["name","Name"],["email","Email"],["phone","Phone"],["company","Company"],["builder","Builder"]].map(([key,label])=><label key={key} className="text-xs">{label}<input className={inputClass} type={key==='email'?'email':'text'} value={newContact[key]} onChange={e=>setNewContact(v=>({...v,[key]:e.target.value}))}/></label>)}</div><p className="mt-2 text-xs">An existing email or phone must be selected from the picker instead of creating a duplicate.</p></details>}
+          {selected.length > 0 && <p className="mt-2 flex items-center gap-1 text-xs text-emerald-800"><Link2 className="h-3.5 w-3.5" />{selected.length} contact{selected.length === 1 ? "" : "s"} selected</p>}
           </div>
           {duplicates.length > 0 && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
             <strong>Looks like this job already exists</strong>
             <ul className="mt-1 space-y-1">{duplicates.map((job) => <li key={job.id}><Link className="underline" to={`/jobs/${job.id}`} target="_blank">{job.canonical_name || "Open matching job"}</Link></li>)}</ul>
             <label className="mt-3 flex min-h-10 cursor-pointer items-center gap-2"><input type="checkbox" checked={duplicateApproved} onChange={(e) => setDuplicateApproved(e.target.checked)} /> Create anyway</label>
           </div>}
+          {createdState?.jobId && <p className="text-sm text-blue-800">Job created: <Link className="underline" to={`/jobs/${createdState.jobId}`}>Open job</Link>. Contact links: {createdState.contactLinks.filter(x=>x.status==='fulfilled').length}/{createdState.contactLinks.length}. Folder: {createdState.folder.startsWith?.('https:') ? <a className="underline" href={createdState.folder} target="_blank" rel="noreferrer">Open Drive</a> : createdState.folder}. Note: {createdState.note}.</p>}
           {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
           <DialogFooter>
             <button type="button" disabled={saving} onClick={() => setOpen(false)} className="min-h-11 rounded-xl border px-4 text-sm font-medium">Cancel</button>
-            <button type="submit" disabled={saving || (duplicates.length > 0 && !duplicateApproved)} className="min-h-11 rounded-xl bg-emerald-900 px-4 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Creating…" : duplicateApproved ? "Create anyway" : "Create job"}</button>
+            <button type="submit" disabled={saving || !!createdState?.jobId || (duplicates.length > 0 && !duplicateApproved)} className="min-h-11 rounded-xl bg-emerald-900 px-4 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Creating…" : duplicateApproved ? "Create anyway" : "Create job"}</button>
           </DialogFooter>
         </form>
       </DialogContent>

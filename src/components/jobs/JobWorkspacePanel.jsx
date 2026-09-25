@@ -30,6 +30,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
   const [calEvents, setCalEvents] = useState([]);
   const [evidence, setEvidence] = useState(null);
   const [fieldReports, setFieldReports] = useState([]);
+  const [driveFolder, setDriveFolder] = useState(null);
   const memberKey = [jobId, ...(group?.memberIds || []).filter((m) => m !== jobId)].join(",");
   const memberIds = memberKey.split(",");
   const jobContacts = useJobContacts(jobId);
@@ -61,6 +62,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
       if (ver !== v.current) return;
       const { rows: fl, notes: nt } = activity;
       setJob(jb);
+      setDriveFolder(jb.drive_job_folder_url || null);
       setRows(fl);
       setNotes(nt);
 
@@ -152,6 +154,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
             </a>
           )}
         </div>
+        {driveFolder && <a href={driveFolder} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs underline" style={{color:C.accentText}}>Open verified Drive job folder</a>}
         <DuplicateJobNotice group={group} currentId={jobId} className="mt-3" />
         {eventAttachments(calEvents).length > 0 && (
           <div className="mt-3 rounded-[10px] px-3.5 py-2.5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>

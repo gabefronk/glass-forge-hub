@@ -1,7 +1,11 @@
-import {buildDirectory,matchingContacts} from './contactMatching.js';
+import {buildDirectory,matchingContacts,phoneKey} from './contactMatching.js';
 import {jobContactsView,jobContactCoverage,LINK_ROLES} from './jobContacts.js';
 import {CONTACT_LINK_SEEDS} from './contactLinkSeeds.js';
 const JOB_VIEWS=new Set(['job_contacts','job_contact_coverage']);
+const contactFields=(input)=>{const name=String(input.name||'').trim().replace(/\s+/g,' '),phone=String(input.phone||'').trim(),email=String(input.email||'').trim().toLowerCase(),company=String(input.company||'').trim(),builder=String(input.builder||'').trim();
+ if(!name||name.length>150||[phone,email,company,builder].some(v=>v.length>200)||email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||phone&&!phoneKey(phone))return null;
+ return {name,phone,phone_key:phoneKey(phone),email,email_key:email,company,builder,note:'',review_note:'',source:'hub'};
+};
 const EMPTY_DIRECTORY={source:null,contacts:[],job_references:[]};
 const owners=new Set(['gabefronk@gmail.com','gabriel.fronk.wd@gmail.com']);
 const owner=u=>u?.role==='admin'&&owners.has(String(u.email||'').toLowerCase().trim());
@@ -40,9 +44,21 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
     await api.ContactDirectorySnapshot.create({filename:data.source.filename,source_location:data.source.location,captured_at:data.source.captured_at,workbook_sha256:data.source.workbook_sha256,content_sha256:digest,data_file_uri:file_uri,contact_count:data.contacts.length,job_reference_count:data.job_references.length});
     cache.clear();cache.set(digest,data);return response({ok:true,contacts:data.contacts.length,source:data.source.filename});
    }
-   const snapshot=(await api.ContactDirectorySnapshot.list('-created_date',1))[0];if(!snapshot&&!JOB_VIEWS.has(input.action))return response({empty:true,contacts:[],jobs:[],builders:[],summary:{contacts:0}});
+   const snapshot=(await api.ContactDirectorySnapshot.list('-created_date',1))[0];
+   const hubContacts=await all(api.HubContacts);
+   if(input.action==='create_contact'){
+    const fields=contactFields(input.contact||{});if(!fields)return response({error:'Enter a name and valid contact details.'},400);
+    const directoryContacts=snapshot?(await load(client,snapshot)).contacts:[];
+    const same=[...directoryContacts,...hubContacts].filter(c=>fields.email_key&&c.email_key===fields.email_key||fields.phone_key&&c.phone_key===fields.phone_key);
+    if(same.length)return response({error:'A contact with this email or phone already exists. Choose it instead.',existing:same.map(c=>({key:c.key,name:c.name,company:c.company}))},409);
+    // Random stable key: changing a name or phone later cannot rewrite existing job links.
+    const key=await hash(crypto.randomUUID());const created=await api.HubContacts.create({...fields,key});
+    return response({ok:true,contact:{key:created.key,name:created.name,company:created.company,phone:created.phone,email:created.email}},201);
+   }
+   if(!snapshot&&!hubContacts.length&&!JOB_VIEWS.has(input.action)&&input.action!=='picker')return response({empty:true,contacts:[],jobs:[],builders:[],summary:{contacts:0}});
    // Job views still report missing contacts and owner notes before any directory is imported.
-   const data=snapshot?await load(client,snapshot):EMPTY_DIRECTORY;
+   const stored=snapshot?await load(client,snapshot):EMPTY_DIRECTORY;
+   const data={...stored,contacts:[...stored.contacts,...hubContacts.filter(c=>!stored.contacts.some(row=>row.key===c.key)).map(c=>({...c,row:0}))]};
    if(input.action==='picker')return response({contacts:data.contacts.map(({key,name,company,email,phone})=>({key,name,company,email,phone}))});
    if(input.action==='contact'){const contact=data.contacts.find(c=>c.key===input.contact_key);return contact?response({contact}):response({error:'Contact not found.'},404);}
    if(input.action==='link'){
