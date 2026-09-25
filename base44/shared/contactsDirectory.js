@@ -62,7 +62,7 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
     if(one&&!rawJob)return response({error:'Job not found.'},404);
     // Message threads are optional evidence; a failure only hides that source of suggestions.
     let conversations=[],messages='available';
-    try{conversations=one?await api.MessageConversation.filter({job_id:rawJob.id},'-last_message_at',50):(await all(api.MessageConversation)).filter(c=>c.job_id);}catch{messages='unavailable';}
+    try{conversations=await all(api.MessageConversation,'-last_message_at');}catch{messages='unavailable';}
     if(one)return response(jobContactsView({directory,job:directory.jobs.find(j=>j.id===rawJob.id),rawJob,links,conversations,messages,seeds:CONTACT_LINK_SEEDS}));
     return response(jobContactCoverage({directory,rawJobs:jobs,links,conversations,messages,seeds:CONTACT_LINK_SEEDS}));
    }
