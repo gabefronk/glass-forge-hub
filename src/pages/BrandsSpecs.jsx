@@ -1,95 +1,193 @@
+import { useMemo, useState } from "react";
+import { ExternalLink, Library, LockKeyhole } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { C } from "@/lib/feeUI";
+import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+
 const PELLA_ICON_URL =
   "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/86/15/56/86155612-1b79-cc68-7749-624710f1fd57/AppIcon-0-0-1x_U007emarketing-0-7-0-85-220.png/512x512bb.jpg";
 const PELLA_TECHNICAL_DOCUMENTS_URL = "https://www.pella.com/professionals/downloads/service/perl/";
 const AMSCO_LOGO_URL =
   "https://www.amscowindows.com/wp-content/uploads/2024/11/cropped-AMSCO-Logomark-Vertical-Alternate-Standard-PMS-7684-1-270x270.png";
-const AMSCO_URL = "https://apps.amscowindows.com/";
+const AMSCO_SPECS_URL = "https://apps.amscowindows.com/";
 
-const NAVY = "var(--gf-ink)";
-const HAIRLINE = "var(--gf-border)";
-const PELLA_BG = "#242021";
-
-const BRANDS = [
+const SPECIALIZED_LINKS = [
   {
     href: PELLA_TECHNICAL_DOCUMENTS_URL,
     title: "Pella ADM — Technical documents (opens in a new tab)",
     iconUrl: PELLA_ICON_URL,
     iconAlt: "Pella ADM app icon",
     label: "Pella ADM",
-    bg: PELLA_BG,
+    detail: "Technical documents",
+    bg: "#242021",
     textColor: "#FFFFFF",
   },
   {
-    href: AMSCO_URL,
+    href: AMSCO_SPECS_URL,
     title: "AMSCO SpecFinder (opens in a new tab)",
     iconUrl: AMSCO_LOGO_URL,
     iconAlt: "AMSCO logo",
     label: "Amsco specs",
+    detail: "SpecFinder",
     bg: "#FFFFFF",
-    textColor: NAVY,
+    textColor: "var(--gf-ink)",
   },
 ];
 
-function BrandSquare({ href, title, iconUrl, iconAlt, label, bg, textColor }) {
+const BRANDS = [
+  { name: "Amsco", website: "https://www.amscowindows.com/", series: "Studio", tier: "$" },
+  { name: "Andersen", website: "https://www.andersenwindows.com/", series: "100 Series", tier: "$$" },
+  { name: "Bonelli", website: "https://www.bonelli.com/", series: "Volume Doors", tier: "$$" },
+  { name: "French Steel", website: "https://frenchsteel.com/", series: "Classic Series", tier: "$$$$$" },
+  { name: "Jeldwen", website: "https://www.jeld-wen.com/en-us", series: "Siteline", tier: "$$$$" },
+  { name: "La Cantina", website: "https://www.lacantinadoors.com", series: "Aluminum Wood", tier: "$$$" },
+  { name: "Milgard", website: "https://www.milgard.com/", series: "V150", tier: "$" },
+  { name: "Nu Vista", website: "https://nuvistawindows.com/index.php/en/", series: "Aluminum", tier: "$$$" },
+  { name: "Pella", website: "https://www.pellaprodealer.com/", series: "Impervia", tier: "$$" },
+  { name: "Weather Shield — Coming Soon", website: "https://weathershield.com/", series: null, tier: "?" },
+  { name: "Western", website: "https://westernwindowsystems.com/", series: "Classic", tier: "$$$$$" },
+  { name: "Windor", website: "https://www.windorsystems.com/", series: "2750", tier: "$$" },
+  { name: "Glenview Doors", website: "https://www.glenviewdoors.com/", series: null, tier: "-" },
+  { name: "Inicio Windows and Doors", website: "https://iniciowindows.com/", series: null, tier: "-" },
+  { name: "PRL", website: "https://prlglass.com/", series: null, tier: "-" },
+  { name: "FHC", website: "https://fhc-usa.com/", series: null, tier: "-" },
+  { name: "Glazetech", website: "https://www.glaztech.com/", series: null, tier: "-" },
+];
+
+function SpecializedLink({ link }) {
   return (
-    <li role="listitem" className="flex justify-center">
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={title}
-        aria-label={`${label} — opens in a new tab`}
-        className="group flex h-52 w-52 flex-col items-center overflow-hidden rounded-[44px] motion-safe:transition-transform motion-safe:duration-150 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2A5EA8] focus-visible:outline-offset-8 sm:h-56 sm:w-56 sm:rounded-[48px]"
-        style={{ backgroundColor: bg }}
-      >
-        <img
-          src={iconUrl}
-          alt={iconAlt}
-          width={160}
-          height={160}
-          className="mt-3 h-36 w-36 shrink-0 object-contain sm:h-40 sm:w-40 sm:mt-3"
-          loading="lazy"
-        />
-        <span
-          className="mt-2.5 text-base font-semibold"
-          style={{ color: textColor }}
-        >
-          {label}
-        </span>
-      </a>
+    <a href={link.href} target="_blank" rel="noopener noreferrer" title={link.title}
+      aria-label={`${link.label} — opens in a new tab`}
+      className="group flex min-h-40 flex-col items-center justify-center rounded-[28px] p-4 text-center motion-safe:transition-transform motion-safe:duration-150 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
+      style={{ backgroundColor: link.bg, color: link.textColor, border: `1px solid ${C.border}` }}>
+      <img src={link.iconUrl} alt={link.iconAlt} width={104} height={104} className="h-24 w-24 object-contain" loading="lazy" />
+      <span className="mt-2 text-base font-semibold">{link.label}</span>
+      <span className="mt-0.5 text-[12px] opacity-75">{link.detail}</span>
+    </a>
+  );
+}
+
+function BrandTile({ brand, showPricing }) {
+  return (
+    <li className="flex min-h-48 flex-col rounded-[18px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-heading text-[18px] font-bold leading-tight" style={{ color: C.text }}>{brand.name}</h3>
+        <a href={brand.website} target="_blank" rel="noopener noreferrer" aria-label={`${brand.name} official website — opens in a new tab`}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ color: "var(--gf-teal-600)", backgroundColor: C.headerBg }}>
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      </div>
+      <div className="mt-auto pt-8">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: C.textMuted }}>Known series</p>
+        <p className="mt-1 text-[14px] font-medium" style={{ color: brand.series ? C.textSecondary : C.textFaint }}>
+          {brand.series || "Not specified in the current reference"}
+        </p>
+        {showPricing && (
+          <p className="mt-3 text-[12px]" style={{ color: C.textMuted }}>
+            Relative price tier: <span className="font-mono-num font-semibold" style={{ color: C.text }}>{brand.tier}</span>
+          </p>
+        )}
+      </div>
     </li>
   );
 }
 
-export default function BrandsSpecs() {
-  return (
-    <>
-      <style>{`@media (min-width:640px){.brands-specs-shell{padding-left:40px!important;padding-right:40px!important;padding-top:40px!important}}@media (prefers-reduced-motion:reduce){.brands-specs-shell *{transition:none!important}}`}</style>
-      <div
-        className="brands-specs-shell mx-auto w-full"
-        style={{ maxWidth: 640, paddingLeft: 24, paddingRight: 24, paddingTop: 24, paddingBottom: 104 }}
-      >
-        <h1
-          className="font-semibold"
-          style={{ color: NAVY, fontSize: 22, letterSpacing: "-0.01em", marginBottom: 32, lineHeight: 1.2 }}
-        >
-          <span className="sm:text-[28px]">Product Brands &amp; Specifications</span>
-        </h1>
+function MarginLookup() {
+  const [discountInput, setDiscountInput] = useState("");
+  const marginRows = useMemo(() => Array.from({ length: 51 }, (_, margin) => {
+    const g = margin / 100;
+    const discount = (1 - 0.5 / (1 - g)) * 100;
+    return { margin, discount: Number.isFinite(discount) ? discount : 0 };
+  }), []);
+  const calcResult = useMemo(() => {
+    const d = parseFloat(discountInput);
+    if (!Number.isFinite(d) || d < 0 || d > 100) return null;
+    const margin = 100 - 50 / (1 - d / 100);
+    return Number.isFinite(margin) ? margin : null;
+  }, [discountInput]);
 
-        <ul role="list" className="flex flex-col items-center">
-          {BRANDS.map((b, i) => (
-            <div key={b.href} className="flex flex-col items-center">
-              {i > 0 && (
-                <div
-                  aria-hidden="true"
-                  style={{ width: 160, height: 1, backgroundColor: HAIRLINE, marginBottom: 40, marginTop: 40 }}
-                />
-              )}
-              <BrandSquare {...b} />
-            </div>
-          ))}
-        </ul>
+  return (
+    <section className="overflow-hidden rounded-[14px] card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+      <div className="px-5 py-4" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
+        <div className="flex items-center gap-2">
+          <LockKeyhole className="h-4 w-4" style={{ color: C.textMuted }} />
+          <h2 className="font-heading text-[18px] font-bold" style={{ color: C.text }}>Owner pricing reference</h2>
+        </div>
+        <p className="mt-1.5 text-[12px]" style={{ color: C.textSecondary }}>
+          Cost basis is 50% of list price. For a discount <span className="font-mono-num">d</span> off list, gross margin = 100 − 50/(1−d). For a target margin <span className="font-mono-num">g</span>, discount = 1 − 0.5/(1−g).
+        </p>
       </div>
-    </>
+      <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-end" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="discount-calc" className="text-[12px] font-medium" style={{ color: C.textSecondary }}>Discount off list (%)</label>
+          <input id="discount-calc" type="number" inputMode="decimal" min="0" max="100" step="0.01" value={discountInput}
+            onChange={(event) => setDiscountInput(event.target.value)} placeholder="e.g. 44.44"
+            className="rounded-[8px] px-3 text-[13px] focus:outline-none"
+            style={{ height: 38, width: 160, border: `1px solid ${C.border}`, backgroundColor: C.card, color: C.text }} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[12px] font-medium" style={{ color: C.textSecondary }}>Resulting gross margin</span>
+          <div className="flex items-center rounded-[8px] px-3" style={{ height: 38, minWidth: 160, border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+            {calcResult !== null
+              ? <span className="font-mono-num-bold text-[15px]" style={{ color: "var(--gf-teal-700)" }}>{calcResult.toFixed(2)}%</span>
+              : <span className="text-[12px]" style={{ color: C.textFaint }}>Enter 0–100</span>}
+          </div>
+        </div>
+      </div>
+      <div className="max-h-[420px] overflow-x-auto obsidian-scroll">
+        <table className="w-full text-left text-[13px]" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0"><tr style={{ backgroundColor: C.headerBg }}>
+            <th className="px-5 py-2.5 font-semibold" style={{ color: C.headerText, borderBottom: `1px solid ${C.border}` }}>Gross Margin %</th>
+            <th className="px-5 py-2.5 text-right font-semibold" style={{ color: C.headerText, borderBottom: `1px solid ${C.border}` }}>Discount off List %</th>
+          </tr></thead>
+          <tbody>{marginRows.map((row) => (
+            <tr key={row.margin} style={{ backgroundColor: row.margin % 2 ? C.cardAlt : C.card, borderBottom: `1px solid ${C.rowBorder}` }}>
+              <td className="px-5 py-2 font-mono-num" style={{ color: C.text }}>{row.margin}%</td>
+              <td className="px-5 py-2 text-right font-mono-num" style={{ color: C.textSecondary }}>{row.discount.toFixed(2)}%</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <p className="px-5 py-3 text-[12px]" style={{ color: C.textMuted, borderTop: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
+        Source chart labels: LIST at 0% margin (maximum discount) end; COST at 50% margin (full list price) end.
+      </p>
+    </section>
+  );
+}
+
+export default function BrandsSpecs() {
+  const { user } = useAuth();
+  const owner = isPurchaseOrderOwner(user);
+
+  return (
+    <div className="flex min-h-[100dvh] flex-col" style={{ backgroundColor: C.pageBg }}>
+      <header className="shrink-0 px-[26px] pb-5 pt-[26px] max-[699px]:px-[18px] max-[699px]:pt-[18px]" style={{ background: "linear-gradient(180deg, var(--gf-sidebar-top), var(--gf-sidebar-bottom))" }}>
+        <div className="flex items-center gap-3"><Library className="h-7 w-7" style={{ color: "var(--gf-brass-300)" }} strokeWidth={1.8} />
+          <h1 className="font-heading text-[30px] font-bold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.03em" }}>Brands &amp; Specs</h1>
+        </div>
+        <p className="mt-2 max-w-[680px] text-[13px]" style={{ color: "var(--gf-sidebar-muted)" }}>Manufacturer websites, known product series, and specialized specification tools.</p>
+      </header>
+
+      <main className="flex w-full max-w-[1120px] flex-col gap-8 px-[26px] py-6 max-[699px]:px-[18px]">
+        <section aria-labelledby="spec-tools-heading">
+          <h2 id="spec-tools-heading" className="font-heading text-[20px] font-bold" style={{ color: C.text }}>Specification tools</h2>
+          <p className="mt-1 text-[13px]" style={{ color: C.textSecondary }}>Direct links to the existing specialized Pella and Amsco resources.</p>
+          <div className="mt-4 grid max-w-[520px] grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+            {SPECIALIZED_LINKS.map((link) => <SpecializedLink key={link.href} link={link} />)}
+          </div>
+        </section>
+
+        <section aria-labelledby="brands-heading">
+          <h2 id="brands-heading" className="font-heading text-[20px] font-bold" style={{ color: C.text }}>Manufacturers &amp; vendors</h2>
+          <p className="mt-1 text-[13px]" style={{ color: C.textSecondary }}>Use each tile for the official website and the series recorded in the crew reference.</p>
+          <ul className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {BRANDS.map((brand) => <BrandTile key={brand.name} brand={brand} showPricing={owner} />)}
+          </ul>
+          {owner && <p className="mt-3 text-[12px]" style={{ color: C.textMuted }}>Relative price tiers are rough internal guides only, not pricing.</p>}
+        </section>
+
+        {owner && <MarginLookup />}
+      </main>
+    </div>
   );
 }
