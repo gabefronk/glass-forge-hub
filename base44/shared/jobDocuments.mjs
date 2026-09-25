@@ -1,4 +1,5 @@
 const ROOT='1F_PgUPEuvyvzCk92tdaFiwioLSack4iS';
+import { canReadJobDocuments } from './jobDocumentsAccess.mjs';
 const OWNERS=new Set(['gabefronk@gmail.com','gabriel.fronk.wd@gmail.com']);
 const DRIVE='https://www.googleapis.com/drive/v3';
 const JSON_HEADERS={'Content-Type':'application/json'};
@@ -11,9 +12,10 @@ export function createJobDocumentsHandler({getClient,request=fetch}={}){
   if(req.method!=='POST')return reply({error:'POST required.'},405);
   try{
    const client=await getClient(req),user=await client.auth.me().catch(()=>null);
-   if(!user)return reply({error:'Sign in required.'},401);
-   if(user.role!=='admin'||!OWNERS.has(String(user.email||'').toLowerCase().trim()))return reply({error:'Owner access required.'},403);
-   const input=await req.json(),jobId=String(input.job_id||'');if(!jobId)return reply({error:'Select a job.'},400);
+   if(!canReadJobDocuments(user))return reply({error:'Sign in required.'},401);
+   const input=await req.json();
+   if(input.action!=='list'&&(user.role!=='admin'||!OWNERS.has(String(user.email||'').toLowerCase().trim())))return reply({error:'Owner access required.'},403);
+   const jobId=String(input.job_id||'');if(!jobId)return reply({error:'Select a job.'},400);
    const api=client.asServiceRole.entities,job=await api.Jobs.get(jobId).catch(()=>null);
    if(!job)return reply({error:'Job not found.'},404);
    if(!['ensure_folder','attach_folder','list'].includes(input.action))return reply({error:'Unsupported action.'},400);
