@@ -4,6 +4,7 @@ import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmoun
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 import { reportDueAtWithGrace } from '../../shared/reportMatching.ts';
+import { resolveJobLink } from '../../shared/jobLinkResolver.js';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
@@ -59,6 +60,7 @@ export default async function(req) {
     const items = allItems.filter((it) => (seenIds.has(it.id) ? false : (seenIds.add(it.id), true)));
 
     const existing = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 1000);
+    const jobs = await fetchAllPages(base44.asServiceRole.entities.Jobs, '-created_date', 1000);
     const byGoogleId = new Map();
     for (const e of existing) if (e.google_event_id) byGoogleId.set(e.google_event_id, e);
 
@@ -108,6 +110,8 @@ export default async function(req) {
         report_due_at: reportDueAtWithGrace(event_date),
       };
       const ex = byGoogleId.get(ev.id);
+      const link = resolveJobLink({ job_id: ex?.job_id, job_name: row.job_name, po_number: row.po_number, oe_number: row.oe_number }, jobs);
+      if (!ex?.job_id && link.job_id) Object.assign(row, { job_id: link.job_id, job_link_source: link.source, job_linked_at: new Date().toISOString() });
       if (ex) {
         if (ex.source === 'app') continue;
         const existingAttachments = new Map(

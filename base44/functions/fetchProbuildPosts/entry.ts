@@ -5,6 +5,7 @@ import { countAttachments } from '../../shared/reportMatching.ts';
 import { toMs, getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject, filterProjectsByWindow } from '../../shared/probuildApi.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 import { parseServiceBilling } from '../../shared/serviceBilling.ts';
+import { resolveJobLink } from '../../shared/jobLinkResolver.js';
 
 // Ingest Probuild posts into FeeLines + FieldReports. One row per post.
 // Auth: Firebase refresh-token exchange (rotated token persisted to ProbuildAuth).
@@ -269,6 +270,7 @@ export default async function(req) {
       }
       photoUrlByPost.set(b.postId, photoUrls);
       const reportRow = {
+        ...(() => { const link = resolveJobLink({ project_id: b.projectId, job_name: b.projectName }, [...jobsArr, ...newJobs], [...projectJob].map(([project_id, job_id]) => ({ project_id, job_id }))); return link.job_id ? { job_id: link.job_id, job_link_source: link.source, job_linked_at: new Date().toISOString() } : {}; })(),
         job_date: b.jobDate,
         job_name: b.projectName,
         message: post.message || '',
@@ -281,11 +283,14 @@ export default async function(req) {
         trip_charges: ext.trip_charges != null ? Number(ext.trip_charges) : null,
       };
       if (exRep) {
-        // Append-only (Gabriel 2026-09-15): never overwrite an existing field report.
-        // The only permitted write is additive: fill photo_urls when the report has none.
+        // Existing content remains append-only. Stable identity and missing photos
+        // are additive repairs and never replace report content.
+        const identity = !exRep.job_id && reportRow.job_id ? { job_id: reportRow.job_id, job_link_source: reportRow.job_link_source, job_linked_at: reportRow.job_linked_at } : {};
         if (!(exRep.photo_urls || []).length && photoUrls.length) {
-          frToUpdate.push({ id: exRep.id, photo_urls: photoUrls });
+          frToUpdate.push({ id: exRep.id, photo_urls: photoUrls, ...identity });
           frPhotosFilled++;
+        } else if (Object.keys(identity).length) {
+          frToUpdate.push({ id: exRep.id, ...identity });
         } else {
           frSkippedExisting++;
         }
@@ -414,4 +419,3 @@ export default async function(req) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
-

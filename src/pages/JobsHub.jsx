@@ -84,7 +84,8 @@ export default function JobsHub() {
       const addr = (j.address || "").toLowerCase();
       const pos = (j.po_numbers || []).join(" ").toLowerCase();
       const oes = (j.oe_numbers || []).join(" ").toLowerCase();
-      return [name, aliases, addr, pos, oes].some((s) => s.includes(q));
+      const id = String(j.id || "").toLowerCase();
+      return [name, aliases, addr, pos, oes, id].some((s) => s.includes(q));
     };
     let base = !q ? groups : groups.filter((g) => g.members.some(matches));
     const key = (g) => jobStats[g.id]?.status.key;
@@ -174,7 +175,7 @@ export default function JobsHub() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, alias, address, PO or OE"
+              placeholder="Search name, alias, address, PO, OE or ID"
               className="w-full pl-10 pr-4 rounded-[10px] text-[13px] focus:outline-none transition-colors placeholder:text-[#8F999B]"
               style={{ height: "40px", border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)" }}
             />

@@ -10,7 +10,7 @@ import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
 import { AttachmentViewer } from "@/components/jobs/FeedImage";
 import { fetchAllPages } from "@/lib/pagination";
 import { useJobContacts } from "@/hooks/use-job-contacts";
-import { loadJobGroup, loadJobActivity, jobEventsAndEvidence } from "@/lib/jobGroupData";
+import { loadJobGroup, loadJobActivity, jobEventsAndEvidence, reportsForJob } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 
 export default function JobDetail() {
@@ -53,18 +53,14 @@ export default function JobDetail() {
 
     const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
     if (version === loadVersion.current) {
-      const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt);
+      const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt, [jb.canonical_name, ...(jb.aliases || [])]);
       setCalEvents(shown.events);
       setEvidence(shown.evidence);
     }
 
     const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
-    if (postIds.size) {
-      const allReports = await fetchAllPages(base44.entities.FieldReports, "-created_date", 2000);
-      if (version === loadVersion.current) setFieldReports(allReports.filter((r) => r.post_id && postIds.has(r.post_id)));
-    } else if (version === loadVersion.current) {
-      setFieldReports([]);
-    }
+    const allReports = await fetchAllPages(base44.entities.FieldReports, "-created_date", 2000);
+    if (version === loadVersion.current) setFieldReports(reportsForJob(allReports, memberIds, postIds, [jb.canonical_name, ...(jb.aliases || [])]));
 
     base44.entities.PlanIntake.list("-created_date", 200)
       .then((all) => {
