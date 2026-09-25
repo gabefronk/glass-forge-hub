@@ -12,6 +12,7 @@ import { fetchAllPages } from "@/lib/pagination";
 import { useJobContacts } from "@/hooks/use-job-contacts";
 import { loadJobGroup, loadJobActivity, jobEventsAndEvidence } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
+import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -155,6 +156,7 @@ export default function JobDetail() {
         <div className="max-w-[1240px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
           <aside className="lg:col-span-4 lg:sticky lg:top-6 self-start">
             <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} />
+            <JobMoneyPanel jobId={id} />
           </aside>
           <div className="lg:col-span-8 min-w-0" id="add-note">
             <JobActivityFeed
