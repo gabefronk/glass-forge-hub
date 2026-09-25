@@ -37,6 +37,7 @@ import JobBudgets from '@/pages/JobBudgets';
 import PurchaseOrders from '@/pages/PurchaseOrders';
 import Summit from '@/pages/Summit';
 import UnlinkedJobRecords from '@/pages/UnlinkedJobRecords';
+import JobSetup from '@/pages/JobSetup';
 import { isWindowQuotesOnly } from '@/lib/agentCenterAccess';
 // Add page imports here
 
@@ -95,6 +96,7 @@ const AuthenticatedApp = () => {
           <Route path="/report-library" element={<QuotesOnlyRedirect><ReportLibraryRedirect /></QuotesOnlyRedirect>} />
           <Route path="/jobs" element={<QuotesOnlyRedirect><JobsHub /></QuotesOnlyRedirect>} />
           <Route path="/jobs/:id" element={<QuotesOnlyRedirect><JobDetail /></QuotesOnlyRedirect>} />
+          <Route path="/jobs/:id/setup" element={<QuotesOnlyRedirect><JobSetup /></QuotesOnlyRedirect>} />
           <Route path="/match-debug" element={<QuotesOnlyRedirect><MatchDebug /></QuotesOnlyRedirect>} />
           <Route path="/brands-specs" element={<BrandsSpecs />} />
           <Route path="/products" element={<Navigate to="/brands-specs" replace />} />
