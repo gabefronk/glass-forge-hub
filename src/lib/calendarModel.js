@@ -16,48 +16,52 @@ export function eventKind(e) {
 
 const OPEN_REPORT = ["pending", "missing_photos", "missing_notes", "missing_all"];
 
-// A past visit still waiting on its field report (the red flag on the grid).
-export function reportMissing(e) {
+// A visit on or before `today` still waiting on its field report. Future visits
+// default to "pending" in the data, so they are never flagged.
+export function reportMissing(e, today) {
+  if (today && dayOf(e) > today) return false;
   return e?.report_required !== false && OPEN_REPORT.includes(e?.report_status);
 }
 
 // The "Needs report" filter also keeps rescheduled visits, as the old "Unreported only" toggle did.
-export function needsReportFilter(e) {
+export function needsReportFilter(e, today) {
+  if (today && dayOf(e) > today) return false;
   return e?.report_required !== false && [...OPEN_REPORT, "rescheduled"].includes(e?.report_status);
 }
 
-export const REPORT_LABEL = {
-  ok: "Report complete",
-  complete: "Report complete",
-  pending: "Report due",
-  missing_photos: "Missing photos",
-  missing_notes: "Missing notes",
-  missing_all: "Report missing",
-  rescheduled: "Rescheduled",
-  waived: "Report waived",
-  not_required: "No report needed",
-};
-
-export function reportBadge(e) {
+// Small report chip for a visit, or null when there is nothing worth showing
+// (future visits, no report needed, unaudited or pre-compliance events).
+export function reportBadge(e, today) {
   if (!e?.report_status || e.report_required === false) return null;
-  const label = REPORT_LABEL[e.report_status];
-  if (!label) return null;
-  if (reportMissing(e)) return { label, text: "#6F4E10", bg: "#FAF0DA", border: "#EFDFB7" };
-  if (e.report_status === "rescheduled") return { label, text: "#566063", bg: "#F3EFE7", border: "#E2DCD1" };
-  return { label, text: "#082F2C", bg: "#E2EEEB", border: "#C7E4D2" };
+  if (today && dayOf(e) > today) return null;
+  const late = Number(e.days_late) || 0;
+  switch (e.report_status) {
+    case "ok": return { label: "Reported", text: "#082F2C", bg: "#E2EEEB", border: "#C7E4D2" };
+    case "waived": return { label: "Report waived", text: "#566063", bg: "#F3EFE7", border: "#E2DCD1" };
+    case "rescheduled": return { label: "Rescheduled", text: "#566063", bg: "#F3EFE7", border: "#E2DCD1" };
+    case "pending":
+    case "missing_photos":
+    case "missing_notes":
+    case "missing_all": {
+      const what = { missing_photos: "Needs photos", missing_notes: "Needs notes" }[e.report_status] || "Needs report";
+      if (late > 0) return { label: `${what} · ${late}d late`, text: "#A43432", bg: "#FCEDEC", border: "#F0C9C5" };
+      return { label: what, text: "#6F4E10", bg: "#FAF0DA", border: "#EFDFB7" };
+    }
+    default: return null;
+  }
 }
 
-export function filterEvents(events, filter = "all") {
+export function filterEvents(events, filter = "all", today) {
   if (filter === "all") return events;
-  if (filter === "needs_report") return events.filter(needsReportFilter);
+  if (filter === "needs_report") return events.filter((e) => needsReportFilter(e, today));
   return events.filter((e) => eventKind(e) === filter);
 }
 
-export function kindCounts(events) {
+export function kindCounts(events, today) {
   const c = { all: events.length, install: 0, service: 0, outlook: 0, needs_report: 0 };
   for (const e of events) {
     c[eventKind(e)]++;
-    if (needsReportFilter(e)) c.needs_report++;
+    if (needsReportFilter(e, today)) c.needs_report++;
   }
   return c;
 }
