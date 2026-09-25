@@ -7,7 +7,7 @@ import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
 import { fetchAllPages } from "@/lib/pagination";
 import { ROLE_LABELS } from "@/lib/jobContacts";
 import { useJobContacts } from "@/hooks/use-job-contacts";
-import { loadJobActivity, jobEventsAndEvidence } from "@/lib/jobGroupData";
+import { loadJobActivity, jobEventsAndEvidence, reportsForJob, loadUniqueLegacyNames } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
@@ -64,19 +64,18 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
       setRows(fl);
       setNotes(nt);
 
-      const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
+      const [allCal, names] = await Promise.all([
+        fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000),
+        loadUniqueLegacyNames(memberIds).catch(() => []),
+      ]);
       if (ver !== v.current) return;
-      const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt);
+      const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt, names);
       setCalEvents(shown.events);
       setEvidence(shown.evidence);
 
       const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
-      if (postIds.size) {
-        const all = await fetchAllPages(base44.entities.FieldReports, "-created_date", 2000);
-        if (ver === v.current) setFieldReports(all.filter((r) => r.post_id && postIds.has(r.post_id)));
-      } else if (ver === v.current) {
-        setFieldReports([]);
-      }
+      const all = await fetchAllPages(base44.entities.FieldReports, "-created_date", 2000);
+      if (ver === v.current) setFieldReports(reportsForJob(all, memberIds, postIds, names));
     } finally {
       if (ver === v.current) setLoading(false);
     }

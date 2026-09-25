@@ -269,6 +269,7 @@ export default async function(req) {
       }
       photoUrlByPost.set(b.postId, photoUrls);
       const reportRow = {
+        ...(m.job_id ? { job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: new Date().toISOString() } : {}),
         job_date: b.jobDate,
         job_name: b.projectName,
         message: post.message || '',
@@ -282,7 +283,7 @@ export default async function(req) {
       };
       if (exRep) {
         // Append-only (Gabriel 2026-09-15): never overwrite an existing field report.
-        // The only permitted write is additive: fill photo_urls when the report has none.
+        // The only permitted repair is additive: fill missing photo_urls.
         if (!(exRep.photo_urls || []).length && photoUrls.length) {
           frToUpdate.push({ id: exRep.id, photo_urls: photoUrls });
           frPhotosFilled++;
@@ -414,4 +415,3 @@ export default async function(req) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
-

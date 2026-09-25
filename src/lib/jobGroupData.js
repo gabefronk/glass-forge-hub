@@ -2,6 +2,7 @@ import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
 import { groupForJob } from "@/lib/jobDedupe";
 import { buildReportEvidence } from "@/lib/jobReports";
+import { uniqueLegacyNames } from "@/lib/jobLegacyNames";
 
 // Read-only loaders shared by the job page and the Jobs workspace panel. A job
 // that has duplicate records (see jobDedupe.js) is shown as one: activity from
@@ -30,20 +31,42 @@ export async function loadJobActivity(memberIds) {
   return { rows: rowLists.flat().sort(byDateDesc("job_date")), notes: noteLists.flat().sort(byDateDesc("note_date")) };
 }
 
+export async function loadUniqueLegacyNames(memberIds) {
+  // A bounded partial catalog cannot prove a name unique. Fail closed instead.
+  const jobs = [];
+  for (let page = 0; page < 50; page++) {
+    const batch = await base44.entities.Jobs.list('-created_date', 1000, page * 1000);
+    if (!Array.isArray(batch) || batch.length > 1000) throw new Error('Invalid Jobs catalog page');
+    jobs.push(...batch);
+    if (batch.length < 1000) return uniqueLegacyNames(jobs, memberIds);
+  }
+  throw new Error('Jobs catalog completeness could not be verified');
+}
+
 // Calendar events shown on the job, plus report evidence for its status. The
 // evidence also covers events linked from this job's lines that are filed under
 // another job id, so a linked event's "Report complete" is never missed.
-export function jobEventsAndEvidence(allEvents, memberIds, rows, notes) {
+export function jobEventsAndEvidence(allEvents, memberIds, rows, notes, names = []) {
   const members = new Set(memberIds);
+  const legacyNames = new Set(names.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
   const linkIds = new Set(rows.filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
   const shown = [];
   const relevant = [];
   for (const e of allEvents || []) {
     const linked = Boolean(e.google_event_id) && linkIds.has(e.google_event_id);
-    if (e.job_id ? members.has(e.job_id) : linked) shown.push(e);
-    if (linked || (e.job_id && members.has(e.job_id))) relevant.push(e);
+    const legacyNameMatch = !e.job_id && legacyNames.has(String(e.job_name || "").trim().toLowerCase());
+    if (e.job_id ? members.has(e.job_id) : (linked || legacyNameMatch)) shown.push(e);
+    if (linked || legacyNameMatch || (e.job_id && members.has(e.job_id))) relevant.push(e);
   }
   const canonical = memberIds[0];
   const evidence = buildReportEvidence({ events: relevant, notes, groupOf: (id) => (members.has(id) ? canonical : id) });
   return { events: shown, evidence };
+}
+
+export function reportsForJob(allReports, memberIds, postIds = new Set(), names = []) {
+  const ids = new Set(memberIds);
+  const normalizedNames = new Set(names.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
+  return (allReports || []).filter((r) => r.job_id
+    ? ids.has(r.job_id)
+    : (postIds.has(r.post_id) || normalizedNames.has(String(r.job_name || "").trim().toLowerCase())));
 }
