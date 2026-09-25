@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { C } from "@/lib/feeUI";
 import PageNotFound from "@/lib/PageNotFound";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import { approvedSetupSheetContext, jobMatchesPurchaseOrderSearch, purchaseOrderSubmission } from "@/lib/purchaseOrderSetup";
 import { ClipboardList, Plus, CheckCircle2, AlertTriangle } from "lucide-react";
 
 // Purchase Orders (owner only): YA-#### numbers for material orders. Numbers are
@@ -53,19 +54,23 @@ export default function PurchaseOrders() {
 function PurchaseOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [setupSheets, setSetupSheets] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [jobFilter, setJobFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reviewed, setReviewed] = useState(false);
   const [result, setResult] = useState(null); // { ok, text }
 
   const load = useCallback(async () => {
-    const [o, j] = await Promise.all([
+    const [o, j, s] = await Promise.all([
       base44.entities.PurchaseOrders.list("-created_date", 500).catch(() => []),
       base44.entities.Jobs.list("-created_date", 1000).catch(() => []),
+      base44.entities.JobSetupSheets.list("-created_date", 1000).catch(() => []),
     ]);
     setOrders(o || []);
     setJobs(j || []);
+    setSetupSheets(s || []);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -73,26 +78,20 @@ function PurchaseOrdersPage() {
   const jobOptions = useMemo(() => {
     const q = jobFilter.trim().toLowerCase();
     return jobs
-      .filter((j) => !q || [j.canonical_name, j.builder, j.customer_name].some((v) => String(v || "").toLowerCase().includes(q)) || j.id === form.job_id)
+      .filter((j) => jobMatchesPurchaseOrderSearch(j, q) || j.id === form.job_id)
       .sort((a, b) => String(a.canonical_name || "").localeCompare(String(b.canonical_name || "")));
   }, [jobs, jobFilter, form.job_id]);
 
   const jobName = (id) => jobs.find((j) => j.id === id)?.canonical_name || "";
+  const setupApproval = useMemo(() => approvedSetupSheetContext(setupSheets, form.job_id), [setupSheets, form.job_id]);
 
   async function issue() {
     if (saving) return;
     setSaving(true);
     setResult(null);
     try {
-      const job = jobs.find((j) => j.id === form.job_id);
-      const payload = {
-        vendor: form.vendor,
-        vendor_quote_ref: form.vendor_quote_ref,
-        notes: form.notes,
-        amount_dealer: form.amount_dealer === "" ? undefined : Number(form.amount_dealer),
-        amount_customer: form.amount_customer === "" ? undefined : Number(form.amount_customer),
-      };
-      if (job) Object.assign(payload, { job_id: job.id, job_name: job.canonical_name, builder: job.builder, customer_name: job.customer_name });
+      const payload = purchaseOrderSubmission({ form, context: setupApproval.context, reviewed });
+      if (!payload) throw new Error("Select an approved setup sheet and confirm owner review");
       const res = await base44.functions.invoke("issue_purchase_order", payload);
       const data = res?.data ?? res;
       if (!data?.po_number) throw new Error(data?.error || "PO was not issued");
@@ -100,6 +99,7 @@ function PurchaseOrdersPage() {
       setResult({ ok: !linkNote, text: `Issued ${data.po_number}${linkNote}` });
       setForm(EMPTY_FORM);
       setJobFilter("");
+      setReviewed(false);
       setShowForm(false);
       load();
     } catch (e) {
@@ -162,22 +162,30 @@ function PurchaseOrdersPage() {
               </table>
             </div>
           )}
-          <button onClick={() => setShowForm((v) => !v)} className="self-start inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-2 rounded-[8px]"
+          <button onClick={() => { setShowForm((v) => !v); setReviewed(false); }} className="self-start inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-2 rounded-[8px]"
             style={{ border: `1px solid ${C.border}`, color: C.text }}>
             <Plus className="h-4 w-4" />Issue a PO
           </button>
           {showForm && (
             <div className="grid grid-cols-2 max-[699px]:grid-cols-1 gap-2 rounded-[12px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-              <input value={jobFilter} placeholder="Filter jobs (name, builder, customer)"
+              <input value={jobFilter} aria-label="Search jobs" placeholder="Search name, ID, BFS PO, OE, or YA PO"
                 onChange={(e) => setJobFilter(e.target.value)}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle} />
-              <select value={form.job_id} onChange={(e) => setForm((f) => ({ ...f, job_id: e.target.value }))}
+              <select aria-label="Job" value={form.job_id} onChange={(e) => { setForm((f) => ({ ...f, job_id: e.target.value })); setReviewed(false); }}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle}>
-                <option value="">No job linked</option>
+                <option value="">Select a job</option>
                 {jobOptions.map((j) => (
                   <option key={j.id} value={j.id}>{[j.canonical_name || j.id, j.builder].filter(Boolean).join(" - ")}</option>
                 ))}
               </select>
+              <div className="col-span-2 max-[699px]:col-span-1 rounded-[8px] px-3 py-2 text-[12px]" role="status"
+                style={{ border: `1px solid ${setupApproval.ok ? C.accent : C.amber}`, color: setupApproval.ok ? C.accentText : C.amber }}>
+                {setupApproval.ok
+                  ? `Approved setup sheet: ${setupApproval.context.setup_sheet_approver_name} · ${shortDate(setupApproval.context.setup_sheet_approved_date)}. Job context only.`
+                  : setupApproval.reason === "ambiguous"
+                    ? "Blocked: more than one complete approved setup sheet matches this job."
+                    : "Blocked: exactly one approved setup sheet with approver and approval date is required."}
+              </div>
               {[
                 ["vendor", "Vendor (e.g. AMSCO)"],
                 ["vendor_quote_ref", "Vendor quote ref (e.g. 3517590)"],
@@ -194,8 +202,15 @@ function PurchaseOrdersPage() {
               <input value={form.notes} placeholder="Notes"
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 className="text-[13px] px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1" style={inputStyle} />
-              <button onClick={issue} disabled={saving} className="text-[13px] font-semibold px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1 disabled:opacity-60"
-                style={{ backgroundColor: C.accent, color: "#fff" }}>{saving ? "Issuing..." : "Issue PO number"}</button>
+              <p className="col-span-2 max-[699px]:col-span-1 text-[12px]" style={{ color: C.textMuted }}>
+                Vendor, quote/reference, dealer cost, and customer amount are manual PO fields. Setup-sheet whole-job pricing is never copied here.
+              </p>
+              <label className="col-span-2 max-[699px]:col-span-1 flex items-start gap-2 text-[13px]" style={{ color: C.text }}>
+                <input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} />
+                I reviewed the selected job and every manual PO field. Issue only when I press submit.
+              </label>
+              <button onClick={issue} disabled={saving || !reviewed || !setupApproval.ok} className="text-[13px] font-semibold px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1 disabled:opacity-60"
+                style={{ backgroundColor: C.accent, color: "#fff" }}>{saving ? "Issuing..." : "Review complete — submit and issue PO"}</button>
             </div>
           )}
         </Section>

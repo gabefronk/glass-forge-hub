@@ -14,7 +14,7 @@ import { fetchAllPages } from '../../shared/pagination.ts';
 
 const PREFIX = 'YA-';
 const STATUSES = ['issued', 'emailed', 'ordered', 'confirmed', 'received', 'cancelled'];
-const TEXT_FIELDS = ['job_name', 'builder', 'customer_name', 'vendor', 'vendor_quote_ref', 'order_email_ref', 'notes'];
+const TEXT_FIELDS = ['builder', 'customer_name', 'vendor', 'vendor_quote_ref', 'order_email_ref', 'notes'];
 
 const clean = (v) => (v === null || v === undefined ? '' : String(v).trim());
 
@@ -47,6 +47,10 @@ export default async function(req) {
     const body = await req.json().catch(() => ({}));
     const api = base44.asServiceRole.entities;
 
+    if (body.review_confirmed !== true) {
+      return Response.json({ error: 'owner_review_required' }, { status: 400 });
+    }
+
     const status = clean(body.status) || 'issued';
     if (!STATUSES.includes(status)) return Response.json({ error: 'invalid_status', status }, { status: 200 });
 
@@ -63,6 +67,23 @@ export default async function(req) {
     const job = await api.Jobs.get(jobId).catch(() => null);
     if (!job) return Response.json({ error: 'job_not_found', job_id: jobId }, { status: 200 });
 
+    // Job setup approval supplies identity context only. Never read its nested costs,
+    // pricing, sources, or scope as vendor-specific PO values.
+    const sheets = await fetchAllPages(api.JobSetupSheets, 'created_date').catch(() => []);
+    const approvedSheets = sheets.filter((sheet) =>
+      clean(sheet?.job_id) === jobId &&
+      clean(sheet?.status).toLowerCase() === 'approved' &&
+      clean(sheet?.approver_name) &&
+      clean(sheet?.approved_date)
+    );
+    if (approvedSheets.length !== 1) {
+      return Response.json({ error: approvedSheets.length > 1 ? 'ambiguous_setup_sheet' : 'approved_setup_sheet_required' }, { status: 200 });
+    }
+    const setupSheet = approvedSheets[0];
+    if (clean(body.setup_sheet_id) !== clean(setupSheet.id)) {
+      return Response.json({ error: 'setup_sheet_changed' }, { status: 200 });
+    }
+
     const existing = await fetchAllPages(api.PurchaseOrders, 'created_date');
     const po_number = nextPoNumber(existing);
     const expected = clean(body.po_number).toUpperCase();
@@ -70,13 +91,19 @@ export default async function(req) {
       return Response.json({ error: 'po_number_mismatch', expected, next: po_number }, { status: 200 });
     }
 
-    const row = { po_number, status, created_by_email: user.email || '' };
+    const row = {
+      po_number, status, created_by_email: user.email || '',
+      setup_sheet_id: clean(setupSheet.id),
+      setup_sheet_approver_name: clean(setupSheet.approver_name),
+      setup_sheet_approved_date: clean(setupSheet.approved_date),
+      owner_reviewed_at: new Date().toISOString(),
+    };
     for (const f of TEXT_FIELDS) {
       const v = clean(body[f]);
       if (v) row[f] = v;
     }
     row.job_id = jobId;
-    if (!row.job_name && job.canonical_name) row.job_name = job.canonical_name;
+    row.job_name = clean(setupSheet.job_name) || clean(job.canonical_name);
     if (!row.builder && job.builder) row.builder = job.builder;
     if (!row.customer_name && job.customer_name) row.customer_name = job.customer_name;
     if (amount_dealer !== undefined) row.amount_dealer = amount_dealer;

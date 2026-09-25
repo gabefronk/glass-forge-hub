@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, RotateCcw, CheckCircle2, AlertCircle, Phone } from "lucide-react";
+import { ArrowLeft, RotateCcw, CheckCircle2, Phone } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import NodeMetaPanel from "./NodeMetaPanel";
