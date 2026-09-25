@@ -35,6 +35,7 @@ export default function Summit() {
         <p className="mt-2.5 text-[13px] max-w-[640px]" style={{ color: "var(--gf-sidebar-muted)" }}>
           Field service reference for installers. Troubleshooter v1.1, DIP switch map, potentiometer baselines, and the cert library.
         </p>
+        <div className="mt-4" style={{ height: 3, width: 64, background: "linear-gradient(90deg, var(--gf-brass-400), var(--gf-brass-300))", borderRadius: 3 }} />
       </header>
 
       {/* Tab bar — large touch targets, horizontally scrollable on phones */}

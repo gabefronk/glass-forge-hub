@@ -3,6 +3,8 @@ import { ArrowLeft, ExternalLink, RotateCcw, CheckCircle2, AlertCircle, Phone } 
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import NodeMetaPanel from "./NodeMetaPanel";
+import PhotoSlot from "./PhotoSlot";
+import { SUMMIT_CARD_SHADOW } from "./summitData";
 
 const SYSTEM_TYPES = ["Multi-slide", "Bi-parting", "Pocketing", "Stacking", "Pivot", "90-Degree Cornerless", "Lift & Slide", "Tilt-Up Awning Window", "Not sure"];
 const MOTORS = ["Peak", "Sierra", "Everest", "Tahoe", "Not sure"];
@@ -13,6 +15,14 @@ const CONTEXT_STEPS = [
   { key: "motor", title: "Which motor is it?", prompt: "Pick the motor model if you can see it. Not sure skips this filter.", options: MOTORS },
   { key: "control_type", title: "What's on the wall?", prompt: "Pick the wall control you're using. Not sure skips this filter.", options: CONTROLS },
 ];
+
+// Real-hardware photo to show on a given node (wiring / sensor / control reference).
+const NODE_PHOTOS = {
+  peak_9in1: "motor_hub_ports",
+  flashing_3: "motor_hub_ports",
+  flashing_4: "motion_sensor",
+  sym_reverse: "motion_sensor",
+};
 
 // Interactive decision tree driven by TroubleshootNode records.
 // Starts with a 3-step system-context picker, then walks the tree.
@@ -147,6 +157,11 @@ export default function Troubleshooter() {
     { label: "Control", value: context.control_type },
   ].filter((c) => c.value);
 
+  const isTouchscreenControl = context.control_type === "9-in-1 touchscreen" || context.control_type === "12-in-1 touchscreen";
+  const nodePhotoKey = inTree && current
+    ? (current === root && isTouchscreenControl ? "touchscreen" : NODE_PHOTOS[current.node_id])
+    : null;
+
   return (
     <div className="flex flex-col gap-4">
       {/* Breadcrumb / back */}
@@ -196,11 +211,12 @@ export default function Troubleshooter() {
         const step = CONTEXT_STEPS[ctxStep];
         if (!step) return null;
         return (
-          <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: C.cardShadow }}>
+          <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: SUMMIT_CARD_SHADOW }}>
             <h3 className="font-heading text-[19px] font-bold leading-tight" style={{ color: C.text, letterSpacing: "-0.02em" }}>{step.title}</h3>
             {step.prompt && (
               <p className="text-[14px] mt-1.5 leading-snug" style={{ color: C.textSecondary }}>{step.prompt}</p>
             )}
+            <div className="mt-3" style={{ height: 2, background: "linear-gradient(90deg, var(--gf-brass-400), transparent)", borderRadius: 2 }} />
             <div className="mt-4 flex flex-col gap-2.5">
               {step.options.map((opt) => {
                 const active = context[step.key] === opt;
@@ -228,10 +244,16 @@ export default function Troubleshooter() {
       {/* Tree node card */}
       {inTree && current && (
         <>
-          <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: C.cardShadow }}>
+          <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: SUMMIT_CARD_SHADOW }}>
             <h3 className="font-heading text-[19px] font-bold leading-tight" style={{ color: C.text, letterSpacing: "-0.02em" }}>{current.title}</h3>
             {current.prompt && (
               <p className="text-[14px] mt-1.5 leading-snug" style={{ color: C.textSecondary }}>{current.prompt}</p>
+            )}
+            <div className="mt-3" style={{ height: 2, background: "linear-gradient(90deg, var(--gf-brass-400), transparent)", borderRadius: 2 }} />
+            {nodePhotoKey && (
+              <div className="mt-4">
+                <PhotoSlot photoKey={nodePhotoKey} />
+              </div>
             )}
 
             {current.placeholder && (
@@ -328,7 +350,7 @@ export default function Troubleshooter() {
 
           {/* Session log — only at a leaf */}
           {current.node_type === "leaf" && (
-            <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: C.cardShadow }}>
+            <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: SUMMIT_CARD_SHADOW }}>
               <h4 className="font-heading text-[15px] font-bold" style={{ color: C.text }}>Log this walkthrough</h4>
               <p className="text-[12px] mt-0.5" style={{ color: C.textMuted }}>Records the path taken so the team can spot recurring faults.</p>
 

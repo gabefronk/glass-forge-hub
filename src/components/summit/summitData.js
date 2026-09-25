@@ -70,3 +70,17 @@ export const DOC = {
   motion: { label: "Motion sensor", url: SUMMIT_DOCS[4].url },
   folder: { label: "Full cert folder", url: SUMMIT_DOCS[5].url },
 };
+
+// Real job-site hardware photo registry. URLs stay empty until the photos arrive;
+// PhotoSlot renders a neutral "photo coming" placeholder. No stock or AI images —
+// only real photos of the actual hardware.
+export const SUMMIT_PHOTOS = {
+  dip_switch_bank: { label: "DIP switch bank", caption: "Control board DIP switch bank — Rev 4 layout. Match positions to SA-0078 before changing anything.", url: "" },
+  potentiometer_row: { label: "Potentiometer row", caption: "Potentiometer row on the control board. Do not adjust from memory — refer to SA-0089.", url: "" },
+  motor_hub_ports: { label: "Motor hub ports with cables", caption: "Motor hub ports with cables. Use this view for the port-swap vs cable-swap decision.", url: "" },
+  touchscreen: { label: "Wall touchscreen control", caption: "Wall-mounted touchscreen control (9-in-1 / 12-in-1). Confirm the screen responds before deeper checks.", url: "" },
+  motion_sensor: { label: "Motion sensor faceplate", caption: "Motion sensor faceplate. Check alignment and that the lens is clean and unobstructed.", url: "" },
+};
+
+// Stronger card shadow for the Summit section — gives cards pop in bright daylight.
+export const SUMMIT_CARD_SHADOW = "0 1px 3px rgba(21,24,26,.08), 0 12px 28px -14px rgba(21,24,26,.22)";

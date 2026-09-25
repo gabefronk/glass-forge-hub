@@ -1,14 +1,15 @@
 import { ExternalLink, FolderOpen } from "lucide-react";
 import { C } from "@/lib/feeUI";
-import { SUMMIT_DOCS } from "./summitData";
+import { SUMMIT_DOCS, SUMMIT_CARD_SHADOW } from "./summitData";
 
 // Link cards to the Summit certification library in Drive.
 export default function SummitDocs() {
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: C.cardShadow }}>
+      <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: SUMMIT_CARD_SHADOW }}>
         <h3 className="font-heading text-[18px] font-bold" style={{ color: C.text, letterSpacing: "-0.02em" }}>Summit cert library</h3>
         <p className="text-[13px] mt-1" style={{ color: C.textSecondary }}>Field sheets, service guides, and factory manuals in Drive.</p>
+        <div className="mt-3" style={{ height: 2, background: "linear-gradient(90deg, var(--gf-brass-400), transparent)", borderRadius: 2 }} />
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           {SUMMIT_DOCS.map((d) => {

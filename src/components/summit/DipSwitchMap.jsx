@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { C } from "@/lib/feeUI";
-import { DIP_SWITCHES } from "./summitData";
+import { DIP_SWITCHES, SUMMIT_CARD_SHADOW } from "./summitData";
+import PhotoSlot from "./PhotoSlot";
 
 // Visual diagram of the 8 DIP switches. Tap a switch for detail + warning text.
 export default function DipSwitchMap() {
@@ -9,9 +10,14 @@ export default function DipSwitchMap() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: C.cardShadow }}>
+      <div className="rounded-[14px] p-5" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card, boxShadow: SUMMIT_CARD_SHADOW }}>
         <h3 className="font-heading text-[18px] font-bold" style={{ color: C.text, letterSpacing: "-0.02em" }}>DIP switch map</h3>
         <p className="text-[13px] mt-1" style={{ color: C.textSecondary }}>Tap a switch for its function and warning. Per SA-0078.</p>
+        <div className="mt-3" style={{ height: 2, background: "linear-gradient(90deg, var(--gf-brass-400), transparent)", borderRadius: 2 }} />
+
+        <div className="mt-4">
+          <PhotoSlot photoKey="dip_switch_bank" />
+        </div>
 
         {/* Diagram row of 8 switches */}
         <div className="mt-4 flex items-end justify-between gap-1.5 overflow-x-auto obsidian-scroll pb-1">
