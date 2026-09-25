@@ -121,10 +121,12 @@ export function buildProjectGroups(reports) {
   const groups = new Map(); // key → { id, name, alpha_tokens, names, posts }
   for (const r of reports) {
     const alpha = normalizeEventForProjectMatch(r.job_name).alpha_tokens;
-    const key = alpha.join(" ");
+    // A stable job link is authoritative. Unlinked legacy reports retain the
+    // previous normalized-name grouping so today's evidence does not disappear.
+    const key = r.job_id ? `job:${r.job_id}` : alpha.join(" ");
     if (!key) continue;
     if (!groups.has(key)) {
-      groups.set(key, { id: key, name: r.job_name, alpha_tokens: alpha, names: [], posts: [] });
+      groups.set(key, { id: key, job_id: r.job_id || '', name: r.job_name, alpha_tokens: alpha, names: [], posts: [] });
     }
     const g = groups.get(key);
     if (!g.names.includes(r.job_name)) g.names.push(r.job_name);
@@ -152,6 +154,10 @@ export function scoreEventToProject(event, project) {
 // Resolve a calendar event to the best-matching Probuild project group.
 // Returns { best: { id, name, score } | null, candidates: [{id, name, score}, ...] (top 3), lot_tokens }
 export function resolveProject(event, projects) {
+  if (event?.job_id) {
+    const exact = projects.find((p) => p.job_id === event.job_id);
+    if (exact) return { best: { id: exact.id, name: exact.name, score: 1 }, candidates: [{ id: exact.id, name: exact.name, score: 1 }], lot_tokens: [] };
+  }
   const { alpha_tokens, numeric_tokens } = normalizeEventForProjectMatch(event.job_name);
   const scored = [];
   for (const p of projects) {

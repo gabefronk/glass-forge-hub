@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, Unlink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { label: "Summit", to: "/summit", icon: Mountain },
   { label: "System map", to: "/system-map", icon: Network, ownerOnly: true },
   { label: "Research Queue", to: "/research-queue", icon: Search, ownerOnly: true },
+  { label: "Unlinked", to: "/admin/unlinked", icon: Unlink, ownerOnly: true },
 ];
 
 function monthLabel(m) {
