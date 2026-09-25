@@ -12,12 +12,14 @@ export function newJobPayload(values = {}) {
   const address = normalizeJobText(values.address);
   const po = normalizeJobText(values.po_number);
   const oe = normalizeJobText(values.oe_number);
+  const source = normalizeJobText(values.source_window_quote_id);
   return {
     canonical_name,
     ...(builder ? { builder } : {}),
     ...(address ? { address } : {}),
     ...(po ? { po_numbers: [po] } : {}),
     ...(oe ? { oe_numbers: [oe] } : {}),
+    ...(source ? { source_window_quote_id: source } : {}),
   };
 }
 
