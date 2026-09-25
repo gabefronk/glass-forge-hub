@@ -12,6 +12,7 @@ import { fetchAllPages } from "@/lib/pagination";
 import { useJobContacts } from "@/hooks/use-job-contacts";
 import { loadJobGroup, loadJobActivity, jobEventsAndEvidence } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
+import JobMessageThreads from "@/components/jobs/JobMessageThreads";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -167,6 +168,7 @@ export default function JobDetail() {
               onChanged={loadAll}
               onPhotoClick={setLightbox}
             />
+            <JobMessageThreads jobId={id} />
           </div>
         </div>
       </div>

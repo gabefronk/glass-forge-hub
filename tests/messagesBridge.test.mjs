@@ -26,7 +26,7 @@ test('every inbox action rejects anonymous, ordinary users, and other administra
  const s=await setup();
  for(const user of [null,{role:'user',email:'gabefronk@gmail.com'},{role:'admin',email:'iryedra@gmail.com'},{role:'admin',email:'trevor.draney7@gmail.com'}]){
   s.setUser(user);
-  for(const action of ['inbox','conversation','jobs','link_job','mark_read','attachment','set_device','ingest','upload','heartbeat']){
+  for(const action of ['inbox','conversation','job_threads','jobs','link_job','mark_read','attachment','set_device','ingest','upload','heartbeat']){
    const r=await s.call({action,email:'gabefronk@gmail.com',role:'admin'},false);
    assert.equal(r.status,403,action);
    assert.match(r.headers.get('Cache-Control'),/no-store/);

@@ -175,11 +175,12 @@ export function JobContactSuggestionsRow({ jobContacts }) {
       </Row>
     );
   }
-  if (!view.suggestions.length && view.messages !== "unavailable") return null;
+  const suggestions = (view.suggestions || []).filter((s) => s.role === "superintendent").slice(0, 3);
+  if (!suggestions.length && view.messages !== "unavailable") return null;
   return (
-    <Row icon={Lightbulb} label={`Suggested contacts · not saved (${view.suggestions.length})`}>
+    <Row icon={Lightbulb} label={`Suggested superintendents · owner confirmation required (${suggestions.length})`}>
       {view.messages === "unavailable" && <p className="mb-1.5 text-[11px]" style={{ color: C.textMuted }}>Message threads could not be checked for this job.</p>}
-      <ContactSuggestions suggestions={view.suggestions} onConfirm={confirmLink} />
+      <ContactSuggestions suggestions={suggestions} onConfirm={confirmLink} />
     </Row>
   );
 }
