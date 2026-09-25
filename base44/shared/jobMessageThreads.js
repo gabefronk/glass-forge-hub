@@ -29,9 +29,17 @@ export function resolveJobMessageThreads({jobId, conversations = [], contacts = 
     }
     // A thread explicitly linked elsewhere is never reassigned through a contact.
     if (conversation.job_id) continue;
+    // Participant overlap does not establish the scope of a group conversation.
+    // Reject it before looking up contacts or fetching any message bodies.
+    const keys = participantKeys(conversation.participants);
+    const distinct = new Set(keys);
+    if (!Array.isArray(conversation.participants) || conversation.participants.length !== 1 || keys.length !== 1 || distinct.size !== 1) {
+      review.push({conversation_key: conversation.conversation_key, reason: 'Group or unverified participants require an explicit job link'});
+      continue;
+    }
     const matched = new Set();
     let sharedIdentity = false;
-    for (const key of participantKeys(conversation.participants)) {
+    for (const key of keys) {
       const found = identities.get(key) || [];
       if (found.length > 1) sharedIdentity = true;
       for (const contactKey of found) matched.add(contactKey);
