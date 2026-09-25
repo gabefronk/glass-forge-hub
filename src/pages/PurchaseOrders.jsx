@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { C } from "@/lib/feeUI";
 import PageNotFound from "@/lib/PageNotFound";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import { fetchAllPages } from "@/lib/pagination";
+import { approvedSetupSheetContext, jobMatchesPurchaseOrderSearch, purchaseOrderSubmission } from "@/lib/purchaseOrderSetup";
 import { ClipboardList, Plus, CheckCircle2, AlertTriangle } from "lucide-react";
 
 // Purchase Orders (owner only): YA-#### numbers for material orders. Numbers are
@@ -53,19 +56,26 @@ export default function PurchaseOrders() {
 function PurchaseOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [setupSheets, setSetupSheets] = useState([]);
+  const [setupSheetsComplete, setSetupSheetsComplete] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [jobFilter, setJobFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reviewed, setReviewed] = useState(false);
+  const [useSetupSheet, setUseSetupSheet] = useState(false);
   const [result, setResult] = useState(null); // { ok, text }
 
   const load = useCallback(async () => {
-    const [o, j] = await Promise.all([
+    const [o, j, s] = await Promise.all([
       base44.entities.PurchaseOrders.list("-created_date", 500).catch(() => []),
-      base44.entities.Jobs.list("-created_date", 1000).catch(() => []),
+      fetchAllPages(base44.entities.Jobs, "-created_date"),
+      base44.entities.JobSetupSheets ? fetchAllPages(base44.entities.JobSetupSheets, "-created_date").then(rows => ({rows,complete:true})).catch(() => ({rows:[],complete:false})) : Promise.resolve({rows:[],complete:false}),
     ]);
     setOrders(o || []);
     setJobs(j || []);
+    setSetupSheets(s.rows);
+    setSetupSheetsComplete(s.complete);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -73,11 +83,12 @@ function PurchaseOrdersPage() {
   const jobOptions = useMemo(() => {
     const q = jobFilter.trim().toLowerCase();
     return jobs
-      .filter((j) => !q || [j.canonical_name, j.builder, j.customer_name].some((v) => String(v || "").toLowerCase().includes(q)) || j.id === form.job_id)
+      .filter((j) => jobMatchesPurchaseOrderSearch(j, q) || j.id === form.job_id)
       .sort((a, b) => String(a.canonical_name || "").localeCompare(String(b.canonical_name || "")));
   }, [jobs, jobFilter, form.job_id]);
 
   const jobName = (id) => jobs.find((j) => j.id === id)?.canonical_name || "";
+  const setupApproval = useMemo(() => setupSheetsComplete ? approvedSetupSheetContext(setupSheets, form.job_id) : {ok:false,reason:"unavailable"}, [setupSheets, form.job_id, setupSheetsComplete]);
 
   async function issue() {
     if (saving) return;
@@ -85,14 +96,8 @@ function PurchaseOrdersPage() {
     setResult(null);
     try {
       const job = jobs.find((j) => j.id === form.job_id);
-      const payload = {
-        vendor: form.vendor,
-        vendor_quote_ref: form.vendor_quote_ref,
-        notes: form.notes,
-        amount_dealer: form.amount_dealer === "" ? undefined : Number(form.amount_dealer),
-        amount_customer: form.amount_customer === "" ? undefined : Number(form.amount_customer),
-      };
-      if (job) Object.assign(payload, { job_id: job.id, job_name: job.canonical_name, builder: job.builder, customer_name: job.customer_name });
+      const payload = purchaseOrderSubmission({form: {...form, job_name: job?.canonical_name, builder: job?.builder, customer_name: job?.customer_name}, context: useSetupSheet ? setupApproval.context : null, reviewed});
+      if (!payload || (useSetupSheet && !setupApproval.ok)) throw new Error("Select a job, or confirm the approved setup sheet if using it");
       const res = await base44.functions.invoke("issue_purchase_order", payload);
       const data = res?.data ?? res;
       if (!data?.po_number) throw new Error(data?.error || "PO was not issued");
@@ -100,6 +105,8 @@ function PurchaseOrdersPage() {
       setResult({ ok: !linkNote, text: `Issued ${data.po_number}${linkNote}` });
       setForm(EMPTY_FORM);
       setJobFilter("");
+      setReviewed(false);
+      setUseSetupSheet(false);
       setShowForm(false);
       load();
     } catch (e) {
@@ -162,22 +169,35 @@ function PurchaseOrdersPage() {
               </table>
             </div>
           )}
-          <button onClick={() => setShowForm((v) => !v)} className="self-start inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-2 rounded-[8px]"
+          <button onClick={() => { setShowForm((v) => !v); setReviewed(false); setUseSetupSheet(false); }} className="self-start inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-2 rounded-[8px]"
             style={{ border: `1px solid ${C.border}`, color: C.text }}>
             <Plus className="h-4 w-4" />Issue a PO
           </button>
           {showForm && (
             <div className="grid grid-cols-2 max-[699px]:grid-cols-1 gap-2 rounded-[12px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-              <input value={jobFilter} placeholder="Filter jobs (name, builder, customer)"
+              <input value={jobFilter} aria-label="Search jobs" placeholder="Search name, ID, BFS PO, OE, or YA PO"
                 onChange={(e) => setJobFilter(e.target.value)}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle} />
-              <select value={form.job_id} onChange={(e) => setForm((f) => ({ ...f, job_id: e.target.value }))}
+              <select aria-label="Job" value={form.job_id} onChange={(e) => { setForm((f) => ({ ...f, job_id: e.target.value })); setReviewed(false); setUseSetupSheet(false); }}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle}>
-                <option value="">No job linked</option>
+                <option value="">Select a job</option>
                 {jobOptions.map((j) => (
                   <option key={j.id} value={j.id}>{[j.canonical_name || j.id, j.builder].filter(Boolean).join(" - ")}</option>
                 ))}
               </select>
+              <div className="col-span-2 max-[699px]:col-span-1 rounded-[8px] px-3 py-2 text-[12px]" role="status"
+                style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
+                {setupApproval.ok
+                  ? `Optional setup sheet marked approved: ${setupApproval.context.setup_sheet_approver_name} · ${shortDate(setupApproval.context.setup_sheet_approved_date)}. Entered audit fields are not proof of approval by that person.`
+                  : setupApproval.reason === "ambiguous"
+                    ? "Multiple approved sheets; manual PO remains available. Sheet context requires one sheet marked approved."
+                    : "No sheet marked approved is available. Manual PO remains available."}
+              </div>
+              {setupApproval.ok && <Link to={`/jobs/${form.job_id}/setup`} target="_blank" rel="noopener noreferrer" className="col-span-2 max-[699px]:col-span-1 text-[13px] underline">Open sheet for review</Link>}
+              {setupApproval.ok && <label className="col-span-2 max-[699px]:col-span-1 flex items-start gap-2 text-[13px]" style={{ color: C.text }}>
+                <input type="checkbox" checked={useSetupSheet} onChange={(e) => { setUseSetupSheet(e.target.checked); setReviewed(false); }} />
+                Use the sheet as job context (optional).
+              </label>}
               {[
                 ["vendor", "Vendor (e.g. AMSCO)"],
                 ["vendor_quote_ref", "Vendor quote ref (e.g. 3517590)"],
@@ -187,15 +207,22 @@ function PurchaseOrdersPage() {
                 <input key={key} value={form[key]} placeholder={ph}
                   onChange={(e) => {
                     const v = key.startsWith("amount_") ? e.target.value.replace(/[^0-9.]/g, "") : e.target.value;
-                    setForm((f) => ({ ...f, [key]: v }));
+                    setForm((f) => ({ ...f, [key]: v })); setReviewed(false);
                   }}
                   className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle} />
               ))}
               <input value={form.notes} placeholder="Notes"
-                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                onChange={(e) => { setForm((f) => ({ ...f, notes: e.target.value })); setReviewed(false); }}
                 className="text-[13px] px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1" style={inputStyle} />
-              <button onClick={issue} disabled={saving} className="text-[13px] font-semibold px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1 disabled:opacity-60"
-                style={{ backgroundColor: C.accent, color: "#fff" }}>{saving ? "Issuing..." : "Issue PO number"}</button>
+              <p className="col-span-2 max-[699px]:col-span-1 text-[12px]" style={{ color: C.textMuted }}>
+                Vendor, quote/reference, dealer cost, and customer amount are manual PO fields. Setup-sheet whole-job pricing is never copied here.
+              </p>
+              {useSetupSheet && <label className="col-span-2 max-[699px]:col-span-1 flex items-start gap-2 text-[13px]" style={{ color: C.text }}>
+                <input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} />
+                I reviewed the sheet and every manual PO field. This checkbox does not approve a vendor purchase; issue only when I press submit.
+              </label>}
+              <button onClick={issue} disabled={saving || !form.job_id || (useSetupSheet && (!reviewed || !setupApproval.ok))} className="text-[13px] font-semibold px-3 py-2 rounded-[8px] col-span-2 max-[699px]:col-span-1 disabled:opacity-60"
+                style={{ backgroundColor: C.accent, color: "#fff" }}>{saving ? "Issuing..." : useSetupSheet ? "Review complete - submit and issue PO" : "Issue PO number"}</button>
             </div>
           )}
         </Section>

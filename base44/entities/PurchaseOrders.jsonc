@@ -19,7 +19,11 @@
     },
     "order_email_ref": { "type": "string", "description": "Reference to the order email sent to the vendor (Gmail message/thread id or subject)." },
     "notes": { "type": "string" },
-    "created_by_email": { "type": "string" }
+    "created_by_email": { "type": "string" },
+    "setup_sheet_id": { "type": "string", "description": "Optional JobSetupSheets record marked approved in Hub, used only as job context; entered approver fields do not authenticate the named person." },
+    "setup_sheet_approver_name": { "type": "string", "description": "Entered approver-name snapshot from JobSetupSheets, not verified approval." },
+    "setup_sheet_approved_date": { "type": "string", "description": "Entered approved-date snapshot from JobSetupSheets, not verified approval." },
+    "owner_reviewed_at": { "type": "string", "description": "Timestamp of the owner's explicit PO review and submit." }
   },
   "required": ["po_number", "status"],
   "rls": {
