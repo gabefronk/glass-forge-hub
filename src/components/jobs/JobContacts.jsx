@@ -89,6 +89,7 @@ export function JobContactRows({ jobId, jobContacts }) {
       {view.status?.missing_contact && (
         <Row icon={AlertTriangle} label="Contacts">
           <Missing>No contacts linked to this job yet (0 linked)</Missing>
+          {view.suggestions?.length > 0 && <div className="mt-2"><ContactSuggestions suggestions={view.suggestions.slice(0, 3)} onConfirm={jobContacts.confirmLink} /></div>}
           <p className="mt-1 text-[12px] break-words" style={{ color: C.textMuted }}>
             {view.directory ? "Nothing has been guessed or saved. " : "The contacts directory has not been imported yet. "}
             <Link to={contactsHref} className="underline" style={{ color: C.accentText }}>Find people in Contacts</Link>
@@ -100,7 +101,6 @@ export function JobContactRows({ jobId, jobContacts }) {
 }
 
 function SuggestionCard({ suggestion: s, onConfirm }) {
-  const [pending, setPending] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const role = confirmRoleOf(s);
@@ -110,7 +110,6 @@ function SuggestionCard({ suggestion: s, onConfirm }) {
     setError("");
     try {
       await onConfirm({ contactKey: key, role });
-      setPending("");
     } catch (e) {
       setError(invokeErrorOf(e).message || "The link could not be saved.");
     } finally {
@@ -135,17 +134,9 @@ function SuggestionCard({ suggestion: s, onConfirm }) {
           {people.map((c) => (
             <div key={c.key} className="rounded-md bg-white p-2" style={{ border: `1px solid ${C.rowBorder}` }}>
               <ContactRow contact={c} detail={c.company} />
-              {pending === c.key ? (
-                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <span className="text-[12px]" style={{ color: C.text }}>Save {sanitizeText(c.name)}{role ? " as superintendent" : ""} for this job?</span>
-                  <button type="button" disabled={busy} onClick={() => confirm(c.key)} className="rounded-full px-3 py-1 text-[12px] font-semibold disabled:opacity-50" style={{ backgroundColor: C.accent, color: C.accentDark }}>{busy ? "Saving…" : "Save link"}</button>
-                  <button type="button" disabled={busy} onClick={() => setPending("")} className="text-[12px] underline" style={{ color: C.textSecondary }}>Cancel</button>
-                </div>
-              ) : (
-                <button type="button" onClick={() => { setPending(c.key); setError(""); }} className="mt-1.5 rounded-full px-3 py-1 text-[12px] font-semibold" style={{ border: `1px solid ${C.border}`, color: C.accentText }}>
-                  {c.already_linked ? "Mark as superintendent" : "Link to this job…"}
-                </button>
-              )}
+              <button type="button" disabled={busy} onClick={() => confirm(c.key)} className="mt-1.5 rounded-full px-3 py-1 text-[12px] font-semibold disabled:opacity-50" style={{ border: `1px solid ${C.border}`, color: C.accentText }}>
+                {busy ? "Linking…" : c.already_linked ? "Mark as superintendent" : "Link"}
+              </button>
             </div>
           ))}
         </div>
@@ -159,7 +150,7 @@ function SuggestionCard({ suggestion: s, onConfirm }) {
   );
 }
 
-// Proposed job ⇄ contact links. Nothing is saved until the owner clicks "Link…" and then "Save link".
+// Proposed job ⇄ contact links. Nothing is saved until the owner explicitly clicks "Link".
 export function ContactSuggestions({ suggestions, onConfirm }) {
   if (!suggestions?.length) return null;
   return <ul className="space-y-2">{suggestions.map((s) => <SuggestionCard key={s.id} suggestion={s} onConfirm={onConfirm} />)}</ul>;
@@ -175,7 +166,7 @@ export function JobContactSuggestionsRow({ jobContacts }) {
       </Row>
     );
   }
-  if (!view.suggestions.length && view.messages !== "unavailable") return null;
+  if (view.status?.missing_contact || (!view.suggestions.length && view.messages !== "unavailable")) return null;
   return (
     <Row icon={Lightbulb} label={`Suggested contacts · not saved (${view.suggestions.length})`}>
       {view.messages === "unavailable" && <p className="mb-1.5 text-[11px]" style={{ color: C.textMuted }}>Message threads could not be checked for this job.</p>}
