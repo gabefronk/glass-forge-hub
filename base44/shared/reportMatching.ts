@@ -239,3 +239,17 @@ export function evaluatePosts(posts) {
   });
   return { result: hasNotes || hasPhotos ? "ok" : "missing_all", post_ids: postIds };
 }
+
+// A previously verified post link must survive a forced month refresh. The
+// calendar sync reconciles late-filed reports across dates; a date-claiming
+// audit must not discard that evidence when another visit claims the post.
+export function hasVerifiedMatchedPosts(event, reports, today) {
+  if (event?.report_status !== 'ok' || !Array.isArray(event.matched_post_ids) || !event.matched_post_ids.length) return false;
+  const name = (v) => String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const eventName = name(event.job_name);
+  if (!eventName || !event.event_date) return false;
+  const earliest = addDays(event.event_date, -3);
+  const ids = new Set(event.matched_post_ids.filter(Boolean));
+  const confirmed = reports.filter((r) => ids.has(r.post_id) && name(r.job_name) === eventName && r.job_date >= earliest && r.job_date <= today);
+  return confirmed.length > 0 && evaluatePosts(confirmed).result === 'ok';
+}
