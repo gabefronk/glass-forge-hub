@@ -1,6 +1,5 @@
 const ROOT='1F_PgUPEuvyvzCk92tdaFiwioLSack4iS';
-import { canReadJobDocuments } from './jobDocumentsAccess.mjs';
-const OWNERS=new Set(['gabefronk@gmail.com','gabriel.fronk.wd@gmail.com']);
+import { canReadJobDocuments, canWriteJobDocuments } from './jobDocumentsAccess.mjs';
 const DRIVE='https://www.googleapis.com/drive/v3';
 const JSON_HEADERS={'Content-Type':'application/json'};
 const reply=(body,status=200)=>Response.json(body,{status});
@@ -14,11 +13,15 @@ export function createJobDocumentsHandler({getClient,request=fetch}={}){
    const client=await getClient(req),user=await client.auth.me().catch(()=>null);
    if(!canReadJobDocuments(user))return reply({error:'Sign in required.'},401);
    const input=await req.json();
-   if(input.action!=='list'&&(user.role!=='admin'||!OWNERS.has(String(user.email||'').toLowerCase().trim())))return reply({error:'Owner access required.'},403);
+   if(input.action!=='list'&&!canWriteJobDocuments(user))return reply({error:'Folder linking is not available.'},403);
    const jobId=String(input.job_id||'');if(!jobId)return reply({error:'Select a job.'},400);
    const api=client.asServiceRole.entities,job=await api.Jobs.get(jobId).catch(()=>null);
    if(!job)return reply({error:'Job not found.'},404);
-   if(!['ensure_folder','attach_folder','list'].includes(input.action))return reply({error:'Unsupported action.'},400);
+   if(!['ensure_folder','attach_folder','unlink_folder','list'].includes(input.action))return reply({error:'Unsupported action.'},400);
+   if(input.action==='unlink_folder'){
+    await api.Jobs.update(job.id,{drive_job_folder_id:null,drive_job_folder_url:null});
+    return reply({ok:true,folder:null});
+   }
    const {accessToken}=await client.asServiceRole.connectors.getConnection('googledrive');
    if(!accessToken)return reply({error:'Google Drive is not connected.'},503);
    const drive=async(path,init={})=>{
