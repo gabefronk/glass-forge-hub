@@ -5,6 +5,8 @@ import { C } from "@/lib/feeUI";
 import PageNotFound from "@/lib/PageNotFound";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import { ClipboardList, Plus, CheckCircle2, AlertTriangle } from "lucide-react";
+import { fetchAllPages } from "@/lib/pagination";
+import { filterJobPickerOptions } from "../../base44/shared/jobCatalog.js";
 
 // Purchase Orders (owner only): YA-#### numbers for material orders. Numbers are
 // assigned server-side by issue_purchase_order, which also appends the PO to the
@@ -58,22 +60,28 @@ function PurchaseOrdersPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null); // { ok, text }
+  const [jobsError, setJobsError] = useState("");
 
   const load = useCallback(async () => {
     const [o, j] = await Promise.all([
       base44.entities.PurchaseOrders.list("-created_date", 500).catch(() => []),
-      base44.entities.Jobs.list("-created_date", 1000).catch(() => []),
+      fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
     ]);
     setOrders(o || []);
     setJobs(j || []);
+    setJobsError("");
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const loadSafely = useCallback(async () => {
+    try { await load(); }
+    catch (error) { setJobs([]); setJobsError(`The complete jobs list could not be loaded. Issuing a linked PO is disabled. ${error?.message || ""}`); }
+  }, [load]);
+
+  useEffect(() => { loadSafely(); }, [loadSafely]);
 
   const jobOptions = useMemo(() => {
     const q = jobFilter.trim().toLowerCase();
-    return jobs
-      .filter((j) => !q || [j.canonical_name, j.builder, j.customer_name].some((v) => String(v || "").toLowerCase().includes(q)) || j.id === form.job_id)
+    return filterJobPickerOptions(jobs, q, { selectedId: form.job_id })
       .sort((a, b) => String(a.canonical_name || "").localeCompare(String(b.canonical_name || "")));
   }, [jobs, jobFilter, form.job_id]);
 
@@ -125,6 +133,7 @@ function PurchaseOrdersPage() {
       </header>
 
       <div className="px-[26px] max-[699px]:px-[18px] py-6 flex flex-col gap-6 max-w-[1080px]">
+        {jobsError && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{jobsError}</p>}
         <Section title="Purchase orders" sub={`${orders.length} on record`}>
           {result && (
             <div className="flex items-center gap-2 text-[13px] font-medium" style={{ color: result.ok ? C.accentText : C.amber }}>
@@ -168,10 +177,10 @@ function PurchaseOrdersPage() {
           </button>
           {showForm && (
             <div className="grid grid-cols-2 max-[699px]:grid-cols-1 gap-2 rounded-[12px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-              <input value={jobFilter} placeholder="Filter jobs (name, builder, customer)"
+              <input value={jobFilter} placeholder="Search job ID, name, BFS PO, OE or YA PO"
                 onChange={(e) => setJobFilter(e.target.value)}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle} />
-              <select value={form.job_id} onChange={(e) => setForm((f) => ({ ...f, job_id: e.target.value }))}
+              <select value={form.job_id} disabled={Boolean(jobsError)} onChange={(e) => setForm((f) => ({ ...f, job_id: e.target.value }))}
                 className="text-[13px] px-3 py-2 rounded-[8px]" style={inputStyle}>
                 <option value="">No job linked</option>
                 {jobOptions.map((j) => (
