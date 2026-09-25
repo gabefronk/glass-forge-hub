@@ -42,7 +42,7 @@
       "title": "Builder",
       "description": "Builder / GC name extracted from the job name (part before the dash)"
     },
-    "drive_job_folder_id": { "type": "string", "description": "Verified Google Drive folder for this job; owner-only UI.", "rls": { "read": { "user_condition": { "role": "admin" } }, "write": { "user_condition": { "role": "admin" } } } },
+    "drive_job_folder_id": { "type": "string", "description": "Verified Google Drive folder for this job; signed-in linking UI.", "rls": { "read": { "user_condition": { "role": "admin" } }, "write": { "user_condition": { "role": "admin" } } } },
     "drive_job_folder_url": { "type": "string", "description": "Verified Drive folder link, not a guessed URL.", "rls": { "read": { "user_condition": { "role": "admin" } }, "write": { "user_condition": { "role": "admin" } } } },
     "source_window_quote_id": {
       "type": "string",
