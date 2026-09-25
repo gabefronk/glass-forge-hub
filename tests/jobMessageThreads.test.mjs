@@ -15,3 +15,14 @@ test('shared phone numbers and contacts linked to multiple jobs remain review-on
  assert.equal(result.threads.length,0);
  assert.deepEqual(result.review.map(r=>r.conversation_key),['shared','multiple-jobs','contractor']);
 });
+
+test('unlinked group and unverified participants never infer from one matching contact',()=>{
+ const conversations=[convo('known-unknown',['8015550101','8015559999']),convo('two-known',['8015550101','8015550102']),convo('duplicate',['8015550101','8015550101']),convo('invalid',['8015550101','']),convo('empty',[])];
+ const result=resolveJobMessageThreads({jobId:'job-1',conversations,contacts:[contact('c1','8015550101'),contact('c2','8015550102')],links:[{contact_key:'c1',job_id:'job-1'},{contact_key:'c2',job_id:'job-1'}]});
+ assert.deepEqual(result.threads,[]);
+ assert.equal(result.review.length,5);
+});
+test('explicit group remains allowed, link to another job is never inferred, direct match still works',()=>{
+ const result=resolveJobMessageThreads({jobId:'job-1',conversations:[convo('explicit',['8015550101','8015559999'],'job-1'),convo('other',['8015550101'],'job-2'),convo('direct',['8015550101'])],contacts:[contact('c1','8015550101')],links:[{contact_key:'c1',job_id:'job-1'}]});
+ assert.deepEqual(result.threads.map(t=>t.conversation.conversation_key),['explicit','direct']);
+});
