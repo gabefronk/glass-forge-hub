@@ -167,6 +167,54 @@
         "disabled": false
       },
       {
+        "name": "inbox_search",
+        "title": "Search the inbox agents",
+        "description": "Search the Hub's email inbox agents: triaged threads with category, summary, job link and draft status. Never returns full bodies. Filter by mailbox_key (gf-gmail = Glass Forge Gmail, owner-only; ya-outlook = YA Install Outlook), status (new, needs_reply, waiting, done, ignored), category (job_update, schedule, quote_request, order_vendor, invoice_billing, service_warranty, builder_admin, personal, newsletter_promo, spam, other) and/or free text q (subject, sender, summary, builder, lot, address, PO/OE). Each thread carries id, subject, from, account_hint (address the mail was originally sent to), summary, action_items, next_step, reply_needed, job_id / job_candidates, draft_status and web_link. Admin / manager accounts only; owner-only mailboxes are omitted for non-owners.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "list"
+              ],
+              "description": "Always pass list"
+            },
+            "mailbox_key": {
+              "type": "string",
+              "description": "Optional: gf-gmail or ya-outlook"
+            },
+            "q": {
+              "type": "string",
+              "description": "Optional free text"
+            },
+            "status": {
+              "type": "string",
+              "description": "Optional: new, needs_reply, waiting, done, ignored"
+            },
+            "category": {
+              "type": "string",
+              "description": "Optional thread category"
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Max threads, default 50"
+            }
+          },
+          "required": [
+            "action"
+          ]
+        },
+        "annotations": {
+          "read_only_hint": true,
+          "destructive_hint": false,
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "emailAgent",
+        "disabled": false
+      },
+      {
         "name": "sync_calendar_events",
         "title": "Sync calendar events",
         "description": "Syncs Google Calendar events from the CalendarEvents store into FeeLines for invoicing. Call when new calendar events need to be processed into fee lines. Pass start_date and end_date (YYYY-MM-DD) to scope, or omit for the trailing 14-day window.",
