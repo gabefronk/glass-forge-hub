@@ -38,7 +38,7 @@ function harness({ gmail = true, existingCopy = false } = {}) {
     { title: 'Plans.pdf', file_url: 'https://drive.google.com/open?id=SRC123' },
   ] };
   const unlinked = { id: 'ev2', job_id: null, event_attachments: [{ title: 'a.pdf', file_url: GMAIL_URL }] };
-  const calls = [], updates = [], jobUpdates = [];
+  const calls = [], updates = [], jobUpdates = [], store = {};
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url, method: init.method || 'GET' });
     if (url.startsWith('https://gmail.googleapis.com')) {
@@ -54,8 +54,12 @@ function harness({ gmail = true, existingCopy = false } = {}) {
     }
     if (url.includes('/files?fields=') && init.method === 'POST') {
       const body = JSON.parse(init.body);
-      return Response.json({ id: 'FOLDER-' + body.name.slice(0, 6), name: body.name, mimeType: 'application/vnd.google-apps.folder', parents: body.parents, webViewLink: 'https://drive.google.com/folder' });
+      const f = { id: 'FOLDER-' + body.name.slice(0, 6), name: body.name, mimeType: 'application/vnd.google-apps.folder', parents: body.parents, webViewLink: 'https://drive.google.com/folder' };
+      store[f.id] = f;
+      return Response.json(f);
     }
+    const id = url.split('/files/')[1]?.split('?')[0];
+    if (id && store[id]) return Response.json(store[id]);
     return new Response('missing', { status: 404 });
   };
   const client = { asServiceRole: {
@@ -88,7 +92,8 @@ test('copies Gmail and Drive files into a new job folder under Glass Forge Jobs'
 test('without Israel\'s Gmail connected, Gmail files wait and Drive files still copy', async () => {
   const h = harness({ gmail: false });
   const s = await h.run(25);
-  assert.equal(s.waiting_for_gmail, 2);
+  assert.equal(s.waiting_for_gmail, 1);
+  assert.equal(s.skipped_no_job, 1);
   assert.equal(s.copied, 1);
   assert.equal(h.updates[0].event_attachments[0].job_folder_file_id, undefined);
   assert.equal(h.updates[0].event_attachments[0].job_folder_error, undefined);
