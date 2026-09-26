@@ -6,8 +6,7 @@ import { formatMoney } from "@/lib/feeMath";
 import EventForm from "./EventForm";
 import FieldReportActions from "./FieldReportActions";
 
-const INSTALL_COLOR = "#146556";
-const SERVICE_COLOR = "#A43432";
+import { KIND, eventKind } from "@/lib/calendarModel";
 
 function InfoRow({ icon: Icon, children, sub }) {
   return (
@@ -47,8 +46,7 @@ export default function EventBubble({ event, jobs, onEdit, onDelete, onClose, sa
   }
 
   const readOnly = event.source === "google";
-  const isInstall = event.source === "app";
-  const swatchColor = isInstall ? INSTALL_COLOR : SERVICE_COLOR;
+  const swatchColor = KIND[eventKind(event)].bar;
   const dateLabel = new Date(event.event_date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   const timeLabel = event.start_time ? ` · ${event.start_time}${event.end_time ? ` – ${event.end_time}` : ""}` : "";
 
