@@ -12,7 +12,8 @@ export function useJobFolderFiles(job, refreshKey = 0) {
   const [state, setState] = useState({ loading: false, folder: null, files: [], complete: true, error: "" });
   useEffect(() => {
     if (!canRead || !job?.id) { setState({ loading: false, folder: null, files: [], complete: true, error: "" }); return; }
-    if (!job.drive_job_folder_id) { setState({ loading: false, folder: null, files: [], complete: true, error: "" }); return; }
+    // drive_job_folder_id is admin-only at the field level, so crew logins
+    // cannot see it; always ask the server, which answers "unlinked" if none.
     let active = true;
     setState((s) => ({ ...s, loading: true, error: "" }));
     base44.functions.invoke("job-documents", { action: "list", job_id: job.id })
