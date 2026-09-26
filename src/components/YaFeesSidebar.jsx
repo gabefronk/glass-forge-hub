@@ -9,7 +9,7 @@ import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilt
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
 // Owner-only admin/background routes are grouped under ADMIN_ITEMS below.
-export const NAV_ITEMS = [
+const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "To-do", to: "/todos", icon: CheckSquare, todoOnly: true },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
@@ -23,8 +23,8 @@ export const NAV_ITEMS = [
   { label: "Purchase Orders", to: "/purchase-orders", icon: ClipboardList, ownerOnly: true },
 ];
 
-// Owner-only admin tools (shared with the mobile More sheet).
-export const ADMIN_ITEMS = [
+// Owner-only admin tools (mirrored in MobileBottomNav's More sheet).
+const ADMIN_ITEMS = [
   { label: "Agent Center", to: "/admin/agents", icon: Bot },
   { label: "System Map", to: "/system-map", icon: Network },
   { label: "Research Queue", to: "/research-queue", icon: Search },
