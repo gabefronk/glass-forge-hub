@@ -1,7 +1,7 @@
 import { MapPin, Building2, FileText, ExternalLink } from "lucide-react";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
-import { ContactRow, JobContactRows, JobContactSuggestionsRow, Row } from "@/components/jobs/JobContacts";
+import { BuilderContacts, ContactRow, JobContactRows, JobContactSuggestionsRow, Row } from "@/components/jobs/JobContacts";
 import JobEventDocuments, { eventAttachments } from "@/components/jobs/JobEventDocuments";
 import JobDriveDocuments from "@/components/jobs/JobDriveDocuments";
 
@@ -12,6 +12,9 @@ import JobDriveDocuments from "@/components/jobs/JobDriveDocuments";
 // the hero already shows the address and the files menu shows the documents).
 export default function JobFactsRail({ job, jobContacts, plans, events, hideDocuments = false, contactsOnly = false }) {
   const builder = (jobContacts?.view?.linked || []).filter((c) => c.role === "builder");
+  // Everyone filed under this job's builder (normalized like Jobs.builder), not just job links.
+  const builderPeople = jobContacts?.view?.job?.id === job.id ? jobContacts.view.builder_contacts || [] : [];
+  const builderName = jobContacts?.view?.job?.builder || "";
   const jobPlans = plans || [];
   const mapHref = job.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
 
@@ -21,8 +24,10 @@ export default function JobFactsRail({ job, jobContacts, plans, events, hideDocu
         <Building2 className="h-4 w-4 shrink-0 mt-0.5" style={{ color: C.textMuted }} />
         <div className="min-w-0">
           <div className="mono-label-sm mb-0.5">Builder</div>
-          <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{sanitizeText(job.builder || "—")}</div>
+          <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{sanitizeText(job.builder || builderName || "—")}</div>
+          {builderName && builderName.toLowerCase() !== String(job.builder || "").toLowerCase() && <div className="text-[11px]" style={{ color: C.textFaint }}>Contacts filed as {sanitizeText(builderName)}</div>}
           {builder.length > 0 && <div className="mt-1.5 space-y-1.5">{builder.map((c) => <ContactRow key={c.key} contact={c} />)}</div>}
+          <BuilderContacts contacts={builderPeople} jobId={job.id} />
         </div>
       </div>
 
