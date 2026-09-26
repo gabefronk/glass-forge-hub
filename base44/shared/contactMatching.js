@@ -15,9 +15,9 @@ const CORE_TOKENS={homles:'holmes',holme:'holmes',lanscope:'landscope',anderson:
 const CORE_GENERIC=new Set(['home','builder','construction','const','constructions','custom','group','estate','development','dev','mgt','management','contracting','contractor','contractors','property','properties','services','service','of','utah']);
 const CORE_PHRASES={'david weekley':'weekley','valor holmes':'valor'};
 export const builderCore = value => {
- const t=normalizeCustomer(value).split(' ').filter(Boolean).map(w=>CORE_TOKENS[w]||w);
+ const t=normalizeCustomer(value).split(' ').filter(Boolean).map(w=>Object.hasOwn(CORE_TOKENS,w)?CORE_TOKENS[w]:w);
  while(t.length>1&&CORE_GENERIC.has(t.at(-1)))t.pop();
- const core=t.join(' ');return CORE_PHRASES[core]||core;
+ const core=t.join(' ');return Object.hasOwn(CORE_PHRASES,core)?CORE_PHRASES[core]:core;
 };
 export const builderCoreMatch = (value, knownCore) => Boolean(value&&knownCore&&(value===knownCore||value.startsWith(knownCore+' ')));
 // Cash / walk-in "builders" group unrelated one-off customers, so they never share contacts.
@@ -26,7 +26,7 @@ export const sharedBuilderCore = core => Boolean(core)&&!/^(cash|ya)\b/.test(cor
 export const contactPhoneKeys = c => [...new Set([c?.phone_key,...(c?.phones||[]).map(phoneKey)].filter(Boolean))];
 export const contactEmailKeys = c => [...new Set([c?.email_key,...(c?.emails||[]).map(e=>String(e||'').trim().toLowerCase())].filter(e=>e&&e.includes('@')))];
 // A label spelled with a known typo ("Holme Homes", "Valor Holmes") never becomes the canonical name.
-const typo=name=>{const w=norm(name).split(' ');return w.some(x=>x in CORE_TOKENS&&!['customers','estates'].includes(x))||Object.keys(CORE_PHRASES).some(p=>p!=='david weekley'&&norm(name).replace(/\bhomes?\b/g,'').trim()===p);};
+const typo=name=>{const w=norm(name).split(' ');return w.some(x=>Object.hasOwn(CORE_TOKENS,x)&&!['customers','estates'].includes(x))||Object.keys(CORE_PHRASES).some(p=>p!=='david weekley'&&norm(name).replace(/\bhomes?\b/g,'').trim()===p);};
 // Groups builder labels by core. The canonical label is the one used by the most contacts
 // (`labels`), then by the most workbook job rows (`extra`), then the longest; typos never win.
 export function builderCatalog(labels,extra=[]){
