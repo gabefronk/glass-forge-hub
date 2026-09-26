@@ -481,9 +481,9 @@ test('sync: missing gabriel TeamMember skips to-dos with a warning; LLM failure 
 });
 
 test('sync: when the budget runs out after triage, the un-relayed rows go back to pending and the next run relays them', async () => {
-  // Every LLM call burns 30 of a 50 budget: the first triage batch fits, the relay loop does not.
+  // The one triage call burns 30 of a 20 budget: triage lands, the relay loop never starts.
   let h;
-  h = harness({ budgetMs: 50, llmImpl: async (req) => { h.tick(30); return makeLLM([])(req); } });
+  h = harness({ budgetMs: 20, llmImpl: async (req) => { h.tick(30); return makeLLM([])(req); } });
   const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
   const gf = r.body.mailboxes[0];
   assert.equal(gf.status, 'ok');
