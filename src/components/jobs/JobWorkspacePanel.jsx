@@ -55,6 +55,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [openFormKey, setOpenFormKey] = useState(0);
+  const [showScope, setShowScope] = useState(false);
   const historyRef = useRef(null);
   const v = useRef(0);
   const folder = useJobFolderFiles(job);
@@ -157,14 +158,15 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
   const ROLE_RANK = ["superintendent", "project_manager", "site", "customer", "homeowner", "builder"];
   const sortedContacts = [...linked].sort((a, b) => (ROLE_RANK.indexOf(a.role) + 99) % 99 - (ROLE_RANK.indexOf(b.role) + 99) % 99);
   const visitFact = snap.facts[0];
-  const info = [
-    ["Builder", sanitizeText(job.builder || "") || "—"],
-    ...(job.customer_name ? [["Customer", sanitizeText(job.customer_name)]] : []),
-    ["Type", snap.kind || "—"],
+  const ROLE_SHORT = { superintendent: "Super", project_manager: "PM", site: "Site", customer: "Customer", homeowner: "Owner", builder: "Builder" };
+  const smallBtn = "inline-flex h-8 items-center gap-1.5 rounded-[9px] px-2.5 text-[12.5px] font-semibold whitespace-nowrap";
+  const pos = snap.refs.filter((r) => r.startsWith("PO ")).map((r) => r.slice(3));
+  const oes = snap.refs.filter((r) => r.startsWith("OE ")).map((r) => r.slice(3));
+  const strip = [
     [visitFact.k, <span style={{ color: visitFact.tone === "teal" ? TEAL : INK }}>{visitFact.v}</span>],
     ["Crew", snap.facts[1].v],
-    ["PO", <span className="font-mono text-[13.5px]">{snap.refs.filter((r) => r.startsWith("PO ")).map((r) => r.slice(3)).join(", ") || "—"}</span>],
-    ["OE", <span className="font-mono text-[13.5px]">{snap.refs.filter((r) => r.startsWith("OE ")).map((r) => r.slice(3)).join(", ") || "—"}</span>],
+    ["PO", <span className="font-mono text-[13px]" title={pos.join(", ")}>{pos.length ? pos[0] + (pos.length > 1 ? ` +${pos.length - 1}` : "") : "—"}</span>],
+    ["OE", <span className="font-mono text-[13px]" title={oes.join(", ")}>{oes.length ? oes[0] + (oes.length > 1 ? ` +${oes.length - 1}` : "") : "—"}</span>],
     ["Job folder", folder.folder?.url ? <a href={folder.folder.url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: TEAL }}>Open in Drive</a> : <span style={{ color: MUTED }}>Not linked</span>],
   ];
 
@@ -176,110 +178,79 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll">
-      <div className="px-8 pt-7 pb-10 flex flex-col gap-5 max-[1400px]:px-6">
-        {/* Who, what, where */}
-        <div className="flex items-start gap-4">
+      <div className="px-7 pt-6 pb-10 flex flex-col gap-4 max-[1400px]:px-5">
+        {/* Who and where: two lines */}
+        <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-medium" style={{ color: MUTED }}>
-              {[sanitizeText(job.builder || ""), snap.kind].filter(Boolean).join(" · ") || "Job"}
-            </div>
-            <h2 className="m-0 mt-1 text-[30px] font-extrabold leading-[1.1] break-words" style={{ color: INK, letterSpacing: "-0.04em" }}>{sanitizeText(job.canonical_name)}</h2>
-            {job.address && (
-              <a href={mapHref} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-[15px] font-medium hover:underline" style={{ color: "#34403f" }}>
-                <MapPin className="h-4 w-4 shrink-0" style={{ color: TEAL }} />{sanitizeText(job.address)}
-              </a>
-            )}
-          </div>
-          <span className="shrink-0 rounded-full px-3 py-1 text-[12.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: status.bg, color: status.text }}>{status.label}</span>
-        </div>
-
-        {/* Next step */}
-        <div className="flex items-center gap-3 rounded-[14px] px-4 py-3.5" style={{ backgroundColor: stepBg }}>
-          <span className="shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[12px] font-bold whitespace-nowrap" style={{ color: stepInk }}>{snap.step.tag}</span>
-          <span className="text-[15.5px] font-semibold leading-[22px] break-words" style={{ color: INK }}>{snap.step.text}</span>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-wrap gap-2.5">
-          <button type="button" onClick={() => setShowReport(true)} className="inline-flex items-center gap-2 h-11 px-5 rounded-[12px] text-[14.5px] font-bold text-white whitespace-nowrap" style={{ backgroundColor: TEAL }}>
-            <Camera className="h-4 w-4" />Add field report
-          </button>
-          {lead?.phone ? (
-            <a href={telHref(lead)} className={softBtn} style={{ backgroundColor: SAND, color: INK }} title={`${sanitizeText(lead.name)} · ${lead.phone}`}>
-              <Phone className="h-4 w-4" style={{ color: TEAL }} />Call {sanitizeText(String(lead.name || "").split(" ")[0] || "super")}
-            </a>
-          ) : null}
-          {mapHref ? (
-            <a href={mapHref} target="_blank" rel="noreferrer" className={softBtn} style={{ backgroundColor: SAND, color: INK }}>
-              <Navigation className="h-4 w-4" style={{ color: TEAL }} />Directions
-            </a>
-          ) : null}
-          <button type="button" onClick={logInteraction} className={softBtn} style={{ backgroundColor: SAND, color: INK }}>
-            <Plus className="h-4 w-4" style={{ color: TEAL }} />Log interaction
-          </button>
-          <Link to={`/jobs/${jobId}`} className={`${softBtn} ml-auto`} style={{ color: TEAL }}>
-            Full page <ArrowUpRight className="h-4 w-4" />
-          </Link>
-        </div>
-
-        {/* Job info: everything static about the job, in one place */}
-        <section aria-labelledby="job-info-heading" className="rounded-[16px] p-5" style={{ backgroundColor: SOFT }}>
-          <h3 id="job-info-heading" className="sr-only">Job info</h3>
-          <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-8 max-[1300px]:grid-cols-1 max-[1300px]:gap-5">
-            <dl className="m-0 grid grid-cols-[112px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-[14px]">
-              {info.map(([k, v]) => (
-                <div key={k} className="contents">
-                  <dt className="font-medium" style={{ color: MUTED }}>{k}</dt>
-                  <dd className="m-0 min-w-0 break-words font-semibold" style={{ color: INK }}>{v}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="min-w-0">
-              <SectionTitle id="people-heading">Contacts</SectionTitle>
-              {linked.length ? (
-                <div className="flex flex-col gap-1">
-                  {sortedContacts.map((c) => (
-                    <div key={c.key || c.id || c.name} className="flex items-center gap-3 rounded-[12px] bg-white px-3 py-2.5">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold" style={{ backgroundColor: "#e2eeeb", color: "#082f2c" }}>{String(c.name || "?").charAt(0).toUpperCase()}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[14px] font-semibold" style={{ color: INK }}>{sanitizeText(c.name || "Unknown")}</div>
-                        <div className="text-[12.5px]" style={{ color: MUTED }}>{ROLE_LABELS[c.role] || c.role || "Contact"}</div>
-                        {c.email ? <a href={`mailto:${c.email_key || c.email}`} className="block truncate text-[12.5px] hover:underline" style={{ color: TEAL }}>{c.email}</a> : null}
-                      </div>
-                      {c.phone ? (
-                        <a href={telHref(c)} className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] px-3 py-2 text-[13px] font-semibold whitespace-nowrap" style={{ backgroundColor: SAND, color: INK }}>
-                          <Phone className="h-3.5 w-3.5" style={{ color: TEAL }} />{c.phone}
-                        </a>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              ) : <p className="m-0 text-[13.5px]" style={{ color: MUTED }}>No contacts linked yet.</p>}
-              {missingSuper && (
-                <Link to={`/jobs/${jobId}`} className="mt-2 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium" style={{ backgroundColor: "#faf0da", color: "#8a5a12" }}>
-                  <AlertTriangle className="h-3 w-3 shrink-0" />
-                  {contactView.status.missing_contact ? "Add contacts" : "No super linked yet"}
-                  {contactView.status.suggestions > 0 ? ` · ${contactView.status.suggestions} suggested` : ""}
-                </Link>
+            <h2 className="m-0 text-[24px] font-extrabold leading-[1.15] break-words" style={{ color: INK, letterSpacing: "-0.03em" }}>{sanitizeText(job.canonical_name)}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px]" style={{ color: MUTED }}>
+              {[sanitizeText(job.builder || ""), snap.kind].filter(Boolean).map((t, i) => <span key={i}>{i ? "· " : ""}{t}</span>)}
+              {job.address && (
+                <a href={mapHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium hover:underline" style={{ color: "#34403f" }}>
+                  {job.builder || snap.kind ? <span style={{ color: MUTED }}>·</span> : null}
+                  <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: TEAL }} />{sanitizeText(job.address)}
+                </a>
               )}
             </div>
           </div>
-          <div className="mt-5 border-t pt-4" style={{ borderColor: "#e8e2d6" }}>
-            <SectionTitle id="work-heading">Scope{snap.workFrom ? <span className="font-medium"> · {snap.workFrom}</span> : null}</SectionTitle>
-            {snap.work.length ? (
-              <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
-                {snap.work.map((w, i) => (
-                  <li key={i} className="flex gap-2.5 text-[15px] leading-[22px] font-medium" style={{ color: INK }}>
-                    <span className="mt-[8px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: "#b8955a" }} />
-                    <span className="break-words">{sanitizeText(w)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="m-0 text-[14px]" style={{ color: MUTED }}>No scope written down yet. Log it with “Log interaction” below.</p>
-            )}
+          <span className="shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: status.bg, color: status.text }}>{status.label}</span>
+        </div>
+
+        {/* Next step + actions on one row */}
+        <div className="flex flex-wrap items-center gap-2 rounded-[12px] py-2 pl-3 pr-2" style={{ backgroundColor: stepBg }}>
+          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11.5px] font-bold whitespace-nowrap" style={{ color: stepInk }}>{snap.step.tag}</span>
+          <span className="min-w-0 flex-1 text-[14px] font-semibold leading-[20px]" style={{ color: INK }}>{snap.step.text}</span>
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+            <button type="button" onClick={() => setShowReport(true)} className={`${smallBtn} text-white`} style={{ backgroundColor: TEAL }}>
+              <Camera className="h-3.5 w-3.5" />Field report
+            </button>
+            {mapHref ? <a href={mapHref} target="_blank" rel="noreferrer" className={smallBtn} style={{ backgroundColor: "#fff", color: INK }}><Navigation className="h-3.5 w-3.5" style={{ color: TEAL }} />Directions</a> : null}
+            <button type="button" onClick={logInteraction} className={smallBtn} style={{ backgroundColor: "#fff", color: INK }}><Plus className="h-3.5 w-3.5" style={{ color: TEAL }} />Log</button>
+            <Link to={`/jobs/${jobId}`} className={smallBtn} style={{ color: TEAL }} title="Open the full job page">Full page<ArrowUpRight className="h-3.5 w-3.5" /></Link>
           </div>
-        </section>
+        </div>
+
+        {/* Job facts in one strip */}
+        <dl className="m-0 grid grid-cols-5 overflow-hidden rounded-[12px] max-[1300px]:grid-cols-3" style={{ backgroundColor: SOFT }}>
+          {strip.map(([k, v]) => (
+            <div key={k} className="min-w-0 px-3 py-2">
+              <dt className="text-[11.5px] font-medium" style={{ color: MUTED }}>{k}</dt>
+              <dd className="m-0 truncate text-[13.5px] font-semibold" style={{ color: INK }}>{v}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {/* Contacts: one row of call buttons */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[12.5px] font-bold" style={{ color: MUTED }}>Contacts</span>
+          {sortedContacts.map((c) => {
+            const label = <><span className="font-semibold" style={{ color: INK }}>{sanitizeText(c.name || "Unknown")}</span><span style={{ color: MUTED }}>{ROLE_SHORT[c.role] || ROLE_LABELS[c.role] || "Contact"}</span></>;
+            return c.phone ? (
+              <a key={c.key || c.id || c.name} href={telHref(c)} title={`Call ${sanitizeText(c.name || "")} · ${c.phone}`} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] hover:shadow-sm" style={{ backgroundColor: SAND }}>
+                <Phone className="h-3 w-3" style={{ color: TEAL }} />{label}<span className="font-medium" style={{ color: TEAL }}>{c.phone}</span>
+              </a>
+            ) : (
+              <span key={c.key || c.id || c.name} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px]" style={{ backgroundColor: SAND }}>{label}</span>
+            );
+          })}
+          {!linked.length ? <span className="text-[12.5px]" style={{ color: MUTED }}>None linked yet</span> : null}
+          {missingSuper && (
+            <Link to={`/jobs/${jobId}`} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium" style={{ backgroundColor: "#faf0da", color: "#8a5a12" }}>
+              <AlertTriangle className="h-3 w-3 shrink-0" />{contactView.status.missing_contact ? "Add contacts" : "Add super"}
+            </Link>
+          )}
+        </div>
+
+        {/* Scope: two lines until opened */}
+        {snap.work.length ? (
+          <div className="text-[13.5px] leading-[20px]" style={{ color: INK }}>
+            <span className="mr-1.5 text-[12.5px] font-bold" style={{ color: MUTED }}>Scope{snap.workFrom ? ` · ${snap.workFrom}` : ""}</span>
+            <span className={showScope ? "" : "line-clamp-2"}>{snap.work.map((w) => sanitizeText(w)).join("  ·  ")}</span>
+            {snap.work.length > 2 ? (
+              <button type="button" onClick={() => setShowScope((v) => !v)} className="ml-1 text-[12.5px] font-semibold hover:underline" style={{ color: TEAL }}>{showScope ? "Show less" : "Show all"}</button>
+            ) : null}
+          </div>
+        ) : null}
 
         <DuplicateJobNotice group={group} currentId={jobId} />
 
