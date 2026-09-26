@@ -213,6 +213,7 @@ export default function JobDetail() {
                 onPhotoClick={setLightbox}
                 openFormKey={openFormKey}
                 title="Visits"
+                dedupe={snap}
               />
             </SheetCard>
           </div>
