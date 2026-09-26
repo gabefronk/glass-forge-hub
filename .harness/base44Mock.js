@@ -2,6 +2,7 @@ const SCOPE = 'Please install window as well.<br>ANDERSEN WARRANTY<br>*WARANTY* 
 const JOB = { id: 'j1', canonical_name: 'rainey - warranty glass', builder: 'Holmes Homes', address: '6847 W Ripple Rd, South Jordan', po_numbers: ['7302254'], oe_numbers: ['79567505-00'] };
 const EVENTS = [{ id: 'e1', job_id: 'j1', event_date: '2026-09-25', job_name: '#1 Rainey warranty', created_by: 'ragen@x.com', scope_notes: SCOPE, report_required: true, report_status: 'due', event_attachments: [{ title: 'Report.pdf', file_url: 'https://mail.google.com/mail/?view=att&x=1' }, { title: 'order.pdf', file_url: 'https://drive.google.com/file/d/abc', drive_url: 'https://drive.google.com/file/d/abc' }] }];
 const rows = { Jobs: [JOB], CalendarEvents: EVENTS };
+window.__rows = rows;
 const entity = (name) => ({
   get: async () => JOB,
   list: async (_s, _l, skip) => (skip ? [] : rows[name] || []),
@@ -10,7 +11,7 @@ const entity = (name) => ({
 });
 const saved = { super: window.__SUPER__ || null };
 export const base44 = {
-  auth: { me: async () => ({ email: 'gabefronk@gmail.com', role: 'admin' }) },
+  auth: { me: async () => ({ email: 'gabefronk@gmail.com', role: 'admin', full_name: 'Gabe Fronk', id: 'u1' }) },
   entities: new Proxy({}, { get: (_t, k) => entity(k) }),
   functions: {
     invoke: async (name, body) => {
@@ -18,6 +19,7 @@ export const base44 = {
       if (name === 'contacts-directory' && body.action === 'job_super') return { data: saved };
       if (name === 'contacts-directory' && body.action === 'set_job_super') { saved.super = { key: 'k', ...body.contact }; return { data: saved }; }
       if (name === 'contacts-directory') return { data: { job: { id: 'j1' }, linked: [], suggestions: [], status: {} } };
+      if (name === 'todos') return { data: { me: { id: 'm1', display_name: 'Gabe', owner: true }, members: [{ id: 'm1', display_name: 'Gabe', active: true }], tasks: [], recent_done: [], summary: { overdue: 0, dueToday: 0, inProgress: 0, stale: 0, total: 0 }, team_summary: [] } };
       return { data: {} };
     },
   },
