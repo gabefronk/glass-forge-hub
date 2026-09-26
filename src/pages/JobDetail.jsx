@@ -13,6 +13,7 @@ import { useJobContacts } from "@/hooks/use-job-contacts";
 import { loadJobGroup, loadJobActivity, jobEventsAndEvidence, reportsForJob, loadUniqueLegacyNames } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
+import JobLinkedRecords from "@/components/jobs/JobLinkedRecords";
 import JobMessageThreads from "@/components/jobs/JobMessageThreads";
 import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
@@ -233,6 +234,7 @@ export default function JobDetail() {
               {folderError && <p role="alert" className="mt-2 text-[13px] text-red-700">{folderError}</p>}
             </SheetCard>
           )}
+          <JobLinkedRecords jobId={id} memberIds={group?.memberIds} sourceQuoteId={job.source_window_quote_id} />
           <JobMoneyPanel jobId={id} memberIds={group?.memberIds} />
           <JobMessageThreads jobId={id} />
         </div>
