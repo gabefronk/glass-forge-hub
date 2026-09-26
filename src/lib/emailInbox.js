@@ -14,6 +14,7 @@ export const STATUS_CHIPS = [
   { key: "waiting", label: "Waiting" },
   { key: "done", label: "Done" },
   { key: "ignored", label: "Ignored" },
+  { key: "all", label: "All" },
 ];
 
 export const CATEGORY_LABELS = {
