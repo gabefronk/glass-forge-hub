@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Phone, Mail, HardHat, User, AlertTriangle, Lightbulb } from "lucide-react";
+import { Phone, Mail, HardHat, Home, User, AlertTriangle, Lightbulb } from "lucide-react";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { CONFIDENCE_LABELS, ROLE_LABELS, confirmRoleOf, groupByRole, invokeErrorOf, suggestionTitle } from "@/lib/jobContacts";
@@ -70,7 +70,9 @@ export function JobContactRows({ jobId, jobContacts }) {
   const linked = view.linked || [];
   const supers = linked.filter((c) => c.role === "superintendent");
   const suggestedSupers = (view.suggestions || []).filter((s) => s.role === "superintendent").length;
-  const others = groupByRole(linked).filter(([role]) => role !== "superintendent" && role !== "builder");
+  const owners = [...linked.filter((c) => c.role === "homeowner"), ...linked.filter((c) => c.role === "customer")];
+  const ownerSuggestions = (view.suggestions || []).filter((s) => s.role === "homeowner" && s.confidence === "high").slice(0, 2);
+  const others = groupByRole(linked).filter(([role]) => !["superintendent", "builder", "homeowner", "customer"].includes(role));
   const contactsHref = `/contacts?job=${encodeURIComponent(jobId)}`;
   return (
     <>
@@ -79,6 +81,16 @@ export function JobContactRows({ jobId, jobContacts }) {
           <div className="space-y-1.5">{supers.map((c) => <ContactRow key={c.key} contact={c} detail={LINK_LABELS[c.link]} />)}</div>
         ) : (
           <Missing>No superintendent linked{suggestedSupers > 0 ? ` · ${suggestedSupers} suggested below` : ""}</Missing>
+        )}
+      </Row>
+      <Row icon={Home} label="Homeowner">
+        {owners.length > 0 ? (
+          <div className="space-y-1.5">{owners.map((c) => <ContactRow key={c.key} contact={c} detail={c.role === "customer" ? "Customer" : LINK_LABELS[c.link]} />)}</div>
+        ) : (
+          <>
+            <p className="text-[12px]" style={{ color: C.textMuted }}>Not on file. Add it under the super at the top of the page.</p>
+            {ownerSuggestions.length > 0 && <div className="mt-2"><ContactSuggestions suggestions={ownerSuggestions} onConfirm={jobContacts.confirmLink} /></div>}
+          </>
         )}
       </Row>
       {others.map(([role, list]) => (
@@ -100,7 +112,7 @@ export function JobContactRows({ jobId, jobContacts }) {
   );
 }
 
-function SuggestionCard({ suggestion: s, onConfirm }) {
+function SuggestionCard({ suggestion: s, onConfirm, onAdd }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const role = confirmRoleOf(s);
@@ -116,6 +128,18 @@ function SuggestionCard({ suggestion: s, onConfirm }) {
       setBusy(false);
     }
   };
+  const add = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await onAdd({ role: s.role || "superintendent", contact: s.spr });
+    } catch (e) {
+      setError(invokeErrorOf(e).message || e.message || "The contact could not be added.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const roleName = (ROLE_LABELS[role] || "contact").toLowerCase();
   const missingWho = s.seed ? `${s.seed.name}${s.seed.phone ? ` (${s.seed.phone})` : ""}` : "this number or email";
   return (
     <li className="rounded-lg p-2.5" style={{ border: `1px dashed ${C.borderStrong}`, backgroundColor: C.cardAlt }}>
@@ -135,10 +159,17 @@ function SuggestionCard({ suggestion: s, onConfirm }) {
             <div key={c.key} className="rounded-md bg-white p-2" style={{ border: `1px solid ${C.rowBorder}` }}>
               <ContactRow contact={c} detail={c.company} />
               <button type="button" disabled={busy} onClick={() => confirm(c.key)} className="mt-1.5 rounded-full px-3 py-1 text-[12px] font-semibold disabled:opacity-50" style={{ border: `1px solid ${C.border}`, color: C.accentText }}>
-                {busy ? "Linking…" : c.already_linked ? "Mark as superintendent" : "Link"}
+                {busy ? "Linking…" : c.already_linked ? `Mark as ${roleName}` : role ? `Link as ${roleName}` : "Link"}
               </button>
             </div>
           ))}
+        </div>
+      ) : s.spr && onAdd ? (
+        <div className="mt-2 rounded-md bg-white p-2" style={{ border: `1px solid ${C.rowBorder}` }}>
+          <ContactRow contact={{ name: s.spr.name, phone: s.spr.phone, email: s.spr.email }} detail="From calendar notes · not in contacts yet" />
+          <button type="button" disabled={busy} onClick={add} className="mt-1.5 min-h-9 rounded-full px-3 py-1 text-[12px] font-semibold disabled:opacity-50" style={{ border: `1px solid ${C.border}`, color: C.accentText }}>
+            {busy ? "Adding…" : `Add & link as ${roleName}`}
+          </button>
         </div>
       ) : (
         <p className="mt-1.5 text-[12px] break-words" style={{ color: C.amber }}>
@@ -151,13 +182,13 @@ function SuggestionCard({ suggestion: s, onConfirm }) {
 }
 
 // Proposed job ⇄ contact links. Nothing is saved until the owner explicitly clicks "Link".
-export function ContactSuggestions({ suggestions, onConfirm }) {
+export function ContactSuggestions({ suggestions, onConfirm, onAdd }) {
   if (!suggestions?.length) return null;
-  return <ul className="space-y-2">{suggestions.map((s) => <SuggestionCard key={s.id} suggestion={s} onConfirm={onConfirm} />)}</ul>;
+  return <ul className="space-y-2">{suggestions.map((s) => <SuggestionCard key={s.id} suggestion={s} onConfirm={onConfirm} onAdd={onAdd} />)}</ul>;
 }
 
 export function JobContactSuggestionsRow({ jobContacts }) {
-  const { phase, view, confirmLink } = jobContacts || {};
+  const { phase, view, confirmLink, addContact } = jobContacts || {};
   if (!view || (phase !== "ready" && phase !== "refreshing")) return null;
   if (view.legacy) {
     return (
@@ -171,7 +202,28 @@ export function JobContactSuggestionsRow({ jobContacts }) {
   return (
     <Row icon={Lightbulb} label={`Suggested superintendents · owner confirmation required (${suggestions.length})`}>
       {view.messages === "unavailable" && <p className="mb-1.5 text-[11px]" style={{ color: C.textMuted }}>Message threads could not be checked for this job.</p>}
-      <ContactSuggestions suggestions={suggestions} onConfirm={confirmLink} />
+      <ContactSuggestions suggestions={suggestions} onConfirm={confirmLink} onAdd={addContact} />
     </Row>
+  );
+}
+
+// The builder's own people (office, PMs, supers, warranty) next to the builder name on the job.
+export function BuilderContacts({ contacts, jobId }) {
+  const [open, setOpen] = useState(false);
+  if (!contacts?.length) return null;
+  const shown = open ? contacts : contacts.slice(0, 4);
+  return (
+    <div className="mt-2">
+      <div className="mono-label-sm mb-1">Builder contacts · {contacts.length}</div>
+      <div className="space-y-2">
+        {shown.map((c) => <ContactRow key={c.key} contact={c} detail={[ROLE_LABELS[c.role] && c.role !== "builder" && c.role !== "site" ? ROLE_LABELS[c.role] : "", c.title].filter(Boolean).join(" · ") || c.company} />)}
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-3">
+        {contacts.length > 4 && (
+          <button type="button" onClick={() => setOpen((v) => !v)} className="min-h-9 text-[12px] underline" style={{ color: C.accentText }}>{open ? "Show fewer" : `Show all ${contacts.length}`}</button>
+        )}
+        <Link to={`/contacts?job=${encodeURIComponent(jobId)}`} className="min-h-9 inline-flex items-center text-[12px] underline" style={{ color: C.accentText }}>Open in Contacts</Link>
+      </div>
+    </div>
   );
 }
