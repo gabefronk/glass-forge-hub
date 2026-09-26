@@ -1,18 +1,19 @@
 import { Image as ImageIcon, FolderOpen, ExternalLink } from "lucide-react";
 import { C, formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
-import { splitFolderFiles } from "@/lib/jobHistory";
+import { splitFolderFiles, fileBadge, fileLabel } from "@/lib/jobHistory";
 import JobEventDocuments, { eventAttachments } from "@/components/jobs/JobEventDocuments";
 import FeedImage from "@/components/jobs/FeedImage";
 
 const day = (v) => (v ? formatShort(String(v).slice(0, 10)) : "");
 
-function PlanRow({ href, name, meta }) {
+function PlanRow({ href, name, mime, meta }) {
+  const badge = fileBadge(name, mime);
   const inner = (
     <>
-      <span className="flex h-10 w-8 shrink-0 items-center justify-center rounded-md text-[9px] font-bold" style={{ backgroundColor: "#FCEDEC", color: "#A43432" }}>PDF</span>
+      <span className="flex h-10 w-8 shrink-0 items-center justify-center rounded-md text-[9px] font-bold" style={{ backgroundColor: badge.bg, color: badge.ink }}>{badge.label}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[13.5px] font-semibold break-words" style={{ color: C.text }}>{sanitizeText(name)}</span>
+        <span className="block text-[13.5px] font-semibold break-words" style={{ color: C.text }}>{fileLabel(sanitizeText(name), name)}</span>
         {meta ? <span className="block text-[11.5px]" style={{ color: C.textMuted }}>{meta}</span> : null}
       </span>
       {href ? <ExternalLink className="h-3.5 w-3.5 shrink-0" style={{ color: C.textMuted }} /> : null}
@@ -28,7 +29,8 @@ function PlanRow({ href, name, meta }) {
 // anyone. Reads from the existing connectors only (Drive folder listing,
 // PlanIntake, calendar attachments, field-report photos).
 // bare: no card around it (inside the Jobs workspace, which is already a white panel).
-export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPhotoClick, bare = false }) {
+// showPhotos=false: plans and documents only (the Jobs workspace shows photos with each visit).
+export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPhotoClick, bare = false, showPhotos = true }) {
   const label = "mb-1.5 text-[12.5px] font-semibold";
   const { plans: folderPlans, photos: folderPhotos, other } = splitFolderFiles(folder.files);
   const intake = (plans || []).map((p) => ({
@@ -38,9 +40,10 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
     meta: p.page_count > 0 ? `${p.page_count} pages` : "Plan set",
   }));
   const planRows = [
-    ...folderPlans.map((f) => ({ key: f.id, href: f.url, name: f.name, meta: `Job folder${f.modified_at ? ` · ${day(f.modified_at)}` : ""}` })),
+    ...folderPlans.map((f) => ({ key: f.id, href: f.url, name: f.name, mime: f.mime_type, meta: `Job folder${f.modified_at ? ` · ${day(f.modified_at)}` : ""}` })),
     ...intake.filter((p) => !folderPlans.some((f) => f.name === p.name)),
-    ...other.map((f) => ({ key: f.id, href: f.url, name: f.name, meta: "Job folder" })),
+    ...other.map((f) => ({ key: f.id, href: f.url, name: f.name, mime: f.mime_type, meta: `Job folder${f.modified_at ? ` · ${day(f.modified_at)}` : ""}` })),
+    ...(showPhotos ? [] : folderPhotos.map((f) => ({ key: f.id, href: f.url, name: f.name, mime: f.mime_type, meta: `Photo in job folder${f.modified_at ? ` · ${day(f.modified_at)}` : ""}` }))),
   ];
   const hasEventDocs = eventAttachments(events, { skipJobFolder: !!folder.folder }).length > 0;
   const photoCount = (sitePhotos || []).length + folderPhotos.length;
@@ -48,7 +51,7 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
   return (
     <section aria-labelledby="plans-photos-heading" className={bare ? "" : "mb-6 rounded-[14px] p-4"} style={bare ? undefined : { border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h2 id="plans-photos-heading" className={bare ? "m-0 text-[13px] font-bold" : "font-heading text-[18px] font-bold"} style={{ color: bare ? "#566063" : C.text }}>Plans &amp; photos</h2>
+        <h2 id="plans-photos-heading" className={bare ? "m-0 text-[13px] font-bold" : "font-heading text-[18px] font-bold"} style={{ color: bare ? "#566063" : C.text }}>{showPhotos ? "Plans & photos" : "Plans & documents"}</h2>
         {folder.folder?.url ? (
           <a href={folder.folder.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 min-h-[32px] rounded-full px-3 text-[12px] font-semibold" style={{ border: `1px solid ${C.border}`, color: C.accentText }}>
             <FolderOpen className="h-3.5 w-3.5" />Open job folder
@@ -56,12 +59,12 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className={showPhotos ? "grid grid-cols-1 gap-4 md:grid-cols-2" : ""}>
         <div className="min-w-0">
-          <div className={label} style={{ color: C.textSecondary }}>Plans &amp; documents · {planRows.length}</div>
+          {showPhotos ? <div className={label} style={{ color: C.textSecondary }}>Plans &amp; documents · {planRows.length}</div> : null}
           {folder.loading && !planRows.length ? <p className="text-[12px]" style={{ color: C.textMuted }}>Loading job folder…</p> : null}
           {planRows.length ? (
-            <div className="-mx-2.5">{planRows.map((p) => <PlanRow key={p.key} href={p.href} name={p.name} meta={p.meta} />)}</div>
+            <div className={showPhotos ? "-mx-2.5" : "-mx-2.5 grid grid-cols-1 gap-x-4 xl:grid-cols-2"}>{planRows.map((p) => <PlanRow key={p.key} href={p.href} name={p.name} mime={p.mime} meta={p.meta} />)}</div>
           ) : !folder.loading ? (
             <p className="rounded-[10px] border border-dashed p-3 text-[12.5px]" style={{ borderColor: C.border, color: C.textMuted }}>
               {folder.folder ? "No plans in the job folder yet. Drop the plan set into the folder and it shows up here." : "No job folder linked yet, so there are no plans to show."}
@@ -77,7 +80,7 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
           ) : null}
         </div>
 
-        <div className="min-w-0">
+        {showPhotos ? <div className="min-w-0">
           <div className={label} style={{ color: C.textSecondary }}>Site photos · {photoCount}</div>
           {photoCount ? (
             <div className="grid grid-cols-3 gap-1.5">
@@ -99,7 +102,7 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
               No photos yet. Photos from field reports show up here.
             </p>
           )}
-        </div>
+        </div> : null}
       </div>
     </section>
   );

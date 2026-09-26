@@ -171,3 +171,22 @@ export function touchesJob(event, memberIds, shownIds = []) {
   const id = event?.id || rec.id;
   return !!id && new Set(shownIds).has(id);
 }
+
+// Small type badge for a file, by extension first, then MIME type.
+export function fileBadge(name, mime) {
+  const n = String(name || "").toLowerCase(), m = String(mime || "").toLowerCase();
+  if (/\.pdf$/.test(n) || m === "application/pdf") return { label: "PDF", bg: "#FCEDEC", ink: "#A43432" };
+  if (/\.(csv|xlsx?|numbers)$/.test(n) || /spreadsheet|excel|csv/.test(m)) return { label: n.endsWith(".csv") ? "CSV" : "XLS", bg: "#E2EEEB", ink: "#0B3F3B" };
+  if (/\.(docx?|txt|rtf)$/.test(n) || /document|msword|text\//.test(m)) return { label: "DOC", bg: "#E7EDF2", ink: "#34506A" };
+  if (/\.(jpe?g|png|heic|webp|gif)$/.test(n) || m.startsWith("image/")) return { label: "IMG", bg: "#FAF0DA", ink: "#8A5A12" };
+  if (/\.(dwg|dxf)$/.test(n)) return { label: "CAD", bg: "#EEF1F3", ink: "#34403F" };
+  return { label: "FILE", bg: "#EEF1F3", ink: "#566063" };
+}
+
+// A file name to show, never blank (a name can be emptied by the price filter).
+export function fileLabel(clean, name) {
+  const shown = String(clean || "").trim();
+  if (shown) return shown;
+  const ext = String(name || "").match(/\.([a-z0-9]{2,5})$/i)?.[1];
+  return ext ? `Untitled ${ext.toUpperCase()} file` : "Untitled file";
+}

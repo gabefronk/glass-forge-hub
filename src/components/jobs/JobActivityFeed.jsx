@@ -5,7 +5,7 @@ import ClampedText from "./ClampedText";
 import FeedImage from "./FeedImage";
 import { RefreshCw, Plus, Camera, StickyNote, CheckCircle2, AlertCircle, Clock, Phone, MessageSquare, Mail, Users, Truck, TriangleAlert, HardHat, FileText, ExternalLink } from "lucide-react";
 import { scopeText } from "@/lib/jobWorkspace";
-import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote } from "@/lib/jobHistory";
+import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote, fileLabel } from "@/lib/jobHistory";
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
 
@@ -109,7 +109,7 @@ function FileCard({ file }) {
   return (
     <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-[10px] px-3 py-2 hover:underline" style={{ border: `1px solid ${C.rowBorder}`, color: C.accentText }}>
       <FileText className="h-3.5 w-3.5 shrink-0" style={{ color: C.textMuted }} />
-      <span className="text-[12px] break-words min-w-0 flex-1"><span style={{ color: C.textMuted }}>Saved to job folder: </span>{sanitizeText(file.name)}</span>
+      <span className="text-[12px] break-words min-w-0 flex-1"><span style={{ color: C.textMuted }}>Saved to job folder: </span>{fileLabel(sanitizeText(file.name), file.name)}</span>
       <ExternalLink className="h-3 w-3 shrink-0" />
     </a>
   );
