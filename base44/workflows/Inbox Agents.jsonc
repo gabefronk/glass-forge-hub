@@ -25,18 +25,36 @@
     },
     "do": [
       {
-        "sync_inboxes": {
+        "sync_gmail": {
           "call": "invoke_backend_function",
           "with": {
             "function_name": "emailAgent",
             "args": {
-              "action": "sync"
+              "action": "sync",
+              "mailbox_key": "gf-gmail"
+            }
+          },
+          "then": "sync_outlook",
+          "x-base44": {
+            "title": "Sync Glass Forge (Gmail)",
+            "description": "Every 15 minutes: pull new mail from the Glass Forge Gmail box through the shared connector, classify threads, link them to jobs, relay a job note + to-do into the Hub, label the thread in Gmail, and draft replies (never sent). One mailbox per call so each gets the full time budget; anything the budget cuts off is re-flagged and finished on the next run."
+          }
+        }
+      },
+      {
+        "sync_outlook": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "emailAgent",
+            "args": {
+              "action": "sync",
+              "mailbox_key": "ya-outlook"
             }
           },
           "then": "end",
           "x-base44": {
-            "title": "Sync inbox agents",
-            "description": "Every 15 minutes: for each enabled EmailMailbox (Glass Forge Gmail, YA Install Outlook) pull new mail through the shared connector, classify threads, link them to jobs, relay a job note + to-do into the Hub, label the thread in the provider, and draft replies (never sent). Archives only when the mailbox has archive_enabled."
+            "title": "Sync YA Install (Outlook)",
+            "description": "Same agent on the YA Install Outlook box (inbox delta + categories). Runs after the Gmail step in its own call. Archives only when the mailbox has archive_enabled."
           }
         }
       }
