@@ -4,6 +4,25 @@ async function all(entity) {
   for(let skip=0;skip<50000;skip+=1000){const page=await entity.list("-created_date",1000,skip);records.push(...page);if(page.length<1000)return records;}
   throw Error("Calendar pagination limit reached.");
 }
+// Display-only job links: most synced events never get job_id written back, but the
+// FeeLine built from the same event (calendar_event_id == google_event_id) usually has a
+// confident job match. Attach that job id to the response so "Open job" links work.
+// Nothing is written to CalendarEvents; failures fall back to the stored links only.
+async function feeLineJobLinks(client) {
+  const links=new Map();
+  try {
+    const api=(client.asServiceRole||client).entities.FeeLines;
+    for(let skip=0;skip<50000;skip+=1000){
+      const page=await api.filter({match_confidence:"high"},"-job_date",1000,skip);
+      for(const r of page){if(r.calendar_event_id&&r.job_id&&!links.has(r.calendar_event_id))links.set(r.calendar_event_id,r.job_id);}
+      if(page.length<1000)break;
+    }
+  }catch{/* stored links only */}
+  return links;
+}
+export function withDerivedJobLinks(events,links){
+  return events.map(e=>(!e.job_id&&e.google_event_id&&links.get(e.google_event_id))?{...e,job_id:links.get(e.google_event_id),job_link_derived:true}:e);
+}
 export function createOwnedCalendarHandler({getClient,readTracker}) {
  return async req => {
   const client=getClient(req),user=await client.auth.me().catch(()=>null);
@@ -11,11 +30,13 @@ export function createOwnedCalendarHandler({getClient,readTracker}) {
   if(!["admin","manager"].includes(user.role))return Response.json({error:"Calendar access required."},{status:403});
   try {
    const query=await req.json().catch(()=>({}));
-   const [tracker,calendar,snapshots,recent]=await Promise.all([
+   const [tracker,calendarRaw,snapshots,recent,jobLinks]=await Promise.all([
     readTracker(client),all(client.entities.CalendarEvents),
     user.role==="admin"?client.entities.OutlookCalendarSnapshot.filter({complete:true,calendar_name:"UT Window Install"},"-captured_at",1):[],
-    user.role==="admin"?client.entities.OutlookCalendarSnapshot.filter({calendar_name:"UT Window Install"},"-captured_at",1):[]
+    user.role==="admin"?client.entities.OutlookCalendarSnapshot.filter({calendar_name:"UT Window Install"},"-captured_at",1):[],
+    feeLineJobLinks(client)
    ]);
+   const calendar=withDerivedJobLinks(calendarRaw,jobLinks);
    if(!tracker.rows?.length)throw Error("No verified tracker rows.");
    const snapshot=snapshots[0]||null;
    const imported=(snapshot?.events||[]).map((event,index)=>({...event,id:"outlook-"+snapshot.id+"-"+index,source:"outlook",report_required:false,calendar_name:snapshot.calendar_name,captured_at:snapshot.captured_at}));
