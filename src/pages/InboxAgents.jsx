@@ -41,7 +41,13 @@ export default function InboxAgents() {
 
   useEffect(() => { const timer = setTimeout(() => setQuery(q.trim()), 300); return () => clearTimeout(timer); }, [q]);
 
-  const loadMailboxes = async () => { const r = await inboxCall({ action: "mailboxes" }); boxesLoaded.current = true; setMailboxes(Array.isArray(r.mailboxes) ? r.mailboxes : []); };
+  // `mailboxes` (owner only) carries the live connector check; `list` (everyone) carries the
+  // visible mailboxes without it. Merge by key so a list refresh never wipes `connected`.
+  const loadMailboxes = async () => {
+    try { const r = await inboxCall({ action: "mailboxes" }); setMailboxes((prev) => mergeMailboxes(prev, r.mailboxes)); }
+    catch { /* managers cannot call it — the list response supplies their mailboxes */ }
+    finally { boxesLoaded.current = true; }
+  };
 
   const refresh = useCallback(async ({ quiet = false } = {}) => {
     if (!canView) { setLoading(false); return; }
@@ -54,7 +60,7 @@ export default function InboxAgents() {
       const [list] = await Promise.all([inboxCall(payload), boxesLoaded.current ? Promise.resolve() : loadMailboxes()]);
       if (mine !== seq.current) return;
       setEntries(Array.isArray(list.entries) ? list.entries : []);
-      if (Array.isArray(list.mailboxes)) setMailboxes(list.mailboxes);
+      if (Array.isArray(list.mailboxes)) setMailboxes((prev) => mergeMailboxes(prev, list.mailboxes));
       setError("");
     } catch (e) {
       if (mine === seq.current) { setError(errorText(e, "The ledger could not load. Reload to try again.")); if (!boxesLoaded.current) { boxesLoaded.current = true; setMailboxes([]); } }
@@ -122,7 +128,7 @@ export default function InboxAgents() {
   const visible = useMemo(() => sortEntries(filterEntries(scoped, { chip: chipKey, category })), [scoped, chipKey, category]);
   const providerOf = useMemo(() => Object.fromEntries((mailboxes || []).map((m) => [m.key, m.provider])), [mailboxes]);
   const selectedBoxes = (mailboxes || []).filter((m) => mailbox === "all" || m.key === mailbox);
-  const unconnected = selectedBoxes.filter((m) => !m.connected);
+  const unconnected = selectedBoxes.filter((m) => m.connected === false);
   const lastRun = mailbox !== "all" ? selectedBoxes[0]?.last_run : null;
   const filtersActive = chipKey !== "open" || category || q.trim();
   const emptyText = entries.length ? "No entries match these filters." : mailbox !== "all" && unconnected.length ? "Nothing here until this mailbox is connected." : "The agents have not filed anything yet. Run them once a mailbox is connected.";
