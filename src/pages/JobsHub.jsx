@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Search, X, ArrowUpDown, Building2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Search, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
-import JobBrowserRow, { DuplicateTags, StatusChip, VisitInfo } from "@/components/jobs/JobBrowserRow";
+import JobBrowserRow from "@/components/jobs/JobBrowserRow";
 import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
 import ProbuildReports from "@/pages/ProbuildReports";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { buildJobsOverview, sortJobGroups, builderOptions, JOB_SORTS } from "@/lib/jobsOverview";
+import { buildJobsOverview, sortJobGroups, builderOptions, needsYou, JOB_SORTS } from "@/lib/jobsOverview";
+import { denverDate } from "../../base44/shared/billingCore.js";
 import AddJobDialog from "@/components/jobs/AddJobDialog";
 import { jobMatchesSearch } from "@/lib/jobSearch";
 
@@ -102,6 +103,7 @@ export default function JobsHub() {
     if (segment === "needs_review") base = base.filter(g => key(g) === "needs_review");
     if (segment === "duplicates") base = base.filter(g => g.review.length > 0);
     if (segment === "this_week") base = base.filter(g => jobStats[g.id]?.thisWeek);
+    if (segment === "needs_you") base = base.filter(g => needsYou(jobStats[g.id]?.status, g));
     if (builder) base = base.filter(g => sanitizeText(String(g.job?.builder || "").trim()) === builder);
     return sortJobGroups(base, jobStats, sort);
   }, [groups, search, segment, jobStats, sort, builder]);
@@ -118,15 +120,19 @@ export default function JobsHub() {
     }
   }, [filtered]);
 
-  const pills = [
-    { key: "all", label: "All", count: groups.length },
-    { key: "this_week", label: "Visits this week", count: counts.this_week },
+  // Four main views; the less common ones sit in the "More" menu.
+  const segments = [
+    { key: "needs_you", label: "Needs you", count: counts.needs_you, attention: true },
+    { key: "this_week", label: "This week", count: counts.this_week },
     // The Active view also lists jobs that need a report or a match review, so its count includes them.
     { key: "active", label: "Active", count: counts.active + counts.needs_report + counts.needs_review },
+    { key: "all", label: "All", count: groups.length },
+  ];
+  const moreViews = [
     { key: "complete", label: "Complete", count: counts.complete },
     { key: "needs_report", label: "Needs report", count: counts.needs_report },
-    ...(counts.needs_review ? [{ key: "needs_review", label: "Needs review", count: counts.needs_review }] : []),
-    ...(counts.duplicates ? [{ key: "duplicates", label: "Possible duplicates", count: counts.duplicates }] : []),
+    { key: "needs_review", label: "Needs review", count: counts.needs_review },
+    { key: "duplicates", label: "Possible duplicates", count: counts.duplicates },
   ];
   const selectedGroup = selectedJobId ? groupByJobId.get(selectedJobId) || null : null;
   const handleJobCreated = (job) => {
@@ -173,154 +179,130 @@ export default function JobsHub() {
     : search.trim() ? `No jobs match "${search.trim()}".`
     : segment !== "all" || builder ? "No jobs match these filters."
     : "No jobs yet.";
-
-  const darkField = { height: "40px", border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)" };
+  const todayLabel = new Date(`${denverDate()}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const summary = `${filtered.length.toLocaleString()} ${filtered.length === 1 ? "job" : "jobs"}${builder ? ` · ${builder}` : ""}`;
+  const moreValue = moreViews.some((m) => m.key === segment) ? segment : "";
+  const selectCls = "h-9 min-w-0 rounded-[10px] border-0 bg-white px-2.5 text-[12.5px] text-[#34403f] shadow-[0_1px_2px_rgba(16,22,23,.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0b3f3b]";
 
-  return (
-    <div style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }} className="flex flex-col">
-      {/* Graphite header: title, search, filters */}
-      <header className="shrink-0 px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-5" style={{ background: "linear-gradient(180deg, var(--gf-sidebar-top), var(--gf-sidebar-bottom))", color: "var(--gf-sidebar-text-on)" }}>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div className="flex flex-wrap items-baseline gap-3">
-            <h1 className="font-heading text-[30px] font-bold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.03em" }}>Jobs</h1>
-            <span className="font-mono-num text-[14px]" style={{ color: "var(--gf-sidebar-muted)" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>{groups.length.toLocaleString()} total</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {owner && renderToggle(true)}
-            <AddJobDialog jobs={jobs} onCreated={handleJobCreated} />
-          </div>
-        </div>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[220px] max-w-[560px]">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: "var(--gf-sidebar-muted)" }} />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search name, alias, address, PO, OE or ID"
-                aria-label="Search jobs"
-                className="w-full pl-10 pr-9 rounded-[10px] text-[13px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8955A] transition-colors placeholder:text-[#8F999B]"
-                style={darkField}
-              />
-              {search && (
-                <button type="button" onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full" style={{ color: "var(--gf-sidebar-muted)" }}>
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            <label className="relative inline-flex items-center">
-              <span className="sr-only">Builder</span>
-              <Building2 className="absolute left-3 h-3.5 w-3.5 pointer-events-none" style={{ color: "var(--gf-sidebar-muted)" }} />
-              <select value={builder} onChange={(e) => setBuilder(e.target.value)} className="pl-8 pr-3 rounded-[10px] text-[13px] max-w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8955A]" style={darkField}>
-                <option value="" style={{ color: "#101617" }}>All builders</option>
-                {builders.map((b) => <option key={b.name} value={b.name} style={{ color: "#101617" }}>{b.name} ({b.count})</option>)}
-              </select>
-            </label>
-            <label className="relative inline-flex items-center">
-              <span className="sr-only">Sort</span>
-              <ArrowUpDown className="absolute left-3 h-3.5 w-3.5 pointer-events-none" style={{ color: "var(--gf-sidebar-muted)" }} />
-              <select value={sort} onChange={(e) => setSort(e.target.value)} className="pl-8 pr-3 rounded-[10px] text-[13px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8955A]" style={darkField}>
-                {JOB_SORTS.map((o) => <option key={o.key} value={o.key} style={{ color: "#101617" }}>{o.label}</option>)}
-              </select>
-            </label>
-          </div>
-          <div className="flex items-center gap-2 overflow-x-auto obsidian-scroll" style={{ scrollbarWidth: "none" }}>
-            {pills.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => setSegment(p.key)}
-                aria-pressed={segment === p.key}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap shrink-0 transition-colors"
-                style={segment === p.key
-                  ? { backgroundColor: "var(--gf-brass-400)", color: "var(--gf-on-brass)" }
-                  : { backgroundColor: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)", color: "var(--gf-sidebar-text)" }}
-              >
-                {p.label}<span className="font-mono-num text-[11px]" style={{ opacity: 0.75 }}>{p.count}</span>
-              </button>
-            ))}
-            {filtersActive && (
-              <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap shrink-0 underline-offset-2 hover:underline" style={{ color: "var(--gf-brass-300)" }}>
-                <X className="h-3 w-3" />Clear filters
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-      {loadError && <p role="alert" className="mx-[26px] max-[699px]:mx-[18px] mt-4 rounded-lg border bg-white p-3 text-[13px] text-red-700">{loadError}</p>}
+  const listHeader = (
+    <div className="flex flex-col gap-3.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <h1 className="m-0 text-[28px] font-extrabold" style={{ color: "#101617", letterSpacing: "-0.04em" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>Jobs</h1>
+        <span className="text-[13px]" style={{ color: "#566063" }}>{todayLabel} · {counts.today} {counts.today === 1 ? "visit" : "visits"} today</span>
+      </div>
+      {owner && <div>{renderToggle(false)}</div>}
+      <div className="flex gap-2">
+        <label className="relative flex flex-1 items-center">
+          <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: "#616a6d" }} />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search job, address, PO, OE"
+            aria-label="Search jobs"
+            className="h-[42px] w-full rounded-[11px] border-0 bg-white pl-[38px] pr-9 text-[14px] shadow-[0_1px_2px_rgba(16,22,23,.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0b3f3b]"
+            style={{ color: "#101617" }}
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-1 inline-flex h-8 w-8 items-center justify-center rounded-full" style={{ color: "#616a6d" }}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </label>
+        <AddJobDialog jobs={jobs} onCreated={handleJobCreated} label="New job" triggerClassName="inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-[11px] bg-[#0b3f3b] px-3.5 text-[14px] font-semibold text-white" />
+      </div>
+      <div role="group" aria-label="Show" className="grid grid-cols-4 gap-0.5 rounded-[12px] p-1" style={{ backgroundColor: "#e9e4d9" }}>
+        {segments.map((v) => {
+          const on = segment === v.key;
+          return (
+            <button key={v.key} type="button" onClick={() => setSegment(v.key)} aria-pressed={on}
+              className="flex h-9 min-w-0 items-center justify-center gap-1 rounded-[9px] px-1 text-[13px] whitespace-nowrap"
+              style={on ? { backgroundColor: "#ffffff", color: "#101617", fontWeight: 700, boxShadow: "0 1px 2px rgba(16,22,23,.1)" } : { color: "#566063", fontWeight: 500 }}>
+              {v.label}<span className="text-[11.5px] font-medium" style={{ color: v.attention ? "#8a5a12" : "#6b7477" }}>{v.count.toLocaleString()}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2">
+        <select aria-label="Builder" value={builder} onChange={(e) => setBuilder(e.target.value)} className={`${selectCls} flex-1`}>
+          <option value="">All builders</option>
+          {builders.map((b) => <option key={b.name} value={b.name}>{b.name} ({b.count})</option>)}
+        </select>
+        <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)} className={selectCls}>
+          {JOB_SORTS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+        </select>
+        <select aria-label="More views" value={moreValue} onChange={(e) => setSegment(e.target.value || "all")} className={selectCls} style={moreValue ? { backgroundColor: "#0e2426", color: "#ffffff" } : undefined}>
+          <option value="">More…</option>
+          {moreViews.map((m) => <option key={m.key} value={m.key}>{m.label} ({m.count})</option>)}
+        </select>
+      </div>
+      <div className="flex items-center justify-between text-[12px]" style={{ color: "#6b7477" }}>
+        <span>{summary}</span>
+        {filtersActive && <button type="button" onClick={clearFilters} className="font-semibold hover:underline" style={{ color: "#0b3f3b" }}>Clear filters</button>}
+      </div>
+    </div>
+  );
+
+  const notices = (
+    <>
+      {loadError && <p role="alert" className="mt-3 rounded-lg border bg-white p-3 text-[13px] text-red-700">{loadError}</p>}
       {!loadError && !evidenceAvailable && jobs.length > 0 && (
-        <p role="note" className="mx-[26px] max-[699px]:mx-[18px] mt-4 rounded-lg p-3 text-[13px]" style={{ backgroundColor: C.amberLight, color: C.amber }}>
-          Calendar report statuses could not load, so &quot;Needs report&quot; is based on billing lines only and may include visits whose report is already complete. Visit dates come from billing lines only.
+        <p role="note" className="mt-3 rounded-lg p-3 text-[12.5px]" style={{ backgroundColor: C.amberLight, color: C.amber }}>
+          Calendar report statuses could not load, so &quot;Needs report&quot; is based on billing lines only and may include visits whose report is already complete.
         </p>
       )}
+    </>
+  );
 
-      {/* Desktop split workspace — large desktop only */}
-      <div className="hidden xl:flex flex-1 min-h-0 px-[26px] pt-5 pb-6 gap-5 items-stretch">
-        <aside className="w-[380px] shrink-0 min-h-0 flex flex-col rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-          <div className="shrink-0 px-4 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
-            <span className="text-[12px] font-medium" style={{ color: C.headerText }}>{summary}</span>
-            <span className="text-[11px]" style={{ color: C.textMuted }}>{JOB_SORTS.find((o) => o.key === sort)?.label}</span>
+  const emptyState = (
+    <div className="px-4 py-10 text-center text-[13px]" style={{ color: "#566063" }}>
+      {emptyMessage}
+      {filtersActive && !loadError && <div className="mt-3"><button type="button" onClick={clearFilters} className="min-h-10 rounded-full bg-white px-4 text-[13px] font-medium" style={{ color: "#34403f" }}>Clear filters</button></div>}
+    </div>
+  );
+
+  const loadMore = (step) => filtered.length > visibleCount && (
+    <div className="flex items-center justify-between px-1 py-3">
+      <span className="text-[12px]" style={{ color: "#6b7477" }}>{visibleCount} of {filtered.length.toLocaleString()}</span>
+      <button type="button" onClick={() => setVisibleCount((c) => c + step)} className="min-h-10 rounded-full bg-white px-4 text-[13px] font-semibold shadow-[0_1px_2px_rgba(16,22,23,.08)]" style={{ color: "#0b3f3b" }}>Load more</button>
+    </div>
+  );
+
+  return (
+    <div style={{ backgroundColor: "#f4f1ea", minHeight: "100dvh" }} className="flex flex-col xl:h-[100dvh] xl:overflow-hidden">
+      {/* Desktop: job list on the left, the selected job on the right */}
+      <div className="hidden xl:flex flex-1 min-h-0">
+        <section aria-label="Jobs" className="flex w-[404px] shrink-0 flex-col px-[18px] pt-[26px]">
+          {listHeader}
+          {notices}
+          <div className="mt-3.5 flex-1 min-h-0 overflow-y-auto obsidian-scroll -mx-1 px-1 pb-6">
+            <div className="flex flex-col gap-2">
+              {visibleJobs.map((g) => (
+                <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} selected={g.id === selectedJobId} onSelect={() => setSelectedJobId(g.id)} />
+              ))}
+            </div>
+            {!visibleJobs.length && emptyState}
+            {loadMore(40)}
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll">
-            {visibleJobs.map((g) => (
-              <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} selected={g.id === selectedJobId} onSelect={() => setSelectedJobId(g.id)} />
-            ))}
-            {!visibleJobs.length && (
-              <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>
-                {emptyMessage}
-                {filtersActive && !loadError && <div className="mt-3"><button type="button" onClick={clearFilters} className="px-3 py-1.5 rounded-full text-[12px] font-medium" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Clear filters</button></div>}
-              </div>
-            )}
-            {filtered.length > visibleCount && (
-              <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}` }}>
-                <span className="font-mono-num text-[11px]" style={{ color: C.textMuted }}>{visibleCount} of {filtered.length}</span>
-                <button type="button" onClick={() => setVisibleCount(c => c + 40)} className="px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Load more</button>
-              </div>
-            )}
-          </div>
-        </aside>
-        <section className="flex-1 min-h-0 flex flex-col rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+        </section>
+        <section aria-label="Job" className="mr-[18px] mt-[18px] flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden rounded-t-[20px] bg-white shadow-[0_1px_3px_rgba(16,22,23,.06)]">
           {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} /> : (
-            <div className="flex items-center justify-center h-full text-[13px]" style={{ color: C.textMuted }}>Select a job to view its activity.</div>
+            <div className="flex h-full items-center justify-center text-[13px]" style={{ color: "#566063" }}>Pick a job on the left.</div>
           )}
         </section>
       </div>
 
-      {/* Mobile/tablet card list + detail navigation */}
-      <div className="xl:hidden px-[26px] max-[699px]:px-[18px] pt-4 pb-10">
-        <div className="mb-2.5 text-[12px] font-medium" style={{ color: C.textMuted }}>{summary}</div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
-          {visibleJobs.map((g) => {
-            const job = g.job;
-            const stats = jobStats[g.id];
-            return (
-              <Link key={job.id} to={`/jobs/${job.id}`} className="flex items-start gap-3 rounded-[12px] p-4 transition-colors hover:bg-[#F6F3EC] card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-semibold break-words" style={{ color: C.text, letterSpacing: "-0.01em" }}>{sanitizeText(job.canonical_name)}</div>
-                  <div className="text-[12px] break-words mt-0.5" style={{ color: C.textMuted }}>{[job.builder && sanitizeText(job.builder), job.address && sanitizeText(job.address)].filter(Boolean).join(" · ") || "No builder or address"}</div>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <StatusChip status={stats?.status} />
-                    <DuplicateTags group={g} />
-                  </div>
-                </div>
-                <div className="shrink-0 pt-0.5"><VisitInfo stats={stats} /></div>
-              </Link>
-            );
-          })}
+      {/* Phone and tablet: the same cards, each opens the job page */}
+      <div className="xl:hidden px-[18px] pt-[18px] pb-10 lg:px-[26px]">
+        {listHeader}
+        {notices}
+        <div className="mt-3.5 grid grid-cols-1 gap-2 lg:grid-cols-2">
+          {visibleJobs.map((g) => (
+            <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} href={`/jobs/${g.job.id}`} />
+          ))}
         </div>
-        {!visibleJobs.length && (
-          <div className="py-10 text-center text-[13px] break-words" style={{ color: C.textMuted }}>
-            {emptyMessage}
-            {filtersActive && !loadError && <div className="mt-3"><button type="button" onClick={clearFilters} className="min-h-11 px-4 rounded-full text-[13px] font-medium" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Clear filters</button></div>}
-          </div>
-        )}
-        {filtered.length > visibleCount && (
-          <div className="pt-3 text-center">
-            <button type="button" onClick={() => setVisibleCount(c => c + 20)} className="min-h-11 px-4 rounded-full text-[13px] font-medium whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary, backgroundColor: C.card }}>Load more · {visibleCount} of {filtered.length}</button>
-          </div>
-        )}
+        {!visibleJobs.length && emptyState}
+        {loadMore(20)}
       </div>
     </div>
   );
