@@ -4,6 +4,7 @@ import { sanitizeText } from "@/lib/jobsSanitize";
 import ClampedText from "./ClampedText";
 import FeedImage from "./FeedImage";
 import { RefreshCw, Plus, Camera, StickyNote, CheckCircle2, AlertCircle, Clock, Phone, MessageSquare, Mail, Users, Truck, TriangleAlert, HardHat, FileText, ExternalLink } from "lucide-react";
+import { scopeText } from "@/lib/jobWorkspace";
 import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote } from "@/lib/jobHistory";
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
@@ -74,7 +75,7 @@ function VisitCard({ ev, reports, onPhotoClick }) {
         ))
       ) : (
         ev.scope_notes ? (
-          <ClampedText text={ev.scope_notes} maxLines={5} className="text-[13.5px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }} />
+          <ClampedText text={scopeText(ev.scope_notes).replace(/\n{3,}/g, "\n\n").trim()} maxLines={5} className="text-[13.5px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }} />
         ) : null
       )}
       {crew ? <div className="text-[11px] mt-1.5" style={{ color: C.textMuted }}>Crew: {crew}</div> : null}

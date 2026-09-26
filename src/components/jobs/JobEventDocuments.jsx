@@ -43,7 +43,7 @@ export default function JobEventDocuments({ events, skipJobFolder = false }) {
     <div className="space-y-1">
       {gmailOnlyCount > 0 && (
         <p className="text-[11px]" style={{ color: C.textMuted }}>
-          {gmailOnlyCount} files are still in Israel&apos;s Gmail and can&apos;t be opened here yet.
+          {gmailOnlyCount === 1 ? "1 file is" : `${gmailOnlyCount} files are`} still in Israel&apos;s Gmail and can&apos;t be opened here yet.
         </p>
       )}
       {atts.map((a, i) => {

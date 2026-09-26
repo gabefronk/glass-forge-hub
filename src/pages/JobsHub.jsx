@@ -216,7 +216,7 @@ export default function JobsHub() {
           const on = segment === v.key;
           return (
             <button key={v.key} type="button" onClick={() => setSegment(v.key)} aria-pressed={on}
-              className="flex h-9 min-w-0 items-center justify-center gap-1 rounded-[9px] px-1 text-[13px] whitespace-nowrap"
+              className="flex h-9 min-w-0 items-center justify-center gap-1 rounded-[9px] px-1 text-[13px] whitespace-nowrap max-[480px]:h-11 max-[480px]:flex-col max-[480px]:gap-0 max-[480px]:text-[12px] max-[480px]:leading-tight"
               style={on ? { backgroundColor: "#ffffff", color: "#101617", fontWeight: 700, boxShadow: "0 1px 2px rgba(16,22,23,.1)" } : { color: "#566063", fontWeight: 500 }}>
               {v.label}<span className="text-[11.5px] font-medium" style={{ color: v.attention ? "#8a5a12" : "#6b7477" }}>{v.count.toLocaleString()}</span>
             </button>
