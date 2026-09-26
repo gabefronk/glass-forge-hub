@@ -1,4 +1,4 @@
-import { relativeTime, mailboxName } from "@/lib/emailInbox";
+import { relativeTime, mailboxName } from "@/lib/inboxAgents";
 
 // Mailbox switcher inside the hero: "All" then one chip per mailbox, each with a
 // connected (green) / not connected (amber) dot and when it last synced.

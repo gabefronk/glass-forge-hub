@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
-import { btnBase, btnNeutral } from "@/components/email/emailApi";
+import { btnBase, btnNeutral } from "@/components/inbox/inboxApi";
 
-// Small inline picker for linking a thread to a job: the agent's own candidates first,
+// Small inline picker for linking a ledger entry to a job: the agent's own candidates first,
 // then a text search through jobFinder (find_job). Choosing a result calls onPick(job).
 export default function JobPickerInline({ candidates = [], onPick, onClose, busy }) {
   const [q, setQ] = useState("");
