@@ -6,7 +6,9 @@ import JobEventDocuments, { eventAttachments } from "@/components/jobs/JobEventD
 import JobDriveDocuments from "@/components/jobs/JobDriveDocuments";
 
 // jobContacts is the useJobContacts() result: the read-only Jobs ⇄ ContactJobLink ⇄ directory join.
-export default function JobFactsRail({ job, jobContacts, plans, events }) {
+// hideDocuments: the full job page shows plans, folder files and event
+// documents in its Plans & photos panel, so the rail skips them there.
+export default function JobFactsRail({ job, jobContacts, plans, events, hideDocuments = false }) {
   const builder = (jobContacts?.view?.linked || []).filter((c) => c.role === "builder");
   const jobPlans = plans || [];
   const mapHref = job.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
@@ -24,7 +26,7 @@ export default function JobFactsRail({ job, jobContacts, plans, events }) {
 
       <JobContactRows jobId={job.id} jobContacts={jobContacts} />
 
-      {eventAttachments(events).length > 0 && (
+      {!hideDocuments && eventAttachments(events).length > 0 && (
         <Row icon={FileText} label="Event documents">
           <JobEventDocuments events={events} />
         </Row>
@@ -43,9 +45,9 @@ export default function JobFactsRail({ job, jobContacts, plans, events }) {
         </Row>
       )}
 
-      <JobDriveDocuments job={job} />
+      {!hideDocuments && <JobDriveDocuments job={job} />}
 
-      {jobPlans.length > 0 && (
+      {!hideDocuments && jobPlans.length > 0 && (
         <Row icon={FileText} label="Plans & documents">
           <div className="space-y-1">
             {jobPlans.map((p, i) => {
