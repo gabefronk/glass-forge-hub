@@ -110,7 +110,7 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
           const status = costStatus(job);
           return (
             <article key={job.key}>
-              <button type="button" onClick={() => toggle(job.key)} className="grid w-full items-center gap-3 px-4 py-3 text-left" style={{ gridTemplateColumns: "22px minmax(0,1.5fr) minmax(420px,2fr)", border: 0, backgroundColor: "transparent", cursor: "pointer" }}>
+              <button type="button" onClick={() => toggle(job.key)} className="grid w-full grid-cols-[22px_minmax(0,1fr)] items-center gap-3 px-4 py-3 text-left sm:grid-cols-[22px_minmax(0,1.5fr)_minmax(0,2fr)]" style={{ border: 0, backgroundColor: "transparent", cursor: "pointer" }}>
                 <span style={{ color: C.muted }}>{isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
                 <span className="min-w-0">
                   <span className="block truncate text-[13px] font-semibold" style={{ color: C.ink }}>{job.name}</span>
@@ -121,7 +121,7 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
                     <StatusDot done={job.completion_chain.billing_email_sent} label="billing sent" />
                   </span>
                 </span>
-                <span className="grid min-w-0 gap-3" style={{ gridTemplateColumns: "repeat(4,minmax(0,1fr))" }}>
+                <span className="col-start-2 grid min-w-0 grid-cols-2 gap-3 sm:col-start-auto sm:grid-cols-4">
                   <MoneyCell label="total job profit" value={job.total_job_profit} />
                   <MoneyCell label="Y.A. profit" value={job.ya_windows_profit} />
                   <MoneyCell label="Glass Forge profit" value={job.glass_forge_profit} />
@@ -129,7 +129,7 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
                 </span>
               </button>
               {isOpen && (
-                <div className="px-4 pb-4 pl-12">
+                <div className="px-4 pb-4 sm:pl-12">
                   <div className="grid gap-4 rounded-md p-3 sm:grid-cols-2 lg:grid-cols-4" style={{ backgroundColor: C.soft, border: `1px solid ${C.line}` }}>
                     <DetailPair label="Customer sell price">{moneyOrDash(job.customer_revenue)}</DetailPair>
                     <DetailPair label="Y.A. cost basis">{moneyOrDash(job.product_cost)}</DetailPair>
