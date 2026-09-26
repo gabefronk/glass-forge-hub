@@ -2,11 +2,13 @@
 // Microsoft Graph /me/messages/{id} shapes).
 
 const b64url = (s) => Buffer.from(String(s), 'utf8').toString('base64url');
+// Gmail internalDate (epoch ms as a string) on 2026-09-26 at the given UTC hour/minute.
+export const AT = (h, m = 0) => String(Date.UTC(2026, 8, 26, h, m));
 
 export function gmailMessage({
   id = 'm1', threadId = 't1', from = 'Kyle Super <kyle@ivoryhomes.com>', to = 'gabefronk@gmail.com', cc = '',
   subject = 'Lot 412 Oquirrh West - window install date', text = '', html = '', labelIds = ['INBOX', 'UNREAD'],
-  internalDate = '1758900000000', forwarded = true, attachments = [], messageIdHeader = '<abc123@ivoryhomes.com>', extraHeaders = [],
+  internalDate = AT(14), forwarded = true, attachments = [], messageIdHeader = '<abc123@ivoryhomes.com>', extraHeaders = [],
 } = {}) {
   const headers = [];
   // Gmail adds its own Delivered-To on arrival; a filter-forwarded copy keeps the original
