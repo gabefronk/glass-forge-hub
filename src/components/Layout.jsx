@@ -4,8 +4,7 @@ import YaFeesSidebar from "@/components/YaFeesSidebar";
 import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import { base44 } from "@/api/base44Client";
-import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { Diamond, LogOut, Users } from "lucide-react";
+import { Diamond, LogOut } from "lucide-react";
 
 export default function Layout() {
   const { pathname } = useLocation();
@@ -25,7 +24,6 @@ export default function Layout() {
           <Diamond className="h-4 w-4 shrink-0" style={{ color: "var(--gf-brass-400)" }} fill="var(--gf-brass-400)" /> Glass Forge
         </Link>
         <div className="flex items-center gap-2">
-          {isAgentCenterOwner(user) && <Link to="/contacts" aria-label="Contacts" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2" style={{ color: "var(--gf-sidebar-text)" }}><Users className="h-5 w-5"/></Link>}
           <button type="button" onClick={handleSignOut} disabled={signingOut} aria-label="Sign out" title="Sign out" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg" style={{ color: "var(--gf-sidebar-muted)" }}>
             <LogOut className="h-5 w-5" />
           </button>
