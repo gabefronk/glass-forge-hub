@@ -44,7 +44,7 @@ export function buildReports(rows, fieldReports) {
       byPost.set(r.probuild_post_id, {
         post_id: r.probuild_post_id,
         date: r.job_date,
-        message: [r.note_text, r.probuild_note_text].filter(Boolean).join("\n\n"),
+        message: mergeNoteTexts(r.note_text, r.probuild_note_text),
         photos: r.photo_urls || [],
         created_at: r.probuild_job_date || r.job_date || "",
         author: r.calendar_creator || "",
@@ -52,6 +52,21 @@ export function buildReports(rows, fieldReports) {
     }
   }
   return [...byPost.values()];
+}
+
+// The same report text is often stored twice (note_text and probuild_note_text).
+// Show it once; keep both only when they genuinely differ.
+export function mergeNoteTexts(...texts) {
+  const out = [];
+  for (const raw of texts) {
+    const t = String(raw || "").trim();
+    if (!t) continue;
+    const norm = (v) => v.replace(/\s+/g, " ").toLowerCase();
+    const i = out.findIndex((o) => norm(o).includes(norm(t)) || norm(t).includes(norm(o)));
+    if (i === -1) out.push(t);
+    else if (t.length > out[i].length) out[i] = t;
+  }
+  return out.join("\n\n");
 }
 
 export function isFieldReportNote(note) {

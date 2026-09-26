@@ -26,13 +26,47 @@ export function scopeText(html) {
     .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&quot;/g, "\"");
 }
 
-// Short scope lines for "The work". Money lines stay out of the glance view.
+const PHONE_RE = /\(?\b\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}\b/;
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
+const CONTACT_LABEL_RE = /^(?:spr|super(?:intendent)?|sup|pm|project manager|site contact|contact|email|e-mail|phone|cell|mobile)\b\s*[:#\-]?/i;
+
+// Short scope lines for "The work". Money lines stay out of the glance view,
+// and contact details and order numbers are lifted out (they show elsewhere),
+// but the words that remain are the scheduler's own, never reworded.
 export function workLines(scope, max = 5) {
+  const seen = new Set();
   return scopeText(scope)
-    .split(/\n|•|;\s+/)
-    .map((l) => l.replace(/^[\s\-*·]+/, "").replace(/\s+/g, " ").trim())
-    .filter((l) => l.length > 2 && !/\$\s?\d/.test(l) && !/^(po|oe)\b[\s#:]/i.test(l) && !/^(labor|price|total)\b/i.test(l))
+    .split(/\n|•|;\s+|\s·\s/)
+    .map((l) => l
+      .replace(/\*?\s*(?:orig(?:inal)?\.?\s*)?(?:po|oe)\s*#?\s*:?\s*[\w-]{5,}\s*\*?/gi, " ")
+      .replace(/^[\s\-*·]+|[\s*]+$/g, "")
+      .replace(/\*/g, "")
+      .replace(/\s+/g, " ")
+      .trim())
+    .filter((l) => l.length > 2
+      && !/\$\s?\d/.test(l)
+      && !/^(po|oe)\b[\s#:]/i.test(l)
+      && !/^(labor|price|total)\b/i.test(l)
+      && !CONTACT_LABEL_RE.test(l)
+      && !(EMAIL_RE.test(l) && l.replace(EMAIL_RE, "").replace(/[^A-Za-z]/g, "").length < 6)
+      && !(PHONE_RE.test(l) && l.replace(PHONE_RE, "").replace(/[^A-Za-z]/g, "").length < 14))
+    .filter((l) => { const k = l.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
     .slice(0, max);
+}
+
+// A super named in calendar notes, e.g. "SPR: Mike Shaw 385-230-1483 · Email: mikes@x.com".
+// Returns null unless both a name and a phone are written next to the label.
+export function findSuperInText(text) {
+  const t = scopeText(text).replace(/\s+/g, " ");
+  const m = t.match(/\b(?:spr|super(?:intendent)?|sup)\b\s*[:\-]?\s*([A-Z][a-zA-Z'.-]+(?:\s+[A-Z][a-zA-Z'.-]+){0,2})\s*[,:\-–]?\s*(\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})/i);
+  if (!m) return null;
+  const name = m[1].trim();
+  if (/^(email|phone|cell|call|text|none|tbd)$/i.test(name)) return null;
+  const digits = m[2].replace(/\D/g, "");
+  const phone = `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  const after = t.slice(m.index, m.index + m[0].length + 140);
+  const email = (after.match(EMAIL_RE) || [])[0] || "";
+  return { name, phone, email: email.toLowerCase() };
 }
 
 const uniq = (list) => [...new Set(list.map((v) => String(v || "").trim()).filter(Boolean))];

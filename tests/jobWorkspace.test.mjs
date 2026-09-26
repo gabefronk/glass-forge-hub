@@ -58,3 +58,27 @@ test('job names display with capital first letters, keeping existing capitals', 
   assert.equal(titleCase('911 - pulte home - 347 sunset flat'), '911 - Pulte Home - 347 Sunset Flat');
   assert.equal(titleCase(''), '');
 });
+
+test('scope lines lift out contact details and order numbers, keeping the words', async () => {
+  const { workLines, findSuperInText } = await import('../src/lib/jobWorkspace.js');
+  const notes = 'Amsco Investigation *Closing 9/24*<br>Take shoes off, carpets are being cleaned.<br><br>WARRANTY* - Per Report: (primary bath sh window is not opening and all ops need to be checked in the house – bring 2 32-4 balance springs in case they need to be swapped in the bath) *Orig. PO#: 6851328*<br>SPR: Mike Shaw 385-230-1483<br>Email: mikes@fieldstonehomes.com';
+  const lines = workLines(notes, 10);
+  assert.deepEqual(lines, [
+    'Amsco Investigation Closing 9/24',
+    'Take shoes off, carpets are being cleaned.',
+    'WARRANTY - Per Report: (primary bath sh window is not opening and all ops need to be checked in the house – bring 2 32-4 balance springs in case they need to be swapped in the bath)',
+  ]);
+  assert.deepEqual(findSuperInText(notes), { name: 'Mike Shaw', phone: '385-230-1483', email: 'mikes@fieldstonehomes.com' });
+  assert.equal(findSuperInText('Call the office when done'), null);
+  assert.deepEqual(findSuperInText('Super - Colton (801) 885-4735'), { name: 'Colton', phone: '801-885-4735', email: '' });
+});
+
+test('a report stored twice shows once', async () => {
+  const { mergeNoteTexts, buildReports } = await import('../src/lib/jobHistory.js');
+  const t = 'Changed out the balance springs, checked ops. 1 vinyl man hour';
+  assert.equal(mergeNoteTexts(t, t), t);
+  assert.equal(mergeNoteTexts('Short', 'Short plus more detail'), 'Short plus more detail');
+  assert.equal(mergeNoteTexts('A', 'B'), 'A\n\nB');
+  const r = buildReports([{ source: 'probuild', probuild_post_id: 'p', job_date: '2026-09-22', note_text: t, probuild_note_text: t }], []);
+  assert.equal(r[0].message, t);
+});
