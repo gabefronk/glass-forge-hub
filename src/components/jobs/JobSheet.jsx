@@ -4,7 +4,7 @@ import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
 import { ROLE_LABELS } from "@/lib/jobContacts";
-import { pickSuper, superChoices, parseScopeNotes, scopeIsEmpty } from "@/lib/jobWorkspace";
+import { pickSuper, superChoices, superChoiceGroups, parseScopeNotes, scopeIsEmpty } from "@/lib/jobWorkspace";
 import ScopeNotes from "@/components/jobs/ScopeNotes";
 import { fileBadge, fileLabel } from "@/lib/jobHistory";
 import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs/JobEventDocuments";
@@ -104,40 +104,64 @@ function SuperBox({ jobId, jobContacts, events }) {
   if (editing) return <div className={shell} style={shellStyle}><SuperForm initial={person?.source === "linked" ? person : person ? { ...person } : null} onSave={save} onCancel={() => setEditing(false)} /></div>;
 
   if (!person) {
-    // No super on file: offer the builder's people right here (one tap saves), so they
-    // don't sit unused at the bottom of the page.
+    // No super on file: a dropdown of the builder's people (and any suggested supers)
+    // so the right one is a two-tap pick; a strong candidate also gets a one-tap row.
     const choices = superChoices(view);
+    const quick = choices.filter((c) => c.suggested || c.role === "superintendent").slice(0, 2);
+    const groups = superChoiceGroups(choices);
+    const idOf = (c) => c.key || `${c.name}|${c.phone}`;
     const pick = async (c) => {
       setSaving(true); setError("");
       try { await save({ name: c.name, phone: c.phone || "", email: c.email || "" }); }
       catch (e) { setError(e.message || "Could not save."); }
       finally { setSaving(false); }
     };
+    const builderName = sanitizeText(view?.job?.builder || "the builder");
     return (
       <div className={shell} style={shellStyle}>
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "rgba(207,227,218,.18)", color: "#cfe3da" }}><HardHat className="h-4 w-4" /></span>
           <div className="min-w-0">
             <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>SUPER</div>
-            <div className="text-[14.5px] font-semibold" style={{ color: HERO_MUTED }}>{jobSuper.loading && jobContacts?.phase === "loading" ? "Looking…" : choices.length ? `Not on file yet · pick from ${sanitizeText(view?.job?.builder || "the builder")}` : "Not on file yet"}</div>
+            <div className="text-[14.5px] font-semibold" style={{ color: HERO_MUTED }}>{jobSuper.loading && jobContacts?.phase === "loading" ? "Looking…" : saving ? "Saving…" : "Not on file yet"}</div>
           </div>
         </div>
-        {choices.length > 0 && (
+        {quick.length > 0 && (
           <div className="mt-3 flex flex-col gap-1.5">
-            {choices.map((c) => (
-              <button key={c.key || c.name} type="button" disabled={saving} onClick={() => pick(c)} className="flex min-h-[40px] w-full items-center gap-2.5 rounded-[9px] px-3 text-left disabled:opacity-60" style={{ backgroundColor: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)" }}>
+            {quick.map((c) => (
+              <button key={idOf(c)} type="button" disabled={saving} onClick={() => pick(c)} className="flex min-h-[40px] w-full items-center gap-2.5 rounded-[9px] px-3 text-left disabled:opacity-60" style={{ backgroundColor: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)" }}>
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{initials(c.name)}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px] font-semibold" style={{ color: HERO_INK }}>{sanitizeText(c.name)}</span>
-                  <span className="block truncate text-[11.5px]" style={{ color: "#9aa6a8" }}>{[c.title || ROLE_LABELS[c.role] || "Contact", c.phone].filter(Boolean).join(" · ")}</span>
+                  <span className="block truncate text-[11.5px]" style={{ color: "#9aa6a8" }}>{[c.suggested ? "Suggested for this job" : c.title || ROLE_LABELS[c.role] || "Contact", c.phone].filter(Boolean).join(" · ")}</span>
                 </span>
-                <span className="shrink-0 text-[12px] font-semibold" style={{ color: BRASS_LT }}>{saving ? "Saving…" : "Use as super"}</span>
+                <span className="shrink-0 text-[12px] font-semibold" style={{ color: BRASS_LT }}>Use as super</span>
               </button>
             ))}
           </div>
         )}
+        {choices.length > 0 && (
+          <label className="relative mt-3 block">
+            <span className="sr-only">Pick a super from {builderName}</span>
+            <select
+              value=""
+              disabled={saving}
+              onChange={(e) => { const c = choices.find((x) => idOf(x) === e.target.value); if (c) pick(c); }}
+              className="h-[40px] w-full appearance-none rounded-[9px] pl-3 pr-9 text-[13.5px] font-semibold outline-none focus:ring-2 disabled:opacity-60"
+              style={{ ...FIELD_STYLE, backgroundColor: "#cfe3da", color: "#082f2c", border: "1px solid rgba(207,227,218,.5)" }}
+            >
+              <option value="">Pick a super from {builderName} ({choices.length})</option>
+              {groups.map(([label, list]) => (
+                <optgroup key={label} label={label}>
+                  {list.map((c) => <option key={idOf(c)} value={idOf(c)}>{[sanitizeText(c.name), c.title || ROLE_LABELS[c.role] || "", c.phone].filter(Boolean).join(" · ")}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "#082f2c" }} />
+          </label>
+        )}
         <button type="button" onClick={() => setEditing(true)} className={`${choices.length ? "mt-2" : "mt-3"} inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[9px] text-[13.5px] font-semibold`} style={choices.length ? { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" } : { backgroundColor: "#cfe3da", color: "#082f2c" }}>
-          <UserPlus className="h-3.5 w-3.5" />{choices.length ? "Someone else" : "Add super"}
+          <UserPlus className="h-3.5 w-3.5" />{choices.length ? "Someone not listed" : "Add super"}
         </button>
         {error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
       </div>
