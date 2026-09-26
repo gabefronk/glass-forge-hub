@@ -112,8 +112,8 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
   );
   const cls = "flex w-full items-start gap-3 rounded-[14px] px-3.5 py-[13px] text-left transition-shadow";
   const style = selected
-    ? { backgroundColor: "#0e2426", color: "#ffffff", boxShadow: "0 8px 20px -12px rgba(14,36,38,.6)" }
-    : { backgroundColor: "#ffffff", color: "#101617", boxShadow: "0 1px 2px rgba(16,22,23,.07)" };
+    ? { backgroundColor: "#0e2426", color: "#ffffff", border: "1px solid #0e2426", boxShadow: "0 8px 20px -12px rgba(14,36,38,.6)" }
+    : { backgroundColor: "#ffffff", color: "#101617", border: "1px solid #d3cabb", boxShadow: "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -8px rgba(10,29,31,.18)" };
   if (href) return <Link to={href} className={`${cls} hover:shadow-md`} style={style}>{body}</Link>;
   return (
     <button type="button" onClick={onSelect} aria-current={selected ? "true" : undefined} className={`${cls} ${selected ? "" : "hover:shadow-md"}`} style={style}>

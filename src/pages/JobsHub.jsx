@@ -182,63 +182,66 @@ export default function JobsHub() {
   const todayLabel = new Date(`${denverDate()}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const summary = `${filtered.length.toLocaleString()} ${filtered.length === 1 ? "job" : "jobs"}${builder ? ` · ${builder}` : ""}`;
   const moreValue = moreViews.some((m) => m.key === segment) ? segment : "";
-  const selectCls = "h-9 min-w-0 rounded-[10px] border-0 bg-white px-2.5 text-[12.5px] text-[#34403f] shadow-[0_1px_2px_rgba(16,22,23,.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0b3f3b]";
+  const selectCls = "h-9 min-w-0 rounded-[9px] px-2.5 text-[12.5px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e0c994]";
+  const fieldStyle = { backgroundColor: "rgba(255,255,255,.08)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.16)" };
+  const HERO_INK = "#f2eee8", HERO_MUTED = "#aeb5b7";
 
+  // The list header is a compact dark hero, like every other tab.
   const listHeader = (
-    <div className="flex flex-col gap-3.5">
+    <div className="flex flex-col gap-3 rounded-[14px] px-4 pt-4 pb-3.5" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
       <div className="flex items-baseline justify-between gap-3">
-        <h1 className="m-0 text-[28px] font-extrabold" style={{ color: "#101617", letterSpacing: "-0.04em" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>Jobs</h1>
-        <span className="text-[13px]" style={{ color: "#566063" }}>{todayLabel} · {counts.today} {counts.today === 1 ? "visit" : "visits"} today</span>
+        <h1 className="m-0 text-[26px] font-bold" style={{ color: HERO_INK, letterSpacing: "-0.035em" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>Jobs</h1>
+        <span className="text-[12.5px]" style={{ color: HERO_MUTED }}>{todayLabel} · <span style={{ color: "#e0c994", fontWeight: 600 }}>{counts.today}</span> {counts.today === 1 ? "visit" : "visits"} today</span>
       </div>
-      {owner && <div>{renderToggle(false)}</div>}
+      {owner && <div>{renderToggle(true)}</div>}
       <div className="flex gap-2">
         <label className="relative flex flex-1 items-center">
-          <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: "#616a6d" }} />
+          <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: HERO_MUTED }} />
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search job, address, PO"
             aria-label="Search jobs"
-            className="h-[42px] w-full rounded-[11px] border-0 bg-white pl-[38px] pr-9 text-[14px] shadow-[0_1px_2px_rgba(16,22,23,.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0b3f3b]"
-            style={{ color: "#101617" }}
+            className="h-[40px] w-full rounded-[9px] pl-[38px] pr-9 text-[14px] placeholder:text-[#8f999b] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e0c994]"
+            style={fieldStyle}
           />
           {search && (
-            <button type="button" onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-1 inline-flex h-8 w-8 items-center justify-center rounded-full" style={{ color: "#616a6d" }}>
+            <button type="button" onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-1 inline-flex h-8 w-8 items-center justify-center rounded-full" style={{ color: HERO_MUTED }}>
               <X className="h-3.5 w-3.5" />
             </button>
           )}
         </label>
-        <AddJobDialog jobs={jobs} onCreated={handleJobCreated} label="New job" triggerClassName="inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-[11px] bg-[#0b3f3b] px-3.5 text-[14px] font-semibold text-white" />
+        <AddJobDialog jobs={jobs} onCreated={handleJobCreated} label="New job" triggerClassName="inline-flex h-[40px] shrink-0 items-center gap-1.5 rounded-[9px] bg-[#b8955a] px-3.5 text-[13.5px] font-semibold text-[#1d160a]" />
       </div>
-      <div role="group" aria-label="Show" className="grid grid-cols-4 gap-0.5 rounded-[12px] p-1" style={{ backgroundColor: "rgba(10,29,31,.08)" }}>
+      <div role="group" aria-label="Show" className="grid grid-cols-4 gap-0.5 rounded-[11px] p-1" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
         {segments.map((v) => {
           const on = segment === v.key;
           return (
             <button key={v.key} type="button" onClick={() => setSegment(v.key)} aria-pressed={on}
-              className="flex h-12 min-w-0 flex-col items-center justify-center rounded-[9px] px-1 text-[13px] leading-tight whitespace-nowrap"
-              style={on ? { backgroundColor: "#ffffff", color: "#101617", fontWeight: 700, boxShadow: "0 1px 2px rgba(16,22,23,.1)" } : { color: "#566063", fontWeight: 500 }}>
-              <span>{v.label}</span><span className="mt-0.5 text-[11.5px] font-semibold" style={{ color: v.attention ? "#8a5a12" : "#6b7477" }}>{v.count.toLocaleString()}</span>
+              className="flex h-11 min-w-0 flex-col items-center justify-center rounded-[8px] px-1 text-[12.5px] leading-tight whitespace-nowrap"
+              style={on ? { backgroundColor: "#cfe3da", color: "#082f2c", fontWeight: 700 } : { color: "#c9d0d1", fontWeight: 500 }}>
+              <span>{v.label}</span><span className="mt-0.5 text-[11.5px] font-semibold" style={{ color: on ? "#0b3f3b" : v.attention ? "#e0c994" : HERO_MUTED }}>{v.count.toLocaleString()}</span>
             </button>
           );
         })}
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_124px_96px] items-center gap-2">
-        <select aria-label="Builder" value={builder} onChange={(e) => setBuilder(e.target.value)} className={`${selectCls} w-full`}>
+        <select aria-label="Builder" value={builder} onChange={(e) => setBuilder(e.target.value)} className={`${selectCls} w-full`} style={fieldStyle}>
           <option value="">All builders</option>
           {builders.map((b) => <option key={b.name} value={b.name}>{b.name} ({b.count})</option>)}
         </select>
-        <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)} className={`${selectCls} w-full`}>
+        <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)} className={`${selectCls} w-full`} style={fieldStyle}>
           {JOB_SORTS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
-        <select aria-label="More views" value={moreValue} onChange={(e) => setSegment(e.target.value || "all")} className={`${selectCls} w-full`} style={moreValue ? { backgroundColor: "#0e2426", color: "#ffffff" } : undefined}>
+        <select aria-label="More views" value={moreValue} onChange={(e) => setSegment(e.target.value || "all")} className={`${selectCls} w-full`} style={moreValue ? { backgroundColor: "#e0c994", color: "#1d160a", border: "1px solid #e0c994" } : fieldStyle}>
           <option value="">More…</option>
           {moreViews.map((m) => <option key={m.key} value={m.key}>{m.label} ({m.count})</option>)}
         </select>
       </div>
-      <div className="flex items-center justify-between text-[12px]" style={{ color: "#6b7477" }}>
+      <div className="flex items-center justify-between text-[12px]" style={{ color: HERO_MUTED }}>
         <span>{summary}</span>
-        {filtersActive && <button type="button" onClick={clearFilters} className="font-semibold hover:underline" style={{ color: "#0b3f3b" }}>Clear filters</button>}
+        {filtersActive && <button type="button" onClick={clearFilters} className="font-semibold hover:underline" style={{ color: "#e0c994" }}>Clear filters</button>}
       </div>
     </div>
   );
@@ -272,10 +275,10 @@ export default function JobsHub() {
     <div style={{ backgroundColor: "#d9cbb0", minHeight: "100dvh" }} className="flex flex-col xl:h-[100dvh] xl:overflow-hidden">
       {/* Desktop: job list on the left, the selected job on the right */}
       <div className="hidden xl:flex flex-1 min-h-0">
-        <section aria-label="Jobs" className="flex w-[404px] shrink-0 flex-col px-[18px] pt-[26px]">
+        <section aria-label="Jobs" className="flex w-[404px] shrink-0 flex-col px-[18px] pt-[18px]">
           {listHeader}
           {notices}
-          <div className="mt-3.5 flex-1 min-h-0 overflow-y-auto obsidian-scroll -mx-1 px-1 pb-6">
+          <div className="mt-3 flex-1 min-h-0 overflow-y-auto obsidian-scroll -mx-1 px-1 pb-6">
             <div className="flex flex-col gap-2">
               {visibleJobs.map((g) => (
                 <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} selected={g.id === selectedJobId} onSelect={() => setSelectedJobId(g.id)} />
