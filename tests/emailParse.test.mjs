@@ -19,7 +19,7 @@ test('gmail: multipart text/plain wins, headers extracted, forwarded account_hin
   assert.equal(m.internet_message_id, '<abc123@ivoryhomes.com>');
   assert.equal(m.account_hint, 'gabefronk@gmail.com', 'X-Forwarded-For names the address the mail was really sent to');
   assert.equal(m.direction, 'incoming');
-  assert.equal(m.sent_at, new Date(1758900000000).toISOString());
+  assert.equal(m.sent_at, '2026-09-26T14:00:00.000Z');
   assert.equal(m.has_attachments, true);
   assert.deepEqual(m.attachments, [{ name: 'lot412-plans.pdf', mime: 'application/pdf', size: 20000, attachment_id: 'att0' }]);
   assert.equal(m.web_link, 'https://mail.google.com/mail/u/0/#all/t1');
