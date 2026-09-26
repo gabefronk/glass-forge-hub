@@ -8,9 +8,9 @@
 //   * MERGE (one visible job): same customer AND same normalized street address
 //     (house number, street name, unit/lot), where the only allowed difference is
 //     a street type present on one record and missing on the other.
-//   * MERGE: same customer AND same normalized job name, when the records have
-//     at most one street address in their address fields (name-only records
-//     beside the one with the real address) and at most one window quote.
+//   * MERGE: same customer AND same normalized job name, when exactly one street
+//     address appears across their address fields (name-only records beside the
+//     one with the real address) and at most one window quote.
 //   * FLAG for review, never merge, when the evidence is weaker or conflicts:
 //     - same customer + address but different street types (Dr vs Ct), or
 //       different source window quotes;
@@ -81,8 +81,8 @@ export function groupJobs(jobs) {
   }
   for (const s of singles) makeGroup(s);
 
-  // 1b. Same customer + same job name, where the records agree on at most one
-  // street address from the address FIELD and at most one window quote. This is
+  // 1b. Same customer + same job name, where exactly one street address appears
+  // in the records' address FIELDS and at most one window quote. This is
   // the common ProBuild / calendar case: a name-only record ("Pulte Homes - 338
   // Sunset Flats", no builder or address) beside the record with the real street
   // address. Groups already flagged for conflicting street types or quotes stay out.
@@ -111,7 +111,9 @@ export function groupJobs(jobs) {
       }
       for (const k of keys) { if (!byName.has(k)) byName.set(k, []); byName.get(k).push(g.id); }
     }
-    for (const ids of byName.values()) {
+    for (const list of byName.values()) {
+      // A record with a real address anchors the merge; name-only records join it.
+      const ids = [...list].sort((x, y) => facts.get(y).addrs.size - facts.get(x).addrs.size);
       for (let i = 1; i < ids.length; i++) {
         const a = find(ids[0]);
         const b = find(ids[i]);
@@ -120,7 +122,9 @@ export function groupJobs(jobs) {
         const fb = facts.get(b);
         const addrs = new Set([...fa.addrs, ...fb.addrs]);
         const quotes = new Set([...fa.quotes, ...fb.quotes]);
-        if (addrs.size > 1 || quotes.size > 1) continue; // real conflict: leave for review
+        // Exactly one real address: two name-only records (no address anywhere)
+        // stay flagged, and different addresses or quotes are a real conflict.
+        if (addrs.size !== 1 || quotes.size > 1) continue;
         parent.set(b, a);
         facts.set(a, { addrs, quotes });
       }
