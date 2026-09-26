@@ -1085,3 +1085,26 @@ Frontend only. No entity, function or data changes; nothing published.
 - **Install vs service spot-check.** September "YA - #1 …" events are warranty/service calls by their notes, so the wording rule classifies them correctly.
 - **Calendar load.** `ownedCalendar` re-downloaded, SHA-checked and parsed the whole Sales Tracker workbook on every request. It now keeps the parsed workbook on a warm instance, keyed by the validated snapshot id + sha256 (`readTrackerView(…, cache)`); append batches are re-read every time. Only `ownedCalendar` passes a cache; `salesTrackerLookup` and the append service are unchanged. The page no longer waits for the full Jobs list (only the event form's job picker needs it). Tests: `tests/trackerViewCache.test.mjs`.
 - **Checks.** Root suite 463 pass / 12 fail (same 12 as before); backend suite 838 pass / 2 fail (same 2 as the pre-change commit ee0fa1b); build passes.
+
+## Hub integration + design sweep (2026-09-26)
+
+**Connections**
+- Calendar/Today "Open job" links: `ownedCalendar` now attaches a display-only `job_id` (flag `job_link_derived`) from the high-confidence FeeLine built from the same event (`FeeLines.calendar_event_id == CalendarEvents.google_event_id`). Nothing is written to CalendarEvents or FieldReports (owner rules unchanged). Test: `tests/calendarDerivedJobLinks.test.mjs`.
+- Job page: new owner-only "Quotes & orders" card (`JobLinkedRecords.jsx`) lists window quotes (job_id or `source_window_quote_id`) and vendor orders; Money panel now includes the job's duplicate records (`memberIds`).
+- Job Budgets: job names on budgets and vendor orders link to `/jobs/:id`.
+
+**Integrations**
+- `job-documents` is a self-contained generated bundle (`scripts/build-job-documents-entry.mjs`, test `tests/jobDocumentsBundle.test.mjs`).
+- `probuild-refresh` records the real `asset_copy_failed` detail in `ProbuildRefreshRun.errors[]`.
+- `syncGoogleCalendarEvents`: `maxResults=2500`, retries 429/5xx/524 (3 attempts).
+- `fetchCalendarEvents`, `fetchProbuildPosts`, `auditFieldReports` reject signed-in non-admin/manager callers (scheduled runs unaffected; verified live via MCP `sync_calendar_events`).
+- Note: `base44/shared/jobFolderCopy.js` imports `jobDocuments.mjs` transitively; Daily Ingest ran fine after that change, so transitive `.mjs` imports do serve.
+
+**Design system**
+- Tailwind `slate`/`blue` scales remapped to the warm neutrals/teal (tailwind.config.js); `--gf-error*` tokens defined; shadcn `--primary` = #0B3F3B; remap layer extended for window-quotes navy/slate hexes.
+- Mobile bottom nav on sidebar tokens with brass active state; Invoicing first in More; owner "Admin" group (desktop + mobile) for Agent Center, System Map, Research Queue, Sales Tracker, Messages, Unlinked, ProBuild Daily, Match Debug.
+- Pages centered (removed `!mx-0`); PageShell double mobile bottom padding removed; Jobs → Field reports no longer double-headed (`ProbuildReports embedded`); Invoicing profitability grid no longer forces sideways scroll on phones; Invoicing title is an h1; JobSetup on canvas with scrollable contract table.
+
+**Checks**: lint clean, build passes, root tests 515/515, backend 811/813 (the 2 pre-existing Node-20 `.ts` import failures).
+
+**Open (owner decisions / device actions)**: additive job_id backfill for CalendarEvents/FieldReports; restart AMSCO runner, Mac message collector, gaming-PC quote relay (hostname in `desktopQuoteRelayCore.js`); re-capture Outlook + Sales Tracker (stale since 9/08); full ProBuild library refresh; research queue paused; Goble PlanIntake stuck in error; 7 duplicate kebab-case entity files left in place (deleting entity files is risky).
