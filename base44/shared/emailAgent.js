@@ -108,6 +108,12 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   const normalizerFor = (mailbox) => (mailbox.provider === 'gmail' ? normalizeGmailMessage : normalizeGraphMessage);
 
+  async function whoAmI(provider, mailbox) {
+    if (mailbox.provider === 'gmail') return lowerEmail((await provider.profile())?.emailAddress);
+    const me = await provider.me();
+    return lowerEmail(me?.mail || me?.userPrincipalName);
+  }
+
   // The thread's messages, read from the mailbox right now (never from the Hub).
   async function fetchThreadMessages(provider, mailbox, threadId) {
     const normalize = normalizerFor(mailbox);
@@ -248,12 +254,20 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
         if (mailbox.provider === 'gmail') patch.last_history_id = mailbox._cursor;
         else patch.last_delta_link = mailbox._cursor;
       }
+      if (mailbox._address) patch.address = mailbox._address;
       try { await api.EmailMailbox.update(mailbox.id, patch); } catch (e) { warn(`mailbox update failed: ${errText(e)}`); }
       return { mailbox_key: mailbox.key, status, error: lastError || undefined, ...counts };
     };
 
     let provider;
     try { provider = await connect(ctx, mailbox); } catch (e) { warn(`not connected: ${e.detail || e.message}`); return finish('error', 'not_connected'); }
+
+    // The row says which account it expects; the connector says which one was authorized. Keep
+    // the row honest (direction detection, drafts and the page all key off the real address).
+    try {
+      const who = await whoAmI(provider, mailbox);
+      if (who && who !== lowerEmail(mailbox.address)) { warn(`connector is authorized as ${who}, not ${mailbox.address}; mailbox address updated`); mailbox._address = who; mailbox.address = who; }
+    } catch (e) { warn(`identity check failed: ${errText(e)}`); }
 
     // 1. Pull new mail since the cursor (read in memory; nothing below stores a body).
     let listed;
