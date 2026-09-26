@@ -1,7 +1,7 @@
 import { MapPin, Building2, FileText, ExternalLink } from "lucide-react";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
-import { BuilderContacts, ContactRow, JobContactRows, JobContactSuggestionsRow, Row } from "@/components/jobs/JobContacts";
+import { BuilderContacts, BuilderRoster, ContactRow, JobContactRows, JobContactSuggestionsRow, Row } from "@/components/jobs/JobContacts";
 import JobEventDocuments, { eventAttachments } from "@/components/jobs/JobEventDocuments";
 import JobDriveDocuments from "@/components/jobs/JobDriveDocuments";
 
@@ -20,17 +20,19 @@ export default function JobFactsRail({ job, jobContacts, plans, events, hideDocu
 
   return (
     <div className={contactsOnly ? "overflow-hidden rounded-b-[14px]" : "rounded-[12px] overflow-hidden card-shadow"} style={contactsOnly ? undefined : { border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      {/* On the job page the title already names the builder, so the Contacts card only
-          shows the builder's people (and nothing when there are none). */}
+      {/* On the job page the title names the builder and the hero's Super dropdown holds the
+          builder's people, so the Contacts card keeps the roster to one line with a link. */}
       {(!contactsOnly || builder.length > 0 || builderPeople.length > 0) && (
         <div className="px-3.5 py-3 flex items-start gap-2.5">
           <Building2 className="h-4 w-4 shrink-0 mt-0.5" style={{ color: C.textMuted }} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             {!contactsOnly && <div className="mono-label-sm mb-0.5">Builder</div>}
             {!contactsOnly && <div className="text-[14px] font-semibold break-words" style={{ color: C.text }}>{sanitizeText(job.builder || builderName || "—")}</div>}
             {!contactsOnly && builderName && builderName.toLowerCase() !== String(job.builder || "").toLowerCase() && <div className="text-[11px]" style={{ color: C.textFaint }}>Contacts filed as {sanitizeText(builderName)}</div>}
             {builder.length > 0 && <div className={contactsOnly ? "space-y-1.5" : "mt-1.5 space-y-1.5"}>{builder.map((c) => <ContactRow key={c.key} contact={c} />)}</div>}
-            <BuilderContacts contacts={builderPeople} jobId={job.id} />
+            {contactsOnly
+              ? <BuilderRoster builderName={job.builder || builderName} contacts={builderPeople} jobId={job.id} />
+              : <BuilderContacts contacts={builderPeople} jobId={job.id} />}
           </div>
         </div>
       )}
