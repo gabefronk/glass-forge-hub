@@ -107,8 +107,11 @@ export default function InboxAgents() {
   const sync = async () => {
     setSyncing(true); setError(""); setNotice("");
     try {
-      const r = await inboxCall(mailbox === "all" ? { action: "sync" } : { action: "sync", mailbox_key: mailbox });
-      const lines = (r.mailboxes || []).map((m) => `${m.mailbox_key}: ${m.status}${syncSummary(m) ? ` — ${syncSummary(m)}` : ""}${m.error ? ` (${m.error})` : ""}`);
+      // One call per mailbox so each gets the function's full time budget (same as the schedule).
+      const keys = mailbox === "all" ? (mailboxes || []).filter((m) => m.enabled !== false).map((m) => m.key) : [mailbox];
+      const results = [];
+      for (const key of keys) { const r = await inboxCall({ action: "sync", mailbox_key: key }); results.push(...(r.mailboxes || [])); }
+      const lines = results.map((m) => `${m.mailbox_key}: ${m.status}${syncSummary(m) ? ` — ${syncSummary(m)}` : ""}${m.error ? ` (${m.error})` : ""}`);
       setNotice(lines.length ? `Run finished. ${lines.join(" · ")}` : "Run finished.");
       await Promise.all([loadMailboxes().catch(() => {}), refresh({ quiet: true })]);
     } catch (e) { setError(errorText(e, "The run failed.")); }
