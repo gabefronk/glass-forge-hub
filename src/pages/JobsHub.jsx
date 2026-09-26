@@ -157,7 +157,7 @@ export default function JobsHub() {
     return (
       <div style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }}>
         <div className="px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="font-heading text-[30px] font-bold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Field reports</h1>
             {renderToggle(false)}
           </div>
