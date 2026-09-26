@@ -27,7 +27,9 @@ export function sprContacts(text){
  for(const m of src.matchAll(re)){
   const name=titleName((m[1]||'').replace(/\b(phone|cell|mobile|email)\b.*$/i,'').trim());
   const key=phoneKey(m[2]);if(!key||seen.has(key)||/^(tbd|none|n\/?a|isr)$/i.test(name))continue;seen.add(key);
-  const after=src.slice(m.index,m.index+m[0].length+160).match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+  // The super's email only when it sits under the SPR line, before the next label (ISR, ODR, …).
+  const tail=src.slice(m.index+m[0].length,m.index+m[0].length+160).split(/\b(?:isr|odr|spr|tech|oe|received)\b/i)[0];
+  const after=tail.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
   out.push({name,phone:m[2].trim(),phone_key:key,email:after?after[0].toLowerCase():''});
  }
  return out;
