@@ -38,6 +38,21 @@ export function sprContacts(text){
  }
  return out;
 }
+// Calendar events rarely carry job_id: most reach a job through a billing line's
+// calendar_event_id (the Google event id) or an exact job name / alias, as on the job page.
+// Returns Map(jobId → events). A name shared by two jobs attaches to neither.
+export function eventsByJob(events=[],jobs=[],feeLines=[]){
+ const out=new Map(),add=(id,e)=>{if(!out.has(id))out.set(id,new Set());out.get(id).add(e);};
+ const ids=new Set(jobs.map(j=>j.id)),byGoogle=new Map(),byName=new Map();
+ for(const l of feeLines)if(l.calendar_event_id&&ids.has(l.job_id)){if(!byGoogle.has(l.calendar_event_id))byGoogle.set(l.calendar_event_id,new Set());byGoogle.get(l.calendar_event_id).add(l.job_id);}
+ for(const j of jobs)for(const raw of [j.canonical_name,...(j.aliases||[])]){const n=String(raw||'').trim().toLowerCase();if(!n)continue;if(!byName.has(n))byName.set(n,new Set());byName.get(n).add(j.id);}
+ for(const e of events){
+  if(e.job_id){if(ids.has(e.job_id))add(e.job_id,e);continue;}
+  for(const id of byGoogle.get(e.google_event_id)||[])add(id,e);
+  const named=byName.get(String(e.job_name||'').trim().toLowerCase());if(named?.size===1)add([...named][0],e);
+ }
+ return new Map([...out].map(([k,v])=>[k,[...v]]));
+}
 // One adjacent swap ("Dvais" for "Davis") is the only fuzziness allowed; other variants must be listed.
 function transposed(a,b){if(a.length!==b.length||a.length<4)return false;const i=[...a].findIndex((ch,k)=>ch!==b[k]);return i>=0&&i<a.length-1&&a[i]===b[i+1]&&a[i+1]===b[i]&&a.slice(i+2)===b.slice(i+2);}
 export function nameMatchesSeed(name,seed){const variants=[seed.name,...(seed.name_variants||[])].map(norm).filter(Boolean);return words(name).some(w=>variants.some(v=>w===v||transposed(w,v)));}
