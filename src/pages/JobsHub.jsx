@@ -162,7 +162,7 @@ export default function JobsHub() {
             {renderToggle(false)}
           </div>
         </div>
-        <ProbuildReports />
+        <ProbuildReports embedded />
       </div>
     );
   }
