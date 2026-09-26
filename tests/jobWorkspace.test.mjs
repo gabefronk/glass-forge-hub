@@ -82,3 +82,23 @@ test('a report stored twice shows once', async () => {
   const r = buildReports([{ source: 'probuild', probuild_post_id: 'p', job_date: '2026-09-22', note_text: t, probuild_note_text: t }], []);
   assert.equal(r[0].message, t);
 });
+
+test('pickSuper prefers a linked super, then a suggestion, then calendar notes', async () => {
+  const { pickSuper } = await import('../src/lib/jobWorkspace.js');
+  const events = [
+    { event_date: '2026-09-01', scope_notes: 'SPR: Old Guy 801-111-2222' },
+    { event_date: '2026-09-22', scope_notes: 'Closing 9/24<br>SPR: Mike Shaw 385-230-1483 · Email: mikes@fieldstonehomes.com' },
+  ];
+  const fromNotes = pickSuper({ view: { linked: [], suggestions: [] }, events });
+  assert.equal(fromNotes.source, 'notes');
+  assert.equal(fromNotes.name, 'Mike Shaw');
+  assert.equal(fromNotes.email, 'mikes@fieldstonehomes.com');
+  const sug = pickSuper({ view: { linked: [], suggestions: [{ role: 'superintendent', confidence: 'high', contact: { key: 'k1', name: 'Sue', phone: '801-000-0000' } }] }, events });
+  assert.equal(sug.source, 'suggestion');
+  assert.equal(sug.key, 'k1');
+  const linked = pickSuper({ view: { linked: [{ role: 'superintendent', name: 'Tom', phone: '1', key: 'k2' }] }, events });
+  assert.deepEqual([linked.source, linked.name], ['linked', 'Tom']);
+  const known = pickSuper({ view: { linked: [{ role: 'project_manager', name: 'Mike S.', phone: '(385) 230-1483', key: 'k3' }] }, events });
+  assert.deepEqual([known.source, known.key], ['linked', 'k3']);
+  assert.equal(pickSuper({ view: null, events: [] }), null);
+});
