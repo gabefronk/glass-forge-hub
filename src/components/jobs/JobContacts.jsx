@@ -100,7 +100,16 @@ export function JobContactRows({ jobId, jobContacts, heroShowsPeople = false }) 
           <div className="space-y-1.5">{list.map((c) => <ContactRow key={c.key} contact={c} detail={LINK_LABELS[c.link]} />)}</div>
         </Row>
       ))}
-      {view.status?.missing_contact && (
+      {view.status?.missing_contact && (heroShowsPeople && (view.builder_contacts || []).length > 0 ? (
+        // The builder's people are already listed above and the super/homeowner slots sit
+        // in the hero, so a warning here would just repeat itself.
+        (view.suggestions?.length > 0 || !view.directory) && (
+          <Row icon={User} label="Other people">
+            {view.suggestions?.length > 0 && <ContactSuggestions suggestions={view.suggestions.slice(0, 3)} onConfirm={jobContacts.confirmLink} />}
+            {!view.directory && <p className="m-0 text-[12px]" style={{ color: C.textMuted }}>The contacts directory has not been imported yet.</p>}
+          </Row>
+        )
+      ) : (
         <Row icon={AlertTriangle} label="Contacts">
           <Missing>No contacts linked to this job yet (0 linked)</Missing>
           {view.suggestions?.length > 0 && <div className="mt-2"><ContactSuggestions suggestions={view.suggestions.slice(0, 3)} onConfirm={jobContacts.confirmLink} /></div>}
@@ -109,7 +118,7 @@ export function JobContactRows({ jobId, jobContacts, heroShowsPeople = false }) 
             <Link to={contactsHref} className="underline" style={{ color: C.accentText }}>Find people in Contacts</Link>
           </p>
         </Row>
-      )}
+      ))}
     </>
   );
 }
