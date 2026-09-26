@@ -19,9 +19,12 @@ const BUDGET_COST_INPUTS = ["material_true_cost", "overhead_adder", "additional_
 // boundary; this check prevents a crew browser from making a financial request at all.
 export const canLoadJobMoney = (user) => isAgentCenterOwner(user);
 
+// jobId may be one id or a list (the job plus its duplicate records), so money
+// attached to any record in the duplicate group shows on the job page.
 export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], feeLines = [] } = {}) {
+  const ids = new Set(Array.isArray(jobId) ? jobId : [jobId]);
   const linkedBudgets = budgets
-    .filter((row) => row.job_id === jobId)
+    .filter((row) => ids.has(row.job_id))
     .map((row) => {
       const computed = computeJobBudget(row.inputs || {});
       return {
@@ -33,9 +36,9 @@ export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], fe
         },
       };
     });
-  const linkedPurchaseOrders = purchaseOrders.filter((row) => row.job_id === jobId);
+  const linkedPurchaseOrders = purchaseOrders.filter((row) => ids.has(row.job_id));
   const linkedFeeLines = withComputedAmounts(feeLines)
-    .filter((row) => row.job_id === jobId && !row.superseded_by);
+    .filter((row) => ids.has(row.job_id) && !row.superseded_by);
 
   return {
     budgets: linkedBudgets,
