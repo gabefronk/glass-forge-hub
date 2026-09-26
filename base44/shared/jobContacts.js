@@ -150,9 +150,12 @@ export function jobContactsView({directory,job,rawJob=null,links=[],conversation
   if(!phones.size&&!emails.size)continue;
   for(const c of directory.contacts){
    if(c.status==='merged'||!(contactPhoneKeys(c).some(k=>phones.has(k))||contactEmailKeys(c).some(k=>emails.has(k))))continue;
-   // Builder staff (super, PM, office) keep their own role; anyone else here is the customer side.
-   const own=contactRole(c),staffRole=c.builder&&own!=='site'&&own!=='homeowner'&&hasBuilder(facts,c.builder_key||'');
-   propose(c,{role:staffRole?own:'homeowner',confidence:'high',reason:`Phone or email matches this contact in ${item.label}.`,source:item.source});
+   // The job builder's staff keep their own role; people filed under another company (BFS
+   // inside sales, a vendor rep, another builder) are not this job's people; anyone else is
+   // the customer side.
+   const own=contactRole(c),mine=hasBuilder(facts,c.builder_key||'');
+   if(c.builder&&own!=='homeowner'&&!mine)continue;
+   propose(c,{role:c.builder&&mine&&own!=='homeowner'?(own==='site'?'site':own):'homeowner',confidence:'high',reason:`Phone or email matches this contact in ${item.label}.`,source:item.source});
   }
  }
  for(const seed of seeds){
