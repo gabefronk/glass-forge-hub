@@ -1,3 +1,3 @@
 export const label = s => String(s || "").replaceAll("_", " ");
-export const tone = s => s === "verified" || s === "connected" ? "bg-emerald-50 text-emerald-700" : s === "planned" || s === "manual" ? "bg-slate-100 text-slate-700" : /failed|decision|error/i.test(s) ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-700";
+export const tone = s => s === "verified" || s === "connected" ? "bg-emerald-50 text-emerald-700" : s === "planned" || s === "manual" ? "bg-slate-100 text-slate-700" : /failed|decision|error/i.test(s) ? "bg-amber-50 text-amber-800" : "bg-[var(--gf-teal-050)] text-[var(--gf-teal-600)]";
 export function Pill({ value }) { return <span className={"rounded-full px-2.5 py-1 text-xs font-medium " + tone(value)}>{label(value)}</span>; }

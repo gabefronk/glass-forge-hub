@@ -20,7 +20,7 @@ const laneOptions=[...BOARD_LANES,UNCATEGORIZED_LANE];
 const emptyTask=(id,category)=>({title:'',details:'',assignee_member_id:id||'',due_date:'',category:category||''});
 const fmt=v=>v?new Date(v).toLocaleString():'';
 const shortDate=ymd=>ymd?new Date(ymd+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}):'';
-const DUE_STYLE={overdue:'border-red-300 bg-red-50 text-red-800',today:'border-amber-300 bg-amber-50 text-amber-900',soon:'border-sky-200 bg-sky-50 text-sky-900',later:'border-slate-200 bg-slate-50 text-slate-700'};
+const DUE_STYLE={overdue:'border-red-300 bg-red-50 text-red-800',today:'border-amber-300 bg-amber-50 text-amber-900',soon:'border-[var(--gf-border)] bg-[var(--gf-teal-050)] text-[var(--gf-teal-800)]',later:'border-slate-200 bg-slate-50 text-slate-700'};
 const dueText=(t,today)=>{const s=dueState(t,today),d=daysBetween(today,t.due_date);return s==='overdue'?`Overdue ${-d}d · ${shortDate(t.due_date)}`:s==='today'?'Due today':s==='soon'?`Due ${shortDate(t.due_date)} (${d}d)`:`Due ${shortDate(t.due_date)}`;};
 
 function Stat({icon:Icon,label,value,alert}){

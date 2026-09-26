@@ -1,6 +1,6 @@
 const STYLES = {
   queued: { label: "Queued", cls: "bg-slate-100 text-slate-600" },
-  running: { label: "Running", cls: "bg-blue-50 text-blue-700" },
+  running: { label: "Running", cls: "bg-[var(--gf-teal-050)] text-[var(--gf-teal-600)]" },
   completed: { label: "Completed", cls: "bg-emerald-50 text-emerald-700" },
   blocked: { label: "Blocked", cls: "bg-amber-50 text-amber-800" },
   skipped: { label: "Skipped", cls: "bg-slate-100 text-slate-500" },
