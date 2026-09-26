@@ -86,15 +86,19 @@ test("calendar reverse merge reserves the post, records returned IDs and is idem
   assert.equal(rows.filter(r=>r.source==="both").length,1);
   assert.equal(rows.find(r=>r.source==="both").labor_amt,250);
 });
-test("ProBuild refresh preserves calendar identity, custom fee and report notes",async()=>{
+test("ProBuild refresh preserves calendar identity and custom fee, and only adds photos",async()=>{
   const c=client([{id:"merged",job_id:"job",source:"both",calendar_event_id:"g1",calendar_note_text:"Appointment instructions",job_date:"2026-09-06",invoice_month:"2026-09",job_name_raw:"Calendar title",probuild_post_id:"post",fee_pct:.15,billable:true,man_hours:3}]);
   const run=await handler("fetchProbuildPosts",c,[{projectId:"project",postId:"post",post:{createdAt:"2026-09-07T19:00:00Z",message:"3 composite man hours",attachments:[{downloadURL:"https://example.com/photo.jpg"}]}}]);
   const res=await run(new Request("https://test/",{method:"POST",body:JSON.stringify({start_date:"2026-09-01",end_date:"2026-09-30"})}));
   assert.equal(res.status,200,await res.text());
   const r=c.entities.FeeLines.rows[0];
-  assert.equal(r.job_date,"2026-09-06");assert.equal(r.job_name_raw,"Calendar title");assert.equal(r.source,"both");assert.equal(r.labor_amt,375);assert.equal(r.fee_amt,56.25);
-  assert.match(r.note_text,/Appointment instructions/);assert.match(r.note_text,/3 composite man hours/);
-  assert.equal(c.entities.FieldReports.rows.length,1);assert.equal(r.photo_urls.length,1);
+  // Append-only (2026-09-15): the existing line keeps its identity and amounts;
+  // the only write is the additive photo fill, and no duplicate line is created.
+  assert.equal(c.entities.FeeLines.rows.length,1);
+  assert.equal(r.job_date,"2026-09-06");assert.equal(r.job_name_raw,"Calendar title");assert.equal(r.source,"both");
+  assert.equal(r.calendar_event_id,"g1");assert.equal(r.calendar_note_text,"Appointment instructions");assert.equal(r.fee_pct,.15);assert.equal(r.man_hours,3);
+  assert.equal(r.labor_amt,undefined);assert.equal(r.fee_amt,undefined);
+  assert.equal(c.entities.FieldReports.rows.length,1);assert.match(c.entities.FieldReports.rows[0].message,/3 composite man hours/);assert.equal(r.photo_urls.length,1);
 });
 
 test("month-wide report audit sends one update per event and keeps the fresh status",async()=>{
