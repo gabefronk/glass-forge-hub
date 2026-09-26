@@ -134,7 +134,8 @@ export function jobContactsView({directory,job,rawJob=null,links=[],conversation
  for(const e of [...events].sort((a,b)=>String(b.event_date||'').localeCompare(String(a.event_date||''))))for(const s of sprContacts(e.scope_notes))if(!sprByPhone.has(s.phone_key))sprByPhone.set(s.phone_key,{...s,day:String(e.event_date||'').slice(0,10)});
  for(const [key,s] of sprByPhone){
   const known=(index.byPhone.get(key)||[]);
-  if(known.length){for(const c of known)propose(c,{role:'superintendent',confidence:'high',reason:`Calendar notes${s.day?' ('+s.day+')':''} list "SPR: ${s.name||c.name}" with this contact's phone.`,source:'calendar_spr'});continue;}
+  // Strong only when the contact is filed under this job's builder (or under no builder).
+  if(known.length){for(const c of known)propose(c,{role:'superintendent',confidence:!c.builder||hasBuilder(facts,c.builder_key||'')?'high':'medium',reason:`Calendar notes${s.day?' ('+s.day+')':''} list "SPR: ${s.name||c.name}" with this contact's phone.`,source:'calendar_spr'});continue;}
   if(!s.name)continue;
   open.push({id:'spr:'+key,spr:{name:s.name,phone:s.phone,email:s.email},role:'superintendent',confidence:'medium',reasons:[`Calendar notes${s.day?' ('+s.day+')':''} list "SPR: ${s.name} ${s.phone}". Not in contacts yet.`],sources:['calendar_spr'],candidates:[],needs:'add_contact'});
  }
@@ -155,7 +156,7 @@ export function jobContactsView({directory,job,rawJob=null,links=[],conversation
    // the customer side.
    const own=contactRole(c),mine=hasBuilder(facts,c.builder_key||'');
    if(c.builder&&own!=='homeowner'&&!mine)continue;
-   propose(c,{role:c.builder&&mine&&own!=='homeowner'?(own==='site'?'site':own):'homeowner',confidence:'high',reason:`Phone or email matches this contact in ${item.label}.`,source:item.source});
+   propose(c,{role:c.builder&&mine&&own!=='homeowner'?own:'homeowner',confidence:'high',reason:`Phone or email matches this contact in ${item.label}.`,source:item.source});
   }
  }
  for(const seed of seeds){
