@@ -16,13 +16,14 @@ test('source window size bands including unrounded boundaries', () => {
 });
 test('three 5x5 vinyl windows use listed sale and sub-pay without charging flashing twice', () => {
   const result=calculateInstall([line({qty:3})],newInstallBudget(true));
-  assert.equal(result.sell,156);assert.equal(result.cost,108);assert.equal(result.lines[0].sqft,25);
+  // Sale under the $275 trip minimum is raised to it; the rate math is kept alongside.
+  assert.equal(result.trip_minimum.sale_before_minimum,156);assert.equal(result.sell,275);assert.equal(result.cost,108);assert.equal(result.lines[0].sqft,25);
 });
 test('install method and dark AMSCO exterior are counted once per unit', () => {
   const config=newInstallBudget(true);config.method='vf-window-adder-30';config.selections.w1={adders:['vf-window-adder-26']};
   const result=calculateInstall([line({qty:2,options:{color:'Black exterior / White interior'}})],config);
-  assert.equal(result.sell,178);assert.equal(result.cost,124);assert.equal(result.lines[0].charges.length,3);
-  assert.equal(calculateInstall([line({options:{color:'White exterior / Black interior'}})],newInstallBudget(true)).sell,52);
+  assert.equal(result.trip_minimum.sale_before_minimum,178);assert.equal(result.sell,275);assert.equal(result.cost,124);assert.equal(result.lines[0].charges.length,3);
+  assert.equal(calculateInstall([line({options:{color:'White exterior / Black interior'}})],newInstallBudget(true)).trip_minimum.sale_before_minimum,52);
 });
 test('deselection and disabling prevent installation from accumulating', () => {
   const config=newInstallBudget(true);config.selections.w1={enabled:false};
@@ -49,14 +50,15 @@ test('missing dimensions, unknown products and absent rates never return valid z
 test('standalone budget reproduces C16/C17/C20/C21/C27 without losing zero override', () => {
   const config=newInstallBudget(true);config.finance.product_cost=1000;config.finance.extra_material=100;config.finance.equipment=50;
   const result=calculateInstall([line({qty:3})],config);
-  assert.equal(result.budget.use_tax,85.68);assert.equal(result.budget.material_overhead,7.59);assert.equal(result.budget.second_overhead,7.59);assert.equal(result.budget.total_cost,1358.85);assert.equal(result.budget.material_target_sell,1776.09);assert.equal(result.budget.target_sale,1932.09);
+  assert.equal(result.budget.use_tax,85.68);assert.equal(result.budget.material_overhead,7.59);assert.equal(result.budget.second_overhead,7.59);assert.equal(result.budget.total_cost,1358.85);assert.equal(result.budget.material_target_sell,1776.09);assert.equal(result.budget.target_sale,2051.09); // 1932.09 + $119 to reach the trip minimum
   config.finance.product_cost=0;assert.equal(calculateInstall([line({})],config,{product_cost:9000}).budget.product_cost,0);
 });
 test('linked sale adds install and additional materials once without repricing saved products', () => {
   const config=newInstallBudget(true);const q={lines:[line({qty:2})],install_budget:config,worker_status:'ready',result:{verified:true,totals:{total:1500,dealer_total:1000}}};
-  const result=quoteInstallSummary(q);assert.equal(result.customer_total,1604);assert.equal(result.product_sell,1500);
-  const again=quoteInstallSummary(q);assert.equal(again.customer_total,1604);
-  q.lines[0].qty=3;assert.equal(quoteInstallSummary(q).customer_total,1656);
+  const result=quoteInstallSummary(q);assert.equal(result.customer_total,1775); // 1500 products + $275 trip minimumassert.equal(result.product_sell,1500);
+  const again=quoteInstallSummary(q);assert.equal(again.customer_total,1775);
+  q.lines[0].qty=3;assert.equal(quoteInstallSummary(q).customer_total,1775);
+  q.lines[0].qty=6;assert.equal(quoteInstallSummary(q).customer_total,1812); // 312 install, above the minimum
   q.worker_status='draft';assert.equal(quoteInstallSummary(q).customer_total,null);
 });
 test('accepted install snapshots remain fixed', () => {
@@ -65,7 +67,7 @@ test('accepted install snapshots remain fixed', () => {
 });
 test('margin pricing is optional and blank vs zero remains explicit', () => {
   const config=newInstallBudget(true);config.finance.labor_mode='margin';
-  assert.equal(calculateInstall([line({})],config).sell,49.32);
+  assert.equal(calculateInstall([line({})],config).trip_minimum.sale_before_minimum,49.32);assert.equal(calculateInstall([line({})],config).sell,275);
   assert.equal(calculateInstall([line({})],config).budget,undefined);
   assert.throws(()=>validateInstallBudget({...config,finance:{material_margin:100}}));
   assert.throws(()=>validateInstallBudget({...config,extras:[{rate_id:'bad',qty:1}]}));
@@ -77,4 +79,4 @@ test('linked door panel count is explicitly confirmed separately from product sy
  config.selections.w1.billing_qty=4; const result=calculateInstall(rows,config,{linked:true}); assert.equal(result.sell,972);assert.equal(result.cost,680);assert.equal(rows[0].qty,1);
 });
 
-test('a stale door panel count cannot change a window quantity', () => { const config=newInstallBudget(true); config.selections.w1={billing_qty:4}; const result=calculateInstall([line({qty:1})],config); assert.equal(result.sell,52); assert.equal(result.quantity,1); });
+test('a stale door panel count cannot change a window quantity', () => { const config=newInstallBudget(true); config.selections.w1={billing_qty:4}; const result=calculateInstall([line({qty:1})],config); assert.equal(result.trip_minimum.sale_before_minimum,52); assert.equal(result.quantity,1); });

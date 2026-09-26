@@ -17,10 +17,10 @@ function harness(role = 'admin') {
 const lines=[{id:'w1',style:'Studio Picture',qty:3,width:60,height:60,units:'in'}];
 test('standalone budget saves, reopens, updates with version protection and retries once',async()=>{
   const {data,call}=harness();const body={action:'install_save',request_id:'save-1',title:'Sample budget',lines,install_budget:newInstallBudget(true)};
-  const saved=await call(body);assert.equal(saved.status,200);assert.equal(saved.budget.summary.sell,156);assert.equal(saved.budget.summary.cost,108);
+  const saved=await call(body);assert.equal(saved.status,200);assert.equal(saved.budget.summary.sell,275);assert.equal(saved.budget.summary.trip_minimum.sale_before_minimum,156);assert.equal(saved.budget.summary.cost,108);
   const retry=await call(body);assert.equal(retry.budget.id,saved.budget.id);assert.equal(data.InstallBudgets.length,1);
-  assert.equal((await call({action:'install_detail',budget_id:saved.budget.id})).budget.summary.sell,156);
-  const edited=await call({...body,budget_id:saved.budget.id,expected_version:0,lines:[{...lines[0],qty:4}]});assert.equal(edited.status,200);assert.equal(edited.budget.summary.sell,208);
+  assert.equal((await call({action:'install_detail',budget_id:saved.budget.id})).budget.summary.sell,275);
+  const edited=await call({...body,budget_id:saved.budget.id,expected_version:0,lines:[{...lines[0],qty:4}]});assert.equal(edited.status,200);assert.equal(edited.budget.summary.trip_minimum.sale_before_minimum,208);
   assert.equal((await call({...body,budget_id:saved.budget.id,expected_version:0})).status,409);
   assert.equal((await call({action:'install_list'})).budgets.length,1);
 });
@@ -28,7 +28,7 @@ test('quote install saves independently, prevents stale overwrite and does not m
   const {data,call}=harness();data.QuoteRequests.push({id:'quote1',lines:copy(lines),input_revision:7,state_version:0,worker_status:'ready',sales_status:'open',result:{verified:true,totals:{total:1200,dealer_total:800}}});
   const before=copy(data.QuoteRequests[0].result);
   const saved=await call({action:'update_install',quote_id:'quote1',expected_install_revision:0,install_budget:newInstallBudget(true)});
-  assert.equal(saved.status,200);assert.equal(saved.quote.install_summary.customer_total,1356);assert.equal(saved.quote.input_revision,7);assert.deepEqual(data.QuoteRequests[0].result,before);
+  assert.equal(saved.status,200);assert.equal(saved.quote.install_summary.customer_total,1475); // 1200 products + $275 trip minimumassert.equal(saved.quote.input_revision,7);assert.deepEqual(data.QuoteRequests[0].result,before);
   assert.equal((await call({action:'update_install',quote_id:'quote1',expected_install_revision:0,install_budget:newInstallBudget()})).status,409);
   const removed=await call({action:'update_install',quote_id:'quote1',expected_install_revision:1,install_budget:newInstallBudget()});assert.equal(removed.status,200);assert.equal(removed.quote.install_summary.enabled,false);
   data.QuoteRequests[0].sales_status='won';assert.equal((await call({action:'update_install',quote_id:'quote1',expected_install_revision:2,install_budget:newInstallBudget(true)})).status,409);

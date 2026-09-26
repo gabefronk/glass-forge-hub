@@ -1,6 +1,7 @@
+import "./support/register-src-alias.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateProfitSplitSummaries, calculateJobProfitability } from "../src/lib/jobProfitability.js";
+const { aggregateProfitSplitSummaries, calculateJobProfitability } = await import("../src/lib/jobProfitability.js");
 
 const baseLine = {
   id: "line-1",

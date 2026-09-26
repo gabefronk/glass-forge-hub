@@ -20,10 +20,13 @@ test("missing order permits exact full builder subdivision and whole lot",()=>{
  for(const title of ["Holmes Homes - 2140 Deer Springs","Other Homes - 214 Deer Springs","Holmes Homes - 214 Other Springs","Deer Springs 214"])assert.equal(match({...noOrder,job_name:title}),null);
  assert.equal(match({...noOrder,builder:"Other Homes"}),null);
 });
-test("Edge and Utah events without tracker ownership stay excluded",()=>{
+// Since 2026-09-14 unmatched events are shown as-is (never merged) and counted as unmatched.
+test("Edge and Utah events without tracker ownership are shown unmerged and counted",()=>{
  const result=filterOwnedCalendar([{...event,id:"edge",job_name:"EDGE - 518 RIVER POINT",oe_number:"",po_number:""},{...event,id:"utah",job_name:"Utah 7000 2 Sage Hills",oe_number:"",po_number:"6543689"},event],[row]);
  assert.deepEqual(result.counts,{source_events:3,unmatched_events:2,duplicate_events:0,visible_events:1,removed_events:2});
- assert.equal(result.groups[0][0].id,"one");
+ assert.equal(result.groups.length,3);
+ assert.deepEqual(result.groups.filter(g=>g[0].ownership===null).map(g=>g[0].id).sort(),["edge","utah"]);
+ assert.equal(result.groups.find(g=>g[0].id==="one")[0].ownership.method,"oe");
 });
 test("same-source and cross-source duplicates merge, with alternatives retained",()=>{
  const result=filterOwnedCalendar([event,{...event,id:"two"},{...event,id:"out",source:"outlook"}],[row]);
@@ -62,10 +65,10 @@ function harness(role="admin",fail=false){
  const handler=createOwnedCalendarHandler({getClient:()=>client,readTracker:async()=>{if(fail)throw Error("checksum mismatch");return {rows:[row],snapshot:{source_captured_at:"2026-09-11"},appended:[]};}});
  return {handler,reads:()=>snapshotReads};
 }
-test("handler verifies tracker and excludes unmatched sources from display groups",async()=>{
+test("handler verifies tracker and shows unmatched events without leaking prices",async()=>{
  const {handler}=harness();const response=await handler(req()),data=await response.json();
- assert.equal(response.status,200);assert.equal(data.groups.length,1);assert.equal(data.ownership.counts.unmatched_events,1);
- assert.equal(JSON.stringify(data.groups).includes("EDGE"),false);assert.equal(JSON.stringify(data.groups).includes("sale_price"),false);
+ assert.equal(response.status,200);assert.equal(data.groups.length,2);assert.equal(data.ownership.counts.unmatched_events,1);
+ assert.equal(data.groups.filter(g=>g[0].ownership===null).length,1);assert.equal(JSON.stringify(data.groups).includes("sale_price"),false);
 });
 test("manager access preserves Outlook permission boundary",async()=>{
  const h=harness("manager");const data=await (await h.handler(req())).json();assert.equal(h.reads(),0);assert.equal(data.outlook,null);assert.equal(data.excluded_events,undefined);assert.equal(data.groups.length,1);
