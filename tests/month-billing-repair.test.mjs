@@ -72,8 +72,21 @@ async function handler(name, client, posts=[]) {
 }
 function client(fees,events=[]) {
   const entities={FeeLines:entity(fees),CalendarEvents:entity(events),Jobs:entity([{id:"job",canonical_name:"test job",aliases:[]}]),MonthCloseSnapshot:entity(),FieldReports:entity(),AppSettings:entity(),ReportAudit:entity()};
-  return {asServiceRole:{entities},entities};
+  // Scheduled workflow calls have no end user; auth.me() resolves null.
+  return {auth:{me:async()=>globalThis.__billingTestUser??null},asServiceRole:{entities},entities};
 }
+test("ingest and audit functions reject signed-in non-admin/manager callers before any write",async()=>{
+  for(const name of ["fetchCalendarEvents","fetchProbuildPosts","auditFieldReports"]){
+    const c=client([], [{id:"cal1",source:"google",google_event_id:"g1",event_date:"2026-09-02",job_name:"test job"}]);
+    const run=await handler(name,c);
+    try{
+      globalThis.__billingTestUser={role:"user",email:"crew@example.com"};
+      const denied=await run(new Request("https://test/",{method:"POST",body:JSON.stringify({start_date:"2026-09-01",end_date:"2026-09-30"})}));
+      assert.equal(denied.status,403,name);
+      assert.equal(c.entities.FeeLines.rows.length,0,name);
+    }finally{globalThis.__billingTestUser=undefined;}
+  }
+});
 test("calendar reverse merge reserves the post, records returned IDs and is idempotent",async()=>{
   const c=client([{id:"postrow",job_id:"job",job_date:"2026-09-02",invoice_month:"2026-09",source:"probuild",probuild_post_id:"post",man_hours:2,service_material:"composite",note_text:"2 composite man hours",billable:true}], [{id:"cal1",source:"google",google_event_id:"g1",event_date:"2026-09-02",job_name:"test job",scope_notes:"Visit"},{id:"cal2",source:"google",google_event_id:"g2",event_date:"2026-09-03",job_name:"test job",scope_notes:"Return visit"}]);
   const run=await handler("fetchCalendarEvents",c);
