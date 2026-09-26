@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Send, ArrowLeft, ArrowUpRight, CheckCircle2, Clock3, AlertCircle, Loader2, Settings2, ListChecks, MessageSquare, BriefcaseBusiness, FileText, RefreshCw, Trash2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
+import { PageShell, PageHero, heroBtn, heroPrimary, heroSecondary } from "@/components/PageShell";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import TakeoffEditor, { inputClass, secondaryClass } from "@/components/window-quotes/TakeoffEditor";
 import ConnectClaude from "@/components/window-quotes/ConnectClaude";
@@ -341,11 +342,19 @@ export default function WindowQuotes() {
   });
   if (params.get("view") === "install") return <InstallBudgetWorkspace quotes={quotes} onBack={() => setParams({})} onQuote={id => { setParams({ quote: id, section: "install" }); setTab("install"); }} />;
   if (form === "new") return <div className="min-h-screen px-[18px] py-5 min-[700px]:px-[26px]" style={{ background: C.pageBg }}><WindowQuoteBuilder key={revisionSeed?.title || "new"} seed={revisionSeed} preferenceUserId={user?.id} busy={busy} saveError={error} onSave={saveForm} onCancel={() => setForm(null)} /></div>;
-  return <div className="min-h-screen px-[18px] py-5 min-[700px]:px-[26px]" style={{ background: C.pageBg }}>
-    <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div><div className="mb-2 text-xs text-[#8A958F]">Glass Forge / Window Quotes</div><h1 className="font-heading text-[34px] font-semibold tracking-tight text-[#182422]">{selectedID ? "Window Quote" : "My Quotes"}</h1></div>
-      <div className="flex flex-wrap gap-2"><button className={secondaryClass} onClick={() => setParams({ view: "install" })}><BriefcaseBusiness size={16} />Install Budget</button><ConnectClaude /><ImportAmscoQuote onImported={id=>{select(id);refresh();}} />{selectedID && <button className={primaryClass} onClick={() => { setRevisionSeed(null); setForm("new"); setError(""); }}><Plus size={16} />New quote</button>}</div>
-    </header>
+  return <PageShell width="max-w-none">
+    <PageHero
+      eyebrow="Glass Forge · Window Quotes"
+      title={selectedID ? "Window Quote" : "My Quotes"}
+      sub={selectedID ? (quote?.title || "") : `${quotes.length} ${quotes.length === 1 ? "quote" : "quotes"} on file`}
+      actions={<>
+        <button className={heroBtn} style={heroSecondary} onClick={() => setParams({ view: "install" })}><BriefcaseBusiness size={16} style={{ color: "#e0c994" }} />Install Budget</button>
+        <ConnectClaude />
+        <ImportAmscoQuote onImported={id=>{select(id);refresh();}} />
+        {selectedID && <button className={heroBtn} style={heroPrimary} onClick={() => { setRevisionSeed(null); setForm("new"); setError(""); }}><Plus size={16} />New quote</button>}
+      </>}
+    />
+    <div>
     {(error || listQuery.isError || (selectedID && detailQuery.isError)) && <div role="alert" className="mb-4 rounded-xl border border-[#F0C9C5] bg-[#FCEDEC] p-3 text-sm text-[#A43432]">{error || errorText(detailQuery.error || listQuery.error)}</div>}
     {!selectedID ? <WindowQuoteList quotes={quotes} loading={listQuery.isPending} failed={listQuery.isError} onOpen={select} onNew={() => { setRevisionSeed(null); setForm("new"); setError(""); }} statusLabel={q => quoteStatusInfo(q).label} renderStatus={q => <StatusBadge quote={q} />} /> : <>
       <button onClick={() => setParams({})} className="mb-3 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[#166447]"><ArrowLeft size={15} />All quotes</button>
@@ -383,5 +392,6 @@ export default function WindowQuotes() {
     <Dialog open={!!form} onOpenChange={(open) => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>{form === "edit" ? "Request details" : revisionSeed ? "Revise window quote" : "New window quote"}</DialogTitle><DialogDescription>{form === "edit" ? "Changes create a new request revision. Previous verified results are kept in history." : revisionSeed ? "This creates a fresh pricing request. The previous verified quote stays unchanged." : "Describe what you need in your own words and add any settings you know. The AI reviews your full request when you send it."}</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FCEDEC] p-3 text-sm text-[#A43432]">{error}</p>}{form && <QuoteForm key={form === "edit" ? selectedID : "new"} quote={form === "edit" ? quote : null} seed={form === "new" ? revisionSeed : null} preferenceUserId={user?.id} busy={busy} onSave={saveForm} onCancel={() => setForm(null)} />}</DialogContent></Dialog>
     <Dialog open={!!retryReview} onOpenChange={(open) => { if (!open && !busy) setRetryReview(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>Retry this quote request</DialogTitle><DialogDescription>Review the previous attempt before starting a new quote.</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FCEDEC] p-3 text-sm text-[#A43432]">{error}</p>}{retryReview && <RetryFailedForm quote={retryReview} busy={busy} onSubmit={retryFailed} onCancel={() => setRetryReview(null)} />}</DialogContent></Dialog>
     <Dialog open={wonOpen} onOpenChange={(open) => { if (!busy) setWonOpen(open); }}><DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl bg-white"><DialogHeader><DialogTitle>Accept quote & create job</DialogTitle><DialogDescription>Keep an accepted snapshot of this quote revision.</DialogDescription></DialogHeader>{error && <p role="alert" className="rounded-lg bg-[#FCEDEC] p-3 text-sm text-[#A43432]">{error}</p>}{wonOpen && quote && <WonForm quote={quote} busy={busy} onSubmit={convert} onCancel={() => setWonOpen(false)} />}</DialogContent></Dialog>
-  </div>;
+    </div>
+  </PageShell>;
 }
