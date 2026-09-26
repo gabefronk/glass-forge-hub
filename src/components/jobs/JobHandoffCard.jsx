@@ -107,7 +107,9 @@ export default function JobHandoffCard({ jobId }) {
   };
 
   const members = view?.members || [];
-  const ready = !!view?.ready && !!draft?.start_date;
+  // Submit always goes to the server, which re-checks the list against the job and refuses
+  // with what is missing — so the button only needs a start date and a person.
+  const ready = !!draft?.start_date;
 
   // ---- After submit: the Stage 2 banner --------------------------------------------------------
   if (submitted && !editing) {
@@ -185,7 +187,7 @@ export default function JobHandoffCard({ jobId }) {
               <>
                 <button type="button" className={btn} style={btnNeutral} disabled={!!busy} onClick={saveDraft}>{busy === "save_draft" ? "Saving…" : "Save draft"}</button>
                 <button type="button" className={btn} style={btnBrass} disabled={!!busy || !ready || !draft.to_member_key} onClick={submit} title={ready ? "" : "Every item above must pass, plus a start date"}><Send className="h-3.5 w-3.5" />{busy === "submit" ? "Submitting…" : `Submit to ${draft.to_member_key ? (members.find((m) => m.member_key === draft.to_member_key)?.display_name?.split(" ")[0] || "PM") : "PM"}`}</button>
-                <span className="text-[12px]" style={{ color: C.textMuted }}>{view.ready ? (draft.start_date ? "Ready to go." : "Pick a start date.") : `${view.missing.length} item${view.missing.length === 1 ? "" : "s"} still open. Drafts save as you go.`}</span>
+                <span className="text-[12px]" style={{ color: C.textMuted }}>{view.ready ? (draft.start_date ? "Ready to go." : "Pick a start date.") : `${view.missing.length} item${view.missing.length === 1 ? "" : "s"} still open as of the last save.`}</span>
               </>
             )}
           </div>
