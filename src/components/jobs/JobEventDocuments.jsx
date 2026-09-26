@@ -14,31 +14,36 @@ function iconFor(title) {
   return File;
 }
 
+// Only a Gmail link with no Hub or Drive copy: opens in Israel's account only.
+export const isGmailOnly = (a) => !a.has_hub_copy && !a.drive_url && (a.hub_error === "gmail_only" || isGmailAttachmentUrl(a.file_url));
+
+// Hub copy through a signed URL first, then the Drive copy, then the original link.
+export async function openAttachment(attachment) {
+  const tab = window.open("about:blank", "_blank");
+  try {
+    if (attachment.has_hub_copy) {
+      const response = await base44.functions.invoke("eventAttachmentUrl", {
+        event_id: attachment.event_id,
+        attachment_index: attachment.attachment_index,
+      });
+      const url = response.data?.url;
+      if (!url) throw new Error("No signed URL returned");
+      if (tab) tab.location.href = url; else window.location.assign(url);
+      return;
+    }
+    const fallback = attachment.drive_url || attachment.file_url;
+    if (tab) tab.location.href = fallback; else window.location.assign(fallback);
+  } catch {
+    if (tab) tab.close();
+    const fallback = attachment.drive_url || attachment.file_url;
+    if (fallback && !isGmailAttachmentUrl(fallback)) window.open(fallback, "_blank", "noopener,noreferrer");
+  }
+}
+
 export default function JobEventDocuments({ events, skipJobFolder = false }) {
   const atts = eventAttachments(events, { skipJobFolder });
   if (!atts.length) return null;
-  const gmailOnlyCount = atts.filter((a) => !a.has_hub_copy && !a.drive_url && (a.hub_error === "gmail_only" || isGmailAttachmentUrl(a.file_url))).length;
-  const openAttachment = async (attachment) => {
-    const tab = window.open("about:blank", "_blank");
-    try {
-      if (attachment.has_hub_copy) {
-        const response = await base44.functions.invoke("eventAttachmentUrl", {
-          event_id: attachment.event_id,
-          attachment_index: attachment.attachment_index,
-        });
-        const url = response.data?.url;
-        if (!url) throw new Error("No signed URL returned");
-        if (tab) tab.location.href = url; else window.location.assign(url);
-        return;
-      }
-      const fallback = attachment.drive_url || attachment.file_url;
-      if (tab) tab.location.href = fallback; else window.location.assign(fallback);
-    } catch {
-      if (tab) tab.close();
-      const fallback = attachment.drive_url || attachment.file_url;
-      if (fallback && !isGmailAttachmentUrl(fallback)) window.open(fallback, "_blank", "noopener,noreferrer");
-    }
-  };
+  const gmailOnlyCount = atts.filter(isGmailOnly).length;
   return (
     <div className="space-y-1">
       {gmailOnlyCount > 0 && (
