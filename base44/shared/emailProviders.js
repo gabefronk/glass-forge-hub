@@ -224,7 +224,16 @@ export function createOutlookClient({ accessToken, fetchImpl = globalThis.fetch,
     const map = { ...(cache || {}) };
     const missing = names.filter((n) => !map[n]);
     if (!missing.length) return map;
-    for (const c of await listCategories()) if (c.displayName && c.id) map[c.displayName] = c.id;
+    let master;
+    try { master = await listCategories(); }
+    catch (e) {
+      // The master list needs MailboxSettings.ReadWrite. Without it the names still apply to
+      // messages (uncoloured until someone adds them in Outlook); remember that so the agent
+      // stops asking every run.
+      if (e?.status === 403) { for (const n of missing) map[n] = 'uncoloured'; return map; }
+      throw e;
+    }
+    for (const c of master) if (c.displayName && c.id) map[c.displayName] = c.id;
     const colors = ['preset0', 'preset4', 'preset7', 'preset8', 'preset9', 'preset10', 'preset11', 'preset12'];
     let i = 0;
     for (const name of missing) {
