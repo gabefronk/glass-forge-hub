@@ -43,6 +43,7 @@ export default function RelayRow({ entry: e, provider, onAction, busy }) {
             {e.job_id ? <Chip tone="teal"><Link2 className="h-3 w-3" />{e.job_name || "Linked job"}</Chip> : pick ? <Chip tone="amber">Which job?</Chip> : null}
             {draft ? <Chip tone={draft.tone}>{draft.label}</Chip> : null}
             {e.archived ? <Chip tone="faint">Archived</Chip> : null}
+            {e.triage_pending ? <Chip tone="faint">Queued for next run</Chip> : null}
           </div>
           {changes.length ? (
             <ul className="m-0 mt-2 list-none space-y-0.5 p-0 text-[12px]" style={{ color: C.text }} aria-label="Hub changes">
@@ -61,6 +62,7 @@ export default function RelayRow({ entry: e, provider, onAction, busy }) {
             {open && e.status !== "ignored" ? <button type="button" disabled={busy} onClick={() => setStatus("ignored")} className={btnBase} style={btnNeutral}><XCircle className="h-3.5 w-3.5" />Ignore</button> : null}
             {draft?.key === "drafted" ? <button type="button" disabled={busy} onClick={() => act({ action: "discard_draft", id: e.id }, { draft_status: "discarded" })} className={btnBase} style={btnDanger}><Trash2 className="h-3.5 w-3.5" />Discard draft</button> : null}
             {e.reply_needed && draft?.key !== "drafted" ? <button type="button" disabled={busy} onClick={() => act({ action: "regenerate_draft", id: e.id }, { draft_status: "drafted" })} className={btnBase} style={btnNeutral}><RefreshCw className="h-3.5 w-3.5" />Draft a reply</button> : null}
+            {!e.triage_pending ? <button type="button" disabled={busy} onClick={() => act({ action: "rerun", id: e.id }, { triage_pending: true })} className={btnBase} style={btnNeutral} title="Re-read the thread and run the agent on it again at the next sync"><RefreshCw className="h-3.5 w-3.5" />Re-run agent</button> : null}
           </div>
           {picking ? <JobPickerInline candidates={e.job_candidates || []} onPick={linkJob} onClose={() => setPicking(false)} busy={busy} /> : null}
         </div>
