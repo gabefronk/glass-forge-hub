@@ -297,7 +297,7 @@ export function JobFactsCard({ snap, folder }) {
   return (
     <SheetCard icon={Briefcase} tile={TILE.teal} title="The job" bodyClassName="overflow-hidden rounded-b-[14px]">
       {/* Cells draw their own left and top rules; the outer ones sit under the card edge. */}
-      <dl className="-ml-px -mt-px m-0 grid grid-cols-5 max-[1100px]:grid-cols-3 max-[599px]:grid-cols-2">
+      <dl className="-ml-px -mt-px grid grid-cols-5 max-[1100px]:grid-cols-3 max-[599px]:grid-cols-2">
         {cells.map(([k, v]) => (
           <div key={k} className="min-w-0 border-l border-t px-5 py-4 max-[699px]:px-4" style={{ borderColor: "#eee9e0" }}>
             <dt className="text-[11px] font-semibold tracking-[.12em] uppercase" style={{ color: "#566063" }}>{k}</dt>
