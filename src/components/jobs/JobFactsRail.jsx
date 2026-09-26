@@ -8,13 +8,15 @@ import JobDriveDocuments from "@/components/jobs/JobDriveDocuments";
 // jobContacts is the useJobContacts() result: the read-only Jobs ⇄ ContactJobLink ⇄ directory join.
 // hideDocuments: the full job page shows plans, folder files and event
 // documents in its Plans & photos panel, so the rail skips them there.
-export default function JobFactsRail({ job, jobContacts, plans, events, hideDocuments = false }) {
+// contactsOnly: inside the job sheet's Contacts card (no frame, no address row;
+// the hero already shows the address and the files menu shows the documents).
+export default function JobFactsRail({ job, jobContacts, plans, events, hideDocuments = false, contactsOnly = false }) {
   const builder = (jobContacts?.view?.linked || []).filter((c) => c.role === "builder");
   const jobPlans = plans || [];
   const mapHref = job.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
 
   return (
-    <div className="rounded-[12px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+    <div className={contactsOnly ? "overflow-hidden rounded-b-[14px]" : "rounded-[12px] overflow-hidden card-shadow"} style={contactsOnly ? undefined : { border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="px-3.5 py-3 flex items-start gap-2.5">
         <Building2 className="h-4 w-4 shrink-0 mt-0.5" style={{ color: C.textMuted }} />
         <div className="min-w-0">
@@ -32,7 +34,7 @@ export default function JobFactsRail({ job, jobContacts, plans, events, hideDocu
         </Row>
       )}
 
-      {job.address && (
+      {job.address && !contactsOnly && (
         <Row icon={MapPin} label="Job address">
           {mapHref ? (
             <a href={mapHref} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1.5 text-[13px] break-words hover:underline" style={{ color: C.accentText }}>

@@ -221,7 +221,7 @@ export default function JobDetail() {
           {/* Office tools: contacts, Drive folder link, money, messages. Each hides itself for crew logins. */}
           {canContacts ? (
             <SheetCard icon={Users} tile={TILE.teal} title="Contacts" sub="linked to this job" bodyClassName="">
-              <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} hideDocuments />
+              <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} hideDocuments contactsOnly />
             </SheetCard>
           ) : null}
           {canWriteJobDocuments(user) && (
