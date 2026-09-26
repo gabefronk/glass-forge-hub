@@ -52,7 +52,7 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
         {/* Left: title + status line */}
         <div className="flex flex-col" style={{ flexShrink: 0 }}>
           <span className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>YA WINDOWS · BILLING</span>
-          <span className="text-[26px] font-bold" style={{ color: "var(--gf-ink)", letterSpacing: "-0.035em", lineHeight: 1.2 }}>Invoicing</span>
+          <h1 className="m-0 text-[26px] font-bold" style={{ color: "var(--gf-ink)", letterSpacing: "-0.035em", lineHeight: 1.2 }}>Invoicing</h1>
           {statusLine && (
             <div className="flex items-center gap-1.5 mt-0.5">
               <span style={{ width: "6px", height: "6px", borderRadius: "99px", backgroundColor: "var(--gf-sync)", flexShrink: 0 }} />
