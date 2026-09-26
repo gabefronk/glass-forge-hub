@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { PageShell, PageHero, SheetCard, TILE } from "@/components/PageShell";
@@ -128,7 +129,7 @@ export default function JobBudgets() {
   const jobName = (id) => jobs.find((j) => j.id === id)?.canonical_name || "";
 
   return (
-    <PageShell width="max-w-[1080px]" className="!mx-0">
+    <PageShell width="max-w-[1080px]">
       <PageHero eyebrow="Glass Forge · Money" title="Job Budgets" sub="Drop a vendor quote PDF. The Hub builds the cost basis and margin from your Window Budget Sheet math, files everything under Glass Forge Jobs in Drive, and feeds the invoicing page. Unpaid vendor orders are tracked below until they reconcile." />
 
       <div className="flex flex-col gap-[18px]">
@@ -187,7 +188,7 @@ export default function JobBudgets() {
                     <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.cost_material_tax)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.actual_total_sell)}</td>
                     <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: (b.computed?.actual_margin_pct ?? 0) >= 0.3 ? C.accentText : C.amber }}>{pct(b.computed?.actual_margin_pct)}</td>
-                    <td className="px-4 py-3 text-[12px]" style={{ color: C.textSecondary }}>{b.job_id ? (jobName(b.job_id) || b.job_name) : b.job_name || "-"}</td>
+                    <td className="px-4 py-3 text-[12px]" style={{ color: C.textSecondary }}>{b.job_id ? <Link to={`/jobs/${b.job_id}`} className="font-medium hover:underline" style={{ color: C.accentText }}>{jobName(b.job_id) || b.job_name || "Open job"}</Link> : b.job_name || "-"}</td>
                     <td className="px-4 py-3">
                       {b.drive_job_folder_id && (
                         <a href={`https://drive.google.com/drive/folders/${b.drive_job_folder_id}`} target="_blank" rel="noreferrer"
@@ -234,7 +235,7 @@ export default function JobBudgets() {
                   {o.notes && <span>note: {o.notes}</span>}
                   {o.eta_date && <span>ETA {o.eta_date}</span>}
                   {o.ach_link && <a href={o.ach_link} target="_blank" rel="noreferrer" className="font-medium" style={{ color: C.accentText }}>ACH link</a>}
-                  {o.job_id && jobName(o.job_id) && <span>job: {jobName(o.job_id)}</span>}
+                  {o.job_id && <Link to={`/jobs/${o.job_id}`} className="font-medium hover:underline" style={{ color: C.accentText }}>job: {jobName(o.job_id) || "open"}</Link>}
                 </div>
               </div>
             );
