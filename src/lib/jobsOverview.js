@@ -2,6 +2,7 @@ import { jobsStatus } from "@/lib/jobsSanitize";
 import { groupJobs } from "@/lib/jobDedupe";
 import { buildReportEvidence } from "@/lib/jobReports";
 import { denverDate } from "../../base44/shared/billingCore.js";
+import { eventKind, KIND } from "@/lib/calendarModel";
 
 // The Jobs hub's list model, pure so it can be tested: duplicate records grouped
 // (read-only), one status per visible job, visit dates, and the pill counts.
@@ -60,19 +61,31 @@ export function buildJobsOverview({ jobs = [], feeLines = [], events = null, not
 
   const weekEnd = addDays(today, 6);
   const stats = {};
-  const counts = { needs_report: 0, needs_review: 0, active: 0, complete: 0, duplicates: 0, this_week: 0, records: jobs.length };
+  const counts = { needs_report: 0, needs_review: 0, active: 0, complete: 0, duplicates: 0, this_week: 0, today: 0, needs_you: 0, records: jobs.length };
   for (const g of groups) {
     const rows = rowsByGroup.get(g.id) || [];
     const status = jobsStatus(rows, evidence, today);
     const probuildDates = rows.filter((r) => r.source === "probuild" || r.source === "both").map((r) => r.job_date).filter(Boolean).sort();
     const visits = visitSummary({ events: eventsByGroup.get(g.id) || [], lines: rows, today });
     const thisWeek = Boolean(visits.nextVisit && visits.nextVisit <= weekEnd);
-    stats[g.id] = { status, lastReport: probuildDates.length ? probuildDates[probuildDates.length - 1] : null, ...visits, thisWeek };
+    // Install or service, from the next visit (or the last one when none is booked).
+    const evs = (eventsByGroup.get(g.id) || []).filter((e) => e?.source_status !== "cancelled" && dayOf(e?.event_date));
+    const focus = evs.filter((e) => dayOf(e.event_date) >= today).sort((a, b) => a.event_date.localeCompare(b.event_date))[0]
+      || evs.sort((a, b) => b.event_date.localeCompare(a.event_date))[0];
+    const kind = focus ? KIND[eventKind(focus)].label : "";
+    stats[g.id] = { status, lastReport: probuildDates.length ? probuildDates[probuildDates.length - 1] : null, ...visits, thisWeek, kind, today: visits.nextVisit === today };
     if (status.key in counts) counts[status.key]++;
     if (g.review.length) counts.duplicates++;
     if (thisWeek) counts.this_week++;
+    if (visits.nextVisit === today) counts.today++;
+    if (needsYou(status, g)) counts.needs_you++;
   }
   return { groups, groupByJobId, evidenceAvailable, stats, counts };
+}
+
+// "Needs you": a report is owed, billing lines need matching, or it may be a duplicate.
+export function needsYou(status, group) {
+  return status?.key === "needs_report" || status?.key === "needs_review" || (group?.review?.length || 0) > 0;
 }
 
 // Sorts for the Jobs hub. Pure; returns a new array.

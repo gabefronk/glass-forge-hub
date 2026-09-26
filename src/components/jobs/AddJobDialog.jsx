@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 const blank = { canonical_name: "", builder: "", address: "", po_number: "", oe_number: "", source_window_quote_id: "", initial_note: "" };
 const inputClass = "mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base focus:border-emerald-700 focus:outline-none sm:text-sm";
 
-export default function AddJobDialog({ jobs, onCreated }) {
+export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", label = "Add job" }) {
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState(blank);
   const [contacts, setContacts] = useState([]);
@@ -113,8 +113,8 @@ export default function AddJobDialog({ jobs, onCreated }) {
   return (
     <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) reset(); }}>
       <DialogTrigger asChild>
-        <button type="button" className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[var(--gf-brass-400)] px-3.5 text-sm font-semibold text-[var(--gf-on-brass)]">
-          <Plus className="h-4 w-4" /> Add job
+        <button type="button" className={triggerClassName || "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[var(--gf-brass-400)] px-3.5 text-sm font-semibold text-[var(--gf-on-brass)]"}>
+          <Plus className="h-4 w-4" /> {label}
         </button>
       </DialogTrigger>
       <DialogContent className="bottom-0 top-auto w-full max-w-none translate-y-0 rounded-b-none rounded-t-2xl sm:bottom-auto sm:top-1/2 sm:max-w-lg sm:-translate-y-1/2 sm:rounded-lg">
