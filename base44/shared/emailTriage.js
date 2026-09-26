@@ -141,8 +141,9 @@ export function normalizeTriageResult(result, keys) {
   const byKey = new Map();
   list.forEach((entry, i) => {
     const n = normalizeTriageEntry(entry);
-    const key = keys.includes(n.key) ? n.key : keys[i];
-    if (key && !byKey.has(key)) byKey.set(key, { ...n, key });
+    let key = keys.includes(n.key) && !byKey.has(n.key) ? n.key : '';
+    if (!key) key = keys[i] && !byKey.has(keys[i]) ? keys[i] : (keys.find((k) => !byKey.has(k)) || '');
+    if (key) byKey.set(key, { ...n, key });
   });
   return byKey;
 }
