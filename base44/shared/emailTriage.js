@@ -26,6 +26,7 @@ export const ALL_LABEL_NAMES = [ROOT_LABEL, ...CATEGORIES.map((c) => `${ROOT_LAB
 
 export const RELAY_TODO_CATEGORIES = new Set(['job_update', 'schedule', 'quote_request', 'order_vendor', 'service_warranty', 'invoice_billing']);
 export const DRAFT_CATEGORIES = new Set(['quote_request', 'schedule', 'service_warranty', 'job_update']);
+export const CONTACT_ROLES = ['homeowner', 'superintendent', 'builder_office', 'vendor', 'installer', 'other'];
 export const JOB_MATCH_THRESHOLD = 0.85;
 export const TRIAGE_BATCH = 8;
 export const TRIAGE_TEXT_CAP = 3000;
@@ -64,6 +65,8 @@ export const TRIAGE_SCHEMA = {
               dates: { type: 'array', items: { type: 'string' }, description: 'Dates mentioned, YYYY-MM-DD when determinable, with a short label' },
               contact_name: { type: ['string', 'null'] },
               contact_phone: { type: ['string', 'null'] },
+              contact_email: { type: ['string', 'null'] },
+              contact_role: { type: ['string', 'null'], enum: [...CONTACT_ROLES, null], description: 'Who the contact is on this job, only when the email makes it clear' },
             },
           },
         },
@@ -85,7 +88,7 @@ For each thread return:
 - action_items: short imperative items Gabe must actually do. Empty for FYI, promos, spam and threads Gabe already answered.
 - reply_needed: true only when the latest incoming message is waiting on a reply from Gabe and no reply exists yet in the thread.
 - next_step: one sentence, or empty.
-- extracted: builder, lot (lot/unit/building number as written), street address, PO numbers, OE numbers, dates (YYYY-MM-DD + label), contact name and phone — only what the emails state. Never guess.
+- extracted: builder, lot (lot/unit/building number as written), street address, PO numbers, OE numbers, dates (YYYY-MM-DD + label), contact name / phone / email, and contact_role (homeowner, superintendent, builder_office, vendor, installer, other) only when the email makes the person's role clear — only what the emails state. Never guess.
 
 Return only the JSON described by the schema, one entry per thread key, in the same order.`;
 
@@ -131,6 +134,8 @@ export function normalizeTriageEntry(raw) {
       dates: strList(ex.dates, 80, 10),
       contact_name: str(ex.contact_name, 120),
       contact_phone: str(ex.contact_phone, 40),
+      contact_email: str(ex.contact_email, 120).toLowerCase(),
+      contact_role: CONTACT_ROLES.includes(ex.contact_role) ? ex.contact_role : '',
     },
   };
 }
@@ -157,14 +162,23 @@ export function nextStatus(current, replyNeeded, hasNewIncoming) {
   return replyNeeded ? 'needs_reply' : (cur === 'needs_reply' || cur === 'new' || hasNewIncoming ? 'new' : cur);
 }
 
-// Patch to store on the EmailThread after the LLM classified it.
+// A schedule email that only announces a date ("moved to the 8th") still needs a human to
+// confirm and move the visit, so it gets one action item — and therefore one to-do.
+export function scheduleActionItems(entry) {
+  const items = Array.isArray(entry?.action_items) ? entry.action_items : [];
+  const dates = Array.isArray(entry?.extracted?.dates) ? entry.extracted.dates.filter(Boolean) : [];
+  if (entry?.category !== 'schedule' || items.length || !dates.length) return items;
+  return [`Confirm the date change and move the visit if it is right: ${dates.slice(0, 3).join('; ')}`];
+}
+
+// Patch to store on the EmailRelay row after the LLM classified it.
 export function applyTriage(thread, entry, { now, hasNewIncoming = true } = {}) {
   const n = normalizeTriageEntry(entry);
   return {
     category: n.category,
     priority: n.priority,
     summary: n.summary,
-    action_items: n.action_items,
+    action_items: scheduleActionItems(n),
     next_step: n.next_step,
     reply_needed: n.reply_needed,
     extracted: n.extracted,
@@ -196,6 +210,47 @@ export function decideJobLink(findResult) {
   return { job_id: null, confidence: candidates.length ? 'low' : 'unmatched', candidates, job: null };
 }
 
+// ---- Job facts the agent applies on its own (high-confidence job link only) ----------------------
+
+const refKey = (v) => String(v || '').trim().toUpperCase().replace(/\s+/g, '');
+
+// PO / OE numbers the email states that the job does not carry yet. Additive only: nothing on
+// the job is ever removed or rewritten. `applied` is the ledger's record of what this thread
+// already put on the job, so a re-triage never counts the same number twice.
+export function planJobFacts(job, extracted, applied = {}) {
+  const out = { patch: {}, changes: [], applied: { po_numbers: [...(applied?.po_numbers || [])], oe_numbers: [...(applied?.oe_numbers || [])] } };
+  if (!job) return out;
+  for (const [field, label] of [['po_numbers', 'PO'], ['oe_numbers', 'OE']]) {
+    const have = new Set((job[field] || []).map(refKey).filter(Boolean));
+    const done = new Set(out.applied[field].map(refKey));
+    const add = [];
+    for (const raw of extracted?.[field] || []) {
+      const v = str(raw, 40);
+      const k = refKey(v);
+      if (!k || have.has(k) || done.has(k) || add.some((x) => refKey(x) === k)) continue;
+      add.push(v);
+    }
+    if (add.length) {
+      out.patch[field] = [...(job[field] || []), ...add];
+      out.changes.push(`${add.map((v) => (new RegExp(`^${label}\\b`, 'i').test(v) ? v : `${label} ${v}`)).join(', ')} added to the job`);
+      out.applied[field].push(...add);
+    }
+  }
+  return out;
+}
+
+// The homeowner the email names, only when the email itself says that is who they are and
+// gives a way to reach them. Anything less stays a fact in the note, not a contact.
+export function homeownerCandidate(extracted) {
+  const ex = extracted || {};
+  if (ex.contact_role !== 'homeowner') return null;
+  const name = str(ex.contact_name, 120);
+  const phone = str(ex.contact_phone, 40);
+  const email = str(ex.contact_email, 120).toLowerCase();
+  if (!name || (!phone && !email)) return null;
+  return { name, phone, email };
+}
+
 // ---- Relay / to-do / archive / draft decisions ----------------------------------------------
 
 export const shouldRelay = (thread) => !!(thread?.job_id && !thread?.note_id);
@@ -211,23 +266,27 @@ export function todoCategoryFor(category) {
 
 const ymd = (iso) => (String(iso || '').match(/^\d{4}-\d{2}-\d{2}/) || [new Date().toISOString().slice(0, 10)])[0];
 
-export function buildNoteBody(thread) {
+// The job note is the only trace of the email that lives in the Hub: sender, the agent's
+// summary, action items, what the agent changed, and a link back to the mail itself.
+export function buildNoteBody(thread, changes = []) {
   const from = [thread.from_name, thread.from_email ? `<${thread.from_email}>` : ''].filter(Boolean).join(' ') || 'unknown sender';
   const lines = [`${thread.subject || '(no subject)'}`, `From ${from}`, thread.summary || ''];
   if (Array.isArray(thread.action_items) && thread.action_items.length) {
     lines.push('', 'Action items:', ...thread.action_items.map((a) => `- ${a}`));
   }
-  if (thread.web_link) lines.push('', thread.web_link);
+  const done = (Array.isArray(changes) ? changes : []).filter(Boolean);
+  if (done.length) lines.push('', 'Hub updates:', ...done.map((c) => `- ${c}`));
+  if (thread.web_link) lines.push('', `Open the email: ${thread.web_link}`);
   return lines.join('\n').trim();
 }
 
-export function buildNotePayload(thread, mailbox) {
+export function buildNotePayload(thread, mailbox, changes = []) {
   return {
     job_id: thread.job_id,
     note_date: ymd(thread.last_message_at),
     interaction_type: 'email',
     author: `Inbox agent · ${mailbox?.display_name || mailbox?.key || 'mailbox'}`,
-    body: buildNoteBody(thread).slice(0, 4000),
+    body: buildNoteBody(thread, changes).slice(0, 4000),
     attachments: [],
     edited: false,
     completion: '',
