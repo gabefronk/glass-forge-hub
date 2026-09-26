@@ -1,0 +1,47 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/15 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "inbox_agents",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "sync_inboxes": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "emailAgent",
+            "args": {
+              "action": "sync"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Sync inbox agents",
+            "description": "Every 15 minutes: for each enabled EmailMailbox (Glass Forge Gmail, YA Install Outlook) pull new mail through the shared connector, classify threads, link them to jobs, relay a job note + to-do into the Hub, label the thread in the provider, and draft replies (never sent). Archives only when the mailbox has archive_enabled."
+          }
+        }
+      }
+    ]
+  },
+  "description": "Every 15 minutes, runs the inbox agents on every enabled mailbox: fetch, triage, relay to Jobs / To-dos, label, draft. Never sends mail; archiving is off unless the mailbox enables it.",
+  "name": "Inbox Agents"
+}
