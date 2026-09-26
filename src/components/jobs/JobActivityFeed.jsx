@@ -76,16 +76,32 @@ function ReportBody({ report, onPhotoClick }) {
   );
 }
 
-function VisitCard({ ev, reports, onPhotoClick }) {
+// Visit PO/OE only when it differs from the job's own (a reorder or follow-up ticket);
+// the job's PO/OE are shown once in "The job".
+function VisitRefs({ ev, dedupe }) {
+  const refs = [
+    ev.po_number && ev.po_number !== dedupe?.primaryPo ? `PO ${ev.po_number}` : "",
+    ev.oe_number && ev.oe_number !== dedupe?.primaryOe ? `OE ${ev.oe_number}` : "",
+  ].filter(Boolean);
+  if (!refs.length) return null;
+  return <div className="mt-2 flex flex-wrap gap-x-4 font-mono text-[12.5px]" style={{ color: C.textMuted }}>{refs.map((r) => <span key={r}>{r}</span>)}</div>;
+}
+
+function VisitCard({ ev, reports, onPhotoClick, dedupe }) {
   const [showNotes, setShowNotes] = useState(false);
+  // On the job page the Scope card already shows this visit's notes; don't repeat them.
+  const scopeShownAbove = !!dedupe && !!ev.id && ev.id === dedupe.workEventId;
   const kind = eventKind(ev) === "service" ? "Service visit" : eventKind(ev) === "outlook" ? "Visit" : "Install visit";
   const crew = crewName(ev.created_by);
   const time = ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ""}` : "All day";
   const photos = reports.reduce((n, r) => n + (r.photos?.length || 0), 0);
   const notes = scopeText(ev.scope_notes).replace(/\n{3,}/g, "\n\n").trim();
-  const parsed = useMemo(() => parseScopeNotes(ev.scope_notes, { keepMoney: true, keepContacts: true }), [ev.scope_notes]);
+  const parsed = useMemo(() => parseScopeNotes(ev.scope_notes, { keepMoney: true, keepContacts: true, refs: !dedupe }), [ev.scope_notes, dedupe]);
   return (
     <Entry icon={HardHat} tone="teal" title={kind} meta={joinMeta(time, crew, photoCount(photos))} badge={visitBadge(ev)}>
+      {scopeShownAbove && reports.length === 0 ? (
+        <p className="m-0 mt-1 text-[13px]" style={{ color: C.textMuted }}>Scope and notes are in the Scope card above.</p>
+      ) : null}
       {reports.length > 0 ? (
         <>
           {reports.map((r, i) => (
@@ -93,16 +109,17 @@ function VisitCard({ ev, reports, onPhotoClick }) {
               <ReportBody report={r} onPhotoClick={onPhotoClick} />
             </div>
           ))}
-          {notes ? (
+          {notes && !scopeShownAbove ? (
             <div className="mt-2">
               <button type="button" onClick={() => setShowNotes((v) => !v)} className="text-[12.5px] font-semibold hover:underline" style={{ color: "#0b3f3b" }}>{showNotes ? "Hide calendar notes" : "Calendar notes"}</button>
               {showNotes ? <div className="mt-2"><ScopeNotes parsed={parsed} size="sm" /></div> : null}
             </div>
           ) : null}
         </>
-      ) : notes && !scopeIsEmpty(parsed) ? (
+      ) : notes && !scopeShownAbove && !scopeIsEmpty(parsed) ? (
         <div className="mt-2"><ScopeNotes parsed={parsed} size="sm" limit={2} /></div>
       ) : null}
+      {dedupe ? <VisitRefs ev={ev} dedupe={dedupe} /> : null}
     </Entry>
   );
 }
@@ -190,7 +207,9 @@ function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
 
 // ledger: used inside the job sheet's "Visits" card, which carries the title
 // and the Live marker itself; entries hang from a timeline with brass nodes.
-export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false }) {
+// dedupe (job page): { workEventId, primaryPo, primaryOe } from jobSnapshot, so visits don't
+// repeat the Scope card's notes or the job's own PO/OE.
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null }) {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
   // A "Log interaction" button elsewhere on the page opens the form here.
@@ -260,7 +279,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
             <div className={ledger ? "space-y-4" : "space-y-2"}>
               {groupFiles(items).map((it, i) => {
                 if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
-                if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} />;
+                if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} dedupe={dedupe} />;
                 if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
                 if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                 if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
