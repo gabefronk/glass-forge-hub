@@ -182,7 +182,6 @@ export default function JobsHub() {
     : "No jobs yet.";
   const todayLabel = new Date(`${denverDate()}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const summary = `${filtered.length.toLocaleString()} ${filtered.length === 1 ? "job" : "jobs"}${builder ? ` · ${builder}` : ""}`;
-  const selectCls = "h-9 min-w-0 rounded-[9px] px-2.5 text-[12.5px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e0c994]";
   const fieldStyle = { backgroundColor: "rgba(255,255,255,.08)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.16)" };
   const HERO_INK = "#f2eee8", HERO_MUTED = "#aeb5b7";
 
@@ -214,16 +213,12 @@ export default function JobsHub() {
         </label>
         <AddJobDialog jobs={jobs} onCreated={handleJobCreated} label="New job" triggerClassName="inline-flex h-[40px] shrink-0 items-center gap-1.5 rounded-[9px] bg-[#b8955a] px-3.5 text-[13.5px] font-semibold text-[#1d160a]" />
       </div>
-      <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
-        <QuickFilterMenu value={segment} onChange={setSegment} groups={[{ items: segments }, { title: "More views", items: moreViews }]} />
-        <select aria-label="Builder" value={builder} onChange={(e) => setBuilder(e.target.value)} className={`${selectCls} w-full`} style={fieldStyle}>
-          <option value="">All builders</option>
-          {builders.map((b) => <option key={b.name} value={b.name}>{b.name} ({b.count})</option>)}
-        </select>
-        <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)} className={`${selectCls} w-full`} style={fieldStyle}>
-          {JOB_SORTS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-        </select>
-      </div>
+      <QuickFilterMenu
+        views={segments} moreViews={moreViews} view={segment} onView={setSegment}
+        builders={builders} builder={builder} onBuilder={setBuilder}
+        sorts={JOB_SORTS} sort={sort} onSort={setSort}
+        onClear={clearFilters}
+      />
       <div className="flex items-center justify-between text-[12px]" style={{ color: HERO_MUTED }}>
         <span>{summary}</span>
         {filtersActive && <button type="button" onClick={clearFilters} className="font-semibold hover:underline" style={{ color: "#e0c994" }}>Clear filters</button>}
