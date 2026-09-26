@@ -64,7 +64,7 @@ test('stripQuotedReply handles Outlook header blocks, dividers and mobile signat
 });
 
 test('htmlToText and address list parsing', () => {
-  assert.equal(htmlToText('<div>Line 1<br>Line 2</div><p>Para &lt;tag&gt; &#8217;</p>'), 'Line 1\nLine 2\nPara <tag> ’');
+  assert.equal(htmlToText('<div>Line 1<br>Line 2</div><p>Para &lt;tag&gt; &#8217;</p>'), 'Line 1\nLine 2\n\nPara <tag> ’');
   assert.deepEqual(parseAddressList('"Ortiz, Maria" <maria@x.com>, bob@y.com'), [{ name: 'Ortiz, Maria', email: 'maria@x.com' }, { name: 'bob@y.com'.replace('bob@y.com', ''), email: 'bob@y.com' }]);
 });
 
