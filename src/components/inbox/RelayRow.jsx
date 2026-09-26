@@ -34,7 +34,7 @@ export default function RelayRow({ entry: e, provider, onAction, busy }) {
             <span className="shrink-0 text-[11.5px] tabular-nums" style={{ color: C.textFaint }}>{relativeTime(e.last_message_at)}</span>
           </div>
           <p className="m-0 mt-0.5 truncate text-[12px]" style={{ color: C.textMuted }}>
-            {e.from_name || e.from_email || "unknown sender"}{e.from_name && e.from_email ? ` · ${e.from_email}` : ""}{e.account_hint ? ` → ${e.account_hint}` : ""}
+            {e.from_name || e.from_email || "Sent from this mailbox, no reply yet"}{e.from_name && e.from_email ? ` · ${e.from_email}` : ""}{e.account_hint ? ` → ${e.account_hint}` : ""}
           </p>
           {e.summary ? <p className="m-0 mt-1.5 text-[13px] leading-snug" style={{ color: C.textSecondary }}>{e.summary}</p> : null}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
