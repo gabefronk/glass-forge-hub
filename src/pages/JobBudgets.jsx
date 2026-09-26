@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { PageShell, PageHero, SheetCard, TILE } from "@/components/PageShell";
 import { computeJobBudget } from "../../base44/shared/jobBudgetMath.js";
-import { UploadCloud, FileText, FolderOpen, DollarSign, AlertTriangle, CheckCircle2, Truck, Plus } from "lucide-react";
+import { UploadCloud, FileText, FolderOpen, DollarSign, AlertTriangle, CheckCircle2, Truck, Plus, Calculator } from "lucide-react";
 import { fetchAllPages } from "@/lib/pagination";
 
 // Job Budgets: drop vendor quote PDFs -> cost basis + margins -> Drive filing ->
