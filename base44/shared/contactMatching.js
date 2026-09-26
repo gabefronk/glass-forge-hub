@@ -25,11 +25,14 @@ export const sharedBuilderCore = core => Boolean(core)&&!/^(cash|ya)\b/.test(cor
 // Every phone / email a contact is known by (primary first), including merged extras.
 export const contactPhoneKeys = c => [...new Set([c?.phone_key,...(c?.phones||[]).map(phoneKey)].filter(Boolean))];
 export const contactEmailKeys = c => [...new Set([c?.email_key,...(c?.emails||[]).map(e=>String(e||'').trim().toLowerCase())].filter(e=>e&&e.includes('@')))];
-// Groups builder labels by core; the canonical label is the most used one (then the longest).
-export function builderCatalog(labels){
+// A label spelled with a known typo ("Holme Homes", "Valor Holmes") never becomes the canonical name.
+const typo=name=>{const w=norm(name).split(' ');return w.some(x=>x in CORE_TOKENS&&!['customers','estates'].includes(x))||Object.keys(CORE_PHRASES).some(p=>p!=='david weekley'&&norm(name).replace(/\bhomes?\b/g,'').trim()===p);};
+// Groups builder labels by core. The canonical label is the one used by the most contacts
+// (`labels`), then by the most workbook job rows (`extra`), then the longest; typos never win.
+export function builderCatalog(labels,extra=[]){
  const byCore=new Map();
- for(const label of labels){const name=String(label||'').trim();if(!name)continue;const core=builderCore(name);if(!core)continue;const g=byCore.get(core)||new Map();g.set(name,(g.get(name)||0)+1);byCore.set(core,g);}
- const entries=[...byCore].map(([core,names])=>{const name=[...names].sort((a,b)=>b[1]-a[1]||b[0].length-a[0].length||a[0].localeCompare(b[0]))[0][0];return {core,name,key:builderKey(name),variants:[...names.keys()]};});
+ for(const [list,weight] of [[labels,1000],[extra,1]])for(const label of list){const name=String(label||'').trim();if(!name)continue;const core=builderCore(name);if(!core)continue;const g=byCore.get(core)||new Map();g.set(name,(g.get(name)||0)+weight);byCore.set(core,g);}
+ const entries=[...byCore].map(([core,names])=>{const name=[...names].sort((a,b)=>Number(typo(a[0]))-Number(typo(b[0]))||b[1]-a[1]||b[0].length-a[0].length||a[0].localeCompare(b[0]))[0][0];return {core,name,key:builderKey(name),variants:[...names.keys()]};});
  const byLength=[...entries].sort((a,b)=>b.core.length-a.core.length);
  const find=value=>{const core=builderCore(value);return core?byLength.find(e=>builderCoreMatch(core,e.core))||null:null;};
  return {entries,find};
@@ -38,7 +41,7 @@ const orderKey = value => String(value||'').trim().replace(/-\d{2}$/, '');
 export const tokens = text => norm(text).split(' ').filter(t=>t&&!['lot','bldg','building','unit','res','residence'].includes(t));
 export function buildDirectory(data, rawJobs, manualLinks=[]) {
  // Contacts' labels decide the canonical builder name; workbook job rows only add builders.
- const catalog=builderCatalog([...data.contacts.map(c=>c.builder),...data.contacts.map(c=>c.builder),...data.job_references.map(r=>r.builder)]);
+ const catalog=builderCatalog(data.contacts.map(c=>c.builder),data.job_references.map(r=>r.builder));
  const canonical=value=>catalog.find(value)?.name||String(value||'');
  const builderNames=catalog.entries.map(e=>e.name).sort((a,b)=>a.localeCompare(b));
  const index=new Map();
