@@ -39,7 +39,9 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
         note_date: noteDate,
         body: body.trim(),
         interaction_type: kind,
-        author,
+        // Anyone can fix an entry, but it stays credited to whoever logged it.
+        author: editing?.author || author,
+        ...(editing && editing.author !== author ? { edited_by: author } : {}),
         attachments,
         edited: !!editing,
       };
