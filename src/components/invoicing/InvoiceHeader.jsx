@@ -44,11 +44,15 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
   const statusLine = statusParts.join(" · ");
 
   return (
-    <div style={{ position: "relative", zIndex: 30, backgroundColor: "var(--gf-card)", borderBottom: "1px solid var(--gf-border)" }}>
-      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-5 px-5 sm:px-6 lg:px-8" style={{ minHeight: "68px", paddingTop: "12px", paddingBottom: "12px" }}>
+    // Dark graphite hero, same as the job sheet. The existing controls keep
+    // their variable-based styling; the variables are re-pointed for dark ground.
+    <div className="mx-auto max-w-[1440px] px-5 pt-5 sm:px-6 lg:px-8 max-[699px]:px-3 max-[699px]:pt-4">
+    <div className="rounded-[14px]" style={{ position: "relative", zIndex: 30, background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)", "--gf-ink": "#f2eee8", "--gf-ink-2": "#e0c994", "--gf-ink-3": "#aeb5b7", "--gf-ink-4": "#f2eee8", "--gf-card": "rgba(255,255,255,.09)", "--gf-border": "rgba(255,255,255,.14)", "--gf-border-2": "rgba(255,255,255,.14)", "--gf-field": "rgba(255,255,255,.08)", "--gf-hairline": "rgba(255,255,255,.12)", "--gf-teal-050": "rgba(207,227,218,.16)", "--gf-teal-halo": "rgba(207,227,218,.3)", "--gf-teal-600": "#cfe3da", "--gf-teal-800": "#cfe3da", "--gf-sync": "#e0c994", "--shadow-control": "none" }}>
+      <div className="flex flex-wrap items-center gap-5 px-6 max-[699px]:px-4" style={{ minHeight: "68px", paddingTop: "18px", paddingBottom: "18px" }}>
         {/* Left: title + status line */}
         <div className="flex flex-col" style={{ flexShrink: 0 }}>
-          <span className="text-[20px] font-semibold" style={{ color: "var(--gf-ink)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>Invoicing</span>
+          <span className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>YA WINDOWS · BILLING</span>
+          <span className="text-[26px] font-bold" style={{ color: "var(--gf-ink)", letterSpacing: "-0.035em", lineHeight: 1.2 }}>Invoicing</span>
           {statusLine && (
             <div className="flex items-center gap-1.5 mt-0.5">
               <span style={{ width: "6px", height: "6px", borderRadius: "99px", backgroundColor: "var(--gf-sync)", flexShrink: 0 }} />
@@ -106,7 +110,7 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
               </span>
             </div>
           ) : (
-            <button onClick={onCloseMonth} disabled={closing} aria-label={closing ? "Closing" : "Close month"} title="Close month" className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", background: "linear-gradient(180deg, var(--gf-teal-500), var(--gf-teal-600))", color: "#F4F1EA", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", whiteSpace: "nowrap", flexShrink: 0, boxShadow: "0 1px 2px rgba(11,63,59,.35), inset 0 1px 0 rgba(255,255,255,.12)", cursor: closing ? "wait" : "pointer" }}>
+            <button onClick={onCloseMonth} disabled={closing} aria-label={closing ? "Closing" : "Close month"} title="Close month" className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", background: "#b8955a", color: "#1d160a", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", whiteSpace: "nowrap", flexShrink: 0, boxShadow: "0 1px 2px rgba(11,63,59,.35), inset 0 1px 0 rgba(255,255,255,.12)", cursor: closing ? "wait" : "pointer" }}>
               <FileText className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" />
               <span className="hidden sm:inline">{closing ? "Closing…" : "Close month"}</span>
             </button>
@@ -115,11 +119,12 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
       </div>
 
       {(syncMessage || loadError) && (
-        <div className="mx-auto max-w-[1440px] px-5 pb-3 sm:px-6 lg:px-8">
-          {loadError && <p role="alert" className="text-[13px]" style={{ color: "#A43432" }}>{loadError}</p>}
+        <div className="px-6 pb-4 max-[699px]:px-4">
+          {loadError && <p role="alert" className="text-[13px]" style={{ color: "#f1b9b3" }}>{loadError}</p>}
           {syncMessage && !loadError && <p role="status" className="text-[13px]" style={{ color: "var(--gf-ink-3)" }}>{syncMessage}</p>}
         </div>
       )}
+    </div>
     </div>
   );
 }
