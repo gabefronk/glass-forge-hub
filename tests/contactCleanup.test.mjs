@@ -1,3 +1,4 @@
+import './support/register-src-alias.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
@@ -6,8 +7,8 @@ import {jobContactsView,sprContacts,eventsByJob,calendarSuperAdds,contactRole} f
 import {planContactCleanup,applyContactOverlay,resolveContact,namesCompatible} from '../base44/shared/contactCleanup.js';
 import {homeownerPrefill,pickHomeowner} from '../base44/shared/jobHomeowner.js';
 import {createContactsDirectoryHandler,canonicalJson} from '../base44/shared/contactsDirectory.js';
-import {pickSuper} from '../src/lib/jobWorkspace.js';
 if(!globalThis.crypto)globalThis.crypto=webcrypto;
+const {pickSuper}=await import('../src/lib/jobWorkspace.js');
 
 const person=(k,name,company,phone='',email='')=>{const d=phone.replace(/\D/g,'');return {key:k.repeat(64),row:2,name,builder:company.split(/\s*-\s*/)[0].trim(),company,phone,phone_key:d.length===10?'+1'+d:'',email,email_key:email.toLowerCase(),note:'',review_note:''};};
 const MATT=person('1','Matt','Home Sweet Home - PM','(801) 555-0172','matt@hshbuild.com');
