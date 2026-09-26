@@ -16,6 +16,7 @@ import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
 import JobLinkedRecords from "@/components/jobs/JobLinkedRecords";
 import JobMessageThreads from "@/components/jobs/JobMessageThreads";
 import OwnerSection from "@/components/jobs/OwnerSection";
+import JobCostCard from "@/components/jobs/JobCostCard";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
@@ -197,6 +198,7 @@ export default function JobDetail() {
 
           <DuplicateJobNotice group={group} currentId={id} />
           <JobFactsCard snap={snap} folder={folder} />
+          <JobCostCard jobId={id} />
           <ScopeCard snap={snap} />
 
           <div id="add-note" className="scroll-mt-4">

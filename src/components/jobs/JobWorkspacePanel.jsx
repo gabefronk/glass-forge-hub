@@ -12,6 +12,7 @@ import { jobSnapshot } from "@/lib/jobWorkspace";
 import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
+import JobCostCard from "@/components/jobs/JobCostCard";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
 import { JobHero, JobFactsCard, ScopeCard, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
 import { AttachmentViewer } from "@/components/jobs/FeedImage";
@@ -155,6 +156,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged })
 
         <DuplicateJobNotice group={group} currentId={jobId} />
         <JobFactsCard snap={snap} folder={folder} />
+        <JobCostCard jobId={jobId} />
         <ScopeCard snap={snap} />
 
         <div ref={historyRef} className="scroll-mt-4">
