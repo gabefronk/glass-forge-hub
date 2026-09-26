@@ -218,6 +218,8 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     const fetched = [];
     let fetchErrors = 0;
     await pool(listed.ids, 4, async (ref) => {
+      // Out of time: leave the rest for the next run (cursor is not advanced below).
+      if (overBudget()) { fetchErrors++; return; }
       try {
         const raw = await provider.getMessage(ref.id);
         const m = normalize(raw, { mailboxAddress: mailbox.address });
@@ -228,6 +230,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       }
     });
     counts.fetched = fetched.length;
+    if (fetchErrors) warn(`${fetchErrors} listed message(s) not fetched; cursor held for the next run`);
     // Only advance the cursor once everything listed was fetched and stored.
     const advanceCursor = fetchErrors === 0;
 
