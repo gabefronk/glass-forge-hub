@@ -4,7 +4,7 @@ import { Inbox, RefreshCw, Search, X } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { PageShell, PageHero, HeroBar, heroBtn, heroPrimary, heroSecondary } from "@/components/PageShell";
 import { C } from "@/lib/feeUI";
-import { CATEGORY_KEYS, STATUS_CHIPS, categoryLabel, errorText, filterThreads, mailboxName, sortThreads, statusCounts, syncSummary } from "@/lib/emailInbox";
+import { CATEGORY_KEYS, STATUS_CHIPS, canViewEmail, categoryLabel, errorText, filterThreads, mailboxName, sortThreads, statusCounts, syncSummary } from "@/lib/emailInbox";
 import { emailCall, btnBase, btnPrimary } from "@/components/email/emailApi";
 import MailboxChips from "@/components/email/MailboxChips";
 import ThreadRow from "@/components/email/ThreadRow";
@@ -14,7 +14,6 @@ const chip = "inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-full 
 const chipOn = { backgroundColor: C.accent, color: "#fff", border: "1px solid transparent" };
 const chipOff = { backgroundColor: C.cardAlt, color: C.textSecondary, border: `1px solid ${C.border}` };
 const field = { border: `1px solid ${C.border}`, color: C.text };
-export const canViewEmail = (user) => user?.role === "admin" || user?.role === "manager";
 
 export default function EmailInbox() {
   const { user } = useAuth();
