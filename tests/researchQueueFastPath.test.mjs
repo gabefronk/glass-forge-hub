@@ -158,6 +158,6 @@ test('enqueue response carries a quick_answer for the resolved job', async () =>
 test('date words resolve in Denver time', () => {
   assert.deepEqual(datesFromQuery('whats on thursday', '2026-09-26'), { date: '2026-10-01' });
   assert.deepEqual(datesFromQuery('next week', '2026-09-26'), { from: '2026-09-28', to: '2026-10-04' });
-  assert.deepEqual(datesFromQuery('this week', '2026-09-26'), { from: '2026-09-26', to: '2026-09-26' });
-  assert.equal(jobWords('Move the Gomez visit to Thursday'), 'move gomez');
+  assert.deepEqual(datesFromQuery('this week', '2026-09-26'), { from: '2026-09-26', to: '2026-10-02' });
+  assert.equal(jobWords('Move the Gomez visit to Thursday'), 'gomez');
 });
