@@ -377,12 +377,7 @@ test('sync: missing gabriel TeamMember skips to-dos with a warning; LLM failure 
   assert.equal(h2.store.EmailMessage.length, 3, 'messages are stored before triage');
   assert.equal(h2.store.EmailMailbox.find((m) => m.key === 'gf-gmail').last_history_id, '500', 'cursor still advances: the pending flag carries the work forward');
   // next run: nothing new from the provider, but the pending threads get triaged
-  h2.gstate.history = [];
-  h2.ostate.deltaNext = [];
-  const good = makeLLM([]);
-  h2.llm.length = 0;
   const h3 = harness({ seed: { EmailThread: h2.store.EmailThread, EmailMessage: h2.store.EmailMessage, EmailMailbox: h2.store.EmailMailbox }, gmail: { history: [] }, graph: { deltaNext: [] } });
-  void good;
   const r3 = await h3.call({ action: 'sync' });
   const gf3 = r3.body.mailboxes.find((m) => m.mailbox_key === 'gf-gmail');
   assert.equal(gf3.fetched, 0);
