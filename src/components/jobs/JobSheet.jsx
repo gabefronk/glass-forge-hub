@@ -11,6 +11,8 @@ import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs
 import { useJobSuper } from "@/hooks/use-job-super";
 import { useJobHomeowner, searchContacts } from "@/hooks/use-job-homeowner";
 import { pickHomeowner } from "../../../base44/shared/jobHomeowner.js";
+import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
 
 // "Sand & brass" job sheet: a dark hero (name, address, super, next step,
 // actions, files) and white section cards with green-haze title bands.
