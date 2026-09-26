@@ -25,9 +25,10 @@ function RecordLink({ to, children }) {
   </Link>;
 }
 
-export default function JobMoneyPanel({ jobId }) {
+export default function JobMoneyPanel({ jobId, memberIds }) {
   const { user } = useAuth();
   const owner = canLoadJobMoney(user);
+  const memberKey = (memberIds || []).filter(Boolean).sort().join(",");
   const [state, setState] = useState({ loading: owner, error: "", data: null });
 
   useEffect(() => {
@@ -37,17 +38,20 @@ export default function JobMoneyPanel({ jobId }) {
       return () => { active = false; };
     }
     setState({ loading: true, error: "", data: null });
+    // Include duplicate records of this job so money filed under any of them shows here.
+    const ids = [...new Set([jobId, ...(String(memberKey || "").split(",").filter(Boolean))])];
+    const byJob = ids.length > 1 ? { job_id: { $in: ids } } : { job_id: jobId };
     Promise.all([
-      base44.entities.JobBudgets.filter({ job_id: jobId }, "-created_date", 200),
-      base44.entities.PurchaseOrders.filter({ job_id: jobId }, "-created_date", 500),
-      base44.entities.FeeLines.filter({ job_id: jobId }, "-job_date", 5000),
+      base44.entities.JobBudgets.filter(byJob, "-created_date", 200),
+      base44.entities.PurchaseOrders.filter(byJob, "-created_date", 500),
+      base44.entities.FeeLines.filter(byJob, "-job_date", 5000),
     ]).then(([budgets, purchaseOrders, feeLines]) => {
-      if (active) setState({ loading: false, error: "", data: aggregateJobMoney(jobId, { budgets, purchaseOrders, feeLines }) });
+      if (active) setState({ loading: false, error: "", data: aggregateJobMoney(ids, { budgets, purchaseOrders, feeLines }) });
     }).catch(() => {
       if (active) setState({ loading: false, error: "Financial records could not be loaded.", data: null });
     });
     return () => { active = false; };
-  }, [jobId, owner]);
+  }, [jobId, owner, memberKey]);
 
   // Intentionally render nothing for non-owners: no request, amount, placeholder,
   // or hint that private pricing exists reaches a crew login.
