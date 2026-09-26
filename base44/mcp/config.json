@@ -66,27 +66,6 @@
         "disabled": false
       },
       {
-        "name": "backfill_job_links",
-        "title": "Backfill job links",
-        "description": "Owner only. Additive: copies the job from high-confidence invoicing lines onto calendar events and field reports that have no job yet. Never overwrites a link. Pass dry_run=false to write; default only counts.",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "action": { "type": "string", "enum": ["backfill_links"] },
-            "dry_run": { "type": "boolean" }
-          },
-          "required": ["action"]
-        },
-        "annotations": {
-          "read_only_hint": false,
-          "destructive_hint": false,
-          "idempotent_hint": true,
-          "open_world_hint": null
-        },
-        "handler": "repairJobLinks",
-        "disabled": false
-      },
-      {
         "name": "sync_calendar_events",
         "title": "Sync calendar events",
         "description": "Syncs Google Calendar events from the CalendarEvents store into FeeLines for invoicing. Call when new calendar events need to be processed into fee lines. Pass start_date and end_date (YYYY-MM-DD) to scope, or omit for the trailing 14-day window.",
