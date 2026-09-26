@@ -83,10 +83,12 @@ export default function CalendarPage() {
 
   const load = async () => {
     setLoading(true); setOwnershipError(""); setSelected(null);
+    // The Jobs list only feeds the event form's job picker, so it loads alongside
+    // and never holds up the calendar.
+    fetchAllPages(base44.entities.Jobs, "-created_date", 1000).then(setJobs).catch(() => {});
     try {
-      const [response, jobsArr, me] = await Promise.all([
+      const [response, me] = await Promise.all([
         base44.functions.invoke("ownedCalendar", {}),
-        fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
         base44.auth.me().catch(() => null),
       ]);
       if (response.data?.error) throw new Error(response.data.error);
@@ -95,7 +97,6 @@ export default function CalendarPage() {
       setOwnership(response.data.ownership || null);
       setOutlook(response.data.outlook || null);
       setPartialOutlook(response.data.partial_outlook || null);
-      setJobs(jobsArr);
       setUser(me);
     } catch (e) {
       setEvents([]); setOwnership(null);
