@@ -5,7 +5,8 @@ import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
 import { ROLE_LABELS } from "@/lib/jobContacts";
-import { pickSuper } from "@/lib/jobWorkspace";
+import { pickSuper, parseScopeNotes, scopeIsEmpty } from "@/lib/jobWorkspace";
+import ScopeNotes from "@/components/jobs/ScopeNotes";
 import { fileBadge, fileLabel } from "@/lib/jobHistory";
 import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs/JobEventDocuments";
 import { useJobSuper } from "@/hooks/use-job-super";
@@ -332,17 +333,12 @@ export function JobFactsCard({ snap, folder }) {
 }
 
 export function ScopeCard({ snap }) {
-  if (!snap.work.length) return null;
-  const from = snap.workFrom ? (snap.workFrom.startsWith("from ") ? snap.workFrom : `from the ${snap.workFrom} calendar event`) : "";
+  const parsed = useMemo(() => parseScopeNotes(snap.workText, { refs: false }), [snap.workText]);
+  if (!snap.work.length || scopeIsEmpty(parsed)) return null;
+  const from = snap.workFrom ? (snap.workFrom.startsWith("from ") ? snap.workFrom : `from the ${/^(today|yesterday|tomorrow)$/i.test(snap.workFrom) ? snap.workFrom.toLowerCase() : snap.workFrom} calendar event`) : "";
   return (
-    <SheetCard icon={ClipboardCheck} tile={TILE.bronze} title="Scope" sub={from} bodyClassName="px-5 py-3.5 max-[699px]:px-4">
-      <ul className="m-0 list-none p-0">
-        {snap.work.map((w, i) => (
-          <li key={i} className="relative py-[5px] pl-[18px] text-[14.5px] leading-[21px] break-words" style={{ color: INK }}>
-            <span aria-hidden="true" className="absolute left-0 top-[15px] h-[1.5px] w-[7px]" style={{ backgroundColor: BRASS }} />{sanitizeText(w)}
-          </li>
-        ))}
-      </ul>
+    <SheetCard icon={ClipboardCheck} tile={TILE.bronze} title="Scope" sub={from} bodyClassName="px-5 py-4 max-[699px]:px-4">
+      <ScopeNotes parsed={parsed} />
     </SheetCard>
   );
 }

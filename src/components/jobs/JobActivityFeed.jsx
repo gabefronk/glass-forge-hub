@@ -4,7 +4,8 @@ import { sanitizeText } from "@/lib/jobsSanitize";
 import ClampedText from "./ClampedText";
 import FeedImage from "./FeedImage";
 import { RefreshCw, Plus, Camera, StickyNote, Phone, MessageSquare, Mail, Users, Truck, TriangleAlert, HardHat, FileText, ExternalLink } from "lucide-react";
-import { scopeText } from "@/lib/jobWorkspace";
+import { scopeText, parseScopeNotes, scopeIsEmpty } from "@/lib/jobWorkspace";
+import ScopeNotes from "./ScopeNotes";
 import { eventKind } from "@/lib/calendarModel";
 import { denverDate } from "../../../base44/shared/billingCore.js";
 import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote, fileLabel } from "@/lib/jobHistory";
@@ -104,6 +105,7 @@ function VisitCard({ ev, reports, onPhotoClick }) {
   const time = ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ""}` : "All day";
   const photos = reports.reduce((n, r) => n + (r.photos?.length || 0), 0);
   const notes = scopeText(ev.scope_notes).replace(/\n{3,}/g, "\n\n").trim();
+  const parsed = useMemo(() => parseScopeNotes(ev.scope_notes, { keepMoney: true, keepContacts: true }), [ev.scope_notes]);
   return (
     <Entry icon={HardHat} tone="teal" title={kind} meta={joinMeta(time, crew, photoCount(photos))} badge={visitBadge(ev)}>
       {reports.length > 0 ? (
@@ -116,12 +118,12 @@ function VisitCard({ ev, reports, onPhotoClick }) {
           {notes ? (
             <div className="mt-2">
               <button type="button" onClick={() => setShowNotes((v) => !v)} className="text-[12.5px] font-semibold hover:underline" style={{ color: "#0b3f3b" }}>{showNotes ? "Hide calendar notes" : "Calendar notes"}</button>
-              {showNotes ? <p className="m-0 mt-1 text-[13px] whitespace-pre-wrap break-words" style={{ color: C.textSecondary }}>{notes}</p> : null}
+              {showNotes ? <div className="mt-2"><ScopeNotes parsed={parsed} size="sm" /></div> : null}
             </div>
           ) : null}
         </>
-      ) : notes ? (
-        <ClampedText text={notes} maxLines={3} className="mt-1.5 text-[13.5px] whitespace-pre-wrap break-words" style={{ color: C.textSecondary }} />
+      ) : notes && !scopeIsEmpty(parsed) ? (
+        <div className="mt-2"><ScopeNotes parsed={parsed} size="sm" limit={4} /></div>
       ) : null}
     </Entry>
   );

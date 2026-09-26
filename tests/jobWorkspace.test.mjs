@@ -103,3 +103,21 @@ test('pickSuper prefers a linked super, then a suggestion, then calendar notes',
   assert.equal(pickSuper({ view: null, events: [] }), null);
   assert.equal(pickSuper({ saved: { name: 'Saved Sam', phone: '1' }, view: { linked: [{ role: 'superintendent', name: 'Tom' }] }, events }).name, 'Saved Sam');
 });
+
+test('parseScopeNotes splits scheduler notes into tags, items, notes and reference facts', async () => {
+  const { parseScopeNotes } = await import('../src/lib/jobWorkspace.js');
+  const t = 'Please install window as well.<br>ANDERSEN WARRANTY<br>*WARANTY* - Per Report: 1 – 1626 fx primary bath | 2 - 1626 accents (LINE: 27) | 1 – 2646 sh pantry deadlight - (Line#: 11) *Orig. PO#: 7249419* AW# 26316092<br>Product ETA – Wk of: 9/23 | | Vendor Order #: Confirmation Number: 2386318<br>Received: 9/21<br>Labor $450<br>SPR: Mike Shaw 385-230-1483';
+  const p = parseScopeNotes(t, { refs: false });
+  assert.deepEqual(p.tags, ['Andersen Warranty', 'Waranty · per report']);
+  assert.deepEqual(p.items, [
+    { qty: 1, text: '1626 fx primary bath', line: '' },
+    { qty: 2, text: '1626 accents', line: '27' },
+    { qty: 1, text: '2646 sh pantry deadlight', line: '11' },
+  ]);
+  assert.deepEqual(p.notes, ['Please install window as well.']);
+  assert.deepEqual(p.facts.map((f) => `${f.k} ${f.v}`), ['AW# 26316092', 'ETA Wk of 9/23', 'Vendor conf. 2386318', 'Received 9/21']);
+  const all = parseScopeNotes(t, { keepMoney: true, keepContacts: true });
+  assert.ok(all.notes.includes('Labor $450'));
+  assert.ok(all.facts.some((f) => f.k === 'Orig. PO' && f.v === '7249419'));
+  assert.deepEqual(parseScopeNotes('Closing 9/24<br>Take shoes off.').notes, ['Closing 9/24', 'Take shoes off.']);
+});
