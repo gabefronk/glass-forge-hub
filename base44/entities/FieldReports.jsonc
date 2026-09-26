@@ -9,7 +9,13 @@
     },
     "job_link_source": {
       "type": "string",
-      "enum": ["probuild_project", "po_oe", "name_exact", "owner", "ingest_match"]
+      "enum": [
+        "probuild_project",
+        "po_oe",
+        "name_exact",
+        "owner",
+        "ingest_match"
+      ]
     },
     "job_linked_at": {
       "type": "string",
@@ -64,11 +70,71 @@
     },
     "man_hours": {
       "type": "number",
-      "title": "Man Hours"
+      "title": "Man Hours",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        }
+      }
     },
     "trip_charges": {
       "type": "number",
-      "title": "Trip Charges"
+      "title": "Trip Charges",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        }
+      }
     }
   },
   "required": [
@@ -87,6 +153,11 @@
         {
           "user_condition": {
             "role": "manager"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
           }
         }
       ]
