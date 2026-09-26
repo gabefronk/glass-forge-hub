@@ -1159,3 +1159,14 @@ stated homeowner to the job on a high-confidence link (additive, once); schedule
 only ever become a to-do. `send_draft` is gone — drafts live in the mailbox and are sent
 from there. The `/email` page, its components and the job-page Email card are replaced by
 Admin → Inbox Agents (`/inbox-agents`, owner only). 587 tests green; `vite build` clean.
+
+### Job page "Cost & sell" card (2026-09-26, later)
+
+Two ways to put money on a job without leaving the job page, for admin + manager (crews never
+see the card): **Quick labor** — install price charged to the builder + what the crew cost,
+saved on the job's `JobCostInputs` row (`installation_revenue` / `actual_labor_cost`, one row
+per job and month, blank fields left untouched) so the Invoicing profitability panel and the
+Job Setup sheet pick it up; and **Quote PDF** — the Job Budgets ingest with `job_id` passed,
+which links the budget to this job instead of guessing. New `jobBudgetIngest` actions
+`job_costs` and `set_labor`; pure helpers in `base44/shared/jobLaborEntry.js` (tested).
+Card lives after "The job" on both the full page and the split view.
