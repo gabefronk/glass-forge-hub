@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { C } from "@/lib/feeUI";
+import { PageShell, PageHero, SheetCard, TILE } from "@/components/PageShell";
 import PageNotFound from "@/lib/PageNotFound";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 
@@ -39,13 +40,9 @@ function Tag({ status, children }) {
 
 function Section({ title, sub, children }) {
   return (
-    <section className="rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <div className="px-5 py-4" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
-        <h2 className="font-heading text-[18px] font-bold" style={{ color: C.text, letterSpacing: "-0.02em" }}>{title}</h2>
-        {sub && <p className="text-[12px] mt-0.5" style={{ color: C.textMuted }}>{sub}</p>}
-      </div>
-      <div className="p-5 flex flex-col gap-3">{children}</div>
-    </section>
+    <SheetCard icon={ClipboardList} tile={TILE.teal} title={title} sub={sub} bodyClassName="p-5 flex flex-col gap-3 max-[699px]:p-4">
+      {children}
+    </SheetCard>
   );
 }
 
@@ -128,19 +125,10 @@ function PurchaseOrdersPage() {
   const inputStyle = { border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text };
 
   return (
-    <div className="flex flex-col" style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }}>
-      <header className="shrink-0 px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-5" style={{ background: "linear-gradient(180deg, var(--gf-sidebar-top), var(--gf-sidebar-bottom))", color: "var(--gf-sidebar-text-on)" }}>
-        <div className="flex items-center gap-3">
-          <ClipboardList className="h-7 w-7" style={{ color: "var(--gf-brass-300)" }} strokeWidth={1.8} strokeLinecap="round" />
-          <h1 className="font-heading text-[30px] font-bold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.03em" }}>Purchase Orders</h1>
-        </div>
-        <p className="mt-2 text-[13px] max-w-[680px]" style={{ color: "var(--gf-sidebar-muted)" }}>
-          YA Windows and Doors PO numbers for material orders. Each new PO takes the next YA-#### number
-          and is added to the linked job's PO list. Numbers are never reused.
-        </p>
-      </header>
+    <PageShell width="max-w-[1080px]" className="!mx-0">
+      <PageHero eyebrow="YA Windows · Orders" title="Purchase Orders" sub="YA Windows and Doors PO numbers for material orders. Each new PO takes the next YA-#### number and is added to the linked job's PO list. Numbers are never reused." />
 
-      <div className="px-[26px] max-[699px]:px-[18px] py-6 flex flex-col gap-6 max-w-[1080px]">
+      <div className="flex flex-col gap-[18px]">
         {jobsError && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{jobsError}</p>}
         <Section title="Purchase orders" sub={`${orders.length} on record`}>
           {result && (
