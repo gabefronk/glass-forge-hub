@@ -1,26 +1,25 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, Unlink, ClipboardList } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, ClipboardList } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { Bot, MessageSquare, Users, Network, Search, CheckSquare } from "lucide-react";
+import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
+import { Users, CheckSquare } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
+// Background routes (kept live, not in any menu): /sales-tracker, /system-map,
+// /admin/unlinked, /messages, /research-queue, /admin/agents.
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "To-do", to: "/todos", icon: CheckSquare, todoOnly: true },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
-  { label: "Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Job Budgets", to: "/job-budgets", icon: DollarSign, ownerOnly: true },
   { label: "Calendar", to: "/calendar", icon: Calendar },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", to: "/summit", icon: Mountain },
-  { label: "System map", to: "/system-map", icon: Network, ownerOnly: true },
-  { label: "Unlinked", to: "/admin/unlinked", icon: Unlink, ownerOnly: true },
 ];
 
 function monthLabel(m) {
@@ -138,55 +137,11 @@ export default function YaFeesSidebar() {
             Contacts
           </Link>
         )}
-        {isAgentCenterOwner(user) && (
-          <Link
-            to="/messages"
-            aria-current={pathname === "/messages" ? "page" : undefined}
-            className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
-            style={{
-              minHeight: "36px",
-              backgroundColor: pathname === "/messages" ? "rgba(184,149,90,.14)" : "transparent",
-              color: pathname === "/messages" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
-              boxShadow: pathname === "/messages" ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
-            }}
-            onMouseEnter={(e) => { if (pathname !== "/messages") e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
-            onMouseLeave={(e) => { if (pathname !== "/messages") e.currentTarget.style.backgroundColor = "transparent"; }}
-          >
-            <MessageSquare className="h-4 w-4 shrink-0" style={{ color: pathname === "/messages" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
-            Messages
-          </Link>
-        )}
-        {canViewAgentCenter(user) && (
-          <div role="group" aria-labelledby="operations-navigation" className="mt-3 pt-3 space-y-0.5" style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
-            <div id="operations-navigation" className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--gf-sidebar-muted)" }}>Operations</div>
-          <Link
-            to="/admin/agents"
-            aria-current={pathname === "/admin/agents" ? "page" : undefined}
-            className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
-            style={{
-              minHeight: "36px",
-              backgroundColor: pathname === "/admin/agents" ? "rgba(184,149,90,.14)" : "transparent",
-              color: pathname === "/admin/agents" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
-              boxShadow: pathname === "/admin/agents" ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
-            }}
-            onMouseEnter={(e) => { if (pathname !== "/admin/agents") e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
-            onMouseLeave={(e) => { if (pathname !== "/admin/agents") e.currentTarget.style.backgroundColor = "transparent"; }}
-          >
-            <Bot className="h-4 w-4 shrink-0" style={{ color: pathname === "/admin/agents" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
-            Agent Center
-          </Link>
-          {isAgentCenterOwner(user) && <Link to="/research-queue" aria-current={pathname === "/research-queue" ? "page" : undefined}
-            className="flex min-h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium"
-            style={{ color: pathname === "/research-queue" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)", backgroundColor: pathname === "/research-queue" ? "rgba(184,149,90,.14)" : "transparent" }}>
-            <Search className="h-4 w-4" />Research Queue
-          </Link>}
-          {isAgentCenterOwner(user) && <Link to="/purchase-orders" aria-current={pathname === "/purchase-orders" ? "page" : undefined}
-            className="flex min-h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium"
-            style={{ color: pathname === "/purchase-orders" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)", backgroundColor: pathname === "/purchase-orders" ? "rgba(184,149,90,.14)" : "transparent" }}>
-            <ClipboardList className="h-4 w-4" />Purchase Orders
-          </Link>}
-          </div>
-        )}
+        {isAgentCenterOwner(user) && <Link to="/purchase-orders" aria-current={pathname === "/purchase-orders" ? "page" : undefined}
+          className="flex min-h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium"
+          style={{ color: pathname === "/purchase-orders" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)", backgroundColor: pathname === "/purchase-orders" ? "rgba(184,149,90,.14)" : "transparent", boxShadow: pathname === "/purchase-orders" ? "inset 2px 0 0 var(--gf-brass-400)" : "none" }}>
+          <ClipboardList className="h-4 w-4 shrink-0" style={{ color: pathname === "/purchase-orders" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />Purchase Orders
+        </Link>}
       </nav>
 
       {/* Unbilled mini card */}

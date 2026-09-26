@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, Bot, X, DollarSign, Mountain, Search, ClipboardList } from "lucide-react";
-import { canViewAgentCenter, isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { MessageSquare, Users, Network, CheckSquare } from "lucide-react";
+import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, ClipboardList } from "lucide-react";
+import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
+import { Users, CheckSquare } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 
 const PRIMARY_NAV = [
@@ -15,14 +15,10 @@ const PRIMARY_NAV = [
 const SECONDARY_NAV = [
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
-  { label: "Tracker", ariaLabel: "Sales Tracker", to: "/sales-tracker", icon: PanelsTopLeft },
   { label: "Brands", ariaLabel: "Product Brands & Specifications", to: "/brands-specs", icon: Library },
   { label: "Summit", ariaLabel: "Summit door service", to: "/summit", icon: Mountain },
   { label: "Budgets", ariaLabel: "Job Budgets", to: "/job-budgets", icon: DollarSign, ownerOnly: true },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
-  { label: "Messages", to: "/messages", icon: MessageSquare, ownerOnly: true },
-  { label: "System map", to: "/system-map", icon: Network, ownerOnly: true },
-  { label: "Research", ariaLabel: "Research Queue", to: "/research-queue", icon: Search, ownerOnly: true, operations: true },
   { label: "POs", ariaLabel: "Purchase Orders", to: "/purchase-orders", icon: ClipboardList, ownerOnly: true, operations: true },
 ];
 
@@ -44,8 +40,8 @@ export default function MobileBottomNav({ user }) {
   const quotesOnly = isWindowQuotesOnly(user);
   const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV.filter(item => !item.todoOnly || todoAccess);
   const visibleSecondary = quotesOnly ? SECONDARY_NAV.filter((s) => s.to === "/brands-specs" || s.to === "/summit") : SECONDARY_NAV.filter((s) => !s.ownerOnly || isAgentCenterOwner(user));
-  const moreActive = pathname === "/admin/agents" || visibleSecondary.some((s) => isSecondaryActive(s.to));
-  const showMore = visibleSecondary.length > 0 || canViewAgentCenter(user);
+  const moreActive = visibleSecondary.some((s) => isSecondaryActive(s.to));
+  const showMore = visibleSecondary.length > 0;
 
   const navItemStyle = (active) => ({
     backgroundColor: active ? "#2A3A35" : "transparent",
@@ -90,16 +86,7 @@ export default function MobileBottomNav({ user }) {
                   </Link>
                 );
               })}
-              {canViewAgentCenter(user) && (
-                <Link to="/admin/agents" aria-label="Agent Center" aria-current={pathname === "/admin/agents" ? "page" : undefined}
-                  className="flex min-h-[44px] flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-2.5"
-                  style={navItemStyle(pathname === "/admin/agents")}>
-                  <Bot className="h-5 w-5" style={{ color: pathname === "/admin/agents" ? "#146556" : "#8A958F" }} />
-                  <span className="text-[12px] font-medium whitespace-nowrap" style={{ color: pathname === "/admin/agents" ? "#E8EAE5" : "#8A958F" }}>Agents</span>
-                </Link>
-              )}
             </div>
-            {canViewAgentCenter(user) && <div className="px-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: "#8A958F" }}>Operations: Agent Center and Research Queue</div>}
           </div>
         </>
       )}
