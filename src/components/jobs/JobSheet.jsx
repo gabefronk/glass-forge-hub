@@ -444,7 +444,12 @@ const STEP_CHIP = { bad: ["#f1b9b3", "#4a0f0d"], warn: [BRASS_LT, "#1d160a"], te
 export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, onRename, extra, headingLevel = "h1" }) {
   const mapHref = job?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
   const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
-  const eyebrow = [snap.kind, sanitizeText(job.builder || "")].filter(Boolean).join(" · ").toUpperCase();
+  // The builder already leads most job names ("Bangerter Homes - Gomez Res"); only add it
+  // to the eyebrow when the title doesn't carry it.
+  const builderText = sanitizeText(job.builder || "");
+  const flat = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const builderInTitle = builderText && flat(job.canonical_name).includes(flat(builderText).split(" ")[0]);
+  const eyebrow = [snap.kind, builderInTitle ? "" : builderText].filter(Boolean).join(" · ").toUpperCase();
   const [chipBg, chipInk] = STEP_CHIP[snap.step.tone] || STEP_CHIP.neutral;
   const [lead, ...rest] = String(snap.step.text || "").split(/(?<=\.)\s+/);
 
