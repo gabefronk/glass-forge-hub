@@ -162,9 +162,12 @@ export function recentSitePhotos(entries, limit = 9) {
   return out;
 }
 
-// Realtime events are for the whole entity; only reload when it touches this job.
-export function touchesJob(event, memberIds) {
+// Realtime events cover the whole entity; only reload when one touches this
+// job. A delete may carry no job_id, so also match records already on screen.
+export function touchesJob(event, memberIds, shownIds = []) {
   const ids = new Set(memberIds || []);
-  const rec = event?.data || event?.record || {};
-  return ids.has(rec.job_id) || ids.has(rec.linked_job_id) || ids.has(event?.data?.job_id);
+  const rec = event?.data || {};
+  if (rec.job_id && ids.has(rec.job_id)) return true;
+  const id = event?.id || rec.id;
+  return !!id && new Set(shownIds).has(id);
 }
