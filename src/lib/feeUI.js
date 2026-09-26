@@ -148,7 +148,7 @@ export function jobStatus(rows, evidence = null, today = denverDate()) {
 
 export function crewName(email) {
   if (!email) return "";
-  if (email === "gabriel.fronk.wd@gmail.com") return "Gabe";
+  if (email === "gabriel.fronk.wd@gmail.com" || email === "gabefronk@gmail.com") return "Gabe";
   if (email === "iryedra@gmail.com") return "Ragen";
   return email.split("@")[0];
 }
