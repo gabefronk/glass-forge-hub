@@ -154,9 +154,10 @@ export function jobContactsView({directory,job,rawJob=null,links=[],conversation
    // The job builder's staff keep their own role; people filed under another company (BFS
    // inside sales, a vendor rep, another builder) are not this job's people; anyone else is
    // the customer side.
-   const own=contactRole(c),mine=hasBuilder(facts,c.builder_key||'');
-   if(c.builder&&own!=='homeowner'&&!mine)continue;
-   propose(c,{role:c.builder&&mine&&own!=='homeowner'?own:'homeowner',confidence:'high',reason:`Phone or email matches this contact in ${item.label}.`,source:item.source});
+   // ("Cash Customer" is not a company: those contacts are customers.)
+   const own=contactRole(c),mine=hasBuilder(facts,c.builder_key||''),company=Boolean(c.builder)&&sharedBuilderCore(c.builder_core??builderCore(c.builder));
+   if(company&&own!=='homeowner'&&!mine)continue;
+   propose(c,{role:company&&mine&&own!=='homeowner'?own:'homeowner',confidence:'high',reason:`Phone or email matches this contact in ${item.label}.`,source:item.source});
   }
  }
  for(const seed of seeds){
