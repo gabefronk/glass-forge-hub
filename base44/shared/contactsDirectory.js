@@ -33,7 +33,7 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
    // Crew can only search the minimum contact card fields needed by Add job and
    // explicitly save a chosen job link. The private directory workspace and all
    // import, coverage, message, and suggestion actions remain owner-only.
-   const crewAction=input.action==='picker'||input.action==='link';
+   const crewAction=input.action==='picker'||input.action==='link'||input.action==='job_super'||input.action==='set_job_super';
    if(!owner(user)&&!crewAction)return response({error:'Owner access required.'},403);
    if(input.action==='import'){
     let data;try{data=validateDirectory(input.directory);}catch{return response({error:'This is not a valid contacts directory export.'},400);}
@@ -46,6 +46,21 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
    }
    const snapshot=(await api.ContactDirectorySnapshot.list('-created_date',1))[0];
    const hubContacts=await all(api.HubContacts);
+   // Anyone signed in can save the super for one job (name, phone, email): an
+   // existing contact with the same phone or email is reused, never duplicated.
+   if(input.action==='set_job_super'){
+    const fields=contactFields(input.contact||{});if(!fields)return response({error:'Enter a name and a phone or email.'},400);
+    const job=await api.Jobs.get(input.job_id).catch(()=>null);if(!job)return response({error:'Select an existing job.'},400);
+    const directoryContacts=snapshot?(await load(client,snapshot)).contacts:[];
+    let contact=[...hubContacts,...directoryContacts].find(c=>fields.phone_key&&c.phone_key===fields.phone_key||fields.email_key&&c.email_key===fields.email_key);
+    if(!contact){const key=await hash(crypto.randomUUID());contact=await api.HubContacts.create({...fields,key});}
+    const prior=await api.ContactJobLink.filter({job_id:job.id,role:'superintendent'},'-created_date',50);
+    for(const l of prior)if(l.contact_key!==contact.key)await api.ContactJobLink.update(l.id,{role:''});
+    const same=(await api.ContactJobLink.filter({contact_key:contact.key,job_id:job.id},'-created_date',1))[0];
+    if(same){if(same.role!=='superintendent')await api.ContactJobLink.update(same.id,{role:'superintendent'});}
+    else await api.ContactJobLink.create({contact_key:contact.key,job_id:job.id,source:'manual',role:'superintendent'});
+    return response({ok:true,super:{key:contact.key,name:contact.name,phone:contact.phone||'',email:contact.email||''}});
+   }
    if(input.action==='create_contact'){
     const fields=contactFields(input.contact||{});if(!fields)return response({error:'Enter a name and valid contact details.'},400);
     const directoryContacts=snapshot?(await load(client,snapshot)).contacts:[];
@@ -55,10 +70,16 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
     const key=await hash(crypto.randomUUID());const created=await api.HubContacts.create({...fields,key});
     return response({ok:true,contact:{key:created.key,name:created.name,company:created.company,phone:created.phone,email:created.email}},201);
    }
-   if(!snapshot&&!hubContacts.length&&!JOB_VIEWS.has(input.action)&&input.action!=='picker')return response({empty:true,contacts:[],jobs:[],builders:[],summary:{contacts:0}});
+   if(!snapshot&&!hubContacts.length&&!JOB_VIEWS.has(input.action)&&input.action!=='picker'&&input.action!=='job_super')return response({empty:true,contacts:[],jobs:[],builders:[],summary:{contacts:0}});
    // Job views still report missing contacts and owner notes before any directory is imported.
    const stored=snapshot?await load(client,snapshot):EMPTY_DIRECTORY;
    const data={...stored,contacts:[...stored.contacts,...hubContacts.filter(c=>!stored.contacts.some(row=>row.key===c.key)).map(c=>({...c,row:0}))]};
+   // The job's saved super, as a minimal card, for every signed-in user.
+   if(input.action==='job_super'){
+    const links=await api.ContactJobLink.filter({job_id:String(input.job_id||''),role:'superintendent'},'-created_date',5);
+    const c=links.map(l=>data.contacts.find(x=>x.key===l.contact_key)).find(Boolean);
+    return response({super:c?{key:c.key,name:c.name,phone:c.phone||'',email:c.email||''}:null});
+   }
    if(input.action==='picker')return response({contacts:data.contacts.map(({key,name,company,email,phone})=>({key,name,company,email,phone}))});
    if(input.action==='contact'){const contact=data.contacts.find(c=>c.key===input.contact_key);return contact?response({contact}):response({error:'Contact not found.'},404);}
    if(input.action==='link'){
