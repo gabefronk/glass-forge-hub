@@ -37,7 +37,7 @@ import PurchaseOrders from '@/pages/PurchaseOrders';
 import Summit from '@/pages/Summit';
 import UnlinkedJobRecords from '@/pages/UnlinkedJobRecords';
 import JobSetup from '@/pages/JobSetup';
-import EmailInbox from '@/pages/EmailInbox';
+import InboxAgents from '@/pages/InboxAgents';
 import { isWindowQuotesOnly } from '@/lib/agentCenterAccess';
 // Add page imports here
 
@@ -84,7 +84,7 @@ const AuthenticatedApp = () => {
           <Route path="/calendar" element={<QuotesOnlyRedirect><CalendarPage /></QuotesOnlyRedirect>} />
           <Route path="/dashboard" element={<QuotesOnlyRedirect><Dashboard /></QuotesOnlyRedirect>} />
           <Route path="/todos" element={<QuotesOnlyRedirect><Todos /></QuotesOnlyRedirect>} />
-          <Route path="/email" element={<QuotesOnlyRedirect><EmailInbox /></QuotesOnlyRedirect>} />
+          <Route path="/inbox-agents" element={<QuotesOnlyRedirect><InboxAgents /></QuotesOnlyRedirect>} />
           <Route path="/window-quotes" element={<WindowQuotes />} />
           <Route path="/sales-tracker" element={<QuotesOnlyRedirect><SalesTracker /></QuotesOnlyRedirect>} />
           <Route path="/admin/agents" element={<QuotesOnlyRedirect><AdminAgentCenter /></QuotesOnlyRedirect>} />

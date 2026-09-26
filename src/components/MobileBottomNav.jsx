@@ -4,7 +4,6 @@ import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft,
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
-import { canViewEmail } from "@/lib/emailInbox";
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
 // labels because five slots share the phone width.
@@ -19,7 +18,6 @@ const SECONDARY_NAV = [
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Job Budgets", to: "/job-budgets", icon: DollarSign, ownerOnly: true },
-  { label: "Email", to: "/email", icon: Mail, emailOnly: true },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", ariaLabel: "Summit door service", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
@@ -32,6 +30,7 @@ const ADMIN_NAV = [
   { label: "Research Queue", to: "/research-queue", icon: Search },
   { label: "Sales Tracker", to: "/sales-tracker", icon: TrendingUp },
   { label: "Messages", to: "/messages", icon: MessageSquare },
+  { label: "Inbox Agents", to: "/inbox-agents", icon: Mail },
   { label: "Unlinked Records", to: "/admin/unlinked", icon: Unlink },
   { label: "ProBuild Daily", to: "/admin/probuild-daily", icon: FileText },
   { label: "Match Debug", to: "/match-debug", icon: Bug },
@@ -74,7 +73,7 @@ export default function MobileBottomNav({ user }) {
   const quotesOnly = isWindowQuotesOnly(user);
   const owner = isAgentCenterOwner(user);
   const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV.filter(item => !item.todoOnly || todoAccess);
-  const visibleSecondary = quotesOnly ? SECONDARY_NAV.filter((s) => s.to === "/brands-specs" || s.to === "/summit") : SECONDARY_NAV.filter((s) => (!s.ownerOnly || owner) && (!s.emailOnly || canViewEmail(user)));
+  const visibleSecondary = quotesOnly ? SECONDARY_NAV.filter((s) => s.to === "/brands-specs" || s.to === "/summit") : SECONDARY_NAV.filter((s) => !s.ownerOnly || owner);
   const visibleAdmin = owner && !quotesOnly ? ADMIN_NAV : [];
   const moreActive = [...visibleSecondary, ...visibleAdmin].some((s) => isSecondaryActive(s.to));
   const showMore = visibleSecondary.length + visibleAdmin.length > 0;

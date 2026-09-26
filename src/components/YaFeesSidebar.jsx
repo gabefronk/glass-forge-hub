@@ -5,7 +5,6 @@ import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
-import { canViewEmail } from "@/lib/emailInbox";
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
@@ -18,7 +17,6 @@ const NAV_ITEMS = [
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Job Budgets", to: "/job-budgets", icon: DollarSign, ownerOnly: true },
   { label: "Calendar", to: "/calendar", icon: Calendar },
-  { label: "Email", to: "/email", icon: Mail, emailOnly: true },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
@@ -32,6 +30,7 @@ const ADMIN_ITEMS = [
   { label: "Research Queue", to: "/research-queue", icon: Search },
   { label: "Sales Tracker", to: "/sales-tracker", icon: TrendingUp },
   { label: "Messages", to: "/messages", icon: MessageSquare },
+  { label: "Inbox Agents", to: "/inbox-agents", icon: Mail },
   { label: "Unlinked Records", to: "/admin/unlinked", icon: Unlink },
   { label: "ProBuild Daily", to: "/admin/probuild-daily", icon: FileText },
   { label: "Match Debug", to: "/match-debug", icon: Bug },
@@ -134,7 +133,7 @@ export default function YaFeesSidebar() {
 
       {/* Nav */}
       <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-3 space-y-0.5 overflow-y-auto obsidian-scroll">
-        {NAV_ITEMS.filter(item => (!item.ownerOnly || owner) && (!item.todoOnly || todoAccess) && (!item.emailOnly || canViewEmail(user)) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes" || item.to === "/brands-specs" || item.to === "/summit")).map((item) => (
+        {NAV_ITEMS.filter(item => (!item.ownerOnly || owner) && (!item.todoOnly || todoAccess) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes" || item.to === "/brands-specs" || item.to === "/summit")).map((item) => (
           <SidebarLink key={item.to} item={item} active={pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"))} />
         ))}
         {owner && (

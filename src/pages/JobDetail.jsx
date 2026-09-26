@@ -14,7 +14,6 @@ import { loadJobGroup, loadJobActivity, jobEventsAndEvidence, reportsForJob, loa
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
 import JobLinkedRecords from "@/components/jobs/JobLinkedRecords";
-import JobEmailThreads from "@/components/jobs/JobEmailThreads";
 import JobMessageThreads from "@/components/jobs/JobMessageThreads";
 import OwnerSection from "@/components/jobs/OwnerSection";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
@@ -241,7 +240,6 @@ export default function JobDetail() {
           {(owner || isAgentCenterOwner(user)) && (
             <OwnerSection>
               <JobLinkedRecords jobId={id} memberIds={group?.memberIds} sourceQuoteId={job.source_window_quote_id} />
-              <JobEmailThreads jobId={id} memberIds={group?.memberIds} />
               <JobMoneyPanel jobId={id} memberIds={group?.memberIds} />
               <JobMessageThreads jobId={id} />
             </OwnerSection>
