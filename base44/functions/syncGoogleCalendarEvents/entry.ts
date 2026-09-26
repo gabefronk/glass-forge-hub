@@ -22,6 +22,19 @@ const GF_JOBS_CAL = '0236b85aa32e6358ebe5a232e970e6c9c2c47142f8c3f22cadd5b5b0eb3
 // installer calendar; the GF Jobs calendar is display-only (never written to).
 const SOURCES = [{ id: FULL_CAL, pushToInstaller: true }, { id: GF_JOBS_CAL, pushToInstaller: false }];
 
+// Google list calls occasionally return 429 or 5xx/524 upstream timeouts; one bad
+// page used to abort the whole run. Retry only those (3 attempts, 1s then 3s).
+const LIST_RETRY_DELAYS_MS = [1000, 3000];
+async function fetchCalendarPage(url, headers) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers });
+    const retryable = res.status === 429 || res.status >= 500;
+    if (res.ok || !retryable || attempt >= LIST_RETRY_DELAYS_MS.length) return res;
+    await res.body?.cancel().catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, LIST_RETRY_DELAYS_MS[attempt]));
+  }
+}
+
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -42,12 +55,12 @@ export default async function(req) {
 
     const allItems = [];
     for (const cal of SOURCES) {
-      const baseUrl = `${CAL_API}/calendars/${encodeURIComponent(cal.id)}/events?maxResults=100&singleEvents=true&showDeleted=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
+      const baseUrl = `${CAL_API}/calendars/${encodeURIComponent(cal.id)}/events?maxResults=2500&singleEvents=true&showDeleted=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
       let pageToken = null;
       do {
         let url = baseUrl;
         if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
-        const res = await fetch(url, { headers });
+        const res = await fetchCalendarPage(url, headers);
         if (!res.ok) return Response.json({ error: 'calendar_api_error', detail: await res.text() }, { status: 502 });
         const data = await res.json();
         for (const item of (data.items || [])) allItems.push({ ...item, _calendarId: cal.id });
