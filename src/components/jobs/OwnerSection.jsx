@@ -27,7 +27,7 @@ export default function OwnerSection({ children }) {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block font-heading text-[16px] font-bold" style={{ color: C.text }}>Owner</span>
-          <span className="block text-[11px]" style={{ color: C.textMuted }}>{open ? "Quotes & orders, money and private messages" : "Tap to show quotes & orders, money and private messages"}</span>
+          <span className="block text-[11px]" style={{ color: C.textMuted }}>{open ? "Quotes & orders, email, money and private messages" : "Tap to show quotes & orders, email, money and private messages"}</span>
         </span>
         <ChevronDown className="h-5 w-5 shrink-0 transition-transform" style={{ color: C.textMuted, transform: open ? "rotate(180deg)" : "none" }} />
       </button>
