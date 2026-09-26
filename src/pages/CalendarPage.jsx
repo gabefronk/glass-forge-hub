@@ -6,6 +6,7 @@ import { base44 } from "@/api/base44Client";
 import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, RefreshCw, Search, X } from "lucide-react";
 import { fetchAllPages } from "@/lib/pagination";
 import { C } from "@/lib/feeUI";
+import { PageShell, PageHero, heroBtn, heroPrimary, heroSecondary } from "@/components/PageShell";
 import { KIND, filterEvents, kindCounts, weekDays, weekLabel, addDays, byTime } from "@/lib/calendarModel";
 import MonthGrid from "@/components/calendar/MonthGrid";
 import WeekView from "@/components/calendar/WeekView";
@@ -36,17 +37,10 @@ const VIEWS = [
 // Admin-only tools that replace the calendar body, each with the same back bar.
 function ToolView({ title, onBack, children }) {
   return (
-    <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-      <div className="px-[26px] max-[699px]:px-[18px] pt-[22px] pb-10">
-        <div className="mb-5 flex items-center gap-3">
-          <button type="button" onClick={onBack} className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors hover:bg-[#F6F3EC]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary, backgroundColor: C.card }}>
-            <ArrowLeft className="h-4 w-4" />Calendar
-          </button>
-          <h1 className="font-heading text-[22px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{title}</h1>
-        </div>
-        <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>{children}</div>
-      </div>
-    </div>
+    <PageShell className="!mx-0">
+      <PageHero compact eyebrow="Calendar · Admin tool" title={title} actions={<button type="button" onClick={onBack} className={heroBtn} style={heroSecondary}><ArrowLeft className="h-4 w-4" style={{ color: "#e0c994" }} />Calendar</button>} />
+      <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>{children}</div>
+    </PageShell>
   );
 }
 
@@ -242,74 +236,75 @@ export default function CalendarPage() {
   ];
   const openCreate = (d) => { setSelected(null); setCreating({ event_date: d || selectedDay }); };
   const ghostBtn = { border: `1px solid ${C.border}`, color: C.textSecondary, backgroundColor: C.card };
+  const heroGhost = { backgroundColor: "rgba(255,255,255,.09)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.12)" };
 
   return (
-    <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-      <div className="px-[26px] max-[699px]:px-[18px] pt-[22px] max-[699px]:pt-[16px] pb-10">
+    <PageShell className="!mx-0">
+      <div>
         {/* Header: title, period nav, view switch, primary action */}
-        <div className="mb-4 rounded-[16px] px-4 py-4 sm:px-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+        <div className="mb-4 rounded-[14px] px-6 py-5 max-[699px]:px-4" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
             <div className="min-w-0 mr-auto">
-              <div className="mono-label-sm mb-0.5">Schedule</div>
+              <div className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>SCHEDULE</div>
               <div className="flex flex-wrap items-baseline gap-x-3">
-                <h1 className="font-heading text-[24px] sm:text-[26px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{periodLabel}</h1>
-                <span className="font-mono-num text-[13px]" style={{ color: C.textMuted }}>{periodCount} {periodCount === 1 ? "visit" : "visits"}</span>
+                <h1 className="m-0 text-[28px] font-bold leading-[34px] max-[699px]:text-[24px]" style={{ color: "#f2eee8", letterSpacing: "-0.035em" }}>{periodLabel}</h1>
+                <span className="font-mono-num text-[13px]" style={{ color: "#aeb5b7" }}>{periodCount} {periodCount === 1 ? "visit" : "visits"}</span>
               </div>
             </div>
             <div className="flex items-center gap-1" aria-label={view === "week" ? "Choose week" : "Choose month"}>
-              <button type="button" onClick={() => step(-1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-[#F6F3EC]" style={ghostBtn} aria-label={view === "week" ? "Previous week" : "Previous month"}><ChevronLeft className="h-4 w-4" /></button>
-              <button type="button" onClick={goToday} className="min-h-11 rounded-full px-4 text-[13px] font-medium transition-colors hover:bg-[#F6F3EC]" style={ghostBtn}>Today</button>
-              <button type="button" onClick={() => step(1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-[#F6F3EC]" style={ghostBtn} aria-label={view === "week" ? "Next week" : "Next month"}><ChevronRight className="h-4 w-4" /></button>
+              <button type="button" onClick={() => step(-1)} className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[9px]" style={heroGhost} aria-label={view === "week" ? "Previous week" : "Previous month"}><ChevronLeft className="h-4 w-4" /></button>
+              <button type="button" onClick={goToday} className="h-[38px] rounded-[9px] px-4 text-[13.5px] font-semibold" style={heroGhost}>Today</button>
+              <button type="button" onClick={() => step(1)} className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[9px]" style={heroGhost} aria-label={view === "week" ? "Next week" : "Next month"}><ChevronRight className="h-4 w-4" /></button>
             </div>
-            <div className="flex rounded-full p-1" role="group" aria-label="Calendar view" style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}>
+            <div className="flex rounded-[10px] p-1" role="group" aria-label="Calendar view" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)" }}>
               {VIEWS.map(({ key, label, icon: Icon }) => (
                 <button key={key} type="button" onClick={() => setView(key)} aria-pressed={view === key}
-                  className="inline-flex min-h-9 items-center gap-1.5 px-3 rounded-full text-[12.5px] font-medium transition-colors"
-                  style={view === key ? { backgroundColor: C.accent, color: "#fff" } : { color: C.textSecondary }}>
+                  className="inline-flex min-h-[30px] items-center gap-1.5 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors"
+                  style={view === key ? { backgroundColor: "#cfe3da", color: "#082f2c" } : { color: "#c9d0d1" }}>
                   <Icon className="h-3.5 w-3.5" />{label}
                 </button>
               ))}
             </div>
-            <button type="button" onClick={() => openCreate()} className="inline-flex min-h-11 items-center gap-1.5 px-4 rounded-full text-[13px] font-semibold whitespace-nowrap transition-colors hover:bg-[#093431]" style={{ backgroundColor: C.accent, color: "#fff" }}>
+            <button type="button" onClick={() => openCreate()} className={heroBtn} style={heroPrimary}>
               <Plus className="h-4 w-4" />New event
             </button>
           </div>
 
           {/* Filters, search, refresh */}
-          <div className="mt-4 pt-4 flex flex-wrap items-center gap-2" style={{ borderTop: `1px solid ${C.rowBorder}` }}>
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[12px] px-3 py-2.5" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter events">
               {filterChips.map((f) => (
                 <button key={f.key} type="button" onClick={() => setFilter(f.key)} aria-pressed={filter === f.key}
-                  className="inline-flex min-h-9 items-center gap-1.5 px-3 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-colors"
-                  style={filter === f.key ? { backgroundColor: C.text, color: "#fff" } : { border: `1px solid ${C.border}`, color: C.textSecondary }}>
+                  className="inline-flex min-h-8 items-center gap-1.5 px-3 rounded-[7px] text-[12.5px] font-semibold whitespace-nowrap transition-colors"
+                  style={filter === f.key ? { backgroundColor: "#e0c994", color: "#1d160a" } : { border: "1px solid rgba(255,255,255,.12)", color: "#c9d0d1" }}>
                   {f.dot && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: f.dot }} aria-hidden="true" />}
                   {f.label}<span className="font-mono-num text-[11px]" style={{ opacity: 0.7 }}>{f.count}</span>
                 </button>
               ))}
             </div>
             <div className="relative inline-flex items-center ml-auto max-[699px]:ml-0 max-[699px]:w-full">
-              <Search className="absolute left-3 h-3.5 w-3.5 pointer-events-none" style={{ color: C.textSecondary }} />
+              <Search className="absolute left-3 h-3.5 w-3.5 pointer-events-none" style={{ color: "#aeb5b7" }} />
               <input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search jobs, builders, addresses, crews"
                 aria-label="Search all events"
-                className="pl-8 pr-8 min-h-9 rounded-full text-[12.5px] w-64 max-[699px]:w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10524C]"
-                style={{ border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.card }}
+                className="pl-8 pr-8 min-h-8 rounded-[8px] text-[12.5px] w-64 max-[699px]:w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e0c994]"
+                style={{ backgroundColor: "rgba(255,255,255,.08)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.16)" }}
               />
-              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-1 inline-flex h-7 w-7 items-center justify-center rounded-full" style={{ color: C.textMuted }}><X className="h-3.5 w-3.5" /></button>}
+              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-1 inline-flex h-7 w-7 items-center justify-center rounded-full" style={{ color: "#aeb5b7" }}><X className="h-3.5 w-3.5" /></button>}
             </div>
-            <button type="button" onClick={handleSync} disabled={syncing} title="Pull Google Calendar, ProBuild and billing for this month" className="inline-flex min-h-9 items-center gap-1.5 px-3.5 rounded-full text-[12.5px] font-medium whitespace-nowrap transition-colors hover:bg-[#F6F3EC] disabled:opacity-60" style={ghostBtn}>
-              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />{syncing ? "Refreshing…" : "Refresh month"}
+            <button type="button" onClick={handleSync} disabled={syncing} title="Pull Google Calendar, ProBuild and billing for this month" className="inline-flex min-h-8 items-center gap-1.5 px-3 rounded-[7px] text-[12.5px] font-semibold whitespace-nowrap disabled:opacity-60" style={heroGhost}>
+              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} style={{ color: "#e0c994" }} />{syncing ? "Refreshing…" : "Refresh month"}
             </button>
           </div>
 
           {isAdmin && (
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
-              <span style={{ color: C.textMuted }}>Admin tools:</span>
+              <span style={{ color: "#8f999b" }}>Admin tools:</span>
               {[["install", "Installation calendar"], ["ipad", "iPad schedules"], ["knowledge", "Find a job update"]].map(([k, label]) => (
-                <button key={k} type="button" onClick={() => setTool(k)} className="inline-flex min-h-8 items-center px-3 rounded-full font-medium transition-colors hover:bg-[#F6F3EC]" style={ghostBtn}>{label}</button>
+                <button key={k} type="button" onClick={() => setTool(k)} className="inline-flex min-h-8 items-center px-3 rounded-[7px] font-semibold" style={heroGhost}>{label}</button>
               ))}
             </div>
           )}
@@ -411,6 +406,6 @@ export default function CalendarPage() {
           <AgendaList events={monthEvents} today={today} onSelect={setSelected} emptyText={filter === "all" ? "No events this month." : "No events in this filter this month."} />
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
