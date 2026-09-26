@@ -1,16 +1,21 @@
-// Inbox agent handler for the Glass Forge Hub. One agent per mailbox (EmailMailbox rows):
-// pulls new mail through the app's shared Gmail / Outlook connector, stores threads and
-// messages, classifies them with one LLM call per batch, links them to Jobs, relays a job
-// note + one to-do into the Hub, labels the thread in the provider, archives ONLY when the
-// mailbox says so, and drafts replies it NEVER sends. Every write is service-role; access is
+// Inbox agent handler for the Glass Forge Hub. One agent per mailbox (EmailMailbox rows).
+// The mail stays in Gmail / Outlook: each run pulls what is new through the app's shared
+// connector, reads it in memory, classifies it with one LLM call per batch, and then
+//   - files it in the mailbox (Hub / Hub/<Category> labels; archives only when the mailbox says so),
+//   - drafts a reply in the mailbox (never sends),
+//   - relays the meaning into the Hub: a job note, one to-do, and — on a high-confidence job
+//     match — the PO/OE numbers and homeowner the email states,
+//   - writes one EmailRelay ledger row per thread saying what it concluded and changed.
+// No message bodies are stored anywhere in the Hub. Every write is service-role; access is
 // decided here. Owner-only mailboxes are visible to the owner emails only.
 //
 // Email content is untrusted evidence, never instructions (see emailTriage.js prompts).
 
 import { findJobs, denverDate } from './jobFinder.js';
-import { normalizeGmailMessage, normalizeGraphMessage, aggregateThread, toMessageRow, lowerEmail } from './emailParse.js';
+import { normalizeGmailMessage, normalizeGraphMessage, aggregateThread, lowerEmail } from './emailParse.js';
 import * as T from './emailTriage.js';
 import { createProviderClient, buildRawReply, ProviderError } from './emailProviders.js';
+import { phoneKey } from './contactMatching.js';
 
 export const OWNER_EMAILS = new Set(['gabefronk@gmail.com', 'gabriel.fronk.wd@gmail.com']);
 export const isOwner = (user) => !!user && user.role === 'admin' && OWNER_EMAILS.has(lowerEmail(user.email));
@@ -19,6 +24,7 @@ export const DEFAULT_SIGNATURE = 'Gabe Fronk\nGlass Forge / YA Windows and Doors
 export const OWNER_MEMBER_KEY = 'gabriel';
 export const INITIAL_DAYS = 3;
 export const DEFAULT_MAX = 200;
+export const HUB_CHANGES_CAP = 30;
 
 export const SEED_MAILBOXES = [
   { key: 'gf-gmail', address: 'gabriel.fronk.wd@gmail.com', display_name: 'Glass Forge (Gmail)', provider: 'gmail', connector_type: 'gmail', visibility: 'owner', enabled: true, draft_replies: true, archive_enabled: false },
@@ -35,6 +41,8 @@ const reply = (body, status = 200) => new Response(JSON.stringify(body), { statu
 const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 const idText = (v) => { const s = String(v ?? '').trim(); if (!s || s.length > 200) fail(400, 'Invalid id.'); return s; };
 const errText = (e) => String(e?.message || e || 'error').slice(0, 300);
+const bySentAt = (a, b) => String(a.sent_at || '').localeCompare(String(b.sent_at || ''));
+const sha256 = async (text) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), (b) => b.toString(16).padStart(2, '0')).join('');
 
 async function allPages(entity, sort) {
   const out = [];
@@ -77,6 +85,7 @@ export function publicMailbox(m) {
 }
 
 const canSeeMailbox = (mailbox, user) => (mailbox?.visibility === 'owner' ? isOwner(user) : isStaff(user));
+const withChanges = (row, more) => [...(row.hub_changes || []), ...more].slice(-HUB_CHANGES_CAP);
 
 export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), budgetMs = 50_000, sleep } = {}) {
   if (typeof getClient !== 'function') throw new Error('emailAgent: getClient is required');
@@ -97,24 +106,22 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     return createProviderClient(mailbox.provider, { accessToken: conn.accessToken, fetchImpl, sleep });
   }
 
-  async function threadForUser(ctx, id) {
-    let thread;
-    try { thread = await ctx.api.EmailThread.get(idText(id)); } catch { thread = null; }
-    if (!thread) fail(404, 'Thread not found.');
-    const mailbox = await mailboxByKey(ctx.api, thread.mailbox_key);
-    if (!mailbox || !canSeeMailbox(mailbox, ctx.user)) fail(404, 'Thread not found.');
-    return { thread, mailbox };
+  const normalizerFor = (mailbox) => (mailbox.provider === 'gmail' ? normalizeGmailMessage : normalizeGraphMessage);
+
+  // The thread's messages, read from the mailbox right now (never from the Hub).
+  async function fetchThreadMessages(provider, mailbox, threadId) {
+    const normalize = normalizerFor(mailbox);
+    const raws = await provider.getThreadMessages(threadId);
+    return raws.map((raw) => normalize(raw, { mailboxAddress: mailbox.address })).filter((m) => m.message_id && !m.is_draft).sort(bySentAt);
   }
 
-  async function threadMessages(api, thread) {
-    const rows = await api.EmailMessage.filter({ mailbox_key: thread.mailbox_key, thread_id: thread.thread_id }, 'sent_at', 200);
-    return rows.sort((a, b) => String(a.sent_at || '').localeCompare(String(b.sent_at || '')));
-  }
-
-  async function relayNote(api, thread, mailbox) {
-    if (!T.shouldRelay(thread)) return null;
-    const note = await api.JobNotes.create(T.buildNotePayload(thread, mailbox));
-    return { note_id: note.id, relayed_at: now() };
+  async function entryForUser(ctx, id) {
+    let row;
+    try { row = await ctx.api.EmailRelay.get(idText(id)); } catch { row = null; }
+    if (!row) fail(404, 'Entry not found.');
+    const mailbox = await mailboxByKey(ctx.api, row.mailbox_key);
+    if (!mailbox || !canSeeMailbox(mailbox, ctx.user)) fail(404, 'Entry not found.');
+    return { row, mailbox };
   }
 
   async function ownerMemberId(api, warn) {
@@ -123,26 +130,68 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     return rows[0].id;
   }
 
-  async function createTodo(api, thread, mailbox, assigneeMemberId) {
-    if (!T.shouldCreateTodo(thread)) return null;
-    const key = T.todoRequestKey(mailbox.key, thread.thread_id);
+  // ---- what the agent changes in the Hub ------------------------------------------------------
+
+  // PO / OE numbers and the homeowner the email states, applied to the linked job. Only called
+  // for a high-confidence or owner-made link. Returns the ledger patch + plain-language changes.
+  async function applyJobFacts(api, row, job, warn) {
+    const changes = [];
+    const patch = {};
+    if (!job) return { patch, changes };
+    const facts = T.planJobFacts(job, row.extracted, row.applied);
+    let applied = { ...(row.applied || {}), ...facts.applied };
+    if (Object.keys(facts.patch).length) {
+      try { await api.Jobs.update(job.id, facts.patch); Object.assign(job, facts.patch); changes.push(...facts.changes); }
+      catch (e) { warn(`job facts failed: ${errText(e)}`); applied = { ...(row.applied || {}) }; }
+    }
+    const owner = T.homeownerCandidate(row.extracted);
+    if (owner && !applied.homeowner_contact_key) {
+      try {
+        const existing = await api.ContactJobLink.filter({ job_id: job.id, role: 'homeowner' }, '-created_date', 1);
+        if (!existing[0]) {
+          const pk = phoneKey(owner.phone);
+          let contact = null;
+          if (pk) contact = (await api.HubContacts.filter({ phone_key: pk }, '-created_date', 5)).find((c) => c.status !== 'merged' && c.status !== 'removed');
+          if (!contact && owner.email) contact = (await api.HubContacts.filter({ email_key: owner.email }, '-created_date', 5)).find((c) => c.status !== 'merged' && c.status !== 'removed');
+          if (!contact) {
+            contact = await api.HubContacts.create({ key: await sha256(crypto.randomUUID()), name: owner.name, phone: owner.phone, phone_key: pk, email: owner.email, email_key: owner.email, company: 'Homeowner', builder: '', note: '', review_note: '', source: 'hub', role: 'homeowner' });
+          }
+          await api.ContactJobLink.create({ contact_key: contact.key, job_id: job.id, source: 'inbox_agent', role: 'homeowner' });
+          applied.homeowner_contact_key = contact.key;
+          changes.push(`Homeowner ${contact.name || owner.name} added to the job`);
+        }
+      } catch (e) { warn(`homeowner failed: ${errText(e)}`); }
+    }
+    if (changes.length || Object.keys(applied).length !== Object.keys(row.applied || {}).length) patch.applied = applied;
+    return { patch, changes };
+  }
+
+  async function relayNote(api, row, mailbox, changes, job) {
+    if (!T.shouldRelay(row)) return null;
+    const note = await api.JobNotes.create(T.buildNotePayload(row, mailbox, changes));
+    return { note_id: note.id, relayed_at: now(), change: `Note added to ${job?.canonical_name || 'the job'}` };
+  }
+
+  async function createTodo(api, row, mailbox, assigneeMemberId) {
+    if (!T.shouldCreateTodo(row)) return null;
+    const key = T.todoRequestKey(mailbox.key, row.thread_id);
     const existing = await api.TodoTask.filter({ request_key: key }, 'id', 1);
     if (existing[0]) return { todo_ids: [existing[0].id] };
-    const created = await api.TodoTask.create(T.buildTodoPayload(thread, mailbox, { assigneeMemberId, now: now() }));
-    return { todo_ids: [created.id] };
+    const created = await api.TodoTask.create(T.buildTodoPayload(row, mailbox, { assigneeMemberId, now: now() }));
+    return { todo_ids: [created.id], change: 'To-do created' };
   }
 
   // Ensure "Hub" + "Hub/<Category>" exist in the provider and apply them to the thread.
-  async function labelThread(provider, mailbox, thread, messages) {
-    const names = T.labelNamesFor(thread.category);
+  async function labelThread(provider, mailbox, row, messages) {
+    const names = T.labelNamesFor(row.category);
     const map = await provider.ensureLabels(names, mailbox.labels || {});
     mailbox.labels = map;
     const hubIds = new Set(T.ALL_LABEL_NAMES.map((n) => map[n]).filter(Boolean));
     const wantIds = names.map((n) => map[n]).filter(Boolean);
     if (mailbox.provider === 'gmail') {
-      const current = thread.provider_labels || [];
+      const current = row.provider_labels || [];
       const remove = current.filter((id) => hubIds.has(id) && !wantIds.includes(id));
-      await provider.modifyThread(thread.thread_id, { addLabelIds: wantIds, removeLabelIds: remove });
+      await provider.modifyThread(row.thread_id, { addLabelIds: wantIds, removeLabelIds: remove });
       return { provider_labels: [...new Set([...current.filter((id) => !remove.includes(id)), ...wantIds])] };
     }
     const hubNames = new Set(T.ALL_LABEL_NAMES);
@@ -155,31 +204,31 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     return { provider_labels: merged.length ? merged : names };
   }
 
-  async function archiveInProvider(provider, mailbox, thread, messages) {
-    if (mailbox.provider === 'gmail') await provider.archiveThread(thread.thread_id);
+  async function archiveInProvider(provider, mailbox, row, messages) {
+    if (mailbox.provider === 'gmail') await provider.archiveThread(row.thread_id);
     else for (const m of messages) if (m.direction === 'incoming') await provider.archiveMessage(m.message_id);
-    return { archived: true, provider_labels: (thread.provider_labels || []).filter((l) => l !== 'INBOX') };
+    return { archived: true, provider_labels: (row.provider_labels || []).filter((l) => l !== 'INBOX') };
   }
 
-  async function generateDraft(ctx, mailbox, provider, thread, messages, jobFacts) {
+  async function generateDraft(ctx, mailbox, provider, row, messages, jobFacts) {
     const lastIncoming = [...messages].reverse().find((m) => m.direction === 'incoming') || messages[messages.length - 1];
     if (!lastIncoming) fail(409, 'Nothing to reply to.');
-    const result = await ctx.core.InvokeLLM(T.buildDraftPrompt(thread, messages, mailbox, jobFacts));
+    const result = await ctx.core.InvokeLLM(T.buildDraftPrompt(row, messages, mailbox, jobFacts));
     const text = T.cleanDraftReply(result, mailbox);
     if (!text.trim()) fail(502, 'Empty draft from the model.');
     let draft;
     if (mailbox.provider === 'gmail') {
-      const raw = buildRawReply({ to: lastIncoming.from_email ? [lastIncoming.from_email] : [], subject: T.replySubject(thread.subject), inReplyTo: lastIncoming.internet_message_id || '', references: lastIncoming.references || '', text });
-      draft = await provider.createDraft({ threadId: thread.thread_id, raw });
+      const raw = buildRawReply({ to: lastIncoming.from_email ? [lastIncoming.from_email] : [], subject: T.replySubject(row.subject), inReplyTo: lastIncoming.internet_message_id || '', references: lastIncoming.references || '', text });
+      draft = await provider.createDraft({ threadId: row.thread_id, raw });
     } else {
       draft = await provider.createDraftReply({ messageId: lastIncoming.message_id, text });
     }
-    return { draft_id: draft.draft_id || '', draft_preview: text, draft_status: 'drafted' };
+    return { draft_id: draft.draft_id || '', draft_status: 'drafted' };
   }
 
-  async function discardInProvider(provider, thread) {
-    if (!thread.draft_id) return;
-    try { await provider.deleteDraft(thread.draft_id); } catch (e) { if (!(e instanceof ProviderError && e.status === 404)) throw e; }
+  async function discardInProvider(provider, row) {
+    if (!row.draft_id) return;
+    try { await provider.deleteDraft(row.draft_id); } catch (e) { if (!(e instanceof ProviderError && e.status === 404)) throw e; }
   }
 
   // ---- sync -----------------------------------------------------------------------------------
@@ -206,7 +255,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     let provider;
     try { provider = await connect(ctx, mailbox); } catch (e) { warn(`not connected: ${e.detail || e.message}`); return finish('error', 'not_connected'); }
 
-    // 1. Pull new mail since the cursor.
+    // 1. Pull new mail since the cursor (read in memory; nothing below stores a body).
     let listed;
     try {
       listed = await provider.listNewMessages(mailbox.provider === 'gmail'
@@ -214,7 +263,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
         : { deltaLink: fresh ? '' : (mailbox.last_delta_link || ''), sinceDays: INITIAL_DAYS, max });
     } catch (e) { warn(`list failed: ${errText(e)}`); return finish('error', `list_failed: ${errText(e)}`.slice(0, 200)); }
 
-    const normalize = mailbox.provider === 'gmail' ? normalizeGmailMessage : normalizeGraphMessage;
+    const normalize = normalizerFor(mailbox);
     const fetched = [];
     let fetchErrors = 0;
     await pool(listed.ids, 4, async (ref) => {
@@ -231,66 +280,54 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     });
     counts.fetched = fetched.length;
     if (fetchErrors) warn(`${fetchErrors} listed message(s) not fetched; cursor held for the next run`);
-    // Only advance the cursor once everything listed was fetched and stored.
+    // Only advance the cursor once everything listed was seen.
     const advanceCursor = fetchErrors === 0;
 
-    // 2. Upsert messages and threads.
+    // 2. Upsert ledger rows. A message dated at or before the row's last_message_at was seen
+    //    on an earlier run (the Hub keeps no message ids, only that watermark).
     const byThread = new Map();
     for (const m of fetched) { if (!byThread.has(m.thread_id)) byThread.set(m.thread_id, []); byThread.get(m.thread_id).push(m); }
     const threadIds = [...byThread.keys()];
-    const existingMsgs = new Map(); // thread_id -> rows
-    const existingThreads = new Map();
+    const existingRows = new Map();
     for (const ids of chunk(threadIds, 40)) {
-      const [msgs, ths] = await Promise.all([
-        api.EmailMessage.filter({ mailbox_key: mailbox.key, thread_id: { $in: ids } }, 'sent_at', 1000),
-        api.EmailThread.filter({ mailbox_key: mailbox.key, thread_id: { $in: ids } }, '-last_message_at', 500),
-      ]);
-      for (const r of msgs) { if (!existingMsgs.has(r.thread_id)) existingMsgs.set(r.thread_id, []); existingMsgs.get(r.thread_id).push(r); }
-      for (const t of ths) existingThreads.set(t.thread_id, t);
+      const rows = await api.EmailRelay.filter({ mailbox_key: mailbox.key, thread_id: { $in: ids } }, '-last_message_at', 500);
+      for (const t of rows) existingRows.set(t.thread_id, t);
     }
 
-    const work = new Map(); // thread_id -> { thread, messages, hasNewIncoming }
-    const toCreateMsgs = [];
-    for (const [threadId, newMsgs] of byThread) {
-      const prevMsgs = existingMsgs.get(threadId) || [];
-      const known = new Set(prevMsgs.map((r) => r.message_id));
-      const fresh_ = newMsgs.filter((m) => !known.has(m.message_id));
-      const rows = fresh_.map((m) => toMessageRow(mailbox.key, m));
-      toCreateMsgs.push(...rows);
-      const all = [...prevMsgs, ...fresh_].sort((a, b) => String(a.sent_at || '').localeCompare(String(b.sent_at || '')));
-      const prev = existingThreads.get(threadId) || null;
-      const hasNewIncoming = fresh_.some((m) => m.direction === 'incoming');
+    const work = new Map(); // thread_id -> { patch, prev, messages, hasNewIncoming }
+    for (const [threadId, msgs] of byThread) {
+      const prev = existingRows.get(threadId) || null;
+      const seenUpTo = prev?.last_message_at || '';
+      const fresh_ = msgs.filter((m) => !prev || String(m.sent_at || '') > seenUpTo).sort(bySentAt);
       if (prev && !fresh_.length) continue; // nothing new for this thread
-      const agg = aggregateThread(all, { mailbox, previous: prev });
-      const latest = all[all.length - 1];
+      const agg = aggregateThread(fresh_, { mailbox, previous: prev });
+      const latest = fresh_[fresh_.length - 1];
+      const hasNewIncoming = fresh_.some((m) => m.direction === 'incoming');
       let patch = { ...agg };
       if (!prev) {
-        patch = { ...patch, status: 'new', priority: 'normal', reply_needed: false, action_items: [], job_candidates: [], todo_ids: [], draft_status: 'none', archived: false, triage_pending: true };
+        patch = { ...patch, status: 'new', priority: 'normal', reply_needed: false, action_items: [], job_candidates: [], todo_ids: [], hub_changes: [], applied: {}, draft_status: 'none', archived: false, triage_pending: true };
       } else {
         if (hasNewIncoming) patch.triage_pending = true;
         if (latest && latest.direction === 'outgoing' && (prev.status === 'new' || prev.status === 'needs_reply')) { patch.status = 'waiting'; patch.reply_needed = false; }
         if (prev.archived && hasNewIncoming) patch.archived = false;
       }
-      work.set(threadId, { patch, prev, messages: all, hasNewIncoming });
-    }
-    for (const batch of chunk(toCreateMsgs, 100)) {
-      if (batch.length === 1) await api.EmailMessage.create(batch[0]);
-      else await api.EmailMessage.bulkCreate(batch);
+      work.set(threadId, { patch, prev, messages: msgs.sort(bySentAt), hasNewIncoming });
     }
     const threads = []; // { row, messages, hasNewIncoming }
     for (const [, w] of work) {
       let row;
-      if (w.prev) { await api.EmailThread.update(w.prev.id, w.patch); row = { ...w.prev, ...w.patch }; }
-      else row = await api.EmailThread.create(w.patch);
+      if (w.prev) { await api.EmailRelay.update(w.prev.id, w.patch); row = { ...w.prev, ...w.patch }; }
+      else row = await api.EmailRelay.create(w.patch);
       counts.threads_updated++;
       threads.push({ row, messages: w.messages, hasNewIncoming: w.hasNewIncoming });
     }
     if (advanceCursor && listed.cursor) mailbox._cursor = listed.cursor;
 
-    // Threads left pending by an earlier run (budget / LLM hiccup) get another chance.
+    // Threads left pending by an earlier run (budget / LLM hiccup) get another chance; their
+    // text is read back from the mailbox.
     try {
       const inRun = new Set(threads.map((t) => t.row.thread_id));
-      const leftovers = await api.EmailThread.filter({ mailbox_key: mailbox.key, triage_pending: true }, '-last_message_at', 50);
+      const leftovers = await api.EmailRelay.filter({ mailbox_key: mailbox.key, triage_pending: true }, '-last_message_at', 50);
       for (const t of leftovers) if (!inRun.has(t.thread_id)) threads.push({ row: t, messages: null, hasNewIncoming: true });
     } catch (e) { warn(`leftover scan failed: ${errText(e)}`); }
 
@@ -299,7 +336,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     const triaged = [];
     for (const batch of chunk(pending, T.TRIAGE_BATCH)) {
       if (overBudget()) { warn('budget exhausted before triage finished'); break; }
-      for (const t of batch) if (!t.messages) { try { t.messages = await threadMessages(api, t.row); } catch { t.messages = []; } }
+      for (const t of batch) if (!t.messages) { try { t.messages = await fetchThreadMessages(provider, mailbox, t.row.thread_id); } catch (e) { warn(`thread ${t.row.thread_id} reread failed: ${errText(e)}`); t.messages = []; } }
       const packet = batch.map((t, i) => ({
         key: `t${i}`,
         subject: t.row.subject,
@@ -314,14 +351,14 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
         const entry = byKey.get(`t${i}`);
         if (!entry) { warn(`no triage result for ${batch[i].row.thread_id}`); continue; }
         const patch = T.applyTriage(batch[i].row, entry, { now: now(), hasNewIncoming: batch[i].hasNewIncoming });
-        try { await api.EmailThread.update(batch[i].row.id, patch); } catch (e) { warn(`thread update failed: ${errText(e)}`); continue; }
+        try { await api.EmailRelay.update(batch[i].row.id, patch); } catch (e) { warn(`ledger update failed: ${errText(e)}`); continue; }
         batch[i].row = { ...batch[i].row, ...patch };
         counts.classified++;
         triaged.push(batch[i]);
       }
     }
 
-    // 4. Job match, relay, to-do, label, archive, draft.
+    // 4. Job match, apply facts, relay note, to-do, label, archive, draft.
     let index = null;
     const today = denverDate();
     let assignee; // undefined = not looked up yet, null = missing
@@ -329,6 +366,8 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       if (overBudget()) { warn('budget exhausted before relay finished'); break; }
       const row = t.row;
       const patch = {};
+      const changes = [];
+      let job = null;
       let jobFacts = null;
       try {
         if (!row.job_id && row.job_link_source !== 'owner') {
@@ -341,23 +380,31 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
             patch.job_candidates = link.candidates;
             if (link.job_id) { patch.job_id = link.job_id; patch.job_link_source = 'agent_match'; jobFacts = link.job; }
           } else if (!row.job_match_confidence) patch.job_match_confidence = 'unmatched';
-        } else if (row.job_id) {
+        }
+        if (row.job_id || patch.job_id) {
           index = index || await loadJobIndex(api, fresh);
-          jobFacts = jobFactsFor(row.job_id, index, today);
+          job = (index.jobs || []).find((j) => j.id === (patch.job_id || row.job_id)) || null;
+          jobFacts = jobFacts || jobFactsFor(patch.job_id || row.job_id, index, today);
         }
       } catch (e) { warn(`job match failed: ${errText(e)}`); }
       let cur = { ...row, ...patch };
-      try { const r = await relayNote(api, cur, mailbox); if (r) { Object.assign(patch, r); counts.relayed++; cur = { ...cur, ...r }; } } catch (e) { warn(`relay failed: ${errText(e)}`); }
+      const trusted = cur.job_link_source === 'owner' || cur.job_match_confidence === 'high';
+      if (job && trusted) {
+        const r = await applyJobFacts(api, cur, job, warn);
+        Object.assign(patch, r.patch); changes.push(...r.changes); cur = { ...cur, ...r.patch };
+      }
+      try { const r = await relayNote(api, cur, mailbox, changes, job); if (r) { const { change, ...rest } = r; Object.assign(patch, rest); changes.push(change); counts.relayed++; cur = { ...cur, ...rest }; } } catch (e) { warn(`relay failed: ${errText(e)}`); }
       try {
         if (T.shouldCreateTodo(cur)) {
           if (assignee === undefined) assignee = await ownerMemberId(api, warn);
-          if (assignee) { const r = await createTodo(api, cur, mailbox, assignee); if (r) { Object.assign(patch, r); cur = { ...cur, ...r }; } }
+          if (assignee) { const r = await createTodo(api, cur, mailbox, assignee); if (r) { const { change, ...rest } = r; Object.assign(patch, rest); if (change) changes.push(change); cur = { ...cur, ...rest }; } }
         }
       } catch (e) { warn(`todo failed: ${errText(e)}`); }
       try { Object.assign(patch, await labelThread(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; } catch (e) { warn(`label failed: ${errText(e)}`); }
       try { if (T.shouldArchive(cur, mailbox)) { Object.assign(patch, await archiveInProvider(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; counts.archived++; } } catch (e) { warn(`archive failed: ${errText(e)}`); }
       try { if (T.shouldDraft(cur, mailbox)) { Object.assign(patch, await generateDraft(ctx, mailbox, provider, cur, t.messages || [], jobFacts)); counts.drafted++; } } catch (e) { warn(`draft failed: ${errText(e)}`); }
-      if (Object.keys(patch).length) { try { await api.EmailThread.update(row.id, patch); } catch (e) { warn(`thread update failed: ${errText(e)}`); } }
+      if (changes.length) patch.hub_changes = withChanges(row, changes);
+      if (Object.keys(patch).length) { try { await api.EmailRelay.update(row.id, patch); } catch (e) { warn(`ledger update failed: ${errText(e)}`); } }
     }
 
     // Warnings stay in the run record; last_error is only for a failed run.
@@ -398,26 +445,25 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       keys = [wanted];
     }
     const limit = Math.max(1, Math.min(200, Number(body.limit) || 50));
-    if (!keys.length) return { ok: true, threads: [], mailboxes: [], count: 0 };
+    if (!keys.length) return { ok: true, entries: [], mailboxes: [], count: 0 };
     const query = { mailbox_key: keys.length === 1 ? keys[0] : { $in: keys } };
     if (body.status) { if (!T.STATUSES.includes(body.status)) fail(400, 'Invalid status.'); query.status = body.status; }
     if (body.category) { if (!T.CATEGORIES.includes(body.category)) fail(400, 'Invalid category.'); query.category = body.category; }
     if (body.job_id) query.job_id = String(body.job_id);
     const q = String(body.q || '').trim().toLowerCase();
-    let rows = await ctx.api.EmailThread.filter(query, '-last_message_at', q ? Math.min(500, limit * 4) : limit);
+    let rows = await ctx.api.EmailRelay.filter(query, '-last_message_at', q ? Math.min(500, limit * 4) : limit);
     if (q) {
-      const hay = (t) => [t.subject, t.from_name, t.from_email, t.summary, t.account_hint, t.snippet, t.extracted?.builder, t.extracted?.lot, t.extracted?.address, ...(t.extracted?.po_numbers || []), ...(t.extracted?.oe_numbers || [])].filter(Boolean).join(' ').toLowerCase();
+      const hay = (t) => [t.subject, t.from_name, t.from_email, t.summary, t.account_hint, t.extracted?.builder, t.extracted?.lot, t.extracted?.address, ...(t.extracted?.po_numbers || []), ...(t.extracted?.oe_numbers || []), ...(t.hub_changes || [])].filter(Boolean).join(' ').toLowerCase();
       rows = rows.filter((t) => hay(t).includes(q)).slice(0, limit);
     }
-    return { ok: true, threads: rows, mailboxes: visible.map(publicMailbox), count: rows.length };
+    return { ok: true, entries: rows, mailboxes: visible.map(publicMailbox), count: rows.length };
   }
 
-  async function actionThread(ctx) {
+  async function actionEntry(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
-    const { thread, mailbox } = await threadForUser(ctx, ctx.body.id);
-    const messages = await threadMessages(ctx.api, thread);
-    return { ok: true, thread, messages, mailbox: publicMailbox(mailbox) };
+    const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
+    return { ok: true, entry: row, mailbox: publicMailbox(mailbox) };
   }
 
   async function actionMailboxes(ctx) {
@@ -454,18 +500,18 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     return { ok: true, mailboxes: out };
   }
 
-  // ---- thread mutations -----------------------------------------------------------------------
+  // ---- ledger mutations -----------------------------------------------------------------------
 
   async function actionSetStatus(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
     const status = String(ctx.body.status || '');
     if (!T.STATUSES.includes(status)) fail(400, 'Invalid status.');
-    const { thread } = await threadForUser(ctx, ctx.body.id);
+    const { row } = await entryForUser(ctx, ctx.body.id);
     const patch = { status };
     if (status === 'done' || status === 'ignored' || status === 'waiting') patch.reply_needed = false;
-    await ctx.api.EmailThread.update(thread.id, patch);
-    return { ok: true, thread: { ...thread, ...patch } };
+    await ctx.api.EmailRelay.update(row.id, patch);
+    return { ok: true, entry: { ...row, ...patch } };
   }
 
   async function actionSetCategory(ctx) {
@@ -473,107 +519,100 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
     const category = String(ctx.body.category || '');
     if (!T.CATEGORIES.includes(category)) fail(400, 'Invalid category.');
-    const { thread, mailbox } = await threadForUser(ctx, ctx.body.id);
+    const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     const patch = { category };
     let warning = '';
     try {
       const provider = await connect(ctx, mailbox);
-      const messages = mailbox.provider === 'gmail' ? [] : await threadMessages(ctx.api, thread);
-      Object.assign(patch, await labelThread(provider, mailbox, { ...thread, category }, messages));
+      const messages = mailbox.provider === 'gmail' ? [] : await fetchThreadMessages(provider, mailbox, row.thread_id);
+      Object.assign(patch, await labelThread(provider, mailbox, { ...row, category }, messages));
       await ctx.api.EmailMailbox.update(mailbox.id, { labels: mailbox.labels || {} });
-    } catch (e) { warning = `Category saved; provider label not updated (${errText(e)})`; }
-    await ctx.api.EmailThread.update(thread.id, patch);
-    return { ok: true, thread: { ...thread, ...patch }, warning: warning || undefined };
+    } catch (e) { warning = `Category saved; mailbox label not updated (${errText(e)})`; }
+    await ctx.api.EmailRelay.update(row.id, patch);
+    return { ok: true, entry: { ...row, ...patch }, warning: warning || undefined };
   }
 
+  // An owner-made link is trusted like a high-confidence match: facts are applied and the
+  // note is relayed right away.
   async function actionLinkJob(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
     const jobId = idText(ctx.body.job_id);
-    const { thread, mailbox } = await threadForUser(ctx, ctx.body.id);
+    const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     let job;
     try { job = await ctx.api.Jobs.get(jobId); } catch { job = null; }
     if (!job) fail(404, 'Job not found.');
+    const warnings = [];
     const patch = { job_id: jobId, job_link_source: 'owner', job_match_confidence: 'high', job_candidates: [] };
-    const cur = { ...thread, ...patch };
-    const relay = await relayNote(ctx.api, cur, mailbox);
-    if (relay) Object.assign(patch, relay);
-    await ctx.api.EmailThread.update(thread.id, patch);
-    return { ok: true, thread: { ...thread, ...patch }, job: { id: job.id, name: job.canonical_name } };
+    let cur = { ...row, ...patch };
+    const changes = [];
+    const facts = await applyJobFacts(ctx.api, cur, job, (m) => warnings.push(m));
+    Object.assign(patch, facts.patch); changes.push(...facts.changes); cur = { ...cur, ...facts.patch };
+    const relay = await relayNote(ctx.api, cur, mailbox, changes, job);
+    if (relay) { const { change, ...rest } = relay; Object.assign(patch, rest); changes.push(change); }
+    if (changes.length) patch.hub_changes = withChanges(row, changes);
+    await ctx.api.EmailRelay.update(row.id, patch);
+    return { ok: true, entry: { ...row, ...patch }, job: { id: job.id, name: job.canonical_name }, warning: warnings.length ? warnings.join('; ') : undefined };
   }
 
   async function actionUnlinkJob(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
-    const { thread } = await threadForUser(ctx, ctx.body.id);
-    // The relayed JobNotes row stays on the job (delete it there if it was wrong); clearing
-    // note_id lets a fresh link relay again.
-    const patch = { job_id: null, job_link_source: null, job_match_confidence: 'unmatched', note_id: null, relayed_at: null };
-    await ctx.api.EmailThread.update(thread.id, patch);
-    return { ok: true, thread: { ...thread, ...patch } };
+    const { row } = await entryForUser(ctx, ctx.body.id);
+    // What was already put on the job (note, PO/OE, homeowner) stays there — fix it on the job
+    // page if it was wrong. Clearing note_id lets a fresh link relay again.
+    const patch = { job_id: null, job_link_source: null, job_match_confidence: 'unmatched', note_id: null, relayed_at: null, hub_changes: withChanges(row, ['Job link removed']) };
+    await ctx.api.EmailRelay.update(row.id, patch);
+    return { ok: true, entry: { ...row, ...patch } };
   }
 
   async function actionRegenerateDraft(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
-    const { thread, mailbox } = await threadForUser(ctx, ctx.body.id);
-    if (thread.draft_status === 'sent') fail(409, 'This draft was already sent.');
+    const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     const provider = await connect(ctx, mailbox);
-    const messages = await threadMessages(ctx.api, thread);
-    if (thread.draft_status === 'drafted') { try { await discardInProvider(provider, thread); } catch { /* keep going */ } }
+    const messages = await fetchThreadMessages(provider, mailbox, row.thread_id);
+    if (row.draft_status === 'drafted') { try { await discardInProvider(provider, row); } catch { /* keep going */ } }
     let jobFacts = null;
-    if (thread.job_id) { try { jobFacts = jobFactsFor(thread.job_id, await loadJobIndex(ctx.api), denverDate()); } catch { jobFacts = null; } }
-    const patch = await generateDraft(ctx, mailbox, provider, thread, messages, jobFacts);
-    await ctx.api.EmailThread.update(thread.id, patch);
-    return { ok: true, thread: { ...thread, ...patch } };
+    if (row.job_id) { try { jobFacts = jobFactsFor(row.job_id, await loadJobIndex(ctx.api), denverDate()); } catch { jobFacts = null; } }
+    const patch = await generateDraft(ctx, mailbox, provider, row, messages, jobFacts);
+    await ctx.api.EmailRelay.update(row.id, patch);
+    return { ok: true, entry: { ...row, ...patch } };
   }
 
   async function actionDiscardDraft(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
-    const { thread, mailbox } = await threadForUser(ctx, ctx.body.id);
-    if (thread.draft_status !== 'drafted') fail(409, 'No open draft on this thread.');
+    const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
+    if (row.draft_status !== 'drafted') fail(409, 'No open draft on this thread.');
     let warning = '';
-    try { await discardInProvider(await connect(ctx, mailbox), thread); } catch (e) { warning = `Provider draft not removed (${errText(e)})`; }
+    try { await discardInProvider(await connect(ctx, mailbox), row); } catch (e) { warning = `Mailbox draft not removed (${errText(e)})`; }
     const patch = { draft_status: 'discarded', draft_id: '' };
-    await ctx.api.EmailThread.update(thread.id, patch);
-    return { ok: true, thread: { ...thread, ...patch }, warning: warning || undefined };
-  }
-
-  async function actionSendDraft(ctx) {
-    if (!ctx.user) fail(401, 'Sign in required.');
-    if (ctx.user.role !== 'admin') fail(403, 'Owner access required.');
-    const { thread, mailbox } = await threadForUser(ctx, ctx.body.id);
-    if (thread.draft_status !== 'drafted' || !thread.draft_id) fail(409, 'No open draft to send.');
-    const provider = await connect(ctx, mailbox);
-    await provider.sendDraft(thread.draft_id);
-    const patch = { draft_status: 'sent', status: 'waiting', reply_needed: false };
-    await ctx.api.EmailThread.update(thread.id, patch);
-    return { ok: true, thread: { ...thread, ...patch } };
+    await ctx.api.EmailRelay.update(row.id, patch);
+    return { ok: true, entry: { ...row, ...patch }, warning: warning || undefined };
   }
 
   async function actionArchive(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
-    const { thread, mailbox } = await threadForUser(ctx, ctx.body.id);
+    const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     const provider = await connect(ctx, mailbox);
-    const messages = mailbox.provider === 'gmail' ? [] : await threadMessages(ctx.api, thread);
-    const patch = await archiveInProvider(provider, mailbox, thread, messages);
-    await ctx.api.EmailThread.update(thread.id, patch);
-    return { ok: true, thread: { ...thread, ...patch } };
+    const messages = mailbox.provider === 'gmail' ? [] : await fetchThreadMessages(provider, mailbox, row.thread_id);
+    const patch = await archiveInProvider(provider, mailbox, row, messages);
+    await ctx.api.EmailRelay.update(row.id, patch);
+    return { ok: true, entry: { ...row, ...patch } };
   }
 
   const ACTIONS = {
     sync: actionSync,
     list: actionList,
-    thread: actionThread,
+    entry: actionEntry,
     set_status: actionSetStatus,
     set_category: actionSetCategory,
     link_job: actionLinkJob,
     unlink_job: actionUnlinkJob,
     regenerate_draft: actionRegenerateDraft,
     discard_draft: actionDiscardDraft,
-    send_draft: actionSendDraft,
     archive: actionArchive,
     mailboxes: actionMailboxes,
     seed_mailboxes: actionSeedMailboxes,
