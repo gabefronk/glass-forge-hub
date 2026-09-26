@@ -412,6 +412,7 @@ export default async function(req) {
       append_only: true,
       fr_skipped_existing: frSkippedExisting,
       fr_photos_filled: frPhotosFilled,
+      fr_jobs_linked: frJobsLinked,
       fee_photos_filled: feePhotosFilled,
       service_quantity_filled: serviceFilled,
       merged_into_calendar: merged_count,
