@@ -4,7 +4,7 @@ import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
 import { ROLE_LABELS } from "@/lib/jobContacts";
-import { pickSuper, parseScopeNotes, scopeIsEmpty } from "@/lib/jobWorkspace";
+import { pickSuper, superChoices, parseScopeNotes, scopeIsEmpty } from "@/lib/jobWorkspace";
 import ScopeNotes from "@/components/jobs/ScopeNotes";
 import { fileBadge, fileLabel } from "@/lib/jobHistory";
 import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs/JobEventDocuments";
@@ -104,18 +104,42 @@ function SuperBox({ jobId, jobContacts, events }) {
   if (editing) return <div className={shell} style={shellStyle}><SuperForm initial={person?.source === "linked" ? person : person ? { ...person } : null} onSave={save} onCancel={() => setEditing(false)} /></div>;
 
   if (!person) {
+    // No super on file: offer the builder's people right here (one tap saves), so they
+    // don't sit unused at the bottom of the page.
+    const choices = superChoices(view);
+    const pick = async (c) => {
+      setSaving(true); setError("");
+      try { await save({ name: c.name, phone: c.phone || "", email: c.email || "" }); }
+      catch (e) { setError(e.message || "Could not save."); }
+      finally { setSaving(false); }
+    };
     return (
       <div className={shell} style={shellStyle}>
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "rgba(207,227,218,.18)", color: "#cfe3da" }}><HardHat className="h-4 w-4" /></span>
           <div className="min-w-0">
             <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>SUPER</div>
-            <div className="text-[14.5px] font-semibold" style={{ color: HERO_MUTED }}>{jobSuper.loading && jobContacts?.phase === "loading" ? "Looking…" : "Not on file yet"}</div>
+            <div className="text-[14.5px] font-semibold" style={{ color: HERO_MUTED }}>{jobSuper.loading && jobContacts?.phase === "loading" ? "Looking…" : choices.length ? `Not on file yet · pick from ${sanitizeText(view?.job?.builder || "the builder")}` : "Not on file yet"}</div>
           </div>
         </div>
-        <button type="button" onClick={() => setEditing(true)} className="mt-3 inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[9px] text-[13.5px] font-semibold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>
-          <UserPlus className="h-3.5 w-3.5" />Add super
+        {choices.length > 0 && (
+          <div className="mt-3 flex flex-col gap-1.5">
+            {choices.map((c) => (
+              <button key={c.key || c.name} type="button" disabled={saving} onClick={() => pick(c)} className="flex min-h-[40px] w-full items-center gap-2.5 rounded-[9px] px-3 text-left disabled:opacity-60" style={{ backgroundColor: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)" }}>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{initials(c.name)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13.5px] font-semibold" style={{ color: HERO_INK }}>{sanitizeText(c.name)}</span>
+                  <span className="block truncate text-[11.5px]" style={{ color: "#9aa6a8" }}>{[c.title || ROLE_LABELS[c.role] || "Contact", c.phone].filter(Boolean).join(" · ")}</span>
+                </span>
+                <span className="shrink-0 text-[12px] font-semibold" style={{ color: BRASS_LT }}>{saving ? "Saving…" : "Use as super"}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <button type="button" onClick={() => setEditing(true)} className={`${choices.length ? "mt-2" : "mt-3"} inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[9px] text-[13.5px] font-semibold`} style={choices.length ? { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" } : { backgroundColor: "#cfe3da", color: "#082f2c" }}>
+          <UserPlus className="h-3.5 w-3.5" />{choices.length ? "Someone else" : "Add super"}
         </button>
+        {error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
       </div>
     );
   }
@@ -133,7 +157,7 @@ function SuperBox({ jobId, jobContacts, events }) {
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-extrabold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{initials(person.name)}</span>
         <div className="min-w-0 flex-1">
           <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>
-            {label}{person.source === "notes" ? <span style={{ color: "#8f999b" }}> · FROM {person.day ? day(person.day).toUpperCase() : "CALENDAR"} NOTES</span> : person.source === "suggestion" ? <span style={{ color: "#8f999b" }}> · SUGGESTED</span> : null}
+            {label}{person.source === "notes" ? <span style={{ color: "#8f999b" }}> · FROM {person.day ? day(person.day).toUpperCase() : "CALENDAR"} NOTES</span> : person.source === "suggestion" ? <span style={{ color: "#8f999b" }}> · SUGGESTED</span> : person.source === "builder" ? <span style={{ color: "#8f999b" }}> · {sanitizeText(view?.job?.builder || "BUILDER").toUpperCase()}&apos;S SUPER</span> : null}
           </div>
           <div className="truncate text-[17px] font-bold" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}</div>
         </div>
