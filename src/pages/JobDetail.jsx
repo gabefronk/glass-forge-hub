@@ -19,6 +19,7 @@ import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
 import { JobHero, JobFactsCard, ScopeCard, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
 import { jobSnapshot } from "@/lib/jobWorkspace";
+import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import { denverDate } from "../../base44/shared/billingCore.js";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
@@ -103,10 +104,7 @@ export default function JobDetail() {
     base44.entities.PlanIntake.list("-created_date", 200)
       .then((all) => {
         if (version !== loadVersion.current) return;
-        const linked = all.filter((p) =>
-          (jb.source_window_quote_id && p.quote_id === jb.source_window_quote_id) ||
-          (p.job_name && jb.canonical_name && p.job_name.toLowerCase() === jb.canonical_name.toLowerCase())
-        );
+        const linked = all.filter((p) => planMatchesJob(p, jb));
         setPlans(linked);
       })
       .catch(() => {});

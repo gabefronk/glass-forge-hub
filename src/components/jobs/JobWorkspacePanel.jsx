@@ -9,6 +9,7 @@ import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
 import { loadJobActivity, jobEventsAndEvidence, reportsForJob, loadUniqueLegacyNames } from "@/lib/jobGroupData";
 import { jobSnapshot } from "@/lib/jobWorkspace";
+import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
@@ -75,10 +76,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
       base44.entities.PlanIntake.list("-created_date", 200)
         .then((all) => {
           if (ver !== v.current) return;
-          setPlans(all.filter((p) =>
-            (jb.source_window_quote_id && p.quote_id === jb.source_window_quote_id) ||
-            (p.job_name && jb.canonical_name && p.job_name.toLowerCase() === jb.canonical_name.toLowerCase())
-          ));
+          setPlans(all.filter((p) => planMatchesJob(p, jb)));
         })
         .catch(() => {});
 
