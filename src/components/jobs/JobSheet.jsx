@@ -55,11 +55,21 @@ const BOX_STYLE = { background: "linear-gradient(150deg,rgba(207,227,218,.16),rg
 const FIELD = "h-[34px] w-full min-w-0 rounded-[8px] px-2.5 text-[13.5px] outline-none focus:ring-2";
 const FIELD_STYLE = { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.16)", "--tw-ring-color": "rgba(224,201,148,.5)" };
 
-function SuperForm({ initial, onSave, onCancel }) {
+// choices / builderName: when the builder has people on file, "Change" offers them as a
+// dropdown first so switching supers is a pick, not a retype.
+function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }) {
   const [f, setF] = useState({ name: initial?.name || "", phone: initial?.phone || "", email: initial?.email || "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (k) => (e) => setF((v) => ({ ...v, [k]: e.target.value }));
+  const idOf = (c) => c.key || `${c.name}|${c.phone}`;
+  const pickChoice = async (e) => {
+    const c = choices.find((x) => idOf(x) === e.target.value);
+    if (!c) return;
+    setSaving(true); setError("");
+    try { await onSave({ name: c.name, phone: c.phone || "", email: c.email || "" }); }
+    catch (err) { setError(err.message || "Could not save."); setSaving(false); }
+  };
   const submit = async (e) => {
     e.preventDefault();
     if (!f.name.trim() || (!f.phone.trim() && !f.email.trim())) { setError("Add a name and a phone or email."); return; }
@@ -70,7 +80,22 @@ function SuperForm({ initial, onSave, onCancel }) {
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
       <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>{initial?.name ? "CHANGE SUPER" : "ADD SUPER"}</div>
-      <input autoFocus aria-label="Super name" placeholder="Name" value={f.name} onChange={set("name")} className={FIELD} style={FIELD_STYLE} />
+      {choices.length > 0 && (
+        <label className="relative block">
+          <span className="sr-only">Pick a super from {builderName}</span>
+          <select value="" disabled={saving} onChange={pickChoice} className="h-[36px] w-full appearance-none rounded-[8px] pl-2.5 pr-9 text-[13.5px] font-semibold outline-none focus:ring-2 disabled:opacity-60" style={{ backgroundColor: "#cfe3da", color: "#082f2c", border: "1px solid rgba(207,227,218,.5)" }}>
+            <option value="">Pick from {builderName || "the builder"} ({choices.length})</option>
+            {superChoiceGroups(choices).map(([label, list]) => (
+              <optgroup key={label} label={label}>
+                {list.map((c) => <option key={idOf(c)} value={idOf(c)}>{[sanitizeText(c.name), c.title || ROLE_LABELS[c.role] || "", c.phone].filter(Boolean).join(" · ")}</option>)}
+              </optgroup>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "#082f2c" }} />
+        </label>
+      )}
+      {choices.length > 0 && <div className="text-[11px] font-semibold tracking-[.1em]" style={{ color: "#8f999b" }}>OR TYPE A NEW ONE</div>}
+      <input autoFocus={!choices.length} aria-label="Super name" placeholder="Name" value={f.name} onChange={set("name")} className={FIELD} style={FIELD_STYLE} />
       <input aria-label="Super phone" placeholder="Phone" inputMode="tel" value={f.phone} onChange={set("phone")} className={FIELD} style={FIELD_STYLE} />
       <input aria-label="Super email" placeholder="Email (optional)" inputMode="email" value={f.email} onChange={set("email")} className={FIELD} style={FIELD_STYLE} />
       {error ? <p role="alert" className="m-0 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
@@ -101,7 +126,7 @@ function SuperBox({ jobId, jobContacts, events }) {
   };
   const small = "inline-flex items-center gap-1.5 text-[12.5px] font-semibold hover:underline disabled:opacity-60";
 
-  if (editing) return <div className={shell} style={shellStyle}><SuperForm initial={person?.source === "linked" ? person : person ? { ...person } : null} onSave={save} onCancel={() => setEditing(false)} /></div>;
+  if (editing) return <div className={shell} style={shellStyle}><SuperForm initial={person?.source === "linked" ? person : person ? { ...person } : null} onSave={save} onCancel={() => setEditing(false)} choices={superChoices(view).filter((c) => !person || c.key !== person.key)} builderName={sanitizeText(view?.job?.builder || "")} /></div>;
 
   if (!person) {
     // No super on file: a dropdown of the builder's people (and any suggested supers)
