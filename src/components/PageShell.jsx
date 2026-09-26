@@ -54,7 +54,7 @@ export function HeroStat({ label, value, tone, sub }) {
 export function PageShell({ children, width = "max-w-[1240px]", className = "" }) {
   return (
     <div style={{ backgroundColor: SHEET_BG, minHeight: "100dvh" }}>
-      <div className={`${width} mx-auto flex flex-col gap-[18px] px-5 pt-5 pb-28 max-[699px]:px-3 max-[699px]:pt-4 lg:pb-12 ${className}`}>{children}</div>
+      <div className={`${width} mx-auto flex flex-col gap-[18px] px-5 pt-5 pb-6 max-[699px]:px-3 max-[699px]:pt-4 lg:pb-12 ${className}`}>{children}</div>
     </div>
   );
 }

@@ -155,7 +155,7 @@ export default function BrandsSpecs() {
   const owner = isPurchaseOrderOwner(user);
 
   return (
-    <PageShell width="max-w-[1120px]" className="!mx-0">
+    <PageShell width="max-w-[1120px]">
       <PageHero eyebrow="Reference" title="Brands & Specs" sub="Manufacturer websites, known product series, and specialized specification tools." />
 
       <SheetCard icon={Wrench} tile={TILE.teal} title="Specification tools" sub="Pella and Amsco resources" bodyClassName="p-5 max-[699px]:p-4">

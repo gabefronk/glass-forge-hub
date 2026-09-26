@@ -125,7 +125,7 @@ function PurchaseOrdersPage() {
   const inputStyle = { border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text };
 
   return (
-    <PageShell width="max-w-[1080px]" className="!mx-0">
+    <PageShell width="max-w-[1080px]">
       <PageHero eyebrow="YA Windows · Orders" title="Purchase Orders" sub="YA Windows and Doors PO numbers for material orders. Each new PO takes the next YA-#### number and is added to the linked job's PO list. Numbers are never reused." />
 
       <div className="flex flex-col gap-[18px]">

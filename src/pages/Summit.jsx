@@ -17,7 +17,7 @@ export default function Summit() {
   const [tab, setTab] = useState("troubleshoot");
 
   return (
-    <PageShell width="max-w-[1080px]" className="!mx-0">
+    <PageShell width="max-w-[1080px]">
       <PageHero eyebrow="Summit · Peak / Everest automated door service" title="Summit" sub="Field service reference for installers. Troubleshooter v1.1, DIP switch map, potentiometer baselines, and the cert library.">
         {/* Tab bar: large touch targets, horizontally scrollable on phones */}
         <div className="flex gap-2 overflow-x-auto obsidian-scroll -mx-1 px-1">
