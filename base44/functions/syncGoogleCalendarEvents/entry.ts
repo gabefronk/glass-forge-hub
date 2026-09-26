@@ -6,6 +6,7 @@ import { fetchAllPages } from '../../shared/pagination.ts';
 import { reportDueAtWithGrace } from '../../shared/reportMatching.ts';
 import { preserveAttachmentMetadata } from '../../shared/eventAttachments.js';
 import { rehostEventAttachments } from '../../shared/rehostEventAttachments.js';
+import { copyEventFilesToJobFolders, needsJobFolderCopy } from '../../shared/jobFolderCopy.js';
 import { resolveJobLink } from '../../shared/jobLinkResolver.js';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
@@ -250,9 +251,26 @@ export default async function(req) {
 
     for (const batch of chunk(installerIdUpdates, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
 
+    // New and upcoming events: copy their attachments into the job's Drive
+    // folder (Gmail files need the Gmail connector on Israel's account).
+    let jobFolderCopy = null;
+    try {
+      const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+      const ids = new Set([
+        ...createdRecords.map(e => e.id),
+        ...toUpdate.filter(e => e.source_status !== 'cancelled' && (e.event_date || '') >= since).map(e => e.id),
+      ].filter(Boolean));
+      const candidates = [...createdRecords, ...toUpdate].filter(e => ids.has(e.id) && e.event_attachments?.some(needsJobFolderCopy));
+      const fresh = (await Promise.all([...new Set(candidates.map(e => e.id))].map(id => base44.asServiceRole.entities.CalendarEvents.get(id).catch(() => null))))
+        .filter(e => e && e.source_status !== 'cancelled');
+      if (fresh.length) jobFolderCopy = await copyEventFilesToJobFolders({ client: base44, events: fresh, limit: 25 });
+    } catch (error) {
+      console.error('post-sync job folder copy failed', error);
+    }
+
     try {
       const eventIds = createdRecords
-        .filter(event => event.source_status !== 'cancelled' && event.event_attachments?.some(a => !a.hub_file_uri))
+        .filter(event => event.source_status !== 'cancelled' && event.event_attachments?.some(a => !a.hub_file_uri && !a.job_folder_file_id))
         .map(event => event.id)
         .filter(Boolean);
       if (eventIds.length) await rehostEventAttachments({ client: base44, eventIds, limit: 20 });
@@ -266,6 +284,7 @@ export default async function(req) {
       fetched: allItems.length,
       created: toCreate.length,
       updated: toUpdate.length,
+      job_folder_copy: jobFolderCopy,
       skipped_app: skippedApp,
       force_repush: forceRepush,
       push_candidates: pushCandidates.length,
