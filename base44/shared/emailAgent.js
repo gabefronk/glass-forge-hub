@@ -521,6 +521,18 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     return { ok: true, entry: { ...row, ...patch } };
   }
 
+  // Send one entry back through the agent on the next sync: the mail is re-read from the
+  // mailbox, re-triaged, and the relay (note, to-do, label, draft) runs again. Existing note /
+  // to-do ids stay on the row so nothing is created twice.
+  async function actionRerun(ctx) {
+    if (!ctx.user) fail(401, 'Sign in required.');
+    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    const { row } = await entryForUser(ctx, ctx.body.id);
+    const patch = { triage_pending: true };
+    await ctx.api.EmailRelay.update(row.id, patch);
+    return { ok: true, entry: { ...row, ...patch } };
+  }
+
   async function actionSetCategory(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
@@ -615,6 +627,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     list: actionList,
     entry: actionEntry,
     set_status: actionSetStatus,
+    rerun: actionRerun,
     set_category: actionSetCategory,
     link_job: actionLinkJob,
     unlink_job: actionUnlinkJob,
