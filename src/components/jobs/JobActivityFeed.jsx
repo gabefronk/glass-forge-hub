@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { C, formatShort, formatDateGroup, crewName } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import ClampedText from "./ClampedText";
@@ -46,9 +46,27 @@ function PhotoStrip({ urls, onPhotoClick }) {
 }
 
 // One entry in the job history: icon, what happened, when/who, status, then details.
+// Ledger: flat entries on a timeline (the job sheet), instead of bordered cards.
+const LedgerContext = createContext(false);
+
 function Entry({ icon: Icon, tone = "neutral", title, meta, badge, actions, children }) {
+  const ledger = useContext(LedgerContext);
   const tones = { teal: ["#e2eeeb", "#0b3f3b"], neutral: ["#f1eee7", "#34403f"], red: ["#fcedec", "#a43432"], blue: ["#e7edf2", "#34506a"] };
   const [bg, ink] = tones[tone] || tones.neutral;
+  if (ledger) {
+    return (
+      <article className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Icon className="h-4 w-4 shrink-0" style={{ color: ink }} />
+          <h4 className="m-0 text-[15px] font-bold" style={{ color: C.text }}>{title}</h4>
+          {meta ? <span className="text-[13px]" style={{ color: "#616a6d" }}>{meta}</span> : null}
+          {badge ? <span className="rounded-[7px] px-2 py-0.5 text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span> : null}
+          {actions ? <span className="ml-auto flex items-center gap-1">{actions}</span> : null}
+        </div>
+        <div className="mt-1 border-l-2 pl-3.5" style={{ borderColor: "#eee9e0" }}>{children}</div>
+      </article>
+    );
+  }
   return (
     <article className="flex gap-3 rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: bg, color: ink }}><Icon className="h-4 w-4" /></span>
@@ -190,7 +208,9 @@ function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
   );
 }
 
-export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history" }) {
+// ledger: used inside the job sheet's "Visits" card, which carries the title
+// and the Live marker itself; entries hang from a timeline with brass nodes.
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false }) {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
   // A "Log interaction" button elsewhere on the page opens the form here.
@@ -201,8 +221,9 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   const days = useMemo(() => groupHistoryByDay(entries, filter), [entries, filter]);
 
   return (
+    <LedgerContext.Provider value={ledger}>
     <div>
-      <div className="flex items-center justify-between gap-2 mb-2">
+      <div className={ledger ? "hidden" : "flex items-center justify-between gap-2 mb-2"}>
         <div className="flex items-center gap-2 min-w-0">
           <h2 className="font-heading text-[20px] font-bold" style={{ color: C.text }}>{title}</h2>
           {live ? (
@@ -216,7 +237,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         </button>
       </div>
 
-      <div role="tablist" aria-label="Filter job history" className="flex gap-1.5 overflow-x-auto pb-1 mb-3">
+      <div className={ledger ? "mb-4 flex items-center gap-2" : ""}>
+      <div role="tablist" aria-label="Filter job history" className={ledger ? "flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1" : "flex gap-1.5 overflow-x-auto pb-1 mb-3"}>
         {HISTORY_FILTERS.map((f) => {
           const on = filter === f.key;
           return (
@@ -228,6 +250,12 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
           );
         })}
       </div>
+      {ledger ? (
+        <button type="button" onClick={() => setShowForm((v) => !v)} className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]" style={{ backgroundColor: "#f4f1ea", color: C.text, border: "1px solid #e2dcd1" }}>
+          <Plus className="h-3.5 w-3.5" style={{ color: "#0b3f3b" }} />Log interaction
+        </button>
+      ) : null}
+      </div>
 
       {showForm ? (
         <div className="mb-3">
@@ -235,17 +263,19 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         </div>
       ) : null}
 
-      <div className="space-y-5">
+      <div className={ledger ? "relative pl-6" : "space-y-5"}>
+        {ledger && days.length ? <span aria-hidden="true" className="absolute left-[5px] top-2 bottom-2 w-px" style={{ backgroundColor: "#e2dcd1" }} /> : null}
         {days.length === 0 && !showForm ? (
           <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter === "all" ? "No activity recorded yet." : "Nothing of this type yet."}</div>
         ) : null}
-        {days.map(({ date, items }) => (
-          <div key={date}>
-            <div className="mb-2 flex items-center gap-3">
-              <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: C.text }}>{formatDateGroup(date)}</span>
-              <span className="h-px flex-1" style={{ backgroundColor: C.rowBorder }} />
+        {days.map(({ date, items }, di) => (
+          <div key={date} className={ledger ? `relative ${di ? "mt-5 border-t pt-5" : ""}` : ""} style={ledger ? { borderColor: "#eee9e0" } : undefined}>
+            {ledger ? <span aria-hidden="true" className={`absolute -left-6 h-[11px] w-[11px] rounded-full bg-white ${di ? "top-[26px]" : "top-[5px]"}`} style={{ border: "2px solid #b8955a" }} /> : null}
+            <div className={ledger ? "mb-2" : "mb-2 flex items-center gap-3"}>
+              <span className={ledger ? "text-[13.5px] font-bold whitespace-nowrap" : "text-[13px] font-bold whitespace-nowrap"} style={{ color: ledger ? "#8a6420" : C.text }}>{formatDateGroup(date)}</span>
+              {ledger ? null : <span className="h-px flex-1" style={{ backgroundColor: C.rowBorder }} />}
             </div>
-            <div className="space-y-2">
+            <div className={ledger ? "space-y-4" : "space-y-2"}>
               {groupFiles(items).map((it, i) => {
                 if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
                 if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} />;
@@ -259,5 +289,6 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         ))}
       </div>
     </div>
+    </LedgerContext.Provider>
   );
 }
