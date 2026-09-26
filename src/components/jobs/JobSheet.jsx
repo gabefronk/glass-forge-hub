@@ -514,6 +514,47 @@ const HERO_BTN = "inline-flex h-[38px] items-center gap-[7px] rounded-[9px] px-3
 const HERO_SEC = { backgroundColor: "rgba(255,255,255,.09)", color: HERO_INK, border: "1px solid rgba(255,255,255,.12)" };
 const STEP_CHIP = { bad: ["#f1b9b3", "#4a0f0d"], warn: [BRASS_LT, "#1d160a"], teal: [BRASS_LT, "#1d160a"], neutral: ["rgba(224,201,148,.2)", BRASS_LT] };
 
+// Job stage chip: "Stage 2 · Handed off · Milan". Everyone sees it; owner / managers pick a
+// stage from it (the handoff sets handed_off on its own and tells the chip through a window
+// event so the hero follows without a reload).
+const STAGE_CHIP_LABELS = { quoted: "Quoted", sold: "Sold", ordered: "Ordered", handed_off: "Handed off", scheduled: "Scheduled", installed: "Installed", closed: "Closed" };
+const STAGE_CHIP_NUMBER = { quoted: 1, sold: 1, ordered: 1, handed_off: 2, scheduled: 3, installed: 3, closed: 4 };
+const STAGE_KEYS = Object.keys(STAGE_CHIP_LABELS);
+export function StageChip({ job }) {
+  const { user } = useAuth();
+  const canPick = user?.role === "admin" || user?.role === "manager";
+  const [stage, setStage] = useState(job?.stage || "");
+  const [pm, setPm] = useState(job?.pm_member_key || "");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setStage(job?.stage || ""); setPm(job?.pm_member_key || ""); }, [job?.id, job?.stage, job?.pm_member_key]);
+  useEffect(() => {
+    const onStage = (e) => { if (e.detail?.jobId === job?.id) { setStage(e.detail.stage || ""); if (e.detail.pm !== undefined) setPm(e.detail.pm || ""); } };
+    window.addEventListener("gf:job-stage", onStage);
+    return () => window.removeEventListener("gf:job-stage", onStage);
+  }, [job?.id]);
+  const pick = async (next) => {
+    setBusy(true);
+    const prev = stage;
+    setStage(next);
+    try { await base44.functions.invoke("jobHandoff", { action: "set_stage", job_id: job.id, stage: next }); }
+    catch { setStage(prev); }
+    finally { setBusy(false); }
+  };
+  if (!stage && !canPick) return null;
+  const label = stage ? `Stage ${STAGE_CHIP_NUMBER[stage]} · ${STAGE_CHIP_LABELS[stage]}${stage === "handed_off" && pm ? ` · ${pm.charAt(0).toUpperCase()}${pm.slice(1)}` : ""}` : "Set stage";
+  const style = { backgroundColor: stage === "handed_off" ? "rgba(61,220,151,.14)" : "rgba(255,255,255,.08)", color: stage === "handed_off" ? "#8fe6c2" : "#c9d0d1", border: `1px solid ${stage === "handed_off" ? "rgba(61,220,151,.35)" : "rgba(255,255,255,.14)"}` };
+  if (!canPick) return <span className="inline-flex items-center whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={style}>{label}</span>;
+  return (
+    <label className="relative inline-flex items-center" title="Job stage">
+      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={style}>{label}<ChevronDown className="h-3 w-3" /></span>
+      <select aria-label="Job stage" value={stage} disabled={busy} onChange={(e) => pick(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0">
+        <option value="">No stage</option>
+        {STAGE_KEYS.map((k) => <option key={k} value={k}>Stage {STAGE_CHIP_NUMBER[k]} · {STAGE_CHIP_LABELS[k]}</option>)}
+      </select>
+    </label>
+  );
+}
+
 export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, onRename, extra, headingLevel = "h1" }) {
   const mapHref = job?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
   const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
@@ -536,6 +577,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.14)", color: BRASS_LT, border: "1px solid rgba(224,201,148,.35)" }}>
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "currentColor" }} />{status.label}
               </span>
+              <StageChip job={job} />
             </div>
             <JobTitle job={job} onRename={onRename} headingLevel={headingLevel} />
             {job.address ? (
