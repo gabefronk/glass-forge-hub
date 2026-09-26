@@ -42,8 +42,38 @@
       "title": "Builder",
       "description": "Builder / GC name extracted from the job name (part before the dash)"
     },
-    "drive_job_folder_id": { "type": "string", "description": "Verified Google Drive folder for this job; signed-in linking UI.", "rls": { "read": { "user_condition": { "role": "admin" } }, "write": { "user_condition": { "role": "admin" } } } },
-    "drive_job_folder_url": { "type": "string", "description": "Verified Drive folder link, not a guessed URL.", "rls": { "read": { "user_condition": { "role": "admin" } }, "write": { "user_condition": { "role": "admin" } } } },
+    "drive_job_folder_id": {
+      "type": "string",
+      "description": "Verified Google Drive folder for this job; signed-in linking UI.",
+      "rls": {
+        "read": {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "drive_job_folder_url": {
+      "type": "string",
+      "description": "Verified Drive folder link, not a guessed URL.",
+      "rls": {
+        "read": {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
     "source_window_quote_id": {
       "type": "string",
       "description": "Source Window Quotes request; stable link and conversion reconciliation key."
@@ -83,6 +113,27 @@
     "customer_name": {
       "type": "string",
       "description": "Customer supplied when a window sale is won."
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "quoted",
+        "sold",
+        "ordered",
+        "handed_off",
+        "scheduled",
+        "installed",
+        "closed"
+      ],
+      "description": "Where the job is in its life: quoted \u2192 sold \u2192 ordered \u2192 handed_off (Stage 2, in the PM's hands) \u2192 scheduled \u2192 installed \u2192 closed. Set by hand from the job hero; the handoff sets handed_off itself."
+    },
+    "pm_member_key": {
+      "type": "string",
+      "description": "TeamMember.member_key of who runs the job after handoff (e.g. Milan)."
+    },
+    "handoff_id": {
+      "type": "string",
+      "description": "JobHandoffs row for this job, once one exists."
     }
   },
   "required": [
