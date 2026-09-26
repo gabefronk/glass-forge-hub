@@ -33,9 +33,9 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
     <>
       <div className="flex items-center gap-2 mb-1.5">
         {note.edited && (
-          <span className="font-mono text-[10px] uppercase tracking-[0.13em] italic" style={{ color: C.textMuted }}>{note.edited_by ? `edited by ${note.edited_by}` : "edited"}</span>
+          <span className="text-[11.5px] italic" style={{ color: C.textMuted }}>{note.edited_by ? `edited by ${note.edited_by}` : "edited"}</span>
         )}
-        <span className="font-mono text-[11px] truncate ml-auto" style={{ color: C.textSecondary }}>{note.author}</span>
+        {!embedded ? <span className="text-[12px] truncate ml-auto" style={{ color: C.textSecondary }}>{note.author}</span> : <span className="ml-auto" />}
         {canEdit && (
           <div className="flex items-center gap-1 shrink-0">
             <button type="button" aria-label="Edit note" onClick={() => setEditing(true)} style={{ color: C.textMuted }} className="p-1.5 hover:opacity-100 transition-opacity">

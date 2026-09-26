@@ -5,93 +5,115 @@ import ClampedText from "./ClampedText";
 import FeedImage from "./FeedImage";
 import { RefreshCw, Plus, Camera, StickyNote, CheckCircle2, AlertCircle, Clock, Phone, MessageSquare, Mail, Users, Truck, TriangleAlert, HardHat, FileText, ExternalLink } from "lucide-react";
 import { scopeText } from "@/lib/jobWorkspace";
+import { eventKind } from "@/lib/calendarModel";
 import { denverDate } from "../../../base44/shared/billingCore.js";
 import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote, fileLabel } from "@/lib/jobHistory";
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
 
+// Status pill for a visit, in plain words.
 function visitBadge(ev, today = denverDate()) {
   if (ev.event_date && ev.event_date > today) return { label: "Scheduled", color: "#34506a", bg: "#E7EDF2" };
-  if (!ev.report_required || ev.report_required === false) return { label: "N/A", color: C.textMuted, bg: "#F0F1ED" };
-  if (ev.report_status === "ok") return { label: "Report complete", color: C.accentText, bg: "#E2EEEB" };
-  if (ev.report_status === "waived") return { label: "Waived", color: C.textMuted, bg: "#F0F1ED" };
+  if (!ev.report_required || ev.report_required === false) return null;
+  if (ev.report_status === "ok") return { label: "Report in", color: "#0b3f3b", bg: "#E2EEEB" };
+  if (ev.report_status === "waived") return { label: "No report needed", color: C.textMuted, bg: "#F0F1ED" };
   if (ev.report_status === "rescheduled") return { label: "Rescheduled", color: C.textMuted, bg: "#F0F1ED" };
-  if (ev.days_late > 0) return { label: `${ev.days_late}d late`, color: "#A43432", bg: "#FCEDEC" };
-  return { label: "Awaiting report", color: "#89511A", bg: "#FFF3DF" };
+  if (ev.days_late > 0) return { label: `Report ${ev.days_late}d late`, color: "#A43432", bg: "#FCEDEC" };
+  return { label: "Report due", color: "#8a5a12", bg: "#FAF0DA" };
 }
 
-function PhotoGrid({ urls, onPhotoClick }) {
+const MAX_THUMBS = 8;
+
+// A strip of small photos; the rest sit behind "+N". Tap any to open it full size.
+function PhotoStrip({ urls, onPhotoClick }) {
+  const [all, setAll] = useState(false);
   if (!urls || !urls.length) return null;
+  const shown = all ? urls : urls.slice(0, MAX_THUMBS);
+  const extra = urls.length - shown.length;
   return (
-    <div className="grid grid-cols-3 gap-2 mt-2.5 sm:grid-cols-4">
-      {urls.map((url, i) => (
-        <button key={i} type="button" onClick={() => onPhotoClick(url)} className="aspect-[4/3] rounded-[10px] overflow-hidden shrink-0" style={{ border: `1px solid ${C.border}` }}>
-          <FeedImage src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />
-        </button>
-      ))}
+    <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-6 xl:grid-cols-8">
+      {shown.map((url, i) => {
+        const last = !all && extra > 0 && i === shown.length - 1;
+        return (
+          <button key={i} type="button" onClick={() => (last ? setAll(true) : onPhotoClick(url))} className="relative aspect-square overflow-hidden rounded-[8px]" style={{ backgroundColor: "#eee9e0" }} aria-label={last ? `Show ${extra + 1} more photos` : `Open photo ${i + 1}`}>
+            <FeedImage src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+            {last ? <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-[15px] font-bold text-white">+{extra + 1}</span> : null}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function TypeLabel({ icon: Icon, children, color }) {
+// One entry in the job history: icon, what happened, when/who, status, then details.
+function Entry({ icon: Icon, tone = "neutral", title, meta, badge, actions, children }) {
+  const tones = { teal: ["#e2eeeb", "#0b3f3b"], neutral: ["#f1eee7", "#34403f"], red: ["#fcedec", "#a43432"], blue: ["#e7edf2", "#34506a"] };
+  const [bg, ink] = tones[tone] || tones.neutral;
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color }}>
-      <Icon className="h-3 w-3" />{children}
-    </span>
+    <article className="flex gap-3 rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: bg, color: ink }}><Icon className="h-4 w-4" /></span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <h4 className="m-0 text-[14.5px] font-bold" style={{ color: C.text }}>{title}</h4>
+          {meta ? <span className="text-[13px]" style={{ color: C.textMuted }}>{meta}</span> : null}
+          {badge ? <span className="rounded-full px-2 py-0.5 text-[11.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span> : null}
+          {actions ? <span className="ml-auto flex items-center gap-1">{actions}</span> : null}
+        </div>
+        {children}
+      </div>
+    </article>
   );
 }
 
-function ReportBlock({ report, onPhotoClick }) {
+const joinMeta = (...parts) => parts.filter(Boolean).join(" · ");
+const photoCount = (n) => (n ? `${n} ${n === 1 ? "photo" : "photos"}` : "");
+
+function ReportBody({ report, onPhotoClick }) {
   return (
-    <div className="mt-1">
-      {report.author ? (
-        <div className="text-[11px]" style={{ color: C.textMuted }}>{crewName(report.author)} · {report.created_at ? formatShort(String(report.created_at).slice(0, 10)) : ""}</div>
-      ) : null}
+    <>
       {report.message ? (
-        <ClampedText text={report.message} maxLines={5} className="text-[13.5px] whitespace-pre-wrap break-words mt-1" style={{ color: C.text }} />
-      ) : null}
-      {report.photos?.length ? <div className="mt-2 text-[11.5px] font-semibold" style={{ color: C.textSecondary }}>{report.photos.length} {report.photos.length === 1 ? "photo" : "photos"} from this visit</div> : null}
-      <PhotoGrid urls={report.photos} onPhotoClick={onPhotoClick} />
-    </div>
+        <ClampedText text={report.message} maxLines={4} className="mt-1.5 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words" style={{ color: C.text }} />
+      ) : <p className="m-0 mt-1.5 text-[13.5px]" style={{ color: C.textMuted }}>No notes, photos only.</p>}
+      <PhotoStrip urls={report.photos} onPhotoClick={onPhotoClick} />
+    </>
   );
 }
 
 function VisitCard({ ev, reports, onPhotoClick }) {
-  const badge = visitBadge(ev);
+  const [showNotes, setShowNotes] = useState(false);
+  const kind = eventKind(ev) === "service" ? "Service visit" : eventKind(ev) === "outlook" ? "Visit" : "Install visit";
   const crew = crewName(ev.created_by);
+  const time = ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ""}` : "All day";
+  const photos = reports.reduce((n, r) => n + (r.photos?.length || 0), 0);
+  const notes = scopeText(ev.scope_notes).replace(/\n{3,}/g, "\n\n").trim();
   return (
-    <div className="rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <div className="flex flex-wrap items-center gap-2">
-        <TypeLabel icon={Clock} color={C.textSecondary}>Appointment</TypeLabel>
-        <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textSecondary }}>
-          {ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ""}` : "All day"}
-        </span>
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span>
-      </div>
-      <div className="text-[14px] font-semibold break-words mt-1.5" style={{ color: C.text }}>{sanitizeText(ev.job_name)}</div>
+    <Entry icon={HardHat} tone="teal" title={kind} meta={joinMeta(time, crew, photoCount(photos))} badge={visitBadge(ev)}>
       {reports.length > 0 ? (
-        reports.map((r, i) => (
-          <div key={r.post_id || i} className="mt-2 pt-2" style={{ borderTop: i > 0 ? `1px solid ${C.rowBorder}` : "none" }}>
-            <TypeLabel icon={Camera} color={C.accentText}>Field report</TypeLabel>
-            <ReportBlock report={r} onPhotoClick={onPhotoClick} />
-          </div>
-        ))
-      ) : (
-        ev.scope_notes ? (
-          <ClampedText text={scopeText(ev.scope_notes).replace(/\n{3,}/g, "\n\n").trim()} maxLines={5} className="text-[13.5px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }} />
-        ) : null
-      )}
-      {crew ? <div className="text-[11px] mt-1.5" style={{ color: C.textMuted }}>Crew: {crew}</div> : null}
-    </div>
+        <>
+          {reports.map((r, i) => (
+            <div key={r.post_id || i} className={i ? "mt-3 border-t pt-3" : ""} style={{ borderColor: C.rowBorder }}>
+              <ReportBody report={r} onPhotoClick={onPhotoClick} />
+            </div>
+          ))}
+          {notes ? (
+            <div className="mt-2">
+              <button type="button" onClick={() => setShowNotes((v) => !v)} className="text-[12.5px] font-semibold hover:underline" style={{ color: "#0b3f3b" }}>{showNotes ? "Hide calendar notes" : "Calendar notes"}</button>
+              {showNotes ? <p className="m-0 mt-1 text-[13px] whitespace-pre-wrap break-words" style={{ color: C.textSecondary }}>{notes}</p> : null}
+            </div>
+          ) : null}
+        </>
+      ) : notes ? (
+        <ClampedText text={notes} maxLines={3} className="mt-1.5 text-[13.5px] whitespace-pre-wrap break-words" style={{ color: C.textSecondary }} />
+      ) : null}
+    </Entry>
   );
 }
 
 function ReportCard({ report, onPhotoClick }) {
   return (
-    <div className="rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <TypeLabel icon={Camera} color={C.accentText}>Field report</TypeLabel>
-      <ReportBlock report={report} onPhotoClick={onPhotoClick} />
-    </div>
+    <Entry icon={Camera} tone="teal" title="Field report" meta={joinMeta(crewName(report.author), photoCount(report.photos?.length))}>
+      <ReportBody report={report} onPhotoClick={onPhotoClick} />
+    </Entry>
   );
 }
 
@@ -152,24 +174,19 @@ function groupFiles(items) {
 
 function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
   const isFieldReport = isFieldReportNote(note);
-  const badges = [];
-  if (isFieldReport) {
-    badges.push(<TypeLabel key="t" icon={Camera} color={C.accentText}>Field report</TypeLabel>);
-  } else {
-    const kind = note.interaction_type || "note";
-    const color = kind === "issue" ? "#A43432" : C.textSecondary;
-    badges.push(<TypeLabel key="t" icon={NOTE_ICONS[kind] || StickyNote} color={color}>{interactionLabel(kind)}</TypeLabel>);
-  }
-  if (note.completion === "complete") {
-    badges.push(<TypeLabel key="c" icon={CheckCircle2} color="#166447">Complete</TypeLabel>);
-  } else if (note.completion === "incomplete") {
-    badges.push(<TypeLabel key="i" icon={AlertCircle} color="#A43432">Incomplete</TypeLabel>);
-  }
+  const kind = note.interaction_type || "note";
+  const badge = note.completion === "complete" ? { label: "Work complete", color: "#0b3f3b", bg: "#E2EEEB" }
+    : note.completion === "incomplete" ? { label: "Not finished", color: "#A43432", bg: "#FCEDEC" } : null;
   return (
-    <div className="rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <div className="flex items-center gap-2 flex-wrap">{badges}</div>
+    <Entry
+      icon={isFieldReport ? Camera : NOTE_ICONS[kind] || StickyNote}
+      tone={isFieldReport ? "teal" : kind === "issue" ? "red" : kind === "call" || kind === "text" || kind === "email" ? "blue" : "neutral"}
+      title={isFieldReport ? "Field report" : interactionLabel(kind)}
+      meta={joinMeta(crewName(note.author) || note.author, photoCount(note.attachments?.length))}
+      badge={badge}
+    >
       <JobNoteEntry note={note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} embedded />
-    </div>
+    </Entry>
   );
 }
 
@@ -224,8 +241,9 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         ) : null}
         {days.map(({ date, items }) => (
           <div key={date}>
-            <div className="sticky top-0 z-10 py-1 mb-2" style={{ backgroundColor: C.pageBg }}>
-              <span className="text-[12.5px] font-bold" style={{ color: C.textSecondary }}>{formatDateGroup(date)}</span>
+            <div className="mb-2 flex items-center gap-3">
+              <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: C.text }}>{formatDateGroup(date)}</span>
+              <span className="h-px flex-1" style={{ backgroundColor: C.rowBorder }} />
             </div>
             <div className="space-y-2">
               {groupFiles(items).map((it, i) => {
