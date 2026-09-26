@@ -31,7 +31,7 @@ export default function ContactsDirectory(){
   if(reviewOnly&&!c.review_note)return false;
   if(activeBuilder&&c.builder!==activeBuilder&&(!builderKey||c.builder_key!==builderKey))return false;
   if(jobId&&!c.job_ids.includes(jobId)&&(c.job_specific||!currentJob?.builder_key||c.builder_key!==currentJob.builder_key))return false;
-  return !search.trim()||[c.name,c.company,c.phone,c.phone_key,c.email,c.note].some(v=>v.toLowerCase().includes(search.trim().toLowerCase()));
+  return !search.trim()||[c.name,c.company,c.phone,c.phone_key,c.email,c.note,...(c.aliases||[]),...(c.phones||[]),...(c.emails||[])].some(v=>String(v||'').toLowerCase().includes(search.trim().toLowerCase()));
  });
  const relatedJobs=contact?jobs.filter(j=>(contact.job_ids.includes(j.id)||(!contact.job_specific&&j.builder_key&&j.builder_key===contact.builder_key))&&(!jobSearch||[j.name,j.address,...j.po_numbers,...j.oe_numbers].some(v=>v.toLowerCase().includes(jobSearch.toLowerCase())))):[];
  const saveLink=async(job,remove=false)=>{if(!remove&&!linkRole){setError('Choose a role for this contact.');return;}setBusy(true);try{await call({action:'link',contact_key:contact.key,job_id:job,remove,...(!remove ? {role:linkRole} : {})});setLinkJob('');setLinkRole('');await load();}catch(e){setError(e.response?.data?.error||'Job link could not be saved.')}finally{setBusy(false)}};
