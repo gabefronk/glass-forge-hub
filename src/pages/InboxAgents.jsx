@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { base44 } from "@/api/base44Client";
 import { PageShell, PageHero, HeroBar, heroBtn, heroPrimary, heroSecondary } from "@/components/PageShell";
 import { C } from "@/lib/feeUI";
-import { CATEGORY_KEYS, STATUS_CHIPS, canViewInboxAgents, categoryLabel, chipCounts, errorText, filterEntries, mailboxName, sortEntries, syncSummary } from "@/lib/inboxAgents";
+import { CATEGORY_KEYS, STATUS_CHIPS, canViewInboxAgents, categoryLabel, chipCounts, errorText, filterEntries, mailboxName, mergeMailboxes, sortEntries, syncSummary } from "@/lib/inboxAgents";
 import { inboxCall, btnBase, btnPrimary } from "@/components/inbox/inboxApi";
 import MailboxChips from "@/components/inbox/MailboxChips";
 import RelayRow from "@/components/inbox/RelayRow";
