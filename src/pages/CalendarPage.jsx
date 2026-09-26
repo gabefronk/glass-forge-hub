@@ -239,7 +239,7 @@ export default function CalendarPage() {
   const heroGhost = { backgroundColor: "rgba(255,255,255,.09)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.12)" };
 
   return (
-    <PageShell className="!mx-0">
+    <PageShell width="max-w-none">
       <div>
         {/* Header: title, period nav, view switch, primary action */}
         <div className="mb-4 rounded-[14px] px-6 py-5 max-[699px]:px-4" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
