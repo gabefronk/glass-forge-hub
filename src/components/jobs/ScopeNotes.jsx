@@ -20,7 +20,7 @@ export default function ScopeNotes({ parsed, limit = 0, size = "md" }) {
       {tags.length ? (
         <div className="flex flex-wrap gap-1.5">
           {tags.map((t) => (
-            <span key={t} className="rounded-[6px] px-2 py-0.5 text-[11.5px] font-semibold tracking-[.02em]" style={{ backgroundColor: "#f6efe0", color: "#6f4e10", border: "1px solid #e8d9b5" }}>{sanitizeText(t)}</span>
+            <span key={t} className="rounded-[6px] px-2 py-0.5 text-[11.5px] font-semibold tracking-[.02em]" style={{ backgroundColor: "#f6efe0", color: "#6f4e10", border: "1px solid #e8d9b5" }}>{t.split(" · ").map((x) => sanitizeText(x)).join(" · ")}</span>
           ))}
         </div>
       ) : null}

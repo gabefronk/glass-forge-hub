@@ -123,7 +123,7 @@ function VisitCard({ ev, reports, onPhotoClick }) {
           ) : null}
         </>
       ) : notes && !scopeIsEmpty(parsed) ? (
-        <div className="mt-2"><ScopeNotes parsed={parsed} size="sm" limit={4} /></div>
+        <div className="mt-2"><ScopeNotes parsed={parsed} size="sm" limit={2} /></div>
       ) : null}
     </Entry>
   );

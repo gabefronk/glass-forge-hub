@@ -9753,7 +9753,7 @@
     const shownItems = cut ? items.slice(0, Math.max(0, limit - shownNotes.length)) : items;
     const text = size === "sm" ? "text-[14px] leading-[21px]" : "text-[14.5px] leading-[22px]";
     return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "flex flex-col gap-2.5", children: [
-      tags.length ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "flex flex-wrap gap-1.5", children: tags.map((t) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "rounded-[6px] px-2 py-0.5 text-[11.5px] font-semibold tracking-[.02em]", style: { backgroundColor: "#f6efe0", color: "#6f4e10", border: "1px solid #e8d9b5" }, children: sanitizeText(t) }, t)) }) : null,
+      tags.length ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "flex flex-wrap gap-1.5", children: tags.map((t) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "rounded-[6px] px-2 py-0.5 text-[11.5px] font-semibold tracking-[.02em]", style: { backgroundColor: "#f6efe0", color: "#6f4e10", border: "1px solid #e8d9b5" }, children: t.split(" \xB7 ").map((x) => sanitizeText(x)).join(" \xB7 ") }, t)) }) : null,
       shownNotes.length ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "flex flex-col gap-1", children: shownNotes.map((n, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: `m-0 ${text} break-words`, style: { color: INK }, children: sanitizeText(n) }, i)) }) : null,
       shownItems.length ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("ul", { className: "m-0 flex list-none flex-col overflow-hidden rounded-[10px] p-0", style: { border: "1px solid #eee9e0" }, children: shownItems.map((it, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("li", { className: `flex items-center gap-3 px-3 py-2 ${i ? "border-t" : ""}`, style: { borderColor: "#eee9e0", backgroundColor: i % 2 ? "#fcfbf8" : "#fff" }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "flex h-6 min-w-[34px] shrink-0 items-center justify-center rounded-[6px] font-mono text-[12.5px] font-semibold", style: { backgroundColor: "#e2eeeb", color: "#082f2c" }, children: [
@@ -13471,7 +13471,7 @@
         /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", onClick: () => setShowNotes((v) => !v), className: "text-[12.5px] font-semibold hover:underline", style: { color: "#0b3f3b" }, children: showNotes ? "Hide calendar notes" : "Calendar notes" }),
         showNotes ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mt-2", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ScopeNotes, { parsed, size: "sm" }) }) : null
       ] }) : null
-    ] }) : notes && !scopeIsEmpty(parsed) ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mt-2", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ScopeNotes, { parsed, size: "sm", limit: 4 }) }) : null });
+    ] }) : notes && !scopeIsEmpty(parsed) ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mt-2", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ScopeNotes, { parsed, size: "sm", limit: 2 }) }) : null });
   }
   function ReportCard({ report, onPhotoClick }) {
     return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Entry, { icon: Camera, tone: "teal", title: "Field report", meta: joinMeta(crewName(report.author), photoCount(report.photos?.length)), children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ReportBody, { report, onPhotoClick }) });
