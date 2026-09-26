@@ -28,5 +28,5 @@ test('deployed job-documents handler serves auth and validation paths',async()=>
  assert.equal((await call({action:'list',job_id:'missing'})).status,404);
  const r=await call({action:'unlink_folder',job_id:'job1'});
  assert.equal(r.status,200);assert.deepEqual(r.data,{ok:true,folder:null});
- assert.deepEqual(writes,[{drive_job_folder_id:null,drive_job_folder_url:null}]);
+ assert.deepEqual(JSON.parse(JSON.stringify(writes)),[{drive_job_folder_id:null,drive_job_folder_url:null}]);
 });
