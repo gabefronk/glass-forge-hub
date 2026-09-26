@@ -1,4 +1,5 @@
 // Generated from tested shared queue modules. Owner-review drafts only.
+// Rebuild with: node scripts/build-research-queue-entry.mjs (do not edit by hand).
 // base44/shared/researchQueueEntry.ts
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.48";
 
@@ -159,6 +160,8 @@ function ownerTransition(original, input, now) {
 // base44/shared/researchQueueHandler.mjs
 var owners = /* @__PURE__ */ new Set(["gabefronk@gmail.com", "gabriel.fronk.wd@gmail.com"]);
 var isOwner = (u) => u?.role === "admin" && owners.has(String(u.email || "").toLowerCase().trim());
+var canMove = (u) => u?.role === "admin" || u?.role === "manager";
+var FAST = /* @__PURE__ */ new Set(["quick_search", "move_visit"]);
 var reply = (body, status = 200) => Response.json({ protocol_version: QUEUE_VERSION, ...body }, { status, headers: { "Cache-Control": "private, no-store", "Vary": "Authorization, x-glass-forge-research-key" } });
 var same = (a, b) => {
   if (typeof a !== "string" || typeof b !== "string" || a.length !== 64 || b.length !== 64) return false;
@@ -166,22 +169,47 @@ var same = (a, b) => {
   for (let i = 0; i < 64; i++) difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return difference === 0;
 };
-function createResearchQueueHandler({ getClient, makePacket: makePacket2, now = () => (/* @__PURE__ */ new Date()).toISOString(), uuid = () => crypto.randomUUID() }) {
+async function readInput(req) {
+  const raw = await req.text();
+  if (new TextEncoder().encode(raw).length > 32e3) return null;
+  const input = JSON.parse(raw);
+  return input && !Array.isArray(input) && typeof input.action === "string" ? input : null;
+}
+function createResearchQueueHandler({ getClient, makePacket: makePacket2, quickSearch: quickSearch2 = null, moveVisit: moveVisit2 = null, now = () => (/* @__PURE__ */ new Date()).toISOString(), uuid = () => crypto.randomUUID() }) {
+  async function fastPath(client, user, input) {
+    if (!user) return reply({ error: "Sign in required." }, 401);
+    if (input.action === "quick_search") {
+      if (!quickSearch2) return reply({ error: "Quick search is unavailable." }, 503);
+      return reply(await quickSearch2({ client, user, input, now: now() }));
+    }
+    if (!canMove(user)) return reply({ error: "Admin or manager access required to move visits." }, 403);
+    if (!moveVisit2) return reply({ error: "Moving visits is unavailable." }, 503);
+    const out = await moveVisit2({ client, user, input });
+    return reply(out.body, out.status || 200);
+  }
   return async (req) => {
     if (req.method !== "POST") return reply({ error: "Use POST." }, 405);
     try {
       const client = await getClient(req), db = client.asServiceRole.entities, key2 = req.headers.get("x-glass-forge-research-key");
-      let device = null;
+      let device = null, user = null;
       if (key2 !== null) {
         if (key2.length < 40 || key2.length > 200) return reply({ error: "Research worker authorization required." }, 401);
         const devices = await db.ResearchWorkerDevice.filter({ worker_id: WORKER_ID, scope: WORKER_SCOPE, enabled: true }, "id", 2);
         if (devices.length !== 1 || !same(devices[0].token_hash, await digest(key2))) return reply({ error: "Research worker authorization required." }, 401);
         device = devices[0];
-      } else if (!isOwner(await client.auth.me().catch(() => null))) return reply({ error: "Owner access required." }, 403);
+      } else {
+        user = await client.auth.me().catch(() => null);
+        if (!isOwner(user)) {
+          const input2 = await readInput(req).catch(() => null);
+          if (!input2 || !FAST.has(input2.action)) return reply({ error: "Owner access required." }, 403);
+          return await fastPath(client, user, input2);
+        }
+      }
       const raw = await req.text();
       if (new TextEncoder().encode(raw).length > 32e3) return reply({ error: "Request exceeds 32000 bytes." }, 413);
       const input = JSON.parse(raw);
       if (!input || Array.isArray(input) || typeof input.action !== "string") return reply({ error: "Invalid request." }, 400);
+      if (!device && FAST.has(input.action)) return await fastPath(client, user, input);
       const allowed = device ? ["claim", "heartbeat", "complete", "fail"] : ["status", "enqueue", "enqueue_canary", "cancel", "set_paused"];
       if (!allowed.includes(input.action)) return reply({ error: "Action is unavailable for this caller." }, 403);
       const rows = await db.ResearchQueueState.filter({ name: QUEUE_NAME }, "id", 2);
@@ -189,14 +217,25 @@ function createResearchQueueHandler({ getClient, makePacket: makePacket2, now = 
       const row = rows[0], state = checkState(row.state), at2 = now();
       if (!Number.isSafeInteger(row.state_version) || row.state_version < 0) fail(503, "Queue revision requires review.");
       if (input.action === "status") return reply({ ok: true, paused: state.paused, worker_id: WORKER_ID, last_worker_seen_at: state.last_worker_seen_at, active_task_id: state.active_task_id, capacity: 20, retained_tasks: state.tasks.length, tasks: state.tasks.filter((t) => !input.job_id || t.packet.identity.job_id === input.job_id || t.packet.task_type === "synthetic_canary").map(taskSummary), automatic_send_allowed: false });
-      let change;
+      let change, packet = null;
       if (device) change = await workerTransition(state, input, at2, uuid);
-      else if (input.action === "enqueue" || input.action === "enqueue_canary") change = await enqueueState(state, await makePacket2({ client, input, now: at2 }), at2, uuid);
-      else change = ownerTransition(state, input, at2);
+      else if (input.action === "enqueue" || input.action === "enqueue_canary") {
+        packet = await makePacket2({ client, input, now: at2 });
+        change = await enqueueState(state, packet, at2, uuid);
+      } else change = ownerTransition(state, input, at2);
       if (change.changed) {
         if (new TextEncoder().encode(JSON.stringify(change.state)).length > 85e4) fail(409, "Retained queue data exceeds pilot capacity.");
         const written = await db.ResearchQueueState.updateMany({ id: row.id, state_version: row.state_version }, { $set: { state: change.state, state_version: row.state_version + 1 } });
         if (written.updated !== 1) fail(409, "Queue changed; retry the same request identity.");
+      }
+      if (input.action === "enqueue" && quickSearch2 && packet?.identity?.canonical_name) {
+        let quick_answer = null;
+        try {
+          quick_answer = await quickSearch2({ client, user, input: { action: "quick_search", query: packet.identity.canonical_name }, now: at2 });
+        } catch {
+          quick_answer = null;
+        }
+        return reply({ ...change.body, quick_answer });
       }
       return reply(change.body);
     } catch (error) {
@@ -399,8 +438,8 @@ function instant(v) {
 }
 function localDay(ms, zone) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(ms));
-  const field = (k) => parts.find((p) => p.type === k).value;
-  return `${field("year")}-${field("month")}-${field("day")}`;
+  const field2 = (k) => parts.find((p) => p.type === k).value;
+  return `${field2("year")}-${field2("month")}-${field2("day")}`;
 }
 function recent(timestamp, nowMs) {
   const ms = instant(timestamp);
@@ -798,6 +837,374 @@ function buildJobResearchPlan({ query = {}, lookup = {}, research = {}, now } = 
   return freeze({ ...result, status: provisional ? "provisional_lookup" : "research_needed", reason: provisional ? "no_exact_catalog_match_is_not_proof_of_absence" : "specific_current_evidence_required", manual_handoff: true });
 }
 
+// base44/shared/jobFinder.js
+var STOP = /* @__PURE__ */ new Set(["the", "and", "at", "for", "job", "jobs", "res", "residence", "lot", "homes", "home", "ya", "on", "of", "a", "to", "address", "site", "event", "visit"]);
+var norm4 = (v) => String(v ?? "").toLowerCase().normalize("NFKC").replace(/[^a-z0-9]+/g, " ").trim();
+var PREFIX = /^(?:(?:YA|W|Wes|MDS|AP|BB|HP|SP)\s*-\s*)?(?:(?:#[1-9]\s*)|(?:\([^)]*\)\s*)){0,3}/i;
+var jobKey = (v) => norm4(String(v ?? "").trim().replace(PREFIX, "")).split(" ").filter((t) => t && t !== "res" && t !== "residence").join(" ");
+var tokens = (v) => norm4(v).split(" ").filter((t) => t && !STOP.has(t));
+function denverDate(offsetDays = 0, now = /* @__PURE__ */ new Date()) {
+  const d = new Date(now.getTime() + offsetDays * 864e5);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+function resolveDate(v, now = /* @__PURE__ */ new Date()) {
+  const s = String(v || "").trim().toLowerCase();
+  if (!s) return "";
+  if (s === "today") return denverDate(0, now);
+  if (s === "tomorrow") return denverDate(1, now);
+  if (s === "yesterday") return denverDate(-1, now);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+}
+function matchScore(query, hay) {
+  const q = tokens(query);
+  if (!q.length) return 0;
+  const h = new Set(tokens(hay));
+  const hayText = " " + norm4(hay) + " ";
+  let hit = 0, weight = 0;
+  for (const t of q) {
+    const isNum = /\d/.test(t);
+    const w = isNum ? 2 : 1;
+    weight += w;
+    if (h.has(t)) hit += w;
+    else if (!isNum && t.length >= 4 && hayText.includes(" " + t)) hit += w * 0.7;
+  }
+  return weight ? hit / weight : 0;
+}
+var eventHay = (e) => [e.job_name, e.address, e.source_location, e.builder, e.po_number, e.oe_number].filter(Boolean).join(" ");
+var jobHay = (j) => [j.canonical_name, ...j.aliases || [], j.address, j.builder, j.customer_name, ...j.po_numbers || [], ...j.oe_numbers || []].filter(Boolean).join(" ");
+function safeEvent(e) {
+  return {
+    event_id: e.id,
+    date: e.event_date || null,
+    end_date: e.end_date || null,
+    start_time: e.start_time || null,
+    end_time: e.end_time || null,
+    title: (e.job_name || "").trim(),
+    address: e.address || e.source_location || null,
+    crew: e.crew || null,
+    job_id: e.job_id || null,
+    calendar: e.google_calendar_id || (e.source === "app" ? "hub" : null),
+    po_number: e.po_number || null,
+    oe_number: e.oe_number || null,
+    report_status: e.report_status || null,
+    movable: !!(e.google_event_id && !String(e.google_event_id).startsWith("gfjobs"))
+  };
+}
+var byDateTime = (a, b) => String(a.event_date || "").localeCompare(String(b.event_date || "")) || String(a.start_time || "").localeCompare(String(b.start_time || ""));
+var live = (e) => e.source_status !== "cancelled";
+function eventsForJob(job, events, includeCancelled = false) {
+  const names = new Set([job.canonical_name, ...job.aliases || []].map(jobKey).filter(Boolean));
+  return events.filter((e) => (includeCancelled || live(e)) && (e.job_id === job.id || !e.job_id && names.has(jobKey(e.job_name))));
+}
+var addressKey2 = (a) => {
+  const t = norm4(a).split(" ");
+  return /^\d/.test(t[0] || "") && t.length >= 3 ? t.slice(0, 3).join(" ") : "";
+};
+function findJobs({ query, limit = 5, today }, jobs, events) {
+  const q = String(query || "").trim();
+  if (!q) return { error: "query_required", detail: "Pass a job name, address, lot, PO or OE number." };
+  const scored = [];
+  for (const j of jobs) {
+    const s = matchScore(q, jobHay(j));
+    if (s >= 0.6) scored.push({ job: j, score: s });
+  }
+  const evHits = /* @__PURE__ */ new Map();
+  for (const e of events) {
+    if (!live(e)) continue;
+    const s = matchScore(q, eventHay(e));
+    if (s >= 0.6) {
+      const key2 = e.job_id || "name:" + jobKey(e.job_name);
+      const prev = evHits.get(key2);
+      if (!prev || s > prev.score) evHits.set(key2, { event: e, score: s });
+    }
+  }
+  const jobById = new Map(jobs.map((j) => [j.id, j]));
+  for (const [key2, { event, score }] of evHits) {
+    if (key2.startsWith("name:")) {
+      const j = jobs.find((x) => [x.canonical_name, ...x.aliases || []].some((n) => jobKey(n) === key2.slice(5)));
+      if (j && !scored.some((s) => s.job?.id === j.id)) scored.push({ job: j, score });
+      else if (j) continue;
+      else if (!j) scored.push({ job: null, event, score });
+    } else if (jobById.has(key2) && !scored.some((s) => s.job?.id === key2)) {
+      scored.push({ job: jobById.get(key2), score });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score);
+  const summaries = scored.slice(0, limit * 4).map(({ job, event, score }) => {
+    if (!job) {
+      const evs = events.filter((e) => !e.job_id && jobKey(e.job_name) === jobKey(event.job_name)).sort(byDateTime);
+      return summarize(null, evs, score, today, event);
+    }
+    return summarize(job, eventsForJob(job, events, true).sort(byDateTime), score, today);
+  });
+  const groups = /* @__PURE__ */ new Map();
+  for (const r of summaries) {
+    const key2 = addressKey2(r.address) || "name:" + jobKey(r.name).replace(/\b(reorder|add|change)\b/g, "").trim();
+    const g = groups.get(key2);
+    if (!g) {
+      groups.set(key2, { ...r, job_ids: r.job_id ? [r.job_id] : [], also_named: [] });
+      continue;
+    }
+    if (r.job_id && !g.job_ids.includes(r.job_id)) g.job_ids.push(r.job_id);
+    if (norm4(r.name) !== norm4(g.name) && !g.also_named.includes(r.name)) g.also_named.push(r.name);
+    const seen = new Set([...g.next_visits, ...g.recent_visits].map((v) => v.event_id));
+    g.next_visits = [...g.next_visits, ...r.next_visits.filter((v) => !seen.has(v.event_id))].sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(0, 5);
+    g.recent_visits = [...g.recent_visits, ...r.recent_visits.filter((v) => !seen.has(v.event_id))].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 3);
+    if (!g.job_id && r.job_id) {
+      g.job_id = r.job_id;
+      g.hub_url = r.hub_url;
+    }
+    if (!g.address && r.address) g.address = r.address;
+  }
+  const results = [...groups.values()].slice(0, limit);
+  return {
+    query: q,
+    results,
+    ambiguous: results.length > 1 && results[0].match_score - results[1].match_score < 0.15
+  };
+}
+function summarize(job, evs, score, today, fallbackEvent) {
+  const upcoming = evs.filter((e) => live(e) && (e.event_date || "") >= today);
+  const past = evs.filter((e) => live(e) && (e.event_date || "") < today).reverse();
+  const withAddr = [...evs].reverse().find((e) => e.address || e.source_location);
+  const address = job?.address || withAddr?.address || withAddr?.source_location || fallbackEvent?.address || null;
+  return {
+    job_id: job?.id || null,
+    name: job?.canonical_name || (fallbackEvent?.job_name || "").trim(),
+    builder: job?.builder || null,
+    address,
+    address_source: job?.address ? "job" : address ? "calendar_event" : null,
+    po_numbers: job?.po_numbers || [],
+    oe_numbers: job?.oe_numbers || [],
+    next_visits: upcoming.slice(0, 5).map(safeEvent),
+    recent_visits: past.slice(0, 3).map(safeEvent),
+    match_score: Math.round(score * 100) / 100,
+    hub_url: job?.id ? `/jobs/${job.id}` : null
+  };
+}
+function findEvents({ query, date, from, to, limit = 25, today }, events) {
+  const d = resolveDate(date);
+  const lo = d || resolveDate(from) || (query ? "" : today);
+  const hi = d || resolveDate(to) || (query ? "" : today);
+  const q = String(query || "").trim();
+  let rows = events.filter((e) => live(e) && (!lo || (e.event_date || "") >= lo) && (!hi || (e.event_date || "") <= hi));
+  if (q) rows = rows.map((e) => ({ e, s: matchScore(q, eventHay(e)) })).filter((x) => x.s >= 0.6).sort((a, b) => b.s - a.s || byDateTime(a.e, b.e)).map((x) => x.e);
+  else rows.sort(byDateTime);
+  if (q && !lo && !hi) {
+    const up = rows.filter((e) => (e.event_date || "") >= today).sort(byDateTime);
+    const past = rows.filter((e) => (e.event_date || "") < today).sort((a, b) => byDateTime(b, a));
+    rows = [...up, ...past];
+  }
+  return { query: q || null, from: lo || null, to: hi || null, count: rows.length, events: rows.slice(0, Math.min(100, limit)).map(safeEvent) };
+}
+
+// base44/shared/researchQuickSearch.js
+var WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+var SHORT_DAYS = { sun: 0, mon: 1, tue: 2, tues: 2, wed: 3, thu: 4, thur: 4, thurs: 4, fri: 5, sat: 6 };
+var FILLER = /* @__PURE__ */ new Set([
+  "what",
+  "whats",
+  "s",
+  "is",
+  "are",
+  "was",
+  "the",
+  "a",
+  "an",
+  "for",
+  "at",
+  "on",
+  "of",
+  "to",
+  "in",
+  "we",
+  "our",
+  "us",
+  "i",
+  "me",
+  "my",
+  "where",
+  "when",
+  "who",
+  "which",
+  "do",
+  "does",
+  "did",
+  "have",
+  "has",
+  "any",
+  "anything",
+  "there",
+  "going",
+  "back",
+  "up",
+  "get",
+  "give",
+  "show",
+  "find",
+  "tell",
+  "look",
+  "lookup",
+  "please",
+  "can",
+  "you",
+  "need",
+  "jobsite",
+  "address",
+  "addresses",
+  "site",
+  "job",
+  "location",
+  "schedule",
+  "scheduled",
+  "calendar",
+  "visit",
+  "visits",
+  "next",
+  "last",
+  "this",
+  "week",
+  "deck",
+  "today",
+  "tomorrow",
+  "yesterday",
+  "tonight",
+  "morning",
+  "afternoon",
+  "move",
+  "reschedule",
+  "push",
+  "install",
+  "installs",
+  "appointment",
+  "appointments",
+  "events",
+  "event",
+  "and",
+  "with",
+  "it",
+  "be",
+  ...WEEKDAYS,
+  ...Object.keys(SHORT_DAYS)
+]);
+var SCHEDULE_HINT = /\b(today|tomorrow|yesterday|tonight|schedule[ds]?|calendar|on deck|this week|next week|visits?|when|appointments?|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i;
+var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+var TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+var ID_RE = /^[A-Za-z0-9_-]{1,120}$/;
+var bad = (message) => Object.assign(new Error(message), { status: 400 });
+var addDays = (d, n) => {
+  const t = /* @__PURE__ */ new Date(d + "T12:00:00Z");
+  t.setUTCDate(t.getUTCDate() + n);
+  return t.toISOString().slice(0, 10);
+};
+var weekday = (d) => (/* @__PURE__ */ new Date(d + "T12:00:00Z")).getUTCDay();
+function field(v, max, name) {
+  if (v === void 0 || v === null || v === "") return "";
+  if (typeof v !== "string" || v.length > max || /[\u0000-\u001f\u007f]/.test(v)) throw bad(`Invalid ${name}.`);
+  return v.trim();
+}
+function datesFromQuery(query, today) {
+  const q = " " + norm4(query) + " ";
+  if (/ today | tonight /.test(q)) return { date: today };
+  if (/ tomorrow /.test(q)) return { date: addDays(today, 1) };
+  if (/ yesterday /.test(q)) return { date: addDays(today, -1) };
+  if (/ this week /.test(q)) return { from: today, to: addDays(today, 6) };
+  if (/ next week /.test(q)) {
+    const mon = addDays(today, (8 - weekday(today)) % 7 || 7);
+    return { from: mon, to: addDays(mon, 6) };
+  }
+  for (const t of q.trim().split(" ")) {
+    const dow = WEEKDAYS.includes(t) ? WEEKDAYS.indexOf(t) : SHORT_DAYS[t];
+    if (dow !== void 0) return { date: addDays(today, (dow - weekday(today) + 7) % 7) };
+  }
+  return {};
+}
+var jobWords = (query) => norm4(query).split(" ").filter((t) => t && !FILLER.has(t)).join(" ");
+function when(v) {
+  return [v.date, v.start_time].filter(Boolean).join(" ");
+}
+function answerText(jobs, events, scope) {
+  const lines = [];
+  for (const j of jobs.slice(0, 3)) {
+    const next = j.next_visits[0];
+    lines.push(`${j.name}: ${j.address || "no address on file"}${next ? ` (next visit ${when(next)})` : ""}`);
+  }
+  if (events) {
+    const range = scope.from === scope.to ? scope.from ? `on ${scope.from}` : "" : `${scope.from || "\u2026"} to ${scope.to || "\u2026"}`;
+    lines.push(`${events.count} visit${events.count === 1 ? "" : "s"}${range ? " " + range : ""}` + (events.events.length ? ": " + events.events.slice(0, 6).map((e) => `${e.title}${e.start_time ? " " + e.start_time : ""}${scope.from === scope.to ? "" : " (" + e.date + ")"}`).join("; ") : "."));
+  }
+  return lines.join("\n") || "No matching job or visit.";
+}
+function runQuickSearch({ input = {}, jobs = [], events = [], now = (/* @__PURE__ */ new Date()).toISOString() }) {
+  const today = denverDate(0, new Date(now));
+  const query = field(input.query, 200, "query");
+  const given = { date: field(input.date, 20, "date"), from: field(input.from, 20, "from"), to: field(input.to, 20, "to") };
+  const words = jobWords(query);
+  const spoken = query ? datesFromQuery(query, today) : {};
+  const hasGiven = !!(given.date || given.from || given.to);
+  const scope = hasGiven ? given : spoken;
+  const scheduleAsk = hasGiven || !!(scope.date || scope.from) || SCHEDULE_HINT.test(query);
+  if (!words && !scheduleAsk) throw bad("Pass a query (job name, address, lot, PO or OE) or a date.");
+  const limit = Math.min(10, Math.max(1, Number(input.limit) || 5));
+  const jobResult = words ? findJobs({ query: words, limit, today }, jobs, events) : null;
+  const eventResult = scheduleAsk ? findEvents({ query: words || void 0, date: scope.date, from: scope.from, to: scope.to, limit: 25, today }, events) : null;
+  const found = jobResult?.results || [];
+  return {
+    ok: true,
+    kind: "quick_search",
+    query: query || null,
+    interpreted: { job_words: words || null, date: scope.date || null, from: scope.from || null, to: scope.to || null, today },
+    jobs: found,
+    ambiguous: !!jobResult?.ambiguous,
+    events: eventResult,
+    answer: answerText(found, eventResult, eventResult ? { from: eventResult.from, to: eventResult.to } : {}),
+    money_free: true
+  };
+}
+function makeFinderLoader({ ttl = 6e4, clock = () => Date.now() } = {}) {
+  let cache = { at: 0, jobs: null, events: null };
+  async function all(entity, sort) {
+    const out = [];
+    for (let skip = 0; skip < 5e4; skip += 1e3) {
+      const page = await entity.list(sort, 1e3, skip);
+      out.push(...page);
+      if (page.length < 1e3) return out;
+    }
+    throw new Error("pagination_limit");
+  }
+  const load = async (api, fresh2 = false) => {
+    if (!fresh2 && cache.jobs && clock() - cache.at < ttl) return cache;
+    const [jobs, events] = await Promise.all([all(api.Jobs, "-created_date"), all(api.CalendarEvents, "-event_date")]);
+    cache = { at: clock(), jobs, events };
+    return cache;
+  };
+  load.invalidate = () => {
+    cache = { at: 0, jobs: null, events: null };
+  };
+  return load;
+}
+var MOVE_STATUS = { bad_request: 400, forbidden: 403, Unauthorized: 401, not_found: 404, no_google_event: 409, all_day_event: 409, unsupported_event_shape: 409, google_read_failed: 502, google_write_failed: 502 };
+async function moveVisitThroughHub({ client, input = {} }) {
+  const id2 = field(input.event_id ?? input.id, 120, "event_id");
+  const newDate = field(input.new_date, 20, "new_date");
+  const newTime = field(input.new_start_time, 5, "new_start_time");
+  if (!ID_RE.test(id2) || !DATE_RE.test(newDate)) throw bad("event_id and new_date (YYYY-MM-DD) are required.");
+  if (newTime && !TIME_RE.test(newTime)) throw bad("new_start_time must be HH:MM (24h).");
+  let data;
+  try {
+    const r = await client.functions.invoke("moveCalendarEvent", { id: id2, new_date: newDate, ...newTime ? { new_start_time: newTime } : {} });
+    data = r && typeof r === "object" && "data" in r ? r.data : r;
+  } catch (e) {
+    const status = e?.response?.status || e?.status || 502;
+    const d = e?.response?.data || {};
+    return { status, body: { ok: false, error: d.error || "move_failed", detail: String(d.detail || e?.message || "Move failed.").slice(0, 300) } };
+  }
+  data = data || {};
+  if (data.error) return { status: MOVE_STATUS[data.error] || 409, body: { ok: false, error: data.error, detail: data.detail ? String(data.detail).slice(0, 300) : null } };
+  if (data.unchanged) return { status: 200, body: { ok: true, unchanged: true, event_id: id2 } };
+  return { status: 200, body: { ok: true, event_id: id2, visit: data.record ? safeEvent(data.record) : null, installer_warning: data.installer_warning || null } };
+}
+
 // base44/shared/researchQueueEntry.ts
 async function makePacket({ client, input, now }) {
   if (input.action === "enqueue_canary") return canaryPacket();
@@ -811,4 +1218,14 @@ async function makePacket({ client, input, now }) {
   const plan = buildJobResearchPlan({ query, lookup: { ...lookup, job_name: jobs.find((j) => j.id === identity.job_id)?.canonical_name }, research: input.research || {}, now });
   return makeResearchPacket(plan);
 }
-Deno.serve(createResearchQueueHandler({ getClient: async (req) => createClientFromRequest(req), makePacket }));
+var loadFinder = makeFinderLoader();
+async function quickSearch({ client, input, now }) {
+  const { jobs, events } = await loadFinder(client.asServiceRole.entities, input.fresh === true);
+  return runQuickSearch({ input, jobs, events, now });
+}
+async function moveVisit({ client, input }) {
+  const out = await moveVisitThroughHub({ client, input });
+  if (out.body?.ok) loadFinder.invalidate();
+  return out;
+}
+Deno.serve(createResearchQueueHandler({ getClient: async (req) => createClientFromRequest(req), makePacket, quickSearch, moveVisit }));
