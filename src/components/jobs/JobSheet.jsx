@@ -501,13 +501,11 @@ export const heroLinkStyle = HERO_SEC;
 // ---------- "The job" and "Scope" ----------
 
 export function JobFactsCard({ snap, folder }) {
-  const visit = snap.facts[0];
   const pos = snap.refs.filter((r) => r.startsWith("PO ")).map((r) => r.slice(3));
   const oes = snap.refs.filter((r) => r.startsWith("OE ")).map((r) => r.slice(3));
   const ref = (list) => (list.length ? <span className="font-mono text-[14px] font-medium" title={list.join(", ")}>{list[0]}{list.length > 1 ? <span style={{ color: MUTED }}> +{list.length - 1}</span> : null}</span> : <span style={{ color: MUTED, fontWeight: 500 }}>—</span>);
   // The next / last visit is already the headline of the hero's action bar, so it is not
   // repeated here; this card holds the reference facts that appear nowhere else.
-  void visit;
   const cells = [
     ["Crew", snap.facts[1].v],
     ["PO", ref(pos)],
