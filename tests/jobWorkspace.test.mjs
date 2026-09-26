@@ -49,3 +49,12 @@ test('a job worked from a field report shows that visit and its work, not "none 
   assert.deepEqual(s.work, ['Pulled the stationary panel', 'Reseated it in the cavity', 'Water tested, no leaks']);
   assert.equal(s.workFrom, 'from the Sep 23 report');
 });
+
+test('job names display with capital first letters, keeping existing capitals', async () => {
+  const { titleCase } = await import('../src/lib/displayName.js');
+  assert.equal(titleCase('patterson homes - 10 beck hillside estates'), 'Patterson Homes - 10 Beck Hillside Estates');
+  assert.equal(titleCase('AV24 - Aria-Belle - 1212 North Luna Circle - RETRO'), 'AV24 - Aria-Belle - 1212 North Luna Circle - RETRO');
+  assert.equal(titleCase('d r horton 165 viridian'), 'D R Horton 165 Viridian');
+  assert.equal(titleCase('911 - pulte home - 347 sunset flat'), '911 - Pulte Home - 347 Sunset Flat');
+  assert.equal(titleCase(''), '');
+});

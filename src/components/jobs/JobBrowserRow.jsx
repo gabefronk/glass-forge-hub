@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { titleCase } from "@/lib/displayName";
 import { C, formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { addDays } from "@/lib/jobsOverview";
@@ -97,7 +98,7 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
     <>
       <span className="mt-[7px] h-[9px] w-[9px] shrink-0 rounded-full" style={{ backgroundColor: selected ? "#e0c994" : stats?.thisWeek ? "#0b3f3b" : "#c9c2b5" }} aria-hidden="true" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15.5px] font-bold" style={{ letterSpacing: "-0.02em" }}>{sanitizeText(job.canonical_name)}</span>
+        <span className="block truncate text-[15.5px] font-bold" style={{ letterSpacing: "-0.02em" }}>{titleCase(sanitizeText(job.canonical_name))}</span>
         <span className="mt-0.5 block truncate text-[13px]" style={{ color: selected ? "#c9d0d1" : "#566063" }}>{sub}</span>
         {kindLine ? <span className="mt-0.5 block truncate text-[12.5px]" style={{ color: selected ? "#aeb5b7" : "#6b7477" }}>{kindLine}</span> : null}
       </span>

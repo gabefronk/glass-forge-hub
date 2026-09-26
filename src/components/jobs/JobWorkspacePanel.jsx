@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { titleCase } from "@/lib/displayName";
 import { Link } from "react-router-dom";
 import { Camera, ArrowUpRight, MapPin, Phone, Navigation, Plus, AlertTriangle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -25,15 +26,8 @@ const STEP_TONES = {
   bad: ["#fcedec", "#a43432"],
 };
 
-// Superintendent first, then project manager, from the read-only job contacts join.
-function pickLead(linked) {
-  return linked.find((c) => c.role === "superintendent") || linked.find((c) => c.role === "project_manager") || null;
-}
 const telHref = (c) => `tel:${c.phone_key || String(c.phone || "").replace(/[^\d+]/g, "")}`;
 
-function SectionTitle({ children, id }) {
-  return <h3 id={id} className="m-0 mb-2 text-[13px] font-bold" style={{ color: MUTED }}>{children}</h3>;
-}
 
 // Right side of the desktop Jobs workspace: what the installer or super needs
 // to act (next step, call, directions, facts, plans & photos), then the live
@@ -139,7 +133,6 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
   const contactView = jobContacts.view?.job?.id === jobId ? jobContacts.view : null;
   const linked = contactView?.linked || [];
-  const lead = pickLead(linked);
   const missingSuper = Boolean(contactView?.status?.missing_superintendent);
   const mapHref = job?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
 
@@ -174,7 +167,6 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
     setOpenFormKey((k) => k + 1);
     historyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-  const softBtn = "inline-flex items-center gap-2 h-11 px-4 rounded-[12px] text-[14px] font-semibold whitespace-nowrap";
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll">
@@ -182,7 +174,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
         {/* Who and where: two lines */}
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="m-0 text-[24px] font-extrabold leading-[1.15] break-words" style={{ color: INK, letterSpacing: "-0.03em" }}>{sanitizeText(job.canonical_name)}</h2>
+            <h2 className="m-0 text-[24px] font-extrabold leading-[1.15] break-words" style={{ color: INK, letterSpacing: "-0.03em" }}>{titleCase(sanitizeText(job.canonical_name))}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px]" style={{ color: MUTED }}>
               {[sanitizeText(job.builder || ""), snap.kind].filter(Boolean).map((t, i) => <span key={i}>{i ? "· " : ""}{t}</span>)}
               {job.address && (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { titleCase } from "@/lib/displayName";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Camera, Plus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -176,7 +177,7 @@ export default function JobDetail() {
           <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div className="min-w-0 flex-1">
               <div className="mono-label-sm mb-1 break-words">{sanitizeText(job.builder || "—")}</div>
-              <h1 className="break-words font-heading text-[28px] sm:text-[30px] font-semibold leading-tight" style={{ color: C.text, letterSpacing: "-0.03em" }}>{sanitizeText(job.canonical_name)}</h1>
+              <h1 className="break-words font-heading text-[28px] sm:text-[30px] font-semibold leading-tight" style={{ color: C.text, letterSpacing: "-0.03em" }}>{titleCase(sanitizeText(job.canonical_name))}</h1>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 {job.address && <span className="text-[12px] break-words" style={{ color: C.textMuted }}>{sanitizeText(job.address)}</span>}
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ backgroundColor: status.bg, color: status.text }}>
