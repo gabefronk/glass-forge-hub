@@ -78,6 +78,9 @@ function coveringLine(existingFees, row, ev, accept) {
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
+    // Scheduled workflows run with no end user (null); signed-in callers must be admin/manager.
+    const user = await base44.auth.me().catch(() => null);
+    if (user && !['admin', 'manager'].includes(user.role)) return Response.json({ error: 'forbidden' }, { status: 403 });
     const body = await req.json().catch(() => ({}));
 
     const startStr = body.start_date || null;
