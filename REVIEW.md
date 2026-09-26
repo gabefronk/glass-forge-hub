@@ -1170,3 +1170,17 @@ Job Setup sheet pick it up; and **Quote PDF** — the Job Budgets ingest with `j
 which links the budget to this job instead of guessing. New `jobBudgetIngest` actions
 `job_costs` and `set_labor`; pure helpers in `base44/shared/jobLaborEntry.js` (tested).
 Card lives after "The job" on both the full page and the split view.
+
+### Job handoff — Stage 2 to the PM (2026-09-26, later)
+
+Spec: docs/superpowers/specs/2026-09-26-job-handoff-design.md. `Jobs.stage` (quoted → sold →
+ordered → handed_off → scheduled → installed → closed) + `pm_member_key` + `handoff_id`; new
+`JobHandoffs` entity (checklist, dates, note, what submit created). Pure logic in
+`base44/shared/jobHandoff.js` (checklist evaluation from job facts, readiness, packet text,
+to-do / kickoff-event / note rows) with tests; `jobHandoff` function (get, save_draft, submit,
+update, set_stage; admin + manager). Job page: "Hand off" card (checklist with uploads, ETA,
+start date, PM picker, note, Submit) that becomes the Stage 2 banner; stage chip + picker in
+the hero. Submit: job → handed_off + pm; ONE to-do on the PM's Follow-ups lane (request_key
+handoff:<job_id>) due on the start date carrying the packet; ONE Hub-only kickoff
+CalendarEvents row (google_event_id gfjobs-handoff-<job_id>, never pushed to Google); one job
+note. Update after submit moves the to-do / event / packet with the new dates.
