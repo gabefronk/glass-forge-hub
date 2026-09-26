@@ -506,6 +506,23 @@ test('sync: when the budget runs out after triage, the un-relayed rows go back t
   assert.equal(h2.store.TodoTask.length, 1);
 });
 
+test('rerun: flags an entry pending; the next sync re-reads it and relays without duplicating the note or to-do', async () => {
+  const h = harness({ user: OWNER });
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  const before = thread(h, 't1');
+  assert.ok(before.note_id); assert.equal(h.store.TodoTask.length, 1);
+  assert.equal((await h.as(CREW).call({ action: 'rerun', id: before.id })).status, 403);
+  const r = await h.as(OWNER).call({ action: 'rerun', id: before.id });
+  assert.equal(r.status, 200);
+  assert.equal(thread(h, 't1').triage_pending, true);
+  const h2 = harness({ seed: { EmailRelay: h.store.EmailRelay, EmailMailbox: h.store.EmailMailbox, JobNotes: h.store.JobNotes, TodoTask: h.store.TodoTask }, gmail: { history: [] } });
+  const r2 = await h2.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.equal(r2.body.mailboxes[0].classified, 1);
+  assert.equal(thread(h2, 't1').triage_pending, false);
+  assert.equal(thread(h2, 't1').note_id, before.note_id);
+  assert.equal(h2.store.JobNotes.length, 1); assert.equal(h2.store.TodoTask.length, 1);
+});
+
 test('list / entry: owner-only mailbox is hidden from managers and non-owner admins; owner sees both; filters and q work; entries carry no mail text', async () => {
   const h = harness();
   await h.call({ action: 'sync' });
