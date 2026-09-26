@@ -12,7 +12,13 @@
     },
     "job_link_source": {
       "type": "string",
-      "enum": ["probuild_project", "po_oe", "name_exact", "owner"]
+      "enum": [
+        "probuild_project",
+        "po_oe",
+        "name_exact",
+        "owner",
+        "ingest_match"
+      ]
     },
     "job_linked_at": {
       "type": "string",
