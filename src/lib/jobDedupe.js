@@ -8,6 +8,9 @@
 //   * MERGE (one visible job): same customer AND same normalized street address
 //     (house number, street name, unit/lot), where the only allowed difference is
 //     a street type present on one record and missing on the other.
+//   * MERGE: same customer AND same normalized job name, when the records have
+//     at most one street address in their address fields (name-only records
+//     beside the one with the real address) and at most one window quote.
 //   * FLAG for review, never merge, when the evidence is weaker or conflicts:
 //     - same customer + address but different street types (Dr vs Ct), or
 //       different source window quotes;
@@ -77,6 +80,64 @@ export function groupJobs(jobs) {
     makeGroup(members, "Same customer and address");
   }
   for (const s of singles) makeGroup(s);
+
+  // 1b. Same customer + same job name, where the records agree on at most one
+  // street address from the address FIELD and at most one window quote. This is
+  // the common ProBuild / calendar case: a name-only record ("Pulte Homes - 338
+  // Sunset Flats", no builder or address) beside the record with the real street
+  // address. Groups already flagged for conflicting street types or quotes stay out.
+  {
+    const conflicted = new Set(flags.keys());
+    const parent = new Map(groups.map((g) => [g.id, g.id]));
+    const find = (id) => { while (parent.get(id) !== id) { parent.set(id, parent.get(parent.get(id))); id = parent.get(id); } return id; };
+    const facts = new Map(); // root id -> { addrs:Set, quotes:Set }
+    for (const g of groups) {
+      const addrs = new Set();
+      const quotes = new Set();
+      for (const m of g.members) {
+        const a = info.get(m.id).address;
+        if (a && a.source === "address") addrs.add(`${a.street}|${a.unit}`);
+        if (m.source_window_quote_id) quotes.add(m.source_window_quote_id);
+      }
+      facts.set(g.id, { addrs, quotes });
+    }
+    const byName = new Map();
+    for (const g of groups) {
+      if (conflicted.has(g.id)) continue;
+      const keys = new Set();
+      for (const m of g.members) {
+        const { customer, name } = info.get(m.id);
+        if (customer && name) keys.add(`${customer}|${name}`);
+      }
+      for (const k of keys) { if (!byName.has(k)) byName.set(k, []); byName.get(k).push(g.id); }
+    }
+    for (const ids of byName.values()) {
+      for (let i = 1; i < ids.length; i++) {
+        const a = find(ids[0]);
+        const b = find(ids[i]);
+        if (a === b) continue;
+        const fa = facts.get(a);
+        const fb = facts.get(b);
+        const addrs = new Set([...fa.addrs, ...fb.addrs]);
+        const quotes = new Set([...fa.quotes, ...fb.quotes]);
+        if (addrs.size > 1 || quotes.size > 1) continue; // real conflict: leave for review
+        parent.set(b, a);
+        facts.set(a, { addrs, quotes });
+      }
+    }
+    const byRoot = new Map();
+    for (const g of groups) { const r = find(g.id); if (!byRoot.has(r)) byRoot.set(r, []); byRoot.get(r).push(g); }
+    if ([...byRoot.values()].some((list) => list.length > 1)) {
+      const kept = [];
+      for (const list of byRoot.values()) {
+        if (list.length === 1) { kept.push(list[0]); continue; }
+        const members = [...list.flatMap((g) => g.members)].sort(byAge);
+        kept.push({ id: members[0].id, job: members[0], members, memberIds: members.map((m) => m.id), merged: true, mergeReason: "Same customer and job name; the records don't disagree on address", review: [] });
+      }
+      groups.length = 0;
+      groups.push(...kept);
+    }
+  }
 
   // 2. Review flags across groups that were NOT merged.
   const near = new Map();
