@@ -211,7 +211,7 @@ export default function JobsHub() {
         </label>
         <AddJobDialog jobs={jobs} onCreated={handleJobCreated} label="New job" triggerClassName="inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-[11px] bg-[#0b3f3b] px-3.5 text-[14px] font-semibold text-white" />
       </div>
-      <div role="group" aria-label="Show" className="grid grid-cols-4 gap-0.5 rounded-[12px] p-1" style={{ backgroundColor: "#e9e4d9" }}>
+      <div role="group" aria-label="Show" className="grid grid-cols-4 gap-0.5 rounded-[12px] p-1" style={{ backgroundColor: "rgba(10,29,31,.08)" }}>
         {segments.map((v) => {
           const on = segment === v.key;
           return (
@@ -269,7 +269,7 @@ export default function JobsHub() {
   );
 
   return (
-    <div style={{ backgroundColor: "#f4f1ea", minHeight: "100dvh" }} className="flex flex-col xl:h-[100dvh] xl:overflow-hidden">
+    <div style={{ backgroundColor: "#d9cbb0", minHeight: "100dvh" }} className="flex flex-col xl:h-[100dvh] xl:overflow-hidden">
       {/* Desktop: job list on the left, the selected job on the right */}
       <div className="hidden xl:flex flex-1 min-h-0">
         <section aria-label="Jobs" className="flex w-[404px] shrink-0 flex-col px-[18px] pt-[26px]">
@@ -285,7 +285,7 @@ export default function JobsHub() {
             {loadMore(40)}
           </div>
         </section>
-        <section aria-label="Job" className="mr-[18px] mt-[18px] flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden rounded-t-[20px] bg-white shadow-[0_1px_3px_rgba(16,22,23,.06)]">
+        <section aria-label="Job" className="mr-[18px] mt-[18px] flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden rounded-t-[20px]" style={{ backgroundColor: "#d9cbb0", boxShadow: "inset 0 0 0 1px rgba(10,29,31,.08)" }}>
           {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} onJobChanged={(next) => setJobs((current) => current.map((j) => (j.id === next.id ? { ...j, ...next } : j)))} /> : (
             <div className="flex h-full items-center justify-center text-[13px]" style={{ color: "#566063" }}>Pick a job on the left.</div>
           )}
