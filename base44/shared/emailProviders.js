@@ -127,6 +127,13 @@ export function createGmailClient({ accessToken, fetchImpl = globalThis.fetch, s
 
   async function getMessage(id) { return get(`/messages/${encodeURIComponent(id)}?format=full`); }
 
+  // Every message of one thread, full payloads, oldest first (Gmail returns them in order).
+  // The agent reads a thread from here whenever it needs text it did not keep.
+  async function getThreadMessages(threadId) {
+    const t = await get(`/threads/${encodeURIComponent(threadId)}?format=full`);
+    return (t.messages || []).filter((m) => m && m.id && !(m.labelIds || []).some((l) => SKIP_GMAIL_LABELS.has(l)));
+  }
+
   async function listLabels() { return (await get('/labels')).labels || []; }
 
   // name -> id for every requested label; creates the missing ones. `cache` is the mailbox.labels map.
@@ -156,7 +163,7 @@ export function createGmailClient({ accessToken, fetchImpl = globalThis.fetch, s
   const sendDraft = (draftId) => get('/drafts/send', { method: 'POST', body: JSON.stringify({ id: draftId }) });
   const deleteDraft = (draftId) => get(`/drafts/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
 
-  return { provider: 'gmail', profile, listNewMessages, getMessage, listLabels, ensureLabels, modifyThread, archiveThread, createDraft, sendDraft, deleteDraft, now };
+  return { provider: 'gmail', profile, listNewMessages, getMessage, getThreadMessages, listLabels, ensureLabels, modifyThread, archiveThread, createDraft, sendDraft, deleteDraft, now };
 }
 
 // ---- Microsoft Graph (Outlook) ------------------------------------------------------------------
@@ -203,6 +210,13 @@ export function createOutlookClient({ accessToken, fetchImpl = globalThis.fetch,
     return get(`/messages/${encodeURIComponent(id)}?${q}`, { headers: { Prefer: 'outlook.body-content-type="text"' } });
   }
 
+  // Every message of one conversation (any folder), oldest first, full bodies as text.
+  async function getThreadMessages(conversationId) {
+    const filter = `conversationId eq '${String(conversationId).replace(/'/g, "''")}'`;
+    const data = await get(`/messages?$filter=${encodeURIComponent(filter)}&$select=${GRAPH_MESSAGE_SELECT}&$top=50`, { headers: { Prefer: 'outlook.body-content-type="text"' } });
+    return (data.value || []).filter((m) => m && m.id && m.isDraft !== true).sort((a, b) => String(a.receivedDateTime || '').localeCompare(String(b.receivedDateTime || '')));
+  }
+
   async function listCategories() { return (await get('/outlook/masterCategories')).value || []; }
 
   // Outlook categories are applied by display name; the cache keeps the master-category ids.
@@ -233,7 +247,7 @@ export function createOutlookClient({ accessToken, fetchImpl = globalThis.fetch,
   const sendDraft = (draftId) => get(`/messages/${encodeURIComponent(draftId)}/send`, { method: 'POST', body: '{}' });
   const deleteDraft = (draftId) => get(`/messages/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
 
-  return { provider: 'outlook', me, listNewMessages, getMessage, listCategories, ensureLabels, setCategories, archiveMessage, createDraftReply, sendDraft, deleteDraft, now };
+  return { provider: 'outlook', me, listNewMessages, getMessage, getThreadMessages, listCategories, ensureLabels, setCategories, archiveMessage, createDraftReply, sendDraft, deleteDraft, now };
 }
 
 export function createProviderClient(provider, opts) {
