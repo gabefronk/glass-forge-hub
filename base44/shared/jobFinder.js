@@ -71,10 +71,13 @@ const live = (e) => e.source_status !== 'cancelled';
 
 // Events that belong to a job: linked by job_id, or (for unlinked events) same
 // normalized name as the job's name / aliases.
-export function eventsForJob(job, events) {
+// includeCancelled: cancelled visits still carry a valid jobsite address.
+export function eventsForJob(job, events, includeCancelled = false) {
   const names = new Set([job.canonical_name, ...(job.aliases || [])].map(jobKey).filter(Boolean));
-  return events.filter((e) => live(e) && (e.job_id === job.id || (!e.job_id && names.has(jobKey(e.job_name)))));
+  return events.filter((e) => (includeCancelled || live(e)) && (e.job_id === job.id || (!e.job_id && names.has(jobKey(e.job_name)))));
 }
+// "7577 S Oak Hallow Rd West Jordan" and "7577 s oak hallow rd, west jordan ut" -> same key.
+const addressKey = (a) => { const t = norm(a).split(' '); return /^\d/.test(t[0] || '') && t.length >= 3 ? t.slice(0, 3).join(' ') : ''; };
 
 export function findJobs({ query, limit = 5, today }, jobs, events) {
   const q = String(query || '').trim();
@@ -107,13 +110,29 @@ export function findJobs({ query, limit = 5, today }, jobs, events) {
     }
   }
   scored.sort((a, b) => b.score - a.score);
-  const results = scored.slice(0, limit).map(({ job, event, score }) => {
+  const summaries = scored.slice(0, limit * 4).map(({ job, event, score }) => {
     if (!job) {
-      const evs = events.filter((e) => live(e) && !e.job_id && jobKey(e.job_name) === jobKey(event.job_name)).sort(byDateTime);
+      const evs = events.filter((e) => !e.job_id && jobKey(e.job_name) === jobKey(event.job_name)).sort(byDateTime);
       return summarize(null, evs, score, today, event);
     }
-    return summarize(job, eventsForJob(job, events).sort(byDateTime), score, today);
+    return summarize(job, eventsForJob(job, events, true).sort(byDateTime), score, today);
   });
+  // Duplicate Job records / differently-titled visits at the same jobsite collapse into
+  // one result so the agent gets a single answer instead of three near-identical ones.
+  const groups = new Map();
+  for (const r of summaries) {
+    const key = addressKey(r.address) || 'name:' + jobKey(r.name).replace(/\b(reorder|add|change)\b/g, '').trim();
+    const g = groups.get(key);
+    if (!g) { groups.set(key, { ...r, job_ids: r.job_id ? [r.job_id] : [], also_named: [] }); continue; }
+    if (r.job_id && !g.job_ids.includes(r.job_id)) g.job_ids.push(r.job_id);
+    if (norm(r.name) !== norm(g.name) && !g.also_named.includes(r.name)) g.also_named.push(r.name);
+    const seen = new Set([...g.next_visits, ...g.recent_visits].map((v) => v.event_id));
+    g.next_visits = [...g.next_visits, ...r.next_visits.filter((v) => !seen.has(v.event_id))].sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(0, 5);
+    g.recent_visits = [...g.recent_visits, ...r.recent_visits.filter((v) => !seen.has(v.event_id))].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 3);
+    if (!g.job_id && r.job_id) { g.job_id = r.job_id; g.hub_url = r.hub_url; }
+    if (!g.address && r.address) g.address = r.address;
+  }
+  const results = [...groups.values()].slice(0, limit);
   return {
     query: q,
     results,
@@ -122,8 +141,8 @@ export function findJobs({ query, limit = 5, today }, jobs, events) {
 }
 
 function summarize(job, evs, score, today, fallbackEvent) {
-  const upcoming = evs.filter((e) => (e.event_date || '') >= today);
-  const past = evs.filter((e) => (e.event_date || '') < today).reverse();
+  const upcoming = evs.filter((e) => live(e) && (e.event_date || '') >= today);
+  const past = evs.filter((e) => live(e) && (e.event_date || '') < today).reverse();
   const withAddr = [...evs].reverse().find((e) => e.address || e.source_location);
   const address = job?.address || withAddr?.address || withAddr?.source_location || fallbackEvent?.address || null;
   return {
