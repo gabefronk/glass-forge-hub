@@ -257,6 +257,7 @@ export default async function(req) {
     const frToUpdate = [];
     let frSkippedExisting = 0;
     let frPhotosFilled = 0;
+    let frJobsLinked = 0;
     const photoUrlByPost = new Map();
     for (const { b, normName, m } of matched) {
       const post = b.post;
@@ -286,13 +287,19 @@ export default async function(req) {
       };
       if (exRep) {
         // Append-only (Gabriel 2026-09-15): never overwrite an existing field report.
-        // The only permitted repair is additive: fill missing photo_urls.
+        // Permitted additive repairs: fill missing photo_urls, and (owner-approved
+        // 2026-09-26) fill a missing job_id from a high-confidence match.
+        const patch = {};
         if (!(exRep.photo_urls || []).length && photoUrls.length) {
-          frToUpdate.push({ id: exRep.id, photo_urls: photoUrls });
+          patch.photo_urls = photoUrls;
           frPhotosFilled++;
-        } else {
-          frSkippedExisting++;
         }
+        if (!exRep.job_id && m.job_id && m.match_confidence === 'high') {
+          Object.assign(patch, { job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: new Date().toISOString() });
+          frJobsLinked++;
+        }
+        if (Object.keys(patch).length) frToUpdate.push({ id: exRep.id, ...patch });
+        else frSkippedExisting++;
       }
       else frToCreate.push(reportRow);
     }
