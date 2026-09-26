@@ -2,6 +2,9 @@
 // time, status counts, client-side filtering and the small pieces of thread state the
 // rows render. Kept here so they can be unit-tested (tests/emailInbox.test.mjs).
 
+// Who sees the Email tab: admins and managers (owner-only mailboxes are filtered server-side).
+export const canViewEmail = (user) => user?.role === "admin" || user?.role === "manager";
+
 export const OPEN_STATUSES = ["new", "needs_reply", "waiting"];
 
 export const STATUS_LABELS = { new: "New", needs_reply: "Needs reply", waiting: "Waiting", done: "Done", ignored: "Ignored" };
