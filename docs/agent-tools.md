@@ -63,7 +63,9 @@ reads gets one `EmailRelay` ledger row (what it concluded + what it changed) wit
 | key | address | provider / connector | visibility | notes |
 |---|---|---|---|---|
 | `gf-gmail` | gabriel.fronk.wd@gmail.com | Gmail (`gmail` connector, gmail.modify) | **owner** — only gabefronk@gmail.com / gabriel.fronk.wd@gmail.com see its entries | gabefronk@gmail.com is filter-forwarded into this box; each entry records the address the mail was really sent to as `account_hint` (X-Forwarded-For / Delivered-To / X-Original-To / To). |
-| `ya-outlook` | yawindowinstall@outlook.com | Outlook (`outlook` connector, Microsoft Graph Mail.ReadWrite) | managers — admin + manager | Inbox delta only. |
+| `ya-outlook` | yawindowinstall@outlook.com | Outlook (`outlook` connector, Microsoft Graph Mail.ReadWrite + User.Read + offline_access) | managers — admin + manager | Inbox delta only. The Hub/… categories are applied by name; colouring them needs MailboxSettings.ReadWrite, which the connector does not have, so add colours in Outlook by hand if wanted. |
+
+The schedule (`base44/workflows/Inbox Agents.jsonc`, every 15 min) and the page's **Run now** call `sync` once per mailbox so each gets the function's full time budget. If a run is cut off after triage, the un-relayed rows are re-flagged `triage_pending` and finished on the next run; **Re-run agent** on a row (action `rerun`) does the same by hand.
 
 What a run does, per enabled mailbox
 1. Pulls new mail since the stored cursor (Gmail `users.history`, Graph inbox delta; first run = last 3 days, capped at 200 messages) and reads it **in memory only**. A message dated at or before the ledger row's `last_message_at` was seen before (the Hub keeps that watermark, not message ids).
