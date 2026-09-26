@@ -277,6 +277,21 @@ export default async function jobBudgetIngest(req) {
     return Response.json({ status: 'ok', cost_input_id: row.id, month: v.month, ...margin, ...summarizeJobCosts({ costInput: row, budget: null }) });
   }
 
+  if (action === 'clear_labor') {
+    // Undo a quick entry: the two labor numbers come off the row; the row itself goes only
+    // when nothing else (product cost, overhead, route notes) was ever set on it.
+    const jobId = String(body.job_id || '').trim();
+    if (!jobId) return Response.json({ error: 'job_id is required' }, { status: 400 });
+    const month = /^\d{4}-\d{2}$/.test(String(body.month || '')) ? String(body.month) : null;
+    const rows = await db.JobCostInputs.filter(month ? { job_id: jobId, month } : { job_id: jobId }, '-month', 5).catch(() => []);
+    const row = (rows || []).find((c) => c.installation_revenue != null || c.actual_labor_cost != null) || null;
+    if (!row) return Response.json({ status: 'ok', cleared: false });
+    const bare = ['product_cost', 'product_sell', 'installation_material_cost', 'allocated_overhead', 'worker_count', 'quote_request_id', 'quote_number'].every((k) => row[k] == null || row[k] === '');
+    if (bare) await db.JobCostInputs.delete(row.id);
+    else await db.JobCostInputs.update(row.id, { installation_revenue: null, actual_labor_cost: null, notes: '' });
+    return Response.json({ status: 'ok', cleared: true, deleted: bare, cost_input_id: row.id });
+  }
+
   // --- VendorOrders: the unpaid-jobs tracker -------------------------------
 
   if (action === 'upsert_order') {
