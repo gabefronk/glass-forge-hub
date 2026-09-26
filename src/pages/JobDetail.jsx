@@ -233,7 +233,7 @@ export default function JobDetail() {
               {folderError && <p role="alert" className="mt-2 text-[13px] text-red-700">{folderError}</p>}
             </SheetCard>
           )}
-          <JobMoneyPanel jobId={id} />
+          <JobMoneyPanel jobId={id} memberIds={group?.memberIds} />
           <JobMessageThreads jobId={id} />
         </div>
       </div>
