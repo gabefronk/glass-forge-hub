@@ -12,15 +12,18 @@ export default function MailboxChips({ mailboxes, value, onChange }) {
       <button type="button" role="tab" aria-selected={value === "all"} className={chipBase} style={value === "all" ? on : off} onClick={() => onChange("all")}>All</button>
       {(mailboxes || []).map((m) => {
         const active = value === m.key;
-        const dot = m.connected ? "#3ddc97" : "var(--gf-amber-500)";
+        // `connected` is undefined until the owner-only connector check answers; only a
+        // definite false is "not connected".
+        const down = m.connected === false;
+        const dot = down ? "var(--gf-amber-500)" : m.connected ? "#3ddc97" : "#CEC6B8";
         const synced = m.last_synced_at ? `synced ${relativeTime(m.last_synced_at)}` : "never synced";
         return (
           <button key={m.key} type="button" role="tab" aria-selected={active} className={chipBase} style={active ? on : off} onClick={() => onChange(m.key)}
-            title={`${m.address || ""}${m.connected ? "" : " · not connected"}${m.last_error ? ` · ${m.last_error}` : ""}`}>
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dot, boxShadow: `0 0 0 3px ${m.connected ? "rgba(61,220,151,.18)" : "rgba(192,139,46,.22)"}` }} aria-hidden="true" />
+            title={`${m.address || ""}${down ? " · not connected" : ""}${m.last_error ? ` · ${m.last_error}` : ""}`}>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dot, boxShadow: `0 0 0 3px ${down ? "rgba(192,139,46,.22)" : m.connected ? "rgba(61,220,151,.18)" : "rgba(206,198,184,.25)"}` }} aria-hidden="true" />
             <span className="flex flex-col items-start leading-tight">
               <span>{mailboxName(m)}</span>
-              <span className="text-[10.5px] font-medium" style={{ color: active ? "rgba(29,22,10,.7)" : "var(--gf-sidebar-muted)" }}>{m.connected ? synced : "not connected"}</span>
+              <span className="text-[10.5px] font-medium" style={{ color: active ? "rgba(29,22,10,.7)" : "var(--gf-sidebar-muted)" }}>{down ? "not connected" : synced}</span>
             </span>
           </button>
         );
