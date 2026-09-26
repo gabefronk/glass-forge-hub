@@ -1,6 +1,7 @@
+import './support/register-src-alias.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pickSuper, superChoices } from '../src/lib/jobWorkspace.js';
+const { pickSuper, superChoices } = await import('../src/lib/jobWorkspace.js');
 
 const view = { job: { id: 'j1', builder: 'Durkin' }, linked: [], suggestions: [], builder_contacts: [
   { key: 'b', name: 'Barry', phone: '(435) 714-3045', role: 'project_manager', title: 'PM' },
