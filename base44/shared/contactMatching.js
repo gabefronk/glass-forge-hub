@@ -35,7 +35,6 @@ export function builderCatalog(labels){
  return {entries,find};
 }
 const orderKey = value => String(value||'').trim().replace(/-\d{2}$/, '');
-const starts = (text,key) => text===key||text.startsWith(key+' ');
 export const tokens = text => norm(text).split(' ').filter(t=>t&&!['lot','bldg','building','unit','res','residence'].includes(t));
 export function buildDirectory(data, rawJobs, manualLinks=[]) {
  // Contacts' labels decide the canonical builder name; workbook job rows only add builders.
