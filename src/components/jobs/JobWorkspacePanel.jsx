@@ -9,7 +9,6 @@ import { useJobContacts } from "@/hooks/use-job-contacts";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
 import { loadJobActivity, jobEventsAndEvidence, reportsForJob, loadUniqueLegacyNames } from "@/lib/jobGroupData";
-import { buildJobHistory, recentSitePhotos } from "@/lib/jobHistory";
 import { jobSnapshot } from "@/lib/jobWorkspace";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
@@ -137,10 +136,6 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
   const today = denverDate();
   const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
-  const sitePhotos = useMemo(
-    () => recentSitePhotos(buildJobHistory({ events: calEvents, rows, notes, fieldReports }), 6),
-    [calEvents, rows, notes, fieldReports]
-  );
   const contactView = jobContacts.view?.job?.id === jobId ? jobContacts.view : null;
   const linked = contactView?.linked || [];
   const lead = pickLead(linked);
@@ -163,7 +158,6 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
   const sortedContacts = [...linked].sort((a, b) => (ROLE_RANK.indexOf(a.role) + 99) % 99 - (ROLE_RANK.indexOf(b.role) + 99) % 99);
   const visitFact = snap.facts[0];
   const info = [
-    ["Address", job.address ? <a href={mapHref} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: TEAL }}>{sanitizeText(job.address)}</a> : "—"],
     ["Builder", sanitizeText(job.builder || "") || "—"],
     ...(job.customer_name ? [["Customer", sanitizeText(job.customer_name)]] : []),
     ["Type", snap.kind || "—"],
