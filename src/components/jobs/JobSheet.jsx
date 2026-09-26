@@ -4,11 +4,11 @@ import { base44 } from "@/api/base44Client";
 import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
-import { ROLE_LABELS, invokeErrorOf } from "@/lib/jobContacts";
+import { ROLE_LABELS } from "@/lib/jobContacts";
 import { pickSuper } from "@/lib/jobWorkspace";
 import { fileBadge, fileLabel } from "@/lib/jobHistory";
 import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs/JobEventDocuments";
-import { confirmContactLink } from "@/hooks/use-job-contacts";
+import { useJobSuper } from "@/hooks/use-job-super";
 
 // "Sand & brass" job sheet: a dark hero (name, address, super, next step,
 // actions, files) and white section cards with green-haze title bands.
@@ -47,35 +47,56 @@ export function LiveMark({ live }) {
 
 // ---------- Super card (lives in the hero) ----------
 
-// Save a super found in calendar notes: create the contact (owner-only), or
-// reuse the contact that already has this phone or email, then link it to the
-// job as superintendent. Nothing is written until the owner taps.
-async function saveSuper({ jobId, person }) {
-  let key = person.key;
-  if (!key) {
-    try {
-      const r = await base44.functions.invoke("contacts-directory", { action: "create_contact", contact: { name: person.name, phone: person.phone, email: person.email || undefined } });
-      if (r?.data?.error && !r.data.existing) throw new Error(r.data.error);
-      key = r?.data?.contact?.key || r?.data?.existing?.[0]?.key;
-    } catch (error) {
-      key = error?.response?.data?.existing?.[0]?.key;
-      if (!key) throw new Error(invokeErrorOf(error).message || error.message || "Contact could not be saved.");
-    }
-  }
-  if (!key) throw new Error("Contact could not be saved.");
-  await confirmContactLink({ jobId, contactKey: key, role: "superintendent" });
-}
+const FIELD = "h-[34px] w-full min-w-0 rounded-[8px] px-2.5 text-[13.5px] outline-none focus:ring-2";
+const FIELD_STYLE = { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.16)", "--tw-ring-color": "rgba(224,201,148,.5)" };
 
-function SuperBox({ jobId, jobContacts, events, canSave }) {
-  const view = jobContacts?.view?.job?.id === jobId ? jobContacts.view : null;
-  const person = useMemo(() => pickSuper({ view, events }), [view, events]);
+function SuperForm({ initial, onSave, onCancel }) {
+  const [f, setF] = useState({ name: initial?.name || "", phone: initial?.phone || "", email: initial?.email || "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => { setError(""); }, [jobId]);
+  const set = (k) => (e) => setF((v) => ({ ...v, [k]: e.target.value }));
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!f.name.trim() || (!f.phone.trim() && !f.email.trim())) { setError("Add a name and a phone or email."); return; }
+    setSaving(true); setError("");
+    try { await onSave({ name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim() }); }
+    catch (err) { setError(err.message || "Could not save."); setSaving(false); }
+  };
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-2">
+      <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>{initial?.name ? "CHANGE SUPER" : "ADD SUPER"}</div>
+      <input autoFocus aria-label="Super name" placeholder="Name" value={f.name} onChange={set("name")} className={FIELD} style={FIELD_STYLE} />
+      <input aria-label="Super phone" placeholder="Phone" inputMode="tel" value={f.phone} onChange={set("phone")} className={FIELD} style={FIELD_STYLE} />
+      <input aria-label="Super email" placeholder="Email (optional)" inputMode="email" value={f.email} onChange={set("email")} className={FIELD} style={FIELD_STYLE} />
+      {error ? <p role="alert" className="m-0 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
+      <div className="flex gap-2">
+        <button type="submit" disabled={saving} className="inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] text-[13.5px] font-semibold disabled:opacity-60" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{saving ? "Saving…" : "Save super"}</button>
+        <button type="button" onClick={onCancel} className="inline-flex h-[34px] items-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function SuperBox({ jobId, jobContacts, events }) {
+  const jobSuper = useJobSuper(jobId);
+  const view = jobContacts?.view?.job?.id === jobId ? jobContacts.view : null;
+  const person = useMemo(() => pickSuper({ saved: jobSuper.saved, view, events }), [jobSuper.saved, view, events]);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setError(""); setEditing(false); }, [jobId]);
 
   const shell = "w-[300px] max-w-full shrink-0 rounded-[12px] p-3.5 pb-3 max-[899px]:w-full";
   const shellStyle = { background: "linear-gradient(150deg,rgba(207,227,218,.16),rgba(207,227,218,.06))", border: "1px solid rgba(207,227,218,.22)" };
   const label = person?.role && person.role !== "superintendent" ? (ROLE_LABELS[person.role] || "Contact").toUpperCase() : "SUPER";
+  const save = async (contact) => {
+    await jobSuper.save(contact);
+    setEditing(false);
+    if (jobContacts?.phase && jobContacts.phase !== "private") jobContacts.reload();
+  };
+  const small = "inline-flex items-center gap-1.5 text-[12.5px] font-semibold hover:underline disabled:opacity-60";
+
+  if (editing) return <div className={shell} style={shellStyle}><SuperForm initial={person?.source === "linked" ? person : person ? { ...person } : null} onSave={save} onCancel={() => setEditing(false)} /></div>;
 
   if (!person) {
     return (
@@ -84,20 +105,20 @@ function SuperBox({ jobId, jobContacts, events, canSave }) {
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "rgba(207,227,218,.18)", color: "#cfe3da" }}><HardHat className="h-4 w-4" /></span>
           <div className="min-w-0">
             <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>SUPER</div>
-            <div className="text-[14.5px] font-semibold" style={{ color: HERO_MUTED }}>{jobContacts?.phase === "loading" ? "Looking…" : "Not on file yet"}</div>
+            <div className="text-[14.5px] font-semibold" style={{ color: HERO_MUTED }}>{jobSuper.loading && jobContacts?.phase === "loading" ? "Looking…" : "Not on file yet"}</div>
           </div>
         </div>
-        <p className="m-0 mt-2 text-[12px] leading-[17px]" style={{ color: "#9aa6a8" }}>Shows here once a super is linked or named in the calendar notes.</p>
+        <button type="button" onClick={() => setEditing(true)} className="mt-3 inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[9px] text-[13.5px] font-semibold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>
+          <UserPlus className="h-3.5 w-3.5" />Add super
+        </button>
       </div>
     );
   }
 
-  const save = async () => {
+  const confirm = async () => {
     setSaving(true); setError("");
-    try {
-      if (person.source === "suggestion") await jobContacts.confirmLink({ contactKey: person.key, role: "superintendent" });
-      else { await saveSuper({ jobId, person }); await jobContacts.reload(); }
-    } catch (e) { setError(e.message || "Could not save."); }
+    try { await save({ name: person.name, phone: person.phone, email: person.email }); }
+    catch (e) { setError(e.message || "Could not save."); }
     finally { setSaving(false); }
   };
 
@@ -127,12 +148,13 @@ function SuperBox({ jobId, jobContacts, events, canSave }) {
           <a href={`mailto:${person.email}`} className="inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>Email</a>
         ) : null}
       </div>
-      {person.email ? <a href={`mailto:${person.email}`} className="mt-2 block truncate text-[12px] hover:underline" style={{ color: "#9aa6a8" }}>{person.email}</a> : null}
-      {canSave && person.source !== "linked" ? (
-        <button type="button" disabled={saving} onClick={save} className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-semibold hover:underline disabled:opacity-60" style={{ color: BRASS_LT }}>
-          <UserPlus className="h-3.5 w-3.5" />{saving ? "Saving…" : "Save as super"}
-        </button>
-      ) : null}
+      <div className="mt-2 flex items-center gap-3">
+        {person.email ? <a href={`mailto:${person.email}`} className="min-w-0 flex-1 truncate text-[12px] hover:underline" style={{ color: "#9aa6a8" }}>{person.email}</a> : <span className="flex-1" />}
+        {person.source !== "linked"
+          ? <button type="button" disabled={saving} onClick={confirm} className={small} style={{ color: BRASS_LT }}><UserPlus className="h-3.5 w-3.5" />{saving ? "Saving…" : "Save as super"}</button>
+          : null}
+        <button type="button" onClick={() => setEditing(true)} className={small} style={{ color: "#9fc3b6" }}>{person.source === "linked" ? "Change" : "Edit"}</button>
+      </div>
       {error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
     </div>
   );
@@ -228,7 +250,7 @@ const HERO_BTN = "inline-flex h-[38px] items-center gap-[7px] rounded-[9px] px-3
 const HERO_SEC = { backgroundColor: "rgba(255,255,255,.09)", color: HERO_INK, border: "1px solid rgba(255,255,255,.12)" };
 const STEP_CHIP = { bad: ["#f1b9b3", "#4a0f0d"], warn: [BRASS_LT, "#1d160a"], teal: [BRASS_LT, "#1d160a"], neutral: ["rgba(224,201,148,.2)", BRASS_LT] };
 
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, canSaveSuper, onFieldReport, onLog, extra, headingLevel = "h1" }) {
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, extra, headingLevel = "h1" }) {
   const mapHref = job?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
   const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
   const eyebrow = [snap.kind, sanitizeText(job.builder || "")].filter(Boolean).join(" · ").toUpperCase();
@@ -254,7 +276,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
               </a>
             ) : null}
           </div>
-          <SuperBox jobId={job.id} jobContacts={jobContacts} events={events} canSave={canSaveSuper} />
+          <SuperBox jobId={job.id} jobContacts={jobContacts} events={events} />
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2.5 rounded-[12px] py-2.5 pl-4 pr-2.5" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>

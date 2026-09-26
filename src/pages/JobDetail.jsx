@@ -188,7 +188,6 @@ export default function JobDetail() {
             events={calEvents}
             folder={folder}
             plans={plans}
-            canSaveSuper={owner && canContacts}
             onFieldReport={() => setShowReport(true)}
             onLog={logInteraction}
             extra={owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}

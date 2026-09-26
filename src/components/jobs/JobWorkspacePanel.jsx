@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, HardHat } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { useAuth } from "@/lib/AuthContext";
-import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import { jobsStatus } from "@/lib/jobsSanitize";
 import { fetchAllPages } from "@/lib/pagination";
 import { useJobContacts } from "@/hooks/use-job-contacts";
@@ -36,7 +34,6 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
   const memberKey = [jobId, ...(group?.memberIds || []).filter((m) => m !== jobId)].join(",");
   const memberIds = memberKey.split(",");
   const jobContacts = useJobContacts(jobId);
-  const { user } = useAuth();
   const [currentUser, setCurrentUser] = useState("");
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
@@ -151,7 +148,6 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
           events={calEvents}
           folder={folder}
           plans={plans}
-          canSaveSuper={isPurchaseOrderOwner(user) && jobContacts.phase !== "private"}
           onFieldReport={() => setShowReport(true)}
           onLog={logInteraction}
           headingLevel="h2"
