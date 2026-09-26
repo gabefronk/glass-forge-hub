@@ -261,7 +261,7 @@ export function aggregateThread(messages, { mailbox, previous = null } = {}) {
   const toEmails = [...new Set(rows.flatMap((m) => m.to || []))];
   const hintRow = rows.find((m) => m.direction === 'incoming' && m.account_hint) || rows.find((m) => m.account_hint);
   const subject = (rows.find((m) => m.subject) || {}).subject || previous?.subject || '';
-  const webLink = mailbox?.provider === 'outlook' ? (last?.web_link || previous?.web_link || '') : (last?.web_link || previous?.web_link || '');
+  const webLink = last?.web_link || previous?.web_link || (mailbox?.provider === 'gmail' && (last?.thread_id || previous?.thread_id) ? `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(last?.thread_id || previous?.thread_id)}` : '');
   return {
     mailbox_key: mailbox?.key || previous?.mailbox_key || '',
     thread_id: last?.thread_id || previous?.thread_id || '',
@@ -275,7 +275,7 @@ export function aggregateThread(messages, { mailbox, previous = null } = {}) {
     last_message_at: last?.sent_at || previous?.last_message_at || null,
     message_count: rows.length,
     snippet: last ? snippetOf(last.snippet || last.text) : (previous?.snippet || ''),
-    has_attachments: rows.some((m) => m.has_attachments) || previous?.has_attachments === true,
+    has_attachments: rows.some((m) => m.has_attachments === true || (Array.isArray(m.attachments) && m.attachments.length > 0)) || previous?.has_attachments === true,
     provider_labels: [...new Set((last?.labels || previous?.provider_labels || []))].slice(0, 40),
     web_link: webLink,
   };
