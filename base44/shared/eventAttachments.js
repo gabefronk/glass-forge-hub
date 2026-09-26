@@ -1,6 +1,7 @@
 export const HUB_ATTACHMENT_FIELDS = [
   'drive_file_id', 'drive_url', 'rehosted_at',
   'hub_file_uri', 'hub_uploaded_at', 'hub_size', 'hub_sha256', 'hub_error',
+  'job_folder_file_id', 'job_folder_copied_at', 'job_folder_error',
 ];
 
 export function preserveAttachmentMetadata(incoming, existing = []) {
