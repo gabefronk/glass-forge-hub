@@ -135,7 +135,7 @@ const JOBS = [
 const EVENTS = [{ id: 'ev1', job_id: 'job1', event_date: nextYear(), start_time: '08:00', job_name: 'Oquirrh West 412', address: '412 Oquirrh West Dr Herriman', source_status: 'confirmed', google_event_id: 'g1' }];
 const MEMBERS = [{ id: 'mg', member_key: 'gabriel', display_name: 'Gabriel', auth_user_ids: ['ga', 'gw'], active: true, revision: 0, management_lock: '', seed_state: 'complete' }];
 
-function harness({ user = null, seed = {}, gmail = {}, graph = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES } = {}) {
+function harness({ user = null, seed = {}, gmail = {}, graph = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES, llmImpl = null } = {}) {
   resetJobCache();
   const { store, api, calls } = makeStore({ EmailMailbox: mailboxes, Jobs: JOBS, CalendarEvents: EVENTS, TeamMember: MEMBERS, ...seed });
   const gstate = { scan: [{ id: 'm1', threadId: 't1' }, { id: 'm3', threadId: 't3' }], messages: { m1: GMAIL_SCHEDULE, m3: GMAIL_PROMO }, labels: [{ id: 'Label_1', name: 'Hub' }], history: [], ...gmail };
@@ -147,7 +147,7 @@ function harness({ user = null, seed = {}, gmail = {}, graph = {}, connections =
     asServiceRole: {
       entities: api,
       connectors: { getConnection: async (type) => { if (!connections[type]) throw new Error(`connector ${type} not connected`); return connections[type]; } },
-      integrations: { Core: { InvokeLLM: makeLLM(llm) } },
+      integrations: { Core: { InvokeLLM: llmImpl ? (req) => { llm.push(req); return llmImpl(req); } : makeLLM(llm) } },
     },
   };
   let clock = '2026-09-26T17:00:00.000Z';
@@ -366,13 +366,29 @@ test('sync: missing gabriel TeamMember skips to-dos with a warning; LLM failure 
   assert.deepEqual(thread(h, 't1').todo_ids, []);
   assert.ok(thread(h, 't1').note_id, 'relay still happens');
 
-  const h2 = harness();
-  const boom = new Error('llm down');
-  h2.store; // keep reference
-  const origLLM = h2.llm;
-  // swap the LLM for a failing one by wrapping getClient's Core
-  const client = { auth: { me: async () => null }, asServiceRole: { entities: h2.store && Object.fromEntries(Object.keys(h2.store).map((n) => [n, null])) } };
-  void client; void origLLM; void boom;
+  const h2 = harness({ llmImpl: async () => { throw new Error('llm down'); } });
+  const r2 = await h2.call({ action: 'sync' });
+  const gf2 = r2.body.mailboxes.find((m) => m.mailbox_key === 'gf-gmail');
+  assert.equal(gf2.status, 'ok', 'a triage failure is a warning, not a failed run');
+  assert.equal(gf2.classified, 0);
+  assert.ok(gf2.errors.some((e) => /llm down/.test(e)));
+  assert.equal(thread(h2, 't1').triage_pending, true);
+  assert.equal(thread(h2, 't1').category, undefined);
+  assert.equal(h2.store.EmailMessage.length, 3, 'messages are stored before triage');
+  assert.equal(h2.store.EmailMailbox.find((m) => m.key === 'gf-gmail').last_history_id, '500', 'cursor still advances: the pending flag carries the work forward');
+  // next run: nothing new from the provider, but the pending threads get triaged
+  h2.gstate.history = [];
+  h2.ostate.deltaNext = [];
+  const good = makeLLM([]);
+  h2.llm.length = 0;
+  const h3 = harness({ seed: { EmailThread: h2.store.EmailThread, EmailMessage: h2.store.EmailMessage, EmailMailbox: h2.store.EmailMailbox }, gmail: { history: [] }, graph: { deltaNext: [] } });
+  void good;
+  const r3 = await h3.call({ action: 'sync' });
+  const gf3 = r3.body.mailboxes.find((m) => m.mailbox_key === 'gf-gmail');
+  assert.equal(gf3.fetched, 0);
+  assert.equal(gf3.classified, 2, 'leftover pending threads are picked up');
+  assert.equal(thread(h3, 't1').category, 'schedule');
+  assert.equal(thread(h3, 't1').triage_pending, false);
 });
 
 test('list / thread: owner-only mailbox is hidden from managers and non-owner admins; owner sees both; filters and q work', async () => {
