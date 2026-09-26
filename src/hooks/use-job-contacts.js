@@ -53,7 +53,19 @@ export function useJobContacts(jobId) {
     await load();
   }, [jobId, load]);
 
-  return { ...state, reload: load, confirmLink };
+  // A person named in the job's notes (e.g. a calendar "SPR:" line) who is not a contact yet:
+  // creates the contact (or reuses one with that phone / email) and links it in that role.
+  const addContact = useCallback(async ({ role, contact }) => {
+    await addJobRoleContact({ jobId, role, contact });
+    await load();
+  }, [jobId, load]);
+
+  return { ...state, reload: load, confirmLink, addContact };
+}
+
+export function addJobRoleContact({ jobId, role, contact }) {
+  const action = role === "homeowner" ? "set_job_homeowner" : "set_job_super";
+  return call({ action, job_id: jobId, contact: { name: contact.name, phone: contact.phone || "", email: contact.email || "" } });
 }
 
 // The single write path: the existing owner-only `link` action, marked as a confirmed suggestion.
