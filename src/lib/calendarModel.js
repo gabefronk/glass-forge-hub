@@ -8,10 +8,15 @@ export const KIND = {
   outlook: { label: "Outlook", text: "#34506A", bg: "#E7EDF2", border: "#C7D8EF", bar: "#34506A" },
 };
 
-// App-created events are installs; Google-sourced ones are service calls; Outlook stays separate.
+// Same wording rule Invoicing uses for fee lines (feeUI.workType): service,
+// warranty or "per report" in the title or scope means a service call. Everything
+// else on the install calendars is an install. Outlook stays separate.
+// (Before, every Google-synced event counted as service, so installs showed red.)
+const SERVICE_RE = /service|warranty|wty|warr|per report/i;
 export function eventKind(e) {
   if (e?.source === "outlook") return "outlook";
-  return e?.source === "app" ? "install" : "service";
+  const text = `${e?.job_name || ""} ${e?.scope_notes || ""}`;
+  return SERVICE_RE.test(text) ? "service" : "install";
 }
 
 const OPEN_REPORT = ["pending", "missing_photos", "missing_notes", "missing_all"];
