@@ -42,7 +42,7 @@ async function compiledUrl(url) {
 const entity=(rows=[])=>({rows:structuredClone(rows),list:async(_sort,limit=1000,skip=0)=>structuredClone(rows.slice(skip,skip+limit)),bulkUpdate:async function(patches){for(const p of patches)Object.assign(this.rows.find(x=>x.id===p.id),p);return patches;},bulkCreate:async function(patches){this.rows.push(...patches);return patches;}});
 test('forced month audit leaves verified ok event unchanged rather than clearing its linked post',async()=>{
   const ev=entity([ {id:'verified',...events[1]} ]), rp=entity(reports), au=entity(), settings=entity();
-  const client={asServiceRole:{entities:{CalendarEvents:ev,FieldReports:rp,ReportAudit:au,AppSettings:settings}}};
+  const client={auth:{me:async()=>null},asServiceRole:{entities:{CalendarEvents:ev,FieldReports:rp,ReportAudit:au,AppSettings:settings}}};
   let text=await readFile(new URL('../base44/functions/auditFieldReports/entry.ts',import.meta.url),'utf8');
   text=text.replace(/import \{ createClientFromRequest \} from [^;]+;/,'const createClientFromRequest=()=>globalThis.__auditGuardClient;');
   const url=new URL('../base44/functions/auditFieldReports/entry.ts',import.meta.url);
