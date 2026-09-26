@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEmailAgentHandler, resetJobCache, SEED_MAILBOXES } from '../base44/shared/emailAgent.js';
-import { gmailMessage, graphMessage, REPLY_TEXT } from './fixtures/emailFixtures.mjs';
+import { gmailMessage, graphMessage, REPLY_TEXT, AT } from './fixtures/emailFixtures.mjs';
 
 // ---- users ---------------------------------------------------------------------------------------
 const OWNER = { id: 'ga', email: 'gabefronk@gmail.com', role: 'admin', full_name: 'Gabriel' };
@@ -68,7 +68,7 @@ function makeFetch(routes) {
   return { fetchImpl, hits };
 }
 
-const GMAIL_PROMO = gmailMessage({ id: 'm3', threadId: 't3', from: 'Deals <promo@vendor.com>', to: 'gabriel.fronk.wd@gmail.com', subject: '50% off blinds this week', text: 'Buy now while supplies last.', forwarded: false, internalDate: '1758901000000' });
+const GMAIL_PROMO = gmailMessage({ id: 'm3', threadId: 't3', from: 'Deals <promo@vendor.com>', to: 'gabriel.fronk.wd@gmail.com', subject: '50% off blinds this week', text: 'Buy now while supplies last.', forwarded: false, internalDate: AT(13) });
 const GMAIL_SCHEDULE = gmailMessage({ text: REPLY_TEXT });
 const GRAPH_SERVICE = graphMessage({ bodyText: 'The bottom sash on the master bedroom window cracked. Can someone come look at it this week?\n\nMaria' });
 
@@ -77,7 +77,7 @@ function gmailRoutes(state) {
   return [
     { method: 'GET', match: '/gmail/v1/users/me/profile', data: { emailAddress: 'gabriel.fronk.wd@gmail.com', historyId: '500' } },
     { method: 'GET', match: '/gmail/v1/users/me/messages?', data: () => ({ messages: state.scan }) },
-    { method: 'GET', match: '/gmail/v1/users/me/history?', data: () => (state.historyError ? undefined : { history: state.history || [], historyId: state.historyId || '500' }), status: () => 200 },
+    { method: 'GET', match: '/gmail/v1/users/me/history?', data: () => ({ history: state.history || [], historyId: state.historyId || '500' }) },
     { method: 'GET', match: /\/gmail\/v1\/users\/me\/messages\/([^?]+)\?format=full/, data: ({ url }) => state.messages[decodeURIComponent(url.match(/messages\/([^?]+)\?/)[1])] },
     { method: 'GET', match: '/gmail/v1/users/me/labels', data: () => ({ labels: state.labels }) },
     { method: 'POST', match: '/gmail/v1/users/me/labels', data: ({ body }) => { const l = { id: `Label_${++labelSerial}`, name: body.name }; state.labels.push(l); return l; } },
@@ -174,7 +174,7 @@ test('auth: scheduled sync (no user) is allowed; role user gets 403 on sync and 
   assert.equal((await h.as(MANAGER).call({ action: 'sync' })).status, 403);
   assert.equal((await h.as(null).call({ action: 'list' })).status, 401);
   assert.equal((await h.call({ action: 'bogus' })).status, 400);
-  assert.equal((await h.call({ action: 'thread', id: 'nope' }, OWNER)).status, 404);
+  assert.equal((await h.as(OWNER).call({ action: 'thread', id: 'nope' })).status, 404);
 });
 
 test('sync: Gmail thread is stored, triaged, job-linked, relayed as a job note + one to-do, labelled and drafted (never sent, never archived)', async () => {
@@ -313,7 +313,7 @@ test('sync: second run is incremental (history / delta cursors) and creates noth
   assert.equal(h.store.EmailThread.length, before.threads);
   assert.equal(h.store.EmailAgentRun.length, 4);
   // A follow-up from Kyle on t1 arrives via history.
-  h.gstate.messages.m2 = gmailMessage({ id: 'm2', threadId: 't1', text: 'Bumping this - any word on the 6th?', internalDate: '1758950000000', messageIdHeader: '<def@ivoryhomes.com>' });
+  h.gstate.messages.m2 = gmailMessage({ id: 'm2', threadId: 't1', text: 'Bumping this - any word on the 6th?', internalDate: AT(14, 30), messageIdHeader: '<def@ivoryhomes.com>' });
   h.gstate.history = [{ id: '510', messagesAdded: [{ message: { id: 'm2', threadId: 't1', labelIds: ['INBOX', 'UNREAD'] } }, { message: { id: 'd1', threadId: 't1', labelIds: ['DRAFT'] } }] }];
   h.gstate.historyId = '510';
   h.setClock('2026-09-26T18:00:00.000Z');
@@ -330,7 +330,7 @@ test('sync: second run is incremental (history / delta cursors) and creates noth
   assert.equal(h.hits.filter((x) => x.url.endsWith('/drafts')).length, before.drafts, 'existing draft kept');
   assert.equal(h.store.EmailMailbox.find((m) => m.key === 'gf-gmail').last_history_id, '510');
   // Gabe replies (SENT): the thread goes to waiting without another LLM call.
-  h.gstate.messages.m4 = gmailMessage({ id: 'm4', threadId: 't1', from: 'Gabe Fronk <gabriel.fronk.wd@gmail.com>', to: 'kyle@ivoryhomes.com', labelIds: ['SENT'], text: 'Yes, the 6th is locked in.', forwarded: false, internalDate: '1758960000000' });
+  h.gstate.messages.m4 = gmailMessage({ id: 'm4', threadId: 't1', from: 'Gabe Fronk <gabriel.fronk.wd@gmail.com>', to: 'kyle@ivoryhomes.com', labelIds: ['SENT'], text: 'Yes, the 6th is locked in.', forwarded: false, internalDate: AT(14, 45) });
   h.gstate.history = [{ id: '520', messagesAdded: [{ message: { id: 'm4', threadId: 't1', labelIds: ['SENT'] } }] }];
   const llmBefore = h.llm.length;
   await h.call({ action: 'sync' });
