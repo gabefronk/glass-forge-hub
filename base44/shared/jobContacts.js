@@ -1,7 +1,7 @@
 // Read-only join of Jobs, ContactJobLink and the ContactDirectorySnapshot contacts for a job, plus
 // proposed links. Nothing here writes: a proposal becomes a ContactJobLink only when the owner
 // confirms it through the contacts-directory `link` action.
-import {norm,phoneKey,builderKey,tokens} from './contactMatching.js';
+import {norm,phoneKey,builderKey,tokens,contactPhoneKeys,contactEmailKeys,sharedBuilderCore,builderCore} from './contactMatching.js';
 
 export const LINK_ROLES=['superintendent','project_manager','homeowner','site','builder','customer'];
 const ROLE_RULES=[{role:'superintendent',re:/\b(super|supers|superintendent|superintendant|supt)\b/},{role:'project_manager',re:/\b(pm|project manager|construction manager|field manager|lead)\b/},{role:'homeowner',re:/\b(homeowner|home owner|owner|buyer|customer|resident)\b/}];
@@ -16,14 +16,29 @@ const sameBuilder=(a,b)=>Boolean(a&&b&&(a===b||a.startsWith(b+' ')||b.startsWith
 export const qualifierOf=c=>{const b=String(c?.builder||''),co=String(c?.company||'');return (b&&co.startsWith(b)?co.slice(b.length):co).replace(/^\s*[-–—:]\s*/,'').trim();};
 // The role comes from the workbook's company label ("Holmes Homes - Daybreak Super"), never from free-text notes.
 export function contactRole(c){const q=norm(qualifierOf(c));for(const {role,re} of ROLE_RULES)if(re.test(q))return role;return q?'site':'builder';}
-const publicContact=c=>({key:c.key,name:c.name,company:c.company||'',builder:c.builder||'',phone:c.phone||'',phone_key:c.phone_key||'',email:c.email||'',email_key:c.email_key||''});
+const publicContact=c=>({key:c.key,name:c.name,company:c.company||'',builder:c.builder_name||c.builder||'',phone:c.phone||'',phone_key:c.phone_key||'',email:c.email||'',email_key:c.email_key||''});
+const titleName=name=>String(name||'').trim().replace(/\s+/g,' ').split(' ').map(w=>w===w.toUpperCase()&&w.length>1?w[0]+w.slice(1).toLowerCase():w).join(' ');
+// "SPR: Amy 801-555-0100", "SPR:  COLTON 801-555-0100" or "SPR: Chris\n * Phone: 435-555-0100" in calendar
+// scope notes: the site superintendent. The phone must sit next to the label (within the
+// following line), so ISR / office numbers further down are never taken as the super's.
+export function sprContacts(text){
+ const out=[],seen=new Set(),src=String(text||'').replace(/<mailto:[^>]*>/gi,'');
+ const re=/\b(?:spr|supt|super(?:intendent)?)\s*[:\-]\s*([A-Za-z][A-Za-z'.-]*(?:[ \t]+[A-Za-z][A-Za-z'.-]*){0,2})?[ \t,:\-–]*(?:\r?\n[\s*•-]*(?:phone|cell|mobile)?\s*:?\s*)?(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/gi;
+ for(const m of src.matchAll(re)){
+  const name=titleName((m[1]||'').replace(/\b(phone|cell|mobile|email)\b.*$/i,'').trim());
+  const key=phoneKey(m[2]);if(!key||seen.has(key)||/^(tbd|none|n\/?a|isr)$/i.test(name))continue;seen.add(key);
+  const after=src.slice(m.index,m.index+m[0].length+160).match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+  out.push({name,phone:m[2].trim(),phone_key:key,email:after?after[0].toLowerCase():''});
+ }
+ return out;
+}
 // One adjacent swap ("Dvais" for "Davis") is the only fuzziness allowed; other variants must be listed.
 function transposed(a,b){if(a.length!==b.length||a.length<4)return false;const i=[...a].findIndex((ch,k)=>ch!==b[k]);return i>=0&&i<a.length-1&&a[i]===b[i+1]&&a[i+1]===b[i]&&a.slice(i+2)===b.slice(i+2);}
 export function nameMatchesSeed(name,seed){const variants=[seed.name,...(seed.name_variants||[])].map(norm).filter(Boolean);return words(name).some(w=>variants.some(v=>w===v||transposed(w,v)));}
 
 export function indexDirectory(directory,links=[]){
  const byJob=new Map(),byBuilder=new Map(),byPhone=new Map(),byEmail=new Map(),linkRole=new Map();
- for(const c of directory.contacts){for(const id of c.job_ids||[])push(byJob,id,c);push(byBuilder,c.builder_key||'',c);if(c.phone_key)push(byPhone,c.phone_key,c);if(c.email_key)push(byEmail,c.email_key,c);}
+ for(const c of directory.contacts){if(c.status==='merged')continue;for(const id of c.job_ids||[])push(byJob,id,c);if(sharedBuilderCore(c.builder_core??builderCore(c.builder)))push(byBuilder,c.builder_key||'',c);for(const k of contactPhoneKeys(c))push(byPhone,k,c);for(const k of contactEmailKeys(c))push(byEmail,k,c);}
  for(const l of links)if(l.role&&LINK_ROLES.includes(l.role))linkRole.set(l.contact_key+'|'+l.job_id,l.role);
  return {byJob,byBuilder,byPhone,byEmail,linkRole};
 }
@@ -92,6 +107,16 @@ export function jobContactsView({directory,job,rawJob=null,links=[],conversation
   const ca=contactAddress(c);
   if(ca&&facts.address&&addressKey(ca)===addressKey(facts.address))propose(c,{role:'homeowner',confidence:'medium',reason:`Directory address "${ca}" matches the job address.`,source:'address'});
  }
+ // Calendar "SPR:" lines name the site superintendent: a directory contact with that phone is
+ // a strong superintendent match; anyone else is offered as a new contact to add and link.
+ const sprByPhone=new Map();
+ for(const e of [...events].sort((a,b)=>String(b.event_date||'').localeCompare(String(a.event_date||''))))for(const s of sprContacts(e.scope_notes))if(!sprByPhone.has(s.phone_key))sprByPhone.set(s.phone_key,{...s,day:String(e.event_date||'').slice(0,10)});
+ for(const [key,s] of sprByPhone){
+  const known=(index.byPhone.get(key)||[]);
+  if(known.length){for(const c of known)propose(c,{role:'superintendent',confidence:'high',reason:`Calendar notes${s.day?' ('+s.day+')':''} list "SPR: ${s.name||c.name}" with this contact's phone.`,source:'calendar_spr'});continue;}
+  if(!s.name)continue;
+  open.push({id:'spr:'+key,spr:{name:s.name,phone:s.phone,email:s.email},role:'superintendent',confidence:'medium',reasons:[`Calendar notes${s.day?' ('+s.day+')':''} list "SPR: ${s.name} ${s.phone}". Not in contacts yet.`],sources:['calendar_spr'],candidates:[],needs:'add_contact'});
+ }
  const evidence=[
   {source:'job',label:'the job record',text:evidenceText(rawJob)},
   {source:'accepted_quote',label:'the accepted quote',text:evidenceText(rawJob?.accepted_quote_snapshot)},
@@ -102,7 +127,12 @@ export function jobContactsView({directory,job,rawJob=null,links=[],conversation
  for(const item of evidence){
   const phones=new Set(phoneKeys(item.text)),emails=new Set(emailKeys(item.text));
   if(!phones.size&&!emails.size)continue;
-  for(const c of directory.contacts)if((c.phone_key&&phones.has(c.phone_key))||(c.email_key&&emails.has(c.email_key)))propose(c,{role:'homeowner',confidence:'high',reason:`Phone or email matches this contact in ${item.label}.`,source:item.source});
+  for(const c of directory.contacts){
+   if(c.status==='merged'||!(contactPhoneKeys(c).some(k=>phones.has(k))||contactEmailKeys(c).some(k=>emails.has(k))))continue;
+   // Builder staff (super, PM, office) keep their own role; anyone else here is the customer side.
+   const own=contactRole(c),staffRole=c.builder&&own!=='site'&&own!=='homeowner'&&hasBuilder(facts,c.builder_key||'');
+   propose(c,{role:staffRole?own:'homeowner',confidence:'high',reason:`Phone or email matches this contact in ${item.label}.`,source:item.source});
+  }
  }
  for(const seed of seeds){
   const how=seedJobMatch(seed,facts);if(!how)continue;
@@ -141,10 +171,20 @@ export function jobContactsView({directory,job,rawJob=null,links=[],conversation
    if(qt.length&&qt.every(w=>facts.label_words.has(w)))propose(c,{role,confidence:'low',reason:`The workbook label "${c.company}" fits ${c.candidate_count} jobs, including this one.`,source:'directory'});
   }
  }
- const title=s=>s.contact?.name||s.seed?.name||s.participant?.phone||s.participant?.email||'';
+ const title=s=>s.contact?.name||s.seed?.name||s.spr?.name||s.participant?.phone||s.participant?.email||'';
  const suggestions=weakLimit([...proposals.values(),...open,...unknown.values()].sort((a,b)=>RANK[b.confidence]-RANK[a.confidence]||Number(b.role==='superintendent')-Number(a.role==='superintendent')||title(a).localeCompare(title(b))));
  const superintendents=linked.filter(c=>c.role==='superintendent').length;
- return {job:{id:job.id,name:facts.name,builder:facts.builder,address:facts.address},source:directory.source||null,directory:Boolean(directory.source),messages,linked,suggestions,seed_ids:seedIds,status:{linked:linked.length,superintendents,missing_contact:!linked.length,missing_superintendent:!superintendents,suggestions:suggestions.length}};
+ return {job:{id:job.id,name:facts.name,builder:facts.builder,address:facts.address},source:directory.source||null,directory:Boolean(directory.source),messages,linked,suggestions,builder_contacts:builderContactsFor(builderContacts,job.id,linkedByKey),seed_ids:seedIds,status:{linked:linked.length,superintendents,missing_contact:!linked.length,missing_superintendent:!superintendents,suggestions:suggestions.length}};
+}
+
+// The builder's own people (office, PM, supers, warranty) for a job: every contact filed under
+// the job's builder that is not tied to a different specific job. Shown next to the builder name.
+const BUILDER_ROLE_ORDER={superintendent:0,project_manager:1,builder:2,site:3,homeowner:4};
+export function builderContactsFor(list,jobId,linkedByKey=new Map(),limit=24){
+ const seen=new Set();
+ return list.filter(c=>{if(seen.has(c.key)||linkedByKey.has(c.key)||c.status==='merged')return false;seen.add(c.key);const role=contactRole(c);if(role==='homeowner')return false;return !c.job_specific||(c.job_ids||[]).includes(jobId);})
+  .map(c=>({...publicContact(c),role:contactRole(c),title:qualifierOf(c)}))
+  .sort((a,b)=>(BUILDER_ROLE_ORDER[a.role]??9)-(BUILDER_ROLE_ORDER[b.role]??9)||a.name.localeCompare(b.name)).slice(0,limit);
 }
 
 // Every Glass Forge job (workbook-only references excluded): link coverage, missing counts and proposals.
