@@ -91,3 +91,19 @@ test('the ledger page is admin-only', () => {
   assert.equal(canViewInboxAgents({ role: 'manager' }), false);
   assert.equal(canViewInboxAgents(null), false);
 });
+
+test('mergeMailboxes keeps the connector check when a list refresh lacks it', async () => {
+  const { mergeMailboxes } = await import('../src/lib/inboxAgents.js');
+  const prev = [{ key: 'gf-gmail', connected: true, last_synced_at: null }, { key: 'ya-outlook', connected: false }];
+  const fromList = [{ key: 'gf-gmail', last_synced_at: '2026-09-26T20:40:00Z', last_error: '' }, { key: 'extra' }];
+  const out = mergeMailboxes(prev, fromList);
+  const gm = out.find((m) => m.key === 'gf-gmail');
+  assert.equal(gm.connected, true);
+  assert.equal(gm.last_synced_at, '2026-09-26T20:40:00Z');
+  assert.equal(out.find((m) => m.key === 'ya-outlook').connected, false);
+  assert.ok(out.find((m) => m.key === 'extra'));
+  assert.deepEqual(mergeMailboxes(null, undefined), []);
+  // the check arriving after the list keeps the list's fresher fields
+  const later = mergeMailboxes(fromList, [{ key: 'gf-gmail', connected: true }]);
+  assert.equal(later[0].connected, true); assert.equal(later[0].last_synced_at, '2026-09-26T20:40:00Z');
+});
