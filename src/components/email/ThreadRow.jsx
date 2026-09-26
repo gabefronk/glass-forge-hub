@@ -27,7 +27,7 @@ export default function ThreadRow({ thread: t, provider, expanded, onToggle, onA
     if (!window.confirm(`Send the drafted reply to ${t.from_name || t.from_email || "this thread"}?\n\n"${(t.draft_preview || "").slice(0, 240)}${(t.draft_preview || "").length > 240 ? "…" : ""}"`)) return;
     act({ action: "send_draft", id: t.id }, { draft_status: "sent", status: "waiting" });
   };
-  const keyToggle = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } };
+  const keyToggle = (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onToggle(); } };
 
   return (
     <article ref={rowRef} className="card-shadow rounded-[14px] bg-white" style={{ border: `1px solid ${expanded ? "var(--gf-teal-500)" : C.border}` }} aria-label={t.subject || "Email thread"}>
