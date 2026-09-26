@@ -399,14 +399,14 @@ export default function Invoicing() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: "#F5F6F3" }}>
+      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.pageBg }}>
         <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: "#DDE0DA", borderTopColor: "#146556" }} />
       </div>
     );
   }
 
   return (
-    <div style={{ backgroundColor: "#F5F6F3", minHeight: "100vh" }}>
+    <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       <InvoiceHeader
         month={month}
         onMonthChange={setMonth}

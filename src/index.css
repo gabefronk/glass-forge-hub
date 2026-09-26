@@ -64,7 +64,7 @@
 
     /* Glass Forge — Deep Teal & Brass design system */
     --gf-body: #E4DFD4;
-    --gf-canvas: #F4F1EA;
+    --gf-canvas: #D9CBB0;
     --gf-card: #FFFFFF;
     --gf-card-band: #FAF8F3;
     --gf-field: #F4F1EA;
@@ -268,10 +268,15 @@
     background: radial-gradient(120% 90% at 20% 0%, rgba(20,101,86,.05) 0%, rgba(245,246,243,0) 62%);
   }
   .card-shadow {
-    box-shadow: 0 1px 2px rgba(24,36,34,.04), 0 4px 12px -8px rgba(24,36,34,.10);
+    box-shadow: 0 1px 2px rgba(10,29,31,.08), 0 6px 14px -6px rgba(10,29,31,.16), 0 22px 40px -22px rgba(10,29,31,.34);
   }
   .card-shadow-elevated {
-    box-shadow: 0 1px 2px rgba(24,36,34,.04), 0 8px 20px -12px rgba(24,36,34,.16);
+    box-shadow: 0 1px 2px rgba(10,29,31,.08), 0 10px 20px -8px rgba(10,29,31,.2), 0 28px 48px -22px rgba(10,29,31,.4);
+  }
+  /* Green-haze title band used on every section card (see PageShell). */
+  .sheet-band {
+    background: linear-gradient(90deg, #cfe3da 0%, #e1eee8 45%, #eef5f1 100%);
+    border-bottom: 1px solid #bfd6cb;
   }
   .obsidian-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
   .obsidian-scroll::-webkit-scrollbar-track { background: transparent; }

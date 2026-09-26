@@ -5,7 +5,8 @@ import { visitsMissingReport, hasUpcomingVisit } from "@/lib/jobReports";
 // ── Glass Forge Design Refresh palette ──────────────────────────────────
 // Warm off-white canvas, opaque white surfaces, graphite nav, teal primary.
 export const C = {
-  pageBg: "#F4F1EA",
+  pageBg: "#D9CBB0", // Sand & brass ground; cards sit white on it
+  sheetBg: "#D9CBB0",
   card: "#FFFFFF",
   cardAlt: "#FAF8F3",
   text: "#101617",
@@ -15,7 +16,7 @@ export const C = {
   accent: "#0B3F3B",
   accentDark: "#FFFFFF",
   accentText: "#082F2C",
-  border: "#E2DCD1",
+  border: "#D3CABB",
   borderStrong: "#E0DACF",
   rowBorder: "#EEE9E0",
   rowHover: "#F6F3EC",
