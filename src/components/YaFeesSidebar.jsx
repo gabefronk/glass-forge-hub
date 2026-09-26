@@ -3,14 +3,13 @@ import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { Users, CheckSquare } from "lucide-react";
+import { Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
-// Background routes (kept live, not in any menu): /sales-tracker, /system-map,
-// /admin/unlinked, /messages, /research-queue, /admin/agents.
-const NAV_ITEMS = [
+// Owner-only admin/background routes are grouped under ADMIN_ITEMS below.
+export const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "To-do", to: "/todos", icon: CheckSquare, todoOnly: true },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
@@ -20,7 +19,43 @@ const NAV_ITEMS = [
   { label: "Calendar", to: "/calendar", icon: Calendar },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", to: "/summit", icon: Mountain },
+  { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
+  { label: "Purchase Orders", to: "/purchase-orders", icon: ClipboardList, ownerOnly: true },
 ];
+
+// Owner-only admin tools (shared with the mobile More sheet).
+export const ADMIN_ITEMS = [
+  { label: "Agent Center", to: "/admin/agents", icon: Bot },
+  { label: "System Map", to: "/system-map", icon: Network },
+  { label: "Research Queue", to: "/research-queue", icon: Search },
+  { label: "Sales Tracker", to: "/sales-tracker", icon: TrendingUp },
+  { label: "Messages", to: "/messages", icon: MessageSquare },
+  { label: "Unlinked Records", to: "/admin/unlinked", icon: Unlink },
+  { label: "ProBuild Daily", to: "/admin/probuild-daily", icon: FileText },
+  { label: "Match Debug", to: "/match-debug", icon: Bug },
+];
+
+function SidebarLink({ item, active }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      to={item.to}
+      aria-current={active ? "page" : undefined}
+      className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
+      style={{
+        minHeight: "36px",
+        backgroundColor: active ? "rgba(184,149,90,.14)" : "transparent",
+        color: active ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
+        boxShadow: active ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = "transparent"; }}
+    >
+      <Icon className="h-4 w-4 shrink-0" style={{ color: active ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
+      {item.label}
+    </Link>
+  );
+}
 
 function monthLabel(m) {
   const [y, mm] = m.split("-").map(Number);
@@ -78,6 +113,7 @@ export default function YaFeesSidebar() {
     })();
   }, [pathname, billingRevision]);
 
+  const owner = isAgentCenterOwner(user);
   return (
     <aside
       className="hidden lg:flex fixed left-0 top-0 h-dvh shrink-0 flex-col z-30"
@@ -96,52 +132,17 @@ export default function YaFeesSidebar() {
 
       {/* Nav */}
       <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-3 space-y-0.5 overflow-y-auto obsidian-scroll">
-        {NAV_ITEMS.filter(item => (!item.ownerOnly || isAgentCenterOwner(user)) && (!item.todoOnly || todoAccess) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes" || item.to === "/brands-specs" || item.to === "/summit")).map((item) => {
-          const Icon = item.icon;
-          const active = pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"));
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              aria-current={active ? "page" : undefined}
-              className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
-              style={{
-                minHeight: "36px",
-                backgroundColor: active ? "rgba(184,149,90,.14)" : "transparent",
-                color: active ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
-                boxShadow: active ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
-              }}
-              onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
-              onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = "transparent"; }}
-            >
-              <Icon className="h-4 w-4 shrink-0" style={{ color: active ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
-              {item.label}
-            </Link>
-          );
-        })}
-        {isAgentCenterOwner(user) && (
-          <Link
-            to="/contacts"
-            aria-current={pathname === "/contacts" ? "page" : undefined}
-            className="flex items-center gap-3 px-3 text-[13.5px] font-medium transition-colors whitespace-nowrap rounded-lg"
-            style={{
-              minHeight: "36px",
-              backgroundColor: pathname === "/contacts" ? "rgba(184,149,90,.14)" : "transparent",
-              color: pathname === "/contacts" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)",
-              boxShadow: pathname === "/contacts" ? "inset 2px 0 0 var(--gf-brass-400)" : "none",
-            }}
-            onMouseEnter={(e) => { if (pathname !== "/contacts") e.currentTarget.style.backgroundColor = "rgba(255,255,255,.05)"; }}
-            onMouseLeave={(e) => { if (pathname !== "/contacts") e.currentTarget.style.backgroundColor = "transparent"; }}
-          >
-            <Users className="h-4 w-4 shrink-0" style={{ color: pathname === "/contacts" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />
-            Contacts
-          </Link>
+        {NAV_ITEMS.filter(item => (!item.ownerOnly || owner) && (!item.todoOnly || todoAccess) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes" || item.to === "/brands-specs" || item.to === "/summit")).map((item) => (
+          <SidebarLink key={item.to} item={item} active={pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"))} />
+        ))}
+        {owner && (
+          <div role="group" aria-labelledby="sidebar-admin-heading" className="mt-3 space-y-0.5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
+            <div id="sidebar-admin-heading" className="px-3 pb-1 text-[10.5px] font-medium uppercase" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.08em" }}>Admin</div>
+            {ADMIN_ITEMS.map((item) => (
+              <SidebarLink key={item.to} item={item} active={pathname === item.to} />
+            ))}
+          </div>
         )}
-        {isAgentCenterOwner(user) && <Link to="/purchase-orders" aria-current={pathname === "/purchase-orders" ? "page" : undefined}
-          className="flex min-h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium"
-          style={{ color: pathname === "/purchase-orders" ? "var(--gf-sidebar-text-on)" : "var(--gf-sidebar-text)", backgroundColor: pathname === "/purchase-orders" ? "rgba(184,149,90,.14)" : "transparent", boxShadow: pathname === "/purchase-orders" ? "inset 2px 0 0 var(--gf-brass-400)" : "none" }}>
-          <ClipboardList className="h-4 w-4 shrink-0" style={{ color: pathname === "/purchase-orders" ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }} strokeWidth={1.8} strokeLinecap="round" />Purchase Orders
-        </Link>}
       </nav>
 
       {/* Unbilled mini card */}
