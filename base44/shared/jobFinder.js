@@ -99,7 +99,8 @@ export function findJobs({ query, limit = 5, today }, jobs, events) {
   for (const [key, { event, score }] of evHits) {
     if (key.startsWith('name:')) {
       const j = jobs.find((x) => [x.canonical_name, ...(x.aliases || [])].some((n) => jobKey(n) === key.slice(5)));
-      if (j && !scored.some((s) => s.job.id === j.id)) scored.push({ job: j, score });
+      if (j && !scored.some((s) => s.job?.id === j.id)) scored.push({ job: j, score });
+      else if (j) continue;
       else if (!j) scored.push({ job: null, event, score });
     } else if (jobById.has(key) && !scored.some((s) => s.job?.id === key)) {
       scored.push({ job: jobById.get(key), score });
