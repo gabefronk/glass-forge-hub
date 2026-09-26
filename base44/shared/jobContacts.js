@@ -228,6 +228,20 @@ export function jobContactCoverage({directory,rawJobs=[],links=[],conversations=
   unmatched_seeds:seeds.filter(s=>!matchedSeeds.has(s.id)).map(seedInfo)};
 }
 
+// Jobs with no superintendent whose calendar notes name exactly one SPR who is not in contacts
+// yet (and no strong directory candidate): the owner can add that person as the job's super.
+export function calendarSuperAdds(coverage){
+ const out=[];
+ for(const job of coverage?.suggested||[]){
+  if(!job.status?.missing_superintendent)continue;
+  const list=job.suggestions||[];
+  if(list.some(s=>s.role==='superintendent'&&s.contact&&s.confidence==='high'))continue;
+  const spr=list.filter(s=>s.spr&&s.role==='superintendent');
+  if(spr.length===1)out.push({job_id:job.id,job_name:job.name,contact:spr[0].spr,reasons:spr[0].reasons});
+ }
+ return out;
+}
+
 // Bulk confirmation is deliberately conservative: exactly one high-confidence directory
 // contact may exist for a role on a job. The caller still writes every returned link via `link`.
 export function highConfidenceSingleCandidateLinks(coverage){
