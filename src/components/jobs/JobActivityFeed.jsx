@@ -159,8 +159,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
             </span>
           ) : null}
         </div>
-        <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap min-h-[32px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
-          <Plus className="h-3 w-3" />Log interaction
+        <button type="button" onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]" style={{ backgroundColor: "#f4f1ea", color: C.text }}>
+          <Plus className="h-3.5 w-3.5" style={{ color: "#0b3f3b" }} />Log interaction
         </button>
       </div>
 
@@ -190,7 +190,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         {days.map(({ date, items }) => (
           <div key={date}>
             <div className="sticky top-0 z-10 py-1 mb-2" style={{ backgroundColor: C.pageBg }}>
-              <span className="font-mono-num text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: C.textMuted }}>{formatDateGroup(date)}</span>
+              <span className="text-[12.5px] font-bold" style={{ color: C.textSecondary }}>{formatDateGroup(date)}</span>
             </div>
             <div className="space-y-2">
               {items.map((it, i) => {

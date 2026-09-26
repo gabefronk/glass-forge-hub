@@ -27,7 +27,9 @@ function PlanRow({ href, name, meta }) {
 // Plans & photos for the crew: everything they need to see before calling
 // anyone. Reads from the existing connectors only (Drive folder listing,
 // PlanIntake, calendar attachments, field-report photos).
-export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPhotoClick }) {
+// bare: no card around it (inside the Jobs workspace, which is already a white panel).
+export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPhotoClick, bare = false }) {
+  const label = "mb-1.5 text-[12.5px] font-semibold";
   const { plans: folderPlans, photos: folderPhotos, other } = splitFolderFiles(folder.files);
   const intake = (plans || []).map((p) => ({
     key: `pi-${p.id}`,
@@ -44,9 +46,9 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
   const photoCount = (sitePhotos || []).length + folderPhotos.length;
 
   return (
-    <section aria-labelledby="plans-photos-heading" className="mb-6 rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+    <section aria-labelledby="plans-photos-heading" className={bare ? "" : "mb-6 rounded-[14px] p-4"} style={bare ? undefined : { border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h2 id="plans-photos-heading" className="font-heading text-[18px] font-bold" style={{ color: C.text }}>Plans &amp; photos</h2>
+        <h2 id="plans-photos-heading" className={bare ? "m-0 text-[13px] font-bold" : "font-heading text-[18px] font-bold"} style={{ color: bare ? "#566063" : C.text }}>Plans &amp; photos</h2>
         {folder.folder?.url ? (
           <a href={folder.folder.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 min-h-[32px] rounded-full px-3 text-[12px] font-semibold" style={{ border: `1px solid ${C.border}`, color: C.accentText }}>
             <FolderOpen className="h-3.5 w-3.5" />Open job folder
@@ -56,7 +58,7 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="min-w-0">
-          <div className="mono-label-sm mb-1.5">Plans &amp; documents · {planRows.length}</div>
+          <div className={label} style={{ color: C.textSecondary }}>Plans &amp; documents · {planRows.length}</div>
           {folder.loading && !planRows.length ? <p className="text-[12px]" style={{ color: C.textMuted }}>Loading job folder…</p> : null}
           {planRows.length ? (
             <div className="-mx-2.5">{planRows.map((p) => <PlanRow key={p.key} href={p.href} name={p.name} meta={p.meta} />)}</div>
@@ -69,14 +71,14 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
           {folder.error ? <p role="alert" className="mt-1 text-[11.5px]" style={{ color: "#A43432" }}>{folder.error}</p> : null}
           {hasEventDocs ? (
             <div className="mt-3">
-              <div className="mono-label-sm mb-1">From calendar events</div>
+              <div className={label} style={{ color: C.textSecondary }}>From calendar events</div>
               <JobEventDocuments events={events} skipJobFolder={!!folder.folder} />
             </div>
           ) : null}
         </div>
 
         <div className="min-w-0">
-          <div className="mono-label-sm mb-1.5">Site photos · {photoCount}</div>
+          <div className={label} style={{ color: C.textSecondary }}>Site photos · {photoCount}</div>
           {photoCount ? (
             <div className="grid grid-cols-3 gap-1.5">
               {(sitePhotos || []).map((p) => (

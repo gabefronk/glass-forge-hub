@@ -198,7 +198,7 @@ export default function JobsHub() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search job, address, PO, OE"
+            placeholder="Search job, address, PO"
             aria-label="Search jobs"
             className="h-[42px] w-full rounded-[11px] border-0 bg-white pl-[38px] pr-9 text-[14px] shadow-[0_1px_2px_rgba(16,22,23,.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0b3f3b]"
             style={{ color: "#101617" }}
@@ -216,22 +216,22 @@ export default function JobsHub() {
           const on = segment === v.key;
           return (
             <button key={v.key} type="button" onClick={() => setSegment(v.key)} aria-pressed={on}
-              className="flex h-9 min-w-0 items-center justify-center gap-1 rounded-[9px] px-1 text-[13px] whitespace-nowrap max-[480px]:h-11 max-[480px]:flex-col max-[480px]:gap-0 max-[480px]:text-[12px] max-[480px]:leading-tight"
+              className="flex h-12 min-w-0 flex-col items-center justify-center rounded-[9px] px-1 text-[13px] leading-tight whitespace-nowrap"
               style={on ? { backgroundColor: "#ffffff", color: "#101617", fontWeight: 700, boxShadow: "0 1px 2px rgba(16,22,23,.1)" } : { color: "#566063", fontWeight: 500 }}>
-              {v.label}<span className="text-[11.5px] font-medium" style={{ color: v.attention ? "#8a5a12" : "#6b7477" }}>{v.count.toLocaleString()}</span>
+              <span>{v.label}</span><span className="mt-0.5 text-[11.5px] font-semibold" style={{ color: v.attention ? "#8a5a12" : "#6b7477" }}>{v.count.toLocaleString()}</span>
             </button>
           );
         })}
       </div>
-      <div className="flex items-center gap-2">
-        <select aria-label="Builder" value={builder} onChange={(e) => setBuilder(e.target.value)} className={`${selectCls} flex-1`}>
+      <div className="grid grid-cols-[minmax(0,1fr)_124px_96px] items-center gap-2">
+        <select aria-label="Builder" value={builder} onChange={(e) => setBuilder(e.target.value)} className={`${selectCls} w-full`}>
           <option value="">All builders</option>
           {builders.map((b) => <option key={b.name} value={b.name}>{b.name} ({b.count})</option>)}
         </select>
-        <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)} className={selectCls}>
+        <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)} className={`${selectCls} w-full`}>
           {JOB_SORTS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
-        <select aria-label="More views" value={moreValue} onChange={(e) => setSegment(e.target.value || "all")} className={selectCls} style={moreValue ? { backgroundColor: "#0e2426", color: "#ffffff" } : undefined}>
+        <select aria-label="More views" value={moreValue} onChange={(e) => setSegment(e.target.value || "all")} className={`${selectCls} w-full`} style={moreValue ? { backgroundColor: "#0e2426", color: "#ffffff" } : undefined}>
           <option value="">More…</option>
           {moreViews.map((m) => <option key={m.key} value={m.key}>{m.label} ({m.count})</option>)}
         </select>

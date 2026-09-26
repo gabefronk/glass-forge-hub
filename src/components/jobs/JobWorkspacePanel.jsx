@@ -136,7 +136,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
 
   const today = denverDate();
   const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
-  const snap = useMemo(() => jobSnapshot({ job, events: calEvents, status, today }), [job, calEvents, status, today]);
+  const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
   const sitePhotos = useMemo(
     () => recentSitePhotos(buildJobHistory({ events: calEvents, rows, notes, fieldReports }), 6),
     [calEvents, rows, notes, fieldReports]
@@ -172,7 +172,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
         <div className="flex items-start gap-4">
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-medium" style={{ color: MUTED }}>
-              {[sanitizeText(job.builder || ""), snap.kind].filter(Boolean).join(" · ") || "No builder"}
+              {[sanitizeText(job.builder || ""), snap.kind].filter(Boolean).join(" · ") || "Job"}
             </div>
             <h2 className="m-0 mt-1 text-[30px] font-extrabold leading-[1.1] break-words" style={{ color: INK, letterSpacing: "-0.04em" }}>{sanitizeText(job.canonical_name)}</h2>
             {job.address && (
@@ -225,13 +225,13 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
 
         <DuplicateJobNotice group={group} currentId={jobId} />
 
-        <JobPlansPhotos folder={folder} plans={plans} events={calEvents} sitePhotos={sitePhotos} onPhotoClick={setLightbox} />
+        <JobPlansPhotos bare folder={folder} plans={plans} events={calEvents} sitePhotos={sitePhotos} onPhotoClick={setLightbox} />
 
         {/* The work + history | people + orders */}
         <div className="grid grid-cols-[minmax(0,1fr)_260px] gap-7 max-[1400px]:grid-cols-1">
           <div className="min-w-0 flex flex-col gap-6">
             <section aria-labelledby="work-heading">
-              <SectionTitle id="work-heading">The work{snap.workFrom ? ` · ${snap.workFrom}` : ""}</SectionTitle>
+              <SectionTitle id="work-heading">The work{snap.workFrom ? <span className="font-medium"> · {snap.workFrom}</span> : null}</SectionTitle>
               {snap.work.length ? (
                 <ul className="m-0 p-0 list-none flex flex-col gap-2">
                   {snap.work.map((w, i) => (
@@ -242,7 +242,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
                   ))}
                 </ul>
               ) : (
-                <p className="m-0 text-[14px]" style={{ color: MUTED }}>No scope on the calendar for this job yet.</p>
+                <p className="m-0 text-[14px]" style={{ color: MUTED }}>No scope written down yet. Log it with “Log interaction” below.</p>
               )}
             </section>
             <div ref={historyRef} className="scroll-mt-4">
