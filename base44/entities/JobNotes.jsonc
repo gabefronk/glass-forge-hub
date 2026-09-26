@@ -13,6 +13,22 @@
       "title": "Note Date",
       "description": "When the interaction happened \u2014 not when the note was typed"
     },
+    "interaction_type": {
+      "type": "string",
+      "enum": [
+        "note",
+        "site_visit",
+        "call",
+        "text",
+        "email",
+        "meeting",
+        "delivery",
+        "issue"
+      ],
+      "title": "Interaction type",
+      "default": "note",
+      "description": "What kind of interaction this entry records. Blank/legacy notes read as 'note'."
+    },
     "body": {
       "type": "string",
       "title": "Body",
