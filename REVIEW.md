@@ -1053,3 +1053,27 @@ attributing it to this change.
 - **The Jobs hub and job pages still count raw review flags.** They don't apply the hold, so a job
   whose only issue is a held companion line reads "Complete" there while Invoicing shows it in
   review.
+
+## Jobs and Calendar usability pass (2026-09-25)
+
+Frontend only. No entity, function or data changes; nothing published.
+
+**Jobs hub** (`JobsHub.jsx`, `JobBrowserRow.jsx`, `src/lib/jobsOverview.js`)
+- Each job shows its **next visit** (Today / Tomorrow / date) or, when nothing is scheduled, its **last visit**. Dates come from linked calendar events and billing lines; cancelled calendar placeholders are ignored.
+- New **Visits this week** pill (next visit within 7 days, Denver days).
+- **Sort**: Newest added (default, unchanged), Next visit, Last visit, Name A–Z. **Builder filter** with counts.
+- Search, view, sort and builder are kept in the URL (`?q=&show=&sort=&builder=`), so Back and shared links keep them. **Clear filters** resets them.
+- Rows: status chip with dot, builder · address on one line; tablet shows two columns.
+
+**Calendar** (`CalendarPage.jsx`, new `EventCard.jsx`, `WeekView.jsx`, `AgendaList.jsx`, `src/lib/calendarModel.js`; `MonthGrid.jsx`, `EventBubble.jsx` colours)
+- One header: period title with visit count, prev/Today/next, Month · **Week** · List, New event.
+- **Week view** (Sun–Sat, crosses month boundaries; arrows move by week).
+- **List view** is a day-by-day agenda with Today/Tomorrow headings, scrolled to today.
+- Filter chips with counts replace "Unreported only": All, Installs, Service, Outlook (when present), Needs report.
+- Visit cards show time range, address, crew, a report chip ("Needs photos · 2d late", "Reported", …) and an Open job link when the event is linked.
+- Admin tools (Installation calendar, iPad schedules, Find a job update) sit in one row and open with a consistent back bar.
+- **Behaviour changes to confirm**
+  - Install vs service now uses the Invoicing wording rule (`service|warranty|wty|warr|per report` in the title or scope = service). Before, every Google-synced event counted as service, so installs were red and the Installs count was 0.
+  - Future visits are no longer flagged as missing a report (their `report_status` defaults to `pending`). The needs-report flag is amber, not red, so it stays visible on service events.
+
+**Tests**: new `tests/jobsHubVisits.test.mjs` (5) and `tests/calendarModel.test.mjs` (6) pass. Full root suite: 459 pass, 12 fail — the same 12 failures as before this change (ownedCalendar handler, install budget, jobProfitability, ProBuild refresh). Lint clean on touched files; `npm run build` passes.
