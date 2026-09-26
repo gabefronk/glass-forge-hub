@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { C } from "@/lib/feeUI";
 import { denverDate } from "../../../base44/shared/billingCore.js";
+import { KIND, eventKind, reportMissing } from "@/lib/calendarModel";
 
 function buildWeeks(month) {
   const [y, m] = month.split("-").map(Number);
@@ -16,23 +17,18 @@ function buildWeeks(month) {
   return weeks;
 }
 
-const INSTALL_BG = "#EAF5EE";
-const INSTALL_TEXT = "#166447";
-const SERVICE_BG = "#FCEDEC";
-const SERVICE_TEXT = "#A43432";
-
+// Same kind colours as the week and list views (lib/calendarModel.js).
 function eventColors(event) {
-  if (event.source === "outlook") return {bg:"#F0E9FA", text:"#7042A1"};
-  const isInstall = event.source === "app";
-  return isInstall
-    ? { bg: INSTALL_BG, text: INSTALL_TEXT }
-    : { bg: SERVICE_BG, text: SERVICE_TEXT };
+  const k = KIND[eventKind(event)];
+  return { bg: k.bg, text: k.text };
 }
 
+// Only visits on or before today can be missing a report; future visits default to "pending".
 function isFlagged(ev) {
-  return ev.report_required !== false &&
-    ["pending", "missing_photos", "missing_notes", "missing_all"].includes(ev.report_status);
+  return reportMissing(ev, denverDate());
 }
+
+const FLAG = "#C08B2E";
 
 function isMovable(ev) {
   const gid = ev.google_event_id || "";
@@ -58,7 +54,7 @@ function DesktopEventBlock({ event, onClick }) {
       style={{
         backgroundColor: bg,
         color: text,
-        borderLeft: flagged ? "2px solid #A43432" : rescheduled ? "2px solid #C9CCC4" : "none",
+        borderLeft: flagged ? `2px solid ${FLAG}` : rescheduled ? "2px solid #C9CCC4" : "none",
         cursor: movable ? "grab" : undefined,
       }}
     >
@@ -69,7 +65,7 @@ function DesktopEventBlock({ event, onClick }) {
       )}
       <span className="truncate">{event.job_name}</span>
       {flagged && (
-        <span className="inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle shrink-0" style={{ backgroundColor: "#A43432" }} />
+        <span className="inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle shrink-0" style={{ backgroundColor: FLAG }} title="Needs report" />
       )}
     </button>
   );
@@ -128,8 +124,8 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
               style={{
                 borderTop: `1px solid ${C.rowBorder}`,
                 borderRight: (i % 7) !== 6 ? `1px solid ${C.rowBorder}` : "none",
-                backgroundColor: isDropTarget ? "#DFF0E6" : isSelected ? "#EAF5EE" : "transparent",
-                boxShadow: isDropTarget ? "inset 0 0 0 2px #166447" : isSelected ? "inset 0 0 0 2px #146556" : "none",
+                backgroundColor: isDropTarget ? "#E2EEEB" : isSelected ? "#EEF5F3" : "transparent",
+                boxShadow: isDropTarget ? "inset 0 0 0 2px #10524C" : isSelected ? "inset 0 0 0 2px #0B3F3B" : "none",
               }}
             >
               {day && (
@@ -162,7 +158,7 @@ export default function MonthGrid({ month, events, onSelect, onCreateForDate, se
                       const { text } = eventColors(e);
                       const flagged = isFlagged(e);
                       const rescheduled = e.report_status === "rescheduled";
-                      const dotColor = flagged ? "#A43432" : rescheduled ? "#C9CCC4" : text;
+                      const dotColor = flagged ? FLAG : rescheduled ? "#C9CCC4" : text;
                       return (
                         <span key={e.id} className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} aria-hidden="true" />
                       );
