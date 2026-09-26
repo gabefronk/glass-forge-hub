@@ -16,7 +16,10 @@ const sameBuilder=(a,b)=>Boolean(a&&b&&(a===b||a.startsWith(b+' ')||b.startsWith
 export const qualifierOf=c=>{const b=String(c?.builder||''),co=String(c?.company||'');return (b&&co.startsWith(b)?co.slice(b.length):co).replace(/^\s*[-–—:]\s*/,'').trim();};
 // The role comes from an owner-confirmed contact role, else the workbook's company label
 // ("Holmes Homes - Daybreak Super"), never from free-text notes.
-export function contactRole(c){if(c?.role&&LINK_ROLES.includes(c.role))return c.role;const q=norm(qualifierOf(c));for(const {role,re} of ROLE_RULES)if(re.test(q))return role;return q?'site':'builder';}
+export function contactRole(c){if(c?.role&&LINK_ROLES.includes(c.role))return c.role;const q=norm(qualifierOf(c));
+ // "Backwood Construction - Owner" is the company's owner (builder side), not a homeowner.
+ if(/^(owner|co owner|owner operator|president)$/.test(q)&&c?.builder)return 'builder';
+ for(const {role,re} of ROLE_RULES)if(re.test(q))return role;return q?'site':'builder';}
 const publicContact=c=>({key:c.key,name:c.name,company:c.company||'',builder:c.builder_name||c.builder||'',phone:c.phone||'',phone_key:c.phone_key||'',email:c.email||'',email_key:c.email_key||''});
 const titleName=name=>String(name||'').trim().replace(/\s+/g,' ').split(' ').map(w=>w===w.toUpperCase()&&w.length>1?w[0]+w.slice(1).toLowerCase():w).join(' ');
 // "SPR: Amy 801-555-0100", "SPR:  COLTON 801-555-0100" or "SPR: Chris\n * Phone: 435-555-0100" in calendar
