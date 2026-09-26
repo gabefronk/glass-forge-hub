@@ -1,4 +1,4 @@
-import { FileText, Image as ImageIcon, FolderOpen, ExternalLink } from "lucide-react";
+import { Image as ImageIcon, FolderOpen, ExternalLink } from "lucide-react";
 import { C, formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { splitFolderFiles } from "@/lib/jobHistory";
@@ -99,8 +99,6 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
           )}
         </div>
       </div>
-      {!planRows.length && !photoCount && !hasEventDocs && !folder.loading ? null : null}
-      <FileText className="hidden" aria-hidden="true" />
     </section>
   );
 }
