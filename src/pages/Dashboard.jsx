@@ -428,7 +428,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }
 
@@ -525,22 +525,7 @@ function DashboardTodos({ user, navigate }) {
           </button>
         )}
       </div>
-    </PageShell>
-  );
-}
-
-function KpiCard({ label, value, valueColor, sub, subColor }) {
-  return (
-    <div className="min-w-0 rounded-[14px] p-3 sm:p-4 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-      <div className="mono-label-sm mb-2">{label}</div>
-      <div className="font-mono-num-bold text-[20px] sm:text-[24px] mb-1 [overflow-wrap:anywhere]" style={{ color: valueColor || C.text, letterSpacing: "-0.025em" }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-[11px] break-words" style={{ color: subColor || C.textMuted }}>
-          {sub}
-        </div>
-      )}
     </div>
   );
 }
+
