@@ -40,7 +40,7 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
     ...intake.filter((p) => !folderPlans.some((f) => f.name === p.name)),
     ...other.map((f) => ({ key: f.id, href: f.url, name: f.name, meta: "Job folder" })),
   ];
-  const hasEventDocs = eventAttachments(events).length > 0;
+  const hasEventDocs = eventAttachments(events, { skipJobFolder: !!folder.folder }).length > 0;
   const photoCount = (sitePhotos || []).length + folderPhotos.length;
 
   return (
@@ -70,7 +70,7 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
           {hasEventDocs ? (
             <div className="mt-3">
               <div className="mono-label-sm mb-1">From calendar events</div>
-              <JobEventDocuments events={events} />
+              <JobEventDocuments events={events} skipJobFolder={!!folder.folder} />
             </div>
           ) : null}
         </div>

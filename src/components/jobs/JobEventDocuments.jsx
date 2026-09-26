@@ -14,8 +14,8 @@ function iconFor(title) {
   return File;
 }
 
-export default function JobEventDocuments({ events }) {
-  const atts = eventAttachments(events);
+export default function JobEventDocuments({ events, skipJobFolder = false }) {
+  const atts = eventAttachments(events, { skipJobFolder });
   if (!atts.length) return null;
   const gmailOnlyCount = atts.filter((a) => !a.has_hub_copy && !a.drive_url && (a.hub_error === "gmail_only" || isGmailAttachmentUrl(a.file_url))).length;
   const openAttachment = async (attachment) => {
@@ -69,7 +69,8 @@ export default function JobEventDocuments({ events }) {
           <button key={i} type="button" onClick={() => openAttachment(a)} className="inline-flex items-center gap-1.5 text-left text-[12px] py-0.5 break-words hover:underline" style={{ color: C.accentText }} title={a.title}>
             <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: C.textMuted }} />
             <span className="break-words">{sanitizeText(a.title)}</span>
-            {a.has_hub_copy && <span className="rounded px-1 py-0.5 text-[10px] bg-emerald-50 text-emerald-700 whitespace-nowrap">Hub copy</span>}
+            {a.in_job_folder && <span className="rounded px-1 py-0.5 text-[10px] bg-emerald-50 text-emerald-700 whitespace-nowrap">In job folder</span>}
+            {!a.in_job_folder && a.has_hub_copy && <span className="rounded px-1 py-0.5 text-[10px] bg-emerald-50 text-emerald-700 whitespace-nowrap">Hub copy</span>}
             <ExternalLink className="h-3 w-3 shrink-0" />
           </button>
         );
