@@ -28,12 +28,14 @@ function shiftedStartEnd(ev, newDate, newTime = '') {
   const s = ev.start || {};
   const e = ev.end || {};
   if (s.dateTime && newTime) {
-    const offset = (String(s.dateTime).match(/(Z|[+-]\d{2}:\d{2})$/) || [''])[0];
+    // Wall-clock time in the event's zone (no fixed offset), so a move across a DST
+    // change keeps the requested local time. Duration is preserved.
     const dur = Date.parse(e.dateTime) - Date.parse(s.dateTime);
-    const startIso = `${newDate}T${newTime}:00${offset}`;
-    const startMs = Date.parse(startIso);
-    if (!Number.isFinite(startMs) || !Number.isFinite(dur)) return null;
-    return { start: { dateTime: startIso, timeZone: s.timeZone }, end: { dateTime: new Date(startMs + dur).toISOString(), timeZone: e.timeZone } };
+    const localStart = Date.parse(`${newDate}T${newTime}:00Z`); // UTC math on local wall time
+    if (!Number.isFinite(localStart) || !Number.isFinite(dur)) return null;
+    const localEnd = new Date(localStart + dur).toISOString().slice(0, 19);
+    const tz = s.timeZone || e.timeZone || 'America/Denver';
+    return { start: { dateTime: `${newDate}T${newTime}:00`, timeZone: tz }, end: { dateTime: localEnd, timeZone: e.timeZone || tz } };
   }
   if (s.dateTime) {
     const oldDay = String(s.dateTime).slice(0, 10);
