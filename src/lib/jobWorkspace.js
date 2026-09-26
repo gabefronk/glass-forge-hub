@@ -69,6 +69,31 @@ export function findSuperInText(text) {
   return { name, phone, email: email.toLowerCase() };
 }
 
+// The one person to call for a job, in order of trust:
+// 1. a linked superintendent, 2. a superintendent the directory suggests,
+// 3. a super written in calendar notes (newest event first),
+// 4. any other linked contact. source tells the UI whether it can be saved.
+export function pickSuper({ view, events } = {}) {
+  const linked = view?.linked || [];
+  const sup = linked.find((c) => c.role === "superintendent");
+  if (sup) return { name: sup.name || "", phone: sup.phone || "", email: sup.email || "", role: "superintendent", source: "linked", key: sup.key || "" };
+  const sug = (view?.suggestions || []).find((s) => s.role === "superintendent" && s.contact?.key && !s.already_linked && s.confidence !== "low");
+  if (sug) return { name: sug.contact.name || "", phone: sug.contact.phone || "", email: sug.contact.email || "", role: "superintendent", source: "suggestion", key: sug.contact.key };
+  const newest = [...(events || [])].filter((e) => e?.scope_notes).sort((a, b) => dayOf(b).localeCompare(dayOf(a)));
+  for (const e of newest) {
+    const found = findSuperInText(e.scope_notes);
+    if (found) {
+      const known = linked.find((c) => String(c.phone || "").replace(/\D/g, "").endsWith(found.phone.replace(/\D/g, "")));
+      if (known) return { name: known.name || found.name, phone: known.phone || found.phone, email: known.email || found.email, role: known.role || "superintendent", source: "linked", key: known.key || "" };
+      return { ...found, role: "superintendent", source: "notes", key: "", day: dayOf(e) };
+    }
+  }
+  const ROLE_RANK = ["project_manager", "site", "customer", "homeowner", "builder"];
+  const other = [...linked].filter((c) => c.phone || c.email).sort((a, b) => (ROLE_RANK.indexOf(a.role) + 99) % 99 - (ROLE_RANK.indexOf(b.role) + 99) % 99)[0];
+  if (other) return { name: other.name || "", phone: other.phone || "", email: other.email || "", role: other.role || "", source: "linked", key: other.key || "" };
+  return null;
+}
+
 const uniq = (list) => [...new Set(list.map((v) => String(v || "").trim()).filter(Boolean))];
 
 // Visits come from the calendar, billing lines and field reports: a job worked
