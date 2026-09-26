@@ -49,7 +49,7 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
    // Anyone signed in can save the super for one job (name, phone, email): an
    // existing contact with the same phone or email is reused, never duplicated.
    if(input.action==='set_job_super'){
-    const fields=contactFields(input.contact||{});if(!fields)return response({error:'Enter a name and a phone or email.'},400);
+    const fields=contactFields(input.contact||{});if(!fields||!fields.phone_key&&!fields.email_key)return response({error:'Enter a name and a phone or email.'},400);
     const job=await api.Jobs.get(input.job_id).catch(()=>null);if(!job)return response({error:'Select an existing job.'},400);
     const directoryContacts=snapshot?(await load(client,snapshot)).contacts:[];
     let contact=[...hubContacts,...directoryContacts].find(c=>fields.phone_key&&c.phone_key===fields.phone_key||fields.email_key&&c.email_key===fields.email_key);
