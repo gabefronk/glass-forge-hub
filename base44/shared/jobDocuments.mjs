@@ -66,14 +66,14 @@ export function createJobDocumentsHandler({getClient,request=fetch}={}){
     const r=await request(DRIVE+path,{...init,headers:{Authorization:'Bearer '+accessToken,...init.headers}});
     if(!r.ok)throw Error('Drive request failed ('+r.status+').');return r.json();
    };
-   const {folder,save}=jobFolderTools({drive,api,job});
+   const {folder,save,validParent}=jobFolderTools({drive,api,job});
    if(input.action==='attach_folder'){
     const id=String(input.folder_id||'');if(!/^[\w-]{10,100}$/.test(id))return reply({error:'Enter a valid Drive folder ID.'},400);
-    {const r=await save(await folder(id));return reply(r.body,r.status);}
+    const r=await save(await folder(id));return reply(r.body,r.status);
    }
    if(input.action==='ensure_folder'){const r=await ensureJobFolder({drive,api,job});return reply(r.body,r.status);}
    if(!job.drive_job_folder_id)return reply({folder:null,files:[],status:'unlinked'});
-   const f=await folder(job.drive_job_folder_id);if(!await jobFolderTools({drive,api,job}).validParent(f))return reply({error:'Stored folder is no longer in Glass Forge Jobs.'},409);
+   const f=await folder(job.drive_job_folder_id);if(!await validParent(f))return reply({error:'Stored folder is no longer in Glass Forge Jobs.'},409);
    const q=`'${escaped(f.id)}' in parents and trashed=false`;
    const files=[],seen=new Set();let page='';do{
     const r=await drive('/files?q='+encodeURIComponent(q)+'&fields=nextPageToken,files(id,name,mimeType,webViewLink,modifiedTime,parents)&pageSize=100'+(page?'&pageToken='+encodeURIComponent(page):''));
