@@ -1,0 +1,175 @@
+{
+  "name": "JobHandoffs",
+  "type": "object",
+  "description": "Stage 2 handoff of a sold job to its PM: the gated checklist, the start date, the note, and what submitting created (to-do, kickoff event). One live row per job; written only by the jobHandoff backend function.",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "title": "Job Id",
+      "description": "Jobs record"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "submitted",
+        "started",
+        "done"
+      ],
+      "title": "Status",
+      "default": "draft",
+      "description": "draft while the checklist is being filled; submitted once handed off; started / done are set by the PM later"
+    },
+    "to_member_key": {
+      "type": "string",
+      "title": "To Member Key",
+      "description": "TeamMember.member_key of the PM receiving the job"
+    },
+    "to_member_id": {
+      "type": "string",
+      "title": "To Member Id"
+    },
+    "to_name": {
+      "type": "string",
+      "title": "To Name"
+    },
+    "from_email": {
+      "type": "string",
+      "title": "From Email"
+    },
+    "from_name": {
+      "type": "string",
+      "title": "From Name"
+    },
+    "start_date": {
+      "type": "string",
+      "title": "Start Date",
+      "description": "YYYY-MM-DD \u2014 the day the PM should jump on it"
+    },
+    "eta_date": {
+      "type": "string",
+      "title": "ETA Date",
+      "description": "Vendor ETA, YYYY-MM-DD"
+    },
+    "po_number": {
+      "type": "string",
+      "title": "PO Number",
+      "description": "PO typed on the checklist (also saved on the job)"
+    },
+    "folder_link": {
+      "type": "string",
+      "title": "Folder Link",
+      "description": "OneDrive / Drive folder link typed on the checklist when the job has no linked Drive folder"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes",
+      "description": "Note to the PM"
+    },
+    "checklist": {
+      "type": "array",
+      "title": "Checklist",
+      "default": [],
+      "description": "[{ key, done, value, file_url, file_name }] \u2014 the owner-entered side of each item; auto checks are recomputed from the job on every read",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "value": {
+            "type": "string"
+          },
+          "file_url": {
+            "type": "string"
+          },
+          "file_name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "title": "Summary",
+      "description": "The handoff packet as it was sent (plain text)"
+    },
+    "todo_id": {
+      "type": "string",
+      "title": "Todo Id"
+    },
+    "calendar_event_id": {
+      "type": "string",
+      "title": "Calendar Event Id",
+      "description": "CalendarEvents row for the kickoff"
+    },
+    "note_id": {
+      "type": "string",
+      "title": "Note Id",
+      "description": "JobNotes row logged at submit"
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Submitted At"
+    },
+    "history": {
+      "type": "array",
+      "title": "History",
+      "default": [],
+      "description": "[{ at, by, what }] \u2014 submit, ETA / start date changes",
+      "items": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "what": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "job_id",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
