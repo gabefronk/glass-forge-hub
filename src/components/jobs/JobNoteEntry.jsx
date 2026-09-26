@@ -8,7 +8,8 @@ import FeedImage from "./FeedImage";
 
 export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClick, embedded }) {
   const [editing, setEditing] = useState(false);
-  const isAuthor = !!currentUser && note.author === currentUser;
+  // For now every signed-in user can fix or remove any history entry.
+  const canEdit = !!currentUser;
 
   if (editing) {
     return (
@@ -23,7 +24,7 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
   }
 
   const handleDelete = async () => {
-    if (!confirm("Delete this note?")) return;
+    if (!confirm(note.author && note.author !== currentUser ? `Delete this entry by ${note.author}?` : "Delete this note?")) return;
     await base44.entities.JobNotes.delete(note.id);
     onChanged();
   };
@@ -32,10 +33,10 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
     <>
       <div className="flex items-center gap-2 mb-1.5">
         {note.edited && (
-          <span className="font-mono text-[10px] uppercase tracking-[0.13em] italic" style={{ color: C.textMuted }}>edited</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.13em] italic" style={{ color: C.textMuted }}>{note.edited_by ? `edited by ${note.edited_by}` : "edited"}</span>
         )}
         <span className="font-mono text-[11px] truncate ml-auto" style={{ color: C.textSecondary }}>{note.author}</span>
-        {isAuthor && (
+        {canEdit && (
           <div className="flex items-center gap-1 shrink-0">
             <button type="button" aria-label="Edit note" onClick={() => setEditing(true)} style={{ color: C.textMuted }} className="p-1.5 hover:opacity-100 transition-opacity">
               <Pencil className="h-3.5 w-3.5" />
