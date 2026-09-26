@@ -72,6 +72,38 @@ test('job link: accepted only at match_score >= 0.85 with ambiguous === false; o
   assert.equal(T.decideJobLink({ error: 'query_required' }).confidence, 'unmatched');
 });
 
+test('planJobFacts adds only the PO/OE numbers the job lacks, once, and never rewrites; homeownerCandidate needs a stated homeowner with a phone or email', () => {
+  const job = { id: 'job1', po_numbers: ['7104345'], oe_numbers: [] };
+  const plan = T.planJobFacts(job, { po_numbers: ['7104345', ' 7104999 ', '7104999'], oe_numbers: ['OE 55-1'] });
+  assert.deepEqual(plan.patch, { po_numbers: ['7104345', '7104999'], oe_numbers: ['OE 55-1'] });
+  assert.deepEqual(plan.changes, ['PO 7104999 added to the job', 'OE 55-1 added to the job']);
+  assert.deepEqual(plan.applied, { po_numbers: ['7104999'], oe_numbers: ['OE 55-1'] });
+  assert.deepEqual(job.po_numbers, ['7104345'], 'the job object is not mutated here');
+  const again = T.planJobFacts({ ...job, po_numbers: ['7104345', '7104999'], oe_numbers: ['OE 55-1'] }, { po_numbers: ['7104999'], oe_numbers: ['oe 55-1'] }, plan.applied);
+  assert.deepEqual(again.patch, {});
+  assert.deepEqual(again.changes, []);
+  const replay = T.planJobFacts({ id: 'job2', po_numbers: [], oe_numbers: [] }, { po_numbers: ['7104999'] }, plan.applied);
+  assert.deepEqual(replay.patch, {}, 'a number this thread already applied is not applied again elsewhere');
+  assert.deepEqual(T.planJobFacts(null, { po_numbers: ['1'] }).changes, []);
+  assert.deepEqual(T.planJobFacts(job, {}).patch, {});
+  assert.deepEqual(T.homeownerCandidate({ contact_role: 'homeowner', contact_name: 'Dana Brewer', contact_phone: '(801) 555-0199', contact_email: '' }), { name: 'Dana Brewer', phone: '(801) 555-0199', email: '' });
+  assert.equal(T.homeownerCandidate({ contact_role: 'homeowner', contact_name: 'Dana Brewer' }), null, 'no way to reach them');
+  assert.equal(T.homeownerCandidate({ contact_role: 'superintendent', contact_name: 'Kyle', contact_phone: '801-555-0142' }), null);
+  assert.equal(T.homeownerCandidate({ contact_role: '', contact_name: 'Dana', contact_phone: '801-555-0199' }), null, 'role must be stated');
+  assert.equal(T.normalizeTriageEntry({ extracted: { contact_role: 'boss' } }).extracted.contact_role, '');
+  assert.equal(T.normalizeTriageEntry({ extracted: { contact_role: 'homeowner', contact_email: 'Dana@Example.com' } }).extracted.contact_email, 'dana@example.com');
+});
+
+test('scheduleActionItems: a schedule email with dates but no ask still yields one confirm-and-move item', () => {
+  assert.deepEqual(T.scheduleActionItems({ category: 'schedule', action_items: [], extracted: { dates: ['2026-10-08 install', '2026-10-09 trim'] } }), ['Confirm the date change and move the visit if it is right: 2026-10-08 install; 2026-10-09 trim']);
+  assert.deepEqual(T.scheduleActionItems({ category: 'schedule', action_items: ['Call Kyle'], extracted: { dates: ['2026-10-08'] } }), ['Call Kyle']);
+  assert.deepEqual(T.scheduleActionItems({ category: 'schedule', action_items: [], extracted: { dates: [] } }), []);
+  assert.deepEqual(T.scheduleActionItems({ category: 'job_update', action_items: [], extracted: { dates: ['2026-10-08'] } }), []);
+  const p = T.applyTriage({ status: 'new' }, { category: 'schedule', priority: 'normal', summary: 'moved', action_items: [], reply_needed: false, extracted: { dates: ['2026-10-08 install'] } }, { now: 'x' });
+  assert.equal(p.action_items.length, 1);
+  assert.equal(T.shouldCreateTodo({ category: 'schedule', action_items: p.action_items }), true);
+});
+
 test('buildJobQuery prefers builder + lot + address, then PO/OE, else empty', () => {
   assert.equal(T.buildJobQuery({ builder: 'Ivory Homes', lot: '412', address: 'Oquirrh West Dr' }), 'Ivory Homes 412 Oquirrh West Dr');
   assert.equal(T.buildJobQuery({ po_numbers: ['7104345'], oe_numbers: ['OE-9'] }), '7104345 OE-9');
@@ -141,6 +173,10 @@ test('job note payload: email interaction on the last message date, authored by 
   assert.equal(note.body.split('\n')[0], THREAD.subject);
   assert.equal(note.body.split('\n')[1], 'From Kyle Super <kyle@ivoryhomes.com>');
   assert.match(note.body, /- Send COI/);
+  assert.match(note.body, /Open the email: https:\/\/mail\.google\.com/);
+  assert.doesNotMatch(note.body, /Hub updates/);
+  const withChanges = T.buildNotePayload(t, MAILBOX, ['PO 7104999 added to the job']);
+  assert.match(withChanges.body, /Hub updates:\n- PO 7104999 added to the job/);
 });
 
 test('draft prompt is guarded, carries job facts and signature; reply cleanup appends the signature when missing', () => {

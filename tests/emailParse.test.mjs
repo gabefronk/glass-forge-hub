@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeGmailMessage, normalizeGraphMessage, accountHint, htmlToText, stripQuotedReply, parseAddressList, aggregateThread, toMessageRow, TEXT_CAP } from '../base44/shared/emailParse.js';
+import { normalizeGmailMessage, normalizeGraphMessage, accountHint, htmlToText, stripQuotedReply, parseAddressList, aggregateThread, TEXT_CAP } from '../base44/shared/emailParse.js';
 import { gmailMessage, graphMessage, REPLY_TEXT, HTML_BODY } from './fixtures/emailFixtures.mjs';
 
 const GF = { key: 'gf-gmail', address: 'gabriel.fronk.wd@gmail.com', provider: 'gmail', display_name: 'Glass Forge (Gmail)' };
@@ -88,7 +88,7 @@ test('graph: text body, recipients, attachments and webLink normalize; sender = 
   assert.equal(html.text, 'Hi');
 });
 
-test('aggregateThread folds messages into the thread row and keeps the latest incoming sender', () => {
+test('aggregateThread folds the run\'s messages into the ledger row: no text, counts and watermark carry forward', () => {
   const m1 = normalizeGmailMessage(gmailMessage({ id: 'm1', text: 'first', internalDate: '1758800000000' }), { mailboxAddress: GF.address });
   const m2 = normalizeGmailMessage(gmailMessage({ id: 'm2', from: 'Gabe Fronk <gabriel.fronk.wd@gmail.com>', to: 'kyle@ivoryhomes.com', labelIds: ['SENT'], text: 'reply', forwarded: false, internalDate: '1758850000000' }), { mailboxAddress: GF.address });
   const m3 = normalizeGmailMessage(gmailMessage({ id: 'm3', subject: 'Re: Lot 412 Oquirrh West - window install date', text: 'third, latest', internalDate: '1758900000000', attachments: [{ name: 'a.pdf' }] }), { mailboxAddress: GF.address });
@@ -101,14 +101,17 @@ test('aggregateThread folds messages into the thread row and keeps the latest in
   assert.equal(agg.last_message_at, m3.sent_at);
   assert.equal(agg.from_email, 'kyle@ivoryhomes.com');
   assert.equal(agg.account_hint, 'gabefronk@gmail.com');
-  assert.equal(agg.has_attachments, true);
-  assert.equal(agg.snippet, 'third, latest');
-  assert.deepEqual(agg.participants.map((p) => p.email), ['kyle@ivoryhomes.com', 'gabefronk@gmail.com']);
   assert.equal(agg.web_link, 'https://mail.google.com/mail/u/0/#all/t1');
-  const row = toMessageRow('gf-gmail', m3);
-  assert.deepEqual(Object.keys(row).sort(), ['attachments', 'cc', 'direction', 'from_email', 'from_name', 'internet_message_id', 'labels', 'mailbox_key', 'message_id', 'sent_at', 'subject', 'text', 'thread_id', 'to']);
-  // Stored rows (no helper fields) aggregate the same way on the next run.
-  const again = aggregateThread([toMessageRow('gf-gmail', m1), toMessageRow('gf-gmail', m2), m3], { mailbox: GF, previous: { ...agg, id: 'thr1' } });
-  assert.equal(again.has_attachments, true);
-  assert.equal(again.from_email, 'kyle@ivoryhomes.com');
+  for (const k of ['text', 'snippet', 'participants', 'to_emails', 'has_attachments', 'attachments']) assert.equal(k in agg, false, `${k} is not part of the ledger`);
+  // Next run: only the new message is in hand; the stored row supplies the rest.
+  const m4 = normalizeGmailMessage(gmailMessage({ id: 'm4', from: 'Gabe Fronk <gabriel.fronk.wd@gmail.com>', to: 'kyle@ivoryhomes.com', labelIds: ['SENT'], text: 'ok', forwarded: false, internalDate: '1758950000000' }), { mailboxAddress: GF.address });
+  const again = aggregateThread([m4], { mailbox: GF, previous: { ...agg, id: 'row1' } });
+  assert.equal(again.message_count, 4);
+  assert.equal(again.first_message_at, m1.sent_at);
+  assert.equal(again.last_message_at, m4.sent_at);
+  assert.equal(again.from_email, 'kyle@ivoryhomes.com', 'latest incoming sender carries forward when only Gabe wrote');
+  assert.equal(again.subject, 'Lot 412 Oquirrh West - window install date');
+  // A replayed older message never moves the watermark backwards.
+  const replay = aggregateThread([m2], { mailbox: GF, previous: { ...again } });
+  assert.equal(replay.last_message_at, m4.sent_at);
 });
