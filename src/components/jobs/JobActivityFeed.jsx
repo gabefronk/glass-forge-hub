@@ -122,7 +122,7 @@ function ChangeCard({ ev }) {
     <div className="flex items-center gap-2 rounded-[10px] px-3 py-2" style={{ border: `1px solid ${C.rowBorder}`, backgroundColor: "transparent" }}>
       <RefreshCw className="h-3 w-3 shrink-0" style={{ color: C.textMuted }} />
       <span className="text-[11.5px] break-words" style={{ color: C.textMuted }}>
-        Install moved: <span className="font-medium">{formatShort(ev.original_scheduled_date)}</span> → <span className="font-medium">{formatShort(ev.event_date)}</span>
+        Visit moved: <span className="font-medium">{formatShort(ev.original_scheduled_date)}</span> → <span className="font-medium">{formatShort(ev.event_date)}</span>
       </span>
     </div>
   );
