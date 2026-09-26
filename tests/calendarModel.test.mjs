@@ -4,10 +4,12 @@ import { eventKind, reportMissing, needsReportFilter, reportBadge, filterEvents,
 
 const TODAY = '2026-09-25';
 
-test('eventKind: app = install, google = service, outlook = outlook', () => {
-  assert.equal(eventKind({ source: 'app' }), 'install');
-  assert.equal(eventKind({ source: 'google' }), 'service');
-  assert.equal(eventKind({ source: 'outlook' }), 'outlook');
+test('eventKind: service wording means service, otherwise install; outlook separate', () => {
+  assert.equal(eventKind({ source: 'app', job_name: 'Holmes Homes - 210 Lakeview' }), 'install');
+  assert.equal(eventKind({ source: 'google', job_name: 'Holmes Homes - 210 Lakeview' }), 'install');
+  assert.equal(eventKind({ source: 'google', job_name: 'Pulte - 12 Oak', scope_notes: 'Warranty: reseal slider' }), 'service');
+  assert.equal(eventKind({ source: 'google', job_name: 'SERVICE - Ivory 217' }), 'service');
+  assert.equal(eventKind({ source: 'outlook', job_name: 'service' }), 'outlook');
 });
 
 test('future visits are never flagged for a missing report', () => {
@@ -29,8 +31,8 @@ test('reportBadge wording', () => {
 
 test('filters and counts', () => {
   const events = [
-    { id: 1, source: 'app', event_date: '2026-09-20', report_status: 'missing_all' },
-    { id: 2, source: 'google', event_date: '2026-09-21', report_status: 'ok' },
+    { id: 1, source: 'app', job_name: 'Install', event_date: '2026-09-20', report_status: 'missing_all' },
+    { id: 2, source: 'google', job_name: 'Service call', event_date: '2026-09-21', report_status: 'ok' },
     { id: 3, source: 'outlook', event_date: '2026-09-30', report_status: 'pending' },
   ];
   assert.deepEqual(filterEvents(events, 'install', TODAY).map((e) => e.id), [1]);
