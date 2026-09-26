@@ -87,7 +87,7 @@ export function publicMailbox(m) {
 const canSeeMailbox = (mailbox, user) => (mailbox?.visibility === 'owner' ? isOwner(user) : isStaff(user));
 const withChanges = (row, more) => [...(row.hub_changes || []), ...more].slice(-HUB_CHANGES_CAP);
 
-export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), budgetMs = 50_000, sleep } = {}) {
+export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), nowMs = () => Date.now(), budgetMs = 50_000, sleep } = {}) {
   if (typeof getClient !== 'function') throw new Error('emailAgent: getClient is required');
 
   // ---- shared helpers ------------------------------------------------------------------------
@@ -239,7 +239,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     const warn = (msg) => { if (counts.errors.length < 40) counts.errors.push(String(msg).slice(0, 300)); };
     const startedAt = now();
     const run = await api.EmailAgentRun.create({ mailbox_key: mailbox.key, started_at: startedAt, status: 'running', ...counts });
-    const overBudget = () => Date.now() - ctx.started > budgetMs;
+    const overBudget = () => nowMs() - ctx.started > budgetMs;
     const finish = async (status, lastError = '') => {
       const finished = now();
       try { await api.EmailAgentRun.update(run.id, { ...counts, status, finished_at: finished }); } catch { /* best effort */ }
@@ -362,8 +362,15 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     let index = null;
     const today = denverDate();
     let assignee; // undefined = not looked up yet, null = missing
-    for (const t of triaged) {
-      if (overBudget()) { warn('budget exhausted before relay finished'); break; }
+    for (let i = 0; i < triaged.length; i++) {
+      const t = triaged[i];
+      if (overBudget()) {
+        warn('budget exhausted before relay finished');
+        // Triage already cleared their pending flag; put it back so the next run re-reads,
+        // re-triages and relays them instead of leaving classified rows with no note / to-do.
+        for (const left of triaged.slice(i)) { try { await api.EmailRelay.update(left.row.id, { triage_pending: true }); } catch (e) { warn(`re-flag failed: ${errText(e)}`); } }
+        break;
+      }
       const row = t.row;
       const patch = {};
       const changes = [];
@@ -635,7 +642,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
         api: client.asServiceRole.entities,
         core: client.asServiceRole.integrations?.Core,
         connectors: client.asServiceRole.connectors,
-        started: Date.now(),
+        started: nowMs(),
       };
       return reply(await fn(ctx));
     } catch (e) {
