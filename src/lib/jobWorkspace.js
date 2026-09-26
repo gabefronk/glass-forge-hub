@@ -162,7 +162,25 @@ export function pickSuper({ saved, view, events } = {}) {
   const ROLE_RANK = ["project_manager", "site", "builder"];
   const other = [...linked].filter((c) => (c.phone || c.email) && c.role !== "homeowner" && c.role !== "customer").sort((a, b) => (ROLE_RANK.indexOf(a.role) + 99) % 99 - (ROLE_RANK.indexOf(b.role) + 99) % 99)[0];
   if (other) return { name: other.name || "", phone: other.phone || "", email: other.email || "", role: other.role || "", source: "linked", key: other.key || "" };
+  // The builder's own people: when the builder has exactly one super on file, that's the
+  // super for this job until someone says otherwise. Several candidates are offered as a
+  // pick list instead (see superChoices), never guessed.
+  const builderSupers = (view?.builder_contacts || []).filter((c) => c.role === "superintendent" && (c.phone || c.email));
+  if (builderSupers.length === 1) {
+    const b = builderSupers[0];
+    return { name: b.name || "", phone: b.phone || "", email: b.email || "", role: "superintendent", source: "builder", key: b.key || "" };
+  }
   return null;
+}
+
+// Builder contacts a person could pick as this job's super, most likely first (supers, then
+// PMs, then site contacts). Shown in the Super card when no super is on file yet.
+export function superChoices(view, limit = 3) {
+  const rank = { superintendent: 0, project_manager: 1, site: 2, builder: 3 };
+  return [...(view?.builder_contacts || [])]
+    .filter((c) => (c.phone || c.email) && c.role !== "homeowner" && c.role !== "customer")
+    .sort((a, b) => (rank[a.role] ?? 9) - (rank[b.role] ?? 9) || String(a.name || "").localeCompare(String(b.name || "")))
+    .slice(0, limit);
 }
 
 const uniq = (list) => [...new Set(list.map((v) => String(v || "").trim()).filter(Boolean))];
