@@ -166,7 +166,11 @@ export default function JobDetail() {
     watch("CalendarEvents", true);
     setLive(subs.length > 0);
     // Coming back to the tab (or the phone) catches anything missed while away.
-    const onVisible = () => { if (document.visibilityState === "visible") schedule(true); };
+    let hiddenAt = 0;
+    const onVisible = () => {
+      if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 60000) schedule(true);
+    };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearTimeout(timer);
