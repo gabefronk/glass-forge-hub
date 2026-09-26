@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Paperclip, X, Loader2 } from "lucide-react";
 import { C } from "@/lib/feeUI";
 import { denverDate } from "../../../base44/shared/billingCore.js";
+import { INTERACTION_TYPES } from "@/lib/jobHistory";
 
 export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel }) {
   const today = denverDate();
   const [noteDate, setNoteDate] = useState(editing?.note_date || today);
   const [body, setBody] = useState(editing?.body || "");
+  const [kind, setKind] = useState(editing?.interaction_type || "note");
   const [attachments, setAttachments] = useState(editing?.attachments || []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -36,6 +38,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
         job_id: jobId,
         note_date: noteDate,
         body: body.trim(),
+        interaction_type: kind,
         author,
         attachments,
         edited: !!editing,
@@ -65,6 +68,23 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
             style={{ border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.cardAlt }}
           />
           <span className="text-[11px] ml-auto whitespace-nowrap" style={{ color: C.textMuted }}>{editing ? "Edit note" : "New note"}</span>
+        </div>
+        <div role="radiogroup" aria-label="Type of interaction" className="flex flex-wrap gap-1.5">
+          {INTERACTION_TYPES.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              role="radio"
+              aria-checked={kind === t.value}
+              onClick={() => setKind(t.value)}
+              className="min-h-[32px] rounded-full px-3 text-[12px] font-medium whitespace-nowrap"
+              style={kind === t.value
+                ? { backgroundColor: C.accent, color: C.accentDark, border: `1px solid ${C.accent}` }
+                : { backgroundColor: C.card, color: C.textSecondary, border: `1px solid ${C.border}` }}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
         <textarea
           value={body}
