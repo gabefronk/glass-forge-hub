@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { C, formatShort, formatDateGroup, crewName } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import ClampedText from "./ClampedText";
@@ -137,9 +137,11 @@ function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
   );
 }
 
-export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick }) {
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history" }) {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
+  // A "Log interaction" button elsewhere on the page opens the form here.
+  useEffect(() => { if (openFormKey) setShowForm(true); }, [openFormKey]);
 
   const entries = useMemo(() => buildJobHistory({ events, rows, notes, fieldReports, files }), [events, rows, notes, fieldReports, files]);
   const counts = useMemo(() => historyCounts(entries), [entries]);
@@ -149,7 +151,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
     <div>
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
-          <h2 className="font-heading text-[20px] font-bold" style={{ color: C.text }}>Job history</h2>
+          <h2 className="font-heading text-[20px] font-bold" style={{ color: C.text }}>{title}</h2>
           {live ? (
             <span className="inline-flex items-center gap-1 text-[11px] whitespace-nowrap" style={{ color: C.textMuted }} title="New notes, reports and visits show up here on their own">
               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#2F8F6B" }} />Live
