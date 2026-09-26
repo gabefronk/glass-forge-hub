@@ -12,7 +12,7 @@
     --card-foreground: #182422;
     --popover: #FFFFFF;
     --popover-foreground: #182422;
-    --primary: #146556;
+    --primary: #0B3F3B;
     --primary-foreground: #FFFFFF;
     --secondary: #F0F1ED;
     --secondary-foreground: #182422;
@@ -103,6 +103,9 @@
     --gf-sidebar-text: #AEB5B7;
     --gf-sidebar-text-on: #F2EEE8;
     --gf-sidebar-muted: #8F999B;
+    --gf-error: #A43432;
+    --gf-error-bg: #FCEDEC;
+    --gf-error-border: #F0C9C5;
     --gf-graphite-900: #0C1F21;
     --gf-sync: #3B8A5A;
     --gf-tile-teal: #E2EEEB;
@@ -135,7 +138,7 @@
     --card-foreground: #182422;
     --popover: #FFFFFF;
     --popover-foreground: #182422;
-    --primary: #146556;
+    --primary: #0B3F3B;
     --primary-foreground: #FFFFFF;
     --secondary: #F0F1ED;
     --secondary-foreground: #182422;
@@ -329,4 +332,15 @@
   .bg-\[\#F6F8FC\] { background-color: var(--gf-card-band) !important; }
   .text-\[\#535E72\] { color: var(--gf-ink-3) !important; }
   .border-\[\#D8E3F4\] { border-color: var(--gf-border) !important; }
+
+  /* Window Quotes + reports off-brand blues/navies → Deep Teal & Brass */
+  .text-\[\#616D81\], .text-\[\#77839A\], .text-\[\#687385\], .text-\[\#687D8B\], .text-\[\#75838c\] { color: var(--gf-ink-3) !important; }
+  .text-\[\#526B7B\], .text-\[\#305367\], .text-\[\#526d7d\] { color: var(--gf-ink-2) !important; }
+  .text-\[\#20386E\], .text-\[\#203B64\] { color: var(--gf-teal-600) !important; }
+  .bg-\[\#F2F6FC\] { background-color: var(--gf-teal-050) !important; }
+  .hover\:bg-\[\#EDF3FA\]:hover { background-color: var(--gf-hover) !important; }
+  .hover\:bg-\[\#234F8E\]:hover { background-color: var(--gf-teal-700) !important; }
+  .border-\[\#CAD5E3\], .border-\[\#CBD5E2\], .border-\[\#AAB2BE\], .border-\[\#bdcbd4\] { border-color: var(--gf-border) !important; }
+  .bg-\[\#245889\], .bg-\[\#196c86\], .bg-\[\#247d9d\], .\!bg-\[\#247d9d\] { background-color: var(--gf-teal-600) !important; }
+  .\!border-\[\#247d9d\] { border-color: var(--gf-teal-600) !important; }
 }
