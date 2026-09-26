@@ -15,7 +15,7 @@ const FILLER = new Set([
   'where', 'when', 'who', 'which', 'do', 'does', 'did', 'have', 'has', 'any', 'anything', 'there', 'going', 'back', 'up', 'get', 'give',
   'show', 'find', 'tell', 'look', 'lookup', 'please', 'can', 'you', 'need', 'jobsite', 'address', 'addresses', 'site', 'job', 'location',
   'schedule', 'scheduled', 'calendar', 'visit', 'visits', 'next', 'last', 'this', 'week', 'deck', 'today', 'tomorrow', 'yesterday',
-  'tonight', 'morning', 'afternoon', 'install', 'installs', 'appointment', 'appointments', 'events', 'event', 'and', 'with', 'it', 'be',
+  'tonight', 'morning', 'afternoon', 'move', 'reschedule', 'push', 'install', 'installs', 'appointment', 'appointments', 'events', 'event', 'and', 'with', 'it', 'be',
   ...WEEKDAYS, ...Object.keys(SHORT_DAYS),
 ]);
 const SCHEDULE_HINT = /\b(today|tomorrow|yesterday|tonight|schedule[ds]?|calendar|on deck|this week|next week|visits?|when|appointments?|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i;
@@ -38,7 +38,7 @@ export function datesFromQuery(query, today) {
   if (/ today | tonight /.test(q)) return { date: today };
   if (/ tomorrow /.test(q)) return { date: addDays(today, 1) };
   if (/ yesterday /.test(q)) return { date: addDays(today, -1) };
-  if (/ this week /.test(q)) return { from: today, to: addDays(today, 6 - weekday(today)) };
+  if (/ this week /.test(q)) return { from: today, to: addDays(today, 6) }; // the next 7 days
   if (/ next week /.test(q)) { const mon = addDays(today, ((8 - weekday(today)) % 7) || 7); return { from: mon, to: addDays(mon, 6) }; }
   for (const t of q.trim().split(' ')) {
     const dow = WEEKDAYS.includes(t) ? WEEKDAYS.indexOf(t) : SHORT_DAYS[t];
