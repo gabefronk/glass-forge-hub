@@ -19,7 +19,8 @@ import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
 import JobPlansPhotos from "@/components/jobs/JobPlansPhotos";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
-import { buildJobHistory, recentSitePhotos, touchesJob } from "@/lib/jobHistory";
+import { buildJobHistory, recentSitePhotos } from "@/lib/jobHistory";
+import { useJobLive } from "@/hooks/use-job-live";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -41,7 +42,6 @@ export default function JobDetail() {
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const loadVersion = useRef(0);
-  const [live, setLive] = useState(false);
   const folder = useJobFolderFiles(job);
   const sitePhotos = useMemo(
     () => recentSitePhotos(buildJobHistory({ events: calEvents, rows, notes, fieldReports }), 9),
@@ -129,55 +129,15 @@ export default function JobDetail() {
     return () => { current = false; loadVersion.current++; };
   }, [id]);
 
-  // Live history: when anyone adds a note, report or visit for this job,
-  // reload quietly. Notes alone only need the cheap notes reload.
-  useEffect(() => {
-    if (!id) return undefined;
-    let timer = null;
-    let full = false;
-    const schedule = (needsFull) => {
-      full = full || needsFull;
-      clearTimeout(timer);
-      timer = setTimeout(async () => {
-        const doFull = full;
-        full = false;
-        try {
-          if (doFull) await loadAll({ quiet: true });
-          else {
-            const { rows: fl, notes: nt } = await loadJobActivity(liveRef.current.memberIds);
-            setRows(fl);
-            setNotes(nt);
-          }
-        } catch { /* the next change or a reload will catch up */ }
-      }, 1200);
-    };
-    const subs = [];
-    const watch = (entity, needsFull) => {
-      try {
-        const off = base44.entities[entity]?.subscribe?.((event) => {
-          const { memberIds, shownIds } = liveRef.current;
-          if (touchesJob(event, memberIds, shownIds)) schedule(needsFull);
-        });
-        if (typeof off === "function") subs.push(off);
-      } catch { /* realtime unavailable: the page still works, just not live */ }
-    };
-    watch("JobNotes", false);
-    watch("FieldReports", true);
-    watch("CalendarEvents", true);
-    setLive(subs.length > 0);
-    // Coming back to the tab (or the phone) catches anything missed while away.
-    let hiddenAt = 0;
-    const onVisible = () => {
-      if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
-      if (hiddenAt && Date.now() - hiddenAt > 60000) schedule(true);
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      clearTimeout(timer);
-      subs.forEach((off) => { try { off(); } catch { /* ignore */ } });
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [id]);
+  const live = useJobLive(id, {
+    scope: () => liveRef.current,
+    reloadAll: () => loadAll({ quiet: true }),
+    reloadNotes: async () => {
+      const { rows: fl, notes: nt } = await loadJobActivity(liveRef.current.memberIds);
+      setRows(fl);
+      setNotes(nt);
+    },
+  });
 
   const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
 
