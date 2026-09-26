@@ -1,7 +1,7 @@
 // Inbox agent: provider message -> normalized record. Pure functions, no I/O.
 // Works for Gmail API `users.messages.get?format=full` payloads and Microsoft Graph
-// `/me/messages/{id}` objects. Also folds a thread's messages into the EmailThread
-// aggregate the Hub stores.
+// `/me/messages/{id}` objects. Normalized messages live in memory for one agent run only
+// (bodies are never stored); `aggregateThread` folds them into the EmailRelay ledger row.
 
 export const TEXT_CAP = 20000;
 export const SNIPPET_CAP = 200;
@@ -242,61 +242,33 @@ export function normalizeGraphMessage(raw, { mailboxAddress = '' } = {}) {
   };
 }
 
-// ---- Thread aggregate -----------------------------------------------------------------
+// ---- Ledger aggregate -----------------------------------------------------------------
 
-// Fold every stored message of one thread (plus any new ones) into the EmailThread
-// fields the Hub keeps. `previous` is the stored thread row (or null for a new thread).
+// Fold the messages seen on one thread THIS run into the EmailRelay ledger fields. `previous`
+// is the stored ledger row (or null for a thread the agent has not seen before): earlier
+// counts and the latest known sender carry forward, since older messages are not kept.
+// Nothing here returns message text.
 export function aggregateThread(messages, { mailbox, previous = null } = {}) {
   const rows = [...messages].filter((m) => m && !m.is_draft).sort((a, b) => String(a.sent_at || '').localeCompare(String(b.sent_at || '')));
   const me = lowerEmail(mailbox?.address);
-  const seen = new Map();
-  const addP = (a) => { if (a && a.email && a.email !== me && !seen.has(a.email)) seen.set(a.email, { name: a.name || '', email: a.email }); };
-  for (const m of rows) {
-    addP({ name: m.from_name, email: m.from_email });
-    for (const a of m.to_named || (m.to || []).map((e) => ({ name: '', email: e }))) addP(a);
-    for (const a of m.cc_named || (m.cc || []).map((e) => ({ name: '', email: e }))) addP(a);
-  }
   const last = rows[rows.length - 1] || null;
-  const lastIncoming = [...rows].reverse().find((m) => m.direction === 'incoming') || last;
-  const toEmails = [...new Set(rows.flatMap((m) => m.to || []))];
+  const lastIncoming = [...rows].reverse().find((m) => m.direction === 'incoming') || null;
   const hintRow = rows.find((m) => m.direction === 'incoming' && m.account_hint) || rows.find((m) => m.account_hint);
   const subject = (rows.find((m) => m.subject) || {}).subject || previous?.subject || '';
   const webLink = last?.web_link || previous?.web_link || (mailbox?.provider === 'gmail' && (last?.thread_id || previous?.thread_id) ? `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(last?.thread_id || previous?.thread_id)}` : '');
+  const firstSeen = rows[0]?.sent_at || null;
+  const prevFirst = previous?.first_message_at || null;
   return {
     mailbox_key: mailbox?.key || previous?.mailbox_key || '',
     thread_id: last?.thread_id || previous?.thread_id || '',
     account_hint: hintRow?.account_hint || previous?.account_hint || me,
     subject: subject.replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, '').trim() || subject,
-    participants: [...seen.values()].slice(0, 30),
-    from_name: lastIncoming?.from_name || previous?.from_name || '',
+    from_name: lastIncoming?.from_name ?? previous?.from_name ?? '',
     from_email: lastIncoming?.from_email || previous?.from_email || '',
-    to_emails: toEmails.slice(0, 30),
-    first_message_at: rows[0]?.sent_at || previous?.first_message_at || null,
-    last_message_at: last?.sent_at || previous?.last_message_at || null,
-    message_count: rows.length,
-    snippet: last ? snippetOf(last.snippet || last.text) : (previous?.snippet || ''),
-    has_attachments: rows.some((m) => m.has_attachments === true || (Array.isArray(m.attachments) && m.attachments.length > 0)) || previous?.has_attachments === true,
+    first_message_at: prevFirst && firstSeen ? (prevFirst < firstSeen ? prevFirst : firstSeen) : (prevFirst || firstSeen),
+    last_message_at: last?.sent_at && (!previous?.last_message_at || last.sent_at > previous.last_message_at) ? last.sent_at : (previous?.last_message_at || last?.sent_at || null),
+    message_count: (Number(previous?.message_count) || 0) + rows.length,
     provider_labels: [...new Set((last?.labels || previous?.provider_labels || []))].slice(0, 40),
     web_link: webLink,
-  };
-}
-
-// Strip normalized-only helper fields before storing an EmailMessage row.
-export function toMessageRow(mailboxKey, m) {
-  return {
-    mailbox_key: mailboxKey,
-    thread_id: m.thread_id,
-    message_id: m.message_id,
-    internet_message_id: m.internet_message_id || '',
-    sent_at: m.sent_at,
-    from_name: m.from_name || '',
-    from_email: m.from_email || '',
-    to: m.to || [],
-    cc: m.cc || [],
-    subject: m.subject || '',
-    text: String(m.text || '').slice(0, TEXT_CAP),
-    direction: m.direction === 'outgoing' ? 'outgoing' : 'incoming',
-    attachments: (m.attachments || []).slice(0, 50),
-    labels: (m.labels || []).slice(0, 40),
   };
 }
