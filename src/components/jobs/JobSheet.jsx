@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase, Camera, ChevronDown, Pencil, ClipboardCheck, ExternalLink, FileText, MapPin, MessageSquare, Navigation, Phone, Plus, HardHat, UserPlus } from "lucide-react";
+import { Briefcase, Camera, ChevronDown, Pencil, ClipboardCheck, ExternalLink, FileText, Home, MapPin, MessageSquare, Navigation, Phone, Plus, HardHat, UserPlus } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
@@ -9,6 +9,8 @@ import ScopeNotes from "@/components/jobs/ScopeNotes";
 import { fileBadge, fileLabel } from "@/lib/jobHistory";
 import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs/JobEventDocuments";
 import { useJobSuper } from "@/hooks/use-job-super";
+import { useJobHomeowner, searchContacts } from "@/hooks/use-job-homeowner";
+import { pickHomeowner } from "../../../base44/shared/jobHomeowner.js";
 
 // "Sand & brass" job sheet: a dark hero (name, address, super, next step,
 // actions, files) and white section cards with green-haze title bands.
@@ -46,6 +48,9 @@ export function LiveMark({ live }) {
 }
 
 // ---------- Super card (lives in the hero) ----------
+
+const BOX_SHELL = "w-full rounded-[12px] p-3.5 pb-3";
+const BOX_STYLE = { background: "linear-gradient(150deg,rgba(207,227,218,.16),rgba(207,227,218,.06))", border: "1px solid rgba(207,227,218,.22)" };
 
 const FIELD = "h-[34px] w-full min-w-0 rounded-[8px] px-2.5 text-[13.5px] outline-none focus:ring-2";
 const FIELD_STYLE = { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.16)", "--tw-ring-color": "rgba(224,201,148,.5)" };
@@ -86,8 +91,8 @@ function SuperBox({ jobId, jobContacts, events }) {
   const [error, setError] = useState("");
   useEffect(() => { setError(""); setEditing(false); }, [jobId]);
 
-  const shell = "w-[300px] max-w-full shrink-0 rounded-[12px] p-3.5 pb-3 max-[899px]:w-full";
-  const shellStyle = { background: "linear-gradient(150deg,rgba(207,227,218,.16),rgba(207,227,218,.06))", border: "1px solid rgba(207,227,218,.22)" };
+  const shell = BOX_SHELL;
+  const shellStyle = BOX_STYLE;
   const label = person?.role && person.role !== "superintendent" ? (ROLE_LABELS[person.role] || "Contact").toUpperCase() : "SUPER";
   const save = async (contact) => {
     await jobSuper.save(contact);
