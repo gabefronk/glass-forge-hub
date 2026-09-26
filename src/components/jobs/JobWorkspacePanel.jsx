@@ -173,6 +173,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged })
               onPhotoClick={setLightbox}
               openFormKey={openFormKey}
               title="Visits"
+              dedupe={snap}
             />
           </SheetCard>
         </div>
