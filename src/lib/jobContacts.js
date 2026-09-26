@@ -1,6 +1,6 @@
 // Display helpers for the job ⇄ contact join served by the contacts-directory function.
-import { contactRole, highConfidenceSingleCandidateLinks } from "../../base44/shared/jobContacts.js";
-export { highConfidenceSingleCandidateLinks };
+import { contactRole, highConfidenceSingleCandidateLinks, calendarSuperAdds } from "../../base44/shared/jobContacts.js";
+export { highConfidenceSingleCandidateLinks, calendarSuperAdds };
 
 export const ASSIGNABLE_CONTACT_ROLES = ["customer", "homeowner", "builder", "superintendent", "project_manager", "site"];
 
