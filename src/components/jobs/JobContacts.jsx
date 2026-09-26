@@ -53,11 +53,13 @@ function Missing({ children }) {
 
 // Linked people for the job, by role, with explicit indicators when nobody (or no superintendent) is linked.
 // Builder-level contacts are drawn by the caller next to the builder name.
-export function JobContactRows({ jobId, jobContacts }) {
+// heroShowsPeople: the job page hero already shows the super and homeowner cards, so the
+// Contacts card skips those two rows instead of showing them a second time.
+export function JobContactRows({ jobId, jobContacts, heroShowsPeople = false }) {
   const { phase, view, error, reload } = jobContacts || {};
   if (!jobContacts || phase === "private" || phase === "idle") return null;
   if (phase === "loading") {
-    return <Row icon={HardHat} label="Superintendent"><p className="text-[12px]" style={{ color: C.textMuted }}>Loading contacts…</p></Row>;
+    return <Row icon={HardHat} label={heroShowsPeople ? "Contacts" : "Superintendent"}><p className="text-[12px]" style={{ color: C.textMuted }}>Loading contacts…</p></Row>;
   }
   if (phase === "error") {
     return (
@@ -76,14 +78,14 @@ export function JobContactRows({ jobId, jobContacts }) {
   const contactsHref = `/contacts?job=${encodeURIComponent(jobId)}`;
   return (
     <>
-      <Row icon={HardHat} label="Superintendent">
+      {!heroShowsPeople && <Row icon={HardHat} label="Superintendent">
         {supers.length > 0 ? (
           <div className="space-y-1.5">{supers.map((c) => <ContactRow key={c.key} contact={c} detail={LINK_LABELS[c.link]} />)}</div>
         ) : (
           <Missing>No superintendent linked{suggestedSupers > 0 ? ` · ${suggestedSupers} suggested below` : ""}</Missing>
         )}
-      </Row>
-      <Row icon={Home} label="Homeowner">
+      </Row>}
+      {!heroShowsPeople && <Row icon={Home} label="Homeowner">
         {owners.length > 0 ? (
           <div className="space-y-1.5">{owners.map((c) => <ContactRow key={c.key} contact={c} detail={c.role === "customer" ? "Customer" : LINK_LABELS[c.link]} />)}</div>
         ) : (
@@ -92,7 +94,7 @@ export function JobContactRows({ jobId, jobContacts }) {
             {ownerSuggestions.length > 0 && <div className="mt-2"><ContactSuggestions suggestions={ownerSuggestions} onConfirm={jobContacts.confirmLink} /></div>}
           </>
         )}
-      </Row>
+      </Row>}
       {others.map(([role, list]) => (
         <Row key={role} icon={role === "project_manager" ? HardHat : User} label={ROLE_LABELS[role]}>
           <div className="space-y-1.5">{list.map((c) => <ContactRow key={c.key} contact={c} detail={LINK_LABELS[c.link]} />)}</div>
