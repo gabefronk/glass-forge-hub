@@ -233,3 +233,25 @@ test('Jobs hub counts: duplicates shown once, completed reports leave the Needs 
   assert.equal(degraded.stats['job-a'].status.key, 'complete');
   assert.equal(degraded.counts.needs_report, 2);
 });
+
+test('a name-only record merges into the same-name record that has the real address', () => {
+  const nameOnly = { id: 'n1', canonical_name: 'pulte homes - 338 sunset flats', created_date: '2026-06-01' };
+  const full = { id: 'n2', canonical_name: 'Pulte Home - 338 Sunset Flats', builder: 'Pulte Home', address: '4929 N Granite Ln Eagle Mountain, UT 84005', created_date: '2026-06-03' };
+  const otherLot = { id: 'n3', canonical_name: 'Pulte Home - 339 Sunset Flats', builder: 'Pulte Home', address: '4931 N Granite Ln Eagle Mountain, UT 84005', created_date: '2026-06-04' };
+  const { groups, groupByJobId } = groupJobs([nameOnly, full, otherLot]);
+  assert.equal(groups.length, 2);
+  const g = groupByJobId.get('n2');
+  assert.equal(g, groupByJobId.get('n1'));
+  assert.deepEqual(g.memberIds, ['n1', 'n2'], 'oldest record stays canonical');
+  assert.equal(g.merged, true);
+  assert.deepEqual(g.review, []);
+  assert.notEqual(groupByJobId.get('n3'), g, 'another lot stays its own job');
+});
+
+test('same name but two different real addresses stays flagged, not merged', () => {
+  const a = { id: 'd1', canonical_name: 'DAI - 26 Calypso Wild Flower', builder: 'DAI', address: '1839 N Barbara Belle Lane Saratoga Springs, UT 84043', created_date: '2026-01-01' };
+  const b = { id: 'd2', canonical_name: 'DAI - 26 Calypso Wild Flower', builder: 'DAI', address: '1868 N Dancing Lady Lane, Saratoga Springs UT 84043', created_date: '2026-01-02' };
+  const { groups, groupByJobId } = groupJobs([a, b]);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groupByJobId.get('d1').review.map((r) => r.reason), ['Same customer and job name']);
+});
