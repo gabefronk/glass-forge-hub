@@ -165,6 +165,141 @@ function SuperBox({ jobId, jobContacts, events }) {
   );
 }
 
+// ---------- Homeowner card (directly under the super, same access as the super) ----------
+
+function HomeownerForm({ initial, canRemove, onSave, onRemove, onCancel }) {
+  const [f, setF] = useState({ name: initial?.name || "", phone: initial?.phone || "", email: initial?.email || "" });
+  const [picked, setPicked] = useState(null);
+  const [matches, setMatches] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const search = useRef(0);
+  const set = (k) => (e) => { setPicked(null); setF((v) => ({ ...v, [k]: e.target.value })); };
+  useEffect(() => {
+    const n = ++search.current;
+    if (picked || f.name.trim().length < 2) { setMatches([]); return undefined; }
+    const t = setTimeout(() => { searchContacts(f.name).then((list) => { if (n === search.current) setMatches(list); }).catch(() => {}); }, 200);
+    return () => clearTimeout(t);
+  }, [f.name, picked]);
+  const choose = (c) => { setPicked(c); setMatches([]); setF({ name: c.name || "", phone: c.phone || "", email: c.email || "" }); };
+  const run = async (fn) => {
+    setSaving(true); setError("");
+    try { await fn(); } catch (err) { setError(err.message || "Could not save."); setSaving(false); }
+  };
+  const submit = (e) => {
+    e.preventDefault();
+    if (picked) { run(() => onSave({ contactKey: picked.key })); return; }
+    if (!f.name.trim() || (!f.phone.trim() && !f.email.trim())) { setError("Add a name and a phone or email."); return; }
+    run(() => onSave({ name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim() }));
+  };
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-2">
+      <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>{canRemove ? "CHANGE HOMEOWNER" : "ADD HOMEOWNER"}</div>
+      <div className="relative">
+        <input autoFocus aria-label="Homeowner name" placeholder="Name (or search contacts)" autoComplete="off" value={f.name} onChange={set("name")} className={FIELD} style={FIELD_STYLE} />
+        {matches.length > 0 ? (
+          <ul role="listbox" aria-label="Matching contacts" className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 overflow-hidden rounded-[9px] bg-white" style={{ border: "1px solid #e2dcd1", boxShadow: "0 12px 30px -10px rgba(21,24,26,.4)" }}>
+            {matches.map((c) => (
+              <li key={c.key}>
+                <button type="button" role="option" aria-selected="false" onClick={() => choose(c)} className="block min-h-11 w-full px-3 py-2 text-left hover:bg-black/[0.04]">
+                  <span className="block truncate text-[13px] font-semibold" style={{ color: INK }}>{sanitizeText(c.name)}</span>
+                  <span className="block truncate text-[11.5px]" style={{ color: MUTED }}>{[c.company, c.phone || c.email].filter(Boolean).join(" · ")}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      {picked ? <p className="m-0 text-[12px]" style={{ color: "#9fc3b6" }}>Using the saved contact {sanitizeText(picked.name)}{picked.company ? ` (${sanitizeText(picked.company)})` : ""}.</p> : null}
+      <input aria-label="Homeowner phone" placeholder="Phone" inputMode="tel" value={f.phone} onChange={set("phone")} className={FIELD} style={FIELD_STYLE} />
+      <input aria-label="Homeowner email" placeholder="Email (optional)" inputMode="email" value={f.email} onChange={set("email")} className={FIELD} style={FIELD_STYLE} />
+      {error ? <p role="alert" className="m-0 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" disabled={saving} className="inline-flex min-h-[34px] flex-1 items-center justify-center rounded-[9px] text-[13.5px] font-semibold disabled:opacity-60 max-[699px]:min-h-11" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{saving ? "Saving…" : "Save homeowner"}</button>
+        <button type="button" onClick={onCancel} className="inline-flex min-h-[34px] items-center rounded-[9px] px-3 text-[13.5px] font-semibold max-[699px]:min-h-11" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>Cancel</button>
+        {canRemove ? <button type="button" disabled={saving} onClick={() => run(onRemove)} className="inline-flex min-h-[34px] items-center px-1 text-[12.5px] font-semibold hover:underline disabled:opacity-60 max-[699px]:min-h-11" style={{ color: "#f1b9b3" }}>Remove</button> : null}
+      </div>
+    </form>
+  );
+}
+
+function HomeownerBox({ job, jobContacts }) {
+  const jobId = job?.id;
+  const homeowner = useJobHomeowner(jobId);
+  const view = jobContacts?.view?.job?.id === jobId ? jobContacts.view : null;
+  const person = useMemo(() => pickHomeowner({ saved: homeowner.saved, view, job }), [homeowner.saved, view, job]);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setError(""); setEditing(false); }, [jobId]);
+  const refresh = () => { if (jobContacts?.phase && jobContacts.phase !== "private") jobContacts.reload(); };
+  const save = async (input) => { await homeowner.save(input); setEditing(false); refresh(); };
+  const remove = async () => { await homeowner.remove(); setEditing(false); refresh(); };
+  const small = "inline-flex min-h-[30px] items-center gap-1.5 text-[12.5px] font-semibold hover:underline disabled:opacity-60 max-[699px]:min-h-11";
+
+  if (editing) {
+    return <div className={BOX_SHELL} style={BOX_STYLE}><HomeownerForm initial={person} canRemove={person?.source === "linked"} onSave={save} onRemove={remove} onCancel={() => setEditing(false)} /></div>;
+  }
+  if (!person) {
+    return (
+      <div className={BOX_SHELL} style={BOX_STYLE}>
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "rgba(207,227,218,.18)", color: "#cfe3da" }}><Home className="h-4 w-4" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>HOMEOWNER</div>
+            <div className="text-[14.5px] font-semibold" style={{ color: HERO_MUTED }}>{homeowner.loading ? "Looking…" : "Not on file yet"}</div>
+          </div>
+          <button type="button" onClick={() => setEditing(true)} className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold max-[699px]:min-h-11" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>
+            <UserPlus className="h-3.5 w-3.5" style={{ color: BRASS_LT }} />Add
+          </button>
+        </div>
+        {homeowner.error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{homeowner.error}</p> : null}
+      </div>
+    );
+  }
+  const confirm = async () => {
+    setSaving(true); setError("");
+    try { await save({ contactKey: person.key }); } catch (e) { setError(e.message || "Could not save."); } finally { setSaving(false); }
+  };
+  const tag = person.source === "suggestion" ? " · SUGGESTED" : person.source === "job" ? " · FROM JOB RECORD" : "";
+  return (
+    <div className={BOX_SHELL} style={BOX_STYLE}>
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-extrabold" style={{ backgroundColor: "#e0c994", color: "#1d160a" }}>{initials(person.name)}</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>HOMEOWNER{tag ? <span style={{ color: "#8f999b" }}>{tag}</span> : null}</div>
+          <div className="truncate text-[17px] font-bold" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}{person.note ? <span className="text-[12.5px] font-medium" style={{ color: HERO_MUTED }}> ({sanitizeText(person.note)})</span> : null}</div>
+        </div>
+      </div>
+      {person.phone || person.email ? (
+        <div className="mt-3 flex gap-2">
+          {person.phone ? (
+            <a href={`tel:${digits(person.phone)}`} className="inline-flex min-h-[34px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap max-[699px]:min-h-11" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${sanitizeText(person.name)}`}>
+              <Phone className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{person.phone}</span>
+            </a>
+          ) : null}
+          {person.phone ? (
+            <a href={`sms:${digits(person.phone)}`} className="inline-flex min-h-[34px] items-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap max-[699px]:min-h-11" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>
+              <MessageSquare className="h-3.5 w-3.5" style={{ color: BRASS_LT }} />Text
+            </a>
+          ) : null}
+          {!person.phone && person.email ? (
+            <a href={`mailto:${person.email}`} className="inline-flex min-h-[34px] flex-1 items-center justify-center rounded-[9px] px-3 text-[13.5px] font-semibold max-[699px]:min-h-11" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>Email</a>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="mt-2 flex items-center gap-3">
+        {person.email ? <a href={`mailto:${person.email}`} className="min-w-0 flex-1 truncate text-[12px] hover:underline" style={{ color: "#9aa6a8" }}>{person.email}</a> : <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: "#8f999b" }}>{person.source === "job" ? "No phone on file" : ""}</span>}
+        {person.source === "suggestion"
+          ? <button type="button" disabled={saving} onClick={confirm} className={small} style={{ color: BRASS_LT }}><UserPlus className="h-3.5 w-3.5" />{saving ? "Saving…" : "Save as homeowner"}</button>
+          : null}
+        <button type="button" onClick={() => setEditing(true)} className={small} style={{ color: person.source === "job" ? BRASS_LT : "#9fc3b6" }}>{person.source === "linked" ? "Change" : person.source === "job" ? "Add phone" : "Edit"}</button>
+      </div>
+      {error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
+    </div>
+  );
+}
+
 // ---------- Files dropdown ----------
 
 // Job folder files (Drive), plan sets (PlanIntake) and calendar attachments in
@@ -331,7 +466,10 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
               </a>
             ) : null}
           </div>
-          <SuperBox jobId={job.id} jobContacts={jobContacts} events={events} />
+          <div className="flex w-[300px] max-w-full shrink-0 flex-col gap-2.5 max-[899px]:w-full">
+            <SuperBox jobId={job.id} jobContacts={jobContacts} events={events} />
+            <HomeownerBox job={job} jobContacts={jobContacts} />
+          </div>
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2.5 rounded-[12px] py-2.5 pl-4 pr-2.5" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
