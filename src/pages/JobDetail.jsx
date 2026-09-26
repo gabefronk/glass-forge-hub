@@ -17,6 +17,9 @@ import JobMessageThreads from "@/components/jobs/JobMessageThreads";
 import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
+import JobPlansPhotos from "@/components/jobs/JobPlansPhotos";
+import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
+import { buildJobHistory, recentSitePhotos, touchesJob } from "@/lib/jobHistory";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -38,6 +41,18 @@ export default function JobDetail() {
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const loadVersion = useRef(0);
+  const [live, setLive] = useState(false);
+  const folder = useJobFolderFiles(job);
+  const sitePhotos = useMemo(
+    () => recentSitePhotos(buildJobHistory({ events: calEvents, rows, notes, fieldReports }), 9),
+    [calEvents, rows, notes, fieldReports]
+  );
+  // Kept in refs so the realtime listener always sees the current job.
+  const liveRef = useRef({ memberIds: [id], shownIds: [] });
+  liveRef.current = {
+    memberIds: [id, ...(group?.memberIds || [])],
+    shownIds: [...notes.map((n) => n.id), ...calEvents.map((e) => e.id), ...fieldReports.map((r) => r.id)].filter(Boolean),
+  };
 
   const attachFolder = async () => {
     setLinkingFolder(true);setFolderError("");
@@ -52,10 +67,13 @@ export default function JobDetail() {
     catch (e) { setFolderError(e.message || "Drive folder could not be unlinked."); }
     finally { setLinkingFolder(false); }
   };
-  const loadAll = async () => {
+  // quiet: a live refresh keeps what is on screen until the new data arrives.
+  const loadAll = async ({ quiet = false } = {}) => {
     const version = ++loadVersion.current;
-    setCalEvents([]);
-    setEvidence(null);
+    if (!quiet) {
+      setCalEvents([]);
+      setEvidence(null);
+    }
     const [jb, grp] = await Promise.all([
       base44.entities.Jobs.get(id),
       loadJobGroup(id),
@@ -111,6 +129,52 @@ export default function JobDetail() {
     return () => { current = false; loadVersion.current++; };
   }, [id]);
 
+  // Live history: when anyone adds a note, report or visit for this job,
+  // reload quietly. Notes alone only need the cheap notes reload.
+  useEffect(() => {
+    if (!id) return undefined;
+    let timer = null;
+    let full = false;
+    const schedule = (needsFull) => {
+      full = full || needsFull;
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const doFull = full;
+        full = false;
+        try {
+          if (doFull) await loadAll({ quiet: true });
+          else {
+            const { rows: fl, notes: nt } = await loadJobActivity(liveRef.current.memberIds);
+            setRows(fl);
+            setNotes(nt);
+          }
+        } catch { /* the next change or a reload will catch up */ }
+      }, 1200);
+    };
+    const subs = [];
+    const watch = (entity, needsFull) => {
+      try {
+        const off = base44.entities[entity]?.subscribe?.((event) => {
+          const { memberIds, shownIds } = liveRef.current;
+          if (touchesJob(event, memberIds, shownIds)) schedule(needsFull);
+        });
+        if (typeof off === "function") subs.push(off);
+      } catch { /* realtime unavailable: the page still works, just not live */ }
+    };
+    watch("JobNotes", false);
+    watch("FieldReports", true);
+    watch("CalendarEvents", true);
+    setLive(subs.length > 0);
+    // Coming back to the tab (or the phone) catches anything missed while away.
+    const onVisible = () => { if (document.visibilityState === "visible") schedule(true); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(timer);
+      subs.forEach((off) => { try { off(); } catch { /* ignore */ } });
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [id]);
+
   const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
 
   if (loading) {
@@ -163,7 +227,7 @@ export default function JobDetail() {
                 <Camera className="h-3.5 w-3.5" />Add field report
               </button>
               <a href="#add-note" className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
-                <Plus className="h-3.5 w-3.5" />Add note
+                <Plus className="h-3.5 w-3.5" />Log interaction
               </a>
             </div>
           </div>
@@ -173,17 +237,21 @@ export default function JobDetail() {
         {/* Body: facts rail + activity feed */}
         <div className="max-w-[1240px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
           <aside className="lg:col-span-4 lg:sticky lg:top-6 self-start">
-            <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} />
+            <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} hideDocuments />
       {canWriteJobDocuments(user) && <section className="rounded-xl border bg-white p-3 text-xs"><strong>Drive job folder linking</strong><p className="mt-1">Paste the ID of a verified folder inside Glass Forge Jobs. A matching name alone is not enough. {job.drive_job_folder_id ? "Linking a new folder replaces the current link." : ""}</p><div className="mt-2 flex gap-2"><input className="min-w-0 flex-1 rounded border p-2" aria-label="Drive folder ID" value={folderId} onChange={e=>setFolderId(e.target.value)}/><button disabled={linkingFolder||!folderId.trim()} className="rounded bg-teal-900 px-3 text-white disabled:opacity-50" onClick={attachFolder}>{job.drive_job_folder_id ? "Replace folder link" : "Link folder"}</button></div>{job.drive_job_folder_id && <button type="button" disabled={linkingFolder} className="mt-2 underline disabled:opacity-50" onClick={unlinkFolder}>Unlink folder</button>}{folderError&&<p role="alert" className="mt-2 text-red-700">{folderError}</p>}</section>}
             <JobMoneyPanel jobId={id} />
           </aside>
-          <div className="lg:col-span-8 min-w-0" id="add-note">
+          <div className="lg:col-span-8 min-w-0">
+            <JobPlansPhotos folder={folder} plans={plans} events={calEvents} sitePhotos={sitePhotos} onPhotoClick={setLightbox} />
+            <div id="add-note" />
             <JobActivityFeed
               jobId={id}
               events={calEvents}
               rows={rows}
               notes={notes}
               fieldReports={fieldReports}
+              files={folder.files}
+              live={live}
               currentUser={user?.email || user?.full_name || ""}
               onChanged={loadAll}
               onPhotoClick={setLightbox}
