@@ -40,11 +40,12 @@ export function HeroBar({ children, className = "" }) {
 }
 
 // Stat tiles inside the hero.
-export function HeroStat({ label, value, tone }) {
+export function HeroStat({ label, value, tone, sub }) {
   return (
     <div className="min-w-[120px] rounded-[12px] px-3.5 py-2.5" style={{ backgroundColor: "rgba(207,227,218,.08)", border: "1px solid rgba(207,227,218,.18)" }}>
       <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>{String(label).toUpperCase()}</div>
-      <div className="mt-0.5 text-[20px] font-bold tabular-nums" style={{ color: tone === "brass" ? BRASS_LT : HERO_INK, letterSpacing: "-0.02em" }}>{value}</div>
+      <div className="mt-0.5 text-[20px] font-bold tabular-nums [overflow-wrap:anywhere]" style={{ color: tone === "brass" ? BRASS_LT : HERO_INK, letterSpacing: "-0.02em" }}>{value}</div>
+      {sub ? <div className="mt-0.5 text-[11.5px] break-words" style={{ color: HERO_MUTED }}>{sub}</div> : null}
     </div>
   );
 }

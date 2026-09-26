@@ -6,9 +6,10 @@ import { base44 } from "@/api/base44Client";
 import { formatMoney, withComputedAmounts } from "@/lib/feeMath";
 import { buildSupersededSet, isReady, withCompanions } from "@/lib/invoicingFilters";
 import { C } from "@/lib/feeUI";
+import { PageShell, PageHero, HeroStat, heroBtn, heroPrimary, heroSecondary } from "@/components/PageShell";
 import { useTodoAccess } from "@/hooks/use-todo-access";
 import { dueState, laneKey, laneLabel, sortByUrgency } from "@/lib/todoBoard";
-import { Download, Plus, Check, ListTodo } from "lucide-react";
+import { Download, Plus, Check, ListTodo, HardHat } from "lucide-react";
 import OutstandingReports from "@/components/dashboard/OutstandingReports";
 import ComplianceSettings from "@/components/dashboard/ComplianceSettings";
 
@@ -187,40 +188,30 @@ export default function Dashboard() {
   const userName = user?.full_name || user?.email?.split("@")[0] || "there";
 
   return (
-    <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-      {/* Hero glow */}
-      <div className="hero-glow px-[26px] pt-[26px] pb-4 max-[699px]:px-[18px] max-[699px]:pt-[18px]">
-        {/* Header row */}
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-          <div className="min-w-0 flex-1 basis-[300px]">
-            <div className="mono-label mb-1.5">{dateHeader()}</div>
-            <h1 className="font-heading text-[24px] sm:text-[28px] font-semibold break-words" style={{ color: C.text, letterSpacing: "-0.03em" }}>
-              {greeting()}, {userName}
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={exportStatement} disabled={exporting} title={`PDF of ${currentMonth} lines that are ready to bill`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6] disabled:opacity-60" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
-              <Download className="h-3.5 w-3.5" />
-              {exporting ? "Generating…" : "Export statement"}
-            </button>
-            <button onClick={() => navigate("/window-quotes?new=1")} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
-              <Plus className="h-3.5 w-3.5" />
-              New quote
-            </button>
-          </div>
-        </div>
-
+    <PageShell width="max-w-none">
+      <PageHero
+        eyebrow={dateHeader()}
+        title={`${greeting()}, ${userName}`}
+        actions={<>
+          <button type="button" onClick={exportStatement} disabled={exporting} title={`PDF of ${currentMonth} lines that are ready to bill`} className={`${heroBtn} disabled:opacity-60`} style={heroSecondary}>
+            <Download className="h-4 w-4" style={{ color: "#e0c994" }} />{exporting ? "Generating…" : "Export statement"}
+          </button>
+          <button onClick={() => navigate("/window-quotes?new=1")} className={heroBtn} style={heroPrimary}>
+            <Plus className="h-4 w-4" />New quote
+          </button>
+        </>}
+      >
         {/* KPI row */}
         <div className="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-4 gap-3">
-          <KpiCard label="Profit YTD" value={`$${formatMoney(ytdProfit)}`} sub={`${ytdMonths.length} ${ytdMonths.length === 1 ? "month" : "months"} recorded in ${currentMonth.slice(0, 4)}`} />
-          <KpiCard label={`${currentMonth} recorded fees`} value={`$${formatMoney(billing.monthEarnedTotal)}`} valueColor={C.accent} sub={`${formatMoney(billing.heldTotal)} held · excludes scheduled`} />
-          <KpiCard label="Ready to bill" value={`$${formatMoney(unbilled.total)}`} sub={`${unbilled.count} eligible lines this month`} />
-          <KpiCard label="On hold" value={String(onHold.count)} valueColor={C.amber} sub={onHold.name || "—"} subColor={C.amber} />
+          <HeroStat label="Profit YTD" value={`$${formatMoney(ytdProfit)}`} sub={`${ytdMonths.length} ${ytdMonths.length === 1 ? "month" : "months"} recorded in ${currentMonth.slice(0, 4)}`} />
+          <HeroStat label={`${currentMonth} recorded fees`} value={`$${formatMoney(billing.monthEarnedTotal)}`} tone="brass" sub={`${formatMoney(billing.heldTotal)} held · excludes scheduled`} />
+          <HeroStat label="Ready to bill" value={`$${formatMoney(unbilled.total)}`} sub={`${unbilled.count} eligible lines this month`} />
+          <HeroStat label="On hold" value={String(onHold.count)} tone={onHold.count ? "brass" : undefined} sub={onHold.name || "—"} />
         </div>
-      </div>
+      </PageHero>
 
       {/* Body */}
-      <div className="px-[26px] max-[699px]:px-[18px] pb-10">
+      <div>
         {calendarError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{calendarError}</p>}
         {loadError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{loadError}</p>}
         {exportError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{exportError}</p>}
@@ -232,9 +223,10 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] gap-5">
           {/* Left: Run sheet */}
           <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-            <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
-              <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Today's run sheet</h2>
-              <span className="font-mono-num text-[12px]" style={{ color: C.textSecondary }}>
+            <div className="sheet-band flex flex-wrap items-center gap-3 px-5 py-[11px] max-[699px]:px-4">
+              <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] text-white" style={{ backgroundColor: "#0b3f3b" }}><HardHat className="h-[15px] w-[15px]" /></span>
+              <h2 className="m-0 text-[16.5px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>Today&apos;s run sheet</h2>
+              <span className="ml-auto font-mono-num text-[12.5px] font-medium" style={{ color: "#3e5a55" }}>
                 {doneCount} of {sortedToday.length} done
               </span>
             </div>
@@ -353,8 +345,8 @@ export default function Dashboard() {
           <div className="min-w-0 space-y-4">
             {/* First-up card */}
             {firstUp && (
-              <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.accent, color: "#FFFFFF" }}>
-                <div className="mono-label-sm mb-2" style={{ color: "rgba(255,255,255,.60)" }}>First up</div>
+              <div className="rounded-[14px] p-5 card-shadow" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", color: "#f2eee8" }}>
+                <div className="mb-2 text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>FIRST UP</div>
                 <div className="font-mono-num-bold text-[32px] mb-1" style={{ letterSpacing: "-0.03em" }}>
                   {firstUp.start_time || "All day"}
                 </div>
@@ -387,7 +379,7 @@ export default function Dashboard() {
             {/* Mini bar chart */}
             <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-heading text-[13px] font-semibold" style={{ color: C.text }}>Monthly profit</h3>
+                <h3 className="text-[15px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>Monthly profit</h3>
                 <span className="mono-label-sm">8 mo</span>
               </div>
               <div className="flex items-end gap-2 h-[80px]">
@@ -413,7 +405,7 @@ export default function Dashboard() {
             {/* Tomorrow card */}
             <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-heading text-[13px] font-semibold" style={{ color: C.text }}>Tomorrow</h3>
+                <h3 className="text-[15px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>Tomorrow</h3>
                 <span className="font-mono-num text-[11px]" style={{ color: C.textSecondary }}>
                   {tomorrowEvents.length} {tomorrowEvents.length === 1 ? "item" : "items"}
                 </span>
@@ -486,9 +478,9 @@ function DashboardTodos({ user, navigate }) {
 
   return (
     <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-      <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
-        <h3 className="font-heading text-[13px] font-semibold flex items-center gap-2" style={{ color: C.text }}>
-          <ListTodo className="h-4 w-4" />
+      <div className="sheet-band flex items-center justify-between gap-3 px-5 py-[11px]">
+        <h3 className="m-0 flex items-center gap-3 text-[16.5px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>
+          <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] text-white" style={{ backgroundColor: "#3b5a3a" }}><ListTodo className="h-[15px] w-[15px]" /></span>
           To-do
           {overdueCount > 0 && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: "#A43432" }}>{overdueCount} overdue</span>}
         </h3>
@@ -533,7 +525,7 @@ function DashboardTodos({ user, navigate }) {
           </button>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 
