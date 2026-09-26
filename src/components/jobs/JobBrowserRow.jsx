@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { C, formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { addDays } from "@/lib/jobsOverview";
@@ -72,29 +73,50 @@ export function StatusChip({ status }) {
   );
 }
 
-// Light row for the desktop job browser: flush, hairline-divided, 3px left
-// accent when selected; name, builder · address, status and next/last visit.
-export default function JobBrowserRow({ job, group = null, stats, selected, onSelect }) {
-  const st = stats?.status;
+const FLAG_TONES = { warn: ["#faf0da", "#8a5a12"], bad: ["#fcedec", "#a43432"], info: ["#e7edf2", "#34506a"] };
+
+// The one flag worth showing on a row, if any.
+export function rowFlag(stats, group) {
+  if (stats?.status?.key === "needs_report") return { label: "Report due", tone: "warn" };
+  if (stats?.status?.key === "needs_review") return { label: "Review", tone: "info" };
+  if (group?.review?.length) return { label: "Duplicate?", tone: "info" };
+  return null;
+}
+
+// Job card for the Jobs list: bold name, builder · address, kind, and the
+// next (or last) visit on the right. The selected job turns dark.
+export default function JobBrowserRow({ job, group = null, stats, selected, onSelect, href }) {
+  const today = denverDate();
+  const when = stats?.nextVisit ? friendlyDay(stats.nextVisit, today) : stats?.lastVisit ? friendlyDay(stats.lastVisit, today) : "";
+  const upcoming = Boolean(stats?.nextVisit);
+  const flag = rowFlag(stats, group);
+  const [fbg, fink] = flag ? FLAG_TONES[flag.tone] : [];
+  const sub = [job.builder && sanitizeText(job.builder), job.address && sanitizeText(job.address)].filter(Boolean).join(" · ") || "No builder or address";
+  const kindLine = [stats?.kind, group?.merged ? `${group.members.length} records` : ""].filter(Boolean).join(" · ");
+  const body = (
+    <>
+      <span className="mt-[7px] h-[9px] w-[9px] shrink-0 rounded-full" style={{ backgroundColor: selected ? "#e0c994" : stats?.thisWeek ? "#0b3f3b" : "#c9c2b5" }} aria-hidden="true" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15.5px] font-bold" style={{ letterSpacing: "-0.02em" }}>{sanitizeText(job.canonical_name)}</span>
+        <span className="mt-0.5 block truncate text-[13px]" style={{ color: selected ? "#c9d0d1" : "#566063" }}>{sub}</span>
+        {kindLine ? <span className="mt-0.5 block truncate text-[12.5px]" style={{ color: selected ? "#aeb5b7" : "#6b7477" }}>{kindLine}</span> : null}
+      </span>
+      <span className="flex shrink-0 flex-col items-end gap-1">
+        {when ? (
+          <span className="whitespace-nowrap text-[13px] font-bold" style={{ color: selected ? "#e0c994" : upcoming ? "#0b3f3b" : "#6b7477" }} title={upcoming ? "Next visit" : "Last visit"}>{when}</span>
+        ) : null}
+        {flag ? <span className="whitespace-nowrap rounded-md px-[7px] py-0.5 text-[11.5px] font-semibold" style={{ backgroundColor: fbg, color: fink }}>{flag.label}</span> : null}
+      </span>
+    </>
+  );
+  const cls = "flex w-full items-start gap-3 rounded-[14px] px-3.5 py-[13px] text-left transition-shadow";
+  const style = selected
+    ? { backgroundColor: "#0e2426", color: "#ffffff", boxShadow: "0 8px 20px -12px rgba(14,36,38,.6)" }
+    : { backgroundColor: "#ffffff", color: "#101617", boxShadow: "0 1px 2px rgba(16,22,23,.07)" };
+  if (href) return <Link to={href} className={`${cls} hover:shadow-md`} style={style}>{body}</Link>;
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-current={selected ? "true" : undefined}
-      className={`w-full text-left flex items-start gap-3 px-4 py-3 transition-colors ${selected ? "bg-[#EEF5F3]" : "hover:bg-[#F6F3EC]"}`}
-      style={{ borderTop: `1px solid ${C.rowBorder}`, boxShadow: selected ? `inset 3px 0 0 ${C.accent}` : "none" }}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-semibold truncate" style={{ color: C.text, letterSpacing: "-0.01em" }}>{sanitizeText(job.canonical_name)}</div>
-        <div className="text-[12px] truncate mt-0.5" style={{ color: C.textMuted }}>
-          {[job.builder && sanitizeText(job.builder), job.address && sanitizeText(job.address)].filter(Boolean).join(" · ") || "No builder or address"}
-        </div>
-        <div className="flex flex-wrap items-center gap-1 mt-1.5">
-          <StatusChip status={st} />
-          {group && <DuplicateTags group={group} />}
-        </div>
-      </div>
-      <div className="shrink-0 pt-0.5"><VisitInfo stats={stats} /></div>
+    <button type="button" onClick={onSelect} aria-current={selected ? "true" : undefined} className={`${cls} ${selected ? "" : "hover:shadow-md"}`} style={style}>
+      {body}
     </button>
   );
 }
