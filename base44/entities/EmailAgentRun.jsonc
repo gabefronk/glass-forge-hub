@@ -1,0 +1,97 @@
+{
+  "name": "EmailAgentRun",
+  "type": "object",
+  "properties": {
+    "mailbox_key": {
+      "type": "string",
+      "title": "Mailbox Key"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Started At"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Finished At"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "ok",
+        "error"
+      ],
+      "title": "Status",
+      "default": "running"
+    },
+    "fetched": {
+      "type": "integer",
+      "title": "Fetched",
+      "default": 0,
+      "description": "Provider messages pulled this run"
+    },
+    "threads_updated": {
+      "type": "integer",
+      "title": "Threads Updated",
+      "default": 0
+    },
+    "classified": {
+      "type": "integer",
+      "title": "Classified",
+      "default": 0
+    },
+    "relayed": {
+      "type": "integer",
+      "title": "Relayed",
+      "default": 0,
+      "description": "Job notes created"
+    },
+    "drafted": {
+      "type": "integer",
+      "title": "Drafted",
+      "default": 0
+    },
+    "archived": {
+      "type": "integer",
+      "title": "Archived",
+      "default": 0
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Errors",
+      "default": []
+    }
+  },
+  "required": [
+    "mailbox_key",
+    "started_at",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
