@@ -50,7 +50,8 @@ export async function rehostEventAttachments({ client, eventIds, limit = 20, fet
   const pending = [];
   for (const event of selected) for (let index = 0; index < (event.event_attachments || []).length; index++) {
     const attachment = event.event_attachments[index];
-    if (!attachment?.hub_file_uri) pending.push({ event, index, attachment });
+    // A copy already saved in the job's Drive folder is the one the crew opens.
+    if (!attachment?.hub_file_uri && !attachment?.job_folder_file_id) pending.push({ event, index, attachment });
   }
   let driveToken = null, driveChecked = false;
   const results = [];
