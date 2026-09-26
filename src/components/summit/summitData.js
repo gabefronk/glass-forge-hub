@@ -83,7 +83,7 @@ export const SUMMIT_PHOTOS = {
 };
 
 // Stronger card shadow for the Summit section — gives cards pop in bright daylight.
-export const SUMMIT_CARD_SHADOW = "0 1px 3px rgba(21,24,26,.08), 0 12px 28px -14px rgba(21,24,26,.22)";
+export const SUMMIT_CARD_SHADOW = "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -6px rgba(10,29,31,.16), 0 22px 40px -22px rgba(10,29,31,.34)";
 
 // Summit field troubleshooter meta (v1.1) — golden rules, DIP functions, blink codes,
 // potentiometers, and the light-pattern decoder. Source of truth for the DIP page,
