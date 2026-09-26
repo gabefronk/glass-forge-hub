@@ -35,3 +35,17 @@ test('cancelled visits are ignored and empty jobs say so', () => {
   assert.equal(s.step.text, 'No visit on the calendar yet.');
   assert.deepEqual(workLines('- one;  two\n$1,200 labor'), ['one', 'two']);
 });
+
+test('a job worked from a field report shows that visit and its work, not "none yet"', () => {
+  const s = jobSnapshot({ job: {}, today: TODAY, status: { key: 'complete', label: 'Complete' }, events: [],
+    rows: [{ job_date: '2026-09-23', source: 'probuild', calendar_creator: 'iryedra@gmail.com', po_number: '6534825' }],
+    fieldReports: [{ job_date: '2026-09-23', message: 'Pulled the stationary panel\nReseated it in the cavity\nWater tested, no leaks' }] });
+  assert.equal(s.facts[0].k, 'Last visit');
+  assert.equal(s.facts[0].v, 'Sep 23');
+  assert.equal(s.facts[1].v, 'Ragen');
+  assert.equal(s.facts[2].v, '6534825');
+  assert.equal(s.step.tag, 'Done');
+  assert.equal(s.step.text, 'Work complete. Last visit was Sep 23.');
+  assert.deepEqual(s.work, ['Pulled the stationary panel', 'Reseated it in the cavity', 'Water tested, no leaks']);
+  assert.equal(s.workFrom, 'from the Sep 23 report');
+});
