@@ -278,12 +278,8 @@ function Scratchpad() {
   const b = computeJobBudget({ material_true_cost: Number(cost) || 0, actual_total_sell: Number(sell) || 0 });
   const has = Number(cost) > 0;
   return (
-    <section className="rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <div className="px-5 py-4" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
-        <h2 className="font-heading text-[18px] font-bold" style={{ color: C.text, letterSpacing: "-0.02em" }}>Quick margin check</h2>
-        <p className="text-[12px] mt-0.5" style={{ color: C.textMuted }}>Same math as the Window Budget Sheet - tax 7.45%, targets at 30% material / 27% labor.</p>
-      </div>
-      <div className="p-5 flex flex-wrap items-end gap-4">
+    <SheetCard icon={Calculator} tile={TILE.green} title="Quick margin check" sub="Window Budget Sheet math: tax 7.45%, targets 30% material / 27% labor" bodyClassName="">
+      <div className="p-5 flex flex-wrap items-end gap-4 max-[699px]:p-4">
         <label className="flex flex-col gap-1 text-[12px] font-medium" style={{ color: C.textMuted }}>
           Material true cost
           <input value={cost} onChange={(e) => setCost(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="1256.98"
@@ -303,6 +299,6 @@ function Scratchpad() {
           </div>
         )}
       </div>
-    </section>
+    </SheetCard>
   );
 }
