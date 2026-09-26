@@ -5,11 +5,13 @@ import ClampedText from "./ClampedText";
 import FeedImage from "./FeedImage";
 import { RefreshCw, Plus, Camera, StickyNote, CheckCircle2, AlertCircle, Clock, Phone, MessageSquare, Mail, Users, Truck, TriangleAlert, HardHat, FileText, ExternalLink } from "lucide-react";
 import { scopeText } from "@/lib/jobWorkspace";
+import { denverDate } from "../../../base44/shared/billingCore.js";
 import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote, fileLabel } from "@/lib/jobHistory";
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
 
-function visitBadge(ev) {
+function visitBadge(ev, today = denverDate()) {
+  if (ev.event_date && ev.event_date > today) return { label: "Scheduled", color: "#34506a", bg: "#E7EDF2" };
   if (!ev.report_required || ev.report_required === false) return { label: "N/A", color: C.textMuted, bg: "#F0F1ED" };
   if (ev.report_status === "ok") return { label: "Report complete", color: C.accentText, bg: "#E2EEEB" };
   if (ev.report_status === "waived") return { label: "Waived", color: C.textMuted, bg: "#F0F1ED" };
@@ -48,6 +50,7 @@ function ReportBlock({ report, onPhotoClick }) {
       {report.message ? (
         <ClampedText text={report.message} maxLines={5} className="text-[13.5px] whitespace-pre-wrap break-words mt-1" style={{ color: C.text }} />
       ) : null}
+      {report.photos?.length ? <div className="mt-2 text-[11.5px] font-semibold" style={{ color: C.textSecondary }}>{report.photos.length} {report.photos.length === 1 ? "photo" : "photos"} from this visit</div> : null}
       <PhotoGrid urls={report.photos} onPhotoClick={onPhotoClick} />
     </div>
   );
@@ -105,6 +108,25 @@ function ChangeCard({ ev }) {
 
 const NOTE_ICONS = { note: StickyNote, site_visit: HardHat, call: Phone, text: MessageSquare, email: Mail, meeting: Users, delivery: Truck, issue: TriangleAlert };
 
+// All files saved to the job folder on one day, as one entry.
+function FileGroupCard({ files }) {
+  return (
+    <div className="rounded-[10px] px-3 py-2" style={{ border: `1px solid ${C.rowBorder}` }}>
+      <div className="flex items-center gap-2 text-[12px]" style={{ color: C.textMuted }}>
+        <FileText className="h-3.5 w-3.5 shrink-0" />
+        {files.length === 1 ? "Saved to job folder" : `${files.length} files saved to job folder`}
+      </div>
+      <div className="mt-1 flex flex-col gap-0.5 pl-5">
+        {files.map((f) => (
+          <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12.5px] break-words hover:underline" style={{ color: C.accentText }}>
+            {fileLabel(sanitizeText(f.name), f.name)}<ExternalLink className="h-3 w-3 shrink-0" />
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FileCard({ file }) {
   return (
     <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-[10px] px-3 py-2 hover:underline" style={{ border: `1px solid ${C.rowBorder}`, color: C.accentText }}>
@@ -113,6 +135,19 @@ function FileCard({ file }) {
       <ExternalLink className="h-3 w-3 shrink-0" />
     </a>
   );
+}
+
+// Collapse a day's "saved to job folder" entries into one.
+function groupFiles(items) {
+  const files = items.filter((it) => it.kind === "file").map((it) => it.file);
+  if (files.length < 2) return items;
+  const out = [];
+  let placed = false;
+  for (const it of items) {
+    if (it.kind !== "file") out.push(it);
+    else if (!placed) { out.push({ kind: "files", files }); placed = true; }
+  }
+  return out;
 }
 
 function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
@@ -193,7 +228,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
               <span className="text-[12.5px] font-bold" style={{ color: C.textSecondary }}>{formatDateGroup(date)}</span>
             </div>
             <div className="space-y-2">
-              {items.map((it, i) => {
+              {groupFiles(items).map((it, i) => {
+                if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
                 if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} />;
                 if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
                 if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
