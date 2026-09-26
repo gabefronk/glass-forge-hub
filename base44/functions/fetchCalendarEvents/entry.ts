@@ -417,6 +417,17 @@ export default async function(req) {
     }
     for (const batch of chunk([...jobPatches.values()], 500)) await base44.asServiceRole.entities.Jobs.bulkUpdate(batch);
 
+    // Owner-approved 2026-09-26: link the calendar event itself to its job so every tab
+    // (Calendar, Today, Jobs) shares one link. Additive only: fills an empty job_id from a
+    // high-confidence match and never overwrites or clears an existing link.
+    const linkedAt = new Date().toISOString();
+    const eventLinks = new Map();
+    for (const { ev, m } of matched) {
+      if (!ev.id || ev.job_id || !m.job_id || m.match_confidence !== 'high' || eventLinks.has(ev.id)) continue;
+      eventLinks.set(ev.id, { id: ev.id, job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: linkedAt });
+    }
+    for (const batch of chunk([...eventLinks.values()], 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
+
     return Response.json({
       source: 'calendar_events',
       locked_months: [...lockedMonths],
@@ -424,6 +435,7 @@ export default async function(req) {
       created: toCreate.length,
       updated: toUpdate.length,
       probuild_reverse_merged: probuildRowsToSupersede.length,
+      calendar_events_linked: eventLinks.size,
       skipped_manually_adjusted: skipped,
       // Locked-month events with labor in their notes and no line of their own:
       // filled (held for review), or listed here when closed or already covered.
