@@ -25,3 +25,12 @@ test('a single builder super fills the slot as a builder suggestion', () => {
 test('a saved super always wins', () => {
   assert.equal(pickSuper({ saved: { name: 'Saved Guy', phone: '222' }, view, events: [] }).source, 'linked');
 });
+
+test('suggested supers lead the list and the dropdown groups by role', async () => {
+  const { superChoiceGroups } = await import('../src/lib/jobWorkspace.js');
+  const v = { ...view, suggestions: [{ role: 'superintendent', contact: { key: 'x', name: 'Ray Site', phone: '333' } }] };
+  const all = superChoices(v);
+  assert.equal(all[0].name, 'Ray Site');
+  assert.ok(all[0].suggested);
+  assert.deepEqual(superChoiceGroups(all).map(([l, list]) => [l, list.length]), [['Suggested for this job', 1], ['Project managers', 2]]);
+});
