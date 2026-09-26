@@ -216,7 +216,7 @@ export function BuilderContacts({ contacts, jobId }) {
     <div className="mt-2">
       <div className="mono-label-sm mb-1">Builder contacts · {contacts.length}</div>
       <div className="space-y-2">
-        {shown.map((c) => <ContactRow key={c.key} contact={c} detail={[ROLE_LABELS[c.role] && c.role !== "builder" && c.role !== "site" ? ROLE_LABELS[c.role] : "", c.title].filter(Boolean).join(" · ") || c.company} />)}
+        {shown.map((c) => <ContactRow key={c.key} contact={c} detail={c.title || ROLE_LABELS[c.role] || c.company} />)}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-3">
         {contacts.length > 4 && (
