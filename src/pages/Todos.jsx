@@ -2,6 +2,7 @@ import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {AlertTriangle,CalendarClock,Check,CheckSquare,Clock,Hourglass,Play,Plus,RefreshCw,RotateCcw,Users,X} from 'lucide-react';
 import {base44} from '@/api/base44Client';
 import {useAuth} from '@/lib/AuthContext';
+import {PageShell,PageHero,heroBtn,heroPrimary,heroSecondary} from '@/components/PageShell';
 import {BOARD_LANES,UNCATEGORIZED_LANE,buildBoard,daysBetween,dueState,isStale,laneKey,laneLabel} from '@/lib/todoBoard';
 import {denverDate} from '../../base44/shared/billingCore.js';
 
@@ -23,7 +24,8 @@ const DUE_STYLE={overdue:'border-red-300 bg-red-50 text-red-800',today:'border-a
 const dueText=(t,today)=>{const s=dueState(t,today),d=daysBetween(today,t.due_date);return s==='overdue'?`Overdue ${-d}d · ${shortDate(t.due_date)}`:s==='today'?'Due today':s==='soon'?`Due ${shortDate(t.due_date)} (${d}d)`:`Due ${shortDate(t.due_date)}`;};
 
 function Stat({icon:Icon,label,value,alert}){
- return <div className={'rounded-xl border px-4 py-3 '+(alert&&value?'border-red-300 bg-red-50 text-red-900':'border-white/10 bg-white/5')}><div className="flex items-center gap-1.5 text-xs uppercase tracking-wider opacity-80"><Icon className="h-3.5 w-3.5"/>{label}</div><div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div></div>;
+ const hot=alert&&value;
+ return <div className="rounded-[12px] px-3.5 py-2.5" style={hot?{backgroundColor:'rgba(224,201,148,.14)',border:'1px solid rgba(224,201,148,.35)'}:{backgroundColor:'rgba(207,227,218,.08)',border:'1px solid rgba(207,227,218,.18)'}}><div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[.14em]" style={{color:hot?'#e0c994':'#9fc3b6'}}><Icon className="h-3.5 w-3.5"/>{label}</div><div className="mt-0.5 text-[22px] font-bold tabular-nums" style={{color:hot?'#e0c994':'#f2eee8',letterSpacing:'-0.02em'}}>{value}</div></div>;
 }
 
 function TaskCard({task,today,busy,assignee,showAssignee,onOpen,onStatus,onMove,onDragStart,onDragEnd}){
@@ -52,7 +54,7 @@ function TaskCard({task,today,busy,assignee,showAssignee,onOpen,onStatus,onMove,
 function Lane({lane,today,busy,canAdd,wide,memberName,showAssignee,onQuickAdd,onDropTask,cardProps}){
  const [title,setTitle]=useState(''),[over,setOver]=useState(false),key=useRef(crypto.randomUUID());
  const submit=async e=>{e.preventDefault();if(!title.trim())return;if(await onQuickAdd(lane.key,title.trim(),key.current)){setTitle('');key.current=crypto.randomUUID();}};
- return <section aria-labelledby={'lane-'+(lane.key||'none')} onDragOver={e=>{e.preventDefault();setOver(true);}} onDragLeave={()=>setOver(false)} onDrop={e=>{e.preventDefault();setOver(false);onDropTask(e,lane.key);}} className={'flex min-w-0 flex-col rounded-2xl border bg-slate-50 '+(over?'ring-2 ring-teal-400 ':'')+(wide?'border-red-200':'border-slate-200')} style={{borderTop:`4px solid ${lane.accent}`}}>
+ return <section aria-labelledby={'lane-'+(lane.key||'none')} onDragOver={e=>{e.preventDefault();setOver(true);}} onDragLeave={()=>setOver(false)} onDrop={e=>{e.preventDefault();setOver(false);onDropTask(e,lane.key);}} className={'card-shadow flex min-w-0 flex-col rounded-[14px] border bg-white '+(over?'ring-2 ring-teal-400 ':'')+(wide?'border-red-200':'border-[#d3cabb]')} style={{borderTop:`4px solid ${lane.accent}`}}>
   <header className="px-3 pt-3">
    <div className="flex items-center justify-between gap-2"><h3 id={'lane-'+(lane.key||'none')} className="text-base font-semibold">{lane.label}</h3><span className="rounded-full bg-white px-2.5 py-0.5 text-sm font-semibold tabular-nums shadow-sm" aria-label={lane.tasks.length+' tasks'}>{lane.tasks.length}</span></div>
    <p className="mt-0.5 text-xs text-slate-500">{lane.hint}</p>
@@ -134,21 +136,20 @@ export default function Todos(){
  const cardProps={onOpen:openTask,onStatus:setStatus,onMove:move,onDragStart,onDragEnd,nameOf};
  const showAssignee=person==='all';
  const laneProps={today,busy,canAdd,memberName:owner&&person!=='mine'&&shownMember?shownMember.display_name:'',showAssignee,onQuickAdd:quickAdd,onDropTask,cardProps};
- return <div className="mx-auto max-w-[1600px] space-y-4 p-4 pb-32 sm:p-6" style={{color:'var(--gf-ink)'}}>
-  <header className="rounded-2xl p-5 text-white sm:p-6" style={{backgroundColor:'var(--gf-sidebar-top)'}}>
-   <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-widest text-slate-300">Nothing slips through</p><h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold"><CheckSquare className="h-6 w-6"/>To-do board</h1><p className="mt-1 text-sm text-slate-300">{owner?(person==='all'?'Everyone’s open work, by lane.':`${shownMember?.display_name||me?.display_name||''}’s open work, by lane.`):'Your assigned tasks, by lane.'} Most urgent at the top of each lane.</p></div>
-    <div className="flex flex-wrap gap-2"><button type="button" className={btn+' flex items-center gap-2 text-slate-800'} disabled={busy||loading||!data||!canAdd} onClick={()=>add('')}><Plus className="h-4 w-4"/>New task</button><button type="button" className={btn+' flex items-center gap-2 text-slate-800'} disabled={busy||loading} onClick={()=>refresh()}><RefreshCw className={'h-4 w-4 '+(loading?'animate-spin':'')}/>Refresh</button></div></div>
-   {data&&<div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" aria-label="Board summary">
+ return <PageShell width="max-w-[1600px]" className="space-y-0" >
+  <PageHero eyebrow="Nothing slips through" title="To-do board" sub={`${owner?(person==='all'?'Everyone’s open work, by lane.':`${shownMember?.display_name||me?.display_name||''}’s open work, by lane.`):'Your assigned tasks, by lane.'} Most urgent at the top of each lane.`}
+   actions={<><button type="button" className={heroBtn+' disabled:opacity-50'} style={heroPrimary} disabled={busy||loading||!data||!canAdd} onClick={()=>add('')}><Plus className="h-4 w-4"/>New task</button><button type="button" className={heroBtn+' disabled:opacity-50'} style={heroSecondary} disabled={busy||loading} onClick={()=>refresh()}><RefreshCw className={'h-4 w-4 '+(loading?'animate-spin':'')} style={{color:'#e0c994'}}/>Refresh</button></>}>
+   {data&&<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" aria-label="Board summary">
     <Stat icon={AlertTriangle} label="Overdue" value={s.overdue} alert/><Stat icon={CalendarClock} label="Due today" value={s.dueToday} alert/><Stat icon={Clock} label="In progress" value={s.inProgress}/><Stat icon={Hourglass} label="Waiting 1 wk+" value={s.stale} alert/><Stat icon={CheckSquare} label="Open total" value={s.total}/>
    </div>}
-  </header>
+  </PageHero>
   {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">{error}</p>}
   {notice&&<p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</p>}
   {loading&&!data&&<p role="status" className="p-8 text-center text-slate-600">Loading your board...</p>}
   {data&&<>
    {s.overdue>0&&<p role="alert" className="flex items-center gap-2 rounded-xl border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-900"><AlertTriangle className="h-4 w-4 shrink-0"/>{s.overdue} overdue {s.overdue===1?'task':'tasks'}{firstOverdue?` — most overdue: “${firstOverdue.title}” in ${laneLabel(laneKey(firstOverdue))}`:''}. Overdue cards are outlined in red at the top of their lane.</p>}
    {data.truncated&&<p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">This board hit its 500-task limit, so some open tasks may not be shown. Finish or archive old tasks.</p>}
-   <section className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border bg-white p-3">
+   <section className="card-shadow flex flex-wrap items-end justify-between gap-3 rounded-[14px] border bg-white p-3" style={{borderColor:'#d3cabb'}}>
     {owner?<label className="min-w-56 text-sm font-medium">Whose board<select aria-label="Choose a person's board" className={field} value={person} disabled={busy} onChange={e=>changeView(e.target.value)}><option value="mine">My board - {me?.display_name}</option><option value="all">Everyone</option>{members.filter(m=>m.id!==me?.id).map(m=><option key={m.id} value={m.id}>{m.display_name}{m.active?'':' (inactive)'}{m.pending_account?' - account pending':''}</option>)}</select></label>:<h2 className="text-lg font-semibold">{me?.display_name}&apos;s board</h2>}
     <div className="flex flex-wrap items-center gap-2"><p className="text-xs text-slate-500">Drag a card to another lane, or use its Move menu.</p>{owner&&<button type="button" className={btn+' flex items-center gap-2'} disabled={busy} onClick={manage}><Users className="h-4 w-4"/>Team</button>}</div>
    </section>
@@ -156,7 +157,7 @@ export default function Todos(){
    {shownMember?.pending_account&&<p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{shownMember.display_name}&apos;s board is ready for assignments. Only Gabriel can access it until a verified sign-in account is linked.</p>}
    {board.uncategorized&&<Lane lane={board.uncategorized} wide {...laneProps}/>}
    <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-4">{board.lanes.map(l=><Lane key={l.key} lane={l} {...laneProps}/>)}</div>
-   <details className="rounded-2xl border bg-white p-4"><summary className="min-h-8 cursor-pointer font-semibold">Recently done ({recentDone.length})</summary>
+   <details className="card-shadow rounded-[14px] border bg-white p-4" style={{borderColor:'#d3cabb'}}><summary className="min-h-8 cursor-pointer font-semibold">Recently done ({recentDone.length})</summary>
     <ul className="mt-3 divide-y">{recentDone.length?recentDone.map(t=><li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"><button type="button" className="min-w-0 flex-1 text-left" onClick={()=>openTask(t)}><span className="break-words font-medium line-through decoration-slate-400">{t.title}</span><span className="ml-2 text-xs text-slate-500">{laneLabel(laneKey(t))}{t.completed_at?' · '+fmt(t.completed_at):''}{showAssignee?' · '+nameOf(t):''}</span></button><button type="button" className={smallBtn} disabled={busy} onClick={()=>setStatus(t,'open')}><RotateCcw className="h-3 w-3"/>Reopen</button></li>):<li className="py-2 text-sm text-slate-500">Nothing finished recently.</li>}</ul>
    </details>
    {owner&&teamOpen&&<form onSubmit={saveMember} aria-label="Manage team" className="space-y-4 rounded-2xl border bg-white p-5"><h2 className="font-semibold">Team members and account links</h2><p className="text-sm text-slate-600">Link only the correct existing sign-in account. No invitation or email is sent here. A person without a linked account remains pending.</p><label className="block text-sm">Person<select className={field} value={memberForm.id} disabled={busy} onChange={e=>memberEdit(members.find(m=>m.id===e.target.value))}><option value="">Add a new person</option>{members.filter(m=>m.member_key!=='gabriel').map(m=><option key={m.id} value={m.id}>{m.display_name}</option>)}</select></label><label className="block text-sm">Display name<input className={field} required maxLength={120} disabled={busy} value={memberForm.display_name} onChange={e=>setMemberForm({...memberForm,display_name:e.target.value})}/></label><label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={memberForm.active} disabled={busy} onChange={e=>setMemberForm({...memberForm,active:e.target.checked})}/>Active and available for assignments</label><fieldset className="space-y-2"><legend className="mb-2 text-sm font-medium">Existing sign-in accounts</legend>{accounts.map(a=><label key={a.id} className="flex min-h-11 items-center gap-2 rounded-lg border p-3 text-sm"><input type="checkbox" disabled={busy||a.owner_account||Boolean(a.member_id&&a.member_id!==memberForm.id)} checked={memberForm.auth_user_ids.includes(a.id)} onChange={e=>setMemberForm({...memberForm,auth_user_ids:e.target.checked?[...memberForm.auth_user_ids,a.id]:memberForm.auth_user_ids.filter(id=>id!==a.id)})}/><span className="break-all">{a.full_name||a.email} · {a.email}{a.member_id&&a.member_id!==memberForm.id?' · already linked':''}</span></label>)}</fieldset><div className="flex flex-wrap gap-2"><button className={btn} disabled={busy}>{busy?'Saving...':'Save member'}</button><button type="button" className={btn} disabled={busy} onClick={()=>setTeamOpen(false)}>Cancel</button></div></form>}
@@ -172,5 +173,5 @@ export default function Todos(){
     </form>}
    </div>
   </div>}
- </div>;
+ </PageShell>;
 }
