@@ -344,3 +344,6 @@
   .bg-\[\#245889\], .bg-\[\#196c86\], .bg-\[\#247d9d\], .\!bg-\[\#247d9d\] { background-color: var(--gf-teal-600) !important; }
   .\!border-\[\#247d9d\] { border-color: var(--gf-teal-600) !important; }
 }
+/* Owner-only panels nested inside the job page's collapsed Owner section: keep their
+   own borders so each stays readable, drop the stacked drop shadows. */
+.job-owner-panels > section { box-shadow: none; margin-top: 12px; }
