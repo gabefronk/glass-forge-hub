@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Briefcase, Camera, ChevronDown, ClipboardCheck, ExternalLink, FileText, MapPin, MessageSquare, Navigation, Phone, Plus, HardHat, UserPlus } from "lucide-react";
-import { base44 } from "@/api/base44Client";
 import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
