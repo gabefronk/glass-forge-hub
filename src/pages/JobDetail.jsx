@@ -15,6 +15,8 @@ import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
 import JobLinkedRecords from "@/components/jobs/JobLinkedRecords";
 import JobMessageThreads from "@/components/jobs/JobMessageThreads";
+import OwnerSection from "@/components/jobs/OwnerSection";
+import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
@@ -235,9 +237,13 @@ export default function JobDetail() {
               {folderError && <p role="alert" className="mt-2 text-[13px] text-red-700">{folderError}</p>}
             </SheetCard>
           )}
-          <JobLinkedRecords jobId={id} memberIds={group?.memberIds} sourceQuoteId={job.source_window_quote_id} />
-          <JobMoneyPanel jobId={id} memberIds={group?.memberIds} />
-          <JobMessageThreads jobId={id} />
+          {(owner || isAgentCenterOwner(user)) && (
+            <OwnerSection>
+              <JobLinkedRecords jobId={id} memberIds={group?.memberIds} sourceQuoteId={job.source_window_quote_id} />
+              <JobMoneyPanel jobId={id} memberIds={group?.memberIds} />
+              <JobMessageThreads jobId={id} />
+            </OwnerSection>
+          )}
         </div>
       </div>
 
