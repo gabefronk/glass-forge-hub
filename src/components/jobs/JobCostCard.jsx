@@ -74,6 +74,17 @@ export default function JobCostCard({ jobId }) {
     finally { setSaving(false); }
   };
 
+  const clear = async () => {
+    setSaving(true); setNotice("");
+    try {
+      await call({ action: "clear_labor", job_id: jobId, month: labor?.month || undefined });
+      setState((s) => ({ ...s, labor: null, error: "" }));
+      setEditing(false);
+      setNotice("Labor numbers cleared.");
+    } catch (err) { setState((s) => ({ ...s, error: err.message || "Could not clear." })); }
+    finally { setSaving(false); }
+  };
+
   const upload = async (files) => {
     const file = [...(files || [])].find((f) => /\.pdf$/i.test(f.name));
     if (!file) { setState((s) => ({ ...s, error: "Choose a PDF." })); return; }
@@ -118,6 +129,7 @@ export default function JobCostCard({ jobId }) {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button type="submit" className={btn} style={btnPrimary} disabled={saving || !check.ok}>{saving ? "Saving…" : "Save"}</button>
             <button type="button" className={btn} style={btnNeutral} onClick={() => setEditing(false)}><X className="h-3.5 w-3.5" />Cancel</button>
+            {labor ? <button type="button" className={btn} style={{ backgroundColor: "var(--gf-error-bg)", color: "var(--gf-error)", border: "1px solid var(--gf-error-border)" }} disabled={saving} onClick={clear}>Clear</button> : null}
             <span className="text-[12.5px]" style={{ color: C.textMuted }}>{preview.profit != null ? `Margin ${moneyOrDash(preview.profit)} · ${percentOrDash(preview.margin_pct)}` : "Enter at least one number"}</span>
           </div>
         </form>
