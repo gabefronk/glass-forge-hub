@@ -5,6 +5,10 @@
 const STOP = new Set(['the', 'and', 'at', 'for', 'job', 'jobs', 'res', 'residence', 'lot', 'homes', 'home', 'ya', 'on', 'of', 'a', 'to', 'address', 'site', 'event', 'visit']);
 
 export const norm = (v) => String(v ?? '').toLowerCase().normalize('NFKC').replace(/[^a-z0-9]+/g, ' ').trim();
+// Calendar titles carry crew/priority prefixes ("YA - #1 (l.i.) ..."); strip them so an
+// event title and a job name compare as the same job.
+const PREFIX = /^(?:(?:YA|W|Wes|MDS|AP|BB|HP|SP)\s*-\s*)?(?:(?:#[1-9]\s*)|(?:\([^)]*\)\s*)){0,3}/i;
+export const jobKey = (v) => norm(String(v ?? '').trim().replace(PREFIX, '')).split(' ').filter((t) => t && t !== 'res' && t !== 'residence').join(' ');
 export const tokens = (v) => norm(v).split(' ').filter((t) => t && !STOP.has(t));
 
 // Denver calendar date (YYYY-MM-DD) for "today"/"tomorrow" style inputs.
@@ -68,8 +72,8 @@ const live = (e) => e.source_status !== 'cancelled';
 // Events that belong to a job: linked by job_id, or (for unlinked events) same
 // normalized name as the job's name / aliases.
 export function eventsForJob(job, events) {
-  const names = new Set([job.canonical_name, ...(job.aliases || [])].map(norm).filter(Boolean));
-  return events.filter((e) => live(e) && (e.job_id === job.id || (!e.job_id && names.has(norm(e.job_name)))));
+  const names = new Set([job.canonical_name, ...(job.aliases || [])].map(jobKey).filter(Boolean));
+  return events.filter((e) => live(e) && (e.job_id === job.id || (!e.job_id && names.has(jobKey(e.job_name)))));
 }
 
 export function findJobs({ query, limit = 5, today }, jobs, events) {
@@ -86,7 +90,7 @@ export function findJobs({ query, limit = 5, today }, jobs, events) {
     if (!live(e)) continue;
     const s = matchScore(q, eventHay(e));
     if (s >= 0.6) {
-      const key = e.job_id || 'name:' + norm(e.job_name);
+      const key = e.job_id || 'name:' + jobKey(e.job_name);
       const prev = evHits.get(key);
       if (!prev || s > prev.score) evHits.set(key, { event: e, score: s });
     }
@@ -94,7 +98,7 @@ export function findJobs({ query, limit = 5, today }, jobs, events) {
   const jobById = new Map(jobs.map((j) => [j.id, j]));
   for (const [key, { event, score }] of evHits) {
     if (key.startsWith('name:')) {
-      const j = jobs.find((x) => [x.canonical_name, ...(x.aliases || [])].some((n) => norm(n) === key.slice(5)));
+      const j = jobs.find((x) => [x.canonical_name, ...(x.aliases || [])].some((n) => jobKey(n) === key.slice(5)));
       if (j && !scored.some((s) => s.job.id === j.id)) scored.push({ job: j, score });
       else if (!j) scored.push({ job: null, event, score });
     } else if (jobById.has(key) && !scored.some((s) => s.job?.id === key)) {
@@ -104,7 +108,7 @@ export function findJobs({ query, limit = 5, today }, jobs, events) {
   scored.sort((a, b) => b.score - a.score);
   const results = scored.slice(0, limit).map(({ job, event, score }) => {
     if (!job) {
-      const evs = events.filter((e) => live(e) && !e.job_id && norm(e.job_name) === norm(event.job_name)).sort(byDateTime);
+      const evs = events.filter((e) => live(e) && !e.job_id && jobKey(e.job_name) === jobKey(event.job_name)).sort(byDateTime);
       return summarize(null, evs, score, today, event);
     }
     return summarize(job, eventsForJob(job, events).sort(byDateTime), score, today);
