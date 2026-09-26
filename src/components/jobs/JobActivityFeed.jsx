@@ -3,7 +3,7 @@ import { C, formatShort, formatDateGroup, crewName } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import ClampedText from "./ClampedText";
 import FeedImage from "./FeedImage";
-import { RefreshCw, Plus, Camera, StickyNote, CheckCircle2, AlertCircle, Clock, Phone, MessageSquare, Mail, Users, Truck, TriangleAlert, HardHat, FileText, ExternalLink } from "lucide-react";
+import { RefreshCw, Plus, Camera, StickyNote, Phone, MessageSquare, Mail, Users, Truck, TriangleAlert, HardHat, FileText, ExternalLink } from "lucide-react";
 import { scopeText } from "@/lib/jobWorkspace";
 import { eventKind } from "@/lib/calendarModel";
 import { denverDate } from "../../../base44/shared/billingCore.js";
