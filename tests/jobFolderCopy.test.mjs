@@ -54,7 +54,7 @@ function harness({ gmail = true, existingCopy = false } = {}) {
     }
     if (url.includes('/files?fields=') && init.method === 'POST') {
       const body = JSON.parse(init.body);
-      const f = { id: 'FOLDER-' + body.name.slice(0, 6), name: body.name, mimeType: 'application/vnd.google-apps.folder', parents: body.parents, webViewLink: 'https://drive.google.com/folder' };
+      const f = { id: 'FOLDER-' + (Object.keys(store).length + 1), name: body.name, mimeType: 'application/vnd.google-apps.folder', parents: body.parents, webViewLink: 'https://drive.google.com/folder' };
       store[f.id] = f;
       return Response.json(f);
     }
