@@ -150,11 +150,13 @@ export function createProbuildRefreshHandler({getClient,getToken,copyFile,fetchI
    return json({run:publicRun(run)});
   } catch(error) {
    const code=error.safeCode||'refresh_step_failed';
+   // Optional sanitized cause (e.g. why an asset copy failed); set only by callers that scrub it.
+   const detail=error.safeCode&&error.safeDetail?{detail:String(error.safeDetail).slice(0,300)}:{};
    // Authentication, validation and pre-run failures never fabricate a run.
    if(run&&api&&input?.action==='next'&&!['complete','failed'].includes(run.status)){
     const attempts=(run.attempts||0)+1,failed=attempts>=3;
     const at=now().toISOString();
-    try{run=await api.ProbuildRefreshRun.update(run.id,{status:failed?'failed':'retry_wait',attempts,next_retry_at:failed?null:new Date(Date.parse(at)+[30000,120000][attempts-1]).toISOString(),checked_at:at,errors:[...(run.errors||[]),{code,at,phase:run.phase,cursor:run.cursor,attempt:attempts}]});}catch{return json({error:'run_receipt_write_failed',run_id:run.id},503);}
+    try{run=await api.ProbuildRefreshRun.update(run.id,{status:failed?'failed':'retry_wait',attempts,next_retry_at:failed?null:new Date(Date.parse(at)+[30000,120000][attempts-1]).toISOString(),checked_at:at,errors:[...(run.errors||[]),{code,...detail,at,phase:run.phase,cursor:run.cursor,attempt:attempts}]});}catch{return json({error:'run_receipt_write_failed',run_id:run.id},503);}
     return json({error:code,run:publicRun(run)},error.status||502);
    }
    return json({error:code},error.status||502);
