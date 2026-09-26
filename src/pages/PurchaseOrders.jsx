@@ -225,6 +225,6 @@ function PurchaseOrdersPage() {
           )}
         </Section>
       </div>
-    </div>
+    </PageShell>
   );
 }

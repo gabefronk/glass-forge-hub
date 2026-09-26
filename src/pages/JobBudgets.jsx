@@ -268,7 +268,7 @@ export default function JobBudgets() {
         {/* Live margin scratchpad */}
         <Scratchpad />
       </div>
-    </div>
+    </PageShell>
   );
 }
 
