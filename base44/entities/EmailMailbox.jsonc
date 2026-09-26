@@ -1,0 +1,137 @@
+{
+  "name": "EmailMailbox",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "title": "Key",
+      "description": "Unique mailbox key, e.g. gf-gmail or ya-outlook. Used as mailbox_key on EmailThread / EmailMessage / EmailAgentRun."
+    },
+    "address": {
+      "type": "string",
+      "title": "Address",
+      "description": "The mailbox's own email address"
+    },
+    "display_name": {
+      "type": "string",
+      "title": "Display Name"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "gmail",
+        "outlook"
+      ],
+      "title": "Provider"
+    },
+    "connector_type": {
+      "type": "string",
+      "title": "Connector Type",
+      "description": "Base44 shared connector integration type passed to connectors.getConnection (gmail | outlook)"
+    },
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "default": true
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "owner",
+        "managers"
+      ],
+      "title": "Visibility",
+      "default": "managers",
+      "description": "owner = only the owner emails (gabefronk@gmail.com / gabriel.fronk.wd@gmail.com) may see this mailbox's threads; managers = admin + manager"
+    },
+    "auto_archive_categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Auto Archive Categories",
+      "default": [
+        "newsletter_promo",
+        "spam"
+      ],
+      "description": "Thread categories the agent may archive in the provider. Only acted on while archive_enabled is true."
+    },
+    "archive_enabled": {
+      "type": "boolean",
+      "title": "Archive Enabled",
+      "default": false,
+      "description": "Master switch for provider-side archiving. Off by default: the agent labels but never removes anything from the inbox until this is on."
+    },
+    "draft_replies": {
+      "type": "boolean",
+      "title": "Draft Replies",
+      "default": true,
+      "description": "Let the agent create provider draft replies (never sends)"
+    },
+    "signature": {
+      "type": "string",
+      "title": "Signature",
+      "default": "Gabe Fronk\nGlass Forge / YA Windows and Doors"
+    },
+    "last_history_id": {
+      "type": "string",
+      "title": "Last History Id",
+      "description": "Gmail users.history cursor"
+    },
+    "last_delta_link": {
+      "type": "string",
+      "title": "Last Delta Link",
+      "description": "Microsoft Graph inbox delta (or resumable next) link"
+    },
+    "last_synced_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Last Synced At"
+    },
+    "last_error": {
+      "type": "string",
+      "title": "Last Error",
+      "description": "Short error code/message from the last run, e.g. not_connected. Blank when healthy."
+    },
+    "last_run": {
+      "type": "object",
+      "title": "Last Run",
+      "additionalProperties": true,
+      "description": "Counters from the last sync: {at, fetched, threads_updated, classified, relayed, drafted, archived, errors}"
+    },
+    "labels": {
+      "type": "object",
+      "title": "Labels",
+      "additionalProperties": true,
+      "description": "Provider label / category ids keyed by label name (e.g. {\"Hub\": \"Label_12\", \"Hub/Schedule\": \"Label_13\"})"
+    }
+  },
+  "required": [
+    "key",
+    "address",
+    "provider",
+    "connector_type"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
