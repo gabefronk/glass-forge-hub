@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { RefreshCw, Play, Pause, Ban, ChevronDown, ChevronRight, LockKeyhole, FlaskConical, AlertCircle, CheckCircle2, Clock3 } from "lucide-react";
+import { C } from "@/lib/feeUI";
+import { RefreshCw, Play, Pause, Ban, ChevronDown, ChevronRight, LockKeyhole, FlaskConical, AlertCircle, CheckCircle2, Clock3, Search, MapPin } from "lucide-react";
 
 const STATUS_TONE = {
   queued: { bg: "var(--gf-tile-slate)", ink: "var(--gf-tile-slate-ink)", label: "Queued" },
@@ -14,6 +15,76 @@ const STATUS_TONE = {
 };
 const tone = s => STATUS_TONE[s] || { bg: "var(--gf-tile-stone)", ink: "var(--gf-tile-stone-ink)", label: s || "Unknown" };
 const when = v => v ? new Date(v).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+
+// Instant answer (no queue): address + next visits for a job, or a day's visits.
+// Any signed-in Hub user may use it; results are money-free.
+function QuickSearch() {
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState(null);
+  const [err, setErr] = useState("");
+  const run = async (e) => {
+    e.preventDefault();
+    if (!q.trim()) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await base44.functions.invoke("research-queue", { action: "quick_search", query: q.trim() });
+      setRes(r.data);
+    } catch (x) {
+      setRes(null);
+      setErr(x.response?.data?.error || x.message || "Search failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const jobs = res?.jobs || [];
+  const events = res?.events?.events || [];
+  return (
+    <section className="rounded-2xl border p-4 sm:p-5" style={{ backgroundColor: C.card, borderColor: C.border, boxShadow: "var(--shadow-card)", color: C.text }}>
+      <h2 className="text-base font-semibold">Quick search</h2>
+      <p className="mt-0.5 text-sm" style={{ color: C.textSecondary }}>Answered right away, no queue. Try “412 Oquirrh West” or “what's on tomorrow”.</p>
+      <form onSubmit={run} className="mt-3 flex gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} maxLength={200} placeholder="Job name, address, lot, PO, or a day" className="min-h-10 min-w-0 flex-1 rounded-lg border px-3 text-sm outline-none" style={{ borderColor: C.border, backgroundColor: C.cardAlt, color: C.text }} />
+        <button type="submit" disabled={busy || !q.trim()} className="flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3.5 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: C.accent }}>
+          <Search className="h-4 w-4" /> {busy ? "Searching…" : "Search"}
+        </button>
+      </form>
+      {err && <p className="mt-3 text-sm" style={{ color: C.tagBlocked.text }}>{err}</p>}
+      {res && (
+        <div className="mt-3 space-y-2">
+          {res.ambiguous && <p className="text-xs" style={{ color: C.amber }}>More than one close match — check which job you mean.</p>}
+          {jobs.map((j) => (
+            <div key={(j.job_ids || [j.job_id]).join(",") + j.name} className="rounded-xl border p-3" style={{ borderColor: C.rowBorder, backgroundColor: C.cardAlt }}>
+              <div className="text-sm font-semibold">{j.hub_url ? <a href={j.hub_url} style={{ color: C.accentText }}>{j.name}</a> : j.name}</div>
+              <div className="mt-1 flex items-start gap-1.5 text-sm" style={{ color: C.textSecondary }}>
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {j.address || "No address on file"}
+              </div>
+              <div className="mt-1.5 text-xs" style={{ color: C.textMuted }}>
+                {j.next_visits?.length ? "Next: " + j.next_visits.slice(0, 3).map((v) => [v.date, v.start_time].filter(Boolean).join(" ")).join(" · ") : "No upcoming visits"}
+              </div>
+            </div>
+          ))}
+          {res.events && (
+            <div className="rounded-xl border p-3" style={{ borderColor: C.rowBorder, backgroundColor: C.cardAlt }}>
+              <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.headerText }}>
+                Visits {res.events.from && res.events.from === res.events.to ? res.events.from : [res.events.from, res.events.to].filter(Boolean).join(" – ")} ({res.events.count})
+              </div>
+              {events.slice(0, 12).map((v) => (
+                <div key={v.event_id} className="mt-1.5 flex flex-wrap gap-x-2 text-sm">
+                  <span className="font-ref" style={{ color: C.textMuted }}>{[v.date, v.start_time].filter(Boolean).join(" ")}</span>
+                  <span className="font-medium">{v.title}</span>
+                  {v.address && <span style={{ color: C.textSecondary }}>{v.address}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {!jobs.length && !events.length && <p className="text-sm" style={{ color: C.textMuted }}>{res.answer || "No match."}</p>}
+        </div>
+      )}
+    </section>
+  );
+}
 
 export default function ResearchQueue() {
   const { user } = useAuth();
@@ -61,10 +132,13 @@ export default function ResearchQueue() {
 
   if (!owner) {
     return (
-      <div className="mx-auto max-w-lg p-8">
+      <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-8">
+        <QuickSearch />
+        <div>
         <LockKeyhole className="mb-4 h-6 w-6" style={{ color: "var(--gf-ink-2)" }} />
         <h1 className="text-xl font-semibold" style={{ color: "var(--gf-ink)" }}>Owner access required</h1>
         <p className="mt-2 text-sm" style={{ color: "var(--gf-ink-2)" }}>The research queue is private to authorized Glass Forge accounts.</p>
+        </div>
       </div>
     );
   }
@@ -105,6 +179,8 @@ export default function ResearchQueue() {
           ))}
         </div>
       </header>
+
+      <QuickSearch />
 
       {error && (
         <div className="flex items-start gap-3 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--gf-error-border)", backgroundColor: "var(--gf-error-bg)", color: "var(--gf-error)" }}>
