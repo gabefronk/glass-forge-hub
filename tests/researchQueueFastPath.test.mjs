@@ -155,6 +155,14 @@ test('enqueue response carries a quick_answer for the resolved job', async () =>
   assert.equal(body.quick_answer.jobs[0].next_visits[0].event_id, 'e2');
 });
 
+test('research-queue entry bundle is current with the shared modules', async () => {
+  const { buildResearchQueueEntry } = await import('../scripts/build-research-queue-entry.mjs');
+  const fs = await import('node:fs');
+  const onDisk = fs.readFileSync(new URL('../base44/functions/research-queue/entry.ts', import.meta.url), 'utf8');
+  assert.equal(onDisk, await buildResearchQueueEntry(), 'run node scripts/build-research-queue-entry.mjs');
+  assert.ok(!/from\s+["']\.{1,2}\//.test(onDisk), 'bundle is self-contained');
+});
+
 test('date words resolve in Denver time', () => {
   assert.deepEqual(datesFromQuery('whats on thursday', '2026-09-26'), { date: '2026-10-01' });
   assert.deepEqual(datesFromQuery('next week', '2026-09-26'), { from: '2026-09-28', to: '2026-10-04' });
