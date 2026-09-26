@@ -168,8 +168,8 @@
       },
       {
         "name": "inbox_search",
-        "title": "Search the inbox agents",
-        "description": "Search the Hub's email inbox agents: triaged threads with category, summary, job link and draft status. Never returns full bodies. Filter by mailbox_key (gf-gmail = Glass Forge Gmail, owner-only; ya-outlook = YA Install Outlook), status (new, needs_reply, waiting, done, ignored), category (job_update, schedule, quote_request, order_vendor, invoice_billing, service_warranty, builder_admin, personal, newsletter_promo, spam, other) and/or free text q (subject, sender, summary, builder, lot, address, PO/OE). Each thread carries id, subject, from, account_hint (address the mail was originally sent to), summary, action_items, next_step, reply_needed, job_id / job_candidates, draft_status and web_link. Admin / manager accounts only; owner-only mailboxes are omitted for non-owners.",
+        "title": "Search the inbox agents' ledger",
+        "description": "Search the inbox agents' ledger: one entry per mail thread the agents read, with category, one-line summary, job link, what the agent changed in the Hub (hub_changes) and draft status. The mail itself is not in the Hub — each entry carries web_link to open it in Gmail / Outlook. Never returns message bodies. Filter by mailbox_key (gf-gmail = Glass Forge Gmail, owner-only; ya-outlook = YA Install Outlook), status (new, needs_reply, waiting, done, ignored), category (job_update, schedule, quote_request, order_vendor, invoice_billing, service_warranty, builder_admin, personal, newsletter_promo, spam, other) and/or free text q (subject, sender, summary, builder, lot, address, PO/OE). Each entry carries id, subject, from, account_hint (address the mail was originally sent to), summary, action_items, next_step, reply_needed, job_id / job_candidates, hub_changes, draft_status and web_link. Admin / manager accounts only; owner-only mailboxes are omitted for non-owners.",
         "input_schema": {
           "type": "object",
           "properties": {
