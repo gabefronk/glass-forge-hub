@@ -1,7 +1,7 @@
 import './support/register-src-alias.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-const { renamePatch, planMatchesJob } = await import('../src/lib/jobRename.js');
+const { renamePatch, planMatchesJob } = await import('../src/lib/jobNames.js');
 
 test('renaming keeps the old name as an alias, deduped, and refuses blanks', () => {
   const job = { canonical_name: 'skyridge 214', aliases: ['Skyridge Lot 214', 'skyridge 214'] };
