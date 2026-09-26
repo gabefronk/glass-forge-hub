@@ -155,14 +155,14 @@ test('cleanup apply is owner-only, keeps every detail, repoints links and never 
  assert.deepEqual(res.applied,[merge.id]);assert.deepEqual(res.skipped,['merge:stale']);
  const gone=s.tables.HubContacts.find(r=>r.key===MATT.key);assert.equal(gone.status,'merged');assert.equal(gone.merged_into,MATTK.key);
  const kept=s.tables.HubContacts.find(r=>r.key===MATTK.key);assert.deepEqual(kept.aliases,['Matt']);assert.deepEqual(kept.merged_keys,[MATT.key]);
- assert.deepEqual(s.tables.ContactJobLink.map(l=>[l.contact_key===MATTK.key,l.job_id,l.role]).sort(),[[true,'hj','site'==='x'?'':''],[true,'wj','site']].sort(),'links moved; the duplicate job link folds into the existing one');
+ assert.deepEqual(s.tables.ContactJobLink.map(l=>[l.contact_key===MATTK.key,l.job_id,l.role]).sort(),[[true,'hj',''],[true,'wj','site']].sort(),'links moved; the duplicate job link folds into the existing one');
  const dir=(await s.call({action:'directory'})).body;
  assert.ok(!dir.contacts.some(c=>c.key===MATT.key),'merged contact hidden');
  assert.equal(dir.contacts.find(c=>c.key===MATTK.key).link_count,2);
  assert.equal((await s.call({action:'contact',contact_key:MATT.key})).body.contact.key,MATTK.key,'old key resolves to the survivor');
  const again=(await s.call({action:'cleanup_plan'})).body;assert.ok(!again.items.some(i=>i.id===merge.id));
- const role=again.items.find(i=>i.type==='builder');
- await s.call({action:'cleanup_apply',ids:[role.id]});
+ const fix=again.items.find(i=>i.type==='builder');
+ await s.call({action:'cleanup_apply',ids:[fix.id]});
  assert.equal(s.tables.HubContacts.find(r=>r.key===NOBUILDER.key).builder,'Weekley Homes');
  assert.equal(s.tables.HubContacts.filter(r=>r.status==='merged').length,1);
 });
