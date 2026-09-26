@@ -140,7 +140,7 @@ const JOBS = [
 const EVENTS = [{ id: 'ev1', job_id: 'job1', event_date: nextYear(), start_time: '08:00', job_name: 'Oquirrh West 412', address: '412 Oquirrh West Dr Herriman', source_status: 'confirmed', google_event_id: 'g1' }];
 const MEMBERS = [{ id: 'mg', member_key: 'gabriel', display_name: 'Gabriel', auth_user_ids: ['ga', 'gw'], active: true, revision: 0, management_lock: '', seed_state: 'complete' }];
 
-function harness({ user = null, seed = {}, gmail = {}, graph = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES, llmImpl = null } = {}) {
+function harness({ user = null, seed = {}, gmail = {}, graph = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES, llmImpl = null, budgetMs = 50_000 } = {}) {
   resetJobCache();
   const { store, api, calls } = makeStore({ EmailMailbox: mailboxes, Jobs: JOBS, CalendarEvents: EVENTS, TeamMember: MEMBERS, ...seed });
   const gstate = { scan: [{ id: 'm1', threadId: 't1' }, { id: 'm3', threadId: 't3' }], messages: { m1: GMAIL_SCHEDULE, m3: GMAIL_PROMO }, threads: { t1: [GMAIL_SCHEDULE], t3: [GMAIL_PROMO] }, labels: [{ id: 'Label_1', name: 'Hub' }], history: [], ...gmail };
@@ -156,13 +156,14 @@ function harness({ user = null, seed = {}, gmail = {}, graph = {}, connections =
     },
   };
   let clock = '2026-09-26T17:00:00.000Z';
-  const h = createEmailAgentHandler({ getClient: async () => client, fetchImpl, now: () => clock, sleep: async () => {} });
+  let ms = 0;
+  const h = createEmailAgentHandler({ getClient: async () => client, fetchImpl, now: () => clock, nowMs: () => ms, budgetMs, sleep: async () => {} });
   const call = async (body, u = user) => {
     const r = await h(new Request('https://test.local/emailAgent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
     return { status: r.status, body: await r.json() };
   };
   const as = (u) => { user = u; return { call: (body) => call(body, u) }; };
-  return { call, as, store, calls, hits, llm, gstate, ostate, setClock: (v) => { clock = v; } };
+  return { call, as, store, calls, hits, llm, gstate, ostate, setClock: (v) => { clock = v; }, tick: (n) => { ms += n; } };
 }
 
 const thread = (h, threadId) => h.store.EmailRelay.find((t) => t.thread_id === threadId);
@@ -477,6 +478,32 @@ test('sync: missing gabriel TeamMember skips to-dos with a warning; LLM failure 
   assert.equal(thread(h3, 't1').job_id, 'job1');
   assert.equal(thread(h3, 't1').draft_status, 'drafted', 'the draft is written from the re-read text');
   assert.equal(thread(h3, 'AAQk1').category, 'service_warranty');
+});
+
+test('sync: when the budget runs out after triage, the un-relayed rows go back to pending and the next run relays them', async () => {
+  // Every LLM call burns 30 of a 50 budget: the first triage batch fits, the relay loop does not.
+  let h;
+  h = harness({ budgetMs: 50, llmImpl: async (req) => { h.tick(30); return makeLLM([])(req); } });
+  const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  const gf = r.body.mailboxes[0];
+  assert.equal(gf.status, 'ok');
+  assert.equal(gf.classified, 2);
+  assert.equal(gf.relayed, 0);
+  assert.ok(gf.errors.some((e) => /budget exhausted before relay/.test(e)));
+  assert.equal(thread(h, 't1').category, 'schedule', 'triage result is kept');
+  assert.equal(thread(h, 't1').triage_pending, true, 're-flagged for the next run');
+  assert.equal(thread(h, 't1').note_id, undefined);
+  assert.equal(h.store.TodoTask.length, 0);
+
+  const h2 = harness({ seed: { EmailRelay: h.store.EmailRelay, EmailMailbox: h.store.EmailMailbox }, gmail: { history: [] } });
+  const r2 = await h2.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  const gf2 = r2.body.mailboxes[0];
+  assert.equal(gf2.fetched, 0);
+  assert.equal(gf2.classified, 2);
+  assert.equal(gf2.relayed, 1, 'the schedule thread relays; the promo does not');
+  assert.equal(thread(h2, 't1').triage_pending, false);
+  assert.ok(thread(h2, 't1').note_id);
+  assert.equal(h2.store.TodoTask.length, 1);
 });
 
 test('list / entry: owner-only mailbox is hidden from managers and non-owner admins; owner sees both; filters and q work; entries carry no mail text', async () => {
