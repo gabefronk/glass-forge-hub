@@ -158,8 +158,9 @@ export function pickSuper({ saved, view, events } = {}) {
       return { ...found, role: "superintendent", source: "notes", key: "", day: dayOf(e) };
     }
   }
-  const ROLE_RANK = ["project_manager", "site", "customer", "homeowner", "builder"];
-  const other = [...linked].filter((c) => c.phone || c.email).sort((a, b) => (ROLE_RANK.indexOf(a.role) + 99) % 99 - (ROLE_RANK.indexOf(b.role) + 99) % 99)[0];
+  // The homeowner / customer has its own slot under the super, so it never fills the super's.
+  const ROLE_RANK = ["project_manager", "site", "builder"];
+  const other = [...linked].filter((c) => (c.phone || c.email) && c.role !== "homeowner" && c.role !== "customer").sort((a, b) => (ROLE_RANK.indexOf(a.role) + 99) % 99 - (ROLE_RANK.indexOf(b.role) + 99) % 99)[0];
   if (other) return { name: other.name || "", phone: other.phone || "", email: other.email || "", role: other.role || "", source: "linked", key: other.key || "" };
   return null;
 }
