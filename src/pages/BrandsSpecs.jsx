@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { ExternalLink, Library, LockKeyhole } from "lucide-react";
+import { ExternalLink, Library, LockKeyhole, Wrench } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { C } from "@/lib/feeUI";
+import { PageShell, PageHero, SheetCard, TILE } from "@/components/PageShell";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 
 const PELLA_ICON_URL =
@@ -107,16 +108,10 @@ function MarginLookup() {
   }, [discountInput]);
 
   return (
-    <section className="overflow-hidden rounded-[14px] card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <div className="px-5 py-4" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.headerBg }}>
-        <div className="flex items-center gap-2">
-          <LockKeyhole className="h-4 w-4" style={{ color: C.textMuted }} />
-          <h2 className="font-heading text-[18px] font-bold" style={{ color: C.text }}>Owner pricing reference</h2>
-        </div>
-        <p className="mt-1.5 text-[12px]" style={{ color: C.textSecondary }}>
-          Cost basis is 50% of list price. For a discount <span className="font-mono-num">d</span> off list, gross margin = 100 − 50/(1−d). For a target margin <span className="font-mono-num">g</span>, discount = 1 − 0.5/(1−g).
-        </p>
-      </div>
+    <SheetCard icon={LockKeyhole} tile={TILE.green} title="Owner pricing reference" sub="cost basis is 50% of list" bodyClassName="">
+      <p className="m-0 px-5 py-3 text-[12.5px]" style={{ color: C.textSecondary, borderBottom: `1px solid ${C.rowBorder}` }}>
+        For a discount <span className="font-mono-num">d</span> off list, gross margin = 100 − 50/(1−d). For a target margin <span className="font-mono-num">g</span>, discount = 1 − 0.5/(1−g).
+      </p>
       <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-end" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="discount-calc" className="text-[12px] font-medium" style={{ color: C.textSecondary }}>Discount off list (%)</label>
@@ -151,7 +146,7 @@ function MarginLookup() {
       <p className="px-5 py-3 text-[12px]" style={{ color: C.textMuted, borderTop: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
         Source chart labels: LIST at 0% margin (maximum discount) end; COST at 50% margin (full list price) end.
       </p>
-    </section>
+    </SheetCard>
   );
 }
 
@@ -160,34 +155,23 @@ export default function BrandsSpecs() {
   const owner = isPurchaseOrderOwner(user);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col" style={{ backgroundColor: C.pageBg }}>
-      <header className="shrink-0 px-[26px] pb-5 pt-[26px] max-[699px]:px-[18px] max-[699px]:pt-[18px]" style={{ background: "linear-gradient(180deg, var(--gf-sidebar-top), var(--gf-sidebar-bottom))" }}>
-        <div className="flex items-center gap-3"><Library className="h-7 w-7" style={{ color: "var(--gf-brass-300)" }} strokeWidth={1.8} />
-          <h1 className="font-heading text-[30px] font-bold" style={{ color: "var(--gf-sidebar-text-on)", letterSpacing: "-0.03em" }}>Brands &amp; Specs</h1>
+    <PageShell width="max-w-[1120px]" className="!mx-0">
+      <PageHero eyebrow="Reference" title="Brands & Specs" sub="Manufacturer websites, known product series, and specialized specification tools." />
+
+      <SheetCard icon={Wrench} tile={TILE.teal} title="Specification tools" sub="Pella and Amsco resources" bodyClassName="p-5 max-[699px]:p-4">
+        <div className="grid max-w-[520px] grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+          {SPECIALIZED_LINKS.map((link) => <SpecializedLink key={link.href} link={link} />)}
         </div>
-        <p className="mt-2 max-w-[680px] text-[13px]" style={{ color: "var(--gf-sidebar-muted)" }}>Manufacturer websites, known product series, and specialized specification tools.</p>
-      </header>
+      </SheetCard>
 
-      <main className="flex w-full max-w-[1120px] flex-col gap-8 px-[26px] py-6 max-[699px]:px-[18px]">
-        <section aria-labelledby="spec-tools-heading">
-          <h2 id="spec-tools-heading" className="font-heading text-[20px] font-bold" style={{ color: C.text }}>Specification tools</h2>
-          <p className="mt-1 text-[13px]" style={{ color: C.textSecondary }}>Direct links to the existing specialized Pella and Amsco resources.</p>
-          <div className="mt-4 grid max-w-[520px] grid-cols-1 gap-4 min-[480px]:grid-cols-2">
-            {SPECIALIZED_LINKS.map((link) => <SpecializedLink key={link.href} link={link} />)}
-          </div>
-        </section>
+      <SheetCard icon={Library} tile={TILE.bronze} title="Manufacturers & vendors" sub="official sites and the series in the crew reference" bodyClassName="p-5 max-[699px]:p-4">
+        <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 xl:grid-cols-3">
+          {BRANDS.map((brand) => <BrandTile key={brand.name} brand={brand} showPricing={owner} />)}
+        </ul>
+        {owner && <p className="mt-3 text-[12px]" style={{ color: C.textMuted }}>Relative price tiers are rough internal guides only, not pricing.</p>}
+      </SheetCard>
 
-        <section aria-labelledby="brands-heading">
-          <h2 id="brands-heading" className="font-heading text-[20px] font-bold" style={{ color: C.text }}>Manufacturers &amp; vendors</h2>
-          <p className="mt-1 text-[13px]" style={{ color: C.textSecondary }}>Use each tile for the official website and the series recorded in the crew reference.</p>
-          <ul className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {BRANDS.map((brand) => <BrandTile key={brand.name} brand={brand} showPricing={owner} />)}
-          </ul>
-          {owner && <p className="mt-3 text-[12px]" style={{ color: C.textMuted }}>Relative price tiers are rough internal guides only, not pricing.</p>}
-        </section>
-
-        {owner && <MarginLookup />}
-      </main>
-    </div>
+      {owner && <MarginLookup />}
+    </PageShell>
   );
 }
