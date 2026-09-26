@@ -18,6 +18,7 @@ async function all(entity,sort='-created_date'){const result=[];for(let skip=0;s
 // One contact per role per job: superintendent and homeowner are single slots on the job page.
 const SINGLE_ROLES={superintendent:'set_job_super',homeowner:'set_job_homeowner'};
 const ROLE_ACTIONS={job_super:'superintendent',job_homeowner:'homeowner'};
+const OVERLAY_FIELDS=['phones','emails','aliases','merged_keys','role','builder','company','status','merged_into'];
 const minimal=c=>c?{key:c.key,name:c.name,phone:c.phone||'',email:c.email||''}:null;
 export function validateDirectory(data){
  if(data?.version!==1||!data.source||!Array.isArray(data.contacts)||!data.contacts.length||data.contacts.length>5000||!Array.isArray(data.job_references)||data.job_references.length>20000)throw Error('Invalid directory.');
@@ -134,7 +135,7 @@ export function createContactsDirectoryHandler({getClient,fetchFile=fetch}={}){
      // Items touching a contact that an earlier item in this batch merged away are re-planned next time.
      const keys=item?[item.survivor?.key,item.contact?.key,...(item.merge||[]).map(m=>m.key)].filter(Boolean):[];
      if(!item||keys.some(k=>merged.has(k))){skipped.push(id);continue;}
-     try{await applyCleanupItem(item,current,{upsert,repoint});applied.push(id);for(const m of item.merge||[])merged.add(m.key);current=current.map(c=>rows.has(c.key)&&rows.get(c.key).source==='override'?{...c,...Object.fromEntries(Object.entries(rows.get(c.key)).filter(([k])=>['phones','emails','aliases','merged_keys','role','builder','company','status','merged_into'].includes(k)))}:c);}
+     try{await applyCleanupItem(item,current,{upsert,repoint});applied.push(id);for(const m of item.merge||[])merged.add(m.key);current=current.map(c=>rows.has(c.key)?{...c,...Object.fromEntries(Object.entries(rows.get(c.key)).filter(([k,v])=>OVERLAY_FIELDS.includes(k)&&v!==undefined))}:c);}
      catch(e){failed.push({id,error:String(e?.message||'Could not apply.')});}
     }
     return response({ok:true,applied,skipped,failed});
