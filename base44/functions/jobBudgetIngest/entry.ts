@@ -7,6 +7,7 @@ import { BUDGET_TEMPLATE_XLSX_B64 } from '../../shared/jobBudgetTemplateXlsx.js'
 import { normalizeCustomer } from '../../shared/jobIdentity.js';
 import { denverDate } from '../../shared/billingCore.js';
 import { fetchCompleteEntity, matchJobTokens } from '../../shared/jobCatalog.js';
+import { validateLaborEntry, laborMargin, buildCostInputPatch, summarizeJobCosts } from '../../shared/jobLaborEntry.js';
 
 // Job Budgets ingest.
 // Gabriel drops one or more vendor quote PDFs on the Job Budgets page. For each:
@@ -108,7 +109,13 @@ async function uploadFile(token, name, bytes, mimeType, parentId) {
 // Conservative job match: link only when exactly one Jobs record lines up with the
 // quote tokens; otherwise needs_review with the candidates. Nothing attaches on weak
 // or split evidence (same rule as the rest of the Hub's job identity logic).
-async function matchJob(db, quote) {
+async function matchJob(db, quote, forcedJobId) {
+  // Dropped from a job page: that job is the match, no guessing.
+  if (forcedJobId) {
+    const job = await db.Jobs.get(String(forcedJobId)).catch(() => null);
+    if (!job) return { status: 'needs_review', reason: 'job not found', candidates: [] };
+    return { status: 'matched', job_id: job.id, job_name: job.canonical_name || job.name || '', reason: 'chosen on the job page' };
+  }
   const tokens = quoteMatchTokens(quote);
   if (!tokens.length) return { status: 'needs_review', reason: 'no usable match tokens on quote', candidates: [] };
   // Matching is a uniqueness decision. Never match against a partial catalog and
@@ -142,9 +149,10 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
   });
 
   // 3. Job match.
-  const match = await matchJob(db, quote);
+  const match = await matchJob(db, quote, body.job_id);
   const matched = match.status === 'matched';
-  const builder = quote.builder || (matched ? '' : '') || quote.bill_to || 'Unknown Builder';
+  const forcedJob = body.job_id && matched ? await db.Jobs.get(String(body.job_id)).catch(() => null) : null;
+  const builder = (forcedJob && forcedJob.builder) || quote.builder || quote.bill_to || 'Unknown Builder';
   const jobName = matched ? match.job_name : (quote.quote_name || cleanName((file_name || 'quote').replace(/\.pdf$/i, ''), 'Unnamed Job'));
 
   // 4. Drive filing.
@@ -237,6 +245,36 @@ export default async function jobBudgetIngest(req) {
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
     if (!accessToken) return Response.json({ error: 'googledrive connector is not connected' }, { status: 200 });
     return processQuote(base44, db, core, accessToken, body, user.email);
+  }
+
+  // --- Job page: quick labor entry + what the job's costs look like -----------
+
+  if (action === 'job_costs') {
+    const jobId = String(body.job_id || '').trim();
+    if (!jobId) return Response.json({ error: 'job_id is required' }, { status: 400 });
+    const [costInputs, budgets] = await Promise.all([
+      db.JobCostInputs.filter({ job_id: jobId }, '-month', 5).catch(() => []),
+      db.JobBudgets.filter({ job_id: jobId }, '-created_date', 1).catch(() => []),
+    ]);
+    // The newest month with numbers on it is the one the card shows.
+    const costInput = (costInputs || []).find((c) => c.installation_revenue != null || c.actual_labor_cost != null) || (costInputs || [])[0] || null;
+    return Response.json({ status: 'ok', ...summarizeJobCosts({ costInput, budget: (budgets || [])[0] || null }) });
+  }
+
+  if (action === 'set_labor') {
+    const jobId = String(body.job_id || '').trim();
+    if (!jobId) return Response.json({ error: 'job_id is required' }, { status: 400 });
+    const job = await db.Jobs.get(jobId).catch(() => null);
+    if (!job) return Response.json({ error: 'job not found' }, { status: 404 });
+    const check = validateLaborEntry(body, { today: denverDate() });
+    if (!check.ok) return Response.json({ error: 'invalid labor entry', fields: check.errors }, { status: 400 });
+    const v = check.values;
+    // One row per job and month; the quick entry updates the row it finds.
+    const existing = (await db.JobCostInputs.filter({ job_id: jobId, month: v.month }, '-created_date', 1).catch(() => []))[0] || null;
+    const patch = buildCostInputPatch(existing, v, { jobId, jobNameNorm: normalizeCustomer(job.canonical_name || job.name || '') });
+    const row = existing ? await db.JobCostInputs.update(existing.id, patch) : await db.JobCostInputs.create(patch);
+    const margin = laborMargin(row.installation_revenue, row.actual_labor_cost);
+    return Response.json({ status: 'ok', cost_input_id: row.id, month: v.month, ...margin, ...summarizeJobCosts({ costInput: row, budget: null }) });
   }
 
   // --- VendorOrders: the unpaid-jobs tracker -------------------------------
