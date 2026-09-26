@@ -1108,3 +1108,41 @@ Frontend only. No entity, function or data changes; nothing published.
 **Checks**: lint clean, build passes, root tests 515/515, backend 811/813 (the 2 pre-existing Node-20 `.ts` import failures).
 
 **Open (owner decisions / device actions)**: additive job_id backfill for CalendarEvents/FieldReports; restart AMSCO runner, Mac message collector, gaming-PC quote relay (hostname in `desktopQuoteRelayCore.js`); re-capture Outlook + Sales Tracker (stale since 9/08); full ProBuild library refresh; research queue paused; Goble PlanIntake stuck in error; 7 duplicate kebab-case entity files left in place (deleting entity files is risky).
+
+## Contacts cleanup, builder linkage and the homeowner slot (2026-09-26)
+
+Nothing was bulk-written to production data; every write below happens only on an owner (or,
+for the super/homeowner slots, a signed-in user's) click.
+
+- **Builder linkage.** `builderCore()` / `builderCatalog()` in `contactMatching.js` normalize
+  builder names from `jobIdentity.normalizeCustomer`, fix known typos (Holme, Homles, Lanscope,
+  Anderson, Valor Holmes), drop trailing generic words (Homes, Construction, Group, of Utah…) and
+  map DAVID WEEKLEY to Weekley. A job builder such as "Holmes 328 Daybreak" belongs to the known
+  builder whose core it starts with. `buildDirectory` now gives every job and contact the same
+  canonical builder, so ~97% of jobs (was ~41%) resolve to a builder that has contacts. Cash / YA
+  "builders" never share contacts. The workbook is not edited.
+- **Job page.** `job_contacts` returns `builder_contacts` (office, PMs, supers, warranty) shown under
+  the builder name. Calendar events now reach a job the same way the job page does (job_id, a
+  billing line's calendar_event_id, or a unique exact name) — before, no SPR event had a job_id.
+  "SPR:" lines become superintendent suggestions: high when the phone is a contact under the
+  job's builder; otherwise an "Add & link as superintendent" card (creates the contact under the
+  job's builder). Phones found in job evidence that belong to another company (BFS ISR, vendor
+  reps, other builders) are no longer proposed as homeowners. Coverage adds "Add all as supers".
+- **Cleanup (owner-only, Contacts page).** `cleanup_plan` proposes merges (same phone / email / full
+  name at the same builder; "Check first" when names or builders differ), missing builders (company
+  email domain used by one builder, or staff job links) and missing roles (calendar SPR phone, or
+  consistent confirmed link roles). `cleanup_apply` re-plans server-side and applies only listed
+  ids. Snapshot contacts get a HubContacts `source:"override"` row with the same key; merges keep
+  all phones / emails / names on the survivor, move ContactJobLink rows (folding duplicates), and
+  mark the other record `status:"merged"` + `merged_into` — never deleted. Old keys resolve to the
+  survivor in `link`, `contact`, `job_super`, `job_homeowner`.
+- **Homeowner slot.** Directly under the Super card in the job hero (job page and Jobs tab), same
+  access rule as the super (any signed-in user): `job_homeowner` / `set_job_homeowner`. Pick a
+  contact (typeahead via `picker`) or enter name + phone/email (reuses a contact with that phone /
+  email, else creates a HubContacts row role `homeowner`), stored as ContactJobLink role
+  `homeowner`, one per job, removable. Prefill from Jobs.customer_name only when it names a person.
+  The rail's Contacts card shows a Homeowner row right after Superintendent; the homeowner never
+  fills the super slot.
+- **Schema (additive):** HubContacts `role`, `status`, `merged_into`, `merged_keys[]`, `aliases[]`,
+  `phones[]`, `emails[]`.
+- **Tests:** `tests/contactCleanup.test.mjs`.
