@@ -75,7 +75,7 @@ const GRAPH_SERVICE = graphMessage({ bodyText: 'The bottom sash on the master be
 function gmailRoutes(state) {
   let labelSerial = 10;
   return [
-    { method: 'GET', match: '/gmail/v1/users/me/profile', data: { emailAddress: 'gabriel.fronk.wd@gmail.com', historyId: '500' } },
+    { method: 'GET', match: '/gmail/v1/users/me/profile', data: () => ({ emailAddress: state.me || 'gabriel.fronk.wd@gmail.com', historyId: '500' }) },
     { method: 'GET', match: '/gmail/v1/users/me/messages?', data: () => ({ messages: state.scan }) },
     { method: 'GET', match: '/gmail/v1/users/me/history?', data: () => ({ history: state.history || [], historyId: state.historyId || '500' }) },
     { method: 'GET', match: /\/gmail\/v1\/users\/me\/messages\/([^?]+)\?format=full/, data: ({ url }) => state.messages[decodeURIComponent(url.match(/messages\/([^?]+)\?/)[1])] },
@@ -93,6 +93,7 @@ function graphRoutes(state) {
   let catSerial = 0;
   const deltaLink = 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=tok1';
   return [
+    { method: 'GET', match: /\/v1\.0\/me\?\$select=mail/, data: () => ({ mail: state.me || 'yawindowinstall@outlook.com', userPrincipalName: state.me || 'yawindowinstall@outlook.com' }) },
     { method: 'GET', match: '/mailFolders/inbox/messages/delta?', data: ({ url }) => ({ value: url.includes('deltatoken') ? (state.deltaNext || []) : state.delta, '@odata.deltaLink': deltaLink }) },
     { method: 'GET', match: '/outlook/masterCategories', data: () => ({ value: state.categories }) },
     { method: 'POST', match: '/outlook/masterCategories', data: ({ body }) => { const c = { id: `cat-${++catSerial}`, displayName: body.displayName }; state.categories.push(c); return c; } },
@@ -504,6 +505,19 @@ test('sync: when the budget runs out after triage, the un-relayed rows go back t
   assert.equal(thread(h2, 't1').triage_pending, false);
   assert.ok(thread(h2, 't1').note_id);
   assert.equal(h2.store.TodoTask.length, 1);
+});
+
+test('sync: when the connector was authorized as a different account, the mailbox row takes that address and the run says so', async () => {
+  const h = harness({ gmail: { me: 'gabefronk@gmail.com' } });
+  const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  const gf = r.body.mailboxes[0];
+  assert.equal(gf.status, 'ok');
+  assert.ok(gf.errors.some((e) => /authorized as gabefronk@gmail.com, not gabriel.fronk.wd@gmail.com/.test(e)));
+  assert.equal(h.store.EmailMailbox.find((m) => m.key === 'gf-gmail').address, 'gabefronk@gmail.com');
+  const h2 = harness();
+  const r2 = await h2.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.ok(!r2.body.mailboxes[0].errors.some((e) => /authorized as/.test(e)));
+  assert.equal(h2.store.EmailMailbox.find((m) => m.key === 'gf-gmail').address, 'gabriel.fronk.wd@gmail.com');
 });
 
 test('rerun: flags an entry pending; the next sync re-reads it and relays without duplicating the note or to-do', async () => {
