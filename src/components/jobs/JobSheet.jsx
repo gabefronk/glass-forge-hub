@@ -295,10 +295,11 @@ export function JobFactsCard({ snap, folder }) {
       : <span key="f" style={{ color: MUTED, fontWeight: 500 }}>{folder?.loading ? "Checking…" : "Not linked"}</span>],
   ];
   return (
-    <SheetCard icon={Briefcase} tile={TILE.teal} title="The job" bodyClassName="">
-      <dl className="m-0 grid grid-cols-5 max-[1100px]:grid-cols-3 max-[599px]:grid-cols-2">
-        {cells.map(([k, v], i) => (
-          <div key={k} className={`min-w-0 px-5 py-4 max-[699px]:px-4 ${i ? "border-l max-[1100px]:[&:nth-child(4)]:border-l-0 max-[599px]:[&:nth-child(odd)]:border-l-0 max-[599px]:[&:nth-child(4)]:border-l" : ""}`} style={{ borderColor: "#eee9e0" }}>
+    <SheetCard icon={Briefcase} tile={TILE.teal} title="The job" bodyClassName="overflow-hidden rounded-b-[14px]">
+      {/* Cells draw their own left and top rules; the outer ones sit under the card edge. */}
+      <dl className="-ml-px -mt-px m-0 grid grid-cols-5 max-[1100px]:grid-cols-3 max-[599px]:grid-cols-2">
+        {cells.map(([k, v]) => (
+          <div key={k} className="min-w-0 border-l border-t px-5 py-4 max-[699px]:px-4" style={{ borderColor: "#eee9e0" }}>
             <dt className="text-[11px] font-semibold tracking-[.12em] uppercase" style={{ color: "#566063" }}>{k}</dt>
             <dd className="m-0 mt-1 truncate text-[15px] font-semibold" style={{ color: INK }}>{v}</dd>
           </div>
