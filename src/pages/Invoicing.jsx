@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
+import { SheetCard, TILE } from "@/components/PageShell";
+import { Receipt } from "lucide-react";
 import { computeFeeAmt, computeLaborAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 import { isReady, isMatchBlocked, isReportBlocked, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import InvoiceHeader from "@/components/invoicing/InvoiceHeader";
@@ -440,12 +442,14 @@ export default function Invoicing() {
             {unprocessedCount > 0 && (
               <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
             )}
-            <InvoiceSummary
-              {...heroStats}
-              month={month}
-              onFilterBlocked={() => setFilter("needs_report")}
-              onFilterMatchBlocked={() => setFilter("needs_review")}
-            />
+            <SheetCard icon={Receipt} tile={TILE.teal} title="This month" sub="recorded fees, held lines and what is ready to bill" className="mt-4" bodyClassName="px-5 max-[699px]:px-4">
+              <InvoiceSummary
+                {...heroStats}
+                month={month}
+                onFilterBlocked={() => setFilter("needs_report")}
+                onFilterMatchBlocked={() => setFilter("needs_review")}
+              />
+            </SheetCard>
             <JobProfitabilityPanel
               rows={monthRows.filter((r) => !supersededSet.has(r.id))}
               jobs={profitabilityInputs.jobs}

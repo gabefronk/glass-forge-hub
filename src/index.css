@@ -69,7 +69,7 @@
     --gf-card-band: #FAF8F3;
     --gf-field: #F4F1EA;
     --gf-hover: #F6F3EC;
-    --gf-border: #E2DCD1;
+    --gf-border: #D3CABB;
     --gf-border-2: #E0DACF;
     --gf-hairline: #EEE9E0;
     --gf-hairline-2: #F3EFE7;
@@ -115,7 +115,7 @@
     --gf-tile-sand-ink: #6F4E10;
     --gf-tile-stone: #F3EFE7;
     --gf-tile-stone-ink: #566063;
-    --shadow-card: 0 1px 2px rgba(21,24,26,.04), 0 16px 40px -28px rgba(21,24,26,.25);
+    --shadow-card: 0 1px 2px rgba(10,29,31,.08), 0 6px 14px -6px rgba(10,29,31,.16), 0 22px 40px -22px rgba(10,29,31,.34);
     --shadow-row: 0 1px 2px rgba(21,24,26,.05), 0 3px 8px -3px rgba(21,24,26,.10);
     --shadow-row-hover: 0 1px 2px rgba(21,24,26,.06), 0 4px 12px -4px rgba(21,24,26,.16);
     --shadow-control: 0 1px 2px rgba(21,24,26,.04);
@@ -125,7 +125,7 @@
     --r-control: 8px;
     --r-button: 9px;
     --r-row: 9px;
-    --r-card: 12px;
+    --r-card: 14px;
   }
 
   .dark {
