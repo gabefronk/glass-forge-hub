@@ -8128,7 +8128,7 @@
 
   // src/components/jobs/JobWorkspacePanel.jsx
   init_define_import_meta_env();
-  var import_react15 = __toESM(require_react());
+  var import_react16 = __toESM(require_react());
 
   // node_modules/lucide-react/dist/esm/lucide-react.js
   init_define_import_meta_env();
@@ -8516,7 +8516,9 @@
   var SCOPE = "Please install window as well.<br>ANDERSEN WARRANTY<br>*WARANTY* - Per Report: 1 \u2013 1626 fx primary bath | 2 - 1626 accents (LINE: 27) | 1 \u2013 2646 sh pantry deadlight - (Line#: 11) *Orig. PO#: 7249419* AW# 26316092<br>Product ETA \u2013 Wk of: 9/23 | | Vendor Order #: Confirmation Number: 2386318<br>Received: 9/21";
   var JOB = { id: "j1", canonical_name: "rainey - warranty glass", builder: "Holmes Homes", address: "6847 W Ripple Rd, South Jordan", po_numbers: ["7302254"], oe_numbers: ["79567505-00"] };
   var EVENTS = [{ id: "e1", job_id: "j1", event_date: "2026-09-25", job_name: "#1 Rainey warranty", created_by: "ragen@x.com", scope_notes: SCOPE, report_required: true, report_status: "due", event_attachments: [{ title: "Report.pdf", file_url: "https://mail.google.com/mail/?view=att&x=1" }, { title: "order.pdf", file_url: "https://drive.google.com/file/d/abc", drive_url: "https://drive.google.com/file/d/abc" }] }];
-  var rows = { Jobs: [JOB], CalendarEvents: EVENTS };
+  var PH = (c) => `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300'><rect width='400' height='300' fill='${c}'/><rect x='120' y='80' width='160' height='140' fill='%23222'/></svg>`;
+  var REPORTS = [{ id: "fr1", job_id: "j1", job_name: "Rainey warranty", job_date: "2026-09-25", author: "ragen@x.com", photos: [PH("%23c9b58a"), PH("%23b9a17a"), PH("%23d6c39a"), PH("%23a8946c"), PH("%23c2ad84")], note_text: "Changed the balance springs, checked ops on all windows. 1 man hour" }];
+  var rows = { Jobs: [JOB], CalendarEvents: EVENTS, FieldReports: REPORTS };
   var entity = (name) => ({
     get: async () => JOB,
     list: async (_s, _l, skip) => skip ? [] : rows[name] || [],
@@ -9581,7 +9583,7 @@
 
   // src/components/jobs/JobActivityFeed.jsx
   init_define_import_meta_env();
-  var import_react11 = __toESM(require_react());
+  var import_react12 = __toESM(require_react());
 
   // src/components/jobs/ClampedText.jsx
   init_define_import_meta_env();
@@ -9614,137 +9616,14 @@
     ] });
   }
 
-  // src/components/jobs/FeedImage.jsx
-  init_define_import_meta_env();
-  var import_react7 = __toESM(require_react());
-  var import_jsx_runtime3 = __toESM(require_jsx_runtime());
-  function getAccessToken() {
-    try {
-      return localStorage.getItem("base44_access_token") || localStorage.getItem("token") || "";
-    } catch {
-      return "";
-    }
-  }
-  async function fetchWithToken(src) {
-    const token = getAccessToken();
-    if (!token) return null;
-    const res = await fetch(src, { headers: { Authorization: `Bearer ${token}` } });
-    return res.ok ? res.blob() : null;
-  }
-  function FileTile({ src, className, style }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: `flex flex-col items-center justify-center gap-1.5 bg-[#F6F3EC] p-2 text-center ${className || ""}`, style, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(FileText, { className: "h-6 w-6 shrink-0", style: { color: "#566063" } }),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "max-w-full truncate text-[11px] font-medium", style: { color: "#101617" }, children: isPdfUrl(src) ? fileLabel(src) : "Open file" }),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "text-[10px] uppercase tracking-[0.1em]", style: { color: "#8F999B" }, children: isPdfUrl(src) ? "PDF" : "Attachment" })
-    ] });
-  }
-  function FeedImage({ src, alt, className, style, loading, onNotImage }) {
-    const [resolvedSrc, setResolvedSrc] = (0, import_react7.useState)(src);
-    const [retried, setRetried] = (0, import_react7.useState)(false);
-    const [notImage, setNotImage] = (0, import_react7.useState)(() => isPdfUrl(src));
-    const objectUrlRef = (0, import_react7.useRef)(null);
-    (0, import_react7.useEffect)(() => {
-      setResolvedSrc(src);
-      setRetried(false);
-      setNotImage(isPdfUrl(src));
-    }, [src]);
-    (0, import_react7.useEffect)(() => () => {
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-    }, []);
-    (0, import_react7.useEffect)(() => {
-      if (notImage) onNotImage?.();
-    }, [notImage]);
-    const handleError = async () => {
-      if (!src) return;
-      if (retried) {
-        setNotImage(true);
-        return;
-      }
-      setRetried(true);
-      try {
-        const blob = await fetchWithToken(src);
-        const generic = !blob?.type || blob.type === "application/octet-stream";
-        if (!blob || !generic && !blob.type.startsWith("image/")) {
-          setNotImage(true);
-          return;
-        }
-        if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-        const url = URL.createObjectURL(blob);
-        objectUrlRef.current = url;
-        setResolvedSrc(url);
-      } catch {
-        setNotImage(true);
-      }
-    };
-    if (notImage) return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(FileTile, { src, className, style });
-    return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("img", { src: resolvedSrc, alt, className, style, loading, onError: handleError });
-  }
-  function PdfFrame({ src }) {
-    const [frameSrc, setFrameSrc] = (0, import_react7.useState)(null);
-    (0, import_react7.useEffect)(() => {
-      let active = true, objectUrl = null;
-      (async () => {
-        let blob = null;
-        try {
-          const res = await fetch(src);
-          if (res.ok) blob = await res.blob();
-        } catch {
-        }
-        if (!blob) {
-          try {
-            blob = await fetchWithToken(src);
-          } catch {
-          }
-        }
-        if (!active) return;
-        if (blob) {
-          const generic = !blob.type || blob.type === "application/octet-stream";
-          objectUrl = URL.createObjectURL(generic ? new Blob([blob], { type: "application/pdf" }) : blob);
-          setFrameSrc(objectUrl);
-        } else {
-          setFrameSrc(src);
-        }
-      })();
-      return () => {
-        active = false;
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-      };
-    }, [src]);
-    if (!frameSrc) return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "flex h-full items-center justify-center text-[13px] text-white/80", children: "Loading document\u2026" });
-    return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("iframe", { src: frameSrc, title: fileLabel(src), className: "h-full w-full rounded-[12px] bg-white" });
-  }
-  function AttachmentViewer({ src, onClose }) {
-    const [pdf, setPdf] = (0, import_react7.useState)(() => isPdfUrl(src));
-    (0, import_react7.useEffect)(() => {
-      setPdf(isPdfUrl(src));
-    }, [src]);
-    (0, import_react7.useEffect)(() => {
-      const onKey = (e) => {
-        if (e.key === "Escape") onClose();
-      };
-      document.addEventListener("keydown", onKey);
-      return () => document.removeEventListener("keydown", onKey);
-    }, [onClose]);
-    return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "fixed inset-0 z-50 flex flex-col p-4", style: { backgroundColor: "rgba(0,0,0,.85)" }, onClick: onClose, role: "dialog", "aria-modal": "true", "aria-label": "Attachment", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "mb-3 flex shrink-0 items-center justify-end gap-2", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("a", { href: src, target: "_blank", rel: "noreferrer", onClick: (e) => e.stopPropagation(), className: "inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white/10 px-3.5 text-[12px] font-semibold text-white", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(ExternalLink, { className: "h-3.5 w-3.5" }),
-          "Open in new tab"
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", onClick: onClose, "aria-label": "Close attachment", className: "inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(X, { className: "h-4 w-4" }) })
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "flex min-h-0 flex-1 items-center justify-center", onClick: pdf ? (e) => e.stopPropagation() : void 0, children: pdf ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(PdfFrame, { src }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(FeedImage, { src, alt: "photo", className: "max-w-full max-h-full rounded-[12px]", onNotImage: () => setPdf(true) }) })
-    ] });
-  }
-
   // src/components/jobs/ScopeNotes.jsx
   init_define_import_meta_env();
-  var import_react8 = __toESM(require_react(), 1);
-  var import_jsx_runtime4 = __toESM(require_jsx_runtime(), 1);
+  var import_react7 = __toESM(require_react(), 1);
+  var import_jsx_runtime3 = __toESM(require_jsx_runtime(), 1);
   var INK = "#101617";
   var MUTED = "#616a6d";
   function ScopeNotes({ parsed, limit = 0, size = "md" }) {
-    const [all, setAll] = (0, import_react8.useState)(false);
+    const [all, setAll] = (0, import_react7.useState)(false);
     if (!parsed) return null;
     const { tags, notes, items, facts } = parsed;
     const total = notes.length + items.length;
@@ -9752,38 +9631,38 @@
     const shownNotes = cut ? notes.slice(0, limit) : notes;
     const shownItems = cut ? items.slice(0, Math.max(0, limit - shownNotes.length)) : items;
     const text = size === "sm" ? "text-[14px] leading-[21px]" : "text-[14.5px] leading-[22px]";
-    return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "flex flex-col gap-2.5", children: [
-      tags.length ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "flex flex-wrap gap-1.5", children: tags.map((t) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "rounded-[6px] px-2 py-0.5 text-[11.5px] font-semibold tracking-[.02em]", style: { backgroundColor: "#f6efe0", color: "#6f4e10", border: "1px solid #e8d9b5" }, children: t.split(" \xB7 ").map((x) => sanitizeText(x)).join(" \xB7 ") }, t)) }) : null,
-      shownNotes.length ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "flex flex-col gap-1", children: shownNotes.map((n, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: `m-0 ${text} break-words`, style: { color: INK }, children: sanitizeText(n) }, i)) }) : null,
-      shownItems.length ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("ul", { className: "m-0 flex list-none flex-col overflow-hidden rounded-[10px] p-0", style: { border: "1px solid #eee9e0" }, children: shownItems.map((it, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("li", { className: `flex items-center gap-3 px-3 py-2 ${i ? "border-t" : ""}`, style: { borderColor: "#eee9e0", backgroundColor: i % 2 ? "#fcfbf8" : "#fff" }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "flex h-6 min-w-[34px] shrink-0 items-center justify-center rounded-[6px] font-mono text-[12.5px] font-semibold", style: { backgroundColor: "#e2eeeb", color: "#082f2c" }, children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "flex flex-col gap-2.5", children: [
+      tags.length ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "flex flex-wrap gap-1.5", children: tags.map((t) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "rounded-[6px] px-2 py-0.5 text-[11.5px] font-semibold tracking-[.02em]", style: { backgroundColor: "#f6efe0", color: "#6f4e10", border: "1px solid #e8d9b5" }, children: t.split(" \xB7 ").map((x) => sanitizeText(x)).join(" \xB7 ") }, t)) }) : null,
+      shownNotes.length ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "flex flex-col gap-1", children: shownNotes.map((n, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { className: `m-0 ${text} break-words`, style: { color: INK }, children: sanitizeText(n) }, i)) }) : null,
+      shownItems.length ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("ul", { className: "m-0 flex list-none flex-col overflow-hidden rounded-[10px] p-0", style: { border: "1px solid #eee9e0" }, children: shownItems.map((it, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("li", { className: `flex items-center gap-3 px-3 py-2 ${i ? "border-t" : ""}`, style: { borderColor: "#eee9e0", backgroundColor: i % 2 ? "#fcfbf8" : "#fff" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "flex h-6 min-w-[34px] shrink-0 items-center justify-center rounded-[6px] font-mono text-[12.5px] font-semibold", style: { backgroundColor: "#e2eeeb", color: "#082f2c" }, children: [
           it.qty,
           "\xD7"
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: `min-w-0 flex-1 ${text} font-medium break-words`, style: { color: INK }, children: sanitizeText(it.text) }),
-        it.line ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "shrink-0 font-mono text-[11.5px]", style: { color: MUTED }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: `min-w-0 flex-1 ${text} font-medium break-words`, style: { color: INK }, children: sanitizeText(it.text) }),
+        it.line ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "shrink-0 font-mono text-[11.5px]", style: { color: MUTED }, children: [
           "line ",
           it.line
         ] }) : null
       ] }, i)) }) : null,
-      cut ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("button", { type: "button", onClick: () => setAll(true), className: "w-fit text-[12.5px] font-semibold hover:underline", style: { color: "#0b3f3b" }, children: [
+      cut ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("button", { type: "button", onClick: () => setAll(true), className: "w-fit text-[12.5px] font-semibold hover:underline", style: { color: "#0b3f3b" }, children: [
         "Show all ",
         total
       ] }) : null,
-      facts.length ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("dl", { className: "m-0 flex flex-wrap gap-x-5 gap-y-1.5 pt-0.5", children: facts.map((f) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "flex items-baseline gap-1.5", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("dt", { className: "text-[10.5px] font-semibold uppercase tracking-[.1em]", style: { color: MUTED }, children: f.k }),
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("dd", { className: "m-0 font-mono text-[13px]", style: { color: "#34403f" }, children: sanitizeText(f.v) })
+      facts.length ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("dl", { className: "m-0 flex flex-wrap gap-x-5 gap-y-1.5 pt-0.5", children: facts.map((f) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "flex items-baseline gap-1.5", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("dt", { className: "text-[10.5px] font-semibold uppercase tracking-[.1em]", style: { color: MUTED }, children: f.k }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("dd", { className: "m-0 font-mono text-[13px]", style: { color: "#34403f" }, children: sanitizeText(f.v) })
       ] }, `${f.k}${f.v}`)) }) : null
     ] });
   }
 
   // src/components/jobs/JobNoteEntry.jsx
   init_define_import_meta_env();
-  var import_react10 = __toESM(require_react(), 1);
+  var import_react11 = __toESM(require_react(), 1);
 
   // src/components/jobs/JobNoteForm.jsx
   init_define_import_meta_env();
-  var import_react9 = __toESM(require_react(), 1);
+  var import_react8 = __toESM(require_react(), 1);
 
   // src/components/ui/button.jsx
   init_define_import_meta_env();
@@ -9829,7 +9708,7 @@
   }
 
   // node_modules/@radix-ui/react-slot/dist/index.mjs
-  var import_jsx_runtime5 = __toESM(require_jsx_runtime(), 1);
+  var import_jsx_runtime4 = __toESM(require_jsx_runtime(), 1);
   var REACT_LAZY_TYPE = Symbol.for("react.lazy");
   var use = React4[" use ".trim().toString()];
   function isPromiseLike(value) {
@@ -9858,9 +9737,9 @@
             return child;
           }
         });
-        return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(SlotClone, { ...slotProps, ref: forwardedRef, children: React4.isValidElement(newElement) ? React4.cloneElement(newElement, void 0, newChildren) : null });
+        return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(SlotClone, { ...slotProps, ref: forwardedRef, children: React4.isValidElement(newElement) ? React4.cloneElement(newElement, void 0, newChildren) : null });
       }
-      return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(SlotClone, { ...slotProps, ref: forwardedRef, children });
+      return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(SlotClone, { ...slotProps, ref: forwardedRef, children });
     });
     Slot2.displayName = `${ownerName}.Slot`;
     return Slot2;
@@ -13174,7 +13053,7 @@
   var isIframe = window.self !== window.top;
 
   // src/components/ui/button.jsx
-  var import_jsx_runtime6 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime5 = __toESM(require_jsx_runtime());
   var buttonVariants = cva(
     "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
     {
@@ -13202,7 +13081,7 @@
   );
   var Button = React5.forwardRef(({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
       Comp,
       {
         className: cn(buttonVariants({ variant, size, className })),
@@ -13214,15 +13093,15 @@
   Button.displayName = "Button";
 
   // src/components/jobs/JobNoteForm.jsx
-  var import_jsx_runtime7 = __toESM(require_jsx_runtime(), 1);
+  var import_jsx_runtime6 = __toESM(require_jsx_runtime(), 1);
   function JobNoteForm({ jobId, author, editing, onSaved, onCancel }) {
     const today = denverDate();
-    const [noteDate, setNoteDate] = (0, import_react9.useState)(editing?.note_date || today);
-    const [body, setBody] = (0, import_react9.useState)(editing?.body || "");
-    const [kind, setKind] = (0, import_react9.useState)(editing?.interaction_type || "note");
-    const [attachments, setAttachments] = (0, import_react9.useState)(editing?.attachments || []);
-    const [uploading, setUploading] = (0, import_react9.useState)(false);
-    const [saving, setSaving] = (0, import_react9.useState)(false);
+    const [noteDate, setNoteDate] = (0, import_react8.useState)(editing?.note_date || today);
+    const [body, setBody] = (0, import_react8.useState)(editing?.body || "");
+    const [kind, setKind] = (0, import_react8.useState)(editing?.interaction_type || "note");
+    const [attachments, setAttachments] = (0, import_react8.useState)(editing?.attachments || []);
+    const [uploading, setUploading] = (0, import_react8.useState)(false);
+    const [saving, setSaving] = (0, import_react8.useState)(false);
     const handleFiles = async (files) => {
       if (!files.length) return;
       setUploading(true);
@@ -13262,10 +13141,10 @@
         setSaving(false);
       }
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "rounded-[12px] p-3", style: { border: `1px solid ${C.border}`, backgroundColor: C.card }, children: /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "space-y-3", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("label", { className: "mono-label-sm", children: "Date" }),
-        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "rounded-[12px] p-3", style: { border: `1px solid ${C.border}`, backgroundColor: C.card }, children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "space-y-3", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("label", { className: "mono-label-sm", children: "Date" }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
           "input",
           {
             type: "date",
@@ -13276,9 +13155,9 @@
             style: { border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.cardAlt }
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "text-[11px] ml-auto whitespace-nowrap", style: { color: C.textMuted }, children: editing ? "Edit note" : "New note" })
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "text-[11px] ml-auto whitespace-nowrap", style: { color: C.textMuted }, children: editing ? "Edit note" : "New note" })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { role: "radiogroup", "aria-label": "Type of interaction", className: "flex flex-wrap gap-1.5", children: INTERACTION_TYPES.map((t) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { role: "radiogroup", "aria-label": "Type of interaction", className: "flex flex-wrap gap-1.5", children: INTERACTION_TYPES.map((t) => /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
         "button",
         {
           type: "button",
@@ -13291,7 +13170,7 @@
         },
         t.value
       )) }),
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
         "textarea",
         {
           value: body,
@@ -13302,9 +13181,9 @@
           style: { border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.cardAlt }
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "flex items-center gap-3 flex-wrap", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("label", { className: "cursor-pointer", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "flex items-center gap-3 flex-wrap", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("label", { className: "cursor-pointer", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
             "input",
             {
               type: "file",
@@ -13317,39 +13196,186 @@
               }
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("span", { className: "inline-flex items-center gap-1 text-xs whitespace-nowrap", style: { color: C.textSecondary }, children: [
-            uploading ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Paperclip, { className: "h-3.5 w-3.5" }),
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "inline-flex items-center gap-1 text-xs whitespace-nowrap", style: { color: C.textSecondary }, children: [
+            uploading ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Paperclip, { className: "h-3.5 w-3.5" }),
             uploading ? "Uploading\u2026" : "Attach"
           ] })
         ] }),
-        attachments.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "flex flex-wrap gap-1.5", children: attachments.map((url, i) => /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "relative h-24 w-24 rounded border overflow-hidden group", style: { borderColor: C.border }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("img", { src: url, alt: "", className: "h-full w-full object-cover" }),
-          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+        attachments.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "flex flex-wrap gap-1.5", children: attachments.map((url, i) => /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "relative h-24 w-24 rounded border overflow-hidden group", style: { borderColor: C.border }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("img", { src: url, alt: "", className: "h-full w-full object-cover" }),
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
             "button",
             {
               type: "button",
               onClick: () => setAttachments((a) => a.filter((_, j) => j !== i)),
               "aria-label": `Remove attachment ${i + 1}`,
               className: "absolute top-0 right-0 bg-[#131A26]/60 text-white rounded-bl p-1 opacity-100 transition-opacity",
-              children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(X, { className: "h-3 w-3" })
+              children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(X, { className: "h-3 w-3" })
             }
           )
         ] }, i)) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "flex items-center gap-2", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Button, { size: "sm", onClick: handleSubmit, disabled: saving || !body.trim(), children: saving ? "Saving\u2026" : editing ? "Save" : "Add note" }),
-        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Button, { size: "sm", variant: "ghost", onClick: onCancel, children: "Cancel" })
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Button, { size: "sm", onClick: handleSubmit, disabled: saving || !body.trim(), children: saving ? "Saving\u2026" : editing ? "Save" : "Add note" }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Button, { size: "sm", variant: "ghost", onClick: onCancel, children: "Cancel" })
       ] })
     ] }) });
   }
 
-  // src/components/jobs/JobNoteEntry.jsx
+  // src/components/jobs/PhotoStrip.jsx
+  init_define_import_meta_env();
+  var import_react10 = __toESM(require_react(), 1);
+
+  // src/components/jobs/FeedImage.jsx
+  init_define_import_meta_env();
+  var import_react9 = __toESM(require_react());
+  var import_jsx_runtime7 = __toESM(require_jsx_runtime());
+  function getAccessToken() {
+    try {
+      return localStorage.getItem("base44_access_token") || localStorage.getItem("token") || "";
+    } catch {
+      return "";
+    }
+  }
+  async function fetchWithToken(src) {
+    const token = getAccessToken();
+    if (!token) return null;
+    const res = await fetch(src, { headers: { Authorization: `Bearer ${token}` } });
+    return res.ok ? res.blob() : null;
+  }
+  function FileTile({ src, className, style }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("span", { className: `flex flex-col items-center justify-center gap-1.5 bg-[#F6F3EC] p-2 text-center ${className || ""}`, style, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(FileText, { className: "h-6 w-6 shrink-0", style: { color: "#566063" } }),
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "max-w-full truncate text-[11px] font-medium", style: { color: "#101617" }, children: isPdfUrl(src) ? fileLabel(src) : "Open file" }),
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "text-[10px] uppercase tracking-[0.1em]", style: { color: "#8F999B" }, children: isPdfUrl(src) ? "PDF" : "Attachment" })
+    ] });
+  }
+  function FeedImage({ src, alt, className, style, loading, onNotImage }) {
+    const [resolvedSrc, setResolvedSrc] = (0, import_react9.useState)(src);
+    const [retried, setRetried] = (0, import_react9.useState)(false);
+    const [notImage, setNotImage] = (0, import_react9.useState)(() => isPdfUrl(src));
+    const objectUrlRef = (0, import_react9.useRef)(null);
+    (0, import_react9.useEffect)(() => {
+      setResolvedSrc(src);
+      setRetried(false);
+      setNotImage(isPdfUrl(src));
+    }, [src]);
+    (0, import_react9.useEffect)(() => () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    }, []);
+    (0, import_react9.useEffect)(() => {
+      if (notImage) onNotImage?.();
+    }, [notImage]);
+    const handleError = async () => {
+      if (!src) return;
+      if (retried) {
+        setNotImage(true);
+        return;
+      }
+      setRetried(true);
+      try {
+        const blob = await fetchWithToken(src);
+        const generic = !blob?.type || blob.type === "application/octet-stream";
+        if (!blob || !generic && !blob.type.startsWith("image/")) {
+          setNotImage(true);
+          return;
+        }
+        if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+        const url = URL.createObjectURL(blob);
+        objectUrlRef.current = url;
+        setResolvedSrc(url);
+      } catch {
+        setNotImage(true);
+      }
+    };
+    if (notImage) return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(FileTile, { src, className, style });
+    return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("img", { src: resolvedSrc, alt, className, style, loading, onError: handleError });
+  }
+  function PdfFrame({ src }) {
+    const [frameSrc, setFrameSrc] = (0, import_react9.useState)(null);
+    (0, import_react9.useEffect)(() => {
+      let active = true, objectUrl = null;
+      (async () => {
+        let blob = null;
+        try {
+          const res = await fetch(src);
+          if (res.ok) blob = await res.blob();
+        } catch {
+        }
+        if (!blob) {
+          try {
+            blob = await fetchWithToken(src);
+          } catch {
+          }
+        }
+        if (!active) return;
+        if (blob) {
+          const generic = !blob.type || blob.type === "application/octet-stream";
+          objectUrl = URL.createObjectURL(generic ? new Blob([blob], { type: "application/pdf" }) : blob);
+          setFrameSrc(objectUrl);
+        } else {
+          setFrameSrc(src);
+        }
+      })();
+      return () => {
+        active = false;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
+    }, [src]);
+    if (!frameSrc) return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "flex h-full items-center justify-center text-[13px] text-white/80", children: "Loading document\u2026" });
+    return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("iframe", { src: frameSrc, title: fileLabel(src), className: "h-full w-full rounded-[12px] bg-white" });
+  }
+  function AttachmentViewer({ src, onClose }) {
+    const [pdf, setPdf] = (0, import_react9.useState)(() => isPdfUrl(src));
+    (0, import_react9.useEffect)(() => {
+      setPdf(isPdfUrl(src));
+    }, [src]);
+    (0, import_react9.useEffect)(() => {
+      const onKey = (e) => {
+        if (e.key === "Escape") onClose();
+      };
+      document.addEventListener("keydown", onKey);
+      return () => document.removeEventListener("keydown", onKey);
+    }, [onClose]);
+    return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "fixed inset-0 z-50 flex flex-col p-4", style: { backgroundColor: "rgba(0,0,0,.85)" }, onClick: onClose, role: "dialog", "aria-modal": "true", "aria-label": "Attachment", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "mb-3 flex shrink-0 items-center justify-end gap-2", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("a", { href: src, target: "_blank", rel: "noreferrer", onClick: (e) => e.stopPropagation(), className: "inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white/10 px-3.5 text-[12px] font-semibold text-white", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(ExternalLink, { className: "h-3.5 w-3.5" }),
+          "Open in new tab"
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("button", { type: "button", onClick: onClose, "aria-label": "Close attachment", className: "inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white", children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(X, { className: "h-4 w-4" }) })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "flex min-h-0 flex-1 items-center justify-center", onClick: pdf ? (e) => e.stopPropagation() : void 0, children: pdf ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(PdfFrame, { src }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(FeedImage, { src, alt: "photo", className: "max-w-full max-h-full rounded-[12px]", onNotImage: () => setPdf(true) }) })
+    ] });
+  }
+
+  // src/components/jobs/PhotoStrip.jsx
   var import_jsx_runtime8 = __toESM(require_jsx_runtime(), 1);
+  var MAX_THUMBS = 8;
+  function PhotoStrip({ urls, onPhotoClick, className = "mt-3" }) {
+    const [all, setAll] = (0, import_react10.useState)(false);
+    if (!urls || !urls.length) return null;
+    const shown = all ? urls : urls.slice(0, MAX_THUMBS);
+    const extra = urls.length - shown.length;
+    return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: `${className} grid grid-cols-4 gap-2 max-[900px]:grid-cols-3 max-[599px]:grid-cols-2`, children: shown.map((url, i) => {
+      const last = !all && extra > 0 && i === shown.length - 1;
+      return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", onClick: () => last ? setAll(true) : onPhotoClick(url), className: "group relative aspect-[4/3] w-full overflow-hidden rounded-[10px]", style: { backgroundColor: "#eee9e0", border: "1px solid #e2dcd1", boxShadow: "0 1px 2px rgba(10,29,31,.08)" }, "aria-label": last ? `Show ${extra + 1} more photos` : `Open photo ${i + 1}`, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(FeedImage, { src: url, alt: "", className: "h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]", loading: "lazy" }),
+        last ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { className: "absolute inset-0 flex items-center justify-center bg-black/55 text-[17px] font-bold text-white", children: [
+          "+",
+          extra + 1
+        ] }) : null
+      ] }, i);
+    }) });
+  }
+
+  // src/components/jobs/JobNoteEntry.jsx
+  var import_jsx_runtime9 = __toESM(require_jsx_runtime(), 1);
   function JobNoteEntry({ note, currentUser, onChanged, onPhotoClick, embedded }) {
-    const [editing, setEditing] = (0, import_react10.useState)(false);
+    const [editing, setEditing] = (0, import_react11.useState)(false);
     const canEdit = !!currentUser;
     if (editing) {
-      return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
         JobNoteForm,
         {
           jobId: note.job_id,
@@ -13368,31 +13394,31 @@
       await base44.entities.JobNotes.delete(note.id);
       onChanged();
     };
-    const controls = canEdit ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "flex items-center gap-3 shrink-0", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", onClick: () => setEditing(true), className: "inline-flex items-center gap-1 text-[12px] font-medium hover:underline", style: { color: C.textMuted }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Pencil, { className: "h-3 w-3" }),
+    const controls = canEdit ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "flex items-center gap-3 shrink-0", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("button", { type: "button", onClick: () => setEditing(true), className: "inline-flex items-center gap-1 text-[12px] font-medium hover:underline", style: { color: C.textMuted }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Pencil, { className: "h-3 w-3" }),
         "Edit"
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", onClick: handleDelete, className: "inline-flex items-center gap-1 text-[12px] font-medium hover:underline", style: { color: C.textMuted }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Trash2, { className: "h-3 w-3" }),
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("button", { type: "button", onClick: handleDelete, className: "inline-flex items-center gap-1 text-[12px] font-medium hover:underline", style: { color: C.textMuted }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Trash2, { className: "h-3 w-3" }),
         "Delete"
       ] })
     ] }) : null;
-    const body = /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(import_jsx_runtime8.Fragment, { children: [
-      !embedded ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "mb-1.5 text-[12px] truncate", style: { color: C.textSecondary }, children: note.author }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(ClampedText, { text: note.body, maxLines: 5, className: "mt-1 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words", style: { color: C.text } }),
-      note.attachments && note.attachments.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "mt-3 flex flex-wrap gap-1.5", children: note.attachments.map((url, i) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", onClick: () => onPhotoClick(url), className: "h-[92px] w-[92px] shrink-0 rounded-[8px] overflow-hidden", style: { backgroundColor: "#eee9e0" }, "aria-label": `Open photo ${i + 1}`, children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(FeedImage, { src: url, alt: "", className: "h-full w-full object-cover", loading: "lazy" }) }, i)) }),
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "mt-2 flex items-center gap-3", children: [
-        note.edited && /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "text-[11.5px] italic", style: { color: C.textMuted }, children: note.edited_by ? `edited by ${note.edited_by}` : "edited" }),
+    const body = /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(import_jsx_runtime9.Fragment, { children: [
+      !embedded ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mb-1.5 text-[12px] truncate", style: { color: C.textSecondary }, children: note.author }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ClampedText, { text: note.body, maxLines: 5, className: "mt-1 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words", style: { color: C.text } }),
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(PhotoStrip, { urls: note.attachments, onPhotoClick }),
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "mt-2 flex items-center gap-3", children: [
+        note.edited && /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "text-[11.5px] italic", style: { color: C.textMuted }, children: note.edited_by ? `edited by ${note.edited_by}` : "edited" }),
         controls
       ] })
     ] });
-    if (embedded) return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { children: body });
-    return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "rounded-[12px] p-3", style: { border: `1px solid ${C.border}`, backgroundColor: C.card }, children: body });
+    if (embedded) return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { children: body });
+    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "rounded-[12px] p-3", style: { border: `1px solid ${C.border}`, backgroundColor: C.card }, children: body });
   }
 
   // src/components/jobs/JobActivityFeed.jsx
-  var import_jsx_runtime9 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime10 = __toESM(require_jsx_runtime());
   function visitBadge(ev, today = denverDate()) {
     if (ev.event_date && ev.event_date > today) return { label: "Scheduled", color: "#34506a", bg: "#E7EDF2" };
     if (!ev.report_required || ev.report_required === false) return null;
@@ -13402,48 +13428,31 @@
     if (ev.days_late > 0) return { label: `Report ${ev.days_late}d late`, color: "#A43432", bg: "#FCEDEC" };
     return { label: "Report due", color: "#8a5a12", bg: "#FAF0DA" };
   }
-  var MAX_THUMBS = 8;
-  function PhotoStrip({ urls, onPhotoClick }) {
-    const [all, setAll] = (0, import_react11.useState)(false);
-    if (!urls || !urls.length) return null;
-    const shown = all ? urls : urls.slice(0, MAX_THUMBS);
-    const extra = urls.length - shown.length;
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mt-3 flex flex-wrap gap-1.5", children: shown.map((url, i) => {
-      const last = !all && extra > 0 && i === shown.length - 1;
-      return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("button", { type: "button", onClick: () => last ? setAll(true) : onPhotoClick(url), className: "relative h-[92px] w-[92px] shrink-0 overflow-hidden rounded-[8px]", style: { backgroundColor: "#eee9e0" }, "aria-label": last ? `Show ${extra + 1} more photos` : `Open photo ${i + 1}`, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(FeedImage, { src: url, alt: "", className: "h-full w-full object-cover", loading: "lazy" }),
-        last ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("span", { className: "absolute inset-0 flex items-center justify-center bg-black/55 text-[15px] font-bold text-white", children: [
-          "+",
-          extra + 1
-        ] }) : null
-      ] }, i);
-    }) });
-  }
-  var LedgerContext = (0, import_react11.createContext)(false);
+  var LedgerContext = (0, import_react12.createContext)(false);
   function Entry({ icon: Icon2, tone = "neutral", title, meta, badge, actions, children }) {
-    const ledger = (0, import_react11.useContext)(LedgerContext);
+    const ledger = (0, import_react12.useContext)(LedgerContext);
     const tones = { teal: ["#e2eeeb", "#0b3f3b"], neutral: ["#f1eee7", "#34403f"], red: ["#fcedec", "#a43432"], blue: ["#e7edf2", "#34506a"] };
     const [bg, ink] = tones[tone] || tones.neutral;
     if (ledger) {
-      return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("article", { className: "min-w-0", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "flex flex-wrap items-center gap-x-2 gap-y-1", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Icon2, { className: "h-4 w-4 shrink-0", style: { color: ink } }),
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("h4", { className: "m-0 text-[15px] font-bold", style: { color: C.text }, children: title }),
-          meta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "text-[13px]", style: { color: "#616a6d" }, children: meta }) : null,
-          badge ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "rounded-[7px] px-2 py-0.5 text-[12px] font-semibold whitespace-nowrap", style: { backgroundColor: badge.bg, color: badge.color }, children: badge.label }) : null,
-          actions ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ml-auto flex items-center gap-1", children: actions }) : null
+      return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("article", { className: "min-w-0", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "flex flex-wrap items-center gap-x-2 gap-y-1", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon2, { className: "h-4 w-4 shrink-0", style: { color: ink } }),
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("h4", { className: "m-0 text-[15px] font-bold", style: { color: C.text }, children: title }),
+          meta ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "text-[13px]", style: { color: "#616a6d" }, children: meta }) : null,
+          badge ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "rounded-[7px] px-2 py-0.5 text-[12px] font-semibold whitespace-nowrap", style: { backgroundColor: badge.bg, color: badge.color }, children: badge.label }) : null,
+          actions ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ml-auto flex items-center gap-1", children: actions }) : null
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mt-1 border-l-2 pl-3.5", style: { borderColor: "#eee9e0" }, children })
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "mt-1 border-l-2 pl-3.5", style: { borderColor: "#eee9e0" }, children })
       ] });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("article", { className: "flex gap-3 rounded-[14px] p-4", style: { border: `1px solid ${C.border}`, backgroundColor: C.card }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-full", style: { backgroundColor: bg, color: ink }, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Icon2, { className: "h-4 w-4" }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "min-w-0 flex-1", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "flex flex-wrap items-center gap-x-2 gap-y-1", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("h4", { className: "m-0 text-[14.5px] font-bold", style: { color: C.text }, children: title }),
-          meta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "text-[13px]", style: { color: C.textMuted }, children: meta }) : null,
-          badge ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "rounded-full px-2 py-0.5 text-[11.5px] font-semibold whitespace-nowrap", style: { backgroundColor: badge.bg, color: badge.color }, children: badge.label }) : null,
-          actions ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ml-auto flex items-center gap-1", children: actions }) : null
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("article", { className: "flex gap-3 rounded-[14px] p-4", style: { border: `1px solid ${C.border}`, backgroundColor: C.card }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-full", style: { backgroundColor: bg, color: ink }, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon2, { className: "h-4 w-4" }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "min-w-0 flex-1", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "flex flex-wrap items-center gap-x-2 gap-y-1", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("h4", { className: "m-0 text-[14.5px] font-bold", style: { color: C.text }, children: title }),
+          meta ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "text-[13px]", style: { color: C.textMuted }, children: meta }) : null,
+          badge ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "rounded-full px-2 py-0.5 text-[11.5px] font-semibold whitespace-nowrap", style: { backgroundColor: badge.bg, color: badge.color }, children: badge.label }) : null,
+          actions ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ml-auto flex items-center gap-1", children: actions }) : null
         ] }),
         children
       ] })
@@ -13452,62 +13461,62 @@
   var joinMeta = (...parts) => parts.filter(Boolean).join(" \xB7 ");
   var photoCount = (n) => n ? `${n} ${n === 1 ? "photo" : "photos"}` : "";
   function ReportBody({ report, onPhotoClick }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(import_jsx_runtime9.Fragment, { children: [
-      report.message ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ClampedText, { text: report.message, maxLines: 4, className: "mt-1.5 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words", style: { color: C.text } }) : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("p", { className: "m-0 mt-1.5 text-[13.5px]", style: { color: C.textMuted }, children: "No notes, photos only." }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(PhotoStrip, { urls: report.photos, onPhotoClick })
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(import_jsx_runtime10.Fragment, { children: [
+      report.message ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(ClampedText, { text: report.message, maxLines: 4, className: "mt-1.5 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words", style: { color: C.text } }) : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "m-0 mt-1.5 text-[13.5px]", style: { color: C.textMuted }, children: "No notes, photos only." }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(PhotoStrip, { urls: report.photos, onPhotoClick })
     ] });
   }
   function VisitCard({ ev, reports, onPhotoClick }) {
-    const [showNotes, setShowNotes] = (0, import_react11.useState)(false);
+    const [showNotes, setShowNotes] = (0, import_react12.useState)(false);
     const kind = eventKind(ev) === "service" ? "Service visit" : eventKind(ev) === "outlook" ? "Visit" : "Install visit";
     const crew = crewName(ev.created_by);
     const time = ev.start_time ? `${ev.start_time}${ev.end_time ? `\u2013${ev.end_time}` : ""}` : "All day";
     const photos = reports.reduce((n, r2) => n + (r2.photos?.length || 0), 0);
     const notes = scopeText(ev.scope_notes).replace(/\n{3,}/g, "\n\n").trim();
-    const parsed = (0, import_react11.useMemo)(() => parseScopeNotes(ev.scope_notes, { keepMoney: true, keepContacts: true }), [ev.scope_notes]);
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Entry, { icon: HardHat, tone: "teal", title: kind, meta: joinMeta(time, crew, photoCount(photos)), badge: visitBadge(ev), children: reports.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(import_jsx_runtime9.Fragment, { children: [
-      reports.map((r2, i) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: i ? "mt-3 border-t pt-3" : "", style: { borderColor: C.rowBorder }, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ReportBody, { report: r2, onPhotoClick }) }, r2.post_id || i)),
-      notes ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "mt-2", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", onClick: () => setShowNotes((v) => !v), className: "text-[12.5px] font-semibold hover:underline", style: { color: "#0b3f3b" }, children: showNotes ? "Hide calendar notes" : "Calendar notes" }),
-        showNotes ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mt-2", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ScopeNotes, { parsed, size: "sm" }) }) : null
+    const parsed = (0, import_react12.useMemo)(() => parseScopeNotes(ev.scope_notes, { keepMoney: true, keepContacts: true }), [ev.scope_notes]);
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Entry, { icon: HardHat, tone: "teal", title: kind, meta: joinMeta(time, crew, photoCount(photos)), badge: visitBadge(ev), children: reports.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(import_jsx_runtime10.Fragment, { children: [
+      reports.map((r2, i) => /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: i ? "mt-3 border-t pt-3" : "", style: { borderColor: C.rowBorder }, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(ReportBody, { report: r2, onPhotoClick }) }, r2.post_id || i)),
+      notes ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "mt-2", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", onClick: () => setShowNotes((v) => !v), className: "text-[12.5px] font-semibold hover:underline", style: { color: "#0b3f3b" }, children: showNotes ? "Hide calendar notes" : "Calendar notes" }),
+        showNotes ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "mt-2", children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(ScopeNotes, { parsed, size: "sm" }) }) : null
       ] }) : null
-    ] }) : notes && !scopeIsEmpty(parsed) ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mt-2", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ScopeNotes, { parsed, size: "sm", limit: 2 }) }) : null });
+    ] }) : notes && !scopeIsEmpty(parsed) ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "mt-2", children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(ScopeNotes, { parsed, size: "sm", limit: 2 }) }) : null });
   }
   function ReportCard({ report, onPhotoClick }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Entry, { icon: Camera, tone: "teal", title: "Field report", meta: joinMeta(crewName(report.author), photoCount(report.photos?.length)), children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ReportBody, { report, onPhotoClick }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Entry, { icon: Camera, tone: "teal", title: "Field report", meta: joinMeta(crewName(report.author), photoCount(report.photos?.length)), children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(ReportBody, { report, onPhotoClick }) });
   }
   function ChangeCard({ ev }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "flex items-center gap-2 rounded-[10px] px-3 py-2", style: { border: `1px solid ${C.rowBorder}`, backgroundColor: "transparent" }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(RefreshCw, { className: "h-3 w-3 shrink-0", style: { color: C.textMuted } }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("span", { className: "text-[11.5px] break-words", style: { color: C.textMuted }, children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "flex items-center gap-2 rounded-[10px] px-3 py-2", style: { border: `1px solid ${C.rowBorder}`, backgroundColor: "transparent" }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(RefreshCw, { className: "h-3 w-3 shrink-0", style: { color: C.textMuted } }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { className: "text-[11.5px] break-words", style: { color: C.textMuted }, children: [
         "Visit moved: ",
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "font-medium", children: formatShort(ev.original_scheduled_date) }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "font-medium", children: formatShort(ev.original_scheduled_date) }),
         " \u2192 ",
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "font-medium", children: formatShort(ev.event_date) })
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "font-medium", children: formatShort(ev.event_date) })
       ] })
     ] });
   }
   var NOTE_ICONS = { note: StickyNote, site_visit: HardHat, call: Phone, text: MessageSquare, email: Mail, meeting: Users, delivery: Truck, issue: TriangleAlert };
   function FileGroupCard({ files }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "rounded-[10px] px-3 py-2", style: { border: `1px solid ${C.rowBorder}` }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "flex items-center gap-2 text-[12px]", style: { color: C.textMuted }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(FileText, { className: "h-3.5 w-3.5 shrink-0" }),
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "rounded-[10px] px-3 py-2", style: { border: `1px solid ${C.rowBorder}` }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "flex items-center gap-2 text-[12px]", style: { color: C.textMuted }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(FileText, { className: "h-3.5 w-3.5 shrink-0" }),
         files.length === 1 ? "Saved to job folder" : `${files.length} files saved to job folder`
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mt-1 flex flex-col gap-0.5 pl-5", children: files.map((f) => /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("a", { href: f.url, target: "_blank", rel: "noreferrer", className: "inline-flex items-center gap-1.5 text-[12.5px] break-words hover:underline", style: { color: C.accentText }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "mt-1 flex flex-col gap-0.5 pl-5", children: files.map((f) => /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("a", { href: f.url, target: "_blank", rel: "noreferrer", className: "inline-flex items-center gap-1.5 text-[12.5px] break-words hover:underline", style: { color: C.accentText }, children: [
         fileLabel2(sanitizeText(f.name), f.name),
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ExternalLink, { className: "h-3 w-3 shrink-0" })
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(ExternalLink, { className: "h-3 w-3 shrink-0" })
       ] }, f.id)) })
     ] });
   }
   function FileCard({ file }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("a", { href: file.url, target: "_blank", rel: "noreferrer", className: "flex items-center gap-2 rounded-[10px] px-3 py-2 hover:underline", style: { border: `1px solid ${C.rowBorder}`, color: C.accentText }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(FileText, { className: "h-3.5 w-3.5 shrink-0", style: { color: C.textMuted } }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("span", { className: "text-[12px] break-words min-w-0 flex-1", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { style: { color: C.textMuted }, children: "Saved to job folder: " }),
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("a", { href: file.url, target: "_blank", rel: "noreferrer", className: "flex items-center gap-2 rounded-[10px] px-3 py-2 hover:underline", style: { border: `1px solid ${C.rowBorder}`, color: C.accentText }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(FileText, { className: "h-3.5 w-3.5 shrink-0", style: { color: C.textMuted } }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { className: "text-[12px] break-words min-w-0 flex-1", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: { color: C.textMuted }, children: "Saved to job folder: " }),
         fileLabel2(sanitizeText(file.name), file.name)
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ExternalLink, { className: "h-3 w-3 shrink-0" })
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(ExternalLink, { className: "h-3 w-3 shrink-0" })
     ] });
   }
   function groupFiles(items) {
@@ -13528,7 +13537,7 @@
     const isFieldReport = isFieldReportNote2(note);
     const kind = note.interaction_type || "note";
     const badge = note.completion === "complete" ? { label: "Work complete", color: "#0b3f3b", bg: "#E2EEEB" } : note.completion === "incomplete" ? { label: "Not finished", color: "#A43432", bg: "#FCEDEC" } : null;
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
       Entry,
       {
         icon: isFieldReport ? Camera : NOTE_ICONS[kind] || StickyNote,
@@ -13536,37 +13545,37 @@
         title: isFieldReport ? "Field report" : interactionLabel(kind),
         meta: joinMeta(crewName(note.author) || note.author, photoCount(note.attachments?.length)),
         badge,
-        children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(JobNoteEntry, { note, currentUser, onChanged, onPhotoClick, embedded: true })
+        children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(JobNoteEntry, { note, currentUser, onChanged, onPhotoClick, embedded: true })
       }
     );
   }
   function JobActivityFeed({ jobId, events, rows: rows2, notes, fieldReports, files, live: live2, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false }) {
-    const [showForm, setShowForm] = (0, import_react11.useState)(false);
-    const [filter, setFilter] = (0, import_react11.useState)("all");
-    (0, import_react11.useEffect)(() => {
+    const [showForm, setShowForm] = (0, import_react12.useState)(false);
+    const [filter, setFilter] = (0, import_react12.useState)("all");
+    (0, import_react12.useEffect)(() => {
       if (openFormKey) setShowForm(true);
     }, [openFormKey]);
-    const entries = (0, import_react11.useMemo)(() => buildJobHistory({ events, rows: rows2, notes, fieldReports, files }), [events, rows2, notes, fieldReports, files]);
-    const counts = (0, import_react11.useMemo)(() => historyCounts(entries), [entries]);
-    const days = (0, import_react11.useMemo)(() => groupHistoryByDay(entries, filter), [entries, filter]);
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(LedgerContext.Provider, { value: ledger, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: ledger ? "hidden" : "flex items-center justify-between gap-2 mb-2", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "flex items-center gap-2 min-w-0", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("h2", { className: "font-heading text-[20px] font-bold", style: { color: C.text }, children: title }),
-          live2 ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("span", { className: "inline-flex items-center gap-1 text-[11px] whitespace-nowrap", style: { color: C.textMuted }, title: "New notes, reports and visits show up here on their own", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "h-1.5 w-1.5 rounded-full", style: { backgroundColor: "#2F8F6B" } }),
+    const entries = (0, import_react12.useMemo)(() => buildJobHistory({ events, rows: rows2, notes, fieldReports, files }), [events, rows2, notes, fieldReports, files]);
+    const counts = (0, import_react12.useMemo)(() => historyCounts(entries), [entries]);
+    const days = (0, import_react12.useMemo)(() => groupHistoryByDay(entries, filter), [entries, filter]);
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(LedgerContext.Provider, { value: ledger, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: ledger ? "hidden" : "flex items-center justify-between gap-2 mb-2", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "flex items-center gap-2 min-w-0", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("h2", { className: "font-heading text-[20px] font-bold", style: { color: C.text }, children: title }),
+          live2 ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { className: "inline-flex items-center gap-1 text-[11px] whitespace-nowrap", style: { color: C.textMuted }, title: "New notes, reports and visits show up here on their own", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "h-1.5 w-1.5 rounded-full", style: { backgroundColor: "#2F8F6B" } }),
             "Live"
           ] }) : null
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("button", { type: "button", onClick: () => setShowForm((v) => !v), className: "inline-flex items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]", style: { backgroundColor: "#f4f1ea", color: C.text }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Plus, { className: "h-3.5 w-3.5", style: { color: "#0b3f3b" } }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("button", { type: "button", onClick: () => setShowForm((v) => !v), className: "inline-flex items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]", style: { backgroundColor: "#f4f1ea", color: C.text }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Plus, { className: "h-3.5 w-3.5", style: { color: "#0b3f3b" } }),
           "Log interaction"
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: ledger ? "mb-4 flex items-center gap-2" : "", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { role: "tablist", "aria-label": "Filter job history", className: ledger ? "flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1" : "flex gap-1.5 overflow-x-auto pb-1 mb-3", children: HISTORY_FILTERS.map((f) => {
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: ledger ? "mb-4 flex items-center gap-2" : "", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { role: "tablist", "aria-label": "Filter job history", className: ledger ? "flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1" : "flex gap-1.5 overflow-x-auto pb-1 mb-3", children: HISTORY_FILTERS.map((f) => {
           const on = filter === f.key;
-          return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
+          return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
             "button",
             {
               type: "button",
@@ -13578,37 +13587,37 @@
               children: [
                 f.label,
                 " ",
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { style: { opacity: 0.7 }, children: counts[f.key] })
+                /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: { opacity: 0.7 }, children: counts[f.key] })
               ]
             },
             f.key
           );
         }) }),
-        ledger ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("button", { type: "button", onClick: () => setShowForm((v) => !v), className: "inline-flex shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]", style: { backgroundColor: "#f4f1ea", color: C.text, border: "1px solid #e2dcd1" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Plus, { className: "h-3.5 w-3.5", style: { color: "#0b3f3b" } }),
+        ledger ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("button", { type: "button", onClick: () => setShowForm((v) => !v), className: "inline-flex shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]", style: { backgroundColor: "#f4f1ea", color: C.text, border: "1px solid #e2dcd1" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Plus, { className: "h-3.5 w-3.5", style: { color: "#0b3f3b" } }),
           "Log interaction"
         ] }) : null
       ] }),
-      showForm ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "mb-3", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(JobNoteForm, { jobId, author: currentUser, onSaved: () => {
+      showForm ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "mb-3", children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(JobNoteForm, { jobId, author: currentUser, onSaved: () => {
         setShowForm(false);
         onChanged();
       }, onCancel: () => setShowForm(false) }) }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: ledger ? "relative pl-6" : "space-y-5", children: [
-        ledger && days.length ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { "aria-hidden": "true", className: "absolute left-[5px] top-2 bottom-2 w-px", style: { backgroundColor: "#e2dcd1" } }) : null,
-        days.length === 0 && !showForm ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "py-10 text-center text-[13px]", style: { color: C.textMuted }, children: filter === "all" ? "No activity recorded yet." : "Nothing of this type yet." }) : null,
-        days.map(({ date, items }, di) => /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: ledger ? `relative ${di ? "mt-5 border-t pt-5" : ""}` : "", style: ledger ? { borderColor: "#eee9e0" } : void 0, children: [
-          ledger ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { "aria-hidden": "true", className: `absolute -left-6 h-[11px] w-[11px] rounded-full bg-white ${di ? "top-[26px]" : "top-[5px]"}`, style: { border: "2px solid #b8955a" } }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: ledger ? "mb-2" : "mb-2 flex items-center gap-3", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: ledger ? "text-[13.5px] font-bold whitespace-nowrap" : "text-[13px] font-bold whitespace-nowrap", style: { color: ledger ? "#8a6420" : C.text }, children: formatDateGroup(date) }),
-            ledger ? null : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "h-px flex-1", style: { backgroundColor: C.rowBorder } })
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: ledger ? "relative pl-6" : "space-y-5", children: [
+        ledger && days.length ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { "aria-hidden": "true", className: "absolute left-[5px] top-2 bottom-2 w-px", style: { backgroundColor: "#e2dcd1" } }) : null,
+        days.length === 0 && !showForm ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "py-10 text-center text-[13px]", style: { color: C.textMuted }, children: filter === "all" ? "No activity recorded yet." : "Nothing of this type yet." }) : null,
+        days.map(({ date, items }, di) => /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: ledger ? `relative ${di ? "mt-5 border-t pt-5" : ""}` : "", style: ledger ? { borderColor: "#eee9e0" } : void 0, children: [
+          ledger ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { "aria-hidden": "true", className: `absolute -left-6 h-[11px] w-[11px] rounded-full bg-white ${di ? "top-[26px]" : "top-[5px]"}`, style: { border: "2px solid #b8955a" } }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: ledger ? "mb-2" : "mb-2 flex items-center gap-3", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: ledger ? "text-[13.5px] font-bold whitespace-nowrap" : "text-[13px] font-bold whitespace-nowrap", style: { color: ledger ? "#8a6420" : C.text }, children: formatDateGroup(date) }),
+            ledger ? null : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "h-px flex-1", style: { backgroundColor: C.rowBorder } })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: ledger ? "space-y-4" : "space-y-2", children: groupFiles(items).map((it, i) => {
-            if (it.kind === "files") return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(FileGroupCard, { files: it.files }, `fg-${date}`);
-            if (it.kind === "visit") return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(VisitCard, { ev: it.ev, reports: it.reports, onPhotoClick }, `v-${it.ev.id || i}`);
-            if (it.kind === "report") return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ReportCard, { report: it.report, onPhotoClick }, `r-${it.report.post_id || i}`);
-            if (it.kind === "change") return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ChangeCard, { ev: it.ev }, `c-${it.ev.id || i}`);
-            if (it.kind === "file") return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(FileCard, { file: it.file }, `f-${it.file.id}`);
-            return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(NoteCard, { note: it.note, currentUser, onChanged, onPhotoClick }, `n-${it.note.id}`);
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: ledger ? "space-y-4" : "space-y-2", children: groupFiles(items).map((it, i) => {
+            if (it.kind === "files") return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(FileGroupCard, { files: it.files }, `fg-${date}`);
+            if (it.kind === "visit") return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(VisitCard, { ev: it.ev, reports: it.reports, onPhotoClick }, `v-${it.ev.id || i}`);
+            if (it.kind === "report") return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(ReportCard, { report: it.report, onPhotoClick }, `r-${it.report.post_id || i}`);
+            if (it.kind === "change") return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(ChangeCard, { ev: it.ev }, `c-${it.ev.id || i}`);
+            if (it.kind === "file") return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(FileCard, { file: it.file }, `f-${it.file.id}`);
+            return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(NoteCard, { note: it.note, currentUser, onChanged, onPhotoClick }, `n-${it.note.id}`);
           }) })
         ] }, date))
       ] })
@@ -13617,7 +13626,7 @@
 
   // src/components/jobs/JobFieldReportModal.jsx
   init_define_import_meta_env();
-  var import_react12 = __toESM(require_react());
+  var import_react13 = __toESM(require_react());
 
   // src/lib/fieldReports.js
   init_define_import_meta_env();
@@ -13643,23 +13652,23 @@
   }
 
   // src/components/jobs/JobFieldReportModal.jsx
-  var import_jsx_runtime10 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime11 = __toESM(require_jsx_runtime());
   var PENDING = ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"];
   function JobFieldReportModal({ jobId, jobName, events, onClose, onDone }) {
-    const pendingEvents = (0, import_react12.useMemo)(
+    const pendingEvents = (0, import_react13.useMemo)(
       () => (events || []).filter((e) => e.report_required !== false && PENDING.includes(e.report_status) && e.event_date),
       [events]
     );
     const general = { id: "", label: "General field report (no specific appointment)" };
     const options = [general, ...pendingEvents.map((e) => ({ id: e.id, label: `${formatShort(e.event_date)}${e.start_time ? ` \xB7 ${e.start_time}` : ""}`, ev: e }))];
-    const [selected, setSelected] = (0, import_react12.useState)(pendingEvents[0] ? pendingEvents[0].id : "");
-    const [photos, setPhotos] = (0, import_react12.useState)([]);
-    const [uploading, setUploading] = (0, import_react12.useState)(false);
-    const [notes, setNotes] = (0, import_react12.useState)("");
-    const [completion, setCompletion] = (0, import_react12.useState)("");
-    const [saving, setSaving] = (0, import_react12.useState)(false);
-    const [error, setError] = (0, import_react12.useState)("");
-    const requestKey = (0, import_react12.useRef)(`field-report:${jobId}:${crypto.randomUUID()}`);
+    const [selected, setSelected] = (0, import_react13.useState)(pendingEvents[0] ? pendingEvents[0].id : "");
+    const [photos, setPhotos] = (0, import_react13.useState)([]);
+    const [uploading, setUploading] = (0, import_react13.useState)(false);
+    const [notes, setNotes] = (0, import_react13.useState)("");
+    const [completion, setCompletion] = (0, import_react13.useState)("");
+    const [saving, setSaving] = (0, import_react13.useState)(false);
+    const [error, setError] = (0, import_react13.useState)("");
+    const requestKey = (0, import_react13.useRef)(`field-report:${jobId}:${crypto.randomUUID()}`);
     const canSubmit = (photos.length > 0 || notes.trim()) && completion && !saving;
     const handleFiles = async (files) => {
       if (!files.length) return;
@@ -13699,57 +13708,57 @@
         setSaving(false);
       }
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4", style: { backgroundColor: "rgba(24,36,34,.45)" }, onClick: onClose, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4", style: { backgroundColor: "rgba(24,36,34,.45)" }, onClick: onClose, children: /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
       "div",
       {
         className: "rounded-t-[16px] sm:rounded-[14px] w-full sm:max-w-md max-h-[92dvh] overflow-y-auto overscroll-contain card-shadow-elevated",
         style: { backgroundColor: C.card, border: `1px solid ${C.border}` },
         onClick: (e) => e.stopPropagation(),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "sticky top-0 flex items-center justify-between px-4 py-3", style: { backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("h3", { className: "font-heading text-[15px] font-semibold", style: { color: C.text }, children: "Add field report" }),
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", onClick: onClose, "aria-label": "Close", className: "p-2", style: { color: C.textMuted }, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(X, { className: "h-4 w-4" }) })
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "sticky top-0 flex items-center justify-between px-4 py-3", style: { backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("h3", { className: "font-heading text-[15px] font-semibold", style: { color: C.text }, children: "Add field report" }),
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", onClick: onClose, "aria-label": "Close", className: "p-2", style: { color: C.textMuted }, children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(X, { className: "h-4 w-4" }) })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "p-4 space-y-4", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "text-[12px] break-words", style: { color: C.textMuted }, children: sanitizeText(jobName || "") }),
-            options.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("label", { className: "mono-label-sm block mb-1.5", children: "For appointment" }),
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "p-4 space-y-4", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "text-[12px] break-words", style: { color: C.textMuted }, children: sanitizeText(jobName || "") }),
+            options.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("label", { className: "mono-label-sm block mb-1.5", children: "For appointment" }),
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
                 "select",
                 {
                   value: selected,
                   onChange: (e) => setSelected(e.target.value),
                   className: "w-full min-h-[44px] rounded-[10px] px-3 text-[13px] focus:outline-none",
                   style: { border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text },
-                  children: options.map((o) => /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("option", { value: o.id, children: o.label }, o.id || "general"))
+                  children: options.map((o) => /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("option", { value: o.id, children: o.label }, o.id || "general"))
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("label", { className: "mono-label-sm block mb-1.5", children: "Photos" }),
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("label", { className: "cursor-pointer", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("input", { type: "file", multiple: true, accept: "image/*", className: "hidden", onChange: (e) => {
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("label", { className: "mono-label-sm block mb-1.5", children: "Photos" }),
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("label", { className: "cursor-pointer", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("input", { type: "file", multiple: true, accept: "image/*", className: "hidden", onChange: (e) => {
                   handleFiles(Array.from(e.target.files));
                   e.target.value = "";
                 } }),
-                /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { className: "inline-flex items-center gap-1.5 text-[12px] px-3 py-2 rounded-[10px]", style: { border: `1px solid ${C.border}`, color: C.textSecondary, backgroundColor: C.cardAlt }, children: [
-                  uploading ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Camera, { className: "h-3.5 w-3.5" }),
+                /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { className: "inline-flex items-center gap-1.5 text-[12px] px-3 py-2 rounded-[10px]", style: { border: `1px solid ${C.border}`, color: C.textSecondary, backgroundColor: C.cardAlt }, children: [
+                  uploading ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(LoaderCircle, { className: "h-3.5 w-3.5 animate-spin" }) : /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Camera, { className: "h-3.5 w-3.5" }),
                   uploading ? "Uploading\u2026" : "Add photos"
                 ] })
               ] }),
-              photos.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "grid grid-cols-3 gap-1.5 mt-2", children: photos.map((url, i) => /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "relative aspect-square rounded-md overflow-hidden", style: { border: `1px solid ${C.border}` }, children: [
-                /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("img", { src: url, alt: "", className: "h-full w-full object-cover" }),
-                /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", onClick: () => setPhotos((p) => p.filter((_, j) => j !== i)), "aria-label": "Remove photo", className: "absolute top-0 right-0 rounded-bl p-1", style: { backgroundColor: "rgba(19,26,38,.6)", color: "#fff" }, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(X, { className: "h-3 w-3" }) })
+              photos.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "grid grid-cols-3 gap-1.5 mt-2", children: photos.map((url, i) => /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "relative aspect-square rounded-md overflow-hidden", style: { border: `1px solid ${C.border}` }, children: [
+                /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("img", { src: url, alt: "", className: "h-full w-full object-cover" }),
+                /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", onClick: () => setPhotos((p) => p.filter((_, j) => j !== i)), "aria-label": "Remove photo", className: "absolute top-0 right-0 rounded-bl p-1", style: { backgroundColor: "rgba(19,26,38,.6)", color: "#fff" }, children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(X, { className: "h-3 w-3" }) })
               ] }, i)) })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("label", { className: "mono-label-sm block mb-1.5", children: "Notes" }),
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("textarea", { value: notes, onChange: (e) => setNotes(e.target.value), rows: 3, placeholder: "What did you do, find, or need fixed?", className: "w-full rounded-[10px] p-2.5 text-[13px] resize-y focus:outline-none", style: { border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text } })
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("label", { className: "mono-label-sm block mb-1.5", children: "Notes" }),
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("textarea", { value: notes, onChange: (e) => setNotes(e.target.value), rows: 3, placeholder: "What did you do, find, or need fixed?", className: "w-full rounded-[10px] p-2.5 text-[13px] resize-y focus:outline-none", style: { border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text } })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("label", { className: "mono-label-sm block mb-1.5", children: "Is this job complete or incomplete?" }),
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "grid grid-cols-2 gap-2", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("label", { className: "mono-label-sm block mb-1.5", children: "Is this job complete or incomplete?" }),
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "grid grid-cols-2 gap-2", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
                   "button",
                   {
                     type: "button",
@@ -13761,12 +13770,12 @@
                       color: completion === "complete" ? "#166447" : C.text
                     },
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(CircleCheck, { className: "h-4 w-4" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(CircleCheck, { className: "h-4 w-4" }),
                       "Complete"
                     ]
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+                /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
                   "button",
                   {
                     type: "button",
@@ -13778,18 +13787,18 @@
                       color: completion === "incomplete" ? "#A43432" : C.text
                     },
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(CircleAlert, { className: "h-4 w-4" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(CircleAlert, { className: "h-4 w-4" }),
                       "Incomplete"
                     ]
                   }
                 )
               ] }),
-              completion === "incomplete" ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "text-[11px] mt-1.5", style: { color: C.textMuted }, children: "Milan will be notified to check and get this fixed." }) : null
+              completion === "incomplete" ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "text-[11px] mt-1.5", style: { color: C.textMuted }, children: "Milan will be notified to check and get this fixed." }) : null
             ] }),
-            error ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { role: "alert", className: "text-[12px]", style: { color: "#A43432" }, children: error }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "flex justify-end gap-2 pt-1", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", onClick: onClose, className: "px-3.5 py-2 rounded-full text-[12px]", style: { border: `1px solid ${C.border}`, color: C.textSecondary }, children: "Cancel" }),
-              /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", onClick: handleSubmit, disabled: !canSubmit, className: "px-3.5 py-2 rounded-full text-[12px] font-semibold", style: { backgroundColor: canSubmit ? C.accent : C.mutedBg, color: canSubmit ? C.accentDark : C.textMuted }, children: saving ? "Submitting\u2026" : "Submit report" })
+            error ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { role: "alert", className: "text-[12px]", style: { color: "#A43432" }, children: error }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "flex justify-end gap-2 pt-1", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", onClick: onClose, className: "px-3.5 py-2 rounded-full text-[12px]", style: { border: `1px solid ${C.border}`, color: C.textSecondary }, children: "Cancel" }),
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", onClick: handleSubmit, disabled: !canSubmit, className: "px-3.5 py-2 rounded-full text-[12px] font-semibold", style: { backgroundColor: canSubmit ? C.accent : C.mutedBg, color: canSubmit ? C.accentDark : C.textMuted }, children: saving ? "Submitting\u2026" : "Submit report" })
             ] })
           ] })
         ]
@@ -13799,7 +13808,7 @@
 
   // src/components/jobs/JobSheet.jsx
   init_define_import_meta_env();
-  var import_react14 = __toESM(require_react());
+  var import_react15 = __toESM(require_react());
 
   // src/lib/displayName.js
   init_define_import_meta_env();
@@ -13848,7 +13857,7 @@
   }
 
   // src/components/jobs/JobEventDocuments.jsx
-  var import_jsx_runtime11 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime12 = __toESM(require_jsx_runtime());
   var isGmailOnly = (a) => !a.has_hub_copy && !a.drive_url && (a.hub_error === "gmail_only" || isGmailAttachmentUrl(a.file_url));
   async function openAttachment(attachment) {
     const tab = window.open("about:blank", "_blank");
@@ -13876,7 +13885,7 @@
 
   // src/hooks/use-job-super.js
   init_define_import_meta_env();
-  var import_react13 = __toESM(require_react());
+  var import_react14 = __toESM(require_react());
   var call2 = async (body) => {
     try {
       const r2 = await base44.functions.invoke("contacts-directory", body);
@@ -13887,9 +13896,9 @@
     }
   };
   function useJobSuper(jobId) {
-    const [state, setState] = (0, import_react13.useState)({ loading: true, saved: null, error: "" });
-    const version = (0, import_react13.useRef)(0);
-    const load = (0, import_react13.useCallback)(async () => {
+    const [state, setState] = (0, import_react14.useState)({ loading: true, saved: null, error: "" });
+    const version = (0, import_react14.useRef)(0);
+    const load = (0, import_react14.useCallback)(async () => {
       const n = ++version.current;
       if (!jobId) {
         setState({ loading: false, saved: null, error: "" });
@@ -13903,13 +13912,13 @@
         if (n === version.current) setState({ loading: false, saved: null, error: e.message });
       }
     }, [jobId]);
-    (0, import_react13.useEffect)(() => {
+    (0, import_react14.useEffect)(() => {
       load();
       return () => {
         version.current++;
       };
     }, [load]);
-    const save = (0, import_react13.useCallback)(async ({ name, phone, email }) => {
+    const save = (0, import_react14.useCallback)(async ({ name, phone, email }) => {
       const data = await call2({ action: "set_job_super", job_id: jobId, contact: { name, phone, email } });
       setState({ loading: false, saved: data?.super || null, error: "" });
       return data?.super;
@@ -13918,7 +13927,7 @@
   }
 
   // src/components/jobs/JobSheet.jsx
-  var import_jsx_runtime12 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime13 = __toESM(require_jsx_runtime());
   var SHEET_BG = "#d9cbb0";
   var INK2 = "#101617";
   var MUTED2 = "#616a6d";
@@ -13932,29 +13941,29 @@
   var initials = (name) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "?";
   var day = (v) => v ? formatShort(String(v).slice(0, 10)) : "";
   function SheetCard({ icon: Icon2, tile = TILE.teal, title, sub, right, children, className = "", bodyClassName = "px-5 py-4 max-[699px]:px-4" }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("section", { className: `rounded-[14px] bg-white ${className}`, style: { border: "1px solid #d3cabb", boxShadow: CARD_SHADOW }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex items-center gap-3 rounded-t-[14px] px-5 py-[11px] max-[699px]:px-4", style: { background: "linear-gradient(90deg,#cfe3da 0%,#e1eee8 45%,#eef5f1 100%)", borderBottom: "1px solid #bfd6cb" }, children: [
-        Icon2 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] text-white", style: { backgroundColor: tile }, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Icon2, { className: "h-[15px] w-[15px]" }) }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("h2", { className: "m-0 text-[16.5px] font-extrabold", style: { color: "#082f2c", letterSpacing: "-0.02em" }, children: title }),
-        sub ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "min-w-0 truncate text-[12.5px] font-medium", style: { color: "#3e5a55" }, children: sub }) : null,
-        right ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ml-auto flex shrink-0 items-center gap-2.5", children: right }) : null
+    return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("section", { className: `rounded-[14px] bg-white ${className}`, style: { border: "1px solid #d3cabb", boxShadow: CARD_SHADOW }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex items-center gap-3 rounded-t-[14px] px-5 py-[11px] max-[699px]:px-4", style: { background: "linear-gradient(90deg,#cfe3da 0%,#e1eee8 45%,#eef5f1 100%)", borderBottom: "1px solid #bfd6cb" }, children: [
+        Icon2 ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] text-white", style: { backgroundColor: tile }, children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Icon2, { className: "h-[15px] w-[15px]" }) }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("h2", { className: "m-0 text-[16.5px] font-extrabold", style: { color: "#082f2c", letterSpacing: "-0.02em" }, children: title }),
+        sub ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "min-w-0 truncate text-[12.5px] font-medium", style: { color: "#3e5a55" }, children: sub }) : null,
+        right ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ml-auto flex shrink-0 items-center gap-2.5", children: right }) : null
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: bodyClassName, children })
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: bodyClassName, children })
     ] });
   }
   function LiveMark({ live: live2 }) {
     if (!live2) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "inline-flex items-center gap-1.5 text-[12px] font-medium", style: { color: "#1f6b45" }, title: "New notes, reports and visits show up here on their own", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "h-1.5 w-1.5 rounded-full", style: { backgroundColor: "currentColor" } }),
+    return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "inline-flex items-center gap-1.5 text-[12px] font-medium", style: { color: "#1f6b45" }, title: "New notes, reports and visits show up here on their own", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "h-1.5 w-1.5 rounded-full", style: { backgroundColor: "currentColor" } }),
       "Live"
     ] });
   }
   var FIELD = "h-[34px] w-full min-w-0 rounded-[8px] px-2.5 text-[13.5px] outline-none focus:ring-2";
   var FIELD_STYLE = { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.16)", "--tw-ring-color": "rgba(224,201,148,.5)" };
   function SuperForm({ initial, onSave, onCancel }) {
-    const [f, setF] = (0, import_react14.useState)({ name: initial?.name || "", phone: initial?.phone || "", email: initial?.email || "" });
-    const [saving, setSaving] = (0, import_react14.useState)(false);
-    const [error, setError] = (0, import_react14.useState)("");
+    const [f, setF] = (0, import_react15.useState)({ name: initial?.name || "", phone: initial?.phone || "", email: initial?.email || "" });
+    const [saving, setSaving] = (0, import_react15.useState)(false);
+    const [error, setError] = (0, import_react15.useState)("");
     const set = (k) => (e) => setF((v) => ({ ...v, [k]: e.target.value }));
     const submit = async (e) => {
       e.preventDefault();
@@ -13971,26 +13980,26 @@
         setSaving(false);
       }
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("form", { onSubmit: submit, className: "flex flex-col gap-2", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "text-[10.5px] font-semibold tracking-[.14em]", style: { color: "#9fc3b6" }, children: initial?.name ? "CHANGE SUPER" : "ADD SUPER" }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("input", { autoFocus: true, "aria-label": "Super name", placeholder: "Name", value: f.name, onChange: set("name"), className: FIELD, style: FIELD_STYLE }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("input", { "aria-label": "Super phone", placeholder: "Phone", inputMode: "tel", value: f.phone, onChange: set("phone"), className: FIELD, style: FIELD_STYLE }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("input", { "aria-label": "Super email", placeholder: "Email (optional)", inputMode: "email", value: f.email, onChange: set("email"), className: FIELD, style: FIELD_STYLE }),
-      error ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { role: "alert", className: "m-0 text-[12px]", style: { color: "#f1b9b3" }, children: error }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex gap-2", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", { type: "submit", disabled: saving, className: "inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] text-[13.5px] font-semibold disabled:opacity-60", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, children: saving ? "Saving\u2026" : "Save super" }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", { type: "button", onClick: onCancel, className: "inline-flex h-[34px] items-center rounded-[9px] px-3 text-[13.5px] font-semibold", style: { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }, children: "Cancel" })
+    return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("form", { onSubmit: submit, className: "flex flex-col gap-2", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "text-[10.5px] font-semibold tracking-[.14em]", style: { color: "#9fc3b6" }, children: initial?.name ? "CHANGE SUPER" : "ADD SUPER" }),
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("input", { autoFocus: true, "aria-label": "Super name", placeholder: "Name", value: f.name, onChange: set("name"), className: FIELD, style: FIELD_STYLE }),
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("input", { "aria-label": "Super phone", placeholder: "Phone", inputMode: "tel", value: f.phone, onChange: set("phone"), className: FIELD, style: FIELD_STYLE }),
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("input", { "aria-label": "Super email", placeholder: "Email (optional)", inputMode: "email", value: f.email, onChange: set("email"), className: FIELD, style: FIELD_STYLE }),
+      error ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("p", { role: "alert", className: "m-0 text-[12px]", style: { color: "#f1b9b3" }, children: error }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("button", { type: "submit", disabled: saving, className: "inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] text-[13.5px] font-semibold disabled:opacity-60", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, children: saving ? "Saving\u2026" : "Save super" }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("button", { type: "button", onClick: onCancel, className: "inline-flex h-[34px] items-center rounded-[9px] px-3 text-[13.5px] font-semibold", style: { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }, children: "Cancel" })
       ] })
     ] });
   }
   function SuperBox({ jobId, jobContacts, events }) {
     const jobSuper = useJobSuper(jobId);
     const view = jobContacts?.view?.job?.id === jobId ? jobContacts.view : null;
-    const person = (0, import_react14.useMemo)(() => pickSuper({ saved: jobSuper.saved, view, events }), [jobSuper.saved, view, events]);
-    const [editing, setEditing] = (0, import_react14.useState)(false);
-    const [saving, setSaving] = (0, import_react14.useState)(false);
-    const [error, setError] = (0, import_react14.useState)("");
-    (0, import_react14.useEffect)(() => {
+    const person = (0, import_react15.useMemo)(() => pickSuper({ saved: jobSuper.saved, view, events }), [jobSuper.saved, view, events]);
+    const [editing, setEditing] = (0, import_react15.useState)(false);
+    const [saving, setSaving] = (0, import_react15.useState)(false);
+    const [error, setError] = (0, import_react15.useState)("");
+    (0, import_react15.useEffect)(() => {
       setError("");
       setEditing(false);
     }, [jobId]);
@@ -14003,18 +14012,18 @@
       if (jobContacts?.phase && jobContacts.phase !== "private") jobContacts.reload();
     };
     const small = "inline-flex items-center gap-1.5 text-[12.5px] font-semibold hover:underline disabled:opacity-60";
-    if (editing) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: shell, style: shellStyle, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(SuperForm, { initial: person?.source === "linked" ? person : person ? { ...person } : null, onSave: save, onCancel: () => setEditing(false) }) });
+    if (editing) return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: shell, style: shellStyle, children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(SuperForm, { initial: person?.source === "linked" ? person : person ? { ...person } : null, onSave: save, onCancel: () => setEditing(false) }) });
     if (!person) {
-      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: shell, style: shellStyle, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex items-center gap-3", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "flex h-10 w-10 shrink-0 items-center justify-center rounded-full", style: { backgroundColor: "rgba(207,227,218,.18)", color: "#cfe3da" }, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(HardHat, { className: "h-4 w-4" }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "min-w-0", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "text-[10.5px] font-semibold tracking-[.14em]", style: { color: "#9fc3b6" }, children: "SUPER" }),
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "text-[14.5px] font-semibold", style: { color: HERO_MUTED }, children: jobSuper.loading && jobContacts?.phase === "loading" ? "Looking\u2026" : "Not on file yet" })
+      return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: shell, style: shellStyle, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex items-center gap-3", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "flex h-10 w-10 shrink-0 items-center justify-center rounded-full", style: { backgroundColor: "rgba(207,227,218,.18)", color: "#cfe3da" }, children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(HardHat, { className: "h-4 w-4" }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "min-w-0", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "text-[10.5px] font-semibold tracking-[.14em]", style: { color: "#9fc3b6" }, children: "SUPER" }),
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "text-[14.5px] font-semibold", style: { color: HERO_MUTED }, children: jobSuper.loading && jobContacts?.phase === "loading" ? "Looking\u2026" : "Not on file yet" })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("button", { type: "button", onClick: () => setEditing(true), className: "mt-3 inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[9px] text-[13.5px] font-semibold", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(UserPlus, { className: "h-3.5 w-3.5" }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("button", { type: "button", onClick: () => setEditing(true), className: "mt-3 inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[9px] text-[13.5px] font-semibold", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(UserPlus, { className: "h-3.5 w-3.5" }),
           "Add super"
         ] })
       ] });
@@ -14030,41 +14039,41 @@
         setSaving(false);
       }
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: shell, style: shellStyle, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex items-center gap-3", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-extrabold", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, children: initials(person.name) }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "min-w-0 flex-1", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "text-[10.5px] font-semibold tracking-[.14em]", style: { color: "#9fc3b6" }, children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: shell, style: shellStyle, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex items-center gap-3", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-extrabold", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, children: initials(person.name) }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "min-w-0 flex-1", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "text-[10.5px] font-semibold tracking-[.14em]", style: { color: "#9fc3b6" }, children: [
             label,
-            person.source === "notes" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { style: { color: "#8f999b" }, children: [
+            person.source === "notes" ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { style: { color: "#8f999b" }, children: [
               " \xB7 FROM ",
               person.day ? day(person.day).toUpperCase() : "CALENDAR",
               " NOTES"
-            ] }) : person.source === "suggestion" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: { color: "#8f999b" }, children: " \xB7 SUGGESTED" }) : null
+            ] }) : person.source === "suggestion" ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { color: "#8f999b" }, children: " \xB7 SUGGESTED" }) : null
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "truncate text-[17px] font-bold", style: { color: HERO_INK, letterSpacing: "-0.01em" }, children: sanitizeText(person.name) || "Unknown" })
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "truncate text-[17px] font-bold", style: { color: HERO_INK, letterSpacing: "-0.01em" }, children: sanitizeText(person.name) || "Unknown" })
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "mt-3 flex gap-2", children: [
-        person.phone ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("a", { href: `tel:${digits(person.phone)}`, className: "inline-flex h-[34px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, title: `Call ${sanitizeText(person.name)}`, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Phone, { className: "h-3.5 w-3.5 shrink-0" }),
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "truncate", children: person.phone })
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "mt-3 flex gap-2", children: [
+        person.phone ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("a", { href: `tel:${digits(person.phone)}`, className: "inline-flex h-[34px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, title: `Call ${sanitizeText(person.name)}`, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Phone, { className: "h-3.5 w-3.5 shrink-0" }),
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "truncate", children: person.phone })
         ] }) : null,
-        person.phone ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("a", { href: `sms:${digits(person.phone)}`, className: "inline-flex h-[34px] items-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap", style: { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MessageSquare, { className: "h-3.5 w-3.5", style: { color: BRASS_LT } }),
+        person.phone ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("a", { href: `sms:${digits(person.phone)}`, className: "inline-flex h-[34px] items-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap", style: { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(MessageSquare, { className: "h-3.5 w-3.5", style: { color: BRASS_LT } }),
           "Text"
         ] }) : null,
-        !person.phone && person.email ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("a", { href: `mailto:${person.email}`, className: "inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] px-3 text-[13.5px] font-semibold", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, children: "Email" }) : null
+        !person.phone && person.email ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("a", { href: `mailto:${person.email}`, className: "inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] px-3 text-[13.5px] font-semibold", style: { backgroundColor: "#cfe3da", color: "#082f2c" }, children: "Email" }) : null
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "mt-2 flex items-center gap-3", children: [
-        person.email ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("a", { href: `mailto:${person.email}`, className: "min-w-0 flex-1 truncate text-[12px] hover:underline", style: { color: "#9aa6a8" }, children: person.email }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "flex-1" }),
-        person.source !== "linked" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("button", { type: "button", disabled: saving, onClick: confirm2, className: small, style: { color: BRASS_LT }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(UserPlus, { className: "h-3.5 w-3.5" }),
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "mt-2 flex items-center gap-3", children: [
+        person.email ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("a", { href: `mailto:${person.email}`, className: "min-w-0 flex-1 truncate text-[12px] hover:underline", style: { color: "#9aa6a8" }, children: person.email }) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "flex-1" }),
+        person.source !== "linked" ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("button", { type: "button", disabled: saving, onClick: confirm2, className: small, style: { color: BRASS_LT }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(UserPlus, { className: "h-3.5 w-3.5" }),
           saving ? "Saving\u2026" : "Save as super"
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", { type: "button", onClick: () => setEditing(true), className: small, style: { color: "#9fc3b6" }, children: person.source === "linked" ? "Change" : "Edit" })
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("button", { type: "button", onClick: () => setEditing(true), className: small, style: { color: "#9fc3b6" }, children: person.source === "linked" ? "Change" : "Edit" })
       ] }),
-      error ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { role: "alert", className: "m-0 mt-1 text-[12px]", style: { color: "#f1b9b3" }, children: error }) : null
+      error ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("p", { role: "alert", className: "m-0 mt-1 text-[12px]", style: { color: "#f1b9b3" }, children: error }) : null
     ] });
   }
   function jobFileItems({ folder, plans, events }) {
@@ -14083,11 +14092,11 @@
     return [...folderFiles, ...intake, ...cal];
   }
   function FilesMenu({ folder, plans, events }) {
-    const [open, setOpen] = (0, import_react14.useState)(false);
-    const ref = (0, import_react14.useRef)(null);
-    const items = (0, import_react14.useMemo)(() => jobFileItems({ folder, plans, events }), [folder, plans, events]);
+    const [open, setOpen] = (0, import_react15.useState)(false);
+    const ref = (0, import_react15.useRef)(null);
+    const items = (0, import_react15.useMemo)(() => jobFileItems({ folder, plans, events }), [folder, plans, events]);
     const gmail = items.filter((i) => i.gmailOnly).length;
-    (0, import_react14.useEffect)(() => {
+    (0, import_react15.useEffect)(() => {
       if (!open) return void 0;
       const close = (e) => {
         if (ref.current && !ref.current.contains(e.target)) setOpen(false);
@@ -14102,47 +14111,47 @@
         document.removeEventListener("keydown", esc);
       };
     }, [open]);
-    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { ref, className: "relative", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("button", { type: "button", "aria-expanded": open, "aria-haspopup": "true", onClick: () => setOpen((v) => !v), className: `${HERO_BTN} ${open ? "outline outline-2" : ""}`, style: { ...HERO_SEC, outlineColor: "rgba(224,201,148,.45)" }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(FileText, { className: "h-[15px] w-[15px]", style: { color: BRASS_LT } }),
+    return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { ref, className: "relative", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("button", { type: "button", "aria-expanded": open, "aria-haspopup": "true", onClick: () => setOpen((v) => !v), className: `${HERO_BTN} ${open ? "outline outline-2" : ""}`, style: { ...HERO_SEC, outlineColor: "rgba(224,201,148,.45)" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(FileText, { className: "h-[15px] w-[15px]", style: { color: BRASS_LT } }),
         "Files",
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: { color: HERO_MUTED, fontWeight: 500 }, children: folder?.loading && !items.length ? "\u2026" : items.length }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(ChevronDown, { className: "h-[13px] w-[13px]", style: { color: BRASS_LT } })
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { color: HERO_MUTED, fontWeight: 500 }, children: folder?.loading && !items.length ? "\u2026" : items.length }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(ChevronDown, { className: "h-[13px] w-[13px]", style: { color: BRASS_LT } })
       ] }),
-      open ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { role: "menu", className: "absolute right-0 top-[calc(100%+6px)] z-30 w-[430px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[12px] bg-white max-[699px]:left-0 max-[699px]:right-auto", style: { border: "1px solid #e2dcd1", boxShadow: "0 18px 44px -12px rgba(21,24,26,.35),0 2px 6px rgba(21,24,26,.06)" }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex items-center justify-between gap-3 px-4 py-3", style: { borderBottom: "1px solid #eee9e0", backgroundColor: "#faf8f3" }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("b", { className: "text-[13.5px]", style: { color: INK2 }, children: "Job files" }),
-          folder?.folder?.url ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("a", { href: folder.folder.url, target: "_blank", rel: "noreferrer", className: "inline-flex items-center gap-1 text-[12px] font-semibold hover:underline", style: { color: "#0b3f3b" }, children: [
+      open ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { role: "menu", className: "absolute right-0 top-[calc(100%+6px)] z-30 w-[430px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[12px] bg-white max-[699px]:left-0 max-[699px]:right-auto", style: { border: "1px solid #e2dcd1", boxShadow: "0 18px 44px -12px rgba(21,24,26,.35),0 2px 6px rgba(21,24,26,.06)" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex items-center justify-between gap-3 px-4 py-3", style: { borderBottom: "1px solid #eee9e0", backgroundColor: "#faf8f3" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("b", { className: "text-[13.5px]", style: { color: INK2 }, children: "Job files" }),
+          folder?.folder?.url ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("a", { href: folder.folder.url, target: "_blank", rel: "noreferrer", className: "inline-flex items-center gap-1 text-[12px] font-semibold hover:underline", style: { color: "#0b3f3b" }, children: [
             "Open folder",
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(ExternalLink, { className: "h-3 w-3" })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "text-[12px]", style: { color: MUTED2 }, children: folder?.loading ? "Checking folder\u2026" : "Folder not linked" })
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(ExternalLink, { className: "h-3 w-3" })
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "text-[12px]", style: { color: MUTED2 }, children: folder?.loading ? "Checking folder\u2026" : "Folder not linked" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "max-h-[380px] overflow-y-auto", children: [
-          !items.length ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "m-0 px-4 py-4 text-[13px]", style: { color: MUTED2 }, children: folder?.loading ? "Loading job folder\u2026" : "No files yet. Plans, calendar attachments and job-folder files show up here." }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "max-h-[380px] overflow-y-auto", children: [
+          !items.length ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("p", { className: "m-0 px-4 py-4 text-[13px]", style: { color: MUTED2 }, children: folder?.loading ? "Loading job folder\u2026" : "No files yet. Plans, calendar attachments and job-folder files show up here." }) : null,
           items.map((it, i) => {
             const badge = fileBadge(it.name, it.mime);
-            const inner = /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(import_jsx_runtime12.Fragment, { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "flex h-[34px] w-7 shrink-0 items-end justify-center rounded-[5px] bg-white pb-[5px] text-[8px] font-bold tracking-[.04em]", style: { border: "1px solid #e2dcd1", color: badge.ink }, children: badge.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "min-w-0 flex-1", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("b", { className: "block truncate text-[13.5px] font-semibold", style: { color: it.gmailOnly ? MUTED2 : INK2 }, children: fileLabel2(sanitizeText(it.name), it.name) }),
-                /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("small", { className: "text-[12px]", style: { color: MUTED2 }, children: it.meta })
+            const inner = /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_jsx_runtime13.Fragment, { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "flex h-[34px] w-7 shrink-0 items-end justify-center rounded-[5px] bg-white pb-[5px] text-[8px] font-bold tracking-[.04em]", style: { border: "1px solid #e2dcd1", color: badge.ink }, children: badge.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "min-w-0 flex-1", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("b", { className: "block truncate text-[13.5px] font-semibold", style: { color: it.gmailOnly ? MUTED2 : INK2 }, children: fileLabel2(sanitizeText(it.name), it.name) }),
+                /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("small", { className: "text-[12px]", style: { color: MUTED2 }, children: it.meta })
               ] }),
-              it.gmailOnly ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "shrink-0 whitespace-nowrap rounded-[6px] px-1.5 py-px text-[11px] font-semibold", style: { color: "#6f4e10", backgroundColor: "#faf0da", border: "1px solid #efdfb7" }, children: "In Israel's Gmail" }) : it.attachment?.in_job_folder ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "shrink-0 whitespace-nowrap rounded-[6px] px-1.5 py-px text-[11px] font-semibold", style: { color: "#082f2c", backgroundColor: "#e2eeeb" }, children: "In job folder" }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(ExternalLink, { className: "h-3.5 w-3.5 shrink-0", style: { color: MUTED2 } })
+              it.gmailOnly ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "shrink-0 whitespace-nowrap rounded-[6px] px-1.5 py-px text-[11px] font-semibold", style: { color: "#6f4e10", backgroundColor: "#faf0da", border: "1px solid #efdfb7" }, children: "In Israel's Gmail" }) : it.attachment?.in_job_folder ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "shrink-0 whitespace-nowrap rounded-[6px] px-1.5 py-px text-[11px] font-semibold", style: { color: "#082f2c", backgroundColor: "#e2eeeb" }, children: "In job folder" }) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(ExternalLink, { className: "h-3.5 w-3.5 shrink-0", style: { color: MUTED2 } })
             ] });
             const cls = `flex w-full items-center gap-3 px-4 py-2.5 text-left ${i ? "border-t" : ""}`;
-            if (it.gmailOnly) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: cls, style: { borderColor: "#eee9e0" }, title: "Stored in Israel's Gmail. It opens here once his Gmail is connected.", children: inner }, it.key);
-            if (it.attachment) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", { type: "button", role: "menuitem", onClick: () => openAttachment(it.attachment), className: `${cls} hover:bg-black/[0.03]`, style: { borderColor: "#eee9e0" }, children: inner }, it.key);
-            if (it.href) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("a", { role: "menuitem", href: it.href, target: "_blank", rel: "noreferrer", className: `${cls} hover:bg-black/[0.03]`, style: { borderColor: "#eee9e0" }, children: inner }, it.key);
-            return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: cls, style: { borderColor: "#eee9e0" }, title: "No file link recorded", children: inner }, it.key);
+            if (it.gmailOnly) return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: cls, style: { borderColor: "#eee9e0" }, title: "Stored in Israel's Gmail. It opens here once his Gmail is connected.", children: inner }, it.key);
+            if (it.attachment) return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("button", { type: "button", role: "menuitem", onClick: () => openAttachment(it.attachment), className: `${cls} hover:bg-black/[0.03]`, style: { borderColor: "#eee9e0" }, children: inner }, it.key);
+            if (it.href) return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("a", { role: "menuitem", href: it.href, target: "_blank", rel: "noreferrer", className: `${cls} hover:bg-black/[0.03]`, style: { borderColor: "#eee9e0" }, children: inner }, it.key);
+            return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: cls, style: { borderColor: "#eee9e0" }, title: "No file link recorded", children: inner }, it.key);
           })
         ] }),
-        gmail || folder?.error || folder && folder.complete === false ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "px-4 py-2.5 text-[12px]", style: { borderTop: "1px solid #eee9e0", backgroundColor: "#faf8f3", color: "#566063" }, children: [
-          gmail ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { children: [
+        gmail || folder?.error || folder && folder.complete === false ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "px-4 py-2.5 text-[12px]", style: { borderTop: "1px solid #eee9e0", backgroundColor: "#faf8f3", color: "#566063" }, children: [
+          gmail ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { children: [
             gmail === 1 ? "That file opens" : "Those files open",
             " here once Israel's Gmail is connected."
           ] }) : null,
-          folder?.complete === false ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { children: "Showing part of the folder. Open it for everything." }) : null,
-          folder?.error ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { role: "alert", style: { color: "#a43432" }, children: folder.error }) : null
+          folder?.complete === false ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { children: "Showing part of the folder. Open it for everything." }) : null,
+          folder?.error ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { role: "alert", style: { color: "#a43432" }, children: folder.error }) : null
         ] }) : null
       ] }) : null
     ] });
@@ -14157,47 +14166,47 @@
     const [chipBg, chipInk] = STEP_CHIP[snap.step.tone] || STEP_CHIP.neutral;
     const H = headingLevel;
     const [lead, ...rest] = String(snap.step.text || "").split(/(?<=\.)\s+/);
-    return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("section", { className: "relative z-[3] rounded-[14px]", style: { background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "px-7 pt-7 pb-4 max-[699px]:px-4 max-[699px]:pt-5", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex flex-wrap items-stretch gap-6 max-[699px]:gap-4", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "min-w-[240px] flex-1", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex flex-wrap items-center gap-2.5", children: [
-            eyebrow ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "text-[11px] font-semibold tracking-[.12em]", style: { color: "#8f999b" }, children: eyebrow }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold", style: { backgroundColor: "rgba(224,201,148,.14)", color: BRASS_LT, border: "1px solid rgba(224,201,148,.35)" }, children: [
-              /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "h-1.5 w-1.5 rounded-full", style: { backgroundColor: "currentColor" } }),
+    return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("section", { className: "relative z-[3] rounded-[14px]", style: { background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }, children: /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "px-7 pt-7 pb-4 max-[699px]:px-4 max-[699px]:pt-5", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex flex-wrap items-stretch gap-6 max-[699px]:gap-4", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "min-w-[240px] flex-1", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex flex-wrap items-center gap-2.5", children: [
+            eyebrow ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "text-[11px] font-semibold tracking-[.12em]", style: { color: "#8f999b" }, children: eyebrow }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold", style: { backgroundColor: "rgba(224,201,148,.14)", color: BRASS_LT, border: "1px solid rgba(224,201,148,.35)" }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "h-1.5 w-1.5 rounded-full", style: { backgroundColor: "currentColor" } }),
               status.label
             ] })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(H, { className: "m-0 mt-1.5 break-words text-[32px] font-bold leading-[38px] max-[699px]:text-[26px] max-[699px]:leading-[31px]", style: { color: HERO_INK, letterSpacing: "-0.035em" }, children: titleCase(sanitizeText(job.canonical_name)) }),
-          job.address ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("a", { href: mapHref, target: "_blank", rel: "noreferrer", className: "mt-2 inline-flex items-center gap-[7px] text-[14.5px] font-medium hover:underline", style: { color: "#c9d0d1" }, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MapPin, { className: "h-[15px] w-[15px] shrink-0", style: { color: BRASS_LT } }),
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(H, { className: "m-0 mt-1.5 break-words text-[32px] font-bold leading-[38px] max-[699px]:text-[26px] max-[699px]:leading-[31px]", style: { color: HERO_INK, letterSpacing: "-0.035em" }, children: titleCase(sanitizeText(job.canonical_name)) }),
+          job.address ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("a", { href: mapHref, target: "_blank", rel: "noreferrer", className: "mt-2 inline-flex items-center gap-[7px] text-[14.5px] font-medium hover:underline", style: { color: "#c9d0d1" }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(MapPin, { className: "h-[15px] w-[15px] shrink-0", style: { color: BRASS_LT } }),
             sanitizeText(job.address)
           ] }) : null
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(SuperBox, { jobId: job.id, jobContacts, events })
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(SuperBox, { jobId: job.id, jobContacts, events })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "mt-5 flex flex-wrap items-center gap-2.5 rounded-[12px] py-2.5 pl-4 pr-2.5", style: { backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold", style: { backgroundColor: chipBg, color: chipInk }, children: snap.step.tag }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("p", { className: "m-0 min-w-[180px] flex-1 text-[15px] font-semibold leading-[21px]", style: { color: HERO_INK }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "mt-5 flex flex-wrap items-center gap-2.5 rounded-[12px] py-2.5 pl-4 pr-2.5", style: { backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold", style: { backgroundColor: chipBg, color: chipInk }, children: snap.step.tag }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("p", { className: "m-0 min-w-[180px] flex-1 text-[15px] font-semibold leading-[21px]", style: { color: HERO_INK }, children: [
           lead,
-          rest.length ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "font-medium", style: { color: HERO_MUTED }, children: [
+          rest.length ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "font-medium", style: { color: HERO_MUTED }, children: [
             " ",
             rest.join(" ")
           ] }) : null
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("button", { type: "button", onClick: onFieldReport, className: HERO_BTN, style: { backgroundColor: BRASS, color: "#1d160a" }, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Camera, { className: "h-[15px] w-[15px]" }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("button", { type: "button", onClick: onFieldReport, className: HERO_BTN, style: { backgroundColor: BRASS, color: "#1d160a" }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Camera, { className: "h-[15px] w-[15px]" }),
             "Field report"
           ] }),
-          dirHref ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("a", { href: dirHref, target: "_blank", rel: "noreferrer", className: HERO_BTN, style: HERO_SEC, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Navigation, { className: "h-[15px] w-[15px]", style: { color: BRASS_LT } }),
+          dirHref ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("a", { href: dirHref, target: "_blank", rel: "noreferrer", className: HERO_BTN, style: HERO_SEC, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Navigation, { className: "h-[15px] w-[15px]", style: { color: BRASS_LT } }),
             "Directions"
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("button", { type: "button", onClick: onLog, className: HERO_BTN, style: HERO_SEC, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Plus, { className: "h-[15px] w-[15px]", style: { color: BRASS_LT } }),
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("button", { type: "button", onClick: onLog, className: HERO_BTN, style: HERO_SEC, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Plus, { className: "h-[15px] w-[15px]", style: { color: BRASS_LT } }),
             "Log"
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(FilesMenu, { folder, plans, events }),
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(FilesMenu, { folder, plans, events }),
           extra
         ] })
       ] })
@@ -14209,56 +14218,56 @@
     const visit = snap.facts[0];
     const pos = snap.refs.filter((r2) => r2.startsWith("PO ")).map((r2) => r2.slice(3));
     const oes = snap.refs.filter((r2) => r2.startsWith("OE ")).map((r2) => r2.slice(3));
-    const ref = (list) => list.length ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "font-mono text-[14px] font-medium", title: list.join(", "), children: [
+    const ref = (list) => list.length ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "font-mono text-[14px] font-medium", title: list.join(", "), children: [
       list[0],
-      list.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { style: { color: MUTED2 }, children: [
+      list.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { style: { color: MUTED2 }, children: [
         " +",
         list.length - 1
       ] }) : null
-    ] }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: { color: MUTED2, fontWeight: 500 }, children: "\u2014" });
+    ] }) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { color: MUTED2, fontWeight: 500 }, children: "\u2014" });
     const cells = [
-      [visit.k, /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: { color: visit.tone === "teal" ? "#0b3f3b" : INK2 }, children: visit.v }, "v")],
+      [visit.k, /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { color: visit.tone === "teal" ? "#0b3f3b" : INK2 }, children: visit.v }, "v")],
       ["Crew", snap.facts[1].v],
       ["PO", ref(pos)],
       ["OE", ref(oes)],
-      ["Job folder", folder?.folder?.url ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("a", { href: folder.folder.url, target: "_blank", rel: "noreferrer", className: "hover:underline", style: { color: "#0b3f3b" }, children: "Open in Drive" }, "f") : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: { color: MUTED2, fontWeight: 500 }, children: folder?.loading ? "Checking\u2026" : "Not linked" }, "f")]
+      ["Job folder", folder?.folder?.url ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("a", { href: folder.folder.url, target: "_blank", rel: "noreferrer", className: "hover:underline", style: { color: "#0b3f3b" }, children: "Open in Drive" }, "f") : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { color: MUTED2, fontWeight: 500 }, children: folder?.loading ? "Checking\u2026" : "Not linked" }, "f")]
     ];
-    return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(SheetCard, { icon: Briefcase, tile: TILE.teal, title: "The job", bodyClassName: "overflow-hidden rounded-b-[14px]", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("dl", { className: "-ml-px -mt-px grid grid-cols-5 max-[1100px]:grid-cols-3 max-[599px]:grid-cols-2", children: cells.map(([k, v]) => /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "min-w-0 border-l border-t px-5 py-4 max-[699px]:px-4", style: { borderColor: "#eee9e0" }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("dt", { className: "text-[11px] font-semibold tracking-[.12em] uppercase", style: { color: "#566063" }, children: k }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("dd", { className: "m-0 mt-1 truncate text-[15px] font-semibold", style: { color: INK2 }, children: v })
+    return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(SheetCard, { icon: Briefcase, tile: TILE.teal, title: "The job", bodyClassName: "overflow-hidden rounded-b-[14px]", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("dl", { className: "-ml-px -mt-px grid grid-cols-5 max-[1100px]:grid-cols-3 max-[599px]:grid-cols-2", children: cells.map(([k, v]) => /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "min-w-0 border-l border-t px-5 py-4 max-[699px]:px-4", style: { borderColor: "#eee9e0" }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("dt", { className: "text-[11px] font-semibold tracking-[.12em] uppercase", style: { color: "#566063" }, children: k }),
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("dd", { className: "m-0 mt-1 truncate text-[15px] font-semibold", style: { color: INK2 }, children: v })
     ] }, k)) }) });
   }
   function ScopeCard({ snap }) {
-    const parsed = (0, import_react14.useMemo)(() => parseScopeNotes(snap.workText, { refs: false }), [snap.workText]);
+    const parsed = (0, import_react15.useMemo)(() => parseScopeNotes(snap.workText, { refs: false }), [snap.workText]);
     if (!snap.work.length || scopeIsEmpty(parsed)) return null;
     const from = snap.workFrom ? snap.workFrom.startsWith("from ") ? snap.workFrom : `from the ${/^(today|yesterday|tomorrow)$/i.test(snap.workFrom) ? snap.workFrom.toLowerCase() : snap.workFrom} calendar event` : "";
-    return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(SheetCard, { icon: ClipboardCheck, tile: TILE.bronze, title: "Scope", sub: from, bodyClassName: "px-5 py-4 max-[699px]:px-4", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(ScopeNotes, { parsed }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(SheetCard, { icon: ClipboardCheck, tile: TILE.bronze, title: "Scope", sub: from, bodyClassName: "px-5 py-4 max-[699px]:px-4", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(ScopeNotes, { parsed }) });
   }
 
   // src/components/jobs/JobWorkspacePanel.jsx
-  var import_jsx_runtime13 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime14 = __toESM(require_jsx_runtime());
   var MUTED3 = "#566063";
   var TEAL = "#0b3f3b";
   function JobWorkspacePanel({ jobId, group = null }) {
-    const [job, setJob] = (0, import_react15.useState)(null);
-    const [rows2, setRows] = (0, import_react15.useState)([]);
-    const [notes, setNotes] = (0, import_react15.useState)([]);
-    const [calEvents, setCalEvents] = (0, import_react15.useState)([]);
-    const [evidence, setEvidence] = (0, import_react15.useState)(null);
-    const [fieldReports, setFieldReports] = (0, import_react15.useState)([]);
-    const [plans, setPlans] = (0, import_react15.useState)([]);
+    const [job, setJob] = (0, import_react16.useState)(null);
+    const [rows2, setRows] = (0, import_react16.useState)([]);
+    const [notes, setNotes] = (0, import_react16.useState)([]);
+    const [calEvents, setCalEvents] = (0, import_react16.useState)([]);
+    const [evidence, setEvidence] = (0, import_react16.useState)(null);
+    const [fieldReports, setFieldReports] = (0, import_react16.useState)([]);
+    const [plans, setPlans] = (0, import_react16.useState)([]);
     const memberKey = [jobId, ...(group?.memberIds || []).filter((m) => m !== jobId)].join(",");
     const memberIds = memberKey.split(",");
     const jobContacts = useJobContacts(jobId);
-    const [currentUser, setCurrentUser] = (0, import_react15.useState)("");
-    const [loading, setLoading] = (0, import_react15.useState)(true);
-    const [lightbox, setLightbox] = (0, import_react15.useState)(null);
-    const [showReport, setShowReport] = (0, import_react15.useState)(false);
-    const [openFormKey, setOpenFormKey] = (0, import_react15.useState)(0);
-    const historyRef = (0, import_react15.useRef)(null);
-    const v = (0, import_react15.useRef)(0);
+    const [currentUser, setCurrentUser] = (0, import_react16.useState)("");
+    const [loading, setLoading] = (0, import_react16.useState)(true);
+    const [lightbox, setLightbox] = (0, import_react16.useState)(null);
+    const [showReport, setShowReport] = (0, import_react16.useState)(false);
+    const [openFormKey, setOpenFormKey] = (0, import_react16.useState)(0);
+    const historyRef = (0, import_react16.useRef)(null);
+    const v = (0, import_react16.useRef)(0);
     const folder = useJobFolderFiles(job);
-    (0, import_react15.useEffect)(() => {
+    (0, import_react16.useEffect)(() => {
       base44.auth.me().then((m) => setCurrentUser(m?.email || m?.full_name || "")).catch(() => {
       });
     }, []);
@@ -14314,7 +14323,7 @@
         if (ver === v.current) setLoading(false);
       }
     };
-    (0, import_react15.useEffect)(() => {
+    (0, import_react16.useEffect)(() => {
       (async () => {
         await load();
       })();
@@ -14335,21 +14344,21 @@
       }
     });
     const today = denverDate();
-    const status = (0, import_react15.useMemo)(() => jobsStatus(rows2, evidence), [rows2, evidence]);
-    const snap = (0, import_react15.useMemo)(() => jobSnapshot({ job, events: calEvents, rows: rows2, fieldReports, status, today }), [job, calEvents, rows2, fieldReports, status, today]);
+    const status = (0, import_react16.useMemo)(() => jobsStatus(rows2, evidence), [rows2, evidence]);
+    const snap = (0, import_react16.useMemo)(() => jobSnapshot({ job, events: calEvents, rows: rows2, fieldReports, status, today }), [job, calEvents, rows2, fieldReports, status, today]);
     if (loading) {
-      return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "flex items-center justify-center h-full", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "w-6 h-6 border-2 rounded-full animate-spin", style: { borderColor: "#e2dcd1", borderTopColor: TEAL } }) });
+      return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "flex items-center justify-center h-full", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "w-6 h-6 border-2 rounded-full animate-spin", style: { borderColor: "#e2dcd1", borderTopColor: TEAL } }) });
     }
     if (!job) {
-      return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "flex items-center justify-center h-full text-[13px]", style: { color: MUTED3 }, children: "Select a job to see it here." });
+      return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "flex items-center justify-center h-full text-[13px]", style: { color: MUTED3 }, children: "Select a job to see it here." });
     }
     const logInteraction = () => {
       setOpenFormKey((k) => k + 1);
       historyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex-1 min-h-0 overflow-y-auto obsidian-scroll", style: { backgroundColor: SHEET_BG }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "px-6 pt-6 pb-10 flex flex-col gap-[18px] max-[1400px]:px-5", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "flex-1 min-h-0 overflow-y-auto obsidian-scroll", style: { backgroundColor: SHEET_BG }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "px-6 pt-6 pb-10 flex flex-col gap-[18px] max-[1400px]:px-5", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           JobHero,
           {
             job,
@@ -14362,16 +14371,16 @@
             onFieldReport: () => setShowReport(true),
             onLog: logInteraction,
             headingLevel: "h2",
-            extra: /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(Link, { to: `/jobs/${jobId}`, className: heroLinkClass, style: heroLinkStyle, title: "Open the full job page", children: [
+            extra: /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(Link, { to: `/jobs/${jobId}`, className: heroLinkClass, style: heroLinkStyle, title: "Open the full job page", children: [
               "Full page",
-              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(ArrowUpRight, { className: "h-[15px] w-[15px]", style: { color: "#e0c994" } })
+              /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(ArrowUpRight, { className: "h-[15px] w-[15px]", style: { color: "#e0c994" } })
             ] })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(DuplicateJobNotice, { group, currentId: jobId }),
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(JobFactsCard, { snap, folder }),
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(ScopeCard, { snap }),
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { ref: historyRef, className: "scroll-mt-4", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(SheetCard, { icon: HardHat, tile: TILE.green, title: "Visits", sub: "notes, reports and calls, newest first", right: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(LiveMark, { live: live2 }), children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(DuplicateJobNotice, { group, currentId: jobId }),
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(JobFactsCard, { snap, folder }),
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(ScopeCard, { snap }),
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { ref: historyRef, className: "scroll-mt-4", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(SheetCard, { icon: HardHat, tile: TILE.green, title: "Visits", sub: "notes, reports and calls, newest first", right: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(LiveMark, { live: live2 }), children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           JobActivityFeed,
           {
             ledger: true,
@@ -14390,18 +14399,18 @@
           }
         ) }) })
       ] }),
-      showReport && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(JobFieldReportModal, { jobId, jobName: job.canonical_name, events: calEvents, onClose: () => setShowReport(false), onDone: () => {
+      showReport && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(JobFieldReportModal, { jobId, jobName: job.canonical_name, events: calEvents, onClose: () => setShowReport(false), onDone: () => {
         setShowReport(false);
         load({ quiet: true });
       } }),
-      lightbox && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(AttachmentViewer, { src: lightbox, onClose: () => setLightbox(null) })
+      lightbox && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(AttachmentViewer, { src: lightbox, onClose: () => setLightbox(null) })
     ] });
   }
 
   // .harness/entry.jsx
-  var import_jsx_runtime14 = __toESM(require_jsx_runtime(), 1);
+  var import_jsx_runtime15 = __toESM(require_jsx_runtime(), 1);
   (0, import_client.createRoot)(document.getElementById("root")).render(
-    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(MemoryRouter, { children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { height: "100vh", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(JobWorkspacePanel, { jobId: "j1" }) }) })
+    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(MemoryRouter, { children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: { height: "100vh", display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(JobWorkspacePanel, { jobId: "j1" }) }) })
   );
 })();
 /*! Bundled license information:
