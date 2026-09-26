@@ -218,6 +218,24 @@ export function JobContactSuggestionsRow({ jobContacts }) {
   );
 }
 
+// Job page: the builder's roster already feeds the Super dropdown in the hero, so down here
+// it is one line with a link, not a list of names.
+export function BuilderRoster({ builderName, contacts, jobId }) {
+  if (!contacts?.length) return null;
+  const supers = contacts.filter((c) => c.role === "superintendent").length;
+  const pms = contacts.filter((c) => c.role === "project_manager").length;
+  const parts = [supers ? `${supers} super${supers === 1 ? "" : "s"}` : "", pms ? `${pms} PM${pms === 1 ? "" : "s"}` : ""].filter(Boolean);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div className="min-w-0">
+        <div className="text-[13px] font-semibold" style={{ color: C.text }}>{sanitizeText(builderName) || "Builder"} · {contacts.length} on file</div>
+        <div className="text-[11.5px]" style={{ color: C.textMuted }}>{parts.length ? parts.join(", ") + " · " : ""}pick the super at the top of the page</div>
+      </div>
+      <Link to={`/contacts?job=${encodeURIComponent(jobId)}`} className="inline-flex min-h-9 items-center text-[12px] font-semibold underline" style={{ color: C.accentText }}>Open in Contacts</Link>
+    </div>
+  );
+}
+
 // The builder's own people (office, PMs, supers, warranty) next to the builder name on the job.
 export function BuilderContacts({ contacts, jobId }) {
   const [open, setOpen] = useState(false);
