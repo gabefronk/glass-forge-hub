@@ -1,0 +1,273 @@
+{
+  "name": "EmailRelay",
+  "type": "object",
+  "description": "Inbox-agent ledger: one row per mail thread the agent looked at, holding only what it concluded and what it changed in the Hub. Never message bodies \u2014 mail stays in Gmail / Outlook; web_link opens it there.",
+  "properties": {
+    "mailbox_key": {
+      "type": "string",
+      "title": "Mailbox Key",
+      "description": "EmailMailbox.key this thread belongs to"
+    },
+    "thread_id": {
+      "type": "string",
+      "title": "Thread Id",
+      "description": "Provider thread id (Gmail threadId / Graph conversationId). Unique with mailbox_key."
+    },
+    "account_hint": {
+      "type": "string",
+      "title": "Account Hint",
+      "description": "Address the mail was originally sent to (X-Forwarded-For / Delivered-To / To), so forwarded gabefronk@gmail.com mail stays distinguishable inside the Gmail mailbox."
+    },
+    "subject": {
+      "type": "string",
+      "title": "Subject"
+    },
+    "from_name": {
+      "type": "string",
+      "title": "From Name",
+      "description": "Sender of the latest incoming message"
+    },
+    "from_email": {
+      "type": "string",
+      "title": "From Email"
+    },
+    "first_message_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "First Message At"
+    },
+    "last_message_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Last Message At"
+    },
+    "message_count": {
+      "type": "integer",
+      "title": "Message Count",
+      "default": 0,
+      "description": "Messages the agent has seen on this thread"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "job_update",
+        "schedule",
+        "quote_request",
+        "order_vendor",
+        "invoice_billing",
+        "service_warranty",
+        "builder_admin",
+        "personal",
+        "newsletter_promo",
+        "spam",
+        "other"
+      ],
+      "title": "Category"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "urgent",
+        "normal",
+        "low"
+      ],
+      "title": "Priority",
+      "default": "normal"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "new",
+        "needs_reply",
+        "waiting",
+        "done",
+        "ignored"
+      ],
+      "title": "Status",
+      "default": "new"
+    },
+    "summary": {
+      "type": "string",
+      "title": "Summary",
+      "description": "Agent's one-line summary, <= 240 chars"
+    },
+    "action_items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Action Items",
+      "default": []
+    },
+    "next_step": {
+      "type": "string",
+      "title": "Next Step"
+    },
+    "reply_needed": {
+      "type": "boolean",
+      "title": "Reply Needed",
+      "default": false
+    },
+    "job_id": {
+      "type": "string",
+      "title": "Job Id",
+      "description": "link to Jobs (nullable)"
+    },
+    "job_link_source": {
+      "type": "string",
+      "enum": [
+        "agent_match",
+        "owner"
+      ],
+      "title": "Job Link Source"
+    },
+    "job_match_confidence": {
+      "type": "string",
+      "enum": [
+        "high",
+        "low",
+        "unmatched"
+      ],
+      "title": "Job Match Confidence"
+    },
+    "job_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          }
+        }
+      },
+      "title": "Job Candidates",
+      "default": [],
+      "description": "findJobs results kept when the top match was not accepted"
+    },
+    "extracted": {
+      "type": "object",
+      "title": "Extracted",
+      "additionalProperties": true,
+      "description": "Facts the agent pulled from the thread: {builder, lot, address, po_numbers[], oe_numbers[], dates[], contact_name, contact_phone, contact_email, contact_role}"
+    },
+    "hub_changes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Hub Changes",
+      "default": [],
+      "description": "Plain-language log of what the agent changed in the Hub for this thread, e.g. \"Note added to Hutchins\", \"PO YA-0005 added\", \"To-do created\""
+    },
+    "applied": {
+      "type": "object",
+      "title": "Applied",
+      "additionalProperties": true,
+      "description": "Job facts the agent already applied: {po_numbers[], oe_numbers[], homeowner_contact_key}. Stops the same fact being applied twice."
+    },
+    "draft_id": {
+      "type": "string",
+      "title": "Draft Id",
+      "description": "Provider draft id (Gmail draft id / Graph draft message id). The draft itself lives in the mailbox."
+    },
+    "draft_status": {
+      "type": "string",
+      "enum": [
+        "none",
+        "drafted",
+        "discarded"
+      ],
+      "title": "Draft Status",
+      "default": "none"
+    },
+    "note_id": {
+      "type": "string",
+      "title": "Note Id",
+      "description": "JobNotes row created by the relay"
+    },
+    "todo_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Todo Ids",
+      "default": []
+    },
+    "relayed_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Relayed At"
+    },
+    "provider_labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Provider Labels",
+      "default": [],
+      "description": "Gmail label ids / Outlook categories the agent last saw or set"
+    },
+    "archived": {
+      "type": "boolean",
+      "title": "Archived",
+      "default": false
+    },
+    "triaged_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Triaged At"
+    },
+    "triage_pending": {
+      "type": "boolean",
+      "title": "Triage Pending",
+      "default": true,
+      "description": "True while the thread has mail the agent has not classified yet. Cleared by the sync once triage runs."
+    },
+    "web_link": {
+      "type": "string",
+      "title": "Web Link",
+      "description": "Opens the thread in the provider (Gmail #all/<threadId>; Outlook message webLink)"
+    }
+  },
+  "required": [
+    "mailbox_key",
+    "thread_id"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
