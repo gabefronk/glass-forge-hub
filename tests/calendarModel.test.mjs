@@ -56,3 +56,10 @@ test('groupByDay sorts days and times, untimed last', () => {
   assert.deepEqual(g.map((x) => x.day), ['2026-09-25', '2026-09-26']);
   assert.deepEqual(g[1].events.map((e) => e.id), ['c', 'b']);
 });
+
+test('"YA - #1" return trips read as service visits', async () => {
+  const { eventKind } = await import('../src/lib/calendarModel.js');
+  assert.equal(eventKind({ job_name: 'YA - #1 Fieldstone 215 The Crossings' }), 'service');
+  assert.equal(eventKind({ job_name: '#2 Holmes Homes 203 Lakeview' }), 'service');
+  assert.equal(eventKind({ job_name: 'Holmes Homes - 214 Deer Springs' }), 'install');
+});

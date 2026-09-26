@@ -31,11 +31,11 @@ function PhotoStrip({ urls, onPhotoClick }) {
   const shown = all ? urls : urls.slice(0, MAX_THUMBS);
   const extra = urls.length - shown.length;
   return (
-    <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-6 xl:grid-cols-8">
+    <div className="mt-3 flex flex-wrap gap-1.5">
       {shown.map((url, i) => {
         const last = !all && extra > 0 && i === shown.length - 1;
         return (
-          <button key={i} type="button" onClick={() => (last ? setAll(true) : onPhotoClick(url))} className="relative aspect-square overflow-hidden rounded-[8px]" style={{ backgroundColor: "#eee9e0" }} aria-label={last ? `Show ${extra + 1} more photos` : `Open photo ${i + 1}`}>
+          <button key={i} type="button" onClick={() => (last ? setAll(true) : onPhotoClick(url))} className="relative h-[92px] w-[92px] shrink-0 overflow-hidden rounded-[8px]" style={{ backgroundColor: "#eee9e0" }} aria-label={last ? `Show ${extra + 1} more photos` : `Open photo ${i + 1}`}>
             <FeedImage src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
             {last ? <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-[15px] font-bold text-white">+{extra + 1}</span> : null}
           </button>

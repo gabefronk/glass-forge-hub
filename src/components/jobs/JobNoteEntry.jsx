@@ -45,9 +45,9 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
       {!embedded ? <div className="mb-1.5 text-[12px] truncate" style={{ color: C.textSecondary }}>{note.author}</div> : null}
       <ClampedText text={note.body} maxLines={5} className="mt-1 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words" style={{ color: C.text }} />
       {note.attachments && note.attachments.length > 0 && (
-        <div className="grid grid-cols-4 gap-1.5 mt-3 sm:grid-cols-6 xl:grid-cols-8">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {note.attachments.map((url, i) => (
-            <button key={i} type="button" onClick={() => onPhotoClick(url)} className="aspect-square rounded-[8px] overflow-hidden" style={{ backgroundColor: "#eee9e0" }} aria-label={`Open photo ${i + 1}`}>
+            <button key={i} type="button" onClick={() => onPhotoClick(url)} className="h-[92px] w-[92px] shrink-0 rounded-[8px] overflow-hidden" style={{ backgroundColor: "#eee9e0" }} aria-label={`Open photo ${i + 1}`}>
               <FeedImage src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
             </button>
           ))}

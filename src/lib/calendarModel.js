@@ -16,6 +16,8 @@ const SERVICE_RE = /service|warranty|wty|warr|per report/i;
 export function eventKind(e) {
   if (e?.source === "outlook") return "outlook";
   const text = `${e?.job_name || ""} ${e?.scope_notes || ""}`;
+  // Israel's "YA - #1 …" titles are return trips (service), per the calendar convention.
+  if (/^\s*(?:ya\s*-\s*)?#\s*[1-9]/i.test(e?.job_name || "")) return "service";
   return SERVICE_RE.test(text) ? "service" : "install";
 }
 
