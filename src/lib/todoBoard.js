@@ -2,8 +2,8 @@
 // Lane keys match TodoTask.category values validated by base44/shared/todoService.mjs.
 
 export const BOARD_LANES = [
-  { key: "quote_request", label: "Quote Requests", hint: "Quotes to price, prepare or send", accent: "#245889" },
-  { key: "odd_end", label: "Odd End Items", hint: "Small fixes, punch items and loose ends", accent: "#7042A1" },
+  { key: "quote_request", label: "Quote Requests", hint: "Quotes to price, prepare or send", accent: "#0B3F3B" },
+  { key: "odd_end", label: "Odd End Items", hint: "Small fixes, punch items and loose ends", accent: "#B8955A" },
   { key: "order", label: "Orders to Place", hint: "Windows, glass and parts to order", accent: "#89511A" },
   { key: "follow_up", label: "Follow-ups", hint: "Calls, emails and check-ins owed", accent: "#146556" },
 ];
