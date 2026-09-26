@@ -21,7 +21,7 @@ function visitBadge(ev) {
 function PhotoGrid({ urls, onPhotoClick }) {
   if (!urls || !urls.length) return null;
   return (
-    <div className="grid grid-cols-2 gap-2 mt-2.5 sm:grid-cols-3">
+    <div className="grid grid-cols-3 gap-2 mt-2.5 sm:grid-cols-4">
       {urls.map((url, i) => (
         <button key={i} type="button" onClick={() => onPhotoClick(url)} className="aspect-[4/3] rounded-[10px] overflow-hidden shrink-0" style={{ border: `1px solid ${C.border}` }}>
           <FeedImage src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />

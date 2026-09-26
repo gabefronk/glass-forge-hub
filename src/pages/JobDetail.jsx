@@ -206,7 +206,7 @@ export default function JobDetail() {
             <JobMoneyPanel jobId={id} />
           </aside>
           <div className="lg:col-span-8 min-w-0">
-            <JobPlansPhotos folder={folder} plans={plans} events={calEvents} sitePhotos={sitePhotos} onPhotoClick={setLightbox} />
+            <JobPlansPhotos showPhotos={false} folder={folder} plans={plans} events={calEvents} sitePhotos={sitePhotos} onPhotoClick={setLightbox} />
             <div id="add-note" />
             <JobActivityFeed
               jobId={id}
