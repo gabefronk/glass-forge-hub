@@ -1146,3 +1146,16 @@ for the super/homeowner slots, a signed-in user's) click.
 - **Schema (additive):** HubContacts `role`, `status`, `merged_into`, `merged_keys[]`, `aliases[]`,
   `phones[]`, `emails[]`.
 - **Tests:** `tests/contactCleanup.test.mjs`.
+
+### Inbox agents: mail stays in the mailbox (2026-09-26, later)
+
+Gabe: "I don't want my emails in the Glass Forge Hub." The agent now keeps no message bodies
+and no inbox mirror. `EmailThread` / `EmailMessage` are gone (entity files deleted and the
+platform schemas removed — they never held data); `EmailRelay` is the per-thread ledger
+(what the agent concluded, what it changed: `hub_changes`, `applied`). Text is read from
+Gmail / Graph at run time and dropped; pending re-triage and draft regeneration re-read the
+thread from the provider (`getThreadMessages`). The agent now applies PO/OE numbers and a
+stated homeowner to the job on a high-confidence link (additive, once); schedule changes
+only ever become a to-do. `send_draft` is gone — drafts live in the mailbox and are sent
+from there. The `/email` page, its components and the job-page Email card are replaced by
+Admin → Inbox Agents (`/inbox-agents`, owner only). 587 tests green; `vite build` clean.
