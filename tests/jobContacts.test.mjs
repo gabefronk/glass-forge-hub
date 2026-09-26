@@ -195,3 +195,20 @@ test('confirming a suggestion writes one link with its role; unsupported roles a
 });
 
 test('saved customer role overrides a generic builder company label',()=>{const links=[{contact_key:MAKAY.key,job_id:'j607',role:'customer'}];const v=view('j607',{links});assert.equal(v.linked.find(c=>c.key===MAKAY.key)?.role,'customer');});
+
+test('any signed-in user can save and read the super for one job, reusing a matching contact',async()=>{
+ const s=await setup();await s.importDirectory();
+ s.setUser({role:'user',email:'crew@example.com'});
+ assert.equal((await s.call({action:'job_contacts',job_id:'j607'})).status,403,'the full view stays owner-only');
+ let r=await s.call({action:'job_super',job_id:'j607'});assert.equal(r.status,200);assert.equal((await r.json()).super,null);
+ assert.equal((await s.call({action:'set_job_super',job_id:'j607',contact:{name:'Nobody'}})).status,400,'needs a phone or email');
+ r=await s.call({action:'set_job_super',job_id:'j607',contact:{name:'Dave D',phone:'801-555-0110'}});assert.equal(r.status,200);
+ assert.equal((await r.json()).super.key,DAVIES.key,'same phone reuses the directory contact');
+ r=await s.call({action:'set_job_super',job_id:'j607',contact:{name:'Mike Shaw',phone:'385-230-1483',email:'mikes@fieldstonehomes.com'}});
+ const saved=(await r.json()).super;assert.equal(saved.name,'Mike Shaw');
+ const sup=s.tables.ContactJobLink.filter(l=>l.job_id==='j607'&&l.role==='superintendent');
+ assert.deepEqual(sup.map(l=>l.contact_key),[saved.key],'one super per job');
+ const read=await(await s.call({action:'job_super',job_id:'j607'})).json();
+ assert.deepEqual(read.super,{key:saved.key,name:'Mike Shaw',phone:'385-230-1483',email:'mikes@fieldstonehomes.com'});
+ s.setUser(null);assert.equal((await s.call({action:'job_super',job_id:'j607'})).status,401);
+});
