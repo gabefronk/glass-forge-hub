@@ -357,7 +357,8 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       if (Object.keys(patch).length) { try { await api.EmailThread.update(row.id, patch); } catch (e) { warn(`thread update failed: ${errText(e)}`); } }
     }
 
-    return finish(counts.errors.length ? 'ok' : 'ok', counts.errors.length ? counts.errors[0] : '');
+    // Warnings stay in the run record; last_error is only for a failed run.
+    return finish('ok', '');
   }
 
   async function actionSync(ctx) {
