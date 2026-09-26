@@ -144,6 +144,17 @@ export function syncSummary(run) {
 
 export const mailboxName = (m) => m?.display_name || m?.address || m?.key || "Mailbox";
 
+// Merge a fresh mailbox list over what the page already holds, by key. Only the owner-only
+// `mailboxes` call carries `connected`; the `list` call does not, so fields the incoming row
+// lacks are kept from the previous one. Rows only in the incoming list are added; rows only in
+// the previous list are kept so a partial refresh never hides a mailbox.
+export function mergeMailboxes(prev, incoming) {
+  const byKey = new Map();
+  for (const m of Array.isArray(prev) ? prev : []) if (m?.key) byKey.set(m.key, m);
+  for (const m of Array.isArray(incoming) ? incoming : []) if (m?.key) byKey.set(m.key, { ...(byKey.get(m.key) || {}), ...m });
+  return [...byKey.values()];
+}
+
 export function errorText(e, fallback = "Something went wrong. Reload and try again.") {
   return e?.response?.data?.detail || e?.response?.data?.error || e?.message || fallback;
 }
