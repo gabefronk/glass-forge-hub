@@ -250,9 +250,11 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         ) : null}
         {days.map(({ date, items }, di) => (
           <div key={date} className={ledger ? `relative ${di ? "mt-5 border-t pt-5" : ""}` : ""} style={ledger ? { borderColor: "#eee9e0" } : undefined}>
-            {ledger ? <span aria-hidden="true" className={`absolute -left-6 h-[11px] w-[11px] rounded-full bg-white ${di ? "top-[26px]" : "top-[5px]"}`} style={{ border: "2px solid #b8955a" }} /> : null}
+            {ledger ? <span aria-hidden="true" className={`absolute -left-6 h-[13px] w-[13px] rounded-full ${di ? "top-[29px]" : "top-[8px]"}`} style={{ backgroundColor: "#b8955a", border: "2px solid #fff", boxShadow: "0 0 0 1px #b8955a" }} /> : null}
             <div className={ledger ? "mb-2" : "mb-2 flex items-center gap-3"}>
-              <span className={ledger ? "text-[13.5px] font-bold whitespace-nowrap" : "text-[13px] font-bold whitespace-nowrap"} style={{ color: ledger ? "#8a6420" : C.text }}>{formatDateGroup(date)}</span>
+              {ledger
+                ? <span className="inline-flex items-center rounded-[8px] px-2.5 py-1 text-[15px] font-extrabold tracking-[-0.01em] whitespace-nowrap" style={{ backgroundColor: "#f6efe0", color: "#5c3f0e", border: "1px solid #e8d9b5" }}>{formatDateGroup(date)}</span>
+                : <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: C.text }}>{formatDateGroup(date)}</span>}
               {ledger ? null : <span className="h-px flex-1" style={{ backgroundColor: C.rowBorder }} />}
             </div>
             <div className={ledger ? "space-y-4" : "space-y-2"}>

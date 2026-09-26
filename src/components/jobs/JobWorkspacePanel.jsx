@@ -24,7 +24,7 @@ const MUTED = "#566063", TEAL = "#0b3f3b";
 // address, super, next step, actions, files), the job facts, scope, then the
 // live visit history. `group` is the read-only duplicate group from lib/jobDedupe.js;
 // activity of every member record is shown.
-export default function JobWorkspacePanel({ jobId, group = null }) {
+export default function JobWorkspacePanel({ jobId, group = null, onJobChanged }) {
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -148,6 +148,7 @@ export default function JobWorkspacePanel({ jobId, group = null }) {
           plans={plans}
           onFieldReport={() => setShowReport(true)}
           onLog={logInteraction}
+          onRename={async (name) => { const next = await renameJob(job, name); setJob(next); onJobChanged?.(next); }}
           headingLevel="h2"
           extra={<Link to={`/jobs/${jobId}`} className={heroLinkClass} style={heroLinkStyle} title="Open the full job page">Full page<ArrowUpRight className="h-[15px] w-[15px]" style={{ color: "#e0c994" }} /></Link>}
         />

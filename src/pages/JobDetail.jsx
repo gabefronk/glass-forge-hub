@@ -188,6 +188,7 @@ export default function JobDetail() {
             plans={plans}
             onFieldReport={() => setShowReport(true)}
             onLog={logInteraction}
+            onRename={async (name) => setJob(await renameJob(job, name))}
             extra={owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
           />
 

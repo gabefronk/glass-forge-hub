@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase, Camera, ChevronDown, ClipboardCheck, ExternalLink, FileText, MapPin, MessageSquare, Navigation, Phone, Plus, HardHat, UserPlus } from "lucide-react";
+import { Briefcase, Camera, ChevronDown, Pencil, ClipboardCheck, ExternalLink, FileText, MapPin, MessageSquare, Navigation, Phone, Plus, HardHat, UserPlus } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
@@ -244,18 +244,68 @@ function FilesMenu({ folder, plans, events }) {
   );
 }
 
+// ---------- Editable title ----------
+
+// Tap the pencil to rename the job in place. Enter saves, Escape cancels.
+function JobTitle({ job, onRename, headingLevel }) {
+  const H = headingLevel;
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setEditing(false); setError(""); }, [job?.id]);
+  const shown = titleCase(sanitizeText(job.canonical_name));
+  const start = () => { setValue(job.canonical_name || ""); setError(""); setEditing(true); };
+  const save = async () => {
+    if (saving) return;
+    const next = value.replace(/\s+/g, " ").trim();
+    if (!next || next === job.canonical_name) { setEditing(false); return; }
+    setSaving(true); setError("");
+    try { await onRename(next); setEditing(false); }
+    catch (e) { setError(e.message || "Could not rename."); }
+    finally { setSaving(false); }
+  };
+  if (editing && onRename) {
+    return (
+      <div className="mt-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            autoFocus aria-label="Job name" value={value} onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") setEditing(false); }}
+            className="min-w-[220px] flex-1 rounded-[9px] px-3 text-[24px] font-bold leading-[44px] outline-none max-[699px]:text-[20px]"
+            style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(224,201,148,.45)", letterSpacing: "-0.03em" }}
+          />
+          <button type="button" onClick={save} disabled={saving} className="inline-flex h-[38px] items-center rounded-[9px] px-3.5 text-[13.5px] font-semibold disabled:opacity-60" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{saving ? "Saving…" : "Save"}</button>
+          <button type="button" onClick={() => setEditing(false)} className="inline-flex h-[38px] items-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={HERO_SEC}>Cancel</button>
+        </div>
+        {error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
+        <p className="m-0 mt-1 text-[12px]" style={{ color: "#8f999b" }}>The old name is kept so past visits and files still match this job.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="group mt-1.5 flex items-start gap-2">
+      <H className="m-0 break-words text-[32px] font-bold leading-[38px] max-[699px]:text-[26px] max-[699px]:leading-[31px]" style={{ color: HERO_INK, letterSpacing: "-0.035em" }}>{shown}</H>
+      {onRename ? (
+        <button type="button" onClick={start} aria-label="Rename job" title="Rename job" className="mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] opacity-60 hover:opacity-100 max-[699px]:mt-1" style={{ color: BRASS_LT, backgroundColor: "rgba(255,255,255,.06)" }}>
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 // ---------- Hero ----------
 
 const HERO_BTN = "inline-flex h-[38px] items-center gap-[7px] rounded-[9px] px-3.5 text-[13.5px] font-semibold whitespace-nowrap";
 const HERO_SEC = { backgroundColor: "rgba(255,255,255,.09)", color: HERO_INK, border: "1px solid rgba(255,255,255,.12)" };
 const STEP_CHIP = { bad: ["#f1b9b3", "#4a0f0d"], warn: [BRASS_LT, "#1d160a"], teal: [BRASS_LT, "#1d160a"], neutral: ["rgba(224,201,148,.2)", BRASS_LT] };
 
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, extra, headingLevel = "h1" }) {
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, onRename, extra, headingLevel = "h1" }) {
   const mapHref = job?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
   const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
   const eyebrow = [snap.kind, sanitizeText(job.builder || "")].filter(Boolean).join(" · ").toUpperCase();
   const [chipBg, chipInk] = STEP_CHIP[snap.step.tone] || STEP_CHIP.neutral;
-  const H = headingLevel;
   const [lead, ...rest] = String(snap.step.text || "").split(/(?<=\.)\s+/);
 
   return (
@@ -269,7 +319,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "currentColor" }} />{status.label}
               </span>
             </div>
-            <H className="m-0 mt-1.5 break-words text-[32px] font-bold leading-[38px] max-[699px]:text-[26px] max-[699px]:leading-[31px]" style={{ color: HERO_INK, letterSpacing: "-0.035em" }}>{titleCase(sanitizeText(job.canonical_name))}</H>
+            <JobTitle job={job} onRename={onRename} headingLevel={headingLevel} />
             {job.address ? (
               <a href={mapHref} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-[7px] text-[14.5px] font-medium hover:underline" style={{ color: "#c9d0d1" }}>
                 <MapPin className="h-[15px] w-[15px] shrink-0" style={{ color: BRASS_LT }} />{sanitizeText(job.address)}

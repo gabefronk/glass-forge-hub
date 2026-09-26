@@ -286,7 +286,7 @@ export default function JobsHub() {
           </div>
         </section>
         <section aria-label="Job" className="mr-[18px] mt-[18px] flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden rounded-t-[20px] bg-white shadow-[0_1px_3px_rgba(16,22,23,.06)]">
-          {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} /> : (
+          {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} onJobChanged={(next) => setJobs((current) => current.map((j) => (j.id === next.id ? { ...j, ...next } : j)))} /> : (
             <div className="flex h-full items-center justify-center text-[13px]" style={{ color: "#566063" }}>Pick a job on the left.</div>
           )}
         </section>
