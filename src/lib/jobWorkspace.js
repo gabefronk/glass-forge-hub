@@ -230,5 +230,8 @@ export function jobSnapshot({ job, events, rows = [], fieldReports = [], status,
   }
 
   const workText = workLines(focus?.scope_notes).length ? String(focus?.scope_notes || "") : (lastReport?.message || lastLine?.note_text || lastLine?.probuild_note_text || "");
-  return { next, last: lastEvent, lastDay, kind: kindKey ? KIND[kindKey].label : "", step, facts, refs, work, workFrom, workText };
+  // workEventId: the visit whose calendar notes the Scope card shows, so the Visits
+  // feed can skip repeating them. primaryPo/Oe: the refs shown once in "The job".
+  const workEventId = workLines(focus?.scope_notes).length ? (focus?.id || null) : null;
+  return { next, last: lastEvent, lastDay, kind: kindKey ? KIND[kindKey].label : "", step, facts, refs, work, workFrom, workText, workEventId, primaryPo: pos[0] || "", primaryOe: oes[0] || "" };
 }
