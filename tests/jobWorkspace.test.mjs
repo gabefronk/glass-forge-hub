@@ -101,4 +101,5 @@ test('pickSuper prefers a linked super, then a suggestion, then calendar notes',
   const known = pickSuper({ view: { linked: [{ role: 'project_manager', name: 'Mike S.', phone: '(385) 230-1483', key: 'k3' }] }, events });
   assert.deepEqual([known.source, known.key], ['linked', 'k3']);
   assert.equal(pickSuper({ view: null, events: [] }), null);
+  assert.equal(pickSuper({ saved: { name: 'Saved Sam', phone: '1' }, view: { linked: [{ role: 'superintendent', name: 'Tom' }] }, events }).name, 'Saved Sam');
 });

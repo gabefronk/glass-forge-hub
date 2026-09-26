@@ -73,7 +73,8 @@ export function findSuperInText(text) {
 // 1. a linked superintendent, 2. a superintendent the directory suggests,
 // 3. a super written in calendar notes (newest event first),
 // 4. any other linked contact. source tells the UI whether it can be saved.
-export function pickSuper({ view, events } = {}) {
+export function pickSuper({ saved, view, events } = {}) {
+  if (saved?.name) return { name: saved.name, phone: saved.phone || "", email: saved.email || "", role: "superintendent", source: "linked", key: saved.key || "" };
   const linked = view?.linked || [];
   const sup = linked.find((c) => c.role === "superintendent");
   if (sup) return { name: sup.name || "", phone: sup.phone || "", email: sup.email || "", role: "superintendent", source: "linked", key: sup.key || "" };
