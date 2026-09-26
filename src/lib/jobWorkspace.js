@@ -175,12 +175,28 @@ export function pickSuper({ saved, view, events } = {}) {
 
 // Builder contacts a person could pick as this job's super, most likely first (supers, then
 // PMs, then site contacts). Shown in the Super card when no super is on file yet.
-export function superChoices(view, limit = 3) {
+export function superChoices(view, limit = Infinity) {
   const rank = { superintendent: 0, project_manager: 1, site: 2, builder: 3 };
-  return [...(view?.builder_contacts || [])]
+  const seen = new Set();
+  // Suggested supers (from calendar notes / messages) first, then everyone filed under the builder.
+  const suggested = (view?.suggestions || [])
+    .filter((s) => s.role === "superintendent" && s.contact && !s.already_linked)
+    .map((s) => ({ ...s.contact, role: "superintendent", suggested: true }));
+  return [...suggested, ...(view?.builder_contacts || [])]
     .filter((c) => (c.phone || c.email) && c.role !== "homeowner" && c.role !== "customer")
-    .sort((a, b) => (rank[a.role] ?? 9) - (rank[b.role] ?? 9) || String(a.name || "").localeCompare(String(b.name || "")))
+    .filter((c) => { const k = c.key || `${c.name}|${c.phone}`; if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => (b.suggested ? 1 : 0) - (a.suggested ? 1 : 0) || (rank[a.role] ?? 9) - (rank[b.role] ?? 9) || String(a.name || "").localeCompare(String(b.name || "")))
     .slice(0, limit);
+}
+
+// Dropdown groups for the Super card: [[label, contacts], …] in display order, empty groups dropped.
+export function superChoiceGroups(choices) {
+  const groups = [["Suggested for this job", []], ["Superintendents", []], ["Project managers", []], ["Site contacts", []], ["Other", []]];
+  for (const c of choices) {
+    const i = c.suggested ? 0 : c.role === "superintendent" ? 1 : c.role === "project_manager" ? 2 : c.role === "site" ? 3 : 4;
+    groups[i][1].push(c);
+  }
+  return groups.filter(([, list]) => list.length);
 }
 
 const uniq = (list) => [...new Set(list.map((v) => String(v || "").trim()).filter(Boolean))];
