@@ -54,6 +54,75 @@ export function workLines(scope, max = 5) {
     .slice(0, max);
 }
 
+const tagCase = (t) => t.toLowerCase().replace(/(^|[\s/-])([a-z])/g, (m, a, b) => a + b.toUpperCase());
+const clean = (t) => String(t || "").replace(/\s+/g, " ").replace(/^[\s\-–—:|,;.#]+|[\s\-–—:|,;#]+$/g, "").trim();
+const LINE_REF_RE = /\s*[-–]?\s*\(\s*line\s*#?\s*:?\s*(\d+)\s*\)/i;
+const HEAD_RE = /^(.{2,40}?)\s*[-–]\s*per report\s*:?\s*(.*)$/i;
+const ITEM_RE = /^(\d{1,3})\s*(?:[-–—x×]|pcs?\b|ea\b)\s*(\S.*)$/i;
+
+// Calendar notes as parts the eye can scan: tags (short all-caps headers),
+// quantity line items (split on "|"), plain notes, and reference facts
+// (ETA, received, vendor confirmation, AW#, PO, OE). Words are the
+// scheduler's own; only capitals of all-caps headers are softened.
+// keepMoney/keepContacts keep those lines as notes (the visit history does;
+// the crew-facing Scope card does not). refs=false leaves PO/OE out (the job
+// card already shows them), but still strips them from the text.
+export function parseScopeNotes(text, { keepMoney = false, keepContacts = false, refs = true } = {}) {
+  const out = { tags: [], items: [], notes: [], facts: [] };
+  const seen = new Set();
+  const once = (k) => { const key = k.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; };
+  const fact = (k, v) => { v = clean(v); if (v && once(`fact:${k}:${v}`)) out.facts.push({ k, v }); };
+  const FACTS = [
+    [/\bproduct eta\s*[–-]?\s*(wk of\s*:?\s*)?([\d/]+)/gi, (m) => fact("ETA", (m[1] ? "Wk of " : "") + m[2])],
+    [/\breceived\s*:?\s*(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/gi, (m) => fact("Received", m[1])],
+    [/\bvendor order\s*#?\s*:?\s*(?:confirmation (?:number|#)\s*:?\s*)?([\w-]{4,})/gi, (m) => fact("Vendor conf.", m[1])],
+    [/\bconfirmation (?:number|#)\s*:?\s*([\w-]{4,})/gi, (m) => fact("Vendor conf.", m[1])],
+    [/\bAW\s*#\s*:?\s*([\w-]{4,})/gi, (m) => fact("AW#", m[1])],
+    [/\borig(?:inal)?\.?\s*po\s*#?\s*:?\s*([\w-]{5,})/gi, (m) => refs && fact("Orig. PO", m[1])],
+    [/\bpo\s*#?\s*:?\s*(\d{5,}[\w-]*)/gi, (m) => refs && fact("PO", m[1])],
+    [/\boe\s*#?\s*:?\s*(\d{5,}[\w-]*)/gi, (m) => refs && fact("OE", m[1])],
+  ];
+  const segs = scopeText(text).replace(/\*/g, "").split(/\n|•/).flatMap((l) => l.split(/\s*\|+\s*/));
+  const queue = [...segs];
+  while (queue.length) {
+    let seg = queue.shift();
+    for (const [re, add] of FACTS) seg = seg.replace(re, (...m) => { add(m); return " "; });
+    seg = clean(seg);
+    if (seg.length < 2) continue;
+    const head = seg.match(HEAD_RE);
+    if (head) {
+      const tag = /[a-z]/.test(head[1]) ? clean(head[1]) : tagCase(clean(head[1]));
+      if (once(`tag:${tag} · per report`)) out.tags.push(`${tag} · per report`);
+      if (head[2]) queue.unshift(head[2]);
+      continue;
+    }
+    const money = /\$\s?\d/.test(seg) || /^(labor|price|total)\b/i.test(seg);
+    const contact = CONTACT_LABEL_RE.test(seg)
+      || (EMAIL_RE.test(seg) && seg.replace(EMAIL_RE, "").replace(/[^A-Za-z]/g, "").length < 6)
+      || (PHONE_RE.test(seg) && seg.replace(PHONE_RE, "").replace(/[^A-Za-z]/g, "").length < 14);
+    if ((money && !keepMoney) || (contact && !keepContacts)) continue;
+    const item = !money && !contact ? seg.match(ITEM_RE) : null;
+    if (item && /[A-Za-z]/.test(item[2])) {
+      let rest = item[2]; let line = "";
+      const ref = rest.match(LINE_REF_RE);
+      if (ref) { line = ref[1]; rest = rest.replace(LINE_REF_RE, " "); }
+      rest = clean(rest);
+      if (once(`item:${item[1]}:${rest}`)) out.items.push({ qty: Number(item[1]), text: rest, line });
+      continue;
+    }
+    if (!/[a-z]/.test(seg) && /[A-Z]{3}/.test(seg) && seg.length <= 40 && !money) {
+      const tag = tagCase(seg);
+      if (once(`tag:${tag}`)) out.tags.push(tag);
+      continue;
+    }
+    const note = clean(seg.replace(LINE_REF_RE, " ")) + (/[.!?)]$/.test(seg) ? "" : "");
+    if (note && once(`note:${note}`)) out.notes.push(note);
+  }
+  return out;
+}
+
+export const scopeIsEmpty = (p) => !p || (!p.tags.length && !p.items.length && !p.notes.length && !p.facts.length);
+
 // A super named in calendar notes, e.g. "SPR: Mike Shaw 385-230-1483 · Email: mikes@x.com".
 // Returns null unless both a name and a phone are written next to the label.
 export function findSuperInText(text) {
@@ -159,5 +228,6 @@ export function jobSnapshot({ job, events, rows = [], fieldReports = [], status,
     workFrom = work.length && day ? `from the ${friendlyDay(day, today)} report` : "";
   }
 
-  return { next, last: lastEvent, lastDay, kind: kindKey ? KIND[kindKey].label : "", step, facts, refs, work, workFrom };
+  const workText = workLines(focus?.scope_notes).length ? String(focus?.scope_notes || "") : (lastReport?.message || lastLine?.note_text || lastLine?.probuild_note_text || "");
+  return { next, last: lastEvent, lastDay, kind: kindKey ? KIND[kindKey].label : "", step, facts, refs, work, workFrom, workText };
 }
