@@ -12,6 +12,7 @@ import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { buildJobsOverview, sortJobGroups, builderOptions, needsYou, JOB_SORTS } from "@/lib/jobsOverview";
 import { denverDate } from "../../base44/shared/billingCore.js";
 import AddJobDialog from "@/components/jobs/AddJobDialog";
+import QuickFilterMenu from "@/components/jobs/QuickFilterMenu";
 import { jobMatchesSearch } from "@/lib/jobSearch";
 
 export default function JobsHub() {
@@ -181,7 +182,6 @@ export default function JobsHub() {
     : "No jobs yet.";
   const todayLabel = new Date(`${denverDate()}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const summary = `${filtered.length.toLocaleString()} ${filtered.length === 1 ? "job" : "jobs"}${builder ? ` · ${builder}` : ""}`;
-  const moreValue = moreViews.some((m) => m.key === segment) ? segment : "";
   const selectCls = "h-9 min-w-0 rounded-[9px] px-2.5 text-[12.5px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e0c994]";
   const fieldStyle = { backgroundColor: "rgba(255,255,255,.08)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.16)" };
   const HERO_INK = "#f2eee8", HERO_MUTED = "#aeb5b7";
@@ -214,29 +214,14 @@ export default function JobsHub() {
         </label>
         <AddJobDialog jobs={jobs} onCreated={handleJobCreated} label="New job" triggerClassName="inline-flex h-[40px] shrink-0 items-center gap-1.5 rounded-[9px] bg-[#b8955a] px-3.5 text-[13.5px] font-semibold text-[#1d160a]" />
       </div>
-      <div role="group" aria-label="Show" className="grid grid-cols-4 gap-0.5 rounded-[11px] p-1" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
-        {segments.map((v) => {
-          const on = segment === v.key;
-          return (
-            <button key={v.key} type="button" onClick={() => setSegment(v.key)} aria-pressed={on}
-              className="flex h-11 min-w-0 flex-col items-center justify-center rounded-[8px] px-1 text-[12.5px] leading-tight whitespace-nowrap"
-              style={on ? { backgroundColor: "#cfe3da", color: "#082f2c", fontWeight: 700 } : { color: "#c9d0d1", fontWeight: 500 }}>
-              <span>{v.label}</span><span className="mt-0.5 text-[11.5px] font-semibold" style={{ color: on ? "#0b3f3b" : v.attention ? "#e0c994" : HERO_MUTED }}>{v.count.toLocaleString()}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_124px_96px] items-center gap-2">
+      <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
+        <QuickFilterMenu value={segment} onChange={setSegment} groups={[{ items: segments }, { title: "More views", items: moreViews }]} />
         <select aria-label="Builder" value={builder} onChange={(e) => setBuilder(e.target.value)} className={`${selectCls} w-full`} style={fieldStyle}>
           <option value="">All builders</option>
           {builders.map((b) => <option key={b.name} value={b.name}>{b.name} ({b.count})</option>)}
         </select>
         <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)} className={`${selectCls} w-full`} style={fieldStyle}>
           {JOB_SORTS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-        </select>
-        <select aria-label="More views" value={moreValue} onChange={(e) => setSegment(e.target.value || "all")} className={`${selectCls} w-full`} style={moreValue ? { backgroundColor: "#e0c994", color: "#1d160a", border: "1px solid #e0c994" } : fieldStyle}>
-          <option value="">More…</option>
-          {moreViews.map((m) => <option key={m.key} value={m.key}>{m.label} ({m.count})</option>)}
         </select>
       </div>
       <div className="flex items-center justify-between text-[12px]" style={{ color: HERO_MUTED }}>
