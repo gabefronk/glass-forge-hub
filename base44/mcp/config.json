@@ -44,6 +44,107 @@
     },
     "functions": [
       {
+        "name": "find_job",
+        "title": "Find a job (address, visits)",
+        "description": "FIRST STOP for any job question. Fuzzy search by job name, lot/building number, street address, builder, PO or OE number (e.g. \"412 Oquirrh West\", \"Brewer\", \"PO 7104345\", \"1149 Titan\"). Returns up to 5 matches with job_id, jobsite address, builder, PO/OE numbers, next scheduled visits and recent visits (each with event_id, date, time, address). Lot/house numbers must match exactly. If ambiguous=true, ask which job before acting. Contains no pricing.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Job name, lot, address, builder, PO or OE"
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Max matches, default 5"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "annotations": {
+          "read_only_hint": true,
+          "destructive_hint": false,
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "jobFinder",
+        "disabled": false
+      },
+      {
+        "name": "find_events",
+        "title": "Find calendar visits",
+        "description": "List scheduled install/service visits. Pass date (YYYY-MM-DD, \"today\", \"tomorrow\") or from/to for a range, and/or query text (job name, lot, address). With no arguments returns today. Each visit has event_id (use it with move_event), date, start/end time, title, jobsite address, crew, job_id and movable. Contains no pricing.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Optional text: job name, lot, address, PO"
+            },
+            "date": {
+              "type": "string",
+              "description": "Single day: YYYY-MM-DD, today, tomorrow"
+            },
+            "from": {
+              "type": "string",
+              "description": "Range start YYYY-MM-DD"
+            },
+            "to": {
+              "type": "string",
+              "description": "Range end YYYY-MM-DD"
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Max visits, default 25"
+            }
+          }
+        },
+        "annotations": {
+          "read_only_hint": true,
+          "destructive_hint": false,
+          "idempotent_hint": true,
+          "open_world_hint": null
+        },
+        "handler": "findCalendarEvents",
+        "disabled": false
+      },
+      {
+        "name": "move_event",
+        "title": "Move a calendar visit",
+        "description": "Reschedule one visit. ALWAYS use this instead of update_calendarevents to change a date or time: it moves the real Google Calendar event (Israel's or the GF Jobs calendar), the sanitized installer calendar copy, and the Hub record together so nothing drifts. Get event_id from find_events or find_job (only visits with movable=true). new_date is required (YYYY-MM-DD, keep the current date to change only the time); new_start_time (HH:MM 24h) is optional and keeps the visit length. Confirm the job, old date and new date with the person before calling. Admin/manager accounts only.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "event_id": {
+              "type": "string",
+              "description": "event_id from find_events / find_job"
+            },
+            "new_date": {
+              "type": "string",
+              "description": "YYYY-MM-DD"
+            },
+            "new_start_time": {
+              "type": "string",
+              "description": "Optional HH:MM (24h)"
+            }
+          },
+          "required": [
+            "event_id",
+            "new_date"
+          ]
+        },
+        "annotations": {
+          "read_only_hint": false,
+          "destructive_hint": false,
+          "idempotent_hint": true,
+          "open_world_hint": true
+        },
+        "handler": "moveCalendarEvent",
+        "disabled": false
+      },
+      {
         "name": "run_plans_inbox",
         "title": "Run plans inbox ingest",
         "description": "Advances the Google Drive plans-inbox pipeline one step: discovers new PDFs in 'Glass Forge Plans Inbox / 1 - Drop Plans Here', splits pages, extracts window/door openings per page, merges with IRC R308.4 tempering rules, creates a Window Quotes DRAFT (never queued), moves the PDF to '2 - Processed' and writes a takeoff CSV. Time-boxed: call repeatedly (or let the 10-minute schedule run) until status is done. Optionally pass file_id to force a specific Drive file. Also runs automatically every 10 minutes.",
