@@ -8,6 +8,7 @@ import { normalizeCustomer } from '../../shared/jobIdentity.js';
 import { denverDate } from '../../shared/billingCore.js';
 import { fetchCompleteEntity, matchJobTokens } from '../../shared/jobCatalog.js';
 import { validateLaborEntry, laborMargin, buildCostInputPatch, summarizeJobCosts } from '../../shared/jobLaborEntry.js';
+import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sheetValuesFor } from '../../shared/jobBudgetReview.js';
 
 // Job Budgets ingest.
 // Gabriel drops one or more vendor quote PDFs on the Job Budgets page. For each:
@@ -20,6 +21,11 @@ import { validateLaborEntry, laborMargin, buildCostInputPatch, summarizeJobCosts
 //      PDF, a filled copy of his workbook, and a CSV summary.
 //   5. Create the JobBudgets record and, on a confident job match, upsert this month's
 //      JobCostInputs so the Invoicing page profitability picks it up.
+// After the drop (the review step, shared/jobBudgetReview.js):
+//   set_inputs  type the yellow-cell numbers -> recompute, rewrite the sheet + CSV in
+//               place, refresh JobCostInputs when the row has a job.
+//   link_job    pick a Hub job (or create one from the quote) -> move the Drive files
+//               into Glass Forge Jobs/<Builder>/<Job>, mark filed, upsert JobCostInputs.
 //
 // Also owns VendorOrders (the unpaid-jobs tracker): upsert_order, advance_order_status
 // and set_glass_eta. The glass-ETA chain (Steve text/email -> update -> notify) calls
@@ -104,6 +110,65 @@ async function uploadFile(token, name, bytes, mimeType, parentId) {
     headers: { 'Content-Type': 'multipart/related; boundary=' + boundary },
     body: concatBytes([head, bytes, tail]),
   });
+}
+
+// Replace a file's content in place (same id, same links). Falls back to a fresh upload
+// when the id is gone (deleted or never created).
+async function replaceOrUpload(token, fileId, name, bytes, mimeType, parentId) {
+  if (fileId) {
+    try {
+      return await driveJson(token, `${DRIVE_UPLOAD}/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id,name`, { method: 'PATCH', headers: { 'Content-Type': mimeType }, body: bytes });
+    } catch (e) {
+      if (!/Drive 404/.test(String(e?.message || ''))) throw e;
+    }
+  }
+  return uploadFile(token, name, bytes, mimeType, parentId);
+}
+
+async function moveFile(token, fileId, toParentId) {
+  if (!fileId) return null;
+  const cur = await driveJson(token, `${DRIVE}/files/${encodeURIComponent(fileId)}?fields=id,parents`).catch(() => null);
+  if (!cur) return null;
+  const from = (cur.parents || []).join(',');
+  if ((cur.parents || []).includes(toParentId)) return cur.id;
+  const q = `addParents=${encodeURIComponent(toParentId)}${from ? `&removeParents=${encodeURIComponent(from)}` : ''}&fields=id,parents`;
+  const moved = await driveJson(token, `${DRIVE}/files/${encodeURIComponent(fileId)}?${q}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  return moved.id;
+}
+
+// The filled workbook + CSV for a budget row, written over the existing Drive files.
+async function writeBudgetSheets(token, record, budget, job, folderId) {
+  const stamp = denverDate();
+  const values = sheetValuesFor(record, job, stamp);
+  const base = cleanName(`${record.quote_name || record.job_name || 'quote'} - ${record.manufacturer || record.vendor || 'vendor'} ${record.quote_number || ''}`.trim(), 'quote');
+  const xlsxBytes = fillBudgetXlsx(Uint8Array.from(atob(BUDGET_TEMPLATE_XLSX_B64), (c) => c.charCodeAt(0)), values, budget, { unzipSync, zipSync, strFromU8, strToU8 });
+  const csvBytes = strToU8(buildBudgetCsv({ quote: record.quote || {}, budget, fields: { builder: values.builder, sales_rep: values.sales_rep, date: stamp } }));
+  const xlsxUp = await replaceOrUpload(token, record.drive_budget_xlsx_file_id, `Window Budget Sheet - ${base}.xlsx`, xlsxBytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', folderId);
+  const csvUp = await replaceOrUpload(token, record.drive_budget_csv_file_id, `Window Budget Sheet - ${base}.csv`, csvBytes, 'text/csv', folderId);
+  return { drive_budget_xlsx_file_id: xlsxUp?.id, drive_budget_csv_file_id: csvUp?.id };
+}
+
+// This month's JobCostInputs row for the job, refreshed from the budget's numbers.
+async function upsertCostInputs(db, job, values, quoteNumber) {
+  const month = denverDate().slice(0, 7);
+  const existing = (await db.JobCostInputs.filter({ month, job_id: job.id }, '-created_date', 1).catch(() => []))[0] || null;
+  const patch = reviewCostInputPatch(existing, values, { jobId: job.id, jobNameNorm: normalizeCustomer(job.canonical_name || job.name || ''), month, quoteNumber });
+  const row = existing ? await db.JobCostInputs.update(existing.id, patch) : await db.JobCostInputs.create(patch);
+  return { id: row.id, month };
+}
+
+// The budget row's yellow-cell inputs as the math expects them (older rows only stored
+// material cost + total sell).
+function inputsOf(record) {
+  const i = record.inputs || {};
+  return {
+    material_true_cost: i.material_true_cost ?? 0,
+    labor_cost_sub_pay: i.labor_cost_sub_pay ?? 0,
+    labor_sell_price: i.labor_sell_price ?? 0,
+    additional_install_material: i.additional_install_material ?? 0,
+    additional_equipment: i.additional_equipment ?? 0,
+    actual_total_sell: i.actual_total_sell ?? 0,
+  };
 }
 
 // Conservative job match: link only when exactly one Jobs record lines up with the
