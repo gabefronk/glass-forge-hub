@@ -61,6 +61,19 @@ system, paid by Israel on Gabriel's ok), and status
    Drive ids/paths, job link, glass-ETA fields). On a confident match, this
    month's `JobCostInputs` is upserted with product cost/sell + quote number,
    which is exactly what the Invoicing page reads for job profitability.
+6b. **Review step** (2026-09-26, `shared/jobBudgetReview.js`) - every budget row has
+   **Numbers** (type the yellow cells: material cost, labor cost / sub pay, labor
+   sell, total sell, extras; the Hub recomputes, rewrites the workbook + CSV in
+   place in Drive, and refreshes the cost inputs) and, while unlinked, **Link
+   job** (the drop's candidates, a search over all jobs, or "New job from this
+   quote"; linking moves the Drive files into `Glass Forge Jobs/<Builder>/<Job>`,
+   marks the row `filed`, and writes the cost inputs). The Hub never reads the
+   sheet back from Drive - the Hub is the source, the sheet is the copy. Andersen
+   / BFS quotes never print dealer cost, so they always land on `review` with
+   cost 0 until Numbers is used. A job's month row in `JobCostInputs` is the
+   **sum of every budget on the job** (base quote + add-on quote), refreshed on
+   each save or link. Workbook note: C24 is *Labor Cost (Sub Pay)* and drives the
+   overhead adder (B16) and total cost (B27); C25 Labor Sell Price is manual.
 7. **Unpaid orders** - `VendorOrders` entity + the tracker section on the same
    page. Log an order (or it can be created from a budget), then advance it
    down the chain; every transition is stamped in `status_history`. "Reconciled"
