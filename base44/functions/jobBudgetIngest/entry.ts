@@ -267,20 +267,12 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
     created_by_email: userEmail,
   });
 
-  // Invoicing-page hook: this month's cost basis for the matched job.
+  // Invoicing-page hook: this month's cost basis for the matched job (summed with any
+  // budget already on the job).
   let costInput = null;
   if (matched) {
-    const month = denverDate().slice(0, 7);
-    const existing = await db.JobCostInputs.filter({ month, job_id: match.job_id }, '-created_date', 1).catch(() => []);
-    const patch = {
-      month, job_id: match.job_id, job_name_norm: normalizeCustomer(match.job_name || jobName),
-      material_source: 'manual', quote_number: quote.quote_number || undefined,
-      product_cost: quote.material_true_cost ?? undefined,
-      product_sell: quote.actual_total_sell ?? undefined,
-    };
-    costInput = existing && existing[0]
-      ? await db.JobCostInputs.update(existing[0].id, patch)
-      : await db.JobCostInputs.create(patch);
+    const job = forcedJob || await db.Jobs.get(match.job_id).catch(() => null) || { id: match.job_id, canonical_name: match.job_name || jobName };
+    try { costInput = await upsertCostInputs(db, job, { ...record, inputs: inputsOf(record) }); } catch (_e) { costInput = null; }
   }
 
   return Response.json({
