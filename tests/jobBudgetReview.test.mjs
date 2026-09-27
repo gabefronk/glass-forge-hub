@@ -1,6 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sheetValuesFor } from '../base44/shared/jobBudgetReview.js';
+import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sheetValuesFor, sumBudgetInputs } from '../base44/shared/jobBudgetReview.js';
+
+test('sumBudgetInputs: a job with two quotes adds them up; the row being saved replaces its stored copy', () => {
+  const stored = [
+    { id: 'b1', quote_number: '9485142', inputs: { material_true_cost: 100, actual_total_sell: 500 } },
+    { id: 'b2', quote_number: '9754765', inputs: { material_true_cost: 300, labor_cost_sub_pay: 50, actual_total_sell: 458.78 } },
+  ];
+  const current = { id: 'b1', quote_number: '9485142', inputs: { material_true_cost: 2748.78, actual_total_sell: 7022.31 } };
+  const s = sumBudgetInputs(stored, current);
+  assert.equal(s.count, 2);
+  assert.equal(s.values.material_true_cost, 3048.78);
+  assert.equal(s.values.actual_total_sell, 7481.09);
+  assert.equal(s.values.labor_cost_sub_pay, 50);
+  assert.equal(s.quote_number, '9485142, 9754765');
+  assert.deepEqual(sumBudgetInputs([], current).values.material_true_cost, 2748.78);
+  assert.equal(sumBudgetInputs([]).count, 0);
+});
 
 test('validateBudgetInputs: money strings clean up, blanks are 0, material + total sell are required, negatives fail', () => {
   const ok = validateBudgetInputs({ material_true_cost: '$2,748.78', labor_cost_sub_pay: '', labor_sell_price: '1,200', actual_total_sell: '7022.31' });
