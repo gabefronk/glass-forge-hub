@@ -29,15 +29,22 @@ test("history merges every kind of interaction by date", () => {
   assert.deepEqual(kinds, ["change", "file", "file", "note", "note", "report", "visit", "visit"]);
   const visit = h.find((e) => e.kind === "visit" && e.date === "2026-09-20");
   assert.equal(visit.reports.length, 1, "same-day report folds into the visit");
-  assert.deepEqual(visit.groups, ["visits", "reports"]);
+  assert.deepEqual(visit.groups, ["visits", "photos"], "a visit with a photo report is also under Photos");
 });
 
 test("counts and filters by interaction", () => {
   const h = buildJobHistory({ events, rows: [], notes, fieldReports, files });
-  assert.deepEqual(historyCounts(h), { all: 8, visits: 3, reports: 3, notes: 1, files: 2 });
+  // Three chips only: visits (events + reschedules), notes (calls, notes, field notes without
+  // pictures), photos (anything carrying a picture). Files ride along in All; image files count
+  // as photos.
+  assert.deepEqual(historyCounts(h), { all: 8, visits: 3, notes: 2, photos: 4 });
   const notesOnly = groupHistoryByDay(h, "notes");
   assert.equal(notesOnly.length, 1);
-  assert.equal(notesOnly[0].items[0].note.id, "n1");
+  assert.deepEqual(notesOnly[0].items.map((i) => i.note.id), ["n2", "n1"]);
+  const photos = groupHistoryByDay(h, "photos").flatMap((d) => d.items).map((i) => i.kind).sort();
+  assert.deepEqual(photos, ["file", "note", "report", "visit"]);
+  const plainReport = buildJobHistory({ events: [], rows: [], notes: [], fieldReports: [{ post_id: "p9", job_date: "2026-09-10", message: "No pics today", photo_urls: [] }], files: [] });
+  assert.deepEqual(plainReport[0].groups, ["notes"], "a crew report without pictures is a note");
 });
 
 test("days are newest first and each day reads in order", () => {
