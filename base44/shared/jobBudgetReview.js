@@ -46,6 +46,24 @@ export function reviewCostInputPatch(existing, values, { jobId, jobNameNorm, mon
   return { month, job_id: jobId, job_name_norm: jobNameNorm, material_source: 'manual', ...patch };
 }
 
+// A job can carry several budgets (base quote + add-on quote). The job's cost-input row is
+// the sum of all of them, with `current` (the row being saved) standing in for its stored copy.
+export function sumBudgetInputs(rows = [], current = null) {
+  const totals = { material_true_cost: 0, labor_cost_sub_pay: 0, labor_sell_price: 0, additional_install_material: 0, additional_equipment: 0, actual_total_sell: 0 };
+  const quotes = [];
+  const seen = new Set();
+  const all = current ? [current, ...rows.filter((r) => r.id !== current.id)] : rows;
+  for (const r of all) {
+    if (!r || seen.has(r.id)) continue;
+    seen.add(r.id);
+    const i = r.inputs || {};
+    for (const k of Object.keys(totals)) totals[k] += Number(i[k]) || 0;
+    if (r.quote_number && !quotes.includes(String(r.quote_number))) quotes.push(String(r.quote_number));
+  }
+  for (const k of Object.keys(totals)) totals[k] = Math.round(totals[k] * 100) / 100;
+  return { values: totals, quote_number: quotes.join(', '), count: seen.size };
+}
+
 // Jobs.create payload from a budget row plus what the owner typed in the "new job" form.
 export function newJobFromBudget(budget = {}, over = {}) {
   const name = clean(over.name ?? budget.job_name ?? budget.quote_name);
