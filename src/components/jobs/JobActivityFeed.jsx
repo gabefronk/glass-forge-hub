@@ -237,8 +237,9 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
       </div>
 
       <div className={ledger ? "mb-4 flex items-center gap-2" : ""}>
-      <div role="tablist" aria-label="Filter job history" className={ledger ? "flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1" : "flex gap-1.5 overflow-x-auto pb-1 mb-3"}>
-        {HISTORY_FILTERS.map((f) => {
+      {/* Nothing to filter until something is logged: no row of zeros on a fresh job. */}
+      <div role="tablist" aria-label="Filter job history" className={counts.all === 0 ? (ledger ? "flex min-w-0 flex-1" : "hidden") : ledger ? "flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1" : "flex gap-1.5 overflow-x-auto pb-1 mb-3"}>
+        {counts.all === 0 ? null : HISTORY_FILTERS.map((f) => {
           const on = filter === f.key;
           return (
             <button key={f.key} type="button" role="tab" aria-selected={on} onClick={() => setFilter(f.key)}
