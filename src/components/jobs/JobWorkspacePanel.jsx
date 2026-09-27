@@ -3,11 +3,11 @@ import { Link } from "react-router-dom";
 import { ArrowUpRight, HardHat } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { jobsStatus } from "@/lib/jobsSanitize";
-import { fetchAllPages } from "@/lib/pagination";
 import { useJobContacts } from "@/hooks/use-job-contacts";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
-import { loadJobActivity, jobEventsAndEvidence, reportsForJob, loadUniqueLegacyNames } from "@/lib/jobGroupData";
+import { loadJobActivity, jobEventsAndEvidence, loadJobEvents, loadJobFieldReports, loadUniqueLegacyNames } from "@/lib/jobGroupData";
+import { uniqueLegacyNames } from "@/lib/jobLegacyNames";
 import { jobSnapshot } from "@/lib/jobWorkspace";
 import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
@@ -24,7 +24,7 @@ const MUTED = "#566063", TEAL = "#0b3f3b";
 // address, super, next step, actions, files), the job facts, scope, then the
 // live visit history. `group` is the read-only duplicate group from lib/jobDedupe.js;
 // activity of every member record is shown.
-export default function JobWorkspacePanel({ jobId, group = null, onJobChanged }) {
+export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, preloaded = null }) {
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -80,18 +80,26 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged })
         })
         .catch(() => {});
 
-      const [allCal, names] = await Promise.all([
-        fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000).catch(() => []),
-        loadUniqueLegacyNames(memberIds).catch(() => []),
+      // Avoid full-table scans on every job selection / live refresh: resolve
+      // legacy names from the hub's preloaded Jobs, then fetch this job's
+      // calendar events and field reports with bounded job-scoped queries
+      // (fresh, so a just-added report shows immediately), merging in edge cases
+      // (FeeLine-linked / legacy-name / post-id matches) from the hub's already-
+      // loaded collections. Falls back to a full Jobs scan only when standalone.
+      const names = preloaded?.jobs
+        ? uniqueLegacyNames(preloaded.jobs, memberIds)
+        : await loadUniqueLegacyNames(memberIds).catch(() => []);
+      if (ver !== v.current) return;
+      const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
+      const [allCal, allReports] = await Promise.all([
+        loadJobEvents(memberIds, fl, preloaded?.calEvents, names),
+        loadJobFieldReports(memberIds, postIds, preloaded?.fieldReports, names),
       ]);
       if (ver !== v.current) return;
       const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt, names);
       setCalEvents(shown.events);
       setEvidence(shown.evidence);
-
-      const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
-      const all = await fetchAllPages(base44.entities.FieldReports, "-created_date", 2000).catch(() => []);
-      if (ver === v.current) setFieldReports(reportsForJob(all, memberIds, postIds, names));
+      setFieldReports(allReports);
     } finally {
       if (ver === v.current) setLoading(false);
     }

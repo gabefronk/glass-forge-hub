@@ -70,3 +70,48 @@ export function reportsForJob(allReports, memberIds, postIds = new Set(), names 
     ? ids.has(r.job_id)
     : (postIds.has(r.post_id) || normalizedNames.has(String(r.job_name || "").trim().toLowerCase())));
 }
+
+// Calendar events for a job without scanning the whole table: a fresh job-scoped
+// query for events directly linked to a member, plus edge cases (events tied via
+// a FeeLine's calendar_event_id, or by a legacy name) drawn from the hub's
+// preloaded collection. Returns the merged set; jobEventsAndEvidence() splits it
+// into shown events + report evidence. preloadedAllEvents may be null/undefined
+// when no hub collection is available (edge cases are then skipped).
+export async function loadJobEvents(memberIds, rows, preloadedAllEvents, legacyNames) {
+  const members = new Set(memberIds);
+  const direct = (await Promise.all(
+    [...members].map((id) => base44.entities.CalendarEvents.filter({ job_id: id }, "-event_date", 5000).catch(() => []))
+  )).flat();
+  const directIds = new Set(direct.map((e) => e.id));
+  const linkIds = new Set((rows || []).filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
+  const legacySet = new Set((legacyNames || []).map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
+  const edge = (preloadedAllEvents || []).filter((e) => {
+    if (directIds.has(e.id)) return false;
+    const linked = Boolean(e.google_event_id) && linkIds.has(e.google_event_id);
+    const legacyNameMatch = !e.job_id && legacySet.has(String(e.job_name || "").trim().toLowerCase());
+    return linked || legacyNameMatch;
+  });
+  return [...direct, ...edge];
+}
+
+// Field reports for a job without scanning the whole table: a fresh job-scoped
+// query for reports directly linked to a member, plus edge cases (reports with no
+// job_id whose Probuild post_id matches one of this job's FeeLines, or whose job
+// name matches a legacy name) from the hub's preloaded collection.
+export async function loadJobFieldReports(memberIds, postIds, preloadedAllReports, legacyNames) {
+  const members = new Set(memberIds);
+  const direct = (await Promise.all(
+    [...members].map((id) => base44.entities.FieldReports.filter({ job_id: id }, "-created_date", 2000).catch(() => []))
+  )).flat();
+  const directIds = new Set(direct.map((r) => r.id));
+  const postSet = new Set(postIds || []);
+  const legacySet = new Set((legacyNames || []).map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
+  const edge = (preloadedAllReports || []).filter((r) => {
+    if (directIds.has(r.id)) return false;
+    if (r.job_id) return false; // reports filed under another job belong to that job, not this one
+    const byPost = r.post_id && postSet.has(r.post_id);
+    const byLegacy = legacySet.has(String(r.job_name || "").trim().toLowerCase());
+    return byPost || byLegacy;
+  });
+  return [...direct, ...edge];
+}
