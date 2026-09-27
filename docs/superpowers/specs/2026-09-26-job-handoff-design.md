@@ -1,3 +1,5 @@
+> **Parked 2026-09-26.** Gabe pulled the UI (Hand off card + stage chip on the job page) the same day — "not what I want it to be". The backend (`jobHandoff` function, `JobHandoffs` entity, `base44/shared/jobHandoff.js`, `Jobs.stage / pm_member_key / handoff_id`) is still deployed but nothing calls it. Rework the flow with him before wiring any UI back in.
+
 # Job handoff (Stage 2 → Milan) — design
 
 Gabe sells a job, orders it, gets the ETA, files the plans and notes. Today he then texts
