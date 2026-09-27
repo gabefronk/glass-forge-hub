@@ -312,6 +312,66 @@ export default async function jobBudgetIngest(req) {
     return processQuote(base44, db, core, accessToken, body, user.email);
   }
 
+  // --- Review step on the Job Budgets page ------------------------------------
+
+  if (action === 'set_inputs') {
+    const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
+    if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
+    const check = validateBudgetInputs(body.inputs || {});
+    if (!check.ok) return Response.json({ error: 'invalid inputs', fields: check.errors }, { status: 400 });
+    const values = check.values;
+    const budget = computeJobBudget(values);
+    const job = record.job_id ? await db.Jobs.get(record.job_id).catch(() => null) : null;
+    const patch = { inputs: values, computed: budget };
+    const warnings = [];
+    try {
+      const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
+      if (accessToken && record.drive_job_folder_id) Object.assign(patch, await writeBudgetSheets(accessToken, record, budget, job, record.drive_job_folder_id));
+      else warnings.push('Drive sheet not rewritten: no folder on this budget.');
+    } catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 200)}`); }
+    const updated = await db.JobBudgets.update(record.id, patch);
+    let costInput = null;
+    if (job) { try { costInput = await upsertCostInputs(db, job, values, record.quote_number); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 200)}`); } }
+    return Response.json({ status: 'ok', budget_id: updated.id, computed: budget, cost_input: costInput, warnings });
+  }
+
+  if (action === 'link_job') {
+    const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
+    if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
+    let job = null;
+    if (body.job_id) {
+      job = await db.Jobs.get(String(body.job_id)).catch(() => null);
+      if (!job) return Response.json({ error: 'job not found' }, { status: 404 });
+    } else if (body.new_job) {
+      let payload;
+      try { payload = newJobFromBudget(record, body.new_job); } catch (e) { return Response.json({ error: String(e?.message || e) }, { status: 400 }); }
+      // Never mint a duplicate: an existing job with the same name is the job.
+      const same = await db.Jobs.filter({ canonical_name: payload.canonical_name }, '-created_date', 1).catch(() => []);
+      job = (same && same[0]) || await db.Jobs.create(payload);
+    } else {
+      return Response.json({ error: 'job_id or new_job is required' }, { status: 400 });
+    }
+    const warnings = [];
+    let folder = { id: record.drive_job_folder_id, path: record.drive_job_folder_path };
+    const budget = record.computed && Object.keys(record.computed).length ? record.computed : computeJobBudget(inputsOf(record));
+    try {
+      const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
+      if (accessToken) {
+        folder = await ensureJobFolder(accessToken, job.builder || record.builder, job.canonical_name || job.name || record.job_name, false);
+        for (const id of [record.drive_quote_file_id, record.drive_budget_xlsx_file_id, record.drive_budget_csv_file_id]) {
+          try { await moveFile(accessToken, id, folder.id); } catch (e) { warnings.push(`Drive move failed: ${String(e?.message || e).slice(0, 160)}`); }
+        }
+        try { Object.assign(record, await writeBudgetSheets(accessToken, { ...record, ...linkedBudgetPatch(job, user.email, folder) }, budget, job, folder.id)); }
+        catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 160)}`); }
+      } else warnings.push('Drive not connected: files stay where they are.');
+    } catch (e) { warnings.push(`Drive: ${String(e?.message || e).slice(0, 160)}`); }
+    const patch = { ...linkedBudgetPatch(job, user.email, folder), inputs: inputsOf(record), computed: budget, drive_budget_xlsx_file_id: record.drive_budget_xlsx_file_id, drive_budget_csv_file_id: record.drive_budget_csv_file_id };
+    const updated = await db.JobBudgets.update(record.id, patch);
+    let costInput = null;
+    try { costInput = await upsertCostInputs(db, job, inputsOf(record), record.quote_number); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 160)}`); }
+    return Response.json({ status: 'ok', budget_id: updated.id, job: { id: job.id, name: job.canonical_name || job.name || '' }, drive: { folder_id: folder.id, folder_path: folder.path }, cost_input: costInput, warnings });
+  }
+
   // --- Job page: quick labor entry + what the job's costs look like -----------
 
   if (action === 'job_costs') {

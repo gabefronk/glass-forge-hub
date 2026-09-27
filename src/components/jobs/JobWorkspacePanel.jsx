@@ -48,7 +48,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, p
     base44.auth.me().then((m) => setCurrentUser(m?.email || m?.full_name || "")).catch(() => {});
   }, []);
 
-  const load = async ({ quiet = false } = {}) => {
+  const load = async ({ quiet = false, skipActivity = false } = {}) => {
     if (!jobId) {
       setJob(null); setRows([]); setNotes([]); setCalEvents([]); setEvidence(null); setFieldReports([]); setPlans([]);
       setLoading(false);
@@ -62,15 +62,23 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, p
       setPlans([]);
     }
     try {
-      const [jb, activity] = await Promise.all([
-        base44.entities.Jobs.get(jobId),
-        loadJobActivity(memberIds),
-      ]);
+      // Live refreshes (reloadAll) fire on FieldReports/CalendarEvents changes —
+      // FeeLines/JobNotes didn't change, so skip loadJobActivity and reuse the
+      // rows/notes already on screen instead of re-reading them every refresh.
+      // User actions (onChanged/onDone) pass skipActivity=false and refresh all.
+      const jb = await base44.entities.Jobs.get(jobId);
+      let fl = rows;
+      let nt = notes;
+      if (!skipActivity) {
+        const activity = await loadJobActivity(memberIds);
+        if (ver !== v.current) return;
+        fl = activity.rows;
+        nt = activity.notes;
+        setRows(fl);
+        setNotes(nt);
+      }
       if (ver !== v.current) return;
-      const { rows: fl, notes: nt } = activity;
       setJob(jb);
-      setRows(fl);
-      setNotes(nt);
       if (!quiet) setLoading(false);
 
       base44.entities.PlanIntake.list("-created_date", 200)
@@ -115,7 +123,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, p
       memberIds,
       shownIds: [...notes.map((n) => n.id), ...calEvents.map((e) => e.id), ...fieldReports.map((r) => r.id)].filter(Boolean),
     }),
-    reloadAll: () => load({ quiet: true }),
+    reloadAll: () => load({ quiet: true, skipActivity: true }),
     reloadNotes: async () => {
       const { rows: fl, notes: nt } = await loadJobActivity(memberIds);
       setRows(fl);

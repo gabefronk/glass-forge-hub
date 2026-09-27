@@ -20,7 +20,6 @@ export default function JobsHub() {
   const [feeLines, setFeeLines] = useState([]);
   const [calEvents, setCalEvents] = useState(null);
   const [jobNotes, setJobNotes] = useState(null);
-  const [fieldReports, setFieldReports] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   // Search, view, sort and builder live in the URL so Back and shared links keep them.
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
@@ -49,18 +48,16 @@ export default function JobsHub() {
       try {
         // Calendar events and notes are report evidence for "Needs report"; if they
         // can't load, statuses fall back to fee lines alone and a notice says so.
-        const [jb, fl, ev, nt, fr] = await Promise.all([
+        const [jb, fl, ev, nt] = await Promise.all([
           fetchAllPages(base44.entities.Jobs, '-created_date', 1000),
           fetchAllPages(base44.entities.FeeLines, '-created_date', 1000),
           fetchAllPages(base44.entities.CalendarEvents, '-event_date', 1000).catch(() => null),
           fetchAllPages(base44.entities.JobNotes, '-note_date', 1000).catch(() => null),
-          fetchAllPages(base44.entities.FieldReports, '-created_date', 1000).catch(() => null),
         ]);
         setJobs(jb);
         setFeeLines(fl);
         setCalEvents(ev);
         setJobNotes(nt);
-        setFieldReports(fr);
       } catch (e) {
         setLoadError("Jobs could not load. Reload to try again. " + (e?.message || ""));
       } finally {
@@ -272,7 +269,7 @@ export default function JobsHub() {
           </div>
         </section>
         <section aria-label="Job" className="mr-[18px] mt-[18px] flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden rounded-t-[20px]" style={{ backgroundColor: "#d9cbb0", boxShadow: "inset 0 0 0 1px rgba(10,29,31,.08)" }}>
-          {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} onJobChanged={(next) => setJobs((current) => current.map((j) => (j.id === next.id ? { ...j, ...next } : j)))} preloaded={{ jobs, feeLines, calEvents, jobNotes, fieldReports }} /> : (
+          {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} onJobChanged={(next) => setJobs((current) => current.map((j) => (j.id === next.id ? { ...j, ...next } : j)))} preloaded={{ jobs, feeLines, calEvents, jobNotes }} /> : (
             <div className="flex h-full items-center justify-center text-[13px]" style={{ color: "#566063" }}>Pick a job on the left.</div>
           )}
         </section>
