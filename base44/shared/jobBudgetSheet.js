@@ -91,7 +91,10 @@ export function fillBudgetXlsx(templateBytes, values, budget, zipTools) {
   if (values.openings_qty) xml = setCell(xml, 'C14', 'num', values.openings_qty);
 
   xml = setCell(xml, 'C15', 'num', budget.material_true_cost);
-  xml = setCell(xml, 'C24', 'num', budget.labor_sell_price);
+  if (budget.additional_install_material) xml = setCell(xml, 'C18', 'num', budget.additional_install_material);
+  if (budget.additional_equipment) xml = setCell(xml, 'C19', 'num', budget.additional_equipment);
+  xml = setCell(xml, 'C24', 'num', budget.labor_cost_sub_pay); // Labor Cost (Sub Pay)
+  if (budget.labor_sell_price) xml = setCell(xml, 'C25', 'num', budget.labor_sell_price); // Labor Sell Price (manual)
   xml = setCell(xml, 'C28', 'num', budget.actual_total_sell);
   // Cached formula results.
   xml = setCell(xml, 'C16', 'num', budget.overhead_adder);
