@@ -178,27 +178,25 @@ export default function JobBudgets() {
         </Section>
 
         {/* Budgets list */}
-        <Section title="Budgets" sub={`${budgets.length} on record · "review" means the drop could not place it on a job or read the cost — use Numbers and Link job on the row`}>
-          {notice ? <p role="status" className="m-0 rounded-[10px] px-3 py-2 text-[12.5px] font-medium" style={{ backgroundColor: C.accent18, color: C.text }}>{notice}</p> : null}
+        <Section title="Budgets" sub={`${budgets.length} on record`}>
           {budgets.length === 0 && <p className="text-[13px]" style={{ color: C.textMuted }}>No budgets yet. Drop a quote PDF above.</p>}
           <div className="overflow-x-auto obsidian-scroll">
             <table className="w-full text-left text-[13px]" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ backgroundColor: C.headerBg }}>
-                  {["Budget", "Cost basis", "Sell", "Margin", "Job", "Drive", "Status", ""].map((h, i) => (
-                    <th key={h || i} className="px-4 py-2.5 font-semibold whitespace-nowrap" style={{ color: C.headerText, borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                  {["Budget", "Cost basis", "Sell", "Margin", "Job", "Drive", "Status"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 font-semibold whitespace-nowrap" style={{ color: C.headerText, borderBottom: `1px solid ${C.border}` }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {budgets.map((b) => (
-                  <Fragment key={b.id}>
-                  <tr style={{ borderBottom: review.id === b.id && review.mode ? "none" : `1px solid ${C.rowBorder}` }}>
+                  <tr key={b.id} style={{ borderBottom: `1px solid ${C.rowBorder}` }}>
                     <td className="px-4 py-3">
                       <div className="font-medium" style={{ color: C.text }}>{b.title}</div>
                       <div className="text-[11px]" style={{ color: C.textFaint }}>{[b.quoted_by && `by ${b.quoted_by}`, b.openings_qty && `${b.openings_qty} openings`].filter(Boolean).join(" - ")}</div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.total_cost_overhead ?? b.computed?.cost_material_tax)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.cost_material_tax)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.actual_total_sell)}</td>
                     <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: (b.computed?.actual_margin_pct ?? 0) >= 0.3 ? C.accentText : C.amber }}>{pct(b.computed?.actual_margin_pct)}</td>
                     <td className="px-4 py-3 text-[12px]" style={{ color: C.textSecondary }}>{b.job_id ? <Link to={`/jobs/${b.job_id}`} className="font-medium hover:underline" style={{ color: C.accentText }}>{jobName(b.job_id) || b.job_name || "Open job"}</Link> : b.job_name || "-"}</td>
@@ -211,18 +209,7 @@ export default function JobBudgets() {
                       )}
                     </td>
                     <td className="px-4 py-3"><Tag status={b.status}>{b.status === "needs_review" ? "review" : b.status}</Tag></td>
-                    <td className="px-4 py-3"><BudgetRowButtons budget={b} mode={review.id === b.id ? review.mode : ""} onMode={(mode) => { setNotice(""); setReview(mode ? { id: b.id, mode } : { id: "", mode: "" }); }} /></td>
                   </tr>
-                  {review.id === b.id && review.mode ? (
-                    <tr style={{ borderBottom: `1px solid ${C.rowBorder}` }}>
-                      <td colSpan={8} className="px-4 pb-4 pt-0">
-                        {review.mode === "numbers"
-                          ? <NumbersEditor budget={b} onDone={reviewDone("numbers")} onCancel={() => setReview({ id: "", mode: "" })} />
-                          : <LinkJobEditor budget={b} jobs={jobs} onDone={reviewDone("link")} onCancel={() => setReview({ id: "", mode: "" })} />}
-                      </td>
-                    </tr>
-                  ) : null}
-                  </Fragment>
                 ))}
               </tbody>
             </table>
