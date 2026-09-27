@@ -16,8 +16,10 @@ test("workbook replication: BAXTER / Amsco 3517590 matches the filled sheet", ()
 
 test("desired margins drive target sells", () => {
   const b = computeJobBudget({ material_true_cost: 1000, labor_cost_sub_pay: 500 });
-  // cost = 1000 + 74.50 tax = 1074.50; target sell = 1074.50 / 0.70
-  assert.equal(b.sell_material_tax_target, 1535);
+  // B16 = 500/0.74 - 500 = 175.68 -> B17 = 1000 + 35.14 = 1035.14; + 74.50 use tax = 1109.64;
+  // target sell = 1109.64 / 0.70
+  assert.equal(b.overhead_adder, 175.68);
+  assert.equal(b.sell_material_tax_target, 1585.19);
   assert.equal(b.labor_target_sell, 684.93); // 500 / 0.73
   assert.equal(b.actual_margin_pct, null);   // no actual sell -> no margin
 });
