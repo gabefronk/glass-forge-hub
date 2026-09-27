@@ -16,13 +16,21 @@ export function interactionLabel(value) {
   return (INTERACTION_TYPES.find((t) => t.value === value) || INTERACTION_TYPES[0]).label;
 }
 
+// Three things Gabe tracks on a job for now: when we were there, what was said, and the
+// pictures. Field reports fold into those (a report with photos is a photo entry, one without
+// is a note); Drive files ride along in All, and image files count as photos.
 export const HISTORY_FILTERS = [
   { key: "all", label: "All" },
   { key: "visits", label: "Visits" },
-  { key: "reports", label: "Field reports" },
-  { key: "notes", label: "Notes & calls" },
-  { key: "files", label: "Files" },
+  { key: "notes", label: "Notes" },
+  { key: "photos", label: "Photos" },
 ];
+
+export const isImageFile = (f) => {
+  const mime = String(f?.mime_type || f?.mimeType || "").toLowerCase();
+  const name = String(f?.name || "").toLowerCase();
+  return mime.startsWith("image/") || /\.(jpe?g|png|heic|webp|gif)$/.test(name);
+};
 
 // Reports are normalized by source record id (probuild_post_id) so each post
 // renders exactly once, whether it came from FieldReports or a fee line.
@@ -77,11 +85,11 @@ const dayOf = (value) => (value ? String(value).slice(0, 10) : "");
 
 // Which filter chips an entry belongs to (it always belongs to "all").
 export function entryGroups(entry) {
-  if (entry.kind === "visit") return entry.reports?.length ? ["visits", "reports"] : ["visits"];
+  if (entry.kind === "visit") return (entry.reports || []).some((r) => r.photos?.length) ? ["visits", "photos"] : ["visits"];
   if (entry.kind === "change") return ["visits"];
-  if (entry.kind === "report") return ["reports"];
-  if (entry.kind === "file") return ["files"];
-  if (entry.kind === "note") return isFieldReportNote(entry.note) ? ["reports"] : ["notes"];
+  if (entry.kind === "report") return entry.report?.photos?.length ? ["photos"] : ["notes"];
+  if (entry.kind === "file") return isImageFile(entry.file) ? ["photos"] : [];
+  if (entry.kind === "note") return entry.note?.attachments?.length ? ["notes", "photos"] : ["notes"];
   return [];
 }
 
@@ -125,7 +133,7 @@ export function buildJobHistory({ events, rows, notes, fieldReports, files } = {
 }
 
 export function historyCounts(entries) {
-  const counts = { all: entries.length, visits: 0, reports: 0, notes: 0, files: 0 };
+  const counts = { all: entries.length, visits: 0, notes: 0, photos: 0 };
   for (const e of entries) for (const g of e.groups || []) counts[g] += 1;
   return counts;
 }
