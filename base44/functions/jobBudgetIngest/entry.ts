@@ -8,7 +8,7 @@ import { normalizeCustomer } from '../../shared/jobIdentity.js';
 import { denverDate } from '../../shared/billingCore.js';
 import { fetchCompleteEntity, matchJobTokens } from '../../shared/jobCatalog.js';
 import { validateLaborEntry, laborMargin, buildCostInputPatch, summarizeJobCosts } from '../../shared/jobLaborEntry.js';
-import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sheetValuesFor } from '../../shared/jobBudgetReview.js';
+import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sheetValuesFor, sumBudgetInputs } from '../../shared/jobBudgetReview.js';
 
 // Job Budgets ingest.
 // Gabriel drops one or more vendor quote PDFs on the Job Budgets page. For each:
@@ -148,13 +148,17 @@ async function writeBudgetSheets(token, record, budget, job, folderId) {
   return { drive_budget_xlsx_file_id: xlsxUp?.id, drive_budget_csv_file_id: csvUp?.id };
 }
 
-// This month's JobCostInputs row for the job, refreshed from the budget's numbers.
-async function upsertCostInputs(db, job, values, quoteNumber) {
+// This month's JobCostInputs row for the job, refreshed from ALL of the job's budgets (a
+// base quote plus an add-on quote add up); `current` is the row being saved, with its new
+// numbers, in place of whatever the database still holds for it.
+async function upsertCostInputs(db, job, current) {
   const month = denverDate().slice(0, 7);
+  const siblings = await db.JobBudgets.filter({ job_id: job.id }, '-created_date', 50).catch(() => []);
+  const sum = sumBudgetInputs(siblings || [], current);
   const existing = (await db.JobCostInputs.filter({ month, job_id: job.id }, '-created_date', 1).catch(() => []))[0] || null;
-  const patch = reviewCostInputPatch(existing, values, { jobId: job.id, jobNameNorm: normalizeCustomer(job.canonical_name || job.name || ''), month, quoteNumber });
+  const patch = reviewCostInputPatch(existing, sum.values, { jobId: job.id, jobNameNorm: normalizeCustomer(job.canonical_name || job.name || ''), month, quoteNumber: sum.quote_number });
   const row = existing ? await db.JobCostInputs.update(existing.id, patch) : await db.JobCostInputs.create(patch);
-  return { id: row.id, month };
+  return { id: row.id, month, budgets_summed: sum.count, product_cost: sum.values.material_true_cost, product_sell: sum.values.actual_total_sell };
 }
 
 // The budget row's yellow-cell inputs as the math expects them (older rows only stored
@@ -331,7 +335,7 @@ export default async function jobBudgetIngest(req) {
     } catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 200)}`); }
     const updated = await db.JobBudgets.update(record.id, patch);
     let costInput = null;
-    if (job) { try { costInput = await upsertCostInputs(db, job, values, record.quote_number); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 200)}`); } }
+    if (job) { try { costInput = await upsertCostInputs(db, job, { ...record, inputs: values }); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 200)}`); } }
     return Response.json({ status: 'ok', budget_id: updated.id, computed: budget, cost_input: costInput, warnings });
   }
 
@@ -368,7 +372,7 @@ export default async function jobBudgetIngest(req) {
     const patch = { ...linkedBudgetPatch(job, user.email, folder), inputs: inputsOf(record), computed: budget, drive_budget_xlsx_file_id: record.drive_budget_xlsx_file_id, drive_budget_csv_file_id: record.drive_budget_csv_file_id };
     const updated = await db.JobBudgets.update(record.id, patch);
     let costInput = null;
-    try { costInput = await upsertCostInputs(db, job, inputsOf(record), record.quote_number); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 160)}`); }
+    try { costInput = await upsertCostInputs(db, job, { ...record, job_id: job.id, inputs: inputsOf(record) }); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 160)}`); }
     return Response.json({ status: 'ok', budget_id: updated.id, job: { id: job.id, name: job.canonical_name || job.name || '' }, drive: { folder_id: folder.id, folder_path: folder.path }, cost_input: costInput, warnings });
   }
 
