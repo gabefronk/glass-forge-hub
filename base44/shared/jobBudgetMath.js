@@ -89,6 +89,8 @@ export function computeJobBudget(inputs = {}, opts = {}) {
 
   return {
     material_true_cost: roundMoney(materialTrueCost),
+    additional_install_material: roundMoney(addlInstallMatl),
+    additional_equipment: roundMoney(addlEquipment),
     overhead_adder: roundMoney(overheadAdder),
     budget_cost_total_material: roundMoney(budgetCostTotalMaterial),
     use_tax: roundMoney(useTax),
