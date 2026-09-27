@@ -28,6 +28,7 @@ export function validateBudgetInputs(raw = {}) {
   }
   if (!errors.includes('material_true_cost') && money(raw.material_true_cost) === null) errors.push('material_true_cost');
   if (!errors.includes('actual_total_sell') && !(values.actual_total_sell > 0)) errors.push('actual_total_sell');
+  errors.sort((a, b) => INPUT_FIELDS.indexOf(a) - INPUT_FIELDS.indexOf(b));
   return { ok: errors.length === 0, errors, values };
 }
 
