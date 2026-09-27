@@ -7,11 +7,11 @@
 //   C16  Overhead Adder (INSTLAB, $/unit put in qty; 20% of it feeds B17)
 //   C18  Additional Install Material
 //   C19  Additional Equipment
-//   C23  Labor Cost (sub pay, non taxable)
-//   C24  Labor Sell Price (non taxable)
+//   C24  Labor Cost (sub pay, non taxable) - yellow input; drives B16 and B27
+//   C25  Labor Sell Price (non taxable) - manual price, never part of the cost side
 //   B28  Total Sell to Customer, includes tax (actual sell, yellow input)
-//   D22  Desired material margin (0.30)     C25  Desired labor margin (0.27)
-//   B16  =(C24/0.74)-C24   overhead adder from labor sell
+//   E22  Desired material margin (0.30)     E25  Desired labor margin (0.27)
+//   B16  =(C24/0.74)-C24   overhead adder from labor cost
 //   B17  =C15+(C16*0.2)    budget cost total (material)
 //   C20  =(C15+C18+C19)*0.0745  use tax
 //   B21  =C17+C18+C19+C20  cost material/tax   (note: workbook uses C17..C19,
@@ -66,10 +66,10 @@ export function computeJobBudget(inputs = {}, opts = {}) {
   const laborSellPrice = num(inputs.labor_sell_price);
   const actualTotalSell = num(inputs.actual_total_sell);
 
-  // B16 - overhead adder derived from labor sell unless manually entered.
+  // B16 - overhead adder derived from labor cost (C24) unless manually entered.
   const overheadAdder = overheadAdderIn !== 0
     ? overheadAdderIn
-    : (laborSellPrice ? (laborSellPrice / BUDGET_DEFAULTS.labor_overhead_factor) - laborSellPrice : 0);
+    : (laborCostSubPay ? (laborCostSubPay / BUDGET_DEFAULTS.labor_overhead_factor) - laborCostSubPay : 0);
   // B17 - budget cost total (material).
   const budgetCostTotalMaterial = materialTrueCost + overheadAdder * BUDGET_DEFAULTS.overhead_keep_pct;
   // C20 - use tax.
@@ -78,10 +78,10 @@ export function computeJobBudget(inputs = {}, opts = {}) {
   const costMaterialTax = budgetCostTotalMaterial + addlInstallMatl + addlEquipment + useTax;
   // B22 - sell material/tax at desired margin.
   const sellMaterialTax = matMargin < 1 ? costMaterialTax / (1 - matMargin) : null;
-  // Labor target sell at desired labor margin (workbook leaves labor sell manual).
+  // Labor target sell at desired labor margin (workbook leaves labor sell, C25, manual).
   const laborTargetSell = labMargin < 1 ? laborCostSubPay / (1 - labMargin) : null;
-  // B27 - total cost of material and labor (overhead).
-  const totalCost = costMaterialTax + laborSellPrice + (overheadAdder - overheadAdder * 0.8);
+  // B27 - total cost of material and labor (overhead): C21 + C24 + (C16 - C16*0.8).
+  const totalCost = costMaterialTax + laborCostSubPay + (overheadAdder - overheadAdder * 0.8);
   // B29 - actual margin vs the real customer sell.
   const actualMarginPct = actualTotalSell > 0 ? 1 - totalCost / actualTotalSell : null;
   // Convenience: suggested total sell = material target + labor target.
