@@ -442,7 +442,7 @@ export default function Invoicing() {
             {unprocessedCount > 0 && (
               <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
             )}
-            <SheetCard icon={Receipt} tile={TILE.teal} title="This month" sub="recorded fees, held lines and what is ready to bill" className="mt-4" bodyClassName="px-5 max-[699px]:px-4">
+            <SheetCard icon={Receipt} tile={TILE.teal} title="This month" sub="the total is what is done and reported — nothing counts until it is" className="mt-4" bodyClassName="px-5 max-[699px]:px-4">
               <InvoiceSummary
                 {...heroStats}
                 month={month}
