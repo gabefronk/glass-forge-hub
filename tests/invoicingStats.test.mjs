@@ -1,7 +1,8 @@
 import './support/register-src-alias.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { invoicingStats } from '../src/lib/invoicingStats.js';
+// Loaded after the alias hook is registered (static imports would resolve first).
+const { invoicingStats } = await import('../src/lib/invoicingStats.js');
 
 // Gabe's rule for the month total: anything that is done AND reported counts; a visit with no
 // field report yet does not count until it is; future (scheduled) work never counts.
