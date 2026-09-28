@@ -204,7 +204,7 @@ export default function Dashboard() {
         {/* KPI row */}
         <div className="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-4 gap-3">
           <HeroStat label="Profit YTD" value={`$${formatMoney(ytdProfit)}`} sub={`${ytdMonths.length} ${ytdMonths.length === 1 ? "month" : "months"} recorded in ${currentMonth.slice(0, 4)}`} />
-          <HeroStat label={`${currentMonth} recorded fees`} value={`$${formatMoney(billing.monthEarnedTotal)}`} tone="brass" sub={`${formatMoney(billing.heldTotal)} held · excludes scheduled`} />
+          <HeroStat label={`${currentMonth} recorded fees`} value={`$${formatMoney(billing.monthEarnedTotal)}`} tone="brass" sub={`done and reported · ${formatMoney(billing.readyTotal)} ready to bill`} />
           <HeroStat label="Ready to bill" value={`$${formatMoney(unbilled.total)}`} sub={`${unbilled.count} eligible lines this month`} />
           <HeroStat label="On hold" value={String(onHold.count)} tone={onHold.count ? "brass" : undefined} sub={onHold.name || "—"} />
         </div>
