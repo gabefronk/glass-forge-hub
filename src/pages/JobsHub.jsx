@@ -24,7 +24,7 @@ export default function JobsHub() {
   // Search, view, sort and builder live in the URL so Back and shared links keep them.
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [segment, setSegment] = useState(() => searchParams.get("show") || "all");
-  const [sort, setSort] = useState(() => (JOB_SORTS.some((o) => o.key === searchParams.get("sort")) ? searchParams.get("sort") : "recent"));
+  const [sort, setSort] = useState(() => (JOB_SORTS.some((o) => o.key === searchParams.get("sort")) ? searchParams.get("sort") : "last"));
   const [builder, setBuilder] = useState(() => searchParams.get("builder") || "");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -38,7 +38,7 @@ export default function JobsHub() {
     const put = (k, v, dflt) => { if (v && v !== dflt) p.set(k, v); else p.delete(k); };
     put("q", search.trim(), "");
     put("show", segment, "all");
-    put("sort", sort, "recent");
+    put("sort", sort, "last");
     put("builder", builder, "");
     if (p.toString() !== searchParams.toString()) setSearchParams(p, { replace: true });
   }, [search, segment, sort, builder]);
