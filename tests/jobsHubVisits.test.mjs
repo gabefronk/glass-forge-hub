@@ -23,15 +23,15 @@ test('visitSummary picks next (today counts) and last visit, ignoring cancelled 
     ],
     lines: [{ job_date: '2026-09-10' }, { job_date: '2026-10-02' }, { job_date: '2026-09-20' }],
   });
-  assert.deepEqual(v, { nextVisit: '2026-09-25', lastVisit: '2026-09-20', visitCount: 4 });
-  assert.deepEqual(visitSummary({ today: TODAY }), { nextVisit: null, lastVisit: null, visitCount: 0 });
+  assert.deepEqual(v, { nextVisit: '2026-09-25', lastVisit: '2026-09-20', latestVisit: '2026-09-25', visitCount: 4 });
+  assert.deepEqual(visitSummary({ today: TODAY }), { nextVisit: null, lastVisit: null, latestVisit: null, visitCount: 0 });
 });
 
 const g = (id, name, created) => ({ id, job: { id, canonical_name: name }, members: [{ id, created_date: created }] });
 
 test('sortJobGroups: next visit first, unscheduled last; last visit; name; newest', () => {
   const groups = [g('a', 'Bravo', '2026-01-01'), g('b', 'alpha', '2026-03-01'), g('c', 'Charlie', '2026-02-01')];
-  const stats = { a: { nextVisit: '2026-10-01', lastVisit: '2026-09-01' }, b: { nextVisit: null, lastVisit: '2026-09-20' }, c: { nextVisit: '2026-09-26', lastVisit: null } };
+  const stats = { a: { nextVisit: '2026-10-01', lastVisit: '2026-09-01', latestVisit: '2026-09-01' }, b: { nextVisit: null, lastVisit: '2026-09-20', latestVisit: '2026-09-20' }, c: { nextVisit: '2026-09-26', lastVisit: null, latestVisit: null } };
   assert.deepEqual(sortJobGroups(groups, stats, 'next').map((x) => x.id), ['c', 'a', 'b']);
   assert.deepEqual(sortJobGroups(groups, stats, 'last').map((x) => x.id), ['b', 'a', 'c']);
   assert.deepEqual(sortJobGroups(groups, stats, 'name').map((x) => x.id), ['b', 'a', 'c']);

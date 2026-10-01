@@ -35,7 +35,10 @@ export function visitSummary({ events = [], lines = [], today }) {
   const sorted = [...dates].sort();
   const next = sorted.find((d) => d >= today) || null;
   const past = sorted.filter((d) => d < today);
-  return { nextVisit: next, lastVisit: past.length ? past[past.length - 1] : null, visitCount: sorted.length };
+  // Most recent visit on or before today — a visit today is the latest, so it
+  // sorts above yesterday instead of being treated as "no last visit".
+  const latestVisit = next && next <= today ? next : (past.length ? past[past.length - 1] : null);
+  return { nextVisit: next, lastVisit: past.length ? past[past.length - 1] : null, latestVisit, visitCount: sorted.length };
 }
 
 export function buildJobsOverview({ jobs = [], feeLines = [], events = null, notes = null, today = denverDate() } = {}) {
@@ -112,8 +115,9 @@ export function sortJobGroups(groups, stats, sort = "recent") {
     });
   }
   if (sort === "last") {
+    // Most recent visit (today counts) first, then newest-added among jobs with no visits.
     return list.sort((a, b) => {
-      const la = stats[a.id]?.lastVisit || "", lb = stats[b.id]?.lastVisit || "";
+      const la = stats[a.id]?.latestVisit || "", lb = stats[b.id]?.latestVisit || "";
       return lb.localeCompare(la) || newest(b).localeCompare(newest(a));
     });
   }
