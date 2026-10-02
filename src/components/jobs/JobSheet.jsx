@@ -59,9 +59,20 @@ const FIELD_STYLE = { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK,
 // dropdown first so switching supers is a pick, not a retype.
 function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }) {
   const [f, setF] = useState({ name: initial?.name || "", phone: initial?.phone || "", email: initial?.email || "" });
+  const [matches, setMatches] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const search = useRef(0);
   const set = (k) => (e) => setF((v) => ({ ...v, [k]: e.target.value }));
+  // Typing in the name box searches the contact directory so a super can be
+  // picked from existing people even when the builder has no one on file.
+  useEffect(() => {
+    const n = ++search.current;
+    if (f.name.trim().length < 2) { setMatches([]); return undefined; }
+    const t = setTimeout(() => { searchContacts(f.name).then((list) => { if (n === search.current) setMatches(list); }).catch(() => {}); }, 200);
+    return () => clearTimeout(t);
+  }, [f.name]);
+  const choose = (c) => { setMatches([]); setF({ name: c.name || "", phone: c.phone || "", email: c.email || "" }); };
   const idOf = (c) => c.key || `${c.name}|${c.phone}`;
   const pickChoice = async (e) => {
     const c = choices.find((x) => idOf(x) === e.target.value);
@@ -95,7 +106,21 @@ function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }
         </label>
       )}
       {choices.length > 0 && <div className="text-[11px] font-semibold tracking-[.1em]" style={{ color: "#8f999b" }}>OR TYPE A NEW ONE</div>}
-      <input autoFocus={!choices.length} aria-label="Super name" placeholder="Name" value={f.name} onChange={set("name")} className={FIELD} style={FIELD_STYLE} />
+      <div className="relative">
+        <input autoFocus={!choices.length} aria-label="Super name" placeholder="Name (or search contacts)" autoComplete="off" value={f.name} onChange={set("name")} className={FIELD} style={FIELD_STYLE} />
+        {matches.length > 0 ? (
+          <ul role="listbox" aria-label="Matching contacts" className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 overflow-hidden rounded-[9px] bg-white" style={{ border: "1px solid #e2dcd1", boxShadow: "0 12px 30px -10px rgba(21,24,26,.4)" }}>
+            {matches.map((c) => (
+              <li key={c.key}>
+                <button type="button" role="option" aria-selected="false" onClick={() => choose(c)} className="block min-h-11 w-full px-3 py-2 text-left hover:bg-black/[0.04]">
+                  <span className="block truncate text-[13px] font-semibold" style={{ color: INK }}>{sanitizeText(c.name)}</span>
+                  <span className="block truncate text-[11.5px]" style={{ color: MUTED }}>{[c.company, c.title, c.phone || c.email].filter(Boolean).join(" · ")}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
       <input aria-label="Super phone" placeholder="Phone" inputMode="tel" value={f.phone} onChange={set("phone")} className={FIELD} style={FIELD_STYLE} />
       <input aria-label="Super email" placeholder="Email (optional)" inputMode="email" value={f.email} onChange={set("email")} className={FIELD} style={FIELD_STYLE} />
       {error ? <p role="alert" className="m-0 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
