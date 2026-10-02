@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Camera, FolderOpen, HardHat, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
@@ -19,6 +19,7 @@ import OwnerSection from "@/components/jobs/OwnerSection";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import DeleteJobButton from "@/components/jobs/DeleteJobButton";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
 import { JobHero, JobFactsCard, ScopeCard, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
 import { jobSnapshot } from "@/lib/jobWorkspace";
@@ -29,6 +30,7 @@ import { useJobLive } from "@/hooks/use-job-live";
 
 export default function JobDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
@@ -192,7 +194,12 @@ export default function JobDetail() {
             onFieldReport={() => setShowReport(true)}
             onLog={logInteraction}
             onRename={async (name) => setJob(await renameJob(job, name))}
-            extra={owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
+            extra={
+              <>
+                {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
+                {(owner || isAgentCenterOwner(user)) ? <DeleteJobButton job={job} onDeleted={() => navigate("/jobs")} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
+              </>
+            }
           />
 
           <DuplicateJobNotice group={group} currentId={id} />

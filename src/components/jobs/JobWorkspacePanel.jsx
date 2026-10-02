@@ -10,10 +10,13 @@ import { loadJobActivity, jobEventsAndEvidence, loadJobEvents, loadJobFieldRepor
 import { uniqueLegacyNames } from "@/lib/jobLegacyNames";
 import { jobSnapshot } from "@/lib/jobWorkspace";
 import { planMatchesJob, renameJob } from "@/lib/jobRename";
+import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
 import { JobHero, JobFactsCard, ScopeCard, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
+import DeleteJobButton from "@/components/jobs/DeleteJobButton";
 import { AttachmentViewer } from "@/components/jobs/FeedImage";
 import { denverDate } from "../../../base44/shared/billingCore.js";
 
@@ -24,7 +27,7 @@ const MUTED = "#566063", TEAL = "#0b3f3b";
 // address, super, next step, actions, files), the job facts, scope, then the
 // live visit history. `group` is the read-only duplicate group from lib/jobDedupe.js;
 // activity of every member record is shown.
-export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, preloaded = null }) {
+export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, onJobDeleted, preloaded = null }) {
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -36,6 +39,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, p
   const memberIds = memberKey.split(",");
   const jobContacts = useJobContacts(jobId);
   const [currentUser, setCurrentUser] = useState("");
+  const [canDelete, setCanDelete] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
@@ -45,7 +49,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, p
   const folder = useJobFolderFiles(job);
 
   useEffect(() => {
-    base44.auth.me().then((m) => setCurrentUser(m?.email || m?.full_name || "")).catch(() => {});
+    base44.auth.me().then((m) => { setCurrentUser(m?.email || m?.full_name || ""); setCanDelete(isAgentCenterOwner(m) || isPurchaseOrderOwner(m)); }).catch(() => {});
   }, []);
 
   const load = async ({ quiet = false, skipActivity = false } = {}) => {
@@ -166,7 +170,12 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, p
           onLog={logInteraction}
           onRename={async (name) => { const next = await renameJob(job, name); setJob(next); onJobChanged?.(next); }}
           headingLevel="h2"
-          extra={<Link to={`/jobs/${jobId}`} className={heroLinkClass} style={heroLinkStyle} title="Open the full job page">Full page<ArrowUpRight className="h-[15px] w-[15px]" style={{ color: "#e0c994" }} /></Link>}
+          extra={
+            <>
+              <Link to={`/jobs/${jobId}`} className={heroLinkClass} style={heroLinkStyle} title="Open the full job page">Full page<ArrowUpRight className="h-[15px] w-[15px]" style={{ color: "#e0c994" }} /></Link>
+              {canDelete ? <DeleteJobButton job={job} onDeleted={() => onJobDeleted?.(job.id)} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
+            </>
+          }
         />
 
         <DuplicateJobNotice group={group} currentId={jobId} />

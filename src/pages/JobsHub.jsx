@@ -269,7 +269,7 @@ export default function JobsHub() {
           </div>
         </section>
         <section aria-label="Job" className="mr-[18px] mt-[18px] flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden rounded-t-[20px]" style={{ backgroundColor: "#d9cbb0", boxShadow: "inset 0 0 0 1px rgba(10,29,31,.08)" }}>
-          {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} onJobChanged={(next) => setJobs((current) => current.map((j) => (j.id === next.id ? { ...j, ...next } : j)))} preloaded={{ jobs, feeLines, calEvents, jobNotes }} /> : (
+          {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} onJobChanged={(next) => setJobs((current) => current.map((j) => (j.id === next.id ? { ...j, ...next } : j)))} onJobDeleted={(deletedId) => { setJobs((current) => current.filter((j) => j.id !== deletedId)); setFeeLines((current) => current.filter((l) => l.job_id !== deletedId)); setJobNotes((current) => current.filter((n) => n.job_id !== deletedId)); setSelectedJobId(null); }} preloaded={{ jobs, feeLines, calEvents, jobNotes }} /> : (
             <div className="flex h-full items-center justify-center text-[13px]" style={{ color: "#566063" }}>Pick a job on the left.</div>
           )}
         </section>
