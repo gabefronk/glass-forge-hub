@@ -16,8 +16,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 //                scheduled          → service date required; confirms / moves the visit
 //                fixed              → the service visit's field report must be marked complete
 //                closed             → closing note required
-//   report   — internal: resolveFieldReport tells us a visit's report came in (event_id,
-//              note_id, completion). Stamps the item whose service visit it was.
+//   (resolveFieldReport stamps service_report_complete_at when the service visit's report is
+//   filed complete.)
 //   ping     — daily 07:00 Denver workflow (no user). Every open item quiet since yesterday, or
 //              ordered/shipped past its ETA → email + text the owner; Gabe is copied once it
 //              has been quiet 2+ days.
@@ -222,23 +222,6 @@ export default async function (req) {
       const subject = `SERVICE ITEM — ${item.job_name || 'job'}: ${TYPES[item.service_type]}${item.unit ? ` (${item.unit})` : ''}`;
       const sent = await notify(base44, { emails: [contacts.email], sms: [contacts.sms] }, subject, summary(item), smsText(item, 'NEW SERVICE ITEM'));
       return Response.json({ ok: true, item, notified: sent });
-    }
-
-    if (action === 'report') {
-      // From resolveFieldReport: a field report was filed against a calendar visit.
-      const { event_id, note_id, completion } = body;
-      if (!event_id) return Response.json({ ok: true, matched: 0 });
-      const items = (await api.ServiceItems.filter({ service_event_id: event_id }, '-created_date', 5, 0)).filter((i) => OPEN.includes(i.status));
-      for (const it of items) {
-        if (completion !== 'complete') continue; // incomplete is handled by "open" (reopens the item)
-        await api.ServiceItems.update(it.id, {
-          service_report_note_id: note_id || '',
-          service_report_complete_at: now,
-          last_activity_at: now, ping_count: 0,
-          activity_log: [...(it.activity_log || []), { at: now, by: who, action: 'service visit report — complete', note: 'Ready to mark Fixed' }],
-        });
-      }
-      return Response.json({ ok: true, matched: items.length });
     }
 
     if (action === 'update') {
