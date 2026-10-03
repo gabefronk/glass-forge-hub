@@ -120,6 +120,19 @@
       "type": "string",
       "format": "date"
     },
+    "service_event_draft": {
+      "type": "boolean",
+      "default": false,
+      "description": "True while the service visit is the auto-drafted date from Delivered; false once confirmed (Service scheduled)"
+    },
+    "service_report_note_id": {
+      "type": "string",
+      "description": "JobNotes id of the service visit's field report"
+    },
+    "service_report_complete_at": {
+      "type": "string",
+      "description": "Set when the service visit's field report comes in marked complete; required before Fixed"
+    },
     "last_activity_at": {
       "type": "string",
       "format": "date-time",
