@@ -562,7 +562,7 @@ function JobInfo({ snap, folder }) {
     <div className="mt-3">
       <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="inline-flex max-w-full items-center gap-2.5 rounded-[9px] px-3 py-1.5 text-[13px] font-semibold" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.14)", color: HERO_INK }}>
         Job info
-        {hint ? <span className="truncate font-mono text-[12px] font-normal" style={{ color: HERO_MUTED }}>{hint}</span> : null}
+        {hint ? <span className="min-w-0 truncate font-mono text-[12px] font-normal" style={{ color: HERO_MUTED }}>{hint}</span> : null}
         <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} style={{ color: BRASS_LT }} />
       </button>
       {open ? (
