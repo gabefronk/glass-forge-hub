@@ -36,7 +36,7 @@ const lanes = [
     handoff: "Project delivery owns when/where/customer context; field operations owns who/how/manpower."
   },
   {
-    name: "Toma",
+    name: "Tama",
     title: "Shower Glass Estimating",
     icon: Layers3,
     owns: ["Receive measurements", "Build shower quotes", "Resolve missing details", "Return pricing to sales"],
