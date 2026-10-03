@@ -154,7 +154,8 @@ function summary(item) {
     `Open job: ${jobLink(item)}`,
   ].filter(Boolean).join('\n');
 }
-const smsText = (item, lead) => `${lead}: ${item.job_name || 'job'} - ${TYPES[item.service_type] || 'Action needed'}${item.unit ? ` (${item.unit})` : ''}. ${LABELS[item.status] || item.status}. ${jobLink(item)}`.slice(0, 300);
+const titleCase = (s) => String(s || '').replace(/\b([a-z])/g, (m) => m.toUpperCase());
+const smsText = (item, lead) => `${lead}: ${titleCase(item.job_name) || 'job'} — ${TYPES[item.service_type] || 'Action needed'}${item.unit ? ` (${item.unit})` : ''}. Status: ${LABELS[item.status] || item.status}. ${jobLink(item)}`.slice(0, 400);
 
 async function pushServiceVisit(base44, api, item, day, confirmed) {
   const job = await api.Jobs.get(item.job_id).catch(() => null);
@@ -260,7 +261,7 @@ export default async function (req) {
         }
       }
       const subject = `SERVICE ITEM — ${item.job_name || 'job'}: ${TYPES[item.service_type]}${item.unit ? ` (${item.unit})` : ''}`;
-      const sent = await notify(base44, { emails: [contacts.email], phones: [contacts.phone], sms: [contacts.sms] }, subject, summary(item), smsText(item, 'NEW SERVICE ITEM'));
+      const sent = await notify(base44, { emails: [contacts.email], phones: [contacts.phone], sms: [contacts.sms] }, subject, summary(item), smsText(item, 'New service item'));
       return Response.json({ ok: true, item, notified: sent });
     }
 
@@ -367,7 +368,7 @@ export default async function (req) {
         if (quiet >= 2 && escalate) emails.push(escalate); // copy Gabe after 2 quiet days
         const why = etaPassed ? `ETA ${item.eta_date} passed` : `${quiet} day${quiet === 1 ? '' : 's'} no activity`;
         const subject = `${etaPassed ? 'ETA PASSED' : 'STILL OPEN'} — ${item.job_name || 'job'}: ${TYPES[item.service_type] || 'service item'} (${why})`;
-        const sent = await notify(base44, { emails, phones: [contacts.phone], sms: [contacts.sms] }, subject, `${summary(item)}\n\nAny update on the job page stops these pings.`, smsText(item, `STILL OPEN (${why})`));
+        const sent = await notify(base44, { emails, phones: [contacts.phone], sms: [contacts.sms] }, subject, `${summary(item)}\n\nAny update on the job page stops these pings.`, smsText(item, `Still open, ${why}`));
         await api.ServiceItems.update(item.id, { last_ping_at: now, ping_count: (item.ping_count || 0) + 1 });
         results.push({ id: item.id, job: item.job_name, quiet, etaPassed, sent });
       }
