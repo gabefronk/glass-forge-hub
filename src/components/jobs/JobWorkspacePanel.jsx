@@ -16,6 +16,7 @@ import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import MergedJobBanner from "@/components/jobs/MergedJobBanner";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
+import ServiceItemBanner from "@/components/jobs/ServiceItemBanner";
 import { JobHero, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
 import { jobProgress } from "@/lib/jobStages";
 import { buildReports } from "@/lib/jobHistory";
@@ -35,6 +36,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
   const [calEvents, setCalEvents] = useState([]);
+  const [serviceKey, setServiceKey] = useState(0);
   const [evidence, setEvidence] = useState(null);
   const [fieldReports, setFieldReports] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -162,6 +164,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   return (
     <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll" style={{ backgroundColor: SHEET_BG }}>
       <div className="px-6 pt-6 pb-10 flex flex-col gap-[18px] max-[1400px]:px-5">
+        <ServiceItemBanner key={`svc-${jobId}-${serviceKey}`} jobId={jobId} onChanged={() => { load({ quiet: true }); onJobChanged?.(job); }} />
         <JobHero
           job={job}
           status={status}
@@ -187,7 +190,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
         <DuplicateJobNotice group={group} currentId={jobId} />
 
         <div ref={historyRef} className="scroll-mt-4">
-          <SheetCard icon={HardHat} tile={TILE.green} title="Visits" sub="notes, reports and calls, newest first" right={<LiveMark live={live} />}>
+          <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
             <JobActivityFeed
               ledger
               jobId={jobId}
@@ -201,7 +204,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
               onChanged={() => load({ quiet: true })}
               onPhotoClick={setLightbox}
               openFormKey={openFormKey}
-              title="Visits"
+              title="History"
               dedupe={snap}
               progress={progress}
             />
@@ -210,7 +213,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
       </div>
 
       {showReport && (
-        <JobFieldReportModal jobId={jobId} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); load({ quiet: true }); }} />
+        <JobFieldReportModal jobId={jobId} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); setServiceKey((k) => k + 1); load({ quiet: true }); }} />
       )}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
