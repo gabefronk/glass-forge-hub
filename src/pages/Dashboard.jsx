@@ -12,6 +12,7 @@ import { dueState, laneKey, laneLabel, sortByUrgency } from "@/lib/todoBoard";
 import { Download, Plus, Check, ListTodo, HardHat } from "lucide-react";
 import OutstandingReports from "@/components/dashboard/OutstandingReports";
 import ComplianceSettings from "@/components/dashboard/ComplianceSettings";
+import { TEAM_STRUCTURE_NOTICE, teamProfileForUser } from "@/lib/teamStructure";
 
 function todayStr() {
   return denverDate(); // YYYY-MM-DD
@@ -186,6 +187,7 @@ export default function Dashboard() {
   }
 
   const userName = user?.full_name || user?.email?.split("@")[0] || "there";
+  const teamProfile = teamProfileForUser(user);
 
   return (
     <PageShell width="max-w-none">
@@ -212,6 +214,18 @@ export default function Dashboard() {
 
       {/* Body */}
       <div>
+        <div className="mb-5 rounded-[14px] border p-5 card-shadow" style={{ backgroundColor: "#fffaf0", borderColor: "#dfc58d" }}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="mb-1 text-[10.5px] font-bold uppercase tracking-[.12em]" style={{ color: "#8a6a2f" }}>Team bulletin</div>
+              <h2 className="text-[17px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>{TEAM_STRUCTURE_NOTICE.title}</h2>
+              <p className="mt-2 max-w-4xl text-[13px] leading-6" style={{ color: C.textSecondary }}>{TEAM_STRUCTURE_NOTICE.body}</p>
+            </div>
+            <button type="button" onClick={() => navigate("/team-structure")} className="shrink-0 rounded-lg px-4 py-2.5 text-[12px] font-semibold text-white" style={{ backgroundColor: C.accent }}>
+              Review team structure
+            </button>
+          </div>
+        </div>
         {calendarError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{calendarError}</p>}
         {loadError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{loadError}</p>}
         {exportError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{exportError}</p>}
@@ -369,6 +383,28 @@ export default function Dashboard() {
                     Directions
                   </button>
                 )}
+                </div>
+              </div>
+            )}
+
+            {teamProfile && (
+              <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+                <div className="sheet-band px-5 py-[11px]">
+                  <div className="text-[10.5px] font-bold uppercase tracking-[.12em]" style={{ color: C.textMuted }}>My current focus</div>
+                  <h3 className="mt-1 text-[16.5px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>{teamProfile.title}</h3>
+                </div>
+                <div className="px-5 py-4">
+                  <div className="space-y-2">
+                    {teamProfile.focus.map((item) => (
+                      <div key={item} className="flex items-start gap-2.5 text-[13px]" style={{ color: C.text }}>
+                        <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: C.accent }} />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => navigate("/team-structure")} className="mt-4 text-[11px] font-semibold" style={{ color: C.accent }}>
+                    See my lane and team handoffs
+                  </button>
                 </div>
               </div>
             )}
