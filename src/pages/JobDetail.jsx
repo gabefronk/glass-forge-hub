@@ -4,6 +4,7 @@ import { ArrowLeft, Camera, FolderOpen, HardHat, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { jobsStatus } from "@/lib/jobsSanitize";
+import { holdForService } from "@/lib/serviceHold";
 import JobFactsRail from "@/components/jobs/JobFactsRail";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
@@ -54,6 +55,7 @@ export default function JobDetail() {
   const [showReport, setShowReport] = useState(false);
   const [openFormKey, setOpenFormKey] = useState(0);
   const [serviceKey, setServiceKey] = useState(0);
+  const [serviceOpen, setServiceOpen] = useState(0);
   const loadVersion = useRef(0);
   const folder = useJobFolderFiles(job);
   // Kept in refs so the realtime listener always sees the current job.
@@ -145,7 +147,8 @@ export default function JobDetail() {
     },
   });
 
-  const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
+  // Open service item: the job is never "Complete" until it's fixed.
+  const status = useMemo(() => holdForService(jobsStatus(rows, evidence), serviceOpen), [rows, evidence, serviceOpen]);
   const today = denverDate();
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
   const progress = useMemo(() => jobProgress({ events: calEvents, reports: buildReports(rows, fieldReports), status, today }), [calEvents, rows, fieldReports, status, today]);
@@ -190,7 +193,7 @@ export default function JobDetail() {
           {loadError && <p role="alert" className="rounded-lg border bg-white p-3 text-[13px] break-words" style={{ color: "#A43432" }}>Some job activity could not load and may be incomplete. {loadError}</p>}
 
           {/* Service item: the red banner. Only renders when something on this job is open. */}
-          <ServiceItemBanner key={`svc-${id}-${serviceKey}`} jobId={id} currentUser={user?.email || ""} onChanged={() => loadAll({ quiet: true })} />
+          <ServiceItemBanner key={`svc-${id}-${serviceKey}`} jobId={id} jobIds={group?.memberIds} onCount={setServiceOpen} onChanged={() => loadAll({ quiet: true })} />
 
           <JobHero
             job={job}
