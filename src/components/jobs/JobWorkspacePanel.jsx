@@ -16,7 +16,9 @@ import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import MergedJobBanner from "@/components/jobs/MergedJobBanner";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
-import { JobHero, JobFactsCard, ScopeCard, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
+import { JobHero, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
+import { jobProgress } from "@/lib/jobStages";
+import { buildReports } from "@/lib/jobHistory";
 import DeleteJobButton from "@/components/jobs/DeleteJobButton";
 import { AttachmentViewer } from "@/components/jobs/FeedImage";
 import { denverDate } from "../../../base44/shared/billingCore.js";
@@ -139,6 +141,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const today = denverDate();
   const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
+  const progress = useMemo(() => jobProgress({ events: calEvents, reports: buildReports(rows, fieldReports), status, today }), [calEvents, rows, fieldReports, status, today]);
 
   if (loading) {
     return (
@@ -171,6 +174,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           onLog={logInteraction}
           onRename={async (name) => { const next = await renameJob(job, name); setJob(next); onJobChanged?.(next); }}
           headingLevel="h2"
+          progress={progress}
           extra={
             <>
               <Link to={`/jobs/${jobId}`} className={heroLinkClass} style={heroLinkStyle} title="Open the full job page">Full page<ArrowUpRight className="h-[15px] w-[15px]" style={{ color: "#e0c994" }} /></Link>
@@ -181,8 +185,6 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
 
         <MergedJobBanner job={job} />
         <DuplicateJobNotice group={group} currentId={jobId} />
-        <JobFactsCard snap={snap} folder={folder} />
-        <ScopeCard snap={snap} />
 
         <div ref={historyRef} className="scroll-mt-4">
           <SheetCard icon={HardHat} tile={TILE.green} title="Visits" sub="notes, reports and calls, newest first" right={<LiveMark live={live} />}>
@@ -201,6 +203,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
               openFormKey={openFormKey}
               title="Visits"
               dedupe={snap}
+              progress={progress}
             />
           </SheetCard>
         </div>
