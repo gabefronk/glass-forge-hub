@@ -11,7 +11,7 @@ import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, int
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
 import { DayCard, MonthRule, UpNextCard, VisitEntry, StageOnlyEntry } from "./VisitDayCard";
-import { ServiceItemPanel, isServiceOpen, FOCUS_EVENT } from "./ServiceItems";
+import { ServiceItemPanel, ServiceItemPointer, isServiceOpen, FOCUS_EVENT } from "./ServiceItems";
 
 // Status pill for a visit, in plain words.
 function visitBadge(ev, today = denverDate()) {
@@ -190,10 +190,11 @@ function groupFiles(items) {
 }
 
 // services: service items raised by this report — shown right under it (one record of the issue).
-function NoteCard({ note, currentUser, onChanged, onPhotoClick, services = [], onServiceChanged }) {
+// pointers: items first reported here that are now tracked on their service visit.
+function NoteCard({ note, currentUser, onChanged, onPhotoClick, services = [], pointers = [], onServiceChanged }) {
   const isFieldReport = isFieldReportNote(note);
   const kind = note.interaction_type || "note";
-  const badge = services.some(isServiceOpen) ? { label: "Service item", color: "#fff", bg: "#A43432" }
+  const badge = [...services, ...pointers.map((p) => p.item)].some(isServiceOpen) ? { label: "Service item", color: "#fff", bg: "#A43432" }
     : note.completion === "complete" ? { label: "Work complete", color: "#0b3f3b", bg: "#E2EEEB" }
     : note.completion === "incomplete" ? { label: "Not finished", color: "#A43432", bg: "#FCEDEC" } : null;
   return (
@@ -206,6 +207,7 @@ function NoteCard({ note, currentUser, onChanged, onPhotoClick, services = [], o
     >
       <JobNoteEntry note={note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} embedded />
       {services.map((s) => <ServiceItemPanel key={s.id} item={s} onChanged={onServiceChanged} />)}
+      {pointers.map((p) => <div key={p.item.id}><ServiceItemPointer item={p.item} visitDate={p.date} /></div>)}
     </Entry>
   );
 }
@@ -238,19 +240,27 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   const stageDays = ledger && progress?.byDate ? progress.byDate : null;
   const milestoneCount = stageDays ? Object.keys(stageDays).length : 0;
   const today = denverDate();
-  const { servicesByNote, looseServices } = useMemo(() => {
+  // Each service item is shown in full in exactly one place: on its service visit once one is
+  // on the schedule (it moves with the visit), otherwise under the report that raised it, or
+  // as its own entry if it was logged by hand. Where it was reported keeps a one-line pointer.
+  const { servicesByNote, pointersByNote, servicesByVisit, looseServices } = useMemo(() => {
     const noteIds = new Set((notes || []).map((n) => n.id));
-    const byNote = {};
+    const visitDate = new Map((events || []).map((e) => [e.id, e.event_date]));
+    const byNote = {}, pointers = {}, byVisit = {};
     const loose = [];
+    const push = (map, k, v) => { (map[k] = map[k] || []).push(v); };
     for (const s of serviceItems || []) {
-      if (s.source_note_id && noteIds.has(s.source_note_id)) (byNote[s.source_note_id] = byNote[s.source_note_id] || []).push(s);
+      if (s.service_event_id && visitDate.has(s.service_event_id)) {
+        push(byVisit, s.service_event_id, s);
+        if (s.source_note_id && noteIds.has(s.source_note_id)) push(pointers, s.source_note_id, { item: s, date: visitDate.get(s.service_event_id) });
+      } else if (s.source_note_id && noteIds.has(s.source_note_id)) push(byNote, s.source_note_id, s);
       else loose.push(s);
     }
-    return { servicesByNote: byNote, looseServices: loose };
-  }, [serviceItems, notes]);
+    return { servicesByNote: byNote, pointersByNote: pointers, servicesByVisit: byVisit, looseServices: loose };
+  }, [serviceItems, notes, events]);
   const noteServices = (note) => servicesByNote[note.id] || [];
-  // A visit booked as the fix for a service item shows it as a service visit.
-  const serviceForVisit = (ev) => (ev?.id && (serviceItems || []).find((s) => s.service_event_id === ev.id)) || null;
+  const notePointers = (note) => pointersByNote[note.id] || [];
+  const visitServices = (ev) => (ev?.id && servicesByVisit[ev.id]) || [];
   const days = useMemo(() => {
     let base = groupHistoryByDay(entries, filter === "milestones" ? "all" : filter);
     if (filter === "all" && looseServices.length) {
@@ -341,12 +351,12 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                 {groupFiles(items).map((it, i) => {
                   if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
                   if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
-                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today)} onPhotoClick={onPhotoClick} service={serviceForVisit(it.ev)} />;
+                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today)} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} />;
                   if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
                   if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                   if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
                   if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
-                  return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} onServiceChanged={onServiceChanged} />;
+                  return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
                 })}
               </DayCard>
             </div>
@@ -374,7 +384,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                 if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                 if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
                 if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
-                return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} onServiceChanged={onServiceChanged} />;
+                return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
               })}
             </div>
           </div>
