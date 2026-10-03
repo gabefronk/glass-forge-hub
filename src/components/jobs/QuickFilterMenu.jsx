@@ -3,14 +3,16 @@ import { ChevronDown, Check, SlidersHorizontal } from "lucide-react";
 
 const SECTION = "px-3.5 pt-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[.12em]";
 
-function Option({ on, label, count, attention, onClick }) {
+function Option({ on, label, count, attention, red, onClick }) {
+  // red: the Service items view — stays red whenever anything is open so it can't be missed.
+  const hot = red && count > 0;
   return (
     <button type="button" role="option" aria-selected={on} onClick={onClick}
       className="flex w-full items-center gap-2.5 px-3.5 py-[7px] text-left text-[13.5px] hover:bg-black/[0.03]"
-      style={{ color: "#101617", fontWeight: on ? 700 : 500, backgroundColor: on ? "#eef5f1" : undefined }}>
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center">{on ? <Check className="h-3.5 w-3.5" style={{ color: "#0b3f3b" }} /> : null}</span>
+      style={{ color: hot ? "#a43432" : "#101617", fontWeight: on || hot ? 700 : 500, backgroundColor: on ? (hot ? "#fcedec" : "#eef5f1") : undefined }}>
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center">{on ? <Check className="h-3.5 w-3.5" style={{ color: hot ? "#a43432" : "#0b3f3b" }} /> : null}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {count !== undefined ? <span className="shrink-0 font-mono text-[12px] tabular-nums" style={{ color: attention && count ? "#8a5a12" : "#616a6d" }}>{count.toLocaleString()}</span> : null}
+      {count !== undefined ? <span className="shrink-0 font-mono text-[12px] tabular-nums" style={{ color: hot ? "#a43432" : attention && count ? "#8a5a12" : "#616a6d" }}>{count.toLocaleString()}</span> : null}
     </button>
   );
 }
@@ -48,7 +50,7 @@ export default function QuickFilterMenu({ views, moreViews, view, onView, builde
         <div role="dialog" aria-label="Filters" className="absolute left-0 top-[calc(100%+6px)] z-30 flex w-[520px] max-w-[calc(100vw-40px)] overflow-hidden rounded-[12px] bg-white max-[599px]:w-[calc(100vw-40px)] max-[599px]:flex-col" style={{ border: "1px solid #e2dcd1", boxShadow: "0 18px 44px -12px rgba(21,24,26,.35),0 2px 6px rgba(21,24,26,.06)" }}>
           <div role="listbox" aria-label="Show" className="min-w-0 flex-1 pb-2 max-[599px]:border-b min-[600px]:border-r" style={{ borderColor: "#eee9e0" }}>
             <div className={SECTION} style={{ color: "#8a6420" }}>Show</div>
-            {views.map((v) => <Option key={v.key} on={v.key === view} label={v.label} count={v.count} attention={v.attention} onClick={() => onView(v.key)} />)}
+            {views.map((v) => <Option key={v.key} on={v.key === view} label={v.label} count={v.count} attention={v.attention} red={v.red} onClick={() => onView(v.key)} />)}
             <div className={SECTION} style={{ color: "#8a6420", borderTop: "1px solid #eee9e0", marginTop: 4 }}>More views</div>
             {moreViews.map((v) => <Option key={v.key} on={v.key === view} label={v.label} count={v.count} onClick={() => onView(v.key)} />)}
           </div>
