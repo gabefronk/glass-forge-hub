@@ -10,6 +10,7 @@ import { denverDate } from "../../../base44/shared/billingCore.js";
 import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote, fileLabel } from "@/lib/jobHistory";
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
+import { DayCard, MonthRule, UpNextCard, VisitEntry, StageOnlyEntry } from "./VisitDayCard";
 
 // Status pill for a visit, in plain words.
 function visitBadge(ev, today = denverDate()) {
@@ -206,10 +207,12 @@ function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
 }
 
 // ledger: used inside the job sheet's "Visits" card, which carries the title
-// and the Live marker itself; entries hang from a timeline with brass nodes.
-// dedupe (job page): { workEventId, primaryPo, primaryOe } from jobSnapshot, so visits don't
-// repeat the Scope card's notes or the job's own PO/OE.
-export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null }) {
+// and the Live marker itself; each date is its own card (VisitDayCard) and visits are
+// laid out as Work / Details / Report rows. PO/OE are not repeated there (Job info has them).
+// dedupe (job page): kept for callers; the non-ledger feed still uses it.
+// progress (job page): jobProgress() from jobStages — tags stage days, adds the
+// Milestones filter and the "Up next" card. Optional; without it the feed is unchanged.
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null }) {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
   // A "Log interaction" button elsewhere on the page opens the form here.
@@ -217,7 +220,20 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
 
   const entries = useMemo(() => buildJobHistory({ events, rows, notes, fieldReports, files }), [events, rows, notes, fieldReports, files]);
   const counts = useMemo(() => historyCounts(entries), [entries]);
-  const days = useMemo(() => groupHistoryByDay(entries, filter), [entries, filter]);
+  const stageDays = ledger && progress?.byDate ? progress.byDate : null;
+  const milestoneCount = stageDays ? Object.keys(stageDays).length : 0;
+  const today = denverDate();
+  const days = useMemo(() => {
+    const base = groupHistoryByDay(entries, filter === "milestones" ? "all" : filter);
+    if (!stageDays || (filter !== "all" && filter !== "milestones")) return base;
+    // A stage can fall on a day with nothing logged (product arrived at BFS): give it a card.
+    const have = new Set(base.map((d) => d.date));
+    const extra = Object.keys(stageDays).filter((d) => !have.has(d)).map((date) => ({ date, items: [{ kind: "stage", date, stages: stageDays[date] }] }));
+    const all = [...base, ...extra].sort((a, b) => b.date.localeCompare(a.date));
+    return filter === "milestones" ? all.filter((d) => stageDays[d.date]) : all;
+  }, [entries, filter, stageDays]);
+  const filters = ledger && milestoneCount ? [HISTORY_FILTERS[0], { key: "milestones", label: "Milestones" }, ...HISTORY_FILTERS.slice(1)] : HISTORY_FILTERS;
+  const filterCount = (key) => (key === "milestones" ? milestoneCount : counts[key]);
 
   return (
     <LedgerContext.Provider value={ledger}>
@@ -239,13 +255,13 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
       <div className={ledger ? "mb-4 flex items-center gap-2" : ""}>
       {/* Nothing to filter until something is logged: no row of zeros on a fresh job. */}
       <div role="tablist" aria-label="Filter job history" className={counts.all === 0 ? (ledger ? "flex min-w-0 flex-1" : "hidden") : ledger ? "flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1" : "flex gap-1.5 overflow-x-auto pb-1 mb-3"}>
-        {counts.all === 0 ? null : HISTORY_FILTERS.map((f) => {
+        {counts.all === 0 ? null : filters.map((f) => {
           const on = filter === f.key;
           return (
             <button key={f.key} type="button" role="tab" aria-selected={on} onClick={() => setFilter(f.key)}
               className="min-h-[32px] rounded-full px-3 text-[12px] font-medium whitespace-nowrap"
               style={on ? { backgroundColor: C.text, color: "#FFFFFF", border: `1px solid ${C.text}` } : { backgroundColor: C.card, color: C.textSecondary, border: `1px solid ${C.border}` }}>
-              {f.label} <span style={{ opacity: 0.7 }}>{counts[f.key]}</span>
+              {f.label} <span style={{ opacity: 0.7 }}>{filterCount(f.key)}</span>
             </button>
           );
         })}
@@ -263,8 +279,31 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         </div>
       ) : null}
 
-      <div className={ledger ? "relative pl-6" : "space-y-5"}>
-        {ledger && days.length ? <span aria-hidden="true" className="absolute left-[5px] top-2 bottom-2 w-px" style={{ backgroundColor: "#e2dcd1" }} /> : null}
+      {ledger ? (
+        <div>
+          {(filter === "all" || filter === "milestones") ? <UpNextCard next={progress?.next} /> : null}
+          {days.length === 0 && !showForm ? (
+            <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter === "all" ? "No activity recorded yet." : "Nothing of this type yet."}</div>
+          ) : null}
+          {days.map(({ date, items }, di) => (
+            <div key={date}>
+              {di === 0 || days[di - 1].date.slice(0, 7) !== date.slice(0, 7) ? <MonthRule date={date} today={today} /> : null}
+              <DayCard date={date} today={today} stages={stageDays?.[date]}>
+                {groupFiles(items).map((it, i) => {
+                  if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
+                  if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
+                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today)} onPhotoClick={onPhotoClick} />;
+                  if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
+                  if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
+                  if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
+                  return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} />;
+                })}
+              </DayCard>
+            </div>
+          ))}
+        </div>
+      ) : (
+      <div className="space-y-5">
         {days.length === 0 && !showForm ? (
           <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter === "all" ? "No activity recorded yet." : "Nothing of this type yet."}</div>
         ) : null}
@@ -290,6 +329,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
           </div>
         ))}
       </div>
+      )}
     </div>
     </LedgerContext.Provider>
   );
