@@ -22,6 +22,11 @@ export default function JobsHub() {
   const [jobNotes, setJobNotes] = useState(null);
   // Open service items by job id — the red tag on the row and the "Service items" view.
   const [serviceByJob, setServiceByJob] = useState({});
+  const loadService = () => base44.functions.invoke("serviceItems", { action: "list", open_only: true }).then((res) => {
+    const map = {};
+    for (const it of res?.data?.items || []) map[it.job_id] = (map[it.job_id] || 0) + 1;
+    setServiceByJob(map);
+  }).catch(() => {});
   const [searchParams, setSearchParams] = useSearchParams();
   // Search, view, sort and builder live in the URL so Back and shared links keep them.
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
@@ -61,11 +66,7 @@ export default function JobsHub() {
         setFeeLines(fl);
         setCalEvents(ev);
         setJobNotes(nt);
-        base44.functions.invoke("serviceItems", { action: "list", open_only: true }).then((res) => {
-          const map = {};
-          for (const it of res?.data?.items || []) map[it.job_id] = (map[it.job_id] || 0) + 1;
-          setServiceByJob(map);
-        }).catch(() => {});
+        loadService();
       } catch (e) {
         setLoadError("Jobs could not load. Reload to try again. " + (e?.message || ""));
       } finally {
@@ -101,8 +102,8 @@ export default function JobsHub() {
   // matches stay separate and are flagged for review. Read-only, see jobDedupe.js.
   // Calendar events and notes supply field-report evidence for "Needs report".
   const { groups, groupByJobId, evidenceAvailable, stats: jobStats, counts } = useMemo(
-    () => buildJobsOverview({ jobs: displayJobs, feeLines, events: calEvents, notes: jobNotes }),
-    [displayJobs, feeLines, calEvents, jobNotes]
+    () => buildJobsOverview({ jobs: displayJobs, feeLines, events: calEvents, notes: jobNotes, serviceByJob }),
+    [displayJobs, feeLines, calEvents, jobNotes, serviceByJob]
   );
 
   const filtered = useMemo(() => {
@@ -290,7 +291,7 @@ export default function JobsHub() {
           </div>
         </section>
         <section aria-label="Job" className="mr-[18px] mt-[18px] flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden rounded-t-[20px]" style={{ backgroundColor: "#d9cbb0", boxShadow: "inset 0 0 0 1px rgba(10,29,31,.08)" }}>
-          {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} onJobChanged={(next) => setJobs((current) => current.map((j) => (j.id === next.id ? { ...j, ...next } : j)))} onJobDeleted={(deletedId) => { setJobs((current) => current.filter((j) => j.id !== deletedId)); setFeeLines((current) => current.filter((l) => l.job_id !== deletedId)); setJobNotes((current) => current.filter((n) => n.job_id !== deletedId)); setSelectedJobId(null); }} preloaded={{ jobs, feeLines, calEvents, jobNotes }} /> : (
+          {selectedJobId ? <JobWorkspacePanel jobId={selectedJobId} group={selectedGroup} onJobChanged={(next) => setJobs((current) => current.map((j) => (j.id === next.id ? { ...j, ...next } : j)))} onServiceChanged={loadService} onJobDeleted={(deletedId) => { setJobs((current) => current.filter((j) => j.id !== deletedId)); setFeeLines((current) => current.filter((l) => l.job_id !== deletedId)); setJobNotes((current) => current.filter((n) => n.job_id !== deletedId)); setSelectedJobId(null); }} preloaded={{ jobs, feeLines, calEvents, jobNotes }} /> : (
             <div className="flex h-full items-center justify-center text-[13px]" style={{ color: "#566063" }}>Pick a job on the left.</div>
           )}
         </section>
