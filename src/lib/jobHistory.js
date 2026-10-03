@@ -16,13 +16,11 @@ export function interactionLabel(value) {
   return (INTERACTION_TYPES.find((t) => t.value === value) || INTERACTION_TYPES[0]).label;
 }
 
-// Three things Gabe tracks on a job for now: when we were there, what was said, and the
-// pictures. Field reports fold into those (a report with photos is a photo entry, one without
-// is a note); Drive files ride along in All, and image files count as photos.
+// Two things Gabe wants to flip to on a job: the milestones (added by the feed when the job
+// has stage days) and the pictures. Visits and Notes chips were dropped (Oct 2026) to keep the
+// page light; everything still shows under All. Drive image files count as photos.
 export const HISTORY_FILTERS = [
   { key: "all", label: "All" },
-  { key: "visits", label: "Visits" },
-  { key: "notes", label: "Notes" },
   { key: "photos", label: "Photos" },
 ];
 
