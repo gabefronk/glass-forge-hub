@@ -14,6 +14,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
   const [attachments, setAttachments] = useState(editing?.attachments || []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const handleFiles = async (files) => {
     if (!files.length) return;
@@ -96,8 +97,21 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
           className="w-full text-sm rounded p-2 resize-y focus:outline-none"
           style={{ border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.cardAlt }}
         />
-        <div className="flex items-center gap-3 flex-wrap">
-          <label className="cursor-pointer">
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            handleFiles(Array.from(e.dataTransfer.files));
+          }}
+          className="rounded-[10px] px-3 py-2.5 transition-colors"
+          style={{
+            border: `1.5px dashed ${dragOver ? C.accent : C.border}`,
+            backgroundColor: dragOver ? C.accentSoft || "rgba(11,63,59,.04)" : "transparent",
+          }}
+        >
+          <label className="flex cursor-pointer items-center justify-center gap-1.5 text-xs whitespace-nowrap" style={{ color: C.textSecondary }}>
             <input
               type="file"
               multiple
@@ -108,29 +122,27 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
                 e.target.value = "";
               }}
             />
-            <span className="inline-flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: C.textSecondary }}>
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
-              {uploading ? "Uploading…" : "Attach"}
-            </span>
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+            {uploading ? "Uploading…" : "Drag & drop photos here, or click to browse"}
           </label>
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {attachments.map((url, i) => (
-                <div key={i} className="relative h-24 w-24 rounded border overflow-hidden group" style={{ borderColor: C.border }}>
-                  <img src={url} alt="" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}
-                    aria-label={`Remove attachment ${i + 1}`}
-                    className="absolute top-0 right-0 bg-[#131A26]/60 text-white rounded-bl p-1 opacity-100 transition-opacity"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {attachments.map((url, i) => (
+              <div key={i} className="relative h-24 w-24 rounded border overflow-hidden group" style={{ borderColor: C.border }}>
+                <img src={url} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}
+                  aria-label={`Remove attachment ${i + 1}`}
+                  className="absolute top-0 right-0 bg-[#131A26]/60 text-white rounded-bl p-1 opacity-100 transition-opacity"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={handleSubmit} disabled={saving || !body.trim()}>
             {saving ? "Saving…" : editing ? "Save" : "Add note"}
