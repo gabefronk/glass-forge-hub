@@ -43,6 +43,8 @@ const ERRORS = {
 const ageDays = (iso) => (iso ? Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 86400000)) : 0);
 export const serviceAnchorId = (id) => `service-item-${id}`;
 
+const matchedKeys = new Set(); // once per job per page session
+
 export function useServiceItems(jobIds) {
   const ids = [...new Set((jobIds || []).filter(Boolean))];
   const key = ids.join(",");
@@ -54,7 +56,17 @@ export function useServiceItems(jobIds) {
       setItems(res?.data?.items || []);
     } catch { /* keep what is shown */ }
   }, [key]);
-  useEffect(() => { setItems([]); reload(); }, [reload]);
+  useEffect(() => {
+    setItems([]);
+    reload();
+    // Opening the job also checks the schedule: a visit booked for an open item gets tracked
+    // (linked, dated, moved to Service scheduled) and the list refreshes if anything changed.
+    if (!key || matchedKeys.has(key)) return;
+    matchedKeys.add(key);
+    base44.functions.invoke("serviceItems", { action: "match", job_ids: key.split(",") })
+      .then((res) => { if (res?.data?.changes?.length) reload(); })
+      .catch(() => {});
+  }, [reload, key]);
   return { items, open: items.filter(isServiceOpen), reload };
 }
 
