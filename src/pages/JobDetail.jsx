@@ -22,7 +22,9 @@ import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import DeleteJobButton from "@/components/jobs/DeleteJobButton";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
-import { JobHero, JobFactsCard, ScopeCard, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
+import { JobHero, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
+import { jobProgress } from "@/lib/jobStages";
+import { buildReports } from "@/lib/jobHistory";
 import { jobSnapshot } from "@/lib/jobWorkspace";
 import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import { denverDate } from "../../base44/shared/billingCore.js";
@@ -144,6 +146,7 @@ export default function JobDetail() {
   const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
   const today = denverDate();
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
+  const progress = useMemo(() => jobProgress({ events: calEvents, reports: buildReports(rows, fieldReports), status, today }), [calEvents, rows, fieldReports, status, today]);
 
   if (loading) {
     return (
@@ -195,6 +198,7 @@ export default function JobDetail() {
             onFieldReport={() => setShowReport(true)}
             onLog={logInteraction}
             onRename={async (name) => setJob(await renameJob(job, name))}
+            progress={progress}
             extra={
               <>
                 {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
@@ -205,8 +209,6 @@ export default function JobDetail() {
 
           <MergedJobBanner job={job} />
           <DuplicateJobNotice group={group} currentId={id} />
-          <JobFactsCard snap={snap} folder={folder} />
-          <ScopeCard snap={snap} />
 
           <div id="add-note" className="scroll-mt-4">
             <SheetCard icon={HardHat} tile={TILE.green} title="Visits" sub="notes, reports and calls, newest first" right={<LiveMark live={live} />}>
@@ -225,6 +227,7 @@ export default function JobDetail() {
                 openFormKey={openFormKey}
                 title="Visits"
                 dedupe={snap}
+                progress={progress}
               />
             </SheetCard>
           </div>
