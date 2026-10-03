@@ -181,6 +181,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           onRename={async (name) => { const next = await renameJob(job, name); setJob(next); onJobChanged?.(next); }}
           headingLevel="h2"
           progress={progress}
+          alert={<ServiceMarker open={service.open} />}
           extra={
             <>
               <Link to={`/jobs/${jobId}`} className={heroLinkClass} style={heroLinkStyle} title="Open the full job page">Full page<ArrowUpRight className="h-[15px] w-[15px]" style={{ color: "#e0c994" }} /></Link>
@@ -210,6 +211,8 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
               title="History"
               dedupe={snap}
               progress={progress}
+              serviceItems={service.items}
+              onServiceChanged={reloadService}
             />
           </SheetCard>
         </div>
