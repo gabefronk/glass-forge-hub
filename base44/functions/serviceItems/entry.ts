@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { secrets } from 'base44:runtime';
+import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Service items: the red banner on a job. One record per thing that needs fixing.
 // Actions (POST JSON):
@@ -24,6 +25,10 @@ import { secrets } from 'base44:runtime';
 //              the owner; Gabe is copied once it has been quiet 2+ days. Items waiting on a
 //              future ETA or a booked visit date are left alone until that date passes.
 //   list     — { job_id? | job_ids?[], open_only? } for the Jobs list / banner.
+//   match    — { job_ids? } finds the calendar visit that fixes each open item and tracks it:
+//              links service_event_id, sets the visit date, moves the item to Service
+//              scheduled and texts/emails the owner. Follows a linked visit when it moves;
+//              unlinks it if it's cancelled. Runs before every ping and when a job page opens.
 
 const OPEN = ['reported', 'acknowledged', 'working', 'ordered', 'shipped', 'delivered', 'scheduled', 'on_hold'];
 const LABELS = {
@@ -157,6 +162,112 @@ function summary(item) {
 }
 const titleCase = (s) => String(s || '').replace(/\b([a-z])/g, (m) => m.toUpperCase());
 const smsText = (item, lead) => `${lead}: ${titleCase(item.job_name) || 'job'} — ${TYPES[item.service_type] || 'Action needed'}${item.unit ? ` (${item.unit})` : ''}. Status: ${LABELS[item.status] || item.status}. ${jobLink(item)}`.slice(0, 400);
+
+// ---------- Matching an item to the calendar visit that fixes it ----------
+const CHAIN = ['reported', 'acknowledged', 'working', 'ordered', 'shipped', 'delivered', 'scheduled', 'fixed', 'closed'];
+const FIX_RE = /\b(service|warr|wty|warranty|replace(?:ment)?|re-?install|remake|re-?order|broken|damaged|missing|swap|redo|fix)\b/i;
+const STOP = new Set(['the', 'and', 'for', 'with', 'new', 'one', 'two', 'job', 'site', 'from', 'came', 'too', 'tall', 'short', 'wrong', 'size', 'missing', 'broken', 'damaged', 'lost', 'unit', 'units', 'logged', 'gabe', 'installer', 'install', 'pull', 'reinstall', 'thu', 'fri', 'mon', 'tue', 'wed', 'need', 'needs', 'order', 'ordered', 'bfs', 'via', 'away', 'walked', 'off', 'all', 'are', 'was', 'not', 'but', 'good', 'though']);
+const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const words = (s) => [...new Set(norm(s).split(' ').filter((w) => (w.length >= 3 || /^\d{3,}$/.test(w)) && !STOP.has(w)))];
+const baseName = (s) => norm(s).replace(/\breorder\b/g, '').replace(/^i\s+/, '').replace(/\s+/g, ' ').trim();
+const BAD_EVENT = /cancel|deleted|superseded/i;
+
+function jobGroupIds(job, allJobs) {
+  if (!job) return [];
+  const addr = norm(job.address), name = baseName(job.canonical_name);
+  const ids = new Set([job.id]);
+  for (const j of allJobs) {
+    if (j.merged_into === job.id || job.merged_into === j.id) ids.add(j.id);
+    else if (addr && norm(j.address) === addr) ids.add(j.id);
+    else if (name && baseName(j.canonical_name) === name) ids.add(j.id);
+  }
+  return [...ids];
+}
+const reportedDay = (item) => {
+  const first = (item.activity_log || []).map((e) => e.at).filter(Boolean).sort()[0] || item.created_date;
+  return denverDate(first);
+};
+const eventText = (ev) => `${ev.job_name || ''}\n${ev.scope_notes || ''}`;
+const overlap = (item, ev) => {
+  const text = ` ${norm(eventText(ev))} `;
+  return words(`${item.unit || ''} ${item.description || ''} ${item.order_ref || ''}`).filter((w) => text.includes(` ${w} `)).length;
+};
+
+async function matchVisits(base44, api, { jobIds = null, who = 'system', now }) {
+  const open = (await api.ServiceItems.filter({ status: { $in: ['reported', 'acknowledged', 'working', 'ordered', 'shipped', 'delivered', 'scheduled'] } }, '-created_date', 500, 0))
+    .filter((i) => !jobIds || jobIds.includes(i.job_id));
+  if (!open.length) return [];
+  const allJobs = await fetchAllPages(api.Jobs, '-created_date', 1000).catch(() => []);
+  const byId = new Map(allJobs.map((j) => [j.id, j]));
+  const changes = [];
+  const linkedIds = new Set(open.map((i) => i.service_event_id).filter(Boolean));
+
+  // Group items by job group so two open items on one house don't grab the same visit.
+  const groups = new Map();
+  for (const item of open) {
+    const gIds = jobGroupIds(byId.get(item.job_id), allJobs);
+    const key = gIds.slice().sort().join(',') || item.job_id;
+    if (!groups.has(key)) groups.set(key, { ids: gIds.length ? gIds : [item.job_id], items: [] });
+    groups.get(key).items.push(item);
+  }
+
+  for (const { ids, items } of groups.values()) {
+    const events = await api.CalendarEvents.filter({ job_id: { $in: ids } }, '-event_date', 300, 0).catch(() => []);
+    const evById = new Map(events.map((e) => [e.id, e]));
+
+    // 1) Items already tracking a visit: follow moves, drop cancelled visits.
+    for (const item of items.filter((i) => i.service_event_id)) {
+      const ev = evById.get(item.service_event_id) || await api.CalendarEvents.get(item.service_event_id).catch(() => null);
+      if (!ev || BAD_EVENT.test(String(ev.source_status || ''))) {
+        const patch = { service_event_id: '', service_event_draft: false, status: item.status === 'scheduled' ? 'working' : item.status, last_activity_at: now, ping_count: 0,
+          activity_log: [...(item.activity_log || []), { at: now, by: who, action: 'calendar', note: `service visit ${item.service_date || ''} was cancelled or removed — needs a new date` }] };
+        await api.ServiceItems.update(item.id, patch);
+        changes.push({ id: item.id, change: 'unlinked' });
+      } else if (ev.event_date && ev.event_date !== item.service_date) {
+        await api.ServiceItems.update(item.id, { service_date: ev.event_date, last_activity_at: now, ping_count: 0,
+          activity_log: [...(item.activity_log || []), { at: now, by: who, action: 'calendar', note: `service visit moved ${item.service_date || ''} → ${ev.event_date}` }] });
+        changes.push({ id: item.id, change: 'moved', date: ev.event_date });
+      }
+    }
+
+    // 2) Items still waiting for a visit: find the one on the schedule that fixes them.
+    const waiting = items.filter((i) => !i.service_event_id);
+    if (!waiting.length) continue;
+    const candidates = events.filter((ev) => ev.event_date && !linkedIds.has(ev.id) && !BAD_EVENT.test(String(ev.source_status || ''))
+      && !waiting.some((i) => i.source_event_id === ev.id) && FIX_RE.test(eventText(ev)));
+    for (const ev of candidates.sort((a, b) => a.event_date.localeCompare(b.event_date))) {
+      const scored = waiting.filter((i) => !i.service_event_id && ev.event_date >= reportedDay(i))
+        .map((i) => ({ i, s: overlap(i, ev) })).sort((a, b) => b.s - a.s);
+      if (!scored.length) continue;
+      const [best, next] = scored;
+      // Clear winner on the issue's own words; a lone open item on the house needs no tie-break.
+      const pick = (best.s >= 1 && (!next || best.s > next.s)) || (scored.length === 1 && waiting.length === 1) ? best.i : null;
+      if (!pick) continue;
+      const patch = {
+        service_event_id: ev.id, service_date: ev.event_date, service_event_draft: false,
+        status: CHAIN.indexOf(pick.status) < CHAIN.indexOf('scheduled') ? 'scheduled' : pick.status,
+        last_activity_at: now, ping_count: 0,
+        activity_log: [...(pick.activity_log || []), { at: now, by: who, action: 'calendar', note: `service visit found on the schedule: ${ev.event_date}${ev.start_time ? ` ${ev.start_time}` : ''} (tracked automatically)` }],
+      };
+      const updated = await api.ServiceItems.update(pick.id, patch);
+      pick.service_event_id = ev.id;
+      linkedIds.add(ev.id);
+      changes.push({ id: pick.id, change: 'linked', event_id: ev.id, date: ev.event_date, item: updated });
+    }
+  }
+
+  // Tell the owner when a visit gets booked for an item.
+  const linked = changes.filter((c) => c.change === 'linked');
+  if (linked.length) {
+    const contacts = await contactsFor(api, '');
+    for (const c of linked) {
+      const it = c.item;
+      await notify(base44, { emails: [contacts.email], phones: [contacts.phone], sms: [contacts.sms] },
+        `Service visit booked — ${it.job_name}: ${TYPES[it.service_type]} on ${c.date}`, summary(it), smsText(it, `Service visit booked for ${c.date}`));
+    }
+  }
+  return changes.map(({ item, ...rest }) => rest);
+}
 
 async function pushServiceVisit(base44, api, item, day, confirmed) {
   const job = await api.Jobs.get(item.job_id).catch(() => null);
@@ -351,7 +462,16 @@ export default async function (req) {
       return Response.json({ ok: true, item: updated, calendar: calendarNote || undefined });
     }
 
+    if (action === 'match') {
+      const ids = Array.isArray(body.job_ids) ? body.job_ids.filter(Boolean) : null;
+      const changes = await matchVisits(base44, api, { jobIds: ids && ids.length ? ids : null, who, now });
+      return Response.json({ ok: true, changes });
+    }
+
     if (action === 'ping') {
+      // First catch any visit that showed up on the schedule for an open item.
+      const matched = await matchVisits(base44, api, { who: 'system', now }).catch((e) => { console.log(`serviceItems: match failed: ${e?.message}`); return []; });
+      if (matched.length) console.log(`serviceItems: match ${JSON.stringify(matched)}`);
       const today = denverDate();
       const items = await api.ServiceItems.filter({ status: { $in: OPEN } }, '-created_date', 500, 0);
       const settingsContacts = await contactsFor(api, '');
