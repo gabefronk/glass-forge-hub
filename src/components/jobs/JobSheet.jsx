@@ -539,7 +539,48 @@ const HERO_BTN = "inline-flex h-[38px] items-center gap-[7px] rounded-[9px] px-3
 const HERO_SEC = { backgroundColor: "rgba(255,255,255,.09)", color: HERO_INK, border: "1px solid rgba(255,255,255,.12)" };
 const STEP_CHIP = { bad: ["#f1b9b3", "#4a0f0d"], warn: [BRASS_LT, "#1d160a"], teal: [BRASS_LT, "#1d160a"], neutral: ["rgba(224,201,148,.2)", BRASS_LT] };
 
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, onRename, extra, headingLevel = "h1" }) {
+// Crew, every PO and OE, and the job folder, folded under the address. Same values the
+// old "The job" card showed (snap.refs / snap.facts from jobSnapshot, folder from
+// useJobFolderFiles); closed by default.
+function JobInfo({ snap, folder }) {
+  const [open, setOpen] = useState(false);
+  const pos = (snap?.refs || []).filter((r) => r.startsWith("PO ")).map((r) => r.slice(3));
+  const oes = (snap?.refs || []).filter((r) => r.startsWith("OE ")).map((r) => r.slice(3));
+  const more = (list) => (list.length > 1 ? ` +${list.length - 1}` : "");
+  const hint = [pos[0] ? `PO ${pos[0]}${more(pos)}` : "", oes[0] ? `OE ${oes[0]}${more(oes)}` : ""].filter(Boolean).join(" · ");
+  const crew = snap?.facts?.[1]?.v || "—";
+  const LABEL = { color: "#9fc3b6" };
+  const cells = [
+    ["Crew", <span key="c">{crew}</span>],
+    ["PO", pos.length ? <span key="p" className="font-mono text-[12.5px] font-medium">{pos.map((p) => <span key={p} className="block">{p}</span>)}</span> : <span key="p" style={{ opacity: 0.6 }}>—</span>],
+    ["OE", oes.length ? <span key="o" className="font-mono text-[12.5px] font-medium">{oes.map((o) => <span key={o} className="block">{o}</span>)}</span> : <span key="o" style={{ opacity: 0.6 }}>—</span>],
+    ["Job folder", folder?.folder?.url
+      ? <a key="f" href={folder.folder.url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: BRASS_LT }}>Open in Drive</a>
+      : <span key="f" style={{ opacity: 0.6 }}>{folder?.loading ? "Checking…" : "Not linked"}</span>],
+  ];
+  return (
+    <div className="mt-3">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="inline-flex max-w-full items-center gap-2.5 rounded-[9px] px-3 py-1.5 text-[13px] font-semibold" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.14)", color: HERO_INK }}>
+        Job info
+        {hint ? <span className="truncate font-mono text-[12px] font-normal" style={{ color: HERO_MUTED }}>{hint}</span> : null}
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} style={{ color: BRASS_LT }} />
+      </button>
+      {open ? (
+        <dl className="m-0 mt-2.5 grid max-w-[720px] grid-cols-4 overflow-hidden rounded-[12px] max-[699px]:grid-cols-2" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.04)" }}>
+          {cells.map(([k, v]) => (
+            <div key={k} className="min-w-0 border-l px-3.5 py-2.5 first:border-l-0 max-[699px]:[&:nth-child(3)]:border-l-0 max-[699px]:[&:nth-child(n+3)]:border-t" style={{ borderColor: "rgba(255,255,255,.08)" }}>
+              <dt className="text-[10.5px] font-semibold uppercase tracking-[.12em]" style={LABEL}>{k}</dt>
+              <dd className="m-0 mt-1 text-[14px] font-semibold leading-[1.45] break-words" style={{ color: HERO_INK }}>{v}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </div>
+  );
+}
+
+// progress (optional): jobProgress() from jobStages — shows a small "Stage n of 7" chip.
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, onRename, extra, headingLevel = "h1", progress = null }) {
   const mapHref = job?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
   const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
   // The builder already leads most job names ("Bangerter Homes - Gomez Res"); only add it
@@ -561,6 +602,11 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.14)", color: BRASS_LT, border: "1px solid rgba(224,201,148,.35)" }}>
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "currentColor" }} />{status.label}
               </span>
+              {progress?.current ? (
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(47,158,95,.16)", color: "#a8e6c1", border: "1px solid rgba(120,210,160,.3)" }}>
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#46c27e", boxShadow: "0 0 0 3px rgba(70,194,126,.25)" }} />Stage {progress.current.n} of 7 · {progress.current.label}
+                </span>
+              ) : null}
             </div>
             <JobTitle job={job} onRename={onRename} headingLevel={headingLevel} />
             {job.address ? (
@@ -568,6 +614,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
                 <MapPin className="h-[15px] w-[15px] shrink-0" style={{ color: BRASS_LT }} />{sanitizeText(job.address)}
               </a>
             ) : null}
+            <JobInfo snap={snap} folder={folder} />
           </div>
           <div className="flex w-[300px] max-w-full shrink-0 flex-col gap-2.5 max-[899px]:w-full">
             <SuperBox jobId={job.id} jobContacts={jobContacts} events={events} />
