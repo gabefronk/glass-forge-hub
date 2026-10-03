@@ -11,6 +11,7 @@ import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, int
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
 import { DayCard, MonthRule, UpNextCard, VisitEntry, StageOnlyEntry } from "./VisitDayCard";
+import { ServiceItemPanel, isServiceOpen } from "./ServiceItems";
 
 // Status pill for a visit, in plain words.
 function visitBadge(ev, today = denverDate()) {
@@ -188,10 +189,12 @@ function groupFiles(items) {
   return out;
 }
 
-function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
+// services: service items raised by this report — shown right under it (one record of the issue).
+function NoteCard({ note, currentUser, onChanged, onPhotoClick, services = [], onServiceChanged }) {
   const isFieldReport = isFieldReportNote(note);
   const kind = note.interaction_type || "note";
-  const badge = note.completion === "complete" ? { label: "Work complete", color: "#0b3f3b", bg: "#E2EEEB" }
+  const badge = services.some(isServiceOpen) ? { label: "Service item", color: "#fff", bg: "#A43432" }
+    : note.completion === "complete" ? { label: "Work complete", color: "#0b3f3b", bg: "#E2EEEB" }
     : note.completion === "incomplete" ? { label: "Not finished", color: "#A43432", bg: "#FCEDEC" } : null;
   return (
     <Entry
@@ -202,6 +205,16 @@ function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
       badge={badge}
     >
       <JobNoteEntry note={note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} embedded />
+      {services.map((s) => <ServiceItemPanel key={s.id} item={s} onChanged={onServiceChanged} />)}
+    </Entry>
+  );
+}
+
+// A service item logged without a field report (from the office): its own entry on the day it was logged.
+function ServiceEntry({ item, onServiceChanged }) {
+  return (
+    <Entry icon={TriangleAlert} tone="red" title="Service item" meta={crewName(item.created_by_email) || item.created_by_email}>
+      <ServiceItemPanel item={item} withReport={false} onChanged={onServiceChanged} />
     </Entry>
   );
 }
@@ -212,7 +225,9 @@ function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
 // dedupe (job page): kept for callers; the non-ledger feed still uses it.
 // progress (job page): jobProgress() from jobStages — tags stage days, adds the
 // Milestones filter and the "Up next" card. Optional; without it the feed is unchanged.
-export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null }) {
+// serviceItems (job page): the job's service items. Each shows under the field report that
+// raised it; one logged without a report gets its own entry on the day it was logged.
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged }) {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
   // A "Log interaction" button elsewhere on the page opens the form here.
@@ -223,15 +238,35 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   const stageDays = ledger && progress?.byDate ? progress.byDate : null;
   const milestoneCount = stageDays ? Object.keys(stageDays).length : 0;
   const today = denverDate();
+  const { servicesByNote, looseServices } = useMemo(() => {
+    const noteIds = new Set((notes || []).map((n) => n.id));
+    const byNote = {};
+    const loose = [];
+    for (const s of serviceItems || []) {
+      if (s.source_note_id && noteIds.has(s.source_note_id)) (byNote[s.source_note_id] = byNote[s.source_note_id] || []).push(s);
+      else loose.push(s);
+    }
+    return { servicesByNote: byNote, looseServices: loose };
+  }, [serviceItems, notes]);
+  const noteServices = (note) => servicesByNote[note.id] || [];
   const days = useMemo(() => {
-    const base = groupHistoryByDay(entries, filter === "milestones" ? "all" : filter);
+    let base = groupHistoryByDay(entries, filter === "milestones" ? "all" : filter);
+    if (filter === "all" && looseServices.length) {
+      const byDate = new Map(base.map((d) => [d.date, { ...d, items: [...d.items] }]));
+      for (const s of looseServices) {
+        const date = denverDate(s.created_date || Date.now());
+        if (!byDate.has(date)) byDate.set(date, { date, items: [] });
+        byDate.get(date).items.push({ kind: "service", date, item: s });
+      }
+      base = [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
+    }
     if (!stageDays || (filter !== "all" && filter !== "milestones")) return base;
     // A stage can fall on a day with nothing logged (product arrived at BFS): give it a card.
     const have = new Set(base.map((d) => d.date));
     const extra = Object.keys(stageDays).filter((d) => !have.has(d)).map((date) => ({ date, items: [{ kind: "stage", date, stages: stageDays[date] }] }));
     const all = [...base, ...extra].sort((a, b) => b.date.localeCompare(a.date));
     return filter === "milestones" ? all.filter((d) => stageDays[d.date]) : all;
-  }, [entries, filter, stageDays]);
+  }, [entries, filter, stageDays, looseServices]);
   const filters = ledger && milestoneCount ? [HISTORY_FILTERS[0], { key: "milestones", label: "Milestones" }, ...HISTORY_FILTERS.slice(1)] : HISTORY_FILTERS;
   const filterCount = (key) => (key === "milestones" ? milestoneCount : counts[key]);
   // If a live reload leaves no stage days, drop back to All instead of a hidden filter.
@@ -298,7 +333,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                   if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
                   if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                   if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
-                  return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} />;
+                  if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
+                  return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} onServiceChanged={onServiceChanged} />;
                 })}
               </DayCard>
             </div>
@@ -325,7 +361,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                 if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
                 if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                 if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
-                return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} />;
+                if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
+                return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} onServiceChanged={onServiceChanged} />;
               })}
             </div>
           </div>
