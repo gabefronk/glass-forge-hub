@@ -234,6 +234,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   }, [entries, filter, stageDays]);
   const filters = ledger && milestoneCount ? [HISTORY_FILTERS[0], { key: "milestones", label: "Milestones" }, ...HISTORY_FILTERS.slice(1)] : HISTORY_FILTERS;
   const filterCount = (key) => (key === "milestones" ? milestoneCount : counts[key]);
+  // If a live reload leaves no stage days, drop back to All instead of a hidden filter.
+  useEffect(() => { if (filter === "milestones" && !milestoneCount) setFilter("all"); }, [filter, milestoneCount]);
 
   return (
     <LedgerContext.Provider value={ledger}>
