@@ -52,6 +52,18 @@ export function utf8ToBase64(str) {
   return btoa(bin);
 }
 export const toBase64Url = (b64) => String(b64).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+// base64 / base64url -> bytes, for downloading attachments to re-upload as receipt files.
+export function b64ToBytes(b64) {
+  const bin = atob(String(b64 || ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+export function b64urlToBytes(b64url) {
+  const b64 = String(b64url || '').replace(/-/g, '+').replace(/_/g, '/');
+  return b64ToBytes(b64 + '==='.slice((b64.length + 3) % 4));
+}
 const needsEncoding = (s) => /[^\x20-\x7e]/.test(String(s || ''));
 const encodeHeaderWord = (s) => (needsEncoding(s) ? `=?UTF-8?B?${utf8ToBase64(s)}?=` : String(s || ''));
 
@@ -127,6 +139,12 @@ export function createGmailClient({ accessToken, fetchImpl = globalThis.fetch, s
 
   async function getMessage(id) { return get(`/messages/${encodeURIComponent(id)}?format=full`); }
 
+  // Download one attachment's bytes (for re-uploading a receipt PDF/image to Drive).
+  async function getAttachmentBytes(messageId, attachmentId) {
+    const a = await get(`/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`);
+    return { mime: String(a.mimeType || 'application/octet-stream'), bytes: b64urlToBytes(a.data) };
+  }
+
   // Every message of one thread, full payloads, oldest first (Gmail returns them in order).
   // The agent reads a thread from here whenever it needs text it did not keep.
   async function getThreadMessages(threadId) {
@@ -163,7 +181,7 @@ export function createGmailClient({ accessToken, fetchImpl = globalThis.fetch, s
   const sendDraft = (draftId) => get('/drafts/send', { method: 'POST', body: JSON.stringify({ id: draftId }) });
   const deleteDraft = (draftId) => get(`/drafts/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
 
-  return { provider: 'gmail', profile, listNewMessages, getMessage, getThreadMessages, listLabels, ensureLabels, modifyThread, archiveThread, createDraft, sendDraft, deleteDraft, now };
+  return { provider: 'gmail', profile, listNewMessages, getMessage, getAttachmentBytes, getThreadMessages, listLabels, ensureLabels, modifyThread, archiveThread, createDraft, sendDraft, deleteDraft, now };
 }
 
 // ---- Microsoft Graph (Outlook) ------------------------------------------------------------------
@@ -208,6 +226,12 @@ export function createOutlookClient({ accessToken, fetchImpl = globalThis.fetch,
   async function getMessage(id) {
     const q = `$select=${GRAPH_MESSAGE_SELECT}&$expand=attachments($select=id,name,contentType,size)`;
     return get(`/messages/${encodeURIComponent(id)}?${q}`, { headers: { Prefer: 'outlook.body-content-type="text"' } });
+  }
+
+  // Download one attachment's bytes (contentBytes is base64) for re-upload to Drive.
+  async function getAttachmentBytes(messageId, attachmentId) {
+    const a = await get(`/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}?$select=contentType,contentBytes`);
+    return { mime: String(a.contentType || 'application/octet-stream'), bytes: b64ToBytes(a.contentBytes) };
   }
 
   // Every message of one conversation (any folder), oldest first, full bodies as text.
@@ -256,7 +280,7 @@ export function createOutlookClient({ accessToken, fetchImpl = globalThis.fetch,
   const sendDraft = (draftId) => get(`/messages/${encodeURIComponent(draftId)}/send`, { method: 'POST', body: '{}' });
   const deleteDraft = (draftId) => get(`/messages/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
 
-  return { provider: 'outlook', me, listNewMessages, getMessage, getThreadMessages, listCategories, ensureLabels, setCategories, archiveMessage, createDraftReply, sendDraft, deleteDraft, now };
+  return { provider: 'outlook', me, listNewMessages, getMessage, getAttachmentBytes, getThreadMessages, listCategories, ensureLabels, setCategories, archiveMessage, createDraftReply, sendDraft, deleteDraft, now };
 }
 
 export function createProviderClient(provider, opts) {
