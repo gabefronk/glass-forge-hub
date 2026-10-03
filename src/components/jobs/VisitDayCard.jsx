@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { HardHat, ShoppingCart, Package, CalendarClock, Paperclip, TriangleAlert } from "lucide-react";
+import { HardHat, ShoppingCart, Package, CalendarClock, Paperclip } from "lucide-react";
 import { crewName } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { visitFields, visibleNotes } from "@/lib/visitFields";
 import ClampedText from "./ClampedText";
 import PhotoStrip from "./PhotoStrip";
-import { FOCUS_EVENT, SERVICE_TYPE_LABEL, serviceLabel, isServiceOpen } from "./ServiceItems";
+import { ServiceItemPanel } from "./ServiceItems";
 
 // The job page's Visits, one card per date: a quiet date stamp, the stage(s) that happened
 // that day, then that day's entries. Upcoming dates are gold and dashed; the latest stage
@@ -160,8 +160,9 @@ function Chip({ children, tone = "sand" }) {
 const joinMeta = (...parts) => parts.filter(Boolean).join(" · ");
 
 // One calendar visit, laid out as rows. badge: the visit's report pill from the feed.
-// service: the service item this visit is the fix for (its service_event_id), if any.
-export function VisitEntry({ ev, reports = [], badge, onPhotoClick, service = null }) {
+// services: the service items this visit is the fix for (their service_event_id). The item is
+// tracked here — one place — and the report it came from just points to it.
+export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [], onServiceChanged }) {
   const f = useMemo(() => visitFields(ev), [ev]);
   const [showOther, setShowOther] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -188,7 +189,7 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick, service = nu
   const original = clean(visibleNotes(ev)).trim();
   const Icon = f.type === "order" ? ShoppingCart : HardHat;
   // Brand leads the title ("Andersen install visit"); a visit booked for a service item is a service visit.
-  const label = service ? "Service visit" : f.label;
+  const label = services.length ? "Service visit" : f.label;
   const brand = clean(f.brand || "");
   const title = brand && f.type !== "order" ? `${brand} ${label.charAt(0).toLowerCase()}${label.slice(1)}` : label;
   const chips = [...new Set(f.tags.map(clean).filter((t) => t && t !== brand))];
@@ -204,15 +205,6 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick, service = nu
         {badge ? <span className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-semibold" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span> : null}
       </div>
       <dl className="m-0 mt-3 flex flex-col gap-2.5 pl-[38px] max-[599px]:pl-0">
-        {service ? (
-          <Row label="Service">
-            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: service.id }))}
-              className="inline-flex flex-wrap items-center gap-1.5 text-left font-semibold hover:underline" style={{ color: isServiceOpen(service) ? "#A43432" : INK2 }}>
-              <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
-              {SERVICE_TYPE_LABEL[service.service_type] || "Action needed"}{service.unit ? ` — ${clean(service.unit)}` : ""} · {serviceLabel(service.status)}
-            </button>
-          </Row>
-        ) : null}
         {issues.length ? (
           <Row label="Issue">
             <ul className="m-0 list-none p-0">{issues.map((i, k) => <li key={k} className="mb-1 last:mb-0">{i.text}{i.line ? <span className="ml-1.5 font-mono text-[11.5px]" style={{ color: MUTED }}>line {i.line}</span> : null}</li>)}</ul>
@@ -255,6 +247,11 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick, service = nu
         <div className="mt-2 pl-[38px] max-[599px]:pl-0">
           <button type="button" onClick={() => setShowOriginal((v) => !v)} className="text-[12px] font-semibold hover:underline" style={{ color: MUTED }}>{showOriginal ? "Hide original calendar notes" : "Original calendar notes"}</button>
           {showOriginal ? <p className="m-0 mt-1.5 whitespace-pre-wrap rounded-[9px] px-3 py-2 font-mono text-[12px] leading-[1.55]" style={{ backgroundColor: BAND, color: "#34403f", border: `1px solid ${HAIR}` }}>{original.replace(/\n{3,}/g, "\n\n")}</p> : null}
+        </div>
+      ) : null}
+      {services.length ? (
+        <div className="pl-[38px] max-[599px]:pl-0">
+          {services.map((s) => <ServiceItemPanel key={s.id} item={s} withReport={false} onChanged={onServiceChanged} />)}
         </div>
       ) : null}
     </article>
