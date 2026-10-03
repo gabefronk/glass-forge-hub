@@ -32,6 +32,7 @@ export default function JobsHub() {
   const [owner, setOwner] = useState(false);
   const [view, setView] = useState("jobs");
   const [selectedJobId, setSelectedJobId] = useState(null);
+  const [showMerged, setShowMerged] = useState(false);
 
   useEffect(() => {
     const p = new URLSearchParams(searchParams);
@@ -85,12 +86,16 @@ export default function JobsHub() {
 
   useEffect(() => { setVisibleCount(40); }, [search, segment, sort, builder]);
 
+  // Merged jobs are hidden from the list and all matching unless an admin
+  // turns on "Show merged". Sample jobs are always hidden.
+  const displayJobs = useMemo(() => jobs.filter((j) => !j.is_sample && (showMerged || !j.merged_into)), [jobs, showMerged]);
+
   // Duplicate records (same customer + address) are shown as one job; weaker
   // matches stay separate and are flagged for review. Read-only, see jobDedupe.js.
   // Calendar events and notes supply field-report evidence for "Needs report".
   const { groups, groupByJobId, evidenceAvailable, stats: jobStats, counts } = useMemo(
-    () => buildJobsOverview({ jobs, feeLines, events: calEvents, notes: jobNotes }),
-    [jobs, feeLines, calEvents, jobNotes]
+    () => buildJobsOverview({ jobs: displayJobs, feeLines, events: calEvents, notes: jobNotes }),
+    [displayJobs, feeLines, calEvents, jobNotes]
   );
 
   const filtered = useMemo(() => {
@@ -221,7 +226,13 @@ export default function JobsHub() {
       />
       <div className="flex items-center justify-between text-[12px]" style={{ color: HERO_MUTED }}>
         <span>{summary}</span>
-        {filtersActive && <button type="button" onClick={clearFilters} className="font-semibold hover:underline" style={{ color: "#e0c994" }}>Clear filters</button>}
+        <div className="flex items-center gap-3">
+          {owner && <label className="flex cursor-pointer items-center gap-1.5 text-[12px]" style={{ color: HERO_MUTED }}>
+            <input type="checkbox" checked={showMerged} onChange={(e) => setShowMerged(e.target.checked)} className="h-3.5 w-3.5" />
+            Show merged
+          </label>}
+          {filtersActive && <button type="button" onClick={clearFilters} className="font-semibold hover:underline" style={{ color: "#e0c994" }}>Clear filters</button>}
+        </div>
       </div>
     </div>
   );

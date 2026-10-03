@@ -1,0 +1,136 @@
+{
+  "name": "JobMergeLog",
+  "type": "object",
+  "properties": {
+    "source_job_id": {
+      "type": "string",
+      "title": "Source Job Id",
+      "description": "The job that was merged away (duplicate)."
+    },
+    "source_job_name": {
+      "type": "string",
+      "title": "Source Job Name",
+      "description": "Canonical name of the source job at merge time, for readable audit."
+    },
+    "target_job_id": {
+      "type": "string",
+      "title": "Target Job Id",
+      "description": "The job that survives and absorbs the source's links."
+    },
+    "target_job_name": {
+      "type": "string",
+      "title": "Target Job Name",
+      "description": "Canonical name of the target job at merge time."
+    },
+    "merged_by": {
+      "type": "string",
+      "title": "Merged By",
+      "description": "Email of the admin who performed the merge."
+    },
+    "merged_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Merged At"
+    },
+    "relocated_fields": {
+      "type": "object",
+      "title": "Relocated Fields",
+      "description": "Snapshot of source fields moved onto the target (po_numbers, oe_numbers, aliases, etc.) so the merge can be reversed.",
+      "properties": {
+        "po_numbers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "oe_numbers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "default": {}
+    },
+    "relocated_link_counts": {
+      "type": "object",
+      "title": "Relocated Link Counts",
+      "description": "How many linked records (FeeLines, FieldReports, CalendarEvents, JobNotes, ContactJobLinks) were re-pointed from source to target.",
+      "properties": {
+        "fee_lines": {
+          "type": "integer",
+          "default": 0
+        },
+        "field_reports": {
+          "type": "integer",
+          "default": 0
+        },
+        "calendar_events": {
+          "type": "integer",
+          "default": 0
+        },
+        "job_notes": {
+          "type": "integer",
+          "default": 0
+        },
+        "contact_job_links": {
+          "type": "integer",
+          "default": 0
+        }
+      },
+      "default": {}
+    },
+    "reversed": {
+      "type": "boolean",
+      "title": "Reversed",
+      "default": false,
+      "description": "True if this merge was later reversed by reverseMerge."
+    },
+    "reversed_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Reversed At"
+    },
+    "reversed_by": {
+      "type": "string",
+      "title": "Reversed By"
+    }
+  },
+  "required": [
+    "source_job_id",
+    "target_job_id",
+    "merged_by",
+    "merged_at"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

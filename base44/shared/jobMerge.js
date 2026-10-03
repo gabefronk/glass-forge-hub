@@ -1,0 +1,99 @@
+// Shared job-merge logic used by mergeJobs and reverseMerge backend functions.
+// Relocates all linked records (FeeLines, FieldReports, CalendarEvents,
+// JobNotes, ContactJobLinks) from a source job to a target job, and merges
+// identity fields (po_numbers, oe_numbers, aliases) onto the target.
+//
+// All entity writes use the service role so the merge succeeds regardless of
+// the calling admin's RLS reach. The caller is responsible for auth checks.
+
+// Union two arrays case-insensitively, preserving order of first appearance.
+export function unionArr(a, b) {
+  const seen = new Set();
+  const out = [];
+  for (const v of [...(a || []), ...(b || [])]) {
+    const key = String(v || "").trim();
+    if (!key) continue;
+    const lower = key.toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    out.push(key);
+  }
+  return out;
+}
+
+// Merge identity fields from source onto target. Returns the patch to apply
+// to the target and a snapshot of what was moved (for reversal).
+export function mergeJobFields(source, target) {
+  const po = unionArr(target.po_numbers, source.po_numbers);
+  const oe = unionArr(target.oe_numbers, source.oe_numbers);
+  const aliases = unionArr(target.aliases, source.aliases);
+  // Only write if something actually changed.
+  const patch = {};
+  if (po.length !== (target.po_numbers || []).length) patch.po_numbers = po;
+  if (oe.length !== (target.oe_numbers || []).length) patch.oe_numbers = oe;
+  if (aliases.length !== (target.aliases || []).length) patch.aliases = aliases;
+  const relocated = {
+    po_numbers: (source.po_numbers || []).filter((p) => !(target.po_numbers || []).some((tp) => tp.toLowerCase() === String(p).toLowerCase())),
+    oe_numbers: (source.oe_numbers || []).filter((p) => !(target.oe_numbers || []).some((tp) => tp.toLowerCase() === String(p).toLowerCase())),
+    aliases: (source.aliases || []).filter((p) => !(target.aliases || []).some((tp) => tp.toLowerCase() === String(p).toLowerCase())),
+  };
+  return { patch, relocated };
+}
+
+// Relocate all linked records from fromJobId to toJobId. Returns counts per
+// entity type. Uses updateMany in a loop (500-record batches).
+export async function relocateLinks(base44, fromJobId, toJobId) {
+  const counts = { fee_lines: 0, field_reports: 0, calendar_events: 0, job_notes: 0, contact_job_links: 0 };
+
+  // FeeLines
+  for (;;) {
+    const res = await base44.asServiceRole.entities.FeeLines.updateMany(
+      { job_id: fromJobId },
+      { $set: { job_id: toJobId } }
+    );
+    counts.fee_lines += res.updated || 0;
+    if (!res.has_more) break;
+  }
+  // FieldReports
+  for (;;) {
+    const res = await base44.asServiceRole.entities.FieldReports.updateMany(
+      { job_id: fromJobId },
+      { $set: { job_id: toJobId } }
+    );
+    counts.field_reports += res.updated || 0;
+    if (!res.has_more) break;
+  }
+  // CalendarEvents
+  for (;;) {
+    const res = await base44.asServiceRole.entities.CalendarEvents.updateMany(
+      { job_id: fromJobId },
+      { $set: { job_id: toJobId } }
+    );
+    counts.calendar_events += res.updated || 0;
+    if (!res.has_more) break;
+  }
+  // JobNotes
+  for (;;) {
+    const res = await base44.asServiceRole.entities.JobNotes.updateMany(
+      { job_id: fromJobId },
+      { $set: { job_id: toJobId } }
+    );
+    counts.job_notes += res.updated || 0;
+    if (!res.has_more) break;
+  }
+  // ContactJobLink (optional — may not exist on all apps)
+  try {
+    for (;;) {
+      const res = await base44.asServiceRole.entities.ContactJobLink.updateMany(
+        { job_id: fromJobId },
+        { $set: { job_id: toJobId } }
+      );
+      counts.contact_job_links += res.updated || 0;
+      if (!res.has_more) break;
+    }
+  } catch (_) {
+    // ContactJobLink entity may not be present; non-fatal.
+  }
+
+  return counts;
+}

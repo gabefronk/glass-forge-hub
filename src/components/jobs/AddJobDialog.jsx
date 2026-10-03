@@ -7,6 +7,7 @@ import { findMatchWarnings, newJobPayload } from "@/lib/newJob";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { ASSIGNABLE_CONTACT_ROLES, ROLE_LABELS } from "@/lib/jobContacts";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import JobMatchWarningDialog from "@/components/jobs/JobMatchWarningDialog";
 
 const blank = { canonical_name: "", builder: "", address: "", po_number: "", oe_number: "", source_window_quote_id: "", initial_note: "" };
 const inputClass = "mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base focus:border-emerald-700 focus:outline-none sm:text-sm";
@@ -57,8 +58,7 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
 
   const submit = async (event) => {
     event.preventDefault();
-    const payload = newJobPayload(values);
-    if (!payload.canonical_name) { setError("Job name is required."); return; }
+    if (!values.canonical_name.trim()) { setError("Job name is required."); return; }
     if (createdState?.jobId) { setError("This job was already created. Open it instead of submitting twice."); return; }
     const warnings = findMatchWarnings(jobs, values);
     setWeakMatches(warnings.weak);
@@ -66,6 +66,21 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
       setMatchWarning({ strong: warnings.strong, medium: warnings.medium });
       return;
     }
+    await proceedCreate();
+  };
+
+  // "Create anyway" from the match-warning dialog: force past the guard.
+  const handleCreateAnyway = () => { setMatchWarning(null); setForceCreate(true); proceedCreate(); };
+  // "Open existing job": close the create form and navigate to the first match.
+  const handleOpenExisting = () => {
+    const first = [...(matchWarning?.strong || []), ...(matchWarning?.medium || [])][0];
+    setMatchWarning(null);
+    if (first) { setOpen(false); reset(); navigate(`/jobs/${first.id}`); }
+  };
+
+  const proceedCreate = async () => {
+    const payload = newJobPayload(values);
+    if (!payload.canonical_name) { setError("Job name is required."); return; }
     if (newContact.name.trim() && !owner) { setError("Only the owner can add a contact here. Ask them to create it in Contacts."); return; }
     if (values.source_window_quote_id.trim() && !owner) { setError("Only the owner can link a source quote. Leave this blank."); return; }
     if (values.source_window_quote_id.trim()) {
@@ -117,6 +132,7 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) reset(); }}>
       <DialogTrigger asChild>
         <button type="button" className={triggerClassName || "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[var(--gf-brass-400)] px-3.5 text-sm font-semibold text-[var(--gf-on-brass)]"}>
@@ -164,5 +180,12 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
         </form>
       </DialogContent>
     </Dialog>
+    <JobMatchWarningDialog
+      matches={matchWarning || { strong: [], medium: [] }}
+      onOpenExisting={handleOpenExisting}
+      onCreateAnyway={handleCreateAnyway}
+      onCancel={() => setMatchWarning(null)}
+    />
+    </>
   );
 }

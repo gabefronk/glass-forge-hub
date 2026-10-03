@@ -134,6 +134,23 @@
     "handoff_id": {
       "type": "string",
       "description": "JobHandoffs row for this job, once one exists."
+    },
+    "is_sample": {
+      "type": "boolean",
+      "title": "Is Sample",
+      "default": false,
+      "description": "True for demo/test jobs excluded from all matching, lists and totals."
+    },
+    "merged_into": {
+      "type": "string",
+      "title": "Merged Into",
+      "description": "ID of the Jobs record this duplicate was merged into. Set by the merge tool; hidden from all lists and matching once set."
+    },
+    "merged_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Merged At",
+      "description": "When this job was merged into another (for audit and reversal)."
     }
   },
   "required": [
