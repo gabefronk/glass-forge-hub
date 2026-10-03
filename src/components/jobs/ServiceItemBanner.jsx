@@ -39,19 +39,32 @@ export function serviceItemsSummary(items) {
   return { open, count: open.length, worst: open.reduce((m, i) => Math.max(m, ageDays(i.last_activity_at || i.created_date)), 0) };
 }
 
-export default function ServiceItemBanner({ jobId, currentUser, onChanged }) {
+const ERRORS = {
+  eta_required: "Add an ETA before marking it ordered or shipped.",
+  note_required: "Add a closing note first.",
+  service_date_required: "Pick the service visit date first.",
+  service_report_required: "Fixed needs the service visit's field report marked Complete. Have the crew file it on the service visit first.",
+};
+
+// jobIds: this job plus its duplicate records (same customer + address), so an item filed on
+// any of them shows here. onCount(n): open count, so the page can hold "Complete" while open.
+export default function ServiceItemBanner({ jobId, jobIds, onChanged, onCount }) {
   const [items, setItems] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const ids = [...new Set([jobId, ...(jobIds || [])].filter(Boolean))];
+  const idsKey = ids.join(",");
 
   const load = async () => {
     try {
-      const res = await base44.functions.invoke("serviceItems", { action: "list", job_id: jobId });
-      setItems(res?.data?.items || []);
+      const res = await base44.functions.invoke("serviceItems", { action: "list", job_ids: ids });
+      const list = res?.data?.items || [];
+      setItems(list);
+      onCount?.(list.filter((i) => SERVICE_OPEN.includes(i.status)).length);
     } catch { setItems([]); }
   };
-  useEffect(() => { setItems(null); setOpenId(null); load(); }, [jobId]);
+  useEffect(() => { setItems(null); setOpenId(null); load(); }, [idsKey]);
 
   if (!items) return null;
   const open = items.filter((i) => SERVICE_OPEN.includes(i.status));
@@ -62,7 +75,7 @@ export default function ServiceItemBanner({ jobId, currentUser, onChanged }) {
     try {
       const res = await base44.functions.invoke("serviceItems", { action: "update", id, ...patch });
       const code = res?.data?.error;
-      if (code) throw new Error({ eta_required: "Add an ETA before marking it ordered or shipped.", note_required: "Add a closing note first." }[code] || code);
+      if (code) throw new Error(ERRORS[code] || code);
       await load();
       onChanged?.();
     } catch (e) { setError(e?.message || "Update failed."); }
@@ -98,6 +111,7 @@ export default function ServiceItemBanner({ jobId, currentUser, onChanged }) {
                     {age === 0 ? "updated today" : `${age} day${age === 1 ? "" : "s"} since activity`}
                   </span>
                   {it.eta_date ? <span className="ml-2 text-[12px] font-medium" style={{ color: "#6b5a58" }}>· ETA {formatShort(it.eta_date)}</span> : null}
+                  {it.service_date ? <span className="ml-2 text-[12px] font-medium" style={{ color: it.service_event_draft ? "#9a5a12" : "#6b5a58" }}>· Service {formatShort(it.service_date)}{it.service_event_draft ? " (draft)" : ""}</span> : null}
                 </span>
                 {expanded ? <ChevronUp className="h-4 w-4 shrink-0" style={{ color: RED }} /> : <ChevronDown className="h-4 w-4 shrink-0" style={{ color: RED }} />}
               </button>
@@ -134,6 +148,7 @@ function ServiceItemDetail({ item, busy, error, onUpdate }) {
   const [costOwner, setCostOwner] = useState(item.cost_owner || "");
   const [serviceDate, setServiceDate] = useState(item.service_date || "");
   const needsOrder = ["ordered", "shipped", "delivered"].includes(status);
+  const showVisit = ["delivered", "scheduled", "fixed"].includes(status) || Boolean(item.service_event_id);
   const field = "w-full min-h-[38px] rounded-[8px] px-2.5 text-[13px] focus:outline-none";
   const fieldStyle = { border: `1px solid ${RED_LINE}`, backgroundColor: "#fff", color: "#182422" };
 
@@ -171,8 +186,8 @@ function ServiceItemDetail({ item, busy, error, onUpdate }) {
             <input value={tracking} onChange={(e) => setTracking(e.target.value)} className={field} style={fieldStyle} />
           </label>
         </>) : null}
-        {status === "scheduled" ? (
-          <label className="text-[11.5px] font-semibold" style={{ color: "#6b5a58" }}>Service date
+        {showVisit ? (
+          <label className="text-[11.5px] font-semibold" style={{ color: "#6b5a58" }}>Service visit date {status === "scheduled" ? "(required)" : ""}
             <input type="date" value={serviceDate} onChange={(e) => setServiceDate(e.target.value)} className={field} style={fieldStyle} />
           </label>
         ) : null}
@@ -190,7 +205,10 @@ function ServiceItemDetail({ item, busy, error, onUpdate }) {
       <label className="mt-2 block text-[11.5px] font-semibold" style={{ color: "#6b5a58" }}>Update note {status === "closed" ? "(required to close)" : ""}
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What happened / what's next" className={field + " py-2 resize-y"} style={fieldStyle} />
       </label>
-      {status === "scheduled" ? <p className="mt-1 mb-0 text-[11px]" style={{ color: "#6b5a58" }}>Put the service visit on the calendar from the Calendar page as usual; set the date here so the banner shows it.</p> : null}
+      {status === "delivered" && !item.service_event_id ? <p className="mt-1 mb-0 text-[11px]" style={{ color: "#6b5a58" }}>Saving as Delivered drafts the service visit on both calendars for the next business day (or the date above). Confirm it with Service scheduled.</p> : null}
+      {item.service_event_draft && status !== "scheduled" ? <p className="mt-1 mb-0 text-[11px]" style={{ color: "#9a5a12" }}>The service visit on {formatShort(item.service_date)} is a draft. Set the real date and pick Service scheduled to confirm it.</p> : null}
+      {status === "scheduled" ? <p className="mt-1 mb-0 text-[11px]" style={{ color: "#6b5a58" }}>Saving puts the visit on the install calendar and the crew calendar (no dollar amounts on the crew one).</p> : null}
+      {status === "fixed" && !item.service_report_complete_at ? <p className="mt-1 mb-0 text-[11px]" style={{ color: RED }}>Fixed needs the service visit's field report marked Complete first.</p> : null}
       {error ? <p role="alert" className="mt-2 mb-0 text-[12px]" style={{ color: RED }}>{error}</p> : null}
       <div className="mt-3 flex items-center justify-between gap-2">
         <span className="text-[11px]" style={{ color: "#6b5a58" }}>Saving resets the daily ping.</span>
