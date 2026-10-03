@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { visitFields, softenCaps, parseMD } from '../src/lib/visitFields.js';
+import { visitFields, softenCaps, parseMD, visibleNotes } from '../src/lib/visitFields.js';
 
 const textOf = (f) => JSON.stringify([f.work, f.details, f.other, f.headsUp, f.issues, f.people, f.result, f.moves, f.tags]);
 
@@ -168,4 +168,12 @@ test('screen service + Todd template: refs scrubbed, reps hidden, screens date a
 test('installer/tech report lines go to result', () => {
   const f = visitFields({ event_date: '2026-06-01', scope_notes: 'Per Tech (Elijah):\nReplaced sash\nReschedule (6/3) – 30 min.' });
   assert.deepEqual(f.result, ['Per Tech (Elijah)', 'Replaced sash', 'Reschedule (6/3) – 30 min.']);
+});
+
+test('visibleNotes keeps the original wording but drops refs, reps and money lines', () => {
+  const v = visibleNotes(OQUIRRH_408);
+  assert.equal(v, 'Amsco direct – 9/23\nQTY.29');
+  const g = visibleNotes({ scope_notes: '*Warranty* - Per Report: SGD sticks (Line#: 4) *Orig. PO#: 6903989*\nOE: 79085003-00\nTech Instructions: adjust it' });
+  assert.equal(g, '*Warranty* - Per Report: SGD sticks (Line#: 4)\nTech Instructions: adjust it');
+  assert.equal(visibleNotes({ scope_notes: null }), '');
 });

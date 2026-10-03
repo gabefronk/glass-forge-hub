@@ -297,3 +297,12 @@ export function visitFields(ev) {
   f.details = f.details.map((d) => ({ ...d, v: /date|ordered|eta|received|requested/i.test(d.k) ? d.v : scrub(d.v) })).filter((d) => d.v);
   return f;
 }
+
+// The calendar text as written, minus what the page keeps out of visits (PO/OE and
+// vendor-order lines, rep pairs, money lines) — for the "Original calendar notes" toggle.
+export function visibleNotes(ev) {
+  const hidden = new Set(visitFields(ev).hidden);
+  return plainText(ev?.scope_notes).split("\n").map((l) => l.trim()).filter(Boolean)
+    .filter((raw) => !hidden.has(raw.replace(/^(?:[*•·]\s+|-\s+)+/, "").replace(/\s+/g, " ").trim()))
+    .map(scrub).filter(Boolean).join("\n");
+}
