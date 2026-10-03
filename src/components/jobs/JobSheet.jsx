@@ -580,7 +580,8 @@ function JobInfo({ snap, folder }) {
 }
 
 // progress (optional): jobProgress() from jobStages — shows a small "Stage n of 7" chip.
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, onRename, extra, headingLevel = "h1", progress = null }) {
+// alert (optional): a node shown first in the chip row by the job name — the red service-item marker.
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, onRename, extra, headingLevel = "h1", progress = null, alert = null }) {
   const mapHref = job?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
   const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
   // The builder already leads most job names ("Bangerter Homes - Gomez Res"); only add it
@@ -598,6 +599,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
         <div className="flex flex-wrap items-stretch gap-6 max-[699px]:gap-4">
           <div className="min-w-[240px] flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
+              {alert}
               {eyebrow ? <span className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>{eyebrow}</span> : null}
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.14)", color: BRASS_LT, border: "1px solid rgba(224,201,148,.35)" }}>
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "currentColor" }} />{status.label}
