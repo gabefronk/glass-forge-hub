@@ -85,3 +85,11 @@ test('no events at all', () => {
   assert.equal(p.current, null);
   assert.equal(p.next, null);
 });
+
+test('review #6: a complete job with no activity for 30+ days does not nag "Up next"', () => {
+  const p = jobProgress({ events: OQUIRRH, reports: OQUIRRH_REPORTS, status: done, today: '2026-11-15' });
+  assert.equal(p.current.key, 'sheetrock');
+  assert.equal(p.next, null);
+  const q = jobProgress({ events: OQUIRRH, reports: OQUIRRH_REPORTS, status: { key: 'active' }, today: '2026-11-15' });
+  assert.equal(q.next.key, 'screens');
+});

@@ -177,3 +177,40 @@ test('visibleNotes keeps the original wording but drops refs, reps and money lin
   assert.equal(g, '*Warranty* - Per Report: SGD sticks (Line#: 4)\nTech Instructions: adjust it');
   assert.equal(visibleNotes({ scope_notes: null }), '');
 });
+
+test('review #1: alphanumeric vendor order numbers never show (Pella screen service)', () => {
+  const ev = { event_date: '2026-10-01', scope_notes: 'Pella Screen Service: (4) Window screens | no PD screen *PO#: 7017567 | Order #: P74LSAR08\nMILG # 12345-AB\nDeliver / Install all screens.' };
+  const f = visitFields(ev);
+  assert.ok(f.work.some((w) => /\(4\) Window screens \| no PD screen$/.test(w)), JSON.stringify(f.work));
+  for (const bad of ['P74LSAR08', 'Order #', '12345-AB', 'MILG']) {
+    assert.ok(!textOf(f).includes(bad), `leaked ${bad}`);
+    assert.ok(!visibleNotes(ev).includes(bad), `leaked in original ${bad}`);
+  }
+});
+
+test('review #2: billing words never become type chips', () => {
+  const a = visitFields({ event_date: '2026-06-01', scope_notes: '*Chargeable per ISR* - Per Report: (1) BRZ screen track (Line #: 1100-1)' });
+  assert.deepEqual(a.tags, []);
+  assert.equal(a.issues.length, 1);
+  const b = visitFields({ event_date: '2026-06-01', scope_notes: '*Amsco WTY / No Charge per OSR* - Per Report: SGD rubbing' });
+  assert.deepEqual(b.tags, ['Amsco Warranty']);
+  const c = visitFields({ event_date: '2026-06-01', scope_notes: '*No Charge Per OSR* - Per Report: adjust doors' });
+  assert.deepEqual(c.tags, []);
+});
+
+test('review #3: a ____ separator ends the result block; Teams invite lines are hidden', () => {
+  const f = visitFields({ event_date: '2026-09-28', scope_notes: 'Reschedule (9/2) – 30 min.\nTech said fine\n________________\nMILGARD WARRANTY\n*WARRANTY* - Per Report: screens torn\nMicrosoft Teams meeting\nJoin: https://teams.microsoft.com/l/x\nMeeting ID: 123 456 789\nPasscode: abc123\nNeed help? | System reference\nFor organizers: Meeting options' });
+  assert.deepEqual(f.result, ['Reschedule (9/2) – 30 min.', 'Tech said fine']);
+  assert.ok(f.tags.includes('Milgard Warranty'));
+  assert.equal(f.issues.length, 1);
+  const shown = textOf(f);
+  for (const bad of ['Teams', 'Meeting ID', 'Passcode', 'organizers']) assert.ok(!shown.includes(bad), `leaked ${bad}`);
+});
+
+test('review #5: plain < and > survive; repeated detail keys keep every value; placed counts real placements', () => {
+  const f = visitFields({ event_date: '2026-06-01', scope_notes: 'Lead time < 2 weeks\nCheck sills > ok' });
+  assert.deepEqual(f.work, ['Lead time < 2 weeks', 'Check sills > ok']);
+  const g = visitFields({ event_date: '2026-06-01', scope_notes: '*WARRANTY* - Per Report: glass\nReceived: 5/26\nReceived: 6/02' });
+  assert.deepEqual(g.details.find((d) => d.k === 'Parts received'), { k: 'Parts received', v: '5/26 · 6/02' });
+  for (const x of [f, g]) assert.equal(x.placed, x.lineCount);
+});

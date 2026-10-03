@@ -70,8 +70,13 @@ export function jobProgress({ events = [], reports = [], status = null, today } 
   const dated = reached.filter((s) => !s.skipped);
   const current = dated.length ? dated.reduce((a, b) => (b.n > a.n ? b : a)) : null;
 
+  // A finished job that has gone quiet for a month isn't waiting on anything: no "Up next".
+  const lastActivity = maxDate([...past.map((x) => x.day), ...reportDays]);
+  const daysQuiet = lastActivity && today ? (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${lastActivity}T00:00:00Z`)) / 86400000 : 0;
+  const settled = status?.key === "complete" && daysQuiet > 30;
+
   let next = null;
-  if (current && current.key !== "complete") {
+  if (current && current.key !== "complete" && !settled) {
     const s = STAGES.slice(current.n).map((x, i) => ({ ...x, n: current.n + i + 1 })).find((x) => !at[x.key]);
     if (s) {
       const future = evs.filter((x) => x.day > today);
