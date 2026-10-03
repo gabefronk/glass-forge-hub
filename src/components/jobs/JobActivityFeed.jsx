@@ -11,7 +11,7 @@ import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, int
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
 import { DayCard, MonthRule, UpNextCard, VisitEntry, StageOnlyEntry } from "./VisitDayCard";
-import { ServiceItemPanel, isServiceOpen } from "./ServiceItems";
+import { ServiceItemPanel, isServiceOpen, FOCUS_EVENT } from "./ServiceItems";
 
 // Status pill for a visit, in plain words.
 function visitBadge(ev, today = denverDate()) {
@@ -269,6 +269,16 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   }, [entries, filter, stageDays, looseServices]);
   const filters = ledger && milestoneCount ? [HISTORY_FILTERS[0], { key: "milestones", label: "Milestones" }, ...HISTORY_FILTERS.slice(1)] : HISTORY_FILTERS;
   const filterCount = (key) => (key === "milestones" ? milestoneCount : counts[key]);
+  // The title-bar service marker jumps here: make sure the item is on screen (All filter).
+  useEffect(() => {
+    const onFocus = (e) => {
+      if (filter === "all") return;
+      setFilter("all");
+      setTimeout(() => window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: e.detail })), 60);
+    };
+    window.addEventListener(FOCUS_EVENT, onFocus);
+    return () => window.removeEventListener(FOCUS_EVENT, onFocus);
+  }, [filter]);
   // If a live reload leaves no stage days, drop back to All instead of a hidden filter.
   useEffect(() => { if (filter === "milestones" && !milestoneCount) setFilter("all"); }, [filter, milestoneCount]);
 
