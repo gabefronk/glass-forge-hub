@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, ClipboardList, Mail } from "lucide-react";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug } from "lucide-react";
+import { Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
@@ -16,6 +16,7 @@ const PRIMARY_NAV = [
 
 const SECONDARY_NAV = [
   { label: "Invoicing", to: "/", icon: Receipt },
+  { label: "Team Structure", to: "/team-structure", icon: GitBranch },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Job Budgets", to: "/job-budgets", icon: DollarSign, ownerOnly: true },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
