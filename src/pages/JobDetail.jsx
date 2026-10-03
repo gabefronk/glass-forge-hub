@@ -53,6 +53,7 @@ export default function JobDetail() {
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [openFormKey, setOpenFormKey] = useState(0);
+  const [serviceKey, setServiceKey] = useState(0);
   const loadVersion = useRef(0);
   const folder = useJobFolderFiles(job);
   // Kept in refs so the realtime listener always sees the current job.
@@ -189,7 +190,7 @@ export default function JobDetail() {
           {loadError && <p role="alert" className="rounded-lg border bg-white p-3 text-[13px] break-words" style={{ color: "#A43432" }}>Some job activity could not load and may be incomplete. {loadError}</p>}
 
           {/* Service item: the red banner. Only renders when something on this job is open. */}
-          <ServiceItemBanner key={`svc-${id}-${reloadKey}`} jobId={id} currentUser={user?.email || ""} onChanged={() => loadAll({ quiet: true })} />
+          <ServiceItemBanner key={`svc-${id}-${serviceKey}`} jobId={id} currentUser={user?.email || ""} onChanged={() => loadAll({ quiet: true })} />
 
           <JobHero
             job={job}
@@ -271,7 +272,7 @@ export default function JobDetail() {
       </div>
 
       {showReport && (
-        <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); loadAll(); }} />
+        <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); setServiceKey((k) => k + 1); loadAll(); }} />
       )}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
