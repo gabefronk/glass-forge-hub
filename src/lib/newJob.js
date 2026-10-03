@@ -1,3 +1,5 @@
+import { findJobMatches, eligibleJobs } from "./jobMatchGuard.js";
+
 export function normalizeJobText(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
@@ -21,6 +23,18 @@ export function newJobPayload(values = {}) {
     ...(oe ? { oe_numbers: [oe] } : {}),
     ...(source ? { source_window_quote_id: source } : {}),
   };
+}
+
+// Tiered duplicate check for the manual "New job" flow. Reuses the shared
+// STRONG/MEDIUM/WEAK guard so the manual flow, ProBuild auto-create and the
+// merge tool all agree on what counts as a duplicate.
+export function findMatchWarnings(jobs = [], values = {}) {
+  const target = {
+    canonical_name: values.canonical_name || "",
+    address: values.address || "",
+    po_numbers: values.po_number ? [values.po_number] : [],
+  };
+  return findJobMatches(target, eligibleJobs(jobs));
 }
 
 export function findDuplicateJobs(jobs = [], values = {}) {
