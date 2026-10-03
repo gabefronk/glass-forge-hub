@@ -86,7 +86,7 @@ export function rowFlag(stats, group) {
 
 // Job card for the Jobs list: bold name, builder · address, kind, and the
 // next (or last) visit on the right. The selected job turns dark.
-export default function JobBrowserRow({ job, group = null, stats, selected, onSelect, href }) {
+export default function JobBrowserRow({ job, group = null, stats, selected, onSelect, href, serviceCount = 0 }) {
   const today = denverDate();
   const when = stats?.nextVisit ? friendlyDay(stats.nextVisit, today) : stats?.lastVisit ? friendlyDay(stats.lastVisit, today) : "";
   const upcoming = Boolean(stats?.nextVisit);
@@ -106,14 +106,15 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
         {when ? (
           <span className="whitespace-nowrap text-[13px] font-bold" style={{ color: selected ? "#e0c994" : upcoming ? "#0b3f3b" : "#6b7477" }} title={upcoming ? "Next visit" : "Last visit"}>{when}</span>
         ) : null}
+        {serviceCount ? <span className="whitespace-nowrap rounded-md px-[7px] py-0.5 text-[11.5px] font-bold uppercase tracking-[.04em]" style={{ backgroundColor: "#a43432", color: "#fff" }} title="Open service item on this job">Service{serviceCount > 1 ? ` ×${serviceCount}` : ""}</span> : null}
         {flag ? <span className="whitespace-nowrap rounded-md px-[7px] py-0.5 text-[11.5px] font-semibold" style={{ backgroundColor: fbg, color: fink }}>{flag.label}</span> : null}
       </span>
     </>
   );
   const cls = "flex w-full items-start gap-3 rounded-[14px] px-3.5 py-[13px] text-left transition-shadow";
   const style = selected
-    ? { backgroundColor: "#0e2426", color: "#ffffff", border: "1px solid #0e2426", boxShadow: "0 8px 20px -12px rgba(14,36,38,.6)" }
-    : { backgroundColor: "#ffffff", color: "#101617", border: "1px solid #d3cabb", boxShadow: "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -8px rgba(10,29,31,.18)" };
+    ? { backgroundColor: "#0e2426", color: "#ffffff", border: `1px solid ${serviceCount ? "#a43432" : "#0e2426"}`, boxShadow: "0 8px 20px -12px rgba(14,36,38,.6)" }
+    : { backgroundColor: "#ffffff", color: "#101617", border: `1px solid ${serviceCount ? "#a43432" : "#d3cabb"}`, borderLeftWidth: serviceCount ? 4 : 1, boxShadow: "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -8px rgba(10,29,31,.18)" };
   if (href) return <Link to={href} className={`${cls} hover:shadow-md`} style={style}>{body}</Link>;
   return (
     <button type="button" onClick={onSelect} aria-current={selected ? "true" : undefined} className={`${cls} ${selected ? "" : "hover:shadow-md"}`} style={style}>
