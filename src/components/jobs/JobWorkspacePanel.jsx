@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowUpRight, HardHat } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { jobsStatus } from "@/lib/jobsSanitize";
+import { holdForService } from "@/lib/serviceHold";
 import { useJobContacts } from "@/hooks/use-job-contacts";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
@@ -31,12 +32,13 @@ const MUTED = "#566063", TEAL = "#0b3f3b";
 // address, super, next step, actions, files), the job facts, scope, then the
 // live visit history. `group` is the read-only duplicate group from lib/jobDedupe.js;
 // activity of every member record is shown.
-export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, onJobDeleted, preloaded = null }) {
+export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, onJobDeleted, onServiceChanged, preloaded = null }) {
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
   const [calEvents, setCalEvents] = useState([]);
   const [serviceKey, setServiceKey] = useState(0);
+  const [serviceOpen, setServiceOpen] = useState(0);
   const [evidence, setEvidence] = useState(null);
   const [fieldReports, setFieldReports] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -141,7 +143,8 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   });
 
   const today = denverDate();
-  const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
+  // Open service item: the job is never "Complete" until it's fixed.
+  const status = useMemo(() => holdForService(jobsStatus(rows, evidence), serviceOpen), [rows, evidence, serviceOpen]);
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
   const progress = useMemo(() => jobProgress({ events: calEvents, reports: buildReports(rows, fieldReports), status, today }), [calEvents, rows, fieldReports, status, today]);
 
@@ -164,7 +167,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   return (
     <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll" style={{ backgroundColor: SHEET_BG }}>
       <div className="px-6 pt-6 pb-10 flex flex-col gap-[18px] max-[1400px]:px-5">
-        <ServiceItemBanner key={`svc-${jobId}-${serviceKey}`} jobId={jobId} onChanged={() => { load({ quiet: true }); onJobChanged?.(job); }} />
+        <ServiceItemBanner key={`svc-${jobId}-${serviceKey}`} jobId={jobId} jobIds={memberIds} onCount={setServiceOpen} onChanged={() => { load({ quiet: true }); onServiceChanged?.(); }} />
         <JobHero
           job={job}
           status={status}
@@ -213,7 +216,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
       </div>
 
       {showReport && (
-        <JobFieldReportModal jobId={jobId} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); setServiceKey((k) => k + 1); load({ quiet: true }); }} />
+        <JobFieldReportModal jobId={jobId} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); setServiceKey((k) => k + 1); load({ quiet: true }); onServiceChanged?.(); }} />
       )}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
