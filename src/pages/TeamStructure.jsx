@@ -12,7 +12,7 @@ const lanes = [
     handoff: "Approved jobs move into project delivery while the sales owner stays attached."
   },
   {
-    name: "Mylan",
+    name: "Milan",
     title: "Project Delivery & Commercial Development",
     icon: Building2,
     owns: ["Customer coordination", "Scheduling", "Project follow-through", "Field coordination"],
