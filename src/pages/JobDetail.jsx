@@ -30,6 +30,7 @@ import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import { denverDate } from "../../base44/shared/billingCore.js";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
+import ServiceItemBanner from "@/components/jobs/ServiceItemBanner";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -187,6 +188,9 @@ export default function JobDetail() {
           </Link>
           {loadError && <p role="alert" className="rounded-lg border bg-white p-3 text-[13px] break-words" style={{ color: "#A43432" }}>Some job activity could not load and may be incomplete. {loadError}</p>}
 
+          {/* Service item: the red banner. Only renders when something on this job is open. */}
+          <ServiceItemBanner key={`svc-${id}-${reloadKey}`} jobId={id} currentUser={user?.email || ""} onChanged={() => loadAll({ quiet: true })} />
+
           <JobHero
             job={job}
             status={status}
@@ -211,7 +215,7 @@ export default function JobDetail() {
           <DuplicateJobNotice group={group} currentId={id} />
 
           <div id="add-note" className="scroll-mt-4">
-            <SheetCard icon={HardHat} tile={TILE.green} title="Visits" sub="notes, reports and calls, newest first" right={<LiveMark live={live} />}>
+            <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
               <JobActivityFeed
                 ledger
                 jobId={id}
@@ -225,7 +229,7 @@ export default function JobDetail() {
                 onChanged={() => loadAll({ quiet: true })}
                 onPhotoClick={setLightbox}
                 openFormKey={openFormKey}
-                title="Visits"
+                title="History"
                 dedupe={snap}
                 progress={progress}
               />
