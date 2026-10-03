@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link2, Plus, Search } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { confirmContactLink } from "@/hooks/use-job-contacts";
-import { findDuplicateJobs, newJobPayload } from "@/lib/newJob";
+import { findMatchWarnings, newJobPayload } from "@/lib/newJob";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { ASSIGNABLE_CONTACT_ROLES, ROLE_LABELS } from "@/lib/jobContacts";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -25,8 +25,10 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
   const [contactsError, setContactsError] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [duplicates, setDuplicates] = useState([]);
-  const [duplicateApproved, setDuplicateApproved] = useState(false);
+  const [matchWarning, setMatchWarning] = useState(null); // {strong, medium} → blocking dialog
+  const [weakMatches, setWeakMatches] = useState([]); // inline note only, no block
+  const [forceCreate, setForceCreate] = useState(false); // set by "Create anyway" in the warning dialog
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!open) return;
@@ -40,11 +42,11 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
 
   const reset = () => {
     setValues(blank); setContactSearch(""); setSelected([]); setContactRoles({}); setNewContactRole(""); setError("");
-    setDuplicates([]); setDuplicateApproved(false); setContactsError(""); setContacts([]); setCreatedState(null); setNewContact({name:"",email:"",phone:"",company:"",builder:""});
+    setMatchWarning(null); setWeakMatches([]); setForceCreate(false); setContactsError(""); setContacts([]); setCreatedState(null); setNewContact({name:"",email:"",phone:"",company:"",builder:""});
   };
   const change = (key, value) => {
     setValues((current) => ({ ...current, [key]: value }));
-    setDuplicates([]); setDuplicateApproved(false); setError("");
+    setMatchWarning(null); setWeakMatches([]); setForceCreate(false); setError("");
   };
   const filteredContacts = useMemo(() => {
     const q = contactSearch.trim().toLowerCase();
@@ -58,8 +60,12 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
     const payload = newJobPayload(values);
     if (!payload.canonical_name) { setError("Job name is required."); return; }
     if (createdState?.jobId) { setError("This job was already created. Open it instead of submitting twice."); return; }
-    const matches = findDuplicateJobs(jobs, values);
-    if (matches.length && !duplicateApproved) { setDuplicates(matches); return; }
+    const warnings = findMatchWarnings(jobs, values);
+    setWeakMatches(warnings.weak);
+    if ((warnings.strong.length || warnings.medium.length) && !forceCreate) {
+      setMatchWarning({ strong: warnings.strong, medium: warnings.medium });
+      return;
+    }
     if (newContact.name.trim() && !owner) { setError("Only the owner can add a contact here. Ask them to create it in Contacts."); return; }
     if (values.source_window_quote_id.trim() && !owner) { setError("Only the owner can link a source quote. Leave this blank."); return; }
     if (values.source_window_quote_id.trim()) {
@@ -145,16 +151,15 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
             {owner && <details className="mt-2 rounded-xl border p-3"><summary className="cursor-pointer text-sm">Add new contact for this job (owner only)</summary><div className="mt-2 grid gap-2 sm:grid-cols-2">{[["name","Name"],["email","Email"],["phone","Phone"],["company","Company"],["builder","Builder"]].map(([key,label])=><label key={key} className="text-xs">{label}<input className={inputClass} type={key==='email'?'email':'text'} value={newContact[key]} onChange={e=>setNewContact(v=>({...v,[key]:e.target.value}))}/></label>)}</div><label className="mt-2 block text-xs">Role for new contact<select className={inputClass} value={newContactRole} onChange={e=>setNewContactRole(e.target.value)}><option value="">Choose role</option>{ASSIGNABLE_CONTACT_ROLES.map(role=><option key={role} value={role}>{ROLE_LABELS[role]}</option>)}</select></label><p className="mt-2 text-xs">An existing email or phone must be selected from the picker instead of creating a duplicate.</p></details>}
           {selected.length > 0 && <p className="mt-2 flex items-center gap-1 text-xs text-emerald-800"><Link2 className="h-3.5 w-3.5" />{selected.length} contact{selected.length === 1 ? "" : "s"} selected</p>}
           </div>
-          {duplicates.length > 0 && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-            <strong>Looks like this job already exists</strong>
-            <ul className="mt-1 space-y-1">{duplicates.map((job) => <li key={job.id}><Link className="underline" to={`/jobs/${job.id}`} target="_blank">{job.canonical_name || "Open matching job"}</Link></li>)}</ul>
-            <label className="mt-3 flex min-h-10 cursor-pointer items-center gap-2"><input type="checkbox" checked={duplicateApproved} onChange={(e) => setDuplicateApproved(e.target.checked)} /> Create anyway</label>
+          {weakMatches.length > 0 && <div className="rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
+            <strong>Similar job{weakMatches.length === 1 ? "" : "s"} on file (not a block):</strong>
+            <ul className="mt-1 space-y-0.5">{weakMatches.map((job) => <li key={job.id}><Link className="underline" to={`/jobs/${job.id}`} target="_blank">{job.canonical_name || "Open job"}</Link>{job.address ? ` · ${job.address}` : ""}</li>)}</ul>
           </div>}
           {createdState?.jobId && <p className="text-sm text-blue-800">Job created: <Link className="underline" to={`/jobs/${createdState.jobId}`}>Open job</Link>. New contact: {createdState.contact}. Contact links: {createdState.contactLinks.filter(x=>x.status==='fulfilled').length}/{createdState.contactLinks.length}. Folder: {createdState.folder.startsWith?.('https:') ? <a className="underline" href={createdState.folder} target="_blank" rel="noreferrer">Open Drive</a> : createdState.folder}. Note: {createdState.note}.</p>}
           {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
           <DialogFooter>
             <button type="button" disabled={saving} onClick={() => setOpen(false)} className="min-h-11 rounded-xl border px-4 text-sm font-medium">Cancel</button>
-            <button type="submit" disabled={saving || !!createdState?.jobId || (duplicates.length > 0 && !duplicateApproved)} className="min-h-11 rounded-xl bg-emerald-900 px-4 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Creating…" : duplicateApproved ? "Create anyway" : "Create job"}</button>
+            <button type="submit" disabled={saving || !!createdState?.jobId} className="min-h-11 rounded-xl bg-emerald-900 px-4 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Creating…" : "Create job"}</button>
           </DialogFooter>
         </form>
       </DialogContent>
