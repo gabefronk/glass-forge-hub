@@ -45,7 +45,7 @@ function StageBar({ stages }) {
   const n = stages.map((s) => s.n);
   const range = n.length > 1 ? `${Math.min(...n)}–${Math.max(...n)}` : n[0];
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2 border-b pb-2.5 max-[599px]:mb-0 max-[599px]:px-3.5 max-[599px]:py-2.5" style={{ borderColor: HAIR, backgroundColor: current ? undefined : undefined }}>
+    <div className="mb-3 flex flex-wrap items-center gap-2 border-b pb-2.5 max-[599px]:mb-0 max-[599px]:px-3.5 max-[599px]:py-2.5" style={{ borderColor: HAIR, backgroundColor: current ? "rgba(238,248,241,.6)" : undefined }}>
       <span className="text-[10.5px] font-bold uppercase tracking-[.12em]" style={{ color: current ? GREEN_INK : INK2 }}>{current ? "Current stage" : "Milestone"}</span>
       {stages.map((s) => (
         <span key={s.key} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[13px] font-bold"
@@ -71,15 +71,15 @@ export function DayCard({ date, today, stages, children }) {
   const stampInk = s.future ? AMBER7 : isCurrent ? GREEN_INK : isStage ? TEAL8 : INK;
   return (
     <section className="mb-3.5 grid grid-cols-[72px_minmax(0,1fr)] gap-x-[18px] rounded-[14px] px-[18px] py-4 max-[599px]:grid-cols-1 max-[599px]:overflow-hidden max-[599px]:p-0" style={shell} aria-label={`${s.wd} ${s.mo} ${s.day}`}>
-      <div className="row-span-[20] self-start border-r pr-3 text-center max-[599px]:row-span-1 max-[599px]:flex max-[599px]:items-baseline max-[599px]:gap-1.5 max-[599px]:border-b max-[599px]:border-r-0 max-[599px]:px-3.5 max-[599px]:py-2 max-[599px]:text-left"
-        style={{ borderColor: s.future ? BRASS : isCurrent ? "#bfe3cc" : HAIR, backgroundColor: undefined }}>
+      <div className="self-start border-r pr-3 text-center max-[599px]:flex max-[599px]:items-baseline max-[599px]:gap-1.5 max-[599px]:border-b max-[599px]:border-r-0 max-[599px]:px-3.5 max-[599px]:py-2 max-[599px]:text-left"
+        style={{ borderColor: s.future ? BRASS : isCurrent ? "#bfe3cc" : HAIR }}>
         {s.rel ? <span className="mb-1.5 block rounded-[5px] px-1 py-0.5 text-[9.5px] font-bold uppercase tracking-[.06em] max-[599px]:order-4 max-[599px]:mb-0 max-[599px]:ml-auto" style={s.future ? { backgroundColor: AMBER100, color: AMBER7 } : { backgroundColor: TEAL050, color: "#10524c" }}>{s.future ? "Upcoming · " : ""}{s.rel}</span> : s.future ? <span className="mb-1.5 block rounded-[5px] px-1 py-0.5 text-[9.5px] font-bold uppercase tracking-[.06em] max-[599px]:order-4 max-[599px]:mb-0 max-[599px]:ml-auto" style={{ backgroundColor: AMBER100, color: AMBER7 }}>Upcoming</span> : null}
         <span className="block text-[10.5px] font-semibold uppercase tracking-[.12em]" style={{ color: s.future ? AMBER7 : INK2 }}>{s.wd}</span>
         <span className="my-px block text-[24px] font-semibold leading-none tracking-[-.02em] max-[599px]:order-2 max-[599px]:text-[15px]" style={{ color: stampInk }}>{s.day}</span>
         <span className="block text-[10.5px] font-semibold uppercase tracking-[.12em] max-[599px]:order-3" style={{ color: s.future ? AMBER7 : INK2 }}>{s.mo}</span>
       </div>
       <div className="min-w-0">
-        {isStage ? <div style={isCurrent ? { backgroundColor: undefined } : undefined}><StageBar stages={stages} /></div> : null}
+        {isStage ? <StageBar stages={stages} /> : null}
         <div className="flex flex-col gap-4 divide-y divide-dashed max-[599px]:gap-0 max-[599px]:px-3.5 max-[599px]:py-3 [&>*+*]:pt-4" style={{ borderColor: "#e0dacf" }}>{children}</div>
       </div>
     </section>
