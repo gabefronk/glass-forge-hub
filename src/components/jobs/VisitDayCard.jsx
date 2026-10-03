@@ -156,8 +156,8 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick }) {
   const multiVendor = f.vendors.filter((v) => v.qty != null).length > 1;
   const cells = [
     !multiVendor && f.qty ? ["Qty", `${f.qty}`] : null,
-    f.delivery ? ["Delivery", joinMeta(f.delivery.method, f.delivery.date)] : null,
-    !multiVendor && f.received.length ? ["At BFS", f.received[f.received.length - 1]] : null,
+    f.delivery ? ["Delivery", clean(joinMeta(f.delivery.method, f.delivery.date))] : null,
+    !multiVendor && f.received.length ? ["At BFS", clean(f.received[f.received.length - 1])] : null,
     f.method ? ["Method", clean(f.method)] : null,
     ...f.details.map((d) => [d.k, clean(d.v)]),
   ].filter((c) => c && c[1]);
@@ -166,7 +166,7 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick }) {
   const meta = joinMeta(time, crewName(ev.created_by), photos ? `${photos} ${photos === 1 ? "photo" : "photos"}` : "");
   const original = clean(visibleNotes(ev)).trim();
   const Icon = f.type === "order" ? ShoppingCart : HardHat;
-  const chips = [f.brand, ...f.tags].filter(Boolean).map(clean).filter(Boolean);
+  const chips = [...new Set([f.brand, ...f.tags].filter(Boolean).map(clean).filter(Boolean))];
 
   return (
     <article className="min-w-0">
@@ -190,7 +190,7 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick }) {
           <Row label="Product">
             <table className="w-full max-w-[420px] border-collapse overflow-hidden rounded-[9px] text-[13.5px]" style={{ border: `1px solid ${HAIR}` }}>
               <thead><tr style={{ backgroundColor: BAND }}>{["Vendor", "Qty", "At BFS"].map((h) => <th key={h} className="border-b px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[.1em]" style={{ color: INK2, borderColor: HAIR }}>{h}</th>)}</tr></thead>
-              <tbody>{f.vendors.filter((v) => v.qty != null).map((v, i) => <tr key={i}><td className="border-b px-3 py-1.5 font-semibold" style={{ borderColor: HAIR }}>{v.brand || "—"}</td><td className="border-b px-3 py-1.5" style={{ borderColor: HAIR }}>{v.qty}</td><td className="border-b px-3 py-1.5" style={{ borderColor: HAIR }}>{v.here || "—"}</td></tr>)}</tbody>
+              <tbody>{f.vendors.filter((v) => v.qty != null).map((v, i) => <tr key={i}><td className="border-b px-3 py-1.5 font-semibold" style={{ borderColor: HAIR }}>{v.brand || "—"}</td><td className="border-b px-3 py-1.5" style={{ borderColor: HAIR }}>{v.qty}</td><td className="border-b px-3 py-1.5" style={{ borderColor: HAIR }}>{clean(v.here) || "—"}</td></tr>)}</tbody>
             </table>
           </Row>
         ) : null}
