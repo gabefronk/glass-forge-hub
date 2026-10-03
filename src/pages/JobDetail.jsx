@@ -31,7 +31,7 @@ import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import { denverDate } from "../../base44/shared/billingCore.js";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
-import ServiceItemBanner from "@/components/jobs/ServiceItemBanner";
+import { ServiceMarker, useServiceItems } from "@/components/jobs/ServiceItems";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -54,10 +54,10 @@ export default function JobDetail() {
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [openFormKey, setOpenFormKey] = useState(0);
-  const [serviceKey, setServiceKey] = useState(0);
-  const [serviceOpen, setServiceOpen] = useState(0);
   const loadVersion = useRef(0);
   const folder = useJobFolderFiles(job);
+  // Service items on this job and its duplicate records: shown on their field report in History.
+  const service = useServiceItems([id, ...(group?.memberIds || [])]);
   // Kept in refs so the realtime listener always sees the current job.
   const liveRef = useRef({ memberIds: [id], shownIds: [] });
   liveRef.current = {
@@ -148,7 +148,7 @@ export default function JobDetail() {
   });
 
   // Open service item: the job is never "Complete" until it's fixed.
-  const status = useMemo(() => holdForService(jobsStatus(rows, evidence), serviceOpen), [rows, evidence, serviceOpen]);
+  const status = useMemo(() => holdForService(jobsStatus(rows, evidence), service.open.length), [rows, evidence, service.open.length]);
   const today = denverDate();
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
   const progress = useMemo(() => jobProgress({ events: calEvents, reports: buildReports(rows, fieldReports), status, today }), [calEvents, rows, fieldReports, status, today]);
@@ -192,9 +192,6 @@ export default function JobDetail() {
           </Link>
           {loadError && <p role="alert" className="rounded-lg border bg-white p-3 text-[13px] break-words" style={{ color: "#A43432" }}>Some job activity could not load and may be incomplete. {loadError}</p>}
 
-          {/* Service item: the red banner. Only renders when something on this job is open. */}
-          <ServiceItemBanner key={`svc-${id}-${serviceKey}`} jobId={id} jobIds={group?.memberIds} onCount={setServiceOpen} onChanged={() => loadAll({ quiet: true })} />
-
           <JobHero
             job={job}
             status={status}
@@ -207,6 +204,7 @@ export default function JobDetail() {
             onLog={logInteraction}
             onRename={async (name) => setJob(await renameJob(job, name))}
             progress={progress}
+            alert={<ServiceMarker open={service.open} />}
             extra={
               <>
                 {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
@@ -236,6 +234,8 @@ export default function JobDetail() {
                 title="History"
                 dedupe={snap}
                 progress={progress}
+                serviceItems={service.items}
+                onServiceChanged={service.reload}
               />
             </SheetCard>
           </div>
@@ -275,7 +275,7 @@ export default function JobDetail() {
       </div>
 
       {showReport && (
-        <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); setServiceKey((k) => k + 1); loadAll(); }} />
+        <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); service.reload(); loadAll(); }} />
       )}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
