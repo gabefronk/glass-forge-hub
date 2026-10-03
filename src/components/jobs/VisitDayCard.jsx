@@ -243,15 +243,15 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [
           </Row>
         ) : null}
       </dl>
+      {services.length ? (
+        <div className="pl-[38px] max-[599px]:pl-0">
+          {services.map((s) => <ServiceItemPanel key={s.id} item={s} withReport={false} onChanged={onServiceChanged} />)}
+        </div>
+      ) : null}
       {original ? (
         <div className="mt-2 pl-[38px] max-[599px]:pl-0">
           <button type="button" onClick={() => setShowOriginal((v) => !v)} className="text-[12px] font-semibold hover:underline" style={{ color: MUTED }}>{showOriginal ? "Hide original calendar notes" : "Original calendar notes"}</button>
           {showOriginal ? <p className="m-0 mt-1.5 whitespace-pre-wrap rounded-[9px] px-3 py-2 font-mono text-[12px] leading-[1.55]" style={{ backgroundColor: BAND, color: "#34403f", border: `1px solid ${HAIR}` }}>{original.replace(/\n{3,}/g, "\n\n")}</p> : null}
-        </div>
-      ) : null}
-      {services.length ? (
-        <div className="pl-[38px] max-[599px]:pl-0">
-          {services.map((s) => <ServiceItemPanel key={s.id} item={s} withReport={false} onChanged={onServiceChanged} />)}
         </div>
       ) : null}
     </article>
