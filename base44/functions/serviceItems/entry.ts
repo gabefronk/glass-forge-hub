@@ -20,8 +20,9 @@ import { secrets } from 'base44:runtime';
 //   (resolveFieldReport stamps service_report_complete_at when the service visit's report is
 //   filed complete.)
 //   ping     — daily 07:00 Denver workflow (no user). Every open item quiet since yesterday, or
-//              ordered/shipped past its ETA → email + text the owner; Gabe is copied once it
-//              has been quiet 2+ days.
+//              ordered/shipped past its ETA, or scheduled past its visit date → email + text
+//              the owner; Gabe is copied once it has been quiet 2+ days. Items waiting on a
+//              future ETA or a booked visit date are left alone until that date passes.
 //   list     — { job_id? | job_ids?[], open_only? } for the Jobs list / banner.
 
 const OPEN = ['reported', 'acknowledged', 'working', 'ordered', 'shipped', 'delivered', 'scheduled', 'on_hold'];
@@ -361,13 +362,18 @@ export default async function (req) {
         const lastDay = denverDate(item.last_activity_at || item.created_date);
         const quiet = Math.max(0, daysBetween(lastDay, today)); // 1 = nothing since yesterday
         const etaPassed = isDay(item.eta_date) && item.eta_date < today && ['ordered', 'shipped'].includes(item.status);
-        if (quiet < 1 && !etaPassed) continue;
+        const visitPassed = item.status === 'scheduled' && isDay(item.service_date) && item.service_date < today;
+        // Waiting on a date that hasn't come yet (parts on the way, visit booked): no nag.
+        const waiting = (['ordered', 'shipped'].includes(item.status) && isDay(item.eta_date) && !etaPassed)
+          || (item.status === 'scheduled' && isDay(item.service_date) && !visitPassed);
+        if (waiting) continue;
+        if (quiet < 1 && !etaPassed && !visitPassed) continue;
         const contacts = item.owner_member_key && item.owner_member_key !== settingsContacts.memberKey ? await contactsFor(api, item.owner_member_key) : settingsContacts;
         const emails = [contacts.email];
         const escalate = contacts.escalate || item.escalate_to_email;
         if (quiet >= 2 && escalate) emails.push(escalate); // copy Gabe after 2 quiet days
-        const why = etaPassed ? `ETA ${item.eta_date} passed` : `${quiet} day${quiet === 1 ? '' : 's'} no activity`;
-        const subject = `${etaPassed ? 'ETA PASSED' : 'STILL OPEN'} — ${item.job_name || 'job'}: ${TYPES[item.service_type] || 'service item'} (${why})`;
+        const why = etaPassed ? `ETA ${item.eta_date} passed` : visitPassed ? `service visit ${item.service_date} passed, not marked fixed` : `${quiet} day${quiet === 1 ? '' : 's'} no activity`;
+        const subject = `${etaPassed ? 'ETA PASSED' : visitPassed ? 'VISIT PASSED' : 'STILL OPEN'} — ${item.job_name || 'job'}: ${TYPES[item.service_type] || 'service item'} (${why})`;
         const sent = await notify(base44, { emails, phones: [contacts.phone], sms: [contacts.sms] }, subject, `${summary(item)}\n\nAny update on the job page stops these pings.`, smsText(item, `Still open, ${why}`));
         await api.ServiceItems.update(item.id, { last_ping_at: now, ping_count: (item.ping_count || 0) + 1 });
         results.push({ id: item.id, job: item.job_name, quiet, etaPassed, sent });
