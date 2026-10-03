@@ -35,6 +35,7 @@ import Todos from '@/pages/Todos';
 import JobBudgets from '@/pages/JobBudgets';
 import PurchaseOrders from '@/pages/PurchaseOrders';
 import Summit from '@/pages/Summit';
+import TeamStructure from '@/pages/TeamStructure';
 import UnlinkedJobRecords from '@/pages/UnlinkedJobRecords';
 import JobSetup from '@/pages/JobSetup';
 import InboxAgents from '@/pages/InboxAgents';
@@ -105,6 +106,7 @@ const AuthenticatedApp = () => {
           <Route path="/purchase-orders" element={<QuotesOnlyRedirect><PurchaseOrders /></QuotesOnlyRedirect>} />
           <Route path="/admin/unlinked" element={<QuotesOnlyRedirect><UnlinkedJobRecords /></QuotesOnlyRedirect>} />
           <Route path="/summit" element={<Summit />} />
+          <Route path="/team-structure" element={<QuotesOnlyRedirect><TeamStructure /></QuotesOnlyRedirect>} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
