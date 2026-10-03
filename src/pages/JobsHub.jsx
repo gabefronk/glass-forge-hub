@@ -20,6 +20,8 @@ export default function JobsHub() {
   const [feeLines, setFeeLines] = useState([]);
   const [calEvents, setCalEvents] = useState(null);
   const [jobNotes, setJobNotes] = useState(null);
+  // Open service items by job id — the red tag on the row and the "Service items" view.
+  const [serviceByJob, setServiceByJob] = useState({});
   const [searchParams, setSearchParams] = useSearchParams();
   // Search, view, sort and builder live in the URL so Back and shared links keep them.
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
@@ -59,6 +61,11 @@ export default function JobsHub() {
         setFeeLines(fl);
         setCalEvents(ev);
         setJobNotes(nt);
+        base44.functions.invoke("serviceItems", { action: "list", open_only: true }).then((res) => {
+          const map = {};
+          for (const it of res?.data?.items || []) map[it.job_id] = (map[it.job_id] || 0) + 1;
+          setServiceByJob(map);
+        }).catch(() => {});
       } catch (e) {
         setLoadError("Jobs could not load. Reload to try again. " + (e?.message || ""));
       } finally {
@@ -110,9 +117,11 @@ export default function JobsHub() {
     if (segment === "duplicates") base = base.filter(g => g.review.length > 0);
     if (segment === "this_week") base = base.filter(g => jobStats[g.id]?.thisWeek);
     if (segment === "needs_you") base = base.filter(g => needsYou(jobStats[g.id]?.status, g));
+    if (segment === "service") base = base.filter(g => g.members.some((m) => serviceByJob[m.id]));
     if (builder) base = base.filter(g => sanitizeText(String(g.job?.builder || "").trim()) === builder);
     return sortJobGroups(base, jobStats, sort);
-  }, [groups, search, segment, jobStats, sort, builder]);
+  }, [groups, search, segment, jobStats, sort, builder, serviceByJob]);
+  const serviceCount = useMemo(() => groups.filter((g) => g.members.some((m) => serviceByJob[m.id])).length, [groups, serviceByJob]);
 
   const builders = useMemo(() => builderOptions(groups, sanitizeText), [groups]);
   const filtersActive = Boolean(search.trim() || segment !== "all" || builder);
@@ -128,6 +137,7 @@ export default function JobsHub() {
 
   // Four main views; the less common ones sit in the "More" menu.
   const segments = [
+    { key: "service", label: "Service items", count: serviceCount, attention: true, red: true },
     { key: "needs_you", label: "Needs you", count: counts.needs_you, attention: true },
     { key: "this_week", label: "This week", count: counts.this_week },
     // The Active view also lists jobs that need a report or a match review, so its count includes them.
@@ -272,7 +282,7 @@ export default function JobsHub() {
           <div className="mt-3 flex-1 min-h-0 overflow-y-auto obsidian-scroll -mx-1 px-1 pb-6">
             <div className="flex flex-col gap-2">
               {visibleJobs.map((g) => (
-                <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} selected={g.id === selectedJobId} onSelect={() => setSelectedJobId(g.id)} />
+                <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} serviceCount={g.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} selected={g.id === selectedJobId} onSelect={() => setSelectedJobId(g.id)} />
               ))}
             </div>
             {!visibleJobs.length && emptyState}
@@ -292,7 +302,7 @@ export default function JobsHub() {
         {notices}
         <div className="mt-3.5 grid grid-cols-1 gap-2 lg:grid-cols-2">
           {visibleJobs.map((g) => (
-            <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} href={`/jobs/${g.job.id}`} />
+            <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} serviceCount={g.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} href={`/jobs/${g.job.id}`} />
           ))}
         </div>
         {!visibleJobs.length && emptyState}
