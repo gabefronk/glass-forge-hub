@@ -166,7 +166,7 @@ const smsText = (item, lead) => `${lead}: ${titleCase(item.job_name) || 'job'} �
 // ---------- Matching an item to the calendar visit that fixes it ----------
 const CHAIN = ['reported', 'acknowledged', 'working', 'ordered', 'shipped', 'delivered', 'scheduled', 'fixed', 'closed'];
 const FIX_RE = /\b(service|warr|wty|warranty|replace(?:ment)?|re-?install|remake|re-?order|broken|damaged|missing|swap|redo|fix)\b/i;
-const STOP = new Set(['the', 'and', 'for', 'with', 'new', 'one', 'two', 'job', 'site', 'from', 'came', 'too', 'tall', 'short', 'wrong', 'size', 'missing', 'broken', 'damaged', 'lost', 'unit', 'units', 'logged', 'gabe', 'installer', 'install', 'pull', 'reinstall', 'thu', 'fri', 'mon', 'tue', 'wed', 'need', 'needs', 'order', 'ordered', 'bfs', 'via', 'away', 'walked', 'off', 'all', 'are', 'was', 'not', 'but', 'good', 'though']);
+const STOP = new Set(['the', 'and', 'for', 'with', 'new', 'one', 'two', 'job', 'site', 'from', 'came', 'too', 'tall', 'short', 'wrong', 'size', 'missing', 'broken', 'damaged', 'lost', 'unit', 'units', 'logged', 'gabe', 'installer', 'install', 'pull', 'reinstall', 'thu', 'fri', 'mon', 'tue', 'wed', 'need', 'needs', 'order', 'ordered', 'bfs', 'via', 'away', 'walked', 'off', 'all', 'are', 'was', 'not', 'but', 'good', 'though', 'window', 'windows', 'homes', 'home', 'lot', 'lots']);
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const words = (s) => [...new Set(norm(s).split(' ').filter((w) => (w.length >= 3 || /^\d{3,}$/.test(w)) && !STOP.has(w)))];
 const baseName = (s) => norm(s).replace(/\breorder\b/g, '').replace(/^i\s+/, '').replace(/\s+/g, ' ').trim();
@@ -188,9 +188,12 @@ const reportedDay = (item) => {
   return denverDate(first);
 };
 const eventText = (ev) => `${ev.job_name || ''}\n${ev.scope_notes || ''}`;
-const overlap = (item, ev) => {
-  const text = ` ${norm(eventText(ev))} `;
-  return words(`${item.unit || ''} ${item.description || ''} ${item.order_ref || ''}`).filter((w) => text.includes(` ${w} `)).length;
+// How many of the issue's own words (unit, description, order #) are in the visit's notes.
+// The job's name/address words don't count — every visit on the house has those.
+const overlap = (item, ev, job) => {
+  const text = ` ${norm(ev.scope_notes)} `;
+  const skip = new Set(words(`${item.job_name || ''} ${job?.canonical_name || ''} ${job?.address || ''} ${job?.builder || ''}`));
+  return words(`${item.unit || ''} ${item.description || ''} ${item.order_ref || ''}`).filter((w) => !skip.has(w) && text.includes(` ${w} `)).length;
 };
 
 async function matchVisits(base44, api, { jobIds = null, who = 'system', now }) {
@@ -237,11 +240,12 @@ async function matchVisits(base44, api, { jobIds = null, who = 'system', now }) 
       && !waiting.some((i) => i.source_event_id === ev.id) && FIX_RE.test(eventText(ev)));
     for (const ev of candidates.sort((a, b) => a.event_date.localeCompare(b.event_date))) {
       const scored = waiting.filter((i) => !i.service_event_id && ev.event_date >= reportedDay(i))
-        .map((i) => ({ i, s: overlap(i, ev) })).sort((a, b) => b.s - a.s);
+        .map((i) => ({ i, s: overlap(i, ev, byId.get(i.job_id)) })).sort((a, b) => b.s - a.s);
       if (!scored.length) continue;
       const [best, next] = scored;
-      // Clear winner on the issue's own words; a lone open item on the house needs no tie-break.
-      const pick = (best.s >= 1 && (!next || best.s > next.s)) || (scored.length === 1 && waiting.length === 1) ? best.i : null;
+      // The visit's notes have to name this issue (unit, part, order #), and beat any other open
+      // item on the house — a generic install/service visit never grabs an item by itself.
+      const pick = best.s >= 1 && (!next || best.s > next.s) ? best.i : null;
       if (!pick) continue;
       const patch = {
         service_event_id: ev.id, service_date: ev.event_date, service_event_draft: false,
