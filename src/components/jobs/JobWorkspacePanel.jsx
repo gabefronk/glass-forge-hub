@@ -13,6 +13,7 @@ import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
+import MergedJobBanner from "@/components/jobs/MergedJobBanner";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
 import { JobHero, JobFactsCard, ScopeCard, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
@@ -178,6 +179,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           }
         />
 
+        <MergedJobBanner job={job} />
         <DuplicateJobNotice group={group} currentId={jobId} />
         <JobFactsCard snap={snap} folder={folder} />
         <ScopeCard snap={snap} />

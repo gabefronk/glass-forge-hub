@@ -12,6 +12,7 @@ import { fetchAllPages } from "@/lib/pagination";
 import { useJobContacts } from "@/hooks/use-job-contacts";
 import { loadJobGroup, loadJobActivity, jobEventsAndEvidence, reportsForJob, loadUniqueLegacyNames } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
+import MergedJobBanner from "@/components/jobs/MergedJobBanner";
 import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
 import JobLinkedRecords from "@/components/jobs/JobLinkedRecords";
 import JobMessageThreads from "@/components/jobs/JobMessageThreads";
@@ -202,6 +203,7 @@ export default function JobDetail() {
             }
           />
 
+          <MergedJobBanner job={job} />
           <DuplicateJobNotice group={group} currentId={id} />
           <JobFactsCard snap={snap} folder={folder} />
           <ScopeCard snap={snap} />
