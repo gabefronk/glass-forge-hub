@@ -249,6 +249,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
     return { servicesByNote: byNote, looseServices: loose };
   }, [serviceItems, notes]);
   const noteServices = (note) => servicesByNote[note.id] || [];
+  // A visit booked as the fix for a service item shows it as a service visit.
+  const serviceForVisit = (ev) => (ev?.id && (serviceItems || []).find((s) => s.service_event_id === ev.id)) || null;
   const days = useMemo(() => {
     let base = groupHistoryByDay(entries, filter === "milestones" ? "all" : filter);
     if (filter === "all" && looseServices.length) {
@@ -339,7 +341,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                 {groupFiles(items).map((it, i) => {
                   if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
                   if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
-                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today)} onPhotoClick={onPhotoClick} />;
+                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today)} onPhotoClick={onPhotoClick} service={serviceForVisit(it.ev)} />;
                   if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
                   if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                   if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
