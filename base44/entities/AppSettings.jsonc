@@ -7,6 +7,21 @@
       "format": "date",
       "title": "Compliance Start Date",
       "description": "Date from which field report compliance is enforced (America/Denver). Calendar events before this date are marked pre_compliance \u2014 excluded from the Today tab, never rendered red on the calendar, and never accrue days_late. The matcher still runs and stores report_status_raw for tuning."
+    },
+    "service_owner_email": {
+      "type": "string",
+      "title": "Service owner email",
+      "description": "Who gets service-item emails and daily pings (Milan). Falls back to the Milan TeamMember's login email when blank."
+    },
+    "service_owner_sms": {
+      "type": "string",
+      "title": "Service owner text address",
+      "description": "Email-to-SMS address for the service owner's phone, e.g. 8015551234@vtext.com (Verizon), @txt.att.net (AT&T), @tmomail.net (T-Mobile). Blank = no text."
+    },
+    "service_escalate_email": {
+      "type": "string",
+      "title": "Service escalation email",
+      "description": "Copied when a reorder is placed and after two quiet days on an open service item (Gabe)."
     }
   },
   "required": [
