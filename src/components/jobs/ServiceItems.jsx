@@ -73,6 +73,19 @@ export function ServiceMarker({ open }) {
   );
 }
 
+// The item lives on its service visit now; where it was first reported just points there.
+export function ServiceItemPointer({ item, visitDate }) {
+  const open = isServiceOpen(item);
+  return (
+    <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: item.id }))}
+      className="mt-2 inline-flex flex-wrap items-center gap-1.5 text-left text-[13px] font-semibold hover:underline" style={{ color: open ? RED : "#6b5a58" }}>
+      <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+      Service item: {SERVICE_TYPE_LABEL[item.service_type] || "Action needed"}{item.unit ? ` — ${item.unit}` : ""} · {serviceLabel(item.status)}
+      <span className="font-medium" style={{ color: "#6b5a58" }}>→ tracked on the {visitDate ? formatShort(visitDate) : "service"} visit</span>
+    </button>
+  );
+}
+
 // withReport: the item sits under its own field report, so the crew's note and photos are
 // already shown above it; otherwise (logged by hand) show them here.
 export function ServiceItemPanel({ item, withReport = true, onChanged }) {
