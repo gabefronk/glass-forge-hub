@@ -31,7 +31,7 @@ const CHAIN = ["reported", "acknowledged", "working", "ordered", "shipped", "del
 export const serviceLabel = (s) => (SERVICE_STATUS.find(([k]) => k === s) || [s, s])[1];
 export const isServiceOpen = (i) => SERVICE_OPEN.includes(i?.status);
 const RED = "#A43432", RED_BG = "#FCEDEC", RED_LINE = "#F0C9C5";
-const FOCUS_EVENT = "service-item-focus";
+export const FOCUS_EVENT = "service-item-focus";
 
 const ERRORS = {
   eta_required: "Add an ETA before marking it ordered or shipped.",
