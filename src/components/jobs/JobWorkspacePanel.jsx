@@ -17,7 +17,7 @@ import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import MergedJobBanner from "@/components/jobs/MergedJobBanner";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
-import ServiceItemBanner from "@/components/jobs/ServiceItemBanner";
+import { ServiceMarker, useServiceItems } from "@/components/jobs/ServiceItems";
 import { JobHero, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
 import { jobProgress } from "@/lib/jobStages";
 import { buildReports } from "@/lib/jobHistory";
@@ -37,13 +37,14 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
   const [calEvents, setCalEvents] = useState([]);
-  const [serviceKey, setServiceKey] = useState(0);
-  const [serviceOpen, setServiceOpen] = useState(0);
   const [evidence, setEvidence] = useState(null);
   const [fieldReports, setFieldReports] = useState([]);
   const [plans, setPlans] = useState([]);
   const memberKey = [jobId, ...(group?.memberIds || []).filter((m) => m !== jobId)].join(",");
   const memberIds = memberKey.split(",");
+  // Service items on this job and its duplicate records: shown on their field report in History.
+  const service = useServiceItems(memberIds);
+  const reloadService = () => { service.reload(); onServiceChanged?.(); };
   const jobContacts = useJobContacts(jobId);
   const [currentUser, setCurrentUser] = useState("");
   const [canDelete, setCanDelete] = useState(false);
@@ -144,7 +145,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
 
   const today = denverDate();
   // Open service item: the job is never "Complete" until it's fixed.
-  const status = useMemo(() => holdForService(jobsStatus(rows, evidence), serviceOpen), [rows, evidence, serviceOpen]);
+  const status = useMemo(() => holdForService(jobsStatus(rows, evidence), service.open.length), [rows, evidence, service.open.length]);
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
   const progress = useMemo(() => jobProgress({ events: calEvents, reports: buildReports(rows, fieldReports), status, today }), [calEvents, rows, fieldReports, status, today]);
 
@@ -167,7 +168,6 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   return (
     <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll" style={{ backgroundColor: SHEET_BG }}>
       <div className="px-6 pt-6 pb-10 flex flex-col gap-[18px] max-[1400px]:px-5">
-        <ServiceItemBanner key={`svc-${jobId}-${serviceKey}`} jobId={jobId} jobIds={memberIds} onCount={setServiceOpen} onChanged={() => { load({ quiet: true }); onServiceChanged?.(); }} />
         <JobHero
           job={job}
           status={status}
@@ -216,7 +216,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
       </div>
 
       {showReport && (
-        <JobFieldReportModal jobId={jobId} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); setServiceKey((k) => k + 1); load({ quiet: true }); onServiceChanged?.(); }} />
+        <JobFieldReportModal jobId={jobId} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); load({ quiet: true }); reloadService(); }} />
       )}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
