@@ -8,6 +8,16 @@ import { formatShort } from "@/lib/feeUI";
 
 const PENDING = ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"];
 
+// "What's needed?" — picked on an incomplete report; opens a service item on the job.
+export const SERVICE_TYPES = [
+  ["wrong_size", "Wrong size"],
+  ["damaged", "Damaged / broken"],
+  ["missing_unit", "Missing or lost unit"],
+  ["missing_part", "Missing part / hardware"],
+  ["install_defect", "Install defect"],
+  ["other", "Other — action needed"],
+];
+
 export default function JobFieldReportModal({ jobId, jobName, events, onClose, onDone }) {
   const pendingEvents = useMemo(
     () => (events || []).filter((e) => e.report_required !== false && PENDING.includes(e.report_status) && e.event_date),
@@ -20,11 +30,13 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
   const [uploading, setUploading] = useState(false);
   const [notes, setNotes] = useState("");
   const [completion, setCompletion] = useState("");
+  const [serviceType, setServiceType] = useState("");
+  const [unit, setUnit] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const requestKey = useRef(`field-report:${jobId}:${crypto.randomUUID()}`);
 
-  const canSubmit = (photos.length > 0 || notes.trim()) && completion && !saving;
+  const canSubmit = (photos.length > 0 || notes.trim()) && completion && (completion !== "incomplete" || serviceType) && !saving;
 
   const handleFiles = async (files) => {
     if (!files.length) return;
@@ -58,6 +70,20 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
         // One key per opened form, so a retried submit cannot raise a second to-do.
         request_key: requestKey.current,
       });
+      if (completion === "incomplete" && serviceType) {
+        // Open the service item on the job: red banner + Milan's text/email/to-do.
+        const res = await base44.functions.invoke("serviceItems", {
+          action: "open",
+          job_id: jobId,
+          source_event_id: selected || "",
+          service_type: serviceType,
+          description: notes.trim(),
+          unit: unit.trim(),
+          photos,
+          request_key: requestKey.current,
+        });
+        if (res?.data?.error) throw new Error(`Report saved, but the service item could not be opened: ${res.data.error}`);
+      }
       onDone();
     } catch (e) {
       setError(e?.message || "Submit failed. Try again.");
@@ -151,10 +177,24 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
                 <AlertCircle className="h-4 w-4" />Incomplete
               </button>
             </div>
-            {completion === "incomplete" ? (
-              <p className="text-[11px] mt-1.5" style={{ color: C.textMuted }}>Milan will be notified to check and get this fixed.</p>
-            ) : null}
           </div>
+
+          {completion === "incomplete" ? (
+            <div className="rounded-[10px] p-3" style={{ backgroundColor: "#FCEDEC", border: "1px solid #F0C9C5" }}>
+              <label className="mono-label-sm block mb-1.5" style={{ color: "#A43432" }}>What's needed?</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {SERVICE_TYPES.map(([key, label]) => (
+                  <button key={key} type="button" onClick={() => setServiceType(key)}
+                    className="min-h-[40px] rounded-[8px] px-2 text-[12.5px] font-medium text-left"
+                    style={{ border: `1px solid ${serviceType === key ? "#A43432" : "#F0C9C5"}`, backgroundColor: serviceType === key ? "#A43432" : "#fff", color: serviceType === key ? "#fff" : C.text }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Which unit? (e.g. 305 SH, door panels)" className="mt-2 w-full min-h-[40px] rounded-[8px] px-2.5 text-[13px] focus:outline-none" style={{ border: "1px solid #F0C9C5", backgroundColor: "#fff", color: C.text }} />
+              <p className="text-[11px] mt-1.5" style={{ color: "#A43432" }}>This opens a service item on the job. Milan gets a text, an email and a to-do, and a ping every day until it moves.</p>
+            </div>
+          ) : null}
 
           {error ? <p role="alert" className="text-[12px]" style={{ color: "#A43432" }}>{error}</p> : null}
 
