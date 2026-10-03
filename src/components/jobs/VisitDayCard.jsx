@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { HardHat, ShoppingCart, Package, CalendarClock } from "lucide-react";
+import { HardHat, ShoppingCart, Package, CalendarClock, Paperclip, TriangleAlert } from "lucide-react";
 import { crewName } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { visitFields, visibleNotes } from "@/lib/visitFields";
 import ClampedText from "./ClampedText";
 import PhotoStrip from "./PhotoStrip";
+import { FOCUS_EVENT, SERVICE_TYPE_LABEL, serviceLabel, isServiceOpen } from "./ServiceItems";
 
 // The job page's Visits, one card per date: a quiet date stamp, the stage(s) that happened
 // that day, then that day's entries. Upcoming dates are gold and dashed; the latest stage
@@ -120,16 +121,33 @@ function Bullets({ items }) {
   );
 }
 
-function Spec({ cells }) {
+// Plain "Key value · Key value" line for the leftover details (install type, VPO, parts ETA…).
+function InlineDetails({ cells }) {
   return (
-    <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-[9px] max-[599px]:grid max-[599px]:w-full max-[599px]:grid-cols-2" style={{ border: `1px solid ${HAIR}`, backgroundColor: "#fff" }}>
+    <span className="flex flex-wrap gap-x-3 gap-y-0.5">
       {cells.map(([k, v], i) => (
-        <div key={`${k}${i}`} className="border-r px-3 py-1.5 last:border-r-0 max-[599px]:border-b" style={{ borderColor: HAIR }}>
-          <span className="block text-[10px] font-semibold uppercase tracking-[.1em]" style={{ color: INK2 }}>{k}</span>
-          <span className="block text-[13.5px] font-semibold">{v}</span>
-        </div>
+        <span key={`${k}${i}`}><span className="text-[12.5px]" style={{ color: MUTED }}>{k}</span> <span className="font-semibold">{v}</span></span>
       ))}
-    </div>
+    </span>
+  );
+}
+
+// Calendar attachments as links. An install-method sheet gets a plain name; the full file
+// name stays in the tooltip.
+const METHOD_RE = /install(ation)?\s*(method|type)|sill pan|nail-on|typar|tyvek|\bzip\b/i;
+function fileName(title) {
+  const t = String(title || "Attachment").replace(/\.pdf$/i, "").replace(/^new\s+/i, "").trim();
+  return METHOD_RE.test(t) ? "Install method sheet" : t;
+}
+function Files({ files }) {
+  return (
+    <span className="flex flex-col gap-0.5">
+      {files.map((a, i) => (
+        <a key={i} href={a.drive_url || a.file_url} target="_blank" rel="noreferrer" title={a.title} className="inline-flex w-fit items-center gap-1.5 text-[13.5px] font-semibold hover:underline" style={{ color: TEAL }}>
+          <Paperclip className="h-3.5 w-3.5 shrink-0" style={{ color: MUTED }} />{clean(fileName(a.title))}{/\.pdf$/i.test(a.title || "") ? <span className="text-[11.5px] font-medium" style={{ color: MUTED }}>PDF</span> : null}
+        </a>
+      ))}
+    </span>
   );
 }
 
@@ -142,7 +160,8 @@ function Chip({ children, tone = "sand" }) {
 const joinMeta = (...parts) => parts.filter(Boolean).join(" · ");
 
 // One calendar visit, laid out as rows. badge: the visit's report pill from the feed.
-export function VisitEntry({ ev, reports = [], badge, onPhotoClick }) {
+// service: the service item this visit is the fix for (its service_event_id), if any.
+export function VisitEntry({ ev, reports = [], badge, onPhotoClick, service = null }) {
   const f = useMemo(() => visitFields(ev), [ev]);
   const [showOther, setShowOther] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -154,32 +173,46 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick }) {
   const issues = f.issues.map((i) => ({ ...i, text: clean(i.text) })).filter((i) => i.text);
   const people = f.people.map((p) => ({ ...p, text: clean(p.text) })).filter((p) => p.text);
   const multiVendor = f.vendors.filter((v) => v.qty != null).length > 1;
-  const cells = [
-    !multiVendor && f.qty ? ["Qty", `${f.qty}`] : null,
-    f.delivery ? ["Delivery", clean(joinMeta(f.delivery.method, f.delivery.date))] : null,
-    !multiVendor && f.received.length ? ["At BFS", clean(f.received[f.received.length - 1])] : null,
-    f.method ? ["Method", clean(f.method)] : null,
-    ...f.details.map((d) => [d.k, clean(d.v)]),
-  ].filter((c) => c && c[1]);
+  // Product: qty, how it's delivered, when it got to BFS — one plain line.
+  const deliveryText = f.delivery ? clean(joinMeta(f.delivery.method.replace(/^To BFS$/, "to BFS"), f.delivery.date)) : "";
+  const product = multiVendor ? "" : joinMeta(
+    f.qty ? `Qty ${f.qty}` : "",
+    deliveryText,
+    f.received.length ? `at BFS ${clean(f.received[f.received.length - 1])}` : "",
+  );
+  const cells = f.details.map((d) => [d.k, clean(d.v)]).filter((c) => c[1]);
+  const files = (ev.event_attachments || []).filter((a) => a?.file_url || a?.drive_url);
   const time = ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ""}` : "All day";
   const photos = reports.reduce((n, r) => n + (r.photos?.length || 0), 0);
   const meta = joinMeta(time, crewName(ev.created_by), photos ? `${photos} ${photos === 1 ? "photo" : "photos"}` : "");
   const original = clean(visibleNotes(ev)).trim();
   const Icon = f.type === "order" ? ShoppingCart : HardHat;
-  const chips = [...new Set([f.brand, ...f.tags].filter(Boolean).map(clean).filter(Boolean))];
+  // Brand leads the title ("Andersen install visit"); a visit booked for a service item is a service visit.
+  const label = service ? "Service visit" : f.label;
+  const brand = clean(f.brand || "");
+  const title = brand && f.type !== "order" ? `${brand} ${label.charAt(0).toLowerCase()}${label.slice(1)}` : label;
+  const chips = [...new Set(f.tags.map(clean).filter((t) => t && t !== brand))];
 
   return (
     <article className="min-w-0">
       <div className="flex items-start gap-2.5">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px]" style={{ backgroundColor: TEAL050, color: TEAL, border: `1px solid ${MINT}` }}><Icon className="h-[15px] w-[15px]" /></span>
         <div className="min-w-0 flex-1">
-          <h4 className="m-0 text-[15.5px] font-bold leading-tight" style={{ color: INK }}>{f.label}</h4>
+          <h4 className="m-0 flex flex-wrap items-center gap-1.5 text-[15.5px] font-bold leading-tight" style={{ color: INK }}>{title}{chips.map((c) => <Chip key={c} tone="teal">{c}</Chip>)}</h4>
           <div className="mt-0.5 text-[12.5px]" style={{ color: MUTED }}>{meta}</div>
         </div>
         {badge ? <span className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-semibold" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span> : null}
       </div>
       <dl className="m-0 mt-3 flex flex-col gap-2.5 pl-[38px] max-[599px]:pl-0">
-        {chips.length ? <Row label="Type"><span className="flex flex-wrap gap-1.5">{chips.map((c) => <Chip key={c} tone={c === f.brand ? "sand" : "teal"}>{c}</Chip>)}</span></Row> : null}
+        {service ? (
+          <Row label="Service">
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: service.id }))}
+              className="inline-flex flex-wrap items-center gap-1.5 text-left font-semibold hover:underline" style={{ color: isServiceOpen(service) ? "#A43432" : INK2 }}>
+              <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+              {SERVICE_TYPE_LABEL[service.service_type] || "Action needed"}{service.unit ? ` — ${clean(service.unit)}` : ""} · {serviceLabel(service.status)}
+            </button>
+          </Row>
+        ) : null}
         {issues.length ? (
           <Row label="Issue">
             <ul className="m-0 list-none p-0">{issues.map((i, k) => <li key={k} className="mb-1 last:mb-0">{i.text}{i.line ? <span className="ml-1.5 font-mono text-[11.5px]" style={{ color: MUTED }}>line {i.line}</span> : null}</li>)}</ul>
@@ -194,9 +227,11 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick }) {
             </table>
           </Row>
         ) : null}
-        {cells.length ? <Row label="Details"><Spec cells={cells} /></Row> : null}
+        {product ? <Row label="Product">{product}</Row> : null}
+        {cells.length ? <Row label="Details"><InlineDetails cells={cells} /></Row> : null}
         {f.moves.length ? <Row label="Moved"><ul className="m-0 list-none p-0 text-[13.5px]" style={{ color: MUTED }}>{f.moves.map((m, i) => <li key={i} className={i === f.moves.length - 1 ? "font-semibold" : ""} style={i === f.moves.length - 1 ? { color: INK } : undefined}>{clean(m)}</li>)}</ul></Row> : null}
-        {headsUp.length ? <Row label="Heads up"><span className="flex flex-wrap gap-1.5">{headsUp.map((h, i) => <Chip key={i} tone="amber">{h}</Chip>)}</span></Row> : null}
+        {headsUp.length ? <Row label="Heads up"><span className="font-medium" style={{ color: AMBER7 }}><Bullets items={headsUp.map((h) => h.charAt(0).toUpperCase() + h.slice(1))} /></span></Row> : null}
+        {files.length ? <Row label="Files"><Files files={files} /></Row> : null}
         {reports.length ? (
           <Row label="Report">
             {reports.map((r, i) => (
