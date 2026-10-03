@@ -168,7 +168,9 @@ const CHAIN = ['reported', 'acknowledged', 'working', 'ordered', 'shipped', 'del
 const FIX_RE = /\b(service|warr|wty|warranty|replace(?:ment)?|re-?install|remake|re-?order|broken|damaged|missing|swap|redo|fix)\b/i;
 const STOP = new Set(['the', 'and', 'for', 'with', 'new', 'one', 'two', 'job', 'site', 'from', 'came', 'too', 'tall', 'short', 'wrong', 'size', 'missing', 'broken', 'damaged', 'lost', 'unit', 'units', 'logged', 'gabe', 'installer', 'install', 'pull', 'reinstall', 'thu', 'fri', 'mon', 'tue', 'wed', 'need', 'needs', 'order', 'ordered', 'bfs', 'via', 'away', 'walked', 'off', 'all', 'are', 'was', 'not', 'but', 'good', 'though', 'window', 'windows', 'homes', 'home', 'lot', 'lots']);
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const words = (s) => [...new Set(norm(s).split(' ').filter((w) => (w.length >= 3 || /^\d{3,}$/.test(w)) && !STOP.has(w)))];
+// Words worth matching on, singularized ("stairs" = "stair", "panels" = "panel").
+const stem = (w) => (w.length > 4 && /[a-z]s$/.test(w) && !/ss$/.test(w) ? w.slice(0, -1) : w);
+const words = (s) => [...new Set(norm(s).split(' ').filter((w) => (w.length >= 3 || /^\d{3,}$/.test(w)) && !STOP.has(w)).map(stem).filter((w) => !STOP.has(w)))];
 const baseName = (s) => norm(s).replace(/\breorder\b/g, '').replace(/^i\s+/, '').replace(/\s+/g, ' ').trim();
 const BAD_EVENT = /cancel|deleted|superseded/i;
 
@@ -191,9 +193,9 @@ const eventText = (ev) => `${ev.job_name || ''}\n${ev.scope_notes || ''}`;
 // How many of the issue's own words (unit, description, order #) are in the visit's notes.
 // The job's name/address words don't count — every visit on the house has those.
 const overlap = (item, ev, job) => {
-  const text = ` ${norm(ev.scope_notes)} `;
+  const said = new Set(words(ev.scope_notes));
   const skip = new Set(words(`${item.job_name || ''} ${job?.canonical_name || ''} ${job?.address || ''} ${job?.builder || ''}`));
-  return words(`${item.unit || ''} ${item.description || ''} ${item.order_ref || ''}`).filter((w) => !skip.has(w) && text.includes(` ${w} `)).length;
+  return words(`${item.unit || ''} ${item.description || ''} ${item.order_ref || ''}`).filter((w) => !skip.has(w) && said.has(w)).length;
 };
 
 async function matchVisits(base44, api, { jobIds = null, who = 'system', now }) {
