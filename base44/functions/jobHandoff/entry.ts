@@ -103,6 +103,13 @@ export default async function jobHandoff(req) {
   if (action === 'set_stage') {
     const stage = str(body.stage, 30);
     if (stage && !STAGES.includes(stage)) return json({ error: 'unknown stage' }, 400);
+    // A job with an open service item can't be marked installed/closed until it's fixed.
+    if (stage === 'installed' || stage === 'closed') {
+      const merged = await db.Jobs.filter({ merged_into: job.id }, 'id', 100, 0).catch(() => []);
+      const ids = [job.id, ...merged.map((j) => j.id)];
+      const open = await db.ServiceItems.filter({ job_id: { $in: ids }, status: { $in: ['reported', 'acknowledged', 'working', 'ordered', 'shipped', 'delivered', 'scheduled', 'on_hold'] } }, 'id', 1, 0).catch(() => []);
+      if (open.length) return json({ error: 'open_service_item', message: 'This job has an open service item. Fix and close it first.' }, 409);
+    }
     const updated = await db.Jobs.update(job.id, { stage: stage || null });
     return json({ status: 'ok', stage: updated.stage || '' });
   }
