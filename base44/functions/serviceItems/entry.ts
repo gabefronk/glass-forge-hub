@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { secrets } from 'base44:runtime';
 
 // Service items: the red banner on a job. One record per thing that needs fixing.
 // Actions (POST JSON):
@@ -34,6 +35,17 @@ const TYPES = {
   missing_part: 'Missing part / hardware', install_defect: 'Install defect', other: 'Action needed',
 };
 const APP_URL = 'https://glass-forge-hub.base44.app';
+// Texts go out as iMessages through Gabe's BlueBubbles server on the Mac (Cloudflare tunnel).
+// Needs the BLUEBUBBLES_PASSWORD secret. Only ever texts the service owner / escalation
+// numbers from AppSettings — this is team notification, not customer messaging.
+const BB_URL = 'https://bluebubbles.gfglassforge.com';
+const secret = (name) => { try { return secrets.get(name) || Deno.env.get(name) || ''; } catch { try { return Deno.env.get(name) || ''; } catch { return ''; } } };
+const e164 = (phone) => {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (d.length === 10) return `+1${d}`;
+  if (d.length === 11 && d.startsWith('1')) return `+${d}`;
+  return d ? `+${d}` : '';
+};
 
 const denverDate = (v = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(v));
 const daysBetween = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
@@ -48,7 +60,7 @@ async function contactsFor(api, memberKey) {
   // Owner contact: AppSettings.service_owner_email / service_owner_sms (email-to-text address),
   // falling back to the TeamMember's login email. Escalation: AppSettings.service_escalate_email.
   const settings = (await api.AppSettings.list('-created_date', 1, 0).catch(() => []))[0] || {};
-  const out = { email: settings.service_owner_email || '', sms: settings.service_owner_sms || '', escalate: settings.service_escalate_email || '', memberId: '', memberKey: memberKey || '' };
+  const out = { email: settings.service_owner_email || '', phone: settings.service_owner_phone || '', sms: settings.service_owner_sms || '', escalate: settings.service_escalate_email || '', memberId: '', memberKey: memberKey || '' };
   const members = await api.TeamMember.list('id', 100, 0).catch(() => []);
   const member = (memberKey && members.find((m) => m.member_key === memberKey)) || members.find((m) => /^milan/i.test(String(m.display_name || '')));
   if (member) {
@@ -94,11 +106,39 @@ async function sendOne(base44, to, subject, body) {
   try { await gmailSend(base44, to, subject, body); return 'gmail'; } catch (_) { /* fall through */ }
   try { await base44.asServiceRole.integrations.Core.SendEmail({ to, subject, body }); return 'core'; } catch (_) { return ''; }
 }
-// emails: full message. sms: short text for the phone (carrier gateways cut ~160 chars).
-async function notify(base44, { emails = [], sms = [] }, subject, body, text) {
+async function bb(path, payload) {
+  const pw = secret('BLUEBUBBLES_PASSWORD');
+  if (!pw) throw new Error('no_bluebubbles_password');
+  const r = await fetch(`${BB_URL}${path}?password=${encodeURIComponent(pw)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  if (!r.ok) throw new Error(`bluebubbles_${r.status}`);
+  return r.json().catch(() => ({}));
+}
+// iMessage through BlueBubbles: the existing 1:1 chat first, then start one if there isn't one.
+async function imessage(phone, text) {
+  const to = e164(phone);
+  if (!to) return '';
+  try {
+    await bb('/api/v1/message/text', { chatGuid: `iMessage;-;${to}`, tempGuid: `svc-${crypto.randomUUID()}`, message: text, method: 'apple-script' });
+    return 'imessage';
+  } catch (e) {
+    if (String(e?.message) === 'no_bluebubbles_password') { console.log('serviceItems: BLUEBUBBLES_PASSWORD not set, text skipped'); return ''; }
+    try {
+      await bb('/api/v1/chat/new', { addresses: [to], message: text, service: 'iMessage', method: 'apple-script', tempGuid: `svc-${crypto.randomUUID()}` });
+      return 'imessage-new';
+    } catch (e2) { console.log(`serviceItems: text to ${to} failed: ${e2?.message || e2}`); return ''; }
+  }
+}
+
+// emails: full message. phones: iMessage via BlueBubbles. sms: carrier email-to-text address,
+// used only when the iMessage didn't go.
+async function notify(base44, { emails = [], phones = [], sms = [] }, subject, body, text) {
   const sent = [];
   for (const addr of [...new Set(emails.filter(Boolean))]) if (await sendOne(base44, addr, subject, body)) sent.push(addr);
-  for (const addr of [...new Set(sms.filter(Boolean))]) if (await sendOne(base44, addr, 'Service item', text)) sent.push(addr);
+  let texted = false;
+  for (const p of [...new Set(phones.filter(Boolean))]) if (await imessage(p, text)) { sent.push(e164(p)); texted = true; }
+  if (!texted) for (const addr of [...new Set(sms.filter(Boolean))]) if (await sendOne(base44, addr, 'Service item', text)) sent.push(addr);
   return sent;
 }
 
@@ -220,7 +260,7 @@ export default async function (req) {
         }
       }
       const subject = `SERVICE ITEM — ${item.job_name || 'job'}: ${TYPES[item.service_type]}${item.unit ? ` (${item.unit})` : ''}`;
-      const sent = await notify(base44, { emails: [contacts.email], sms: [contacts.sms] }, subject, summary(item), smsText(item, 'NEW SERVICE ITEM'));
+      const sent = await notify(base44, { emails: [contacts.email], phones: [contacts.phone], sms: [contacts.sms] }, subject, summary(item), smsText(item, 'NEW SERVICE ITEM'));
       return Response.json({ ok: true, item, notified: sent });
     }
 
@@ -327,7 +367,7 @@ export default async function (req) {
         if (quiet >= 2 && escalate) emails.push(escalate); // copy Gabe after 2 quiet days
         const why = etaPassed ? `ETA ${item.eta_date} passed` : `${quiet} day${quiet === 1 ? '' : 's'} no activity`;
         const subject = `${etaPassed ? 'ETA PASSED' : 'STILL OPEN'} — ${item.job_name || 'job'}: ${TYPES[item.service_type] || 'service item'} (${why})`;
-        const sent = await notify(base44, { emails, sms: [contacts.sms] }, subject, `${summary(item)}\n\nAny update on the job page stops these pings.`, smsText(item, `STILL OPEN (${why})`));
+        const sent = await notify(base44, { emails, phones: [contacts.phone], sms: [contacts.sms] }, subject, `${summary(item)}\n\nAny update on the job page stops these pings.`, smsText(item, `STILL OPEN (${why})`));
         await api.ServiceItems.update(item.id, { last_ping_at: now, ping_count: (item.ping_count || 0) + 1 });
         results.push({ id: item.id, job: item.job_name, quiet, etaPassed, sent });
       }
