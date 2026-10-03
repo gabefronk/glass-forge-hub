@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { HardHat, ShoppingCart, Package, CalendarClock } from "lucide-react";
 import { crewName } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
-import { visitFields } from "@/lib/visitFields";
+import { visitFields, visibleNotes } from "@/lib/visitFields";
 import ClampedText from "./ClampedText";
 import PhotoStrip from "./PhotoStrip";
 
@@ -73,7 +73,7 @@ export function DayCard({ date, today, stages, children }) {
     <section className="mb-3.5 grid grid-cols-[72px_minmax(0,1fr)] gap-x-[18px] rounded-[14px] px-[18px] py-4 max-[599px]:grid-cols-1 max-[599px]:overflow-hidden max-[599px]:p-0" style={shell} aria-label={`${s.wd} ${s.mo} ${s.day}`}>
       <div className="self-start border-r pr-3 text-center max-[599px]:flex max-[599px]:items-baseline max-[599px]:gap-1.5 max-[599px]:border-b max-[599px]:border-r-0 max-[599px]:px-3.5 max-[599px]:py-2 max-[599px]:text-left"
         style={{ borderColor: s.future ? BRASS : isCurrent ? "#bfe3cc" : HAIR }}>
-        {s.rel ? <span className="mb-1.5 block rounded-[5px] px-1 py-0.5 text-[9.5px] font-bold uppercase tracking-[.06em] max-[599px]:order-4 max-[599px]:mb-0 max-[599px]:ml-auto" style={s.future ? { backgroundColor: AMBER100, color: AMBER7 } : { backgroundColor: TEAL050, color: "#10524c" }}>{s.future ? "Upcoming · " : ""}{s.rel}</span> : s.future ? <span className="mb-1.5 block rounded-[5px] px-1 py-0.5 text-[9.5px] font-bold uppercase tracking-[.06em] max-[599px]:order-4 max-[599px]:mb-0 max-[599px]:ml-auto" style={{ backgroundColor: AMBER100, color: AMBER7 }}>Upcoming</span> : null}
+        {s.rel ? <span className="mb-1.5 block rounded-[5px] px-1 py-0.5 text-[9.5px] font-bold uppercase tracking-[.06em] max-[599px]:order-4 max-[599px]:mb-0 max-[599px]:ml-auto" style={s.future ? { backgroundColor: AMBER100, color: AMBER7 } : { backgroundColor: TEAL050, color: "#10524c" }}>{s.rel}</span> : s.future ? <span className="mb-1.5 block rounded-[5px] px-1 py-0.5 text-[9.5px] font-bold uppercase tracking-[.06em] max-[599px]:order-4 max-[599px]:mb-0 max-[599px]:ml-auto" style={{ backgroundColor: AMBER100, color: AMBER7 }}>Upcoming</span> : null}
         <span className="block text-[10.5px] font-semibold uppercase tracking-[.12em]" style={{ color: s.future ? AMBER7 : INK2 }}>{s.wd}</span>
         <span className="my-px block text-[24px] font-semibold leading-none tracking-[-.02em] max-[599px]:order-2 max-[599px]:text-[15px]" style={{ color: stampInk }}>{s.day}</span>
         <span className="block text-[10.5px] font-semibold uppercase tracking-[.12em] max-[599px]:order-3" style={{ color: s.future ? AMBER7 : INK2 }}>{s.mo}</span>
@@ -164,7 +164,7 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick }) {
   const time = ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ""}` : "All day";
   const photos = reports.reduce((n, r) => n + (r.photos?.length || 0), 0);
   const meta = joinMeta(time, crewName(ev.created_by), photos ? `${photos} ${photos === 1 ? "photo" : "photos"}` : "");
-  const original = clean(String(ev.scope_notes || "").replace(/<\s*br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ")).trim();
+  const original = clean(visibleNotes(ev)).trim();
   const Icon = f.type === "order" ? ShoppingCart : HardHat;
   const chips = [f.brand, ...f.tags].filter(Boolean).map(clean).filter(Boolean);
 
@@ -180,12 +180,12 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick }) {
       </div>
       <dl className="m-0 mt-3 flex flex-col gap-2.5 pl-[38px] max-[599px]:pl-0">
         {chips.length ? <Row label="Type"><span className="flex flex-wrap gap-1.5">{chips.map((c) => <Chip key={c} tone={c === f.brand ? "sand" : "teal"}>{c}</Chip>)}</span></Row> : null}
-        {work.length ? <Row label="Work"><Bullets items={work} /></Row> : null}
         {issues.length ? (
           <Row label="Issue">
             <ul className="m-0 list-none p-0">{issues.map((i, k) => <li key={k} className="mb-1 last:mb-0">{i.text}{i.line ? <span className="ml-1.5 font-mono text-[11.5px]" style={{ color: MUTED }}>line {i.line}</span> : null}</li>)}</ul>
           </Row>
         ) : null}
+        {work.length ? <Row label="Work"><Bullets items={work} /></Row> : null}
         {multiVendor ? (
           <Row label="Product">
             <table className="w-full max-w-[420px] border-collapse overflow-hidden rounded-[9px] text-[13.5px]" style={{ border: `1px solid ${HAIR}` }}>
