@@ -36,7 +36,9 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
   const [error, setError] = useState("");
   const requestKey = useRef(`field-report:${jobId}:${crypto.randomUUID()}`);
 
-  const canSubmit = (photos.length > 0 || notes.trim()) && completion && (completion !== "incomplete" || serviceType) && !saving;
+  // Incomplete needs both: what's needed, and which unit.
+  const serviceReady = completion !== "incomplete" || (serviceType && unit.trim());
+  const canSubmit = (photos.length > 0 || notes.trim()) && completion && serviceReady && !saving;
 
   const handleFiles = async (files) => {
     if (!files.length) return;
@@ -60,21 +62,25 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
     setSaving(true);
     setError("");
     try {
-      await resolveFieldReport({
+      const isService = completion === "incomplete" && serviceType;
+      const filed = await resolveFieldReport({
         action: "upload",
         event_id: selected || undefined,
         job_id: jobId,
         photos,
         notes: notes.trim(),
         completion,
+        // Tells the report not to add its own to-do: the service item carries Milan's one to-do.
+        service_type: isService ? serviceType : undefined,
         // One key per opened form, so a retried submit cannot raise a second to-do.
         request_key: requestKey.current,
       });
-      if (completion === "incomplete" && serviceType) {
-        // Open the service item on the job: red banner + Milan's text/email/to-do.
+      if (isService) {
+        // Open the service item on the job the report was filed on: red banner + Milan's text/email/to-do.
         const res = await base44.functions.invoke("serviceItems", {
           action: "open",
-          job_id: jobId,
+          job_id: filed?.job_id || jobId,
+          source_note_id: filed?.note_id || "",
           source_event_id: selected || "",
           service_type: serviceType,
           description: notes.trim(),
@@ -191,7 +197,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
                   </button>
                 ))}
               </div>
-              <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Which unit? (e.g. 305 SH, door panels)" className="mt-2 w-full min-h-[40px] rounded-[8px] px-2.5 text-[13px] focus:outline-none" style={{ border: "1px solid #F0C9C5", backgroundColor: "#fff", color: C.text }} />
+              <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Which unit? (required — e.g. 305 SH, door panels)" aria-label="Which unit" className="mt-2 w-full min-h-[40px] rounded-[8px] px-2.5 text-[13px] focus:outline-none" style={{ border: "1px solid #F0C9C5", backgroundColor: "#fff", color: C.text }} />
               <p className="text-[11px] mt-1.5" style={{ color: "#A43432" }}>This opens a service item on the job. Milan gets a text, an email and a to-do, and a ping every day until it moves.</p>
             </div>
           ) : null}
