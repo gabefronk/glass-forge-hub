@@ -58,6 +58,8 @@ export default function Invoicing() {
   const lastClickedIndex = useRef(null);
   const searchRef = useRef(null);
   const undoTimer = useRef(null);
+  const deleting = useRef(false);
+  const [deletingRows, setDeletingRows] = useState(false);
 
   useEffect(() => { setSelectedIds(new Set()); setDetailRow(null); setUndo(null); lastClickedIndex.current = null; clearTimeout(undoTimer.current); }, [month, focusedJobId]);
   useEffect(() => { localStorage.setItem("inv_view", view); }, [view]);
@@ -196,6 +198,7 @@ export default function Invoicing() {
   }, [monthRows, reportStatusMap, supersededSet]);
 
   const handleEdit = useCallback(async (id, patch) => {
+    if (deleting.current) return;
     const row = feeLines.find((r) => r.id === id);
     if (!row || (focusedJobId && !inInvoiceScope(row, month, focusedJobId))) return;
     // A patch may carry manually_adjusted explicitly (undo restores the prior value).
@@ -234,6 +237,7 @@ export default function Invoicing() {
   }, []);
 
   const handleDelete = useCallback(async (id) => {
+    if (deleting.current) return;
     const row = feeLines.find((r) => r.id === id);
     if (!row || (focusedJobId && !inInvoiceScope(row, month, focusedJobId))) return;
     const { id: _id, created_date, updated_date, created_by_id, ...rest } = row;
@@ -252,6 +256,7 @@ export default function Invoicing() {
   const handleAddReport = useCallback(() => { navigate("/calendar"); }, [navigate]);
 
   const handleMarkBilled = useCallback((id, value = true) => {
+    if (deleting.current) return;
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
     const prev = { billed_to_bfs: row.billed_to_bfs, manually_adjusted: !!row.manually_adjusted };
@@ -260,6 +265,7 @@ export default function Invoicing() {
   }, [feeLines, handleEdit, performAction]);
 
   const handleMarkBilledSelected = useCallback(() => {
+    if (deleting.current) return;
     if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before marking lines billed."); return; }
     const selected = selectedReadyInvoiceRows(feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet);
     const skipped = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId).length - selected.length;
@@ -277,6 +283,7 @@ export default function Invoicing() {
   }, [feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet, loading, loadError, monthClosed, performAction, clearSelection, persistBulk]);
 
   const handleSetFeePctSelected = useCallback((pct) => {
+    if (deleting.current) return;
     if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before changing fees."); return; }
     const selected = selectedLaborFeeRows(feeLines, selectedIds, month, focusedJobId);
     const skipped = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId).length - selected.length;
@@ -294,9 +301,12 @@ export default function Invoicing() {
   }, [feeLines, selectedIds, month, focusedJobId, loading, loadError, monthClosed, performAction, persistBulk]);
 
   const handleDeleteSelected = useCallback(async () => {
+    if (deleting.current) return;
     const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
     if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before deleting lines."); return; }
+    deleting.current = true; setDeletingRows(true);
+    try {
     const { deleted, failed } = await deleteInvoiceRows(selected, id => base44.entities.FeeLines.delete(id));
     const deletedIds = new Set(deleted.map(row => row.id));
     setFeeLines(prev => prev.filter(row => !deletedIds.has(row.id)));
@@ -309,6 +319,7 @@ export default function Invoicing() {
       });
     }
     clearSelection();
+    } finally { deleting.current = false; setDeletingRows(false); }
   }, [feeLines, selectedIds, month, focusedJobId, loading, loadError, monthClosed, performAction, clearSelection]);
 
   const handleExportSelected = useCallback(() => {
@@ -326,6 +337,7 @@ export default function Invoicing() {
   const isLineReady = useCallback((r) => inInvoiceScope(r, month, focusedJobId) && isReady(r, reportStatusMap, supersededSet), [month, focusedJobId, reportStatusMap, supersededSet]);
 
   const handleBillJob = useCallback((job) => {
+    if (deleting.current) return;
     const lines = job.lines.filter(isLineReady);
     if (!lines.length) return;
     const updates = lines.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
@@ -535,6 +547,7 @@ export default function Invoicing() {
 
       {selectedIds.size > 0 && (
         <FloatingActionBar
+          disabled={deletingRows}
           selectedCount={selectedIds.size}
           selectedFee={selectedFee}
           onClear={clearSelection}
