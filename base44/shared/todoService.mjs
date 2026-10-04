@@ -12,9 +12,11 @@ const STATUSES = new Set(["open", "in_progress", "done"]);
 // and is shown in its own "Needs a category" lane so nothing is hidden.
 const CATEGORIES = new Set(["", "quote_request", "odd_end", "order", "follow_up"]);
 const BOARD_DONE_LIMIT = 50;
-const OWNER_PATCH_FIELDS = new Set(["title", "details", "due_date", "assignee_member_id", "status", "progress_note", "category"]);
-const CREW_PATCH_FIELDS = new Set(["status", "progress_note", "category"]);
-const CREATE_FIELDS = new Set(["action", "title", "details", "assignee_member_id", "due_date", "request_key", "category"]);
+const PLANNING_FIELDS = ["focus_date", "waiting_on", "follow_up_date"];
+const OWNER_PATCH_FIELDS = new Set(["title", "details", "due_date", "assignee_member_id", "status", "progress_note", "category", "job_id", ...PLANNING_FIELDS]);
+const CREW_PATCH_FIELDS = new Set(["status", "progress_note", "category", ...PLANNING_FIELDS]);
+const CREATOR_PATCH_FIELDS = new Set([...CREW_PATCH_FIELDS, "title", "details", "due_date", "job_id"]);
+const CREATE_FIELDS = new Set(["action", "title", "details", "assignee_member_id", "due_date", "request_key", "category", "job_id", ...PLANNING_FIELDS]);
 
 function fail(status, message) {
   throw Object.assign(new Error(message), { status });
@@ -131,6 +133,44 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     });
   }
 
+  // Only existing task links may grant access. Never use a submitted job_id here.
+  async function allowedJobs(api, caller, owner) {
+    if (owner) {
+      const jobs = await api.Jobs.list("canonical_name", MAX_LIST_LIMIT, 0);
+      return { jobs: jobs.filter(j => !j.merged_into && !j.is_sample && !/^renta$/i.test(String(j.canonical_name || "").trim())), truncated: jobs.length >= MAX_LIST_LIMIT };
+    }
+    const tasks = await api.TodoTask.filter({ assignee_member_id: caller.id, archived_at: "", status: { $in: ["open", "in_progress"] } }, "id", MAX_LIST_LIMIT, 0);
+    const ids = [...new Set(tasks.map(t => t.job_id).filter(Boolean))];
+    const jobs = await api.Jobs.filter({ $or: [{ pm_member_key: caller.member_key }, ...(ids.length ? [{ id: { $in: ids } }] : [])] }, "canonical_name", MAX_LIST_LIMIT, 0);
+    return { jobs: jobs.filter(j => !j.merged_into && !j.is_sample && !/^renta$/i.test(String(j.canonical_name || "").trim())), truncated: jobs.length >= MAX_LIST_LIMIT || tasks.length >= MAX_LIST_LIMIT };
+  }
+
+  const minimalJob = j => ({ id: j.id, canonical_name: j.canonical_name || "", stage: j.stage || "" });
+
+  async function validateJob(api, caller, owner, value) {
+    const id = idText(value);
+    if (!id) return "";
+    if (owner) {
+      let job; try { job = await api.Jobs.get(id); } catch { fail(404, "Job not found."); }
+      if (!job || job.merged_into || job.is_sample || /^renta$/i.test(String(job.canonical_name || "").trim())) fail(404, "Job is not available.");
+      return id;
+    }
+    const allowed = await allowedJobs(api, caller, owner);
+    if (!allowed.jobs.some(j => j.id === id)) fail(403, "This job is not available to your task list.");
+    return id;
+  }
+
+  async function homeContext(api, caller, deps) {
+    const { jobs, truncated } = await allowedJobs(api, caller, false);
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(deps.now()));
+    const end = new Date(today + "T12:00:00Z");
+    end.setUTCDate(end.getUTCDate() + 7);
+    const until = end.toISOString().slice(0, 10);
+    const events = jobs.length ? await api.CalendarEvents.filter({ job_id: { $in: jobs.map(j => j.id) }, event_date: { $gte: today, $lt: until } }, "event_date", MAX_LIST_LIMIT, 0) : [];
+    const visits = events.filter(e => !["cancelled", "canceled", "rescheduled"].includes(String(e.status || "").toLowerCase()) && !["cancelled", "canceled"].includes(String(e.source_status || "").toLowerCase()) && !["cancelled", "canceled", "rescheduled"].includes(String(e.report_status || "").toLowerCase()) && !/^renta$/i.test(String(e.job_name || e.summary || e.title || "").trim())).map(e => ({ id: e.id, job_id: e.job_id, event_date: e.event_date, start_time: e.start_time || "", report_status: e.report_status || "", summary: e.job_name || e.summary || e.title || "" }));
+    return { ok: true, member_id: caller.id, jobs: jobs.map(minimalJob), jobs_truncated: truncated, visits, visits_truncated: events.length >= MAX_LIST_LIMIT, today, until };
+  }
+
   async function listTasks(api, caller, owner, input) {
     const offset = offsetValue(input.offset);
     const { view, allMembers, query } = await resolveView(api, caller, owner, input);
@@ -172,6 +212,9 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
       // Hitting a limit means the board may be incomplete; the UI says so.
       truncated: open.length >= MAX_LIST_LIMIT || inProgress.length >= MAX_LIST_LIMIT,
     };
+    const jobContext = await allowedJobs(api, caller, owner);
+    body.jobs = jobContext.jobs.map(minimalJob);
+    body.jobs_truncated = jobContext.truncated;
     if (view === "all") body.team_summary = teamSummary(allMembers, active);
     return body;
   }
@@ -189,7 +232,7 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
   }
 
   async function createTask(api, caller, owner, input, deps) {
-    const key = requestKey(input.request_key);
+    const key = caller.id + ":" + requestKey(input.request_key);
     if (caller.management_lock) fail(409, "A previous write needs review before new tasks are added.");
     const unknown = Object.keys(input).filter((k) => !CREATE_FIELDS.has(k));
     if (unknown.length) fail(400, "Unexpected task fields.");
@@ -197,6 +240,10 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     const details = text(input.details, 5000);
     const due_date = dueDate(input.due_date);
     const category = categoryValue(input.category);
+    const focus_date = dueDate(input.focus_date);
+    const waiting_on = text(input.waiting_on, 300);
+    const follow_up_date = dueDate(input.follow_up_date);
+    const job_id = await validateJob(api, caller, owner, input.job_id);
     const members = await api.TeamMember.list("id", MAX_LIST_LIMIT, 0);
     let assigneeId;
     const wanted = idText(input.assignee_member_id);
@@ -213,7 +260,7 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     const duplicates = await api.TodoTask.filter({ request_key: key }, "id", 2, 0);
     if (duplicates.length) {
       const existing = duplicates[0];
-      const same = existing.title === title && (existing.details || "") === details && (existing.due_date || "") === due_date && existing.assignee_member_id === assigneeId && (existing.category || "") === category;
+      const same = existing.title === title && (existing.details || "") === details && (existing.due_date || "") === due_date && existing.assignee_member_id === assigneeId && (existing.category || "") === category && (existing.focus_date || "") === focus_date && (existing.waiting_on || "") === waiting_on && (existing.follow_up_date || "") === follow_up_date && (existing.job_id || "") === job_id;
       if (!same) fail(409, "This request key was already used for a different task.");
       return { ok: true, task: existing, duplicate: true };
     }
@@ -227,6 +274,10 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
       progress_note: "",
       due_date,
       category,
+      focus_date,
+      waiting_on,
+      follow_up_date,
+      job_id,
       created_by_user_id: user.id,
       assigned_by_user_id: user.id,
       completed_at: "",
@@ -257,10 +308,8 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     if (!patch || typeof patch !== "object" || Array.isArray(patch)) fail(400, "Invalid patch.");
     const keys = Object.keys(patch);
     if (!keys.length) fail(400, "Empty patch.");
-    const allowed = owner ? OWNER_PATCH_FIELDS : CREW_PATCH_FIELDS;
     for (const k of keys) {
       if (!OWNER_PATCH_FIELDS.has(k)) fail(400, "Unknown task field.");
-      if (!allowed.has(k)) fail(403, "Only Gabriel can change that field.");
     }
     let task;
     try {
@@ -269,6 +318,9 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
       fail(404, "Task not found.");
     }
     if (!owner && task.assignee_member_id !== caller.id) fail(404, "Task not found.");
+    const ownCreated = task.created_by_user_id === deps.user.id;
+    const allowed = owner ? OWNER_PATCH_FIELDS : ownCreated ? CREATOR_PATCH_FIELDS : CREW_PATCH_FIELDS;
+    for (const k of keys) if (!allowed.has(k)) fail(403, "Only Gabriel can change that field.");
     if (task.archived_at) fail(409, "Archived tasks cannot be edited.");
     if (task.revision !== input.expected_revision) fail(409, "This task changed; reload before saving.");
     const stamp = deps.now();
@@ -276,6 +328,10 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     if ("title" in patch) set.title = text(patch.title, 200, { required: true });
     if ("details" in patch) set.details = text(patch.details, 5000);
     if ("due_date" in patch) set.due_date = dueDate(patch.due_date);
+    if ("focus_date" in patch) set.focus_date = dueDate(patch.focus_date);
+    if ("waiting_on" in patch) set.waiting_on = text(patch.waiting_on, 300);
+    if ("follow_up_date" in patch) set.follow_up_date = dueDate(patch.follow_up_date);
+    if ("job_id" in patch) set.job_id = await validateJob(api, caller, owner, patch.job_id);
     if ("progress_note" in patch) set.progress_note = text(patch.progress_note, 3000);
     if ("category" in patch) set.category = categoryValue(patch.category);
     if ("status" in patch) {
@@ -435,6 +491,8 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
           return reply(await listTasks(api, caller, owner, body));
         case "board":
           return reply(await boardTasks(api, caller, owner, body));
+        case "home_context":
+          return reply(await homeContext(api, caller, deps));
         case "get":
           return reply(await getTask(api, caller, owner, body));
         case "create":
@@ -456,3 +514,4 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     }
   };
 }
+

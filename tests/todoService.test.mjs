@@ -28,13 +28,15 @@ function matches(row,q={}) {
    if(op==='$exists')return (value!==undefined)===arg;
    if(op==='$eq')return value===arg;
    if(op==='$nin')return Array.isArray(value)?value.every(x=>!arg.includes(x)):!arg.includes(value);
+   if(op==='$gte')return value>=arg;
+   if(op==='$lt')return value<arg;
    throw new Error('Unsupported mock operator '+op);
   });
   return Array.isArray(value)?value.includes(v):value===v||(v===null&&value===undefined);
  });
 }
 function harness(user=users[0],options={}) {
- const store={TeamMember:clone(options.members||baseMembers),TodoTask:clone(options.tasks||[task('g1'),task('g2'),task('i1','mi')]),User:clone(users)};
+ const store={TeamMember:clone(options.members||baseMembers),TodoTask:clone(options.tasks||[task('g1'),task('g2'),task('i1','mi')]),User:clone(users),Jobs:clone(options.jobs||[]),CalendarEvents:clone(options.events||[])};
  const touches=[];let serial=0,clock='2026-09-14T09:00:00.000Z';
  const entity=name=>({
   list:async(sort='id',limit=500,skip=0)=>{touches.push(name+':list');return select(name,{},sort,limit,skip);},
@@ -74,3 +76,46 @@ test('member creation retries do not duplicate a person',async()=>{const h=harne
 test('a held write lock blocks changes instead of guessing completion',async()=>{const m=clone(baseMembers);m[0].management_lock='unreconciled-operation';const h=harness(users[0],{members:m});assert.equal((await h.call({action:'create',title:'Blocked',request_key:'request-held-lock-0001'})).status,409);assert.equal(h.store.TodoTask.length,3);});
 test('unexpected create failure retains a reconciliation lock',async()=>{const h=harness(users[0],{failCreate:true});assert.ok((await h.call({action:'create',title:'Uncertain',request_key:'request-uncertain-0001'})).status>=500);assert.ok(h.store.TeamMember[0].management_lock);});
 test('HTTP methods, malformed JSON and no-store headers',async()=>{const h=harness();assert.equal((await h.h(new Request('https://test.local'))).status,405);assert.equal((await h.h(new Request('https://test.local',{method:'POST',body:'{'}))).status,400);const r=await h.call({action:'access'});assert.equal(r.status,200);assert.match(r.headers.get('Cache-Control'),/no-store/);});
+
+
+test('personal planning fields are validated on create and update',async()=>{
+ const h=harness(users[2]);const p={action:'create',title:'Plan',request_key:'planning',focus_date:'2026-10-04',waiting_on:'Supplier reply',follow_up_date:'2026-10-06'};
+ const r=await h.call(p);assert.equal(r.status,200);assert.equal(r.body.task.waiting_on,'Supplier reply');
+ for(const patch of [{focus_date:'2026-02-30'},{follow_up_date:'2026-02-29'},{waiting_on:'x'.repeat(301)},{job_id:{$ne:''}}])assert.equal((await h.call({action:'update_task',id:r.body.task.id,expected_revision:0,patch})).status,400);
+ assert.equal(h.store.TodoTask.find(t=>t.id===r.body.task.id).revision,0);
+ assert.equal((await h.call({action:'update_task',id:'i1',expected_revision:0,patch:{focus_date:'2028-02-29',waiting_on:'',follow_up_date:''}})).status,200);
+});
+
+test('self-created scope edits require current assignment; reassignment remains owner-only',async()=>{
+ const h=harness(users[2],{tasks:[{...task('mine','mi'),created_by_user_id:'is'},{...task('away','mg'),created_by_user_id:'is'},task('assigned','mi')]});
+ assert.equal((await h.call({action:'update_task',id:'mine',expected_revision:0,patch:{title:'Edited',details:'Own instructions',due_date:'2026-10-04'}})).status,200);
+ assert.equal((await h.call({action:'update_task',id:'away',expected_revision:0,patch:{title:'Leak'}})).status,404);
+ assert.equal((await h.call({action:'update_task',id:'assigned',expected_revision:0,patch:{title:'Changed'}})).status,403);
+ assert.equal((await h.call({action:'update_task',id:'mine',expected_revision:1,patch:{focus_date:'2026-10-05',assignee_member_id:'mg'}})).status,403);
+ assert.equal(h.store.TodoTask.find(t=>t.id==='mine').focus_date,undefined);
+});
+
+const jobsFixture=[{id:'ja',canonical_name:'Assigned',pm_member_key:'israel',stage:'install',secret:'private'},{id:'jb',canonical_name:'Task linked',pm_member_key:'gabriel',stage:'service'},{id:'jc',canonical_name:'Unrelated',pm_member_key:'other'},{id:'jd',canonical_name:'Near match',pm_member_key:'israel-other'}];
+test('board jobs are exact-person or existing active task links; crew cannot bootstrap access',async()=>{
+ const h=harness(users[2],{jobs:jobsFixture,tasks:[{...task('linked','mi'),job_id:'jb'},{...task('done','mi'),status:'done',job_id:'jc'},{...task('archived','mi'),archived_at:'2026-09-01',job_id:'jd'}]});
+ const r=await h.call({action:'board'});assert.equal(r.status,200);assert.deepEqual(new Set(r.body.jobs.map(j=>j.id)),new Set(['ja','jb']));assert.deepEqual(Object.keys(r.body.jobs[0]).sort(),['canonical_name','id','stage']);
+ for(const job_id of ['jc','jd','unknown'])assert.equal((await h.call({action:'create',title:'Unauthorized',job_id,request_key:'bad-link-'+job_id})).status,403);
+ const made=await h.call({action:'create',title:'Allowed',job_id:'ja',request_key:'good-link'});assert.equal(made.status,200);
+ assert.equal((await h.call({action:'update_task',id:made.body.task.id,expected_revision:0,patch:{job_id:'jc'}})).status,403);
+ assert.equal((await h.call({action:'update_task',id:made.body.task.id,expected_revision:0,patch:{job_id:''}})).status,200);
+ assert.equal((await harness(users[0],{jobs:jobsFixture}).call({action:'board'})).body.jobs.length,4);
+});
+
+test('request keys are member-scoped and all new payload fields participate in replay',async()=>{
+ const h=harness(users[2],{jobs:jobsFixture});const p={action:'create',title:'Replay',job_id:'ja',request_key:'same-key',focus_date:'2026-10-04',waiting_on:'Vendor',follow_up_date:'2026-10-05'};
+ const a=await h.call(p);assert.equal(a.status,200);assert.equal((await h.call(p)).body.task.id,a.body.task.id);
+ for(const extra of [{job_id:''},{focus_date:''},{waiting_on:'Someone else'},{follow_up_date:''}])assert.equal((await h.call({...p,...extra})).status,409);
+ const owner=harness(users[0],{jobs:jobsFixture,tasks:h.store.TodoTask});const b=await owner.call({...p,assignee_member_id:'mg'});assert.equal(b.status,200);assert.equal(b.body.duplicate,undefined);assert.notEqual(b.body.task.request_key,a.body.task.request_key);
+});
+
+test('home context is personal even for owner and filters seven Denver dates and ignored visits',async()=>{
+ const events=[{id:'v1',job_id:'ja',event_date:'2026-10-03',summary:'Visit'},{id:'v2',job_id:'ja',event_date:'2026-10-09',summary:'Last day'},{id:'v3',job_id:'ja',event_date:'2026-10-10',summary:'Too late'},{id:'v4',job_id:'ja',event_date:'2026-10-04',summary:'Renta'},{id:'v5',job_id:'ja',event_date:'2026-10-04',source_status:'cancelled'},{id:'v6',job_id:'ja',event_date:'2026-10-04',report_status:'rescheduled'},{id:'v7',job_id:'jc',event_date:'2026-10-04',summary:'Other job'},{id:'v8',job_id:'ja',event_date:'2026-10-02',summary:'Past'}];
+ const h=harness(users[2],{jobs:jobsFixture,events});h.setClock('2026-10-04T01:00:00.000Z');const r=await h.call({action:'home_context',member_id:'mg'});assert.equal(r.status,200);assert.equal(r.body.today,'2026-10-03');assert.deepEqual(r.body.visits.map(v=>v.id),['v1','v2']);
+ const owner=await harness(users[0],{jobs:jobsFixture}).call({action:'home_context'});assert.deepEqual(owner.body.jobs.map(j=>j.id),['jb']);
+ for(const user of [null,users[3]]){const denied=harness(user,{jobs:jobsFixture,events});assert.ok((await denied.call({action:'home_context'})).status>=400);assert.ok(!denied.touches.some(t=>t.startsWith('Jobs:')||t.startsWith('CalendarEvents:')));}
+});
