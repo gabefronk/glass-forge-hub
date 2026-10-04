@@ -3,7 +3,7 @@ import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
+import { Settings, Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
@@ -137,12 +137,13 @@ export default function YaFeesSidebar() {
           <SidebarLink key={item.to} item={item} active={pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"))} />
         ))}
         {owner && (
-          <div role="group" aria-labelledby="sidebar-admin-heading" className="mt-3 space-y-0.5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
-            <div id="sidebar-admin-heading" className="px-3 pb-1 text-[10.5px] font-medium uppercase" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.08em" }}>Admin</div>
+          <details key={pathname} className="mt-3 space-y-0.5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
+            <summary className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium hover:bg-white/5" style={{ color: ADMIN_ITEMS.some(item => item.to === pathname) ? "var(--gf-brass-300)" : "var(--gf-sidebar-muted)" }}><Settings className="h-4 w-4" />Operations<span aria-hidden="true" className="ml-auto text-xs">⌄</span></summary>
+            <p className="px-3 py-1 text-xs" style={{ color: "var(--gf-sidebar-muted)" }}>Automation, records and diagnostics</p>
             {ADMIN_ITEMS.map((item) => (
               <SidebarLink key={item.to} item={item} active={pathname === item.to} />
             ))}
-          </div>
+          </details>
         )}
       </nav>
 
