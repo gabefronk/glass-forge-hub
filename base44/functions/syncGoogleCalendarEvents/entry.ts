@@ -1,4 +1,4 @@
-import { denverMidnight, denverDate } from "../../shared/billingCore.js";
+import { isIgnoredWorkItem, denverMidnight, denverDate } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmount, htmlToText } from '../../shared/ingestShared.ts';
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
@@ -84,6 +84,7 @@ export default async function(req) {
     const toCreate = [];
     let skippedApp = 0;
     for (const ev of items) {
+      if (isIgnoredWorkItem(ev)) { skippedApp++; continue; }
       if (ev.extendedProperties?.private?.appSource === 'glassforge') { skippedApp++; continue; }
       if (ev.status === 'cancelled') {
         const ex = byGoogleId.get(ev.id);
