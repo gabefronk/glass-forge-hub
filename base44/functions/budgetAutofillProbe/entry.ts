@@ -10,10 +10,13 @@ export default async function budgetAutofillProbe(req) {
   const base44 = createClientFromRequest(req);
   const db = base44.asServiceRole.entities;
   const core = base44.asServiceRole.integrations.Core;
-  const rows = await db.JobBudgets.list('-created_date', 10);
+  const P = 'https://base44.app/api/apps/6a7f0d7a4a5f825c724273e9/files/mp/public/6a7f0d7a4a5f825c724273e9/';
+  const rows = [
+    { id: 'sandy', source_pdf_url: P + '7da5602cf_SANDYEAGLEMTN-GLASSSREPLACEMENT-AMSCO.pdf', source_pdf_name: 'SANDY EAGLE MTN - GLASSS REPLACEMENT - AMSCO.pdf' },
+    { id: 'hafen', source_pdf_url: P + '1bf7a9439_HafenCabin-BlackWhite-Andersen100_Windor_Jeldwen.pdf', source_pdf_name: 'Hafen Cabin - Black White - Andersen 100_Windor_Jeldwen.pdf' },
+  ];
   const out = [];
-  for (const r of rows || []) {
-    if (!r.source_pdf_url || !/SANDY|AGREN|ANDERSEN100MULL|AMMON/i.test(r.source_pdf_url)) continue;
+  for (const r of rows) {
     try {
       const raw = await core.InvokeLLM({ prompt: QUOTE_PROMPT, response_json_schema: QUOTE_SCHEMA, file_urls: [r.source_pdf_url], add_context_from_internet: false });
       const quote = legacyTotals(normalizeVendorQuote(raw || {}));
