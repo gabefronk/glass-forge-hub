@@ -13,8 +13,8 @@
           "with": {
             "function_name": "probuildProjects",
             "args": {
-              "action": "sync",
-              "days": 14,
+              "action": "build",
+              "job_id": "6abcb461cfe73db4bc147b28",
               "apply": true
             }
           },
