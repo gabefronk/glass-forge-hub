@@ -1,7 +1,10 @@
 import { refreshMonth } from "@/lib/refreshMonth";
 import { invoicingStats } from "@/lib/invoicingStats";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { procurementPath } from "@/lib/procurementRoutes";
+import { inInvoiceScope, selectedInvoiceRows } from "@/lib/invoiceScope";
+import { validMonth } from "../../base44/shared/procurementCore.js";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { SheetCard, TILE } from "@/components/PageShell";
@@ -20,7 +23,12 @@ import JobProfitabilityPanel from "@/components/invoicing/JobProfitabilityPanel"
 
 export default function Invoicing() {
   const navigate = useNavigate();
-  const [month, setMonth] = useState(currentMonthStr());
+  const [params, setParams] = useSearchParams();
+  const focusedJobId = params.get('job_id') || '';
+  const requestedMonth = params.get('month') || '';
+  const [month, setMonth] = useState(() => validMonth(requestedMonth) ? requestedMonth : currentMonthStr());
+  useEffect(() => { if (validMonth(requestedMonth)) setMonth(requestedMonth); }, [requestedMonth]);
+  const changeMonth = value => { setMonth(value); const p = new URLSearchParams(params); p.set('month', value); setParams(p); };
   const [feeLines, setFeeLines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState(() => localStorage.getItem("inv_view") || "lines");
@@ -49,6 +57,7 @@ export default function Invoicing() {
   const searchRef = useRef(null);
   const undoTimer = useRef(null);
 
+  useEffect(() => { setSelectedIds(new Set()); setDetailRow(null); setUndo(null); lastClickedIndex.current = null; clearTimeout(undoTimer.current); }, [month, focusedJobId]);
   useEffect(() => { localStorage.setItem("inv_view", view); }, [view]);
   useEffect(() => { localStorage.setItem("inv_sort", sort); }, [sort]);
   useEffect(() => { localStorage.setItem("inv_hideZeros", String(hideZeros)); }, [hideZeros]);
@@ -89,7 +98,7 @@ export default function Invoicing() {
         return false;
       };
       const unprocessed = (Array.isArray(calEvents) ? calEvents : []).filter(
-        (e) => (e.event_date || "").startsWith(month) && e.source === "google" && e.google_event_id && !feeEventIds.has(e.google_event_id) && !isExcludedFromBanner(e)
+        (e) => (!focusedJobId || e.job_id === focusedJobId) && (e.event_date || "").startsWith(month) && e.source === "google" && e.google_event_id && !feeEventIds.has(e.google_event_id) && !isExcludedFromBanner(e)
       );
       setUnprocessedCount(unprocessed.length);
       try {
@@ -103,12 +112,12 @@ export default function Invoicing() {
       if (!stale()) setLoading(false);
     }
   };
-  useEffect(() => { load(); }, [month]);
+  useEffect(() => { load(); }, [month, focusedJobId]);
 
   // Display copies: $0 ProBuild twins fold into their calendar labor line and priced
   // companions are held for review. Writes always start from the raw feeLines rows.
   const billingRows = useMemo(() => withCompanions(feeLines, billingEvents), [feeLines, billingEvents]);
-  const monthRows = useMemo(() => billingRows.filter((r) => r.invoice_month === month), [billingRows, month]);
+  const monthRows = useMemo(() => billingRows.filter(r => inInvoiceScope(r, month, focusedJobId)), [billingRows, month, focusedJobId]);
   const supersededSet = useMemo(() => buildSupersededSet(billingRows, billingEvents), [billingRows, billingEvents]);
 
   const filteredRows = useMemo(() => {
@@ -249,7 +258,7 @@ export default function Invoicing() {
   }, [feeLines, handleEdit, performAction]);
 
   const handleMarkBilledSelected = useCallback(() => {
-    const selected = feeLines.filter((r) => selectedIds.has(r.id));
+    const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
     const updates = selected.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
     const prevStates = selected.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs, manually_adjusted: !!r.manually_adjusted }));
@@ -260,10 +269,10 @@ export default function Invoicing() {
       persistBulk(prevStates, updates);
     });
     clearSelection();
-  }, [feeLines, selectedIds, performAction, clearSelection, persistBulk]);
+  }, [feeLines, selectedIds, month, focusedJobId, performAction, clearSelection, persistBulk]);
 
   const handleSetFeePctSelected = useCallback((pct) => {
-    const selected = feeLines.filter((r) => selectedIds.has(r.id));
+    const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
     const feePct = pct / 100;
     const updates = selected.map((r) => ({ id: r.id, fee_pct: feePct, fee_amt: Math.round((Number(r.labor_amt) || 0) * feePct * 100) / 100, manually_adjusted: true }));
@@ -274,10 +283,10 @@ export default function Invoicing() {
       setFeeLines((prev) => prev.map((r) => { const u = prevStates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
       persistBulk(prevStates, updates);
     });
-  }, [feeLines, selectedIds, performAction, persistBulk]);
+  }, [feeLines, selectedIds, month, focusedJobId, performAction, persistBulk]);
 
   const handleDeleteSelected = useCallback(async () => {
-    const selected = feeLines.filter((r) => selectedIds.has(r.id));
+    const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
     const deletedData = selected.map((r) => { const { id, created_date, updated_date, created_by_id, ...rest } = r; return rest; });
     setFeeLines((prev) => prev.filter((r) => !selectedIds.has(r.id)));
@@ -290,10 +299,10 @@ export default function Invoicing() {
     }
     performAction(`${selected.length} lines deleted`, () => {}, async () => { const restored = await base44.entities.FeeLines.bulkCreate(deletedData); setFeeLines((prev) => [...prev, ...restored]); });
     clearSelection();
-  }, [feeLines, selectedIds, performAction, clearSelection]);
+  }, [feeLines, selectedIds, month, focusedJobId, performAction, clearSelection]);
 
   const handleExportSelected = useCallback(() => {
-    const selected = feeLines.filter((r) => selectedIds.has(r.id));
+    const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
     const cols = ["job_date", "job_name_norm", "line_description", "labor_amt", "fee_pct", "fee_amt", "billable", "source", "billed_to_bfs"];
     const header = cols.join(",");
@@ -301,7 +310,7 @@ export default function Invoicing() {
     const blob = new Blob([header + "\n" + body], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `selected-lines-${month}.csv`; a.click(); URL.revokeObjectURL(url);
-  }, [feeLines, selectedIds, month]);
+  }, [feeLines, selectedIds, month, focusedJobId]);
 
   // Only lines that are ready to bill; held, scheduled, superseded and excluded lines stay put.
   const isLineReady = useCallback((r) => isReady(r, reportStatusMap, supersededSet), [reportStatusMap, supersededSet]);
@@ -329,6 +338,7 @@ export default function Invoicing() {
   }, [month]);
 
   const handleRunIngest = async () => {
+    if (focusedJobId) { await load(); setSyncMessage('Job billing records reloaded. Global calendar and billing ingest were not run.'); return; }
     setRunningIngest(true);
     try {
       const result = await refreshMonth(month, setSyncMessage);
@@ -343,6 +353,7 @@ export default function Invoicing() {
   };
 
   const handleCloseMonth = async () => {
+    if (focusedJobId) { setSyncMessage('Month close applies to all jobs. Return to the all-jobs view to close a month.'); return; }
     if (monthClosed) {
       if (!window.confirm(`This month is already closed ($${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)} invoiced on ${new Date(monthClosed.closed_at).toLocaleDateString()}). Create a new snapshot with current values?`)) return;
     } else {
@@ -410,9 +421,11 @@ export default function Invoicing() {
 
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
+      {focusedJobId && <div className="mx-auto max-w-[1440px] px-5 pt-5 sm:px-6 lg:px-8"><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div><p className="text-sm font-bold text-emerald-950">Job invoicing: {profitabilityInputs.jobs.find(j => j.id === focusedJobId)?.canonical_name || focusedJobId}</p><p className="mt-1 text-xs text-emerald-900">Only records linked to this job. Global ingest and month-close actions stay in the all-jobs view.</p></div><div className="flex flex-wrap gap-3 text-sm font-semibold text-emerald-950"><Link className="underline" to={procurementPath(focusedJobId, 'invoicing')}>Budget & Orders</Link><Link className="underline" to={`/?month=${encodeURIComponent(month)}`}>Show all jobs</Link></div></div></div>}
       <InvoiceHeader
+        jobScoped={Boolean(focusedJobId)}
         month={month}
-        onMonthChange={setMonth}
+        onMonthChange={changeMonth}
         onExportPdf={handleExportPdf}
         exporting={exporting}
         monthClosed={monthClosed}
