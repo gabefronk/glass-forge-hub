@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { isPurchaseOrderOwner } from '@/lib/purchaseOrderAccess';
 import { procurementPath } from '@/lib/procurementRoutes';
+import { purchasingText, purchasingSearchIndex, matchesPurchasingSearch } from '@/lib/purchasingSearch';
 import { C } from '@/lib/feeUI';
 import { PageShell, PageHero, HeroStat } from '@/components/PageShell';
 import PageNotFound from '@/lib/PageNotFound';
@@ -26,7 +27,7 @@ function Metrics({ figures }) { return <dl className="my-3 grid grid-cols-2 gap-
 
 export function LegacyPurchasingRedirect({ section }) {
   const [params] = useSearchParams();
-  return <Navigate replace to={procurementPath(params.get('job_id') || '', section)} />;
+  return <Navigate replace to={procurementPath(params.get('job_id') || '', section, params.get('month') || '')} />;
 }
 export default function Procurement() {
   const { user } = useAuth();
@@ -55,11 +56,14 @@ function ProcurementWorkspace() {
   const current = data || emptyData;
   const job = current.jobs.find(j => j.id === jobId);
   const availableJobs = useMemo(() => current.jobs.filter(j => !j.merged_into && !j.is_sample).sort((a, b) => String(a.canonical_name).localeCompare(String(b.canonical_name))), [current.jobs]);
-  const searchable = row => [row.title, row.job_name, row.canonical_name, row.vendor, row.quote_number, row.po_number, row.vendor_quote_ref, row.order_number, row.po_name, row.address, row.builder, row.id, ...(row.po_numbers || []), ...(row.oe_numbers || [])].filter(Boolean).join(' ').toLowerCase();
+  const searchIndex = useMemo(() => purchasingSearchIndex(current), [current]);
+  const matches = row => matchesPurchasingSearch(searchIndex.get(row) || purchasingText(row), query);
   const needle = query.trim().toLowerCase();
-  const visible = rows => rows.filter(r => (!jobId || r.job_id === jobId) && (!unlinkedOnly || !r.job_id) && (!needle || searchable(r).includes(needle)));
+  const visible = rows => rows.filter(r => (!jobId || r.job_id === jobId) && (!unlinkedOnly || !r.job_id) && (!needle || matches(r)));
   const budgets = visible(current.budgets), pos = visible(current.purchase_orders), orders = visible(current.vendor_orders);
   const jobBudgets = current.budgets.filter(b => b.job_id === jobId);
+  const sectionCounts = { budgets: budgets.length, orders: pos.length, tracking: orders.length };
+  const pathFor = (id, tab = section) => procurementPath(id, tab, params.get('month') || '');
   const active = new Set(activeBudgets(jobBudgets).map(b => b.id));
   const rollup = budgetRollup(jobBudgets);
   const conflicts = current.conflicts.filter(c => !jobId || c.job_ids.includes(jobId));
@@ -102,17 +106,23 @@ function ProcurementWorkspace() {
   return <PageShell width="max-w-[1240px]">
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
       <Link to={job ? `/jobs/${job.id}` : '/jobs'} className="inline-flex items-center gap-1 font-semibold" style={{ color: C.text }}><ArrowLeft size={15} />{job ? 'Back to job' : 'Back to Jobs'}</Link>
-      <div className="flex flex-wrap gap-2">{job && <><Link to={`/jobs/${job.id}/setup`} target="_blank" rel="noopener noreferrer" className={buttonClass} style={secondaryStyle}>Setup sheet</Link><Link to={procurementPath('', section)} className={buttonClass} style={secondaryStyle}>Purchasing overview</Link></>}<button disabled={loading || uploading} onClick={load} className={buttonClass} style={secondaryStyle}><RefreshCw size={15} />Refresh</button></div>
+      <div className="flex flex-wrap gap-2">{job && <><Link to={`/jobs/${job.id}/setup`} target="_blank" rel="noopener noreferrer" className={buttonClass} style={secondaryStyle}>Setup sheet</Link><Link to={pathFor('')} className={buttonClass} style={secondaryStyle}>Purchasing overview</Link></>}<button disabled={loading || uploading} onClick={load} className={buttonClass} style={secondaryStyle}><RefreshCw size={15} />Refresh</button></div>
     </div>
     <PageHero eyebrow="Glass Forge / purchasing" title={job ? 'Budget & Orders' : 'Purchasing Overview'} sub={job ? job.canonical_name : 'Open a job to manage its quotes, budgets, purchase orders and accounting links in one place.'}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{job ? <><HeroStat label="Budget cost" value={money(rollup.cost)} sub={`${rollup.count} included scopes`} /><HeroStat label="Customer total" value={money(rollup.sell)} sub="Budget estimate, not an invoice" /><HeroStat label="Margin dollars" value={money(rollup.margin_dollars)} /><HeroStat label="Margin" value={percent(rollup.margin_pct)} sub={rollup.status === 'ready' ? 'Based on included scopes' : 'Review incomplete or duplicate costs'} /></> : <><HeroStat label="Quote budgets" value={String(current.budgets.length)} /><HeroStat label="Purchase orders" value={String(current.purchase_orders.length)} /><HeroStat label="Supplier confirmations" value={String(current.vendor_orders.length)} /><HeroStat label="Reference conflicts" value={String(current.conflicts.length)} sub="Flagged, not auto-corrected" /></>}</div>
     </PageHero>
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">{error} Records may be incomplete. Editing is disabled until Refresh succeeds.</p>}
-    {job?.merged_into && <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">This is a merged job record. <Link className="underline" to={procurementPath(job.merged_into, section)}>Open the current job workspace</Link>. No job links have been changed.</p>}
+    {job?.merged_into && <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">This is a merged job record. <Link className="underline" to={pathFor(job.merged_into)}>Open the current job workspace</Link>. No job links have been changed.</p>}
     {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</p>}
     {conflicts.length > 0 && <details className="rounded-xl border border-amber-200 bg-amber-50 p-4" open={Boolean(job)}><summary className="cursor-pointer text-sm font-bold text-amber-900"><AlertTriangle size={15} className="mr-2 inline" />{conflicts.length} PO reference conflict{conflicts.length === 1 ? '' : 's'} - review before linking</summary><div className="mt-3 space-y-2">{conflicts.map(c => <div key={c.number} className="text-sm text-amber-950"><strong>{c.number}</strong><span> appears against </span>{c.job_ids.map((id, i) => <span key={id}>{i ? ' / ' : ''}<Link className="underline" to={`/jobs/${id}`}>{current.jobs.find(j => j.id === id)?.canonical_name || id}</Link></span>)}. Original records are retained; no automatic cross-link is made.</div>)}</div></details>}
-    <Card><div className="grid items-end gap-3 sm:grid-cols-2"><Field label={job ? 'Search this job\u2019s purchasing records' : 'Find a job or quote'} value={query} onChange={setQuery} />{!job && <Field label="Open an existing job" value="" onChange={id => id && navigate(procurementPath(id, section))}><option value="">Choose job...</option>{availableJobs.filter(j => !needle || searchable(j).includes(needle)).map(j => <option key={j.id} value={j.id}>{jobLabel(j)}</option>)}</Field>}</div>{!job && <label className="mt-3 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={unlinkedOnly} onChange={e => setUnlinkedOnly(e.target.checked)} />Show records that still need a job</label>}</Card>
-    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Purchasing sections">{SECTIONS.map(([key, label]) => <button key={key} role="tab" aria-selected={section === key} onClick={() => changeSection(key)} className={buttonClass} style={section === key ? primaryStyle : secondaryStyle}>{label}</button>)}</div>
+    <Card><div className="grid items-end gap-3 sm:grid-cols-2"><Field label={job ? 'Search this job\u2019s purchasing records' : 'Find a job or quote'} value={query} onChange={setQuery} />{!job && <Field label="Open an existing job" value="" onChange={id => id && navigate(pathFor(id))}><option value="">Choose job...</option>{availableJobs.filter(j => !needle || matches(j)).map(j => <option key={j.id} value={j.id}>{jobLabel(j)}</option>)}</Field>}</div>{!job && <label className="mt-3 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={unlinkedOnly} onChange={e => setUnlinkedOnly(e.target.checked)} />Show records that still need a job</label>}</Card>
+    {job && <Card><h2 className="text-base font-bold text-slate-900">This job's workflow</h2><p className="mt-1 text-sm text-slate-600">Review the quote, save customer setup, track the supplier order, then review billing for the selected month.</p><nav aria-label="Job purchasing workflow" className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <Link className="rounded-lg border p-3 text-sm" style={secondaryStyle} to={pathFor(job.id, 'budgets')}><strong>1. Quotes & budget</strong><span className="mt-1 block text-xs">{jobBudgets.length} quotes · {rollup.count} included · {rollup.status === 'ready' ? 'Totals reviewed' : 'Review scope and numbers'}</span></Link>
+      <Link className="rounded-lg border p-3 text-sm" style={secondaryStyle} to={`/jobs/${job.id}/setup`} target="_blank" rel="noopener noreferrer"><strong>2. Customer setup</strong><span className="mt-1 block text-xs">Scope, selling price, tax and terms</span></Link>
+      <Link className="rounded-lg border p-3 text-sm" style={secondaryStyle} to={pathFor(job.id, 'orders')}><strong>3. Orders & delivery</strong><span className="mt-1 block text-xs">{current.purchase_orders.filter(p => p.job_id === jobId).length} POs · {current.vendor_orders.filter(o => o.job_id === jobId).length} supplier confirmations</span></Link>
+      <Link className="rounded-lg border p-3 text-sm" style={secondaryStyle} to={pathFor(job.id, 'invoicing')}><strong>4. Invoicing</strong><span className="mt-1 block text-xs">Review the month and budget connection</span></Link>
+    </nav></Card>}
+    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Purchasing sections">{SECTIONS.map(([key, label]) => <button key={key} role="tab" aria-selected={section === key} onClick={() => changeSection(key)} className={buttonClass} style={section === key ? primaryStyle : secondaryStyle}>{label}{sectionCounts[key] !== undefined ? ` (${sectionCounts[key]})` : ''}</button>)}</div>
     <fieldset disabled={incomplete || Boolean(job?.merged_into || job?.is_sample)} className="min-w-0 space-y-4 border-0 p-0">
       {editor && <div key={editor.key}>
         {editor.mode === 'po' && editorJob && <PurchaseOrderForm job={editorJob} budgets={current.budgets} initialBudget={currentBudget} onDone={done} onCancel={() => setEditor(null)} />}
