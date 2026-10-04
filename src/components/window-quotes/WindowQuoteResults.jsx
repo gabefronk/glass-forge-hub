@@ -2,6 +2,9 @@ import AmscoQuoteSchedule from "./AmscoQuoteSchedule";
 import QuotePricingPanel from "./QuotePricingPanel";
 import { savedScheduleData } from "./quoteScheduleModel";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
+import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import { procurementPath } from "@/lib/procurementRoutes";
 import { ArrowUpRight, BriefcaseBusiness, CheckCircle2, FileText, Wrench } from "lucide-react";
 
 const primaryClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#2A5EA8] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#234F8E] disabled:cursor-not-allowed disabled:opacity-50";
@@ -22,6 +25,7 @@ import { InstallTotals } from './InstallBudgetEditor';
 import { quoteInstallSummary } from '../../../base44/shared/installBudget.js';
 
 export default function WindowQuoteResults({ quote, onWon, onPricingSave, onQuickInstall, busy }) {
+  const { user } = useAuth();
   const result = quote?.result;
   const verified = quote?.worker_status === "ready" && result?.verified === true;
   if (!verified) return <div className="rounded-xl border border-dashed border-[#CBD4E1] bg-[#F6F8FC] px-5 py-10 text-center"><FileText size={28} className="mx-auto mb-3 text-[#77839A]" /><h3 className="font-semibold text-[#131A26]">Your verified quote will appear here</h3><p className="mx-auto mt-2 max-w-sm text-sm text-[#616D81]">Window schematics, saved specifications and prices appear after the quote has been checked.</p></div>;
@@ -57,6 +61,10 @@ export default function WindowQuoteResults({ quote, onWon, onPricingSave, onQuic
       {[totals.list_total, totals.dealer_total ?? totals.dealer_cost, totals.gross_margin].some(present) && <details className="mt-4 border-t border-[#E9EDF4] pt-3"><summary className="cursor-pointer text-xs font-medium text-[#616D81]">Package cost and margin</summary><dl className="mt-3 space-y-2 text-xs">{[["List total", totals.list_total], ["Dealer cost", totals.dealer_total ?? totals.dealer_cost]].filter(([, value]) => present(value)).map(([label, value]) => <div key={label} className="flex flex-wrap justify-between gap-x-4 gap-y-1"><dt className="text-[#616D81]">{label}</dt><dd className="break-all tabular-nums text-[#131A26]">{money(value, currency)}</dd></div>)}{present(totals.gross_margin) && <div className="flex flex-wrap justify-between gap-x-4 gap-y-1"><dt className="text-[#616D81]">Gross margin</dt><dd className="text-[#131A26]">{display(totals.gross_margin)}%</dd></div>}</dl></details>}
       <p className="mt-4 text-[11px] leading-relaxed text-[#77839A]">Prices are the saved quote values. Schematics show overall proportions and are not fabrication drawings.</p>
     </section>
+    {quote.job_id && isPurchaseOrderOwner(user) && <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+      <h4 className="text-sm font-semibold text-emerald-950">Continue this job</h4><p className="mt-1 text-xs text-emerald-900">The accepted revision stays with the job. Review customer details, then manage purchasing and billing from the same job file.</p>
+      <div className="mt-3 flex flex-wrap gap-2"><Link className="rounded-lg bg-emerald-950 px-4 py-2 text-sm font-semibold text-white" to={`/jobs/${encodeURIComponent(quote.job_id)}/setup`}>Review customer setup</Link><Link className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950" to={procurementPath(quote.job_id)}>Budget & Orders</Link></div>
+    </section>}
     {quote.job_id ? <Link to={`/jobs/${encodeURIComponent(quote.job_id)}`} className="flex items-center justify-between rounded-xl border border-[#CADFCF] bg-[#EAF5EE] p-4 text-sm font-semibold text-[#276449]"><span className="flex items-center gap-2"><BriefcaseBusiness size={17} />Won · Open linked job</span><ArrowUpRight size={16} /></Link> : <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#DDE3EC] bg-white p-4"><div><h4 className="text-sm font-semibold text-[#131A26]">Won the sale?</h4><p className="mt-1 text-xs text-[#616D81]">Accept this revision and move it into Jobs.</p></div><button type="button" className={primaryClass} disabled={busy || quote.sales_status === "won" || (installSummary.enabled && !installSummary.complete)} onClick={onWon}><CheckCircle2 size={15} />Mark won</button></div>}
   </div>;
 }
