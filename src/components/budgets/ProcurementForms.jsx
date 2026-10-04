@@ -21,7 +21,7 @@ export function Field({ label, value, onChange, type = 'text', children, disable
   const cls = 'mt-1 w-full min-w-0 rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 disabled:opacity-60';
   return <label className="block min-w-0 text-xs font-semibold text-slate-600">{label}
     {children ? <select className={cls} value={value} disabled={disabled} onChange={e => onChange(e.target.value)}>{children}</select>
-      : <input className={cls} type={type} inputMode={type === 'number' ? 'decimal' : undefined} value={value ?? ''} disabled={disabled} onChange={e => onChange(e.target.value)} />}
+      : <input className={cls} type={type} step={type === 'number' ? 'any' : undefined} min={type === 'number' ? '0' : undefined} inputMode={type === 'number' ? 'decimal' : undefined} value={value ?? ''} disabled={disabled} onChange={e => onChange(e.target.value)} />}
     {hint && <span className="mt-1 block font-normal leading-5">{hint}</span>}
   </label>;
 }
@@ -56,7 +56,7 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
     } catch (e) { setError(messageOf(e)); }
     finally { setBusy(false); }
   }
-  return <FormPanel title={`Prepare PO \u00b7 ${job.canonical_name}`}><form onSubmit={submit}>
+  return <FormPanel title={`Prepare PO \u00b7 ${job.canonical_name}`}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
     <div className="grid gap-3 sm:grid-cols-2">
       <Field label="Source quote / budget" value={form.budget_id} onChange={selectBudget}><option value="">Manual PO (no budget source)</option>{eligible.map(b => <option value={b.id} key={b.id}>{b.title}</option>)}</Field>
       <Field label="Supplier" value={form.vendor} onChange={v => set('vendor', v)} />
@@ -70,10 +70,11 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
     {amount(form.amount_dealer) === 0 && <Review checked={zero} onChange={setZero}>The supplier payable is intentionally zero.</Review>}
     <Review checked={reviewed} onChange={setReviewed}>I reviewed the job, supplier, source quote, scope and payable. Issue a PO record only; do not place or email an order.</Review>
     <ErrorLine error={error} /><Buttons busy={busy} enabled={reviewed && !!form.vendor && !!form.vendor_quote_ref && amount(form.amount_dealer) !== null && (amount(form.amount_dealer) !== 0 || zero)} label="Issue reviewed PO" onCancel={onCancel} />
-  </form></FormPanel>;
+  </fieldset></form></FormPanel>;
 }
 
 export function BudgetUsageForm({ budget, budgets, onDone, onCancel }) {
+  const sourceVersion = useRef(budgetVersion(budget));
   const [usage, setUsage] = useState(budget.budget_usage || 'included');
   const [replaces, setReplaces] = useState(budget.replaces_budget_id || '');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -81,18 +82,19 @@ export function BudgetUsageForm({ budget, budgets, onDone, onCancel }) {
   async function save(e) {
     e.preventDefault(); if (busy) return;
     setBusy(true); setError('');
-    try { const r = await purchasingRequest({ action: 'budget_usage', budget_id: budget.id, budget_version: budgetVersion(budget), budget_usage: usage, replaces_budget_id: usage === 'included' ? replaces : '', review_confirmed: true, request_key: key.current }); onDone(r, r.message); }
+    try { const r = await purchasingRequest({ action: 'budget_usage', budget_id: budget.id, budget_version: sourceVersion.current, budget_usage: usage, replaces_budget_id: usage === 'included' ? replaces : '', review_confirmed: true, request_key: key.current }); onDone(r, r.message); }
     catch (e2) { setError(messageOf(e2)); } finally { setBusy(false); }
   }
-  return <FormPanel title="Choose how this quote counts"><form onSubmit={save}>
+  return <FormPanel title="Choose how this quote counts"><form onSubmit={save}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
     <div className="grid gap-3 sm:grid-cols-2"><Field label="Budget use" value={usage} onChange={setUsage}><option value="draft">Draft - not in totals</option><option value="included">Include in this job's budget</option><option value="reference">Reference only - keep in history</option></Field>
       {usage === 'included' && <Field label="Replaces an earlier quote?" value={replaces} onChange={setReplaces}><option value="">No - separate scope / add-on</option>{budgets.filter(b => b.id !== budget.id && b.job_id === budget.job_id).map(b => <option value={b.id} key={b.id}>{b.title}</option>)}</Field>}</div>
     <p className="mt-3 text-sm text-slate-600">Replacement versions exclude the earlier quote from current totals. Source files, previous numbers and issued purchase orders stay in history. Customer approvals and invoices are not rewritten.</p>
     <ErrorLine error={error} /><Buttons busy={busy} label="Save scope selection" onCancel={onCancel} />
-  </form></FormPanel>;
+  </fieldset></form></FormPanel>;
 }
 
 export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', initialPO, order, onDone, onCancel }) {
+  const sourceVersion = useRef(order?.updated_date);
   const [form, setForm] = useState(() => ({ job_id: order?.job_id || initialPO?.job_id || initialJobId, purchase_order_id: order?.purchase_order_id || initialPO?.id || '', order_number: order?.order_number || '', amount: order?.amount ?? '', eta_date: order?.eta_date || '', received_date: order?.received_date || '', notes: order?.notes || '' }));
   const [reviewed, setReviewed] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const key = useRef(crypto.randomUUID());
@@ -100,10 +102,10 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
   const pos = purchaseOrders.filter(p => p.job_id === form.job_id && p.status !== 'cancelled');
   async function submit(e) {
     e.preventDefault(); if (busy || !reviewed) return; setBusy(true); setError('');
-    try { const r = await purchasingRequest({ ...form, action: 'save_supplier_order', order_id: order?.id, expected_updated_date: order?.updated_date, request_key: key.current, review_confirmed: true }); onDone(r, 'Supplier confirmation saved against the selected job and PO. No order or payment was sent.'); }
+    try { const r = await purchasingRequest({ ...form, action: 'save_supplier_order', order_id: order?.id, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true }); onDone(r, 'Supplier confirmation saved against the selected job and PO. No order or payment was sent.'); }
     catch (e2) { setError(messageOf(e2)); } finally { setBusy(false); }
   }
-  return <FormPanel title={order ? 'Update supplier confirmation' : 'Record supplier confirmation'}><form onSubmit={submit}>
+  return <FormPanel title={order ? 'Update supplier confirmation' : 'Record supplier confirmation'}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
     <div className="grid gap-3 sm:grid-cols-2">
       <Field label="Job" value={form.job_id} disabled={Boolean(order?.job_id || initialPO)} onChange={v => set('job_id', v)}><option value="">Choose existing job</option>{jobs.filter(j => !j.merged_into && !j.is_sample).map(j => <option value={j.id} key={j.id}>{j.canonical_name}</option>)}</Field>
       <Field label="Purchase order" value={form.purchase_order_id} disabled={Boolean(order?.purchase_order_id || initialPO)} onChange={v => set('purchase_order_id', v)}><option value="">Choose PO</option>{pos.map(p => <option value={p.id} key={p.id}>{p.po_number} - {p.vendor} - {p.vendor_quote_ref}</option>)}</Field>
@@ -115,24 +117,25 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
     <Field label="Notes" value={form.notes} onChange={v => set('notes', v)} />
     <Review checked={reviewed} onChange={setReviewed}>These details come from the supplier confirmation. Record them only; do not place an order or change the installation calendar.</Review>
     <ErrorLine error={error} /><Buttons busy={busy} enabled={reviewed && !!form.job_id && !!form.purchase_order_id} label="Save supplier confirmation" onCancel={onCancel} />
-  </form></FormPanel>;
+  </fieldset></form></FormPanel>;
 }
 
 export function OrderStatusForm({ row, supplier = false, onDone, onCancel }) {
+  const sourceVersion = useRef(row.updated_date);
   const [status, setStatus] = useState(row.status || 'issued'), [note, setNote] = useState('');
   const [reviewed, setReviewed] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const key = useRef(crypto.randomUUID());
   const options = supplier ? [['ordered', 'Unpaid / ordered'], ['eta_set', 'Unpaid / ETA received'], ['ach_link_received', 'Payment link received (unpaid)'], ['paid', 'Paid - payment verified'], ['reconciled', 'Reconciled']] : [['issued', 'Issued - not sent'], ['emailed', 'Sent to supplier'], ['ordered', 'Ordered'], ['confirmed', 'Supplier confirmed'], ['received', 'Received'], ['cancelled', 'Cancelled (retain number)']];
   async function submit(e) {
     e.preventDefault(); if (busy || !reviewed) return; setBusy(true); setError('');
-    try { const r = await purchasingRequest({ action: supplier ? 'vendor_status' : 'po_status', po_id: supplier ? undefined : row.id, order_id: supplier ? row.id : undefined, status, note, expected_updated_date: row.updated_date, request_key: key.current, review_confirmed: true }); onDone(r, r.message); }
+    try { const r = await purchasingRequest({ action: supplier ? 'vendor_status' : 'po_status', po_id: supplier ? undefined : row.id, order_id: supplier ? row.id : undefined, status, note, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true }); onDone(r, r.message); }
     catch (e2) { setError(messageOf(e2)); } finally { setBusy(false); }
   }
-  return <FormPanel title={`Record status - ${row.po_number || row.title}`}><form onSubmit={submit}>
+  return <FormPanel title={`Record status - ${row.po_number || row.title}`}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
     <div className="grid gap-3 sm:grid-cols-2"><Field label="Recorded status" value={status} onChange={v => { setStatus(v); setReviewed(false); }}>{options.map(([v, label]) => <option key={v} value={v}>{label}</option>)}</Field><Field label="Evidence / payment reference / reason" value={note} onChange={v => { setNote(v); setReviewed(false); }} /></div>
     <Review checked={reviewed} onChange={setReviewed}>I verified this status. This records a fact only; it does not send money, email a supplier or bill the customer.</Review>
     <ErrorLine error={error} /><Buttons busy={busy} enabled={reviewed && note.trim().length >= 3} label="Save recorded status" onCancel={onCancel} />
-  </form></FormPanel>;
+  </fieldset></form></FormPanel>;
 }
 
 export function InvoiceBridge({ job }) {
@@ -150,7 +153,7 @@ export function InvoiceBridge({ job }) {
     try { const r = await purchasingRequest({ action: 'sync_estimate', job_id: job.id, month, route, preview_version: preview.version, request_key: key.current, review_confirmed: true }); setNotice(r.message); setPreview(await purchasingRequest({ action: 'invoice_preview', job_id: job.id, month })); setReviewed(false); key.current = crypto.randomUUID(); }
     catch (e2) { setError(messageOf(e2)); } finally { setBusy(false); }
   }
-  return <FormPanel title="Budget estimate & invoicing"><form onSubmit={sync}>
+  return <FormPanel title="Budget estimate & invoicing"><form onSubmit={sync}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
     <div className="flex flex-wrap items-end justify-between gap-3"><Field label="Accounting month" type="month" value={month} onChange={setMonth} /><Link className={buttonClass} style={secondaryStyle} to={`/?job_id=${encodeURIComponent(job.id)}&month=${encodeURIComponent(month)}`}>Open this job in Invoicing</Link></div>
     <p className="mt-3 text-sm leading-6 text-slate-600">Budgets are estimates. Invoice amounts, actual labor, customer payments and supplier payments remain separate records. Linking below does not create an invoice, approve an order or overwrite actual financial amounts.</p>
     {preview && <>
@@ -165,5 +168,5 @@ export function InvoiceBridge({ job }) {
     </>}
     {!preview && !error && <p className="mt-3 text-sm">Loading estimate and accounting records...</p>}
     <ErrorLine error={error} />{notice && <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</p>}
-  </form></FormPanel>;
+  </fieldset></form></FormPanel>;
 }
