@@ -549,6 +549,9 @@ export default function Invoicing() {
         <FloatingActionBar
           disabled={deletingRows}
           selectedCount={selectedIds.size}
+          eligibleCount={loading || loadError || monthClosed ? 0 : selectedReadyInvoiceRows(feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet).length}
+          laborCount={loading || loadError || monthClosed ? 0 : selectedLaborFeeRows(feeLines, selectedIds, month, focusedJobId).length}
+          monthLabel={month}
           selectedFee={selectedFee}
           onClear={clearSelection}
           onSetFeePct={handleSetFeePctSelected}
