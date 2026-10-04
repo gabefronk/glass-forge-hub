@@ -63,9 +63,11 @@ async function buildOne(ctx, jobId, apply) {
   const name = calendarTitle(events, today) || job.canonical_name;
   if (!name) return { job_id: job.id, result: 'no_name' };
 
-  // Already in ProBuild under the same name (the crew made it)? Link that one instead.
+  // Already in ProBuild (the crew made it)? Link that one instead: a project the job's own
+  // reports came from, else one with the same name.
   const want = normalizeJobName(name), wantJob = normalizeJobName(job.canonical_name);
-  const existing = projects.find((p) => !p.deletedAt && [want, wantJob].includes(normalizeJobName(p.name || p.title || '')));
+  const reported = (await api.FieldReports.filter({ job_id: job.id }, '-job_date', 20).catch(() => [])).map((r) => r.project_id).filter(Boolean);
+  const existing = projects.find((p) => !p.deletedAt && reported.includes(p.id)) || projects.find((p) => !p.deletedAt && [want, wantJob].includes(normalizeJobName(p.name || p.title || '')));
   if (existing) {
     if (apply) await api.ProbuildProjectLink.create({ project_id: existing.id, project_name: existing.name || '', job_id: job.id, job_name: job.canonical_name });
     return { job_id: job.id, job_name: job.canonical_name, result: apply ? 'linked_existing' : 'would_link_existing', project_id: existing.id, project_name: existing.name };
