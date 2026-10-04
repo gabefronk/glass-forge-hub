@@ -7,20 +7,44 @@ import { computeJobBudget } from "../../base44/shared/jobBudgetMath.js";
 import { UploadCloud, FileText, FolderOpen, DollarSign, AlertTriangle, CheckCircle2, Truck, Plus, Calculator } from "lucide-react";
 import { fetchAllPages } from "@/lib/pagination";
 import { BudgetRowButtons, NumbersEditor, LinkJobEditor } from "@/components/budgets/BudgetReviewRow";
+import { orderKeys } from "../../base44/shared/emailTriage.js";
+import { denverDate } from "../../base44/shared/billingCore.js";
 
 // Job Budgets: drop vendor quote PDFs -> cost basis + margins -> Drive filing ->
-// invoicing cost inputs. Plus the unpaid-jobs tracker (ordered -> ACH link -> paid ->
-// reconciled) so every open payable is one list. The ETA is a fact on the order, not a step:
-// the inbox agent fills it from the vendor's emails (Steve's "ready / pickup" dates), and it
-// can be set or changed by hand, but paying an order never waits on it.
+// invoicing cost inputs. Plus the unpaid vendor orders list: one button, "Mark paid" (Gabe pays
+// from the link the vendor emails; nothing to paste). Each order shows where the work stands
+// from the calendar — visits that name its PO / order number (or on its job after it was
+// ordered): installed, booked, or still waiting on the ETA. The ETA is a fact, never a step;
+// the inbox agent fills it from the vendor's emails and it can be changed by hand.
 
 const money = (n) => (n === null || n === undefined || n === "" || !Number.isFinite(Number(n)))
   ? "-" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n) => (n === null || n === undefined || !Number.isFinite(Number(n))) ? "-" : (Number(n) * 100).toFixed(1) + "%";
 
-const ORDER_LABEL = { ordered: "Ordered", eta_set: "Ordered", ach_link_received: "ACH link in", paid: "Paid", reconciled: "Reconciled" };
-const NEXT_ACTION = { ordered: "ACH link received", eta_set: "ACH link received", ach_link_received: "Mark paid", paid: "Reconcile" };
-const NEXT_STATUS = { ordered: "ach_link_received", eta_set: "ach_link_received", ach_link_received: "paid", paid: "reconciled" };
+const ORDER_LABEL = { ordered: "Unpaid", eta_set: "Unpaid", ach_link_received: "Unpaid", paid: "Paid", reconciled: "Paid" };
+const isPaid = (o) => o.status === "paid" || o.status === "reconciled";
+const md = (d) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "");
+
+// Where the work on an order stands, from the calendar. A visit counts when its notes or title
+// name the order (YA-0003, 09-4307, 3517590…), or when it is on the order's job and dated after
+// the order was placed. Done = a past visit with its report in.
+function orderProgress(order, events, today) {
+  const keys = orderKeys(order);
+  const placed = String(order.created_date || "").slice(0, 10);
+  const said = (ev) => {
+    const text = `${ev.job_name || ""} ${ev.scope_notes || ""}`.toUpperCase();
+    return [...keys].some((k) => text.includes(k));
+  };
+  const hits = (events || []).filter((ev) => ev?.event_date && !/cancel/i.test(ev.source_status || "")
+    && (said(ev) || (order.job_id && ev.job_id === order.job_id && ev.event_date >= placed)));
+  const past = hits.filter((ev) => ev.event_date <= today).sort((a, b) => b.event_date.localeCompare(a.event_date));
+  const done = past.find((ev) => ev.report_status === "ok" || ev.report_status_raw === "ok");
+  if (done) return { tone: "done", text: `Installed ${md(done.event_date)}` };
+  const next = hits.filter((ev) => ev.event_date > today).sort((a, b) => a.event_date.localeCompare(b.event_date))[0];
+  if (next) return { tone: "booked", text: `Install booked ${md(next.event_date)}` };
+  if (past[0]) return { tone: "booked", text: `On site ${md(past[0].event_date)} — report not in yet` };
+  return null;
+}
 // "Steve Chapman email 2026-09-25 (inbox agent, thread …)" -> "Steve Chapman's email 9/25"
 function etaFrom(source) {
   const s = String(source || "");
@@ -56,6 +80,8 @@ function Section({ title, sub, children }) {
 export default function JobBudgets() {
   const [budgets, setBudgets] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [showPaid, setShowPaid] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [processing, setProcessing] = useState([]); // per-drop progress lines
   const [dragOver, setDragOver] = useState(false);
@@ -67,13 +93,16 @@ export default function JobBudgets() {
   const fileInput = useRef(null);
 
   const load = useCallback(async () => {
-    const [b, o, j] = await Promise.allSettled([
+    const since = denverDate(Date.now() - 150 * 86400000);
+    const [b, o, j, e] = await Promise.allSettled([
       base44.entities.JobBudgets.list("-created_date", 200),
       base44.entities.VendorOrders.list("-created_date", 200),
       fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
+      base44.entities.CalendarEvents.filter({ event_date: { $gte: since } }, "-event_date", 2000),
     ]);
     if (b.status === "fulfilled") setBudgets(b.value || []);
     if (o.status === "fulfilled") setOrders(o.value || []);
+    if (e.status === "fulfilled") setEvents(e.value || []);
     if (j.status === "fulfilled") { setJobs(j.value || []); setJobsError(""); }
     else { setJobs([]); setJobsError(`The complete jobs list could not be loaded. Job links are unavailable. ${j.reason?.message || ""}`); }
   }, []);
@@ -121,25 +150,15 @@ export default function JobBudgets() {
     loadSafely();
   }
 
-  async function advanceOrder(order) {
-    const next = NEXT_STATUS[order.status];
-    if (!next) return;
-    const extra = {};
-    if (next === "ach_link_received") {
-      const link = window.prompt("Paste the ACH link from the vendor:");
-      if (link === null) return;
-      extra.ach_link = link;
-    }
-    if (next === "paid") {
-      const ref = window.prompt("Payment reference (ACH confirmation, check #) - optional:") || "";
-      extra.paid_reference = ref;
-    }
-    if (next === "eta_set") {
-      const eta = window.prompt("ETA date (yyyy-mm-dd):");
-      if (!eta) return;
-      extra.eta_date = eta;
-    }
-    await base44.functions.invoke("jobBudgetIngest", { action: "advance_order_status", order_id: order.id, status: next, ...extra });
+  async function markPaid(order) {
+    if (!window.confirm(`Mark ${order.po_name || order.title} paid (${money(order.amount)})?`)) return;
+    await base44.functions.invoke("jobBudgetIngest", { action: "advance_order_status", order_id: order.id, status: "paid", note: "paid from the vendor's link" });
+    loadSafely();
+  }
+
+  async function markUnpaid(order) {
+    if (!window.confirm(`Move ${order.po_name || order.title} back to unpaid?`)) return;
+    await base44.functions.invoke("jobBudgetIngest", { action: "advance_order_status", order_id: order.id, status: order.eta_date ? "eta_set" : "ordered", note: "marked unpaid" });
     loadSafely();
   }
 
@@ -150,7 +169,9 @@ export default function JobBudgets() {
     loadSafely();
   };
 
-  const openPayables = orders.filter((o) => o.status !== "reconciled");
+  const openPayables = orders.filter((o) => !isPaid(o));
+  const paidOrders = orders.filter(isPaid);
+  const today = denverDate();
   const openPayableTotal = openPayables.reduce((n, o) => n + (Number(o.amount) || 0), 0);
   const jobName = (id) => jobs.find((j) => j.id === id)?.canonical_name || "";
 
@@ -247,21 +268,30 @@ export default function JobBudgets() {
         {/* Unpaid jobs tracker */}
         <Section
           title="Unpaid vendor orders"
-          sub={`${openPayables.length} open - ${money(openPayableTotal)} outstanding - ordered -> ACH link -> paid -> reconciled. ETAs fill in from the vendor's emails.`}>
-          {orders.length === 0 && <p className="text-[13px]" style={{ color: C.textMuted }}>No vendor orders logged yet.</p>}
-          {orders.map((o) => {
+          sub={`${openPayables.length} unpaid - ${money(openPayableTotal)} outstanding. ETAs fill in from the vendor's emails; install status comes from the calendar.`}>
+          {openPayables.length === 0 && <p className="text-[13px]" style={{ color: C.textMuted }}>Nothing unpaid.</p>}
+          {[...openPayables, ...(showPaid ? paidOrders : [])].map((o) => {
+            const progress = orderProgress(o, events, today);
             return (
               <div key={o.id} className="rounded-[12px] px-4 py-3 flex flex-col gap-2" style={{ border: `1px solid ${C.rowBorder}`, backgroundColor: C.cardAlt }}>
                 <div className="flex items-center gap-3 flex-wrap">
                   <Truck className="h-4 w-4 shrink-0" style={{ color: C.textMuted }} />
                   <span className="text-[14px] font-semibold" style={{ color: C.text }}>{o.title}</span>
                   <span className="text-[13px] font-medium" style={{ color: C.textSecondary }}>{money(o.amount)}</span>
-                  <Tag status={o.status}>{ORDER_LABEL[o.status] || o.status}</Tag>
-                  {NEXT_STATUS[o.status] && (
-                    <button onClick={() => advanceOrder(o)} className="text-[12px] font-semibold px-3 py-1.5 rounded-[8px]"
+                  <Tag status={isPaid(o) ? "paid" : "ordered"}>{ORDER_LABEL[o.status] || o.status}</Tag>
+                  {progress ? (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                      style={progress.tone === "done" ? { backgroundColor: "#E2EEEB", color: "#0b3f3b", border: "1px solid #C7E4D2" } : { backgroundColor: "#E7EDF2", color: "#34506a", border: "1px solid #cfdbe6" }}>
+                      {progress.text}
+                    </span>
+                  ) : null}
+                  {!isPaid(o) ? (
+                    <button onClick={() => markPaid(o)} className="text-[12px] font-semibold px-3 py-1.5 rounded-[8px]"
                       style={{ backgroundColor: C.accent, color: "#fff" }}>
-                      {NEXT_ACTION[o.status]}
+                      Mark paid
                     </button>
+                  ) : (
+                    <button onClick={() => markUnpaid(o)} className="text-[12px] underline" style={{ color: C.textMuted }}>undo</button>
                   )}
                 </div>
                 <div className="text-[12px] flex flex-wrap gap-x-4 gap-y-1" style={{ color: C.textMuted }}>
@@ -271,13 +301,14 @@ export default function JobBudgets() {
                   {o.payer && <span>pays: {o.payer}</span>}
                   {o.payment_route && o.payment_route !== "unknown" && <span>via {o.payment_route.replace(/_/g, " ")}</span>}
                   {o.notes && <span>note: {o.notes}</span>}
-                  {o.status !== "paid" && o.status !== "reconciled" ? (
+                  {!isPaid(o) && progress?.tone !== "done" ? (
                     <span>
                       {o.eta_date ? <>ETA <span className="font-semibold" style={{ color: C.text }}>{o.eta_date}</span>{etaFrom(o.eta_source) ? ` ${etaFrom(o.eta_source)}` : ""}</> : "No ETA yet"}
                       <button type="button" onClick={() => setEta(o)} className="ml-1.5 underline" style={{ color: C.accentText }}>{o.eta_date ? "change" : "set"}</button>
                     </span>
                   ) : null}
-                  {o.ach_link && <a href={o.ach_link} target="_blank" rel="noreferrer" className="font-medium" style={{ color: C.accentText }}>ACH link</a>}
+                  {o.ach_link && <a href={o.ach_link} target="_blank" rel="noreferrer" className="font-medium" style={{ color: C.accentText }}>pay link</a>}
+                  {isPaid(o) && o.paid_at ? <span>paid {md(String(o.paid_at).slice(0, 10))}</span> : null}
                   {o.job_id && <Link to={`/jobs/${o.job_id}`} className="font-medium hover:underline" style={{ color: C.accentText }}>job: {jobName(o.job_id) || "open"}</Link>}
                 </div>
               </div>
