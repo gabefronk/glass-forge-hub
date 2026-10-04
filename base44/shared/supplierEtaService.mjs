@@ -1,7 +1,7 @@
 import { fetchCompleteEntity } from './jobCatalog.js';
 import { assertOwner } from './purchaseOrderService.mjs';
 import { validDate, text } from './procurementCore.js';
-import { supplierEtaCandidates, linkedEtaSupplier, publicEtaOrder, effectiveSupplierEta } from './supplierEtaCore.mjs';
+import { supplierEtaCandidates, supplierEtaReview, supplierEtaFollowUp, linkedEtaSupplier, publicEtaOrder, effectiveSupplierEta } from './supplierEtaCore.mjs';
 import { supplierEtaHTML } from './supplierEtaPage.mjs';
 
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
@@ -28,7 +28,7 @@ export async function supplierEtaAction(api, body, user, deps = {}) {
     }
     const data = await loadData(api);
     const candidates = supplierEtaCandidates(data);
-    if (action === 'manage') return { orders: candidates.map(po => publicEtaOrder(po, data)), links: (await fetchCompleteEntity(api.SupplierEtaLinks)).map(safeLink) };
+    if (action === 'manage') return { orders: candidates.map(po => ({ ...publicEtaOrder(po, data), follow_up_reason: supplierEtaFollowUp(po, data, now()) })), review: supplierEtaReview(data).filter(r => r.reason && !['Test, sample or merged record', 'Completed, cancelled or received'].includes(r.reason)).map(r => ({ id: r.po.id, po_number: r.po.po_number, reason: r.reason })), links: (await fetchCompleteEntity(api.SupplierEtaLinks)).map(safeLink) };
     const ids = body.order_ids;
     if (!Array.isArray(ids) || !ids.length || ids.length > 50 || new Set(ids).size !== ids.length) fail(400, 'Select between 1 and 50 distinct orders.');
     const selected = ids.map(id => candidates.find(po => po.id === id));
