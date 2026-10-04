@@ -1,0 +1,45 @@
+{
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "budget_autofill_probe",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "probe": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "budgetAutofillProbe",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Probe budget autofill",
+            "description": "Temporary read-only check of quote autofill."
+          }
+        }
+      }
+    ]
+  },
+  "name": "Budget Autofill Probe",
+  "description": "Temporary: read-only check of the Job Budgets autofill against stored quotes. Run manually; never fires on its own.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 3 31 2 *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  }
+}
