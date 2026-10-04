@@ -1,4 +1,4 @@
-import { pricingReview, canonicalPostRows, COMPANION_WINDOW_DAYS } from "../../shared/billingCore.js";
+import { isIgnoredWorkItem, pricingReview, canonicalPostRows, COMPANION_WINDOW_DAYS } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit, isTripChargeAmount } from '../../shared/ingestShared.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
@@ -121,6 +121,7 @@ export default async function(req) {
     const backfillIds = new Set();
     const lockedLaborGaps = [];
     calEvents = calEvents.filter((e) => {
+      if (isIgnoredWorkItem(e)) return false;
       const month = invoiceMonthFromDate(e.event_date || '');
       if (!lockedMonths.has(month)) return true;
       if (e.source_status === 'cancelled') return false;
