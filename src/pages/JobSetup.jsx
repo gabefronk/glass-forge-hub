@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/AuthContext";
 import PageNotFound from "@/lib/PageNotFound";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import { procurementPath } from "@/lib/procurementRoutes";
+import { setupBudgetSource } from '../../base44/shared/procurementCore.js';
+import { fetchAllPages } from '@/lib/pagination';
 import { buildSetupDraft, computeSetupTotals, contractTermsReady, toContractViewModel } from "@/lib/jobSetup";
 
 const money = (v) => v === "" || v === null || v === undefined || !Number.isFinite(Number(v)) ? "—" : Number(v).toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -39,13 +41,17 @@ function JobSetupOwner({ user }) {
     try {
       const [j, setups, budgets, costs] = await Promise.all([
         base44.entities.Jobs.get(id), base44.entities.JobSetupSheets.filter({ job_id: id }, "-updated_date", 2),
-        base44.entities.JobBudgets.filter({ job_id: id }, "-updated_date", 1).catch(() => []),
+        fetchAllPages(base44.entities.JobBudgets, '-updated_date').then(rows => rows.filter(row => row.job_id === id)),
         base44.entities.JobCostInputs.filter({ job_id: id }, "-updated_date", 1).catch(() => []),
       ]);
       const installs = j.source_window_quote_id ? await base44.entities.InstallBudgets.filter({ request_id: j.source_window_quote_id }, "-updated_date", 1).catch(() => []) : [];
       setJob(j);
       if (setups[0]) { setSheet(setups[0]); setRecordId(setups[0].id); }
-      else setSheet(buildSetupDraft({ job: j, budget: budgets[0], costInput: costs[0], installBudget: installs[0] }));
+      else {
+        const source = setupBudgetSource(budgets);
+        setSheet(buildSetupDraft({ job: j, budget: source.budget, costInput: costs[0], installBudget: installs[0] }));
+        if (source.warnings.length) setMessage('Budget totals need review before using them in this draft. ' + source.warnings.join(' '));
+      }
     } catch (e) { setMessage(e?.message || "Setup sheet could not load."); }
     finally { setBusy(false); }
   }, [id]);
