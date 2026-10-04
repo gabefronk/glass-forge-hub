@@ -5,7 +5,7 @@ export function purchasingJobName(row, jobs = []) {
   if (!row?.job_id) return 'No job linked';
   const job = jobs.find(j => j.id === row.job_id);
   if (!job) return 'Linked job unavailable';
-  return String(job.canonical_name || job.display_name || '').trim() || 'Unnamed linked job';
+  return String(job.canonical_name || '').trim() || String(job.display_name || '').trim() || 'Unnamed linked job';
 }
 export function displayDate(value) {
   if (!validDate(value)) return '';
@@ -20,8 +20,8 @@ function recordedDay(value) {
 }
 export function statusDate(row = {}) {
   const entries = Array.isArray(row.status_history) ? row.status_history : [];
-  const entry = [...entries].reverse().find(h => h.status === row.status && recordedDay(h.at));
-  const date = entry ? recordedDay(entry.at) : '';
+  const entry = entries.at(-1);
+  const date = entry?.status === row.status ? recordedDay(entry.at) : '';
   return { date, basis: date ? 'recorded' : 'unknown' };
 }
 export function statusLabel(status) {
@@ -63,12 +63,13 @@ export function purchasingCalendarEvents(data = {}) {
       purchasing: item, purchasing_summary: reference + ' · ' + statusWithDate(row) + ' · ETA ' + etaText(supplier) };
     const add = (id, date, label) => { if (validDate(date)) events.push({ ...common, id: 'purchasing:' + id, event_date: date, purchasing_label: label }); };
     const timing = statusDate(row);
-    add(key + ':status', timing.date, statusLabel(row.status) + ' recorded');
     const ordered = originalOrderDate(po || row);
+    if (row.status !== 'ordered' || timing.date !== ordered) add(key + ':status', timing.date, statusLabel(row.status) + ' recorded');
     if (ordered) add(key + ':ordered', ordered, 'Ordered');
     if (supplier) {
       // ETA key depends only on source ID, so a revised ETA replaces its old entry.
-      if (!validDate(supplier.received_date) && po?.status !== 'cancelled') add('supplier:' + supplier.id + ':eta', supplier.eta_date, 'ETA');
+      const cancelled = (data.purchase_orders || []).some(p => p.id === supplier.purchase_order_id && p.status === 'cancelled');
+      if (!validDate(supplier.received_date) && !cancelled && po?.status !== 'cancelled') add('supplier:' + supplier.id + ':eta', supplier.eta_date, 'ETA');
       add('supplier:' + supplier.id + ':received', supplier.received_date, 'Received');
     }
   }
