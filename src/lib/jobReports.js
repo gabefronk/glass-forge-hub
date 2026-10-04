@@ -16,9 +16,12 @@
 
 export const REPORT_CLEARED_STATUSES = new Set(["ok", "waived", "rescheduled"]);
 
+// Photos alone count as a report (the matcher's raw result is "ok" for a photos-only post).
+// Visits before the compliance start date (pre_compliance) are never owed a report.
 export function eventReportCleared(ev) {
   if (!ev) return false;
-  return ev.report_required === false || REPORT_CLEARED_STATUSES.has(ev.report_status);
+  return ev.report_required === false || REPORT_CLEARED_STATUSES.has(ev.report_status)
+    || ev.report_status === "pre_compliance" || ev.report_status_raw === "ok";
 }
 
 export function isFieldReportNote(note) {
@@ -69,6 +72,8 @@ export function visitsMissingReport(rows, evidence, today) {
     if (probuildDates.has(key) || (r.id && supersededBy.has(r.id))) continue;
     if (linked) {
       if (eventReportCleared(linked)) continue;
+      // Photos uploaded in the Hub for this job on the visit day count as its report.
+      if (ev?.noteJobDates.has(key)) continue;
     } else if (ev && (ev.clearedJobDates.has(key) || ev.noteJobDates.has(key))) {
       continue;
     }
