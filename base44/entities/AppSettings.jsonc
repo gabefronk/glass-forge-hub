@@ -7,6 +7,12 @@
       "title": "Compliance Start Date",
       "type": "string"
     },
+    "probuild_autobuild": {
+      "default": false,
+      "description": "When on, the ProBuild Project Builder workflow creates (or links) a ProBuild project for every job with a visit in the next 14 days, so crews post into a prebuilt project. Off = dry run that only logs what it would do.",
+      "title": "Pre-build ProBuild projects",
+      "type": "boolean"
+    },
     "service_escalate_email": {
       "description": "Copied when a reorder is placed and after two quiet days on an open service item (Gabe).",
       "title": "Service escalation email",
