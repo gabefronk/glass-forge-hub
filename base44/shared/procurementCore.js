@@ -68,12 +68,13 @@ export function budgetFigures(row = {}) {
   const material = amount(inputs.material_true_cost), sell = amount(inputs.actual_total_sell);
   const warnings = [];
   const hasCost = ['material_true_cost', 'labor_cost_sub_pay', 'additional_install_material', 'additional_equipment'].some(k => (amount(inputs[k]) ?? 0) > 0);
-  if (material === null || material < 0 || (!hasCost && !row.numbers_reviewed_at)) warnings.push('Cost needs review');
+  if (material === null || material < 0 || ((!hasCost || (material === 0 && row.quote?.material_true_cost == null && row.openings_qty > 0)) && !row.numbers_reviewed_at)) warnings.push('Cost needs review');
   if (sell === null || sell <= 0) warnings.push('Customer sell needs review');
   for (const k of ['labor_cost_sub_pay', 'labor_sell_price', 'additional_install_material', 'additional_equipment']) {
     if (text(inputs[k]) && (amount(inputs[k]) === null || amount(inputs[k]) < 0)) warnings.push(`Check ${k.replaceAll('_', ' ')}`);
   }
   if (row.autofill?.notes?.length && !row.numbers_reviewed_at) warnings.push('Review quote and labor assumptions');
+  if (row.budget_usage && !row.numbers_reviewed_at) warnings.push('Numbers not reviewed yet');
   const ready = warnings.length === 0;
   return { cost: ready ? calculated.total_cost_overhead : null, sell, margin_dollars: ready ? roundMoney(sell - calculated.total_cost_overhead) : null, margin_pct: ready ? calculated.actual_margin_pct : null, calculated, warnings, ready };
 }
