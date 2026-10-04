@@ -69,17 +69,18 @@ function autofillRecord(fill) {
 
 // Customer PO (YA-0007) -> the one job carrying it, directly or through a vendor order.
 async function matchByPo(db, po) {
-  const key = String(po || '').trim();
-  if (!key || /^(none|n\/a)$/i.test(key)) return null;
+  const key = String(po || '').trim().toUpperCase();
+  if (!key || /^(NONE|N\/A)$/.test(key)) return null;
+  const [jobs, orders, pos] = await Promise.all([
+    fetchCompleteEntity(db.Jobs), fetchCompleteEntity(db.VendorOrders), fetchCompleteEntity(db.PurchaseOrders),
+  ]);
   const ids = new Set();
-  const jobs = await db.Jobs.filter({ po_numbers: key }, '-created_date', 5).catch(() => []);
-  for (const j of jobs || []) ids.add(j.merged_into || j.id);
-  const orders = await db.VendorOrders.list('-created_date', 200).catch(() => []);
-  const re = new RegExp('^\\s*' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
-  for (const o of orders || []) if (o.job_id && re.test(String(o.po_name || ''))) ids.add(o.job_id);
+  for (const j of jobs) if (!j.is_sample && (j.po_numbers || []).some(p => String(p).trim().toUpperCase() === key)) ids.add(j.merged_into || j.id);
+  for (const o of orders) if (o.job_id && (poRefs(o.po_name).includes(key) || String(o.po_name || '').trim().toUpperCase() === key)) ids.add(o.job_id);
+  for (const p of pos) if (p.job_id && String(p.po_number || '').trim().toUpperCase() === key) ids.add(p.job_id);
   if (ids.size !== 1) return null;
-  const job = await db.Jobs.get([...ids][0]).catch(() => null);
-  return job ? { status: 'matched', job_id: job.id, job_name: job.canonical_name || job.name || '', reason: `customer PO ${key}` } : null;
+  const job = jobs.find(j => j.id === [...ids][0] && !j.merged_into && !j.is_sample);
+  return job ? { status: 'matched', job_id: job.id, job_name: job.canonical_name || job.name || '', reason: `unique customer PO ${key}` } : null;
 }
 
 async function driveJson(token, url, init = {}) {
@@ -211,7 +212,7 @@ async function matchJob(db, quote, forcedJobId) {
   // Dropped from a job page: that job is the match, no guessing.
   if (forcedJobId) {
     const job = await db.Jobs.get(String(forcedJobId)).catch(() => null);
-    if (!job) return { status: 'needs_review', reason: 'job not found', candidates: [] };
+    if (!job || job.merged_into || job.is_sample) throw procurementError(409, 'Choose the current existing job before uploading a quote.');
     return { status: 'matched', job_id: job.id, job_name: job.canonical_name || job.name || '', reason: 'chosen on the job page' };
   }
   const byPo = await matchByPo(db, quote.customer_po);
