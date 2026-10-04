@@ -179,6 +179,8 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   }
 
   const fee = computeFeeAmt(row);
+  const isProfitSplit = row.fee_type === "profit_split";
+  const displayedAmount = isProfitSplit ? row.sale_price : row.labor_amt;
   const isCustomFee = row.fee_type !== "profit_split" && Number(row.fee_pct) !== 0.1;
   const builderName = builderFromName(row.job_name_raw || row.job_name_norm || "");
   const tile = builderTile(builderName || row.job_name_raw || row.job_name_norm || "?");
@@ -282,7 +284,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
         {/* Labor */}
         <span className="font-mono-num text-[13px] text-right" style={{ color: "var(--gf-ink-3)", whiteSpace: "nowrap", width: "80px", flexShrink: 0 }}>
-          ${formatMoney(row.labor_amt)}
+          {displayedAmount == null ? "—" : `$${formatMoney(displayedAmount)}`}{isProfitSplit && <span className="block text-[10px]">Job sale · {Math.round((row.split_pct ?? 0.5) * 100)}% split</span>}
         </span>
 
         {/* Status */}
@@ -369,7 +371,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
             {/* Line 2: labor · meta · status */}
             <div className="flex items-center justify-between gap-2 mt-1">
               <span className="text-[12px] truncate" style={{ color: "var(--gf-ink-3)", minWidth: 0 }}>
-                <span className="font-mono-num">${formatMoney(row.labor_amt)}</span>
+                <span className="font-mono-num">{displayedAmount == null ? "—" : `$${formatMoney(displayedAmount)}`}{isProfitSplit && <span className="block text-[10px]">Job sale · {Math.round((row.split_pct ?? 0.5) * 100)}% split</span>}</span>
                 {subline !== "—" && <span> · {subline}</span>}
               </span>
               {statusInfo && <StatusDot {...statusInfo} />}
