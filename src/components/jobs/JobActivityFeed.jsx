@@ -13,11 +13,15 @@ import JobNoteForm from "./JobNoteForm";
 import { DayCard, MonthRule, UpNextCard, VisitEntry, StageOnlyEntry } from "./VisitDayCard";
 import { ServiceItemPanel, ServiceItemPointer, isServiceOpen, FOCUS_EVENT } from "./ServiceItems";
 
-// Status pill for a visit, in plain words.
-function visitBadge(ev, today = denverDate()) {
+// Status pill for a visit, in plain words. Photos alone are a report: a visit with photos on
+// it (Probuild post, or a Hub field report that day) reads "Report in" whatever the notes say.
+// Visits before the compliance start date (pre_compliance) are never shown as owing one.
+function visitBadge(ev, today = denverDate(), { reports = [], photoNote = false } = {}) {
   if (ev.event_date && ev.event_date > today) return { label: "Scheduled", color: "#34506a", bg: "#E7EDF2" };
   if (!ev.report_required || ev.report_required === false) return null;
-  if (ev.report_status === "ok") return { label: "Report in", color: "#0b3f3b", bg: "#E2EEEB" };
+  const hasEvidence = photoNote || reports.some((r) => (r.photos?.length || 0) > 0 || String(r.message || "").trim());
+  if (ev.report_status === "ok" || ev.report_status_raw === "ok" || hasEvidence) return { label: "Report in", color: "#0b3f3b", bg: "#E2EEEB" };
+  if (ev.report_status === "pre_compliance" || ev.report_status === "no_source_data") return null;
   if (ev.report_status === "waived") return { label: "No report needed", color: C.textMuted, bg: "#F0F1ED" };
   if (ev.report_status === "rescheduled") return { label: "Rescheduled", color: C.textMuted, bg: "#F0F1ED" };
   if (ev.days_late > 0) return { label: `Report ${ev.days_late}d late`, color: "#A43432", bg: "#FCEDEC" };
@@ -100,7 +104,7 @@ function VisitCard({ ev, reports, onPhotoClick, dedupe }) {
   const notes = scopeText(ev.scope_notes).replace(/\n{3,}/g, "\n\n").trim();
   const parsed = useMemo(() => parseScopeNotes(ev.scope_notes, { keepMoney: true, keepContacts: true, refs: !dedupe }), [ev.scope_notes, dedupe]);
   return (
-    <Entry icon={HardHat} tone="teal" title={kind} meta={joinMeta(time, crew, photoCount(photos))} badge={visitBadge(ev)}>
+    <Entry icon={HardHat} tone="teal" title={kind} meta={joinMeta(time, crew, photoCount(photos))} badge={visitBadge(ev, undefined, { reports })}>
       {scopeShownAbove && reports.length === 0 ? (
         <p className="m-0 mt-1 text-[13px]" style={{ color: C.textMuted }}>Scope and notes are in the Scope card above.</p>
       ) : null}
@@ -348,10 +352,10 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
             <div key={date}>
               {di === 0 || days[di - 1].date.slice(0, 7) !== date.slice(0, 7) ? <MonthRule date={date} today={today} /> : null}
               <DayCard date={date} today={today} stages={stageDays?.[date]}>
-                {groupFiles(items).map((it, i) => {
+                {groupFiles(items).map((it, i, dayItems) => {
                   if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
                   if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
-                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today)} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} />;
+                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today, { reports: it.reports, photoNote: dayItems.some((x) => x.kind === "note" && x.note?.job_id && (x.note.attachments?.length || 0) > 0) })} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} />;
                   if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
                   if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                   if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
