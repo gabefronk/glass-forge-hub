@@ -158,7 +158,11 @@ test('which event states clear a visit', () => {
   assert.equal(eventReportCleared({ report_status: 'waived' }), true);
   assert.equal(eventReportCleared({ report_status: 'rescheduled' }), true);
   assert.equal(eventReportCleared({ report_required: false, report_status: 'pending' }), true);
-  for (const s of ['pending', 'missing_photos', 'missing_notes', 'missing_all', 'no_source_data', 'pre_compliance', undefined]) {
+  // Photos alone are a report (Gabe, 2026-10-03): photos-in-no-notes clears, and so does a
+  // pre-compliance visit whose report the matcher found.
+  assert.equal(eventReportCleared({ report_status: 'missing_notes' }), true);
+  assert.equal(eventReportCleared({ report_status: 'pre_compliance', report_status_raw: 'ok' }), true);
+  for (const s of ['pending', 'missing_photos', 'missing_all', 'no_source_data', 'pre_compliance', undefined]) {
     assert.equal(eventReportCleared({ report_status: s }), false, String(s));
   }
 });
