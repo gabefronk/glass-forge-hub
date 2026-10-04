@@ -17,7 +17,7 @@ export async function purchasingRequest(body) {
   return data;
 }
 export const messageOf = error => error?.response?.data?.error || error?.message || 'The request could not be completed. Refresh before retrying.';
-export function Field({ label, value, onChange, type = 'text', children, disabled = false, hint }) {
+export function Field({ label, value, onChange, type = 'text', children = undefined, disabled = false, hint = '' }) {
   const cls = 'mt-1 w-full min-w-0 rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 disabled:opacity-60';
   return <label className="block min-w-0 text-xs font-semibold text-slate-600">{label}
     {children ? <select className={cls} value={value} disabled={disabled} onChange={e => onChange(e.target.value)}>{children}</select>
