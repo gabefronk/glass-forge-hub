@@ -9,7 +9,7 @@ import { C } from "@/lib/feeUI";
 // Owner-only: window quotes and vendor orders filed against this job (or any of its
 // duplicate records), so the job page is the one place to reach every linked record.
 const QUOTE_STATUS = { draft: "Draft", queued: "Queued", running: "Pricing", needs_details: "Needs details", needs_sign_in: "Needs sign-in", failed: "Failed", ready: "Priced" };
-const ORDER_STATUS = { ordered: "Ordered", eta_set: "ETA set", ach_link_received: "ACH link in", paid: "Paid", reconciled: "Reconciled" };
+const ORDER_STATUS = { ordered: "Ordered", eta_set: "Ordered", ach_link_received: "ACH link in", paid: "Paid", reconciled: "Reconciled" };
 const money = (v) => (v === null || v === undefined || v === "") ? "" : Number(v).toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 function Chip({ children, tone = "neutral" }) {
