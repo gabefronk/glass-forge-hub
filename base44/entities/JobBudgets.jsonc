@@ -1,6 +1,42 @@
 {
   "name": "JobBudgets",
   "properties": {
+    "budget_usage": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "included",
+        "reference"
+      ],
+      "description": "Optional scope selection. Absent means legacy inclusion. Existing records are not migrated."
+    },
+    "replaces_budget_id": {
+      "type": "string"
+    },
+    "numbers_reviewed_at": {
+      "type": "string"
+    },
+    "numbers_reviewed_by": {
+      "type": "string"
+    },
+    "source_sha256": {
+      "type": "string"
+    },
+    "request_key": {
+      "type": "string"
+    },
+    "input_history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "link_history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
     "autofill": {
       "description": "What the drop filled from the quote and the install price sheet: sources per field, notes for what still needs typing, labor lines priced, install material.",
       "type": "object"
