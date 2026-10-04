@@ -50,7 +50,7 @@ export default function JobsView({ rows, onBillJob, onExportJob, onOpenJob, isLi
               <div className="px-3 pb-4">
                 {job.lines.map((line) => (
                   <div key={line.id} className="flex justify-between items-start py-2 gap-3" style={{ borderTop: "1px solid #ECEEEA" }}>
-                    <div className="min-w-0"><span className="text-[13px] break-words" style={{ color: "#53615B" }}>{line.line_description || line.job_name_raw}</span>{(line._billing_review || line.pricing_review_reason) && <p className="mt-1 text-xs text-amber-800">{line._billing_review || line.pricing_review_reason}</p>}{line._customer_no_charge && <p className="mt-1 text-xs text-teal-800">Customer no-charge · installer labor authorized</p>}</div>
+                    <div className="min-w-0"><span className="text-[13px] break-words" style={{ color: "#53615B" }}>{line.line_description || line.job_name_raw}</span>{(line._billing_review || line.pricing_review_reason) && <p className="mt-1 text-xs text-amber-800">{line._billing_review || line.pricing_review_reason}</p>}{line.fee_type === "profit_split" && <p className="mt-1 text-xs text-teal-800">Job sale ${formatMoney(line.sale_price)} · cost basis ${formatMoney(line.cost)} · margin to split ${formatMoney(Number(line.sale_price) - Number(line.cost))} · your {Math.round((line.split_pct ?? 0.5) * 100)}% share</p>}{line._customer_no_charge && <p className="mt-1 text-xs text-teal-800">Customer no-charge · installer labor authorized</p>}</div>
                     <span className="font-mono-num-bold text-[13px]" style={{ color: "#166447", whiteSpace: "nowrap" }}>${formatMoney(computeFeeAmt(line))}</span>
                   </div>
                 ))}
