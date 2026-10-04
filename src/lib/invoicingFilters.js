@@ -1,5 +1,5 @@
 import { duplicatePostIds, feeCompanions, eventPostIndex } from "../../base44/shared/billingCore.js";
-import { isFutureRow, isTripChargeAmount } from "@/lib/feeMath";
+import { isFutureRow, isTripChargeAmount } from "./feeMath.js";
 
 // Companion lines (see feeCompanions in billingCore.js), for display only: a copy of
 // each row with _companion_folded (a $0 ProBuild twin of a calendar labor line),
