@@ -140,7 +140,7 @@ export function OrderStatusForm({ row, supplier = false, onDone, onCancel }) {
 
 const routeNames = { bfs_installed_sale: 'BFS installed sale', bfs_supply_ya_install: 'BFS supplies · YA installs', bfs_to_ya_turnkey: 'BFS-to-YA turnkey', direct_manufacturer_turnkey: 'Direct customer · YA sale & install' };
 
-export function InvoiceBridge({ job, onRouteSaved }) {
+export function InvoiceBridge({ job }) {
   const [params, setParams] = useSearchParams();
   const requestedMonth = params.get('month') || '';
   const [month, setMonth] = useState(() => validMonth(requestedMonth) ? requestedMonth : denverDate().slice(0, 7));
@@ -154,16 +154,6 @@ export function InvoiceBridge({ job, onRouteSaved }) {
     purchasingRequest({ action: 'invoice_preview', job_id: job.id, month }).then(p => { if (active) setPreview(p); }).catch(e => { if (active) setError(messageOf(e)); });
     return () => { active = false; };
   }, [job.id, month]);
-  async function saveRoute() {
-    if (!preview || !route || busy) return;
-    setBusy(true); setError('');
-    try {
-      const r = await purchasingRequest({ action: 'save_route', job_id: job.id, month, route, preview_version: preview.version, request_key: key.current, review_confirmed: true });
-      setPreview(await purchasingRequest({ action: 'invoice_preview', job_id: job.id, month }));
-      setNotice(r.message); setReviewed(false); key.current = crypto.randomUUID(); onRouteSaved?.();
-    } catch (e) { setError(messageOf(e)); }
-    finally { setBusy(false); }
-  }
   async function sync(e) {
     e.preventDefault(); if (!preview || !reviewed || busy) return; setBusy(true); setError('');
     try { const r = await purchasingRequest({ action: 'sync_estimate', job_id: job.id, month, route, preview_version: preview.version, request_key: key.current, review_confirmed: true }); setNotice(r.message); setPreview(await purchasingRequest({ action: 'invoice_preview', job_id: job.id, month })); setReviewed(false); key.current = crypto.randomUUID(); }
@@ -173,16 +163,11 @@ export function InvoiceBridge({ job, onRouteSaved }) {
     <div className="flex flex-wrap items-end justify-between gap-3"><Field label="Accounting month" type="month" value={month} onChange={changeMonth} /><Link className={buttonClass} style={secondaryStyle} to={`/?job_id=${encodeURIComponent(job.id)}&month=${encodeURIComponent(month)}`}>Open this job in Invoicing</Link></div>
     <p className="mt-3 text-sm leading-6 text-slate-600">Budgets are estimates. Invoice amounts, actual labor, customer payments and supplier payments remain separate records. Linking below does not create an invoice, approve an order or overwrite actual financial amounts.</p>
     {preview && <>
-      <div className="my-4 rounded-lg border p-3">
-        <Field label="How this job is sold" value={route || preview.existing?.route || ''} disabled={preview.closed} onChange={value => { setRoute(value); setReviewed(false); }}><option value="">Choose the sales path</option>{Object.entries(routeNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Field>
-        <p className="mt-2 text-xs text-slate-500">This guides the job's next step. It does not change fees, costs, or who has been paid.</p>
-        {route && route !== preview.existing?.route && <button type="button" disabled={busy || preview.closed} onClick={saveRoute} className={buttonClass + ' mt-3'} style={primaryStyle}>{busy ? 'Saving...' : 'Save sales path'}</button>}
-      </div>
       <details><summary className="cursor-pointer py-3 text-sm font-semibold text-slate-600">Budget estimate details</summary>
       <div className="my-4 grid gap-3 sm:grid-cols-3">{[['Budget cost', preview.estimate.cost], ['Budget customer total', preview.estimate.sell], ['Budget margin dollars', preview.estimate.margin_dollars]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">{label}</div><strong className="text-lg">{money(value)}</strong></div>)}</div>
       {preview.estimate.warnings.length > 0 && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{preview.estimate.warnings.join(' ')}</p>}
       {preview.existing ? <div className="mt-4 rounded-lg border p-3 text-sm text-slate-600"><strong>Existing accounting record (unchanged):</strong><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2"><span>Product revenue {money(preview.existing.product_sell)}</span><span>Recorded labor cost {money(preview.existing.actual_labor_cost)}</span><span>Recorded install revenue {money(preview.existing.installation_revenue)}</span></div><p className="mt-2 text-xs">Last estimate link: {preview.existing.budget_synced_at || 'Not linked yet'}. Historical figures are retained; differences require your review.</p></div>
-        : null}
+        : <div className="mt-4"><Field label="Sales path for this estimate" value={route} onChange={value => { setRoute(value); setReviewed(false); }}><option value="">Choose the job's route</option>{Object.entries(routeNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Field></div>}
       {preview.closed ? <p className="mt-4 font-semibold text-amber-800">This month is closed. Its accounting records cannot be updated here.</p> : <>
         <Review checked={reviewed} onChange={setReviewed}>I reviewed the included scopes and accounting month. Link this estimate without changing actual costs, invoices or payments.</Review>
         <button className={buttonClass} style={primaryStyle} disabled={busy || !reviewed || preview.estimate.status !== 'ready' || (!preview.existing && !route)}>{busy ? 'Linking...' : 'Link / refresh budget estimate'}</button>
