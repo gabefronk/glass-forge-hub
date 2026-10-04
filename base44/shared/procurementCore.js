@@ -78,3 +78,43 @@ export function budgetFigures(row = {}) {
   const ready = warnings.length === 0;
   return { cost: ready ? calculated.total_cost_overhead : null, sell, margin_dollars: ready ? roundMoney(sell - calculated.total_cost_overhead) : null, margin_pct: ready ? calculated.actual_margin_pct : null, calculated, warnings, ready };
 }
+
+// Preserve source records; exclude reference copies and replaced versions from totals.
+export function activeBudgets(rows = []) {
+  const included = rows.filter(includedBudget);
+  const replaced = new Set(included.filter(r => r.replaces_budget_id && rows.some(old => old.id === r.replaces_budget_id && old.job_id === r.job_id)).map(r => r.replaces_budget_id));
+  return included.filter(r => !replaced.has(r.id));
+}
+export function budgetRollup(rows = []) {
+  const active = activeBudgets(rows);
+  const warnings = [];
+  const items = active.map(row => ({ row, figures: budgetFigures(row) }));
+  for (const { row, figures } of items) for (const warning of figures.warnings) warnings.push(`${row.title || row.id}: ${warning}`);
+  for (let i = 0; i < active.length; i++) for (let j = i + 1; j < active.length; j++) {
+    const a = active[i], b = active[j];
+    if (a.job_id === b.job_id && ((a.source_sha256 && a.source_sha256 === b.source_sha256) || (ref(a.quote_number) && ref(a.quote_number) === ref(b.quote_number) && sameVendor(a, b)))) warnings.push(`Possible duplicate scope: ${a.quote_number || a.title}. Keep one version in the budget.`);
+  }
+  const complete = active.length > 0 && !warnings.length;
+  const sum = fn => roundMoney(items.reduce((v, item) => v + (fn(item) || 0), 0));
+  const cost = complete ? sum(i => i.figures.cost) : null;
+  const sell = complete ? sum(i => i.figures.sell) : null;
+  return { version: 1, status: complete ? 'ready' : active.length ? 'needs_review' : 'empty', count: active.length,
+    source_budget_ids: active.map(r => r.id), source_versions: active.map(budgetVersion),
+    cost, sell, margin_dollars: complete ? roundMoney(sell - cost) : null,
+    margin_pct: complete && sell > 0 ? (sell - cost) / sell : null,
+    material_estimate: complete ? sum(i => amount(i.row.inputs?.material_true_cost)) : null,
+    labor_cost_estimate: complete ? sum(i => amount(i.row.inputs?.labor_cost_sub_pay)) : null,
+    labor_sell_estimate: complete ? sum(i => amount(i.row.inputs?.labor_sell_price)) : null,
+    warnings: [...new Set(warnings)],
+  };
+}
+export const validMonth = value => /^\d{4}-(0[1-9]|1[0-2])$/.test(text(value));
+export function validDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text(value))) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+export function estimatePatch(snapshot, by, at) {
+  // No actual-cost, revenue, route, fee, invoice or payment fields are written.
+  return { budget_snapshot: snapshot, budget_synced_by: by, budget_synced_at: at };
+}
