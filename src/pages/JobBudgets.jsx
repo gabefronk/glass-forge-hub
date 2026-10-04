@@ -314,6 +314,11 @@ export default function JobBudgets() {
               </div>
             );
           })}
+          {paidOrders.length ? (
+            <button type="button" onClick={() => setShowPaid((v) => !v)} className="self-start text-[12.5px] font-semibold underline" style={{ color: C.textMuted }}>
+              {showPaid ? "Hide paid orders" : `Show paid orders (${paidOrders.length})`}
+            </button>
+          ) : null}
           <button onClick={() => setShowOrderForm((v) => !v)} className="self-start inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-2 rounded-[8px]"
             style={{ border: `1px solid ${C.border}`, color: C.text }}>
             <Plus className="h-4 w-4" />Log an order
