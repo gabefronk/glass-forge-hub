@@ -176,7 +176,7 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
               <span className="text-[11.5px] font-medium" style={{ color: "var(--gf-ink-2)" }}>{ruleText}</span>
             </div>
             <div style={{ borderRadius: "10px", border: "1px solid var(--gf-border)", overflow: "hidden" }}>
-              <div className="flex items-center justify-between" style={{ padding: "10px 14px", borderBottom: "1px solid var(--gf-hairline)", whiteSpace: "nowrap" }}>
+              {!isProfitSplit && <><div className="flex items-center justify-between" style={{ padding: "10px 14px", borderBottom: "1px solid var(--gf-hairline)", whiteSpace: "nowrap" }}>
                 <span className="text-[13px]" style={{ color: "var(--gf-ink-2)" }}>Labor</span>
                 <span className="font-mono-num-bold text-[14px]" style={{ color: "var(--gf-ink)" }}>${formatMoney(labor)}</span>
               </div>
@@ -184,19 +184,20 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
                 <span className="text-[13px]" style={{ color: "var(--gf-ink-2)" }}>Fee %</span>
                 <span className="font-mono-num-bold text-[14px]" style={{ color: "var(--gf-ink)" }}>{Math.round((row.fee_pct || 0) * 100)}%</span>
               </div>
+              </>}
               {isProfitSplit && (
                 <>
                   <div className="flex items-center justify-between" style={{ padding: "10px 14px", borderBottom: "1px solid var(--gf-hairline)", whiteSpace: "nowrap" }}>
-                    <span className="text-[13px]" style={{ color: "var(--gf-ink-2)" }}>Sale price</span>
+                    <span className="text-[13px]" style={{ color: "var(--gf-ink-2)" }}>Job sale total</span>
                     <span className="font-mono-num-bold text-[14px]" style={{ color: "var(--gf-ink)" }}>${formatMoney(row.sale_price)}</span>
                   </div>
                   <div className="flex items-center justify-between" style={{ padding: "10px 14px", borderBottom: "1px solid var(--gf-hairline)", whiteSpace: "nowrap" }}>
-                    <span className="text-[13px]" style={{ color: "var(--gf-ink-2)" }}>Cost</span>
+                    <span className="text-[13px]" style={{ color: "var(--gf-ink-2)" }}>Recorded cost basis</span>
                     <span className="font-mono-num-bold text-[14px]" style={{ color: "var(--gf-ink)" }}>${formatMoney(row.cost)}</span>
                   </div>
                   <div className="flex items-center justify-between" style={{ padding: "10px 14px", borderBottom: "1px solid var(--gf-hairline)", whiteSpace: "nowrap" }}>
                     <span className="text-[13px]" style={{ color: "var(--gf-ink-2)" }}>Split %</span>
-                    <span className="font-mono-num-bold text-[14px]" style={{ color: "var(--gf-ink)" }}>{Math.round((row.split_pct || 0.5) * 100)}%</span>
+                    <span className="font-mono-num-bold text-[14px]" style={{ color: "var(--gf-ink)" }}>{Math.round((row.split_pct ?? 0.5) * 100)}%</span>
                   </div>
                 </>
               )}
@@ -213,6 +214,7 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
             </div>
             <div className="text-[12.5px] mt-2" style={{ color: "var(--gf-ink-2)", lineHeight: 1.5, wordBreak: "break-word" }}>
               {feeMathString(row)}
+              {isProfitSplit && <p className="mt-2">Profit split on the recorded job sale less cost. Labor and margin may be included in this job amount; it is not a labor-only fee. Separate labor and product amounts are not itemized here.</p>}
               {row._customer_no_charge && <p className="mt-2 text-teal-800">No charge to the customer. This is authorized installer labor, not a customer invoice.</p>}
             </div>
           </div>
