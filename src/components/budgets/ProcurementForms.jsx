@@ -14,6 +14,7 @@ export async function purchasingRequest(body) {
   const response = await base44.functions.invoke('procurement', body);
   const data = response?.data ?? response;
   if (data?.error) throw new Error(data.error);
+  if (body.action && !['overview', 'invoice_preview'].includes(body.action)) window.dispatchEvent(new Event('purchasing-updated'));
   return data;
 }
 export const messageOf = error => error?.response?.data?.error || error?.message || 'The request could not be completed. Refresh before retrying.';
