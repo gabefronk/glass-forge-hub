@@ -160,6 +160,26 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
     return id;
   }
 
+  async function searchJobs(api, caller, owner, input) {
+    const query = text(input.query, 120).trim();
+    if (!query) return { ok: true, jobs: [], truncated: false };
+    const eligible = j => !j.merged_into && j.is_sample !== true && !/^renta$/i.test(String(j.canonical_name || "").trim());
+    if (!owner) {
+      const allowed = await allowedJobs(api, caller, false);
+      const needle = query.toLowerCase();
+      const matches = allowed.jobs.filter(j => eligible(j) && String(j.canonical_name || "").toLowerCase().includes(needle));
+      return { ok: true, jobs: matches.slice(0, 30).map(minimalJob), truncated: allowed.truncated || matches.length > 30 };
+    }
+    // Treat punctuation as literal text; never accept a user-supplied regex/operator.
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matches = await api.Jobs.filter({
+      canonical_name: { $regex: escaped, $options: "i" },
+      is_sample: { $ne: true },
+      $or: [{ merged_into: { $exists: false } }, { merged_into: null }, { merged_into: "" }],
+    }, "canonical_name", 31, 0);
+    return { ok: true, jobs: matches.filter(eligible).slice(0, 30).map(minimalJob), truncated: matches.length > 30 };
+  }
+
   async function homeContext(api, caller, deps) {
     const { jobs, truncated } = await allowedJobs(api, caller, false);
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(deps.now()));
@@ -212,7 +232,8 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
       // Hitting a limit means the board may be incomplete; the UI says so.
       truncated: open.length >= MAX_LIST_LIMIT || inProgress.length >= MAX_LIST_LIMIT,
     };
-    const jobContext = await allowedJobs(api, caller, owner);
+    const linkedIds = [...new Set([...active, ...done].map(t => t.job_id).filter(Boolean))];
+    const jobContext = owner ? { jobs: linkedIds.length ? await api.Jobs.filter({ id: { $in: linkedIds } }, "canonical_name", MAX_LIST_LIMIT, 0) : [], truncated: linkedIds.length >= MAX_LIST_LIMIT } : await allowedJobs(api, caller, false);
     body.jobs = jobContext.jobs.map(minimalJob);
     body.jobs_truncated = jobContext.truncated;
     if (view === "all") body.team_summary = teamSummary(allMembers, active);
@@ -491,6 +512,8 @@ export function createTodoHandler({ getClient, isOwner, now = () => new Date().t
           return reply(await listTasks(api, caller, owner, body));
         case "board":
           return reply(await boardTasks(api, caller, owner, body));
+        case "search_jobs":
+          return reply(await searchJobs(api, caller, owner, body));
         case "home_context":
           return reply(await homeContext(api, caller, deps));
         case "get":

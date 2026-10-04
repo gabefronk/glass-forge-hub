@@ -7,10 +7,10 @@ import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlin
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
 // labels because five slots share the phone width.
 const PRIMARY_NAV = [
-  { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Calendar", to: "/calendar", icon: Calendar },
+  { label: "Invoicing", to: "/", icon: Receipt },
 ];
 
 const SECONDARY_NAV = [
