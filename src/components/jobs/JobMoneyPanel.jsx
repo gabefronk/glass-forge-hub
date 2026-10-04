@@ -1,3 +1,4 @@
+import { statusWithDate } from "@/lib/purchasingDates";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, Landmark } from "lucide-react";
@@ -92,7 +93,7 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
           <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Purchase order sources</h3><RecordLink to={procurementPath(jobId, 'orders')}>Job purchase orders</RecordLink></div>
           {data.purchaseOrders.length ? data.purchaseOrders.map((row) => <div key={row.id} className="mb-2 rounded-lg p-2.5 text-[11px]" style={{ border: `1px solid ${C.rowBorder}` }}>
             <div className="font-semibold" style={{ color: C.text }}>{row.po_number || row.id} · {row.vendor || "Vendor not recorded"}</div>
-            <div style={{ color: C.textMuted }}>Dealer {money(row.amount_dealer)} · customer {money(row.amount_customer)} · status {row.status || "not recorded"}</div>
+            <div style={{ color: C.textMuted }}>Dealer {money(row.amount_dealer)} · customer {money(row.amount_customer)} · {statusWithDate(row)}</div>
             <div className="mt-1 font-medium" style={{ color: C.amber }}>PO status does not indicate payment.</div>
           </div>) : <p className="text-[11px]" style={{ color: C.textMuted }}>No linked PurchaseOrders records.</p>}
         </div>
