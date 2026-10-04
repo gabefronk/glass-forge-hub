@@ -221,3 +221,34 @@ test('fetchWithRetry retries 429/5xx then gives up; never retries 4xx', async ()
   assert.equal((await fetchWithRetry(always, 'https://x', {}, { sleep: async () => {} })).status, 429);
   assert.equal(calls, 3);
 });
+
+// ---- Vendor ETAs from email -------------------------------------------------------------------
+import { planOrderEtas, orderKeys } from '../base44/shared/emailTriage.js';
+
+const ETA_ORDERS = [
+  { id: 'o5', status: 'ordered', order_number: '09-5476', po_name: 'YA-0005 Justin Hutchins AV24 windows', title: 'AMSCO - YA-0005', notes: '', eta_date: null },
+  { id: 'o4', status: 'ordered', order_number: '09-4538', po_name: 'YA-0004', title: 'YA-0004 glass order', notes: '', eta_date: null },
+  { id: 'o2', status: 'eta_set', order_number: '3517590', po_name: 'YA-0002', title: 'AMSCO 3517590 - YA-0002', notes: 'AMSCO conf 09-4192', eta_date: '2026-09-30' },
+  { id: 'o9', status: 'paid', order_number: '09-1111', po_name: 'YA-0009', title: 'paid one', notes: '', eta_date: null },
+];
+
+test('vendor ETA: a date labeled with the order lands on that order only', () => {
+  const thread = { subject: 'YA orders as of right now', extracted: { po_numbers: ['YA-0002', 'YA-0004', 'YA-0005'], dates: ['2026-09-30 pickup YA-0002', '2026-10-01 pickup YA-0004', '2026-10-06 pickup YA-0005'] } };
+  const out = planOrderEtas(ETA_ORDERS, thread);
+  assert.deepEqual(out.map((u) => [u.order_id, u.eta_date]).sort(), [['o4', '2026-10-01'], ['o5', '2026-10-06']]); // o2 unchanged
+});
+
+test('vendor ETA: one order named + one ready date', () => {
+  const thread = { subject: 'Hutchins Window Order - New PO: YA-0005', extracted: { po_numbers: ['YA-0005'], dates: ['2026-10-06: Expected ready date'] } };
+  assert.deepEqual(planOrderEtas(ETA_ORDERS, thread).map((u) => [u.order_id, u.eta_date]), [['o5', '2026-10-06']]);
+});
+
+test('vendor ETA: no arrival-type date, two orders with one loose date, or a paid order -> nothing', () => {
+  assert.deepEqual(planOrderEtas(ETA_ORDERS, { subject: 'PO YA-0004', extracted: { dates: ['2026-09-25: Email date'] } }), []);
+  assert.deepEqual(planOrderEtas(ETA_ORDERS, { subject: 'YA-0004 and YA-0005', extracted: { po_numbers: ['YA-0004', 'YA-0005'], dates: ['2026-10-09 ready'] } }), []);
+  assert.deepEqual(planOrderEtas(ETA_ORDERS, { subject: 'YA-0009', extracted: { dates: ['2026-10-09 pickup YA-0009'] } }), []);
+});
+
+test('vendor ETA: order keys skip "pending" and pick up confirmation numbers from notes', () => {
+  assert.deepEqual([...orderKeys({ order_number: 'pending', po_name: 'YA-0005 x', notes: 'conf 09-4192' })].sort(), ['09-4192', 'YA-0005']);
+});
