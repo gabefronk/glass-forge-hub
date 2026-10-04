@@ -63,6 +63,7 @@ export function mapScopeLines(job = {}, budget = {}) {
   return lines;
 }
 
+/** @param {{ job?: Record<string, any>, budget?: Record<string, any>, costInput?: Record<string, any>, installBudget?: Record<string, any> }} [sources] */
 export function buildSetupDraft({ job = {}, budget = {}, costInput = {}, installBudget = {} } = {}) {
   const totals = job.accepted_quote_snapshot?.result?.totals || {};
   const inputs = budget.inputs || {};
