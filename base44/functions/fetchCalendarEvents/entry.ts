@@ -255,10 +255,10 @@ export default async function(req) {
             row.pricing_review_reason = 'Calendar was rescheduled after a ProBuild charge was recorded; confirm the billing date.';
             row.needs_review = true;
           }
-          if (ex.pricing_review_reason && !row.pricing_review_reason) { row.pricing_review_reason = ex.pricing_review_reason; row.needs_review = true; }
+          if (ex.pricing_review_reason && !ex.pricing_review_reason.startsWith("[Billing audit]") && !row.pricing_review_reason) { row.pricing_review_reason = ex.pricing_review_reason; row.needs_review = true; }
         }
         row.fee_pct = ex.fee_pct ?? row.fee_pct;
-        row.billable = ex.billable ?? row.billable;
+        row.billable = ex.pricing_review_reason?.startsWith("[Billing audit]") ? true : (ex.billable ?? row.billable);
         // Reverse merge: if this existing calendar row has no Probuild data yet,
         // check for a standalone Probuild row (same job, ±3 days) with man_hours
         // or trip_charges that should be folded in. Fixes the timing gap where

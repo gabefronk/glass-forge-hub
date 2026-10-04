@@ -58,7 +58,8 @@ export function withBillingAudit(rows, events=[], today=denverDate()) {
       const candidates=(byPost.get(row.probuild_post_id)||[]).filter(e=>Math.abs(Date.parse(e.event_date)-Date.parse(row.job_date))<=3*86400000);
       if(candidates.length===1)event=candidates[0];
     }
-    const audit=assessBillingLine(row,event,today);
+    const covered = row.source === "probuild" && !row.calendar_event_id && computeLaborAmt(row) === 0 && event && rows.some(c => c.calendar_event_id === event.google_event_id && computeLaborAmt(c)>0 && c.billable !== false);
+    const audit=covered ? result("standard","Work report accompanies the calendar labor line.") : assessBillingLine(row,event,today);
     return {...row,_billing_hidden:audit.hidden,_billing_kind:audit.kind,
       _billing_review:audit.kind==='review'?audit.reason:null,
       _billing_note:audit.reason,_customer_no_charge:!!audit.customer_no_charge};
