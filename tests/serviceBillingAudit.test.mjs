@@ -38,6 +38,10 @@ test('future, rescheduled, cancelled and tracker-only work cannot become earned 
  assert.equal(assessBillingLine(fee,{scope_notes:'Sales Tracker DAILY SALES row 2532\nSale: $3,608.49',report_status:'ok'},day).kind,'tracker_only');
  assert.equal(assessBillingLine({...fee,job_name_raw:'YA - THOMAS - Pick Up'},{scope_notes:'Pella del to BFS –9/3 QTY.13',report_status:'ok'},day).kind,'logistics');
  assert.equal(assessBillingLine({...fee,manually_adjusted:true},null,day).kind,'preserved');
+ const held={...fee,manually_adjusted:true,labor_amt:600,pricing_review_reason:'[Billing audit] Possible duplicate: calendar already has $686.'};
+ assert.equal(assessBillingLine(held,null,day).kind,'review');
+ assert.equal(computeLaborAmt(held),600);
+ assert.equal(assessBillingLine({...held,pricing_review_reason:null},null,day).kind,'preserved');
 });
 test('job name alone does not move charges; report identity supplies context and folds the zero twin once',()=>{
  const event={google_event_id:'e',event_date:'2026-09-28',scope_notes:'We can pay him $350, no charge to customer.',matched_post_ids:['p'],report_status:'ok'};
