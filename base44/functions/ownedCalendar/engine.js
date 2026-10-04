@@ -1,3 +1,4 @@
+import { isIgnoredWorkItem } from "../../shared/billingCore.js";
 const norm = value => String(value ?? "").normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 const order = value => String(value ?? "").trim().toUpperCase().replace(/\s+/g, "");
 const oeOrder = value => order(value).replace(/^(\d{8})-\d{2}$/, "$1");
@@ -69,6 +70,7 @@ export function filterOwnedCalendar(source, rows) {
   const match = createOwnershipMatcher(rows), groups = [], byMonth = {}, rejected = [];
   const totals = {source_events:0, unmatched_events:0, duplicate_events:0, visible_events:0, removed_events:0};
   for (const original of [...source].sort((a,b) => Number(!!b.start_time) - Number(!!a.start_time))) {
+    if (isIgnoredWorkItem(original)) continue;
     const month = String(original.event_date || "").slice(0,7);
     const counts = byMonth[month] ||= {source_events:0, unmatched_events:0, duplicate_events:0, visible_events:0, removed_events:0};
     totals.source_events++; counts.source_events++;
