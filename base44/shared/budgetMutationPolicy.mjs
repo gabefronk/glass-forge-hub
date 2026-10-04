@@ -4,6 +4,7 @@ import { budgetVersion } from './procurementCore.js';
 import { procurementError } from './procurementLock.mjs';
 
 export function assertBudgetVersion(record, expected) {
+  if (record?.deleted_at) throw procurementError(409, 'This quote was deleted. Open the current quote instead.');
   if (!expected || budgetVersion(record) !== expected) throw procurementError(409, 'This budget changed. Reopen it before saving.');
 }
 export function budgetInputPatch(record, body, userEmail, at) {
