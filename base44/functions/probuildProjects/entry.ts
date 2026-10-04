@@ -23,7 +23,7 @@ import { fetchAllPages } from '../../shared/pagination.ts';
 const TEAM = '-O7aXXhvthc41u60Koc6';
 const DB = `https://probuild-prod.firebaseio.com/teams/${TEAM}`;
 const OWNERS = new Set(['gabefronk@gmail.com', 'gabriel.fronk.wd@gmail.com']);
-const json = (v, status = 200) => Response.json(v, { status });
+const json = (v, status = 200) => { try { console.log(`probuildProjects: ${JSON.stringify(v).slice(0, 6000)}`); } catch { /* */ } return Response.json(v, { status }); };
 const denverDate = (v = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(v));
 const addDays = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 
