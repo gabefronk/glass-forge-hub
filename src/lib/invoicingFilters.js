@@ -1,4 +1,5 @@
 import { isIgnoredWorkItem, duplicatePostIds, feeCompanions, eventPostIndex } from "../../base44/shared/billingCore.js";
+import { withBillingAudit } from "../../base44/shared/billingAudit.js";
 import { isFutureRow, isTripChargeAmount } from "./feeMath.js";
 
 // Companion lines (see feeCompanions in billingCore.js), for display only: a copy of
@@ -8,7 +9,7 @@ import { isFutureRow, isTripChargeAmount } from "./feeMath.js";
 // Never write these rows back: the underscore fields are not FeeLines fields.
 // events: CalendarEvents (optional), for the audit's matched posts.
 export function withCompanions(rows, events) {
-  const list = (Array.isArray(rows) ? rows : []).filter(r => !isIgnoredWorkItem(r));
+  const list = withBillingAudit(Array.isArray(rows) ? rows : [], events).filter(r => !isIgnoredWorkItem(r) && !r._billing_hidden);
   const c = feeCompanions(list, { eventPosts: eventPostIndex(events) });
   return list.map((r) => {
     if (c.folded.has(r.id)) return { ...r, _companion_folded: true, _companion_of: c.companionOf.get(r.id) || null };
@@ -22,13 +23,13 @@ export function withCompanions(rows, events) {
 // no_source_data is clear for billing: it means the Probuild pull failed that
 // morning (system fault), not that the crew failed to upload. Surfaced separately
 // in the UI so the user knows data is incomplete without it eating the invoice total.
-const OK_REPORT_STATUSES = ["ok", "waived", "pre_compliance", "no_source_data"];
+const OK_REPORT_STATUSES = ["ok", "waived", "pre_compliance"];
 
 // Review block: the row's job match or pricing is uncertain, or it is a priced
 // ProBuild companion that may repeat calendar labor (see withCompanions).
 // This is NOT the same as a missing field report — keep them separate.
 export const isMatchBlocked = (r) =>
-  (r.needs_review || !!r._companion_review) && !r.manually_adjusted;
+  !!r._billing_review || ((r.needs_review || !!r._companion_review) && !r.manually_adjusted);
 
 // Field-report block: the crew hasn't uploaded photos/notes for the source
 // CalendarEvent. Requires a reportStatusMap: Map<calendar_event_id, report_status>.
@@ -53,9 +54,10 @@ export const hasInvoiceSheetSourceEvidence = (r) => {
 
 export const isReportBlocked = (r, reportStatusMap) => {
   if (!r.calendar_event_id || !reportStatusMap) return false;
-  if (hasFeeLineReportEvidence(r) || hasInvoiceSheetSourceEvidence(r)) return false;
   const status = reportStatusMap.get(r.calendar_event_id);
-  if (!status) return false;
+  if (status === "rescheduled") return true;
+  if (hasFeeLineReportEvidence(r)) return false;
+  if (!status) return true;
   return !OK_REPORT_STATUSES.includes(status);
 };
 
@@ -125,6 +127,7 @@ export function buildSupersededSet(rows, events) {
 //   - has labor > 0 OR is a profit-split row (cost $0 is valid for splits)
 export const isReady = (r, reportStatusMap, supersededSet) =>
   r.billable &&
+  !r._billing_hidden &&
   !r.billed_to_bfs &&
   !isFutureRow(r) &&
   !isMatchBlocked(r) &&

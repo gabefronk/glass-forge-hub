@@ -1,3 +1,4 @@
+import { assessBillingLine, isSalesTrackerOnlyEvent } from "../../shared/billingAudit.js";
 import { isIgnoredWorkItem, pricingReview, canonicalPostRows, COMPANION_WINDOW_DAYS } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit, isTripChargeAmount } from '../../shared/ingestShared.ts';
@@ -121,7 +122,7 @@ export default async function(req) {
     const backfillIds = new Set();
     const lockedLaborGaps = [];
     calEvents = calEvents.filter((e) => {
-      if (isIgnoredWorkItem(e)) return false;
+      if (isIgnoredWorkItem(e) || isSalesTrackerOnlyEvent(e)) return false;
       const month = invoiceMonthFromDate(e.event_date || '');
       if (!lockedMonths.has(month)) return true;
       if (e.source_status === 'cancelled') return false;
@@ -350,6 +351,9 @@ export default async function(req) {
 
     for (const patch of [...toCreate, ...toUpdate]) {
       const event = allCalEvents.find(e => e.google_event_id === patch.calendar_event_id);
+      const assessment = assessBillingLine(patch, event);
+      if (assessment.hidden && !patch.probuild_post_id) { patch.billable = false; patch.pricing_review_reason = "[Billing audit] " + assessment.reason; }
+      if (assessment.kind === "review") { patch.needs_review = true; patch.pricing_review_reason = "[Billing audit] " + assessment.reason; }
       if (event?.source_status === 'cancelled') {
         patch.needs_review = true; patch.pricing_review_reason = 'Source calendar event was cancelled; confirm any completed work.';
         if (!patch.probuild_post_id) patch.billable = false;

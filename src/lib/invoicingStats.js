@@ -12,8 +12,7 @@ export function invoicingStats(rows, reportStatusMap, supersededSet = buildSuper
   // The month total is what is done AND reported: a visit the crew has not reported yet stays
   // out until the report lands; scheduled (future) work never counts. Pricing-review lines are
   // done and reported, so they count at their provisional amount.
-  const reportIds = new Set(report.map(r => r.id));
-  const counted = past.filter(r => !reportIds.has(r.id));
+  const counted = past.filter(r => r.billed_to_bfs || (!isReportBlocked(r, reportStatusMap) && !r._billing_review));
   const sum = arr => Math.round(arr.reduce((n, r) => n + computeFeeAmt(r), 0) * 100) / 100;
   return {
     readyTotal: sum(ready), readyCount: ready.length,

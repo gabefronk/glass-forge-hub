@@ -107,7 +107,7 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
   const isBilled = !!row.billed_to_bfs;
   const isProfitSplit = row.fee_type === "profit_split";
   const needsReview = isMatchBlocked(row);
-  const reviewReason = (!row.manually_adjusted && row._companion_review) || row.pricing_review_reason;
+  const reviewReason = row._billing_review || (!row.manually_adjusted && row._companion_review) || row.pricing_review_reason;
   const photoCount = Array.isArray(row.photo_urls) ? row.photo_urls.length : 0;
   const builderName = builderFromName(row.job_name_raw || row.job_name_norm || "");
   const tile = builderTile(builderName || row.job_name_raw || row.job_name_norm || "?");
