@@ -5,7 +5,7 @@ import {computeLaborAmt, extractLaborAmount, denverDate, isIgnoredWorkItem} from
 export const currentServiceScope = text => String(text || '').split(/\n\s*[_=]{8,}[^\n]*(?:\n|$)/)[0];
 export const isSalesTrackerOnlyEvent = e => /Sales Tracker DAILY SALES row\s+\d+/i.test(e?.scope_notes || e?.calendar_note_text || e?.note_text || '');
 const serviceWords = /\b(?:service|warranty|wty|investigat\w*|adjust\w*|repair\w*|replac\w*|re.?glaz\w*|glass\s+(?:unit|install)|leak\s+diagnos\w*)\b/i;
-const freeWords = /\bno[ -]?charge\b|\bnot\s+billable\b/i;
+const freeWords = /\bno[ -]?charge\b|\bnot\s+billable\b|\bno\s+pay\b/i;
 const sheetrockOnly = text => /\b(?:sheetrock|srw)\b/i.test(text) && !/\b(?:except|chargeable|repair|replace|extra\s+(?:charge|labor))\b/i.test(text);
 const hasPost = r => !!r.probuild_post_id;
 const result = (kind, reason, extra={}) => ({kind,reason,hidden:['ignored','scheduled','tracker_only','logistics','no_charge'].includes(kind),...extra});
@@ -28,7 +28,7 @@ export function assessBillingLine(row, event, today=denverDate()) {
   if (event?.source_status==='cancelled'||event?.report_status==='rescheduled') return reported
     ? result('review','Cancelled or rescheduled calendar conflicts with a work report. Verify the completed visit before billing.')
     : result('scheduled','Cancelled or rescheduled visit; no completed work established.');
-  const free=freeWords.test(scope||report),sheetrock=sheetrockOnly(scope||report);
+  const free=freeWords.test(scope)||freeWords.test(report),sheetrock=sheetrockOnly(scope||report);
   if ((free||sheetrock) && !(approved>0)) {
     if(labor>0)return result('review','No-charge/included-work instructions conflict with recorded labor. Confirm who pays YA; do not assume a customer charge.');
     return result('no_charge',sheetrock?'Sheetrock window visit is included; no separate labor charge stated.':'Explicit no-charge visit; no separate installer payment authorized.');
