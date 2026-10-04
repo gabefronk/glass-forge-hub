@@ -54,7 +54,8 @@ test('AMSCO dealer pricing keeps the printed customer total as the sell', () => 
   assert.equal(f.inputs.actual_total_sell, 7022.31);
   // 35.5 x 59.5 = 14.7 sq ft -> vinyl under-30 ($36/$52) x3, door 2-panel 6/8 ($66/$95)
   assert.equal(f.inputs.labor_cost_sub_pay, 36 * 3 + 66);
-  assert.equal(f.inputs.labor_sell_price, 52 * 3 + 95);
+  assert.equal(f.labor.sell, 275); // 52*3+95 = 251, lifted to the trip minimum
+  assert.equal(f.inputs.labor_sell_price, 275);
   assert.equal(f.install_material, 'vinyl');
 });
 
