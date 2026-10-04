@@ -30,7 +30,8 @@ export function effectiveSupplierEta(po, supplier) {
 // Financial/source records are never returned by the public endpoint.
 export function projectSupplierEtas(data) {
   const pos = data.purchase_orders || [], orders = data.vendor_orders || [];
-  const eligible = pos.filter(po => isAmsco(po.vendor));
+  const conflicts = new Set(referenceConflicts(pos, orders, data.jobs || []).map(c => c.number));
+  const eligible = pos.filter(po => isAmsco(po.vendor) && !conflicts.has(text(po.po_number).toUpperCase()));
   return { ...data, vendor_orders: orders.map(order => {
     const matches = eligible.filter(po => linkedEtaSupplier(po, orders, pos)?.id === order.id && po.supplier_eta);
     if (matches.length !== 1) return order;
