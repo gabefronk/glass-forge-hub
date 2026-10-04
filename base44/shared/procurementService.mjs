@@ -144,6 +144,23 @@ export async function procurementAction(api, body, user, deps = {}) {
       if (body.status === 'reconciled') { patch.reconciled_at = now(); patch.reconcile_note = text(body.note); }
       return { ok: true, order: await saveCurrent(api.VendorOrders, row, body.expected_updated_date, patch), message: 'Payment status recorded only. No money was sent.' };
     }
+    if (action === 'save_route') {
+      const preview = await estimatePreview(api, body);
+      if (preview.closed) throw fail(409, 'This accounting month is closed.');
+      if (body.preview_version !== preview.version) throw fail(409, 'The record changed. Refresh before saving.');
+      if (!['bfs_installed_sale', 'bfs_supply_ya_install', 'bfs_to_ya_turnkey', 'direct_manufacturer_turnkey'].includes(body.route)) throw fail(400, 'Choose how this job is sold.');
+      if (preview.existing) {
+        const record = await saveCurrent(api.JobCostInputs, preview.existing, preview.existing.updated_date, { route: body.route });
+        return { ok: true, cost_input_id: record.id, message: 'Sales path saved. Amounts and payments are unchanged.' };
+      }
+      try {
+        const record = await api.JobCostInputs.create({ month: body.month, job_id: preview.job.id, job_name_norm: text(preview.job.canonical_name).toLowerCase(), route: body.route });
+        return { ok: true, cost_input_id: record.id, message: 'Sales path saved. No invoice or financial amounts were created.' };
+      } catch {
+        lock.holdForReview();
+        throw fail(503, 'Save outcome is uncertain. Refresh before trying again.', { uncertain: true });
+      }
+    }
     if (action === 'sync_estimate') {
       const preview = await estimatePreview(api, body);
       if (preview.closed) throw fail(409, 'This accounting month is closed. Its records were not changed.');
