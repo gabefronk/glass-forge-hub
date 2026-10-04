@@ -53,8 +53,6 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
-  const [openFormKey, setOpenFormKey] = useState(0);
-  const historyRef = useRef(null);
   const v = useRef(0);
   const folder = useJobFolderFiles(job);
 
@@ -162,11 +160,6 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
     return <div className="flex items-center justify-center h-full text-[13px]" style={{ color: MUTED }}>Select a job to see it here.</div>;
   }
 
-  const logInteraction = () => {
-    setOpenFormKey((k) => k + 1);
-    historyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
   return (
     <div className="flex-1 min-h-0 overflow-y-auto obsidian-scroll" style={{ backgroundColor: SHEET_BG }}>
       <div className="px-6 pt-6 pb-10 flex flex-col gap-[18px] max-[1400px]:px-5">
@@ -179,14 +172,12 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           folder={folder}
           plans={plans}
           onFieldReport={() => setShowReport(true)}
-          onLog={logInteraction}
           onRename={async (name) => { const next = await renameJob(job, name); setJob(next); onJobChanged?.(next); }}
           headingLevel="h2"
           progress={progress}
           alert={<ServiceMarker open={service.open} />}
           extra={
             <>
-              <Link to={`/jobs/${jobId}`} className={heroLinkClass} style={heroLinkStyle} title="Open the full job page">Full page<ArrowUpRight className="h-[15px] w-[15px]" style={{ color: "#e0c994" }} /></Link>
               {canPurchase && <Link to={procurementPath(jobId)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link>}
               {canDelete ? <DeleteJobButton job={job} onDeleted={() => onJobDeleted?.(job.id)} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
             </>
@@ -196,7 +187,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
         <MergedJobBanner job={job} />
         <DuplicateJobNotice group={group} currentId={jobId} />
 
-        <div ref={historyRef} className="scroll-mt-4">
+        <div className="scroll-mt-4">
           <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
             <JobActivityFeed
               ledger
@@ -210,7 +201,6 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
               currentUser={currentUser}
               onChanged={() => load({ quiet: true })}
               onPhotoClick={setLightbox}
-              openFormKey={openFormKey}
               title="History"
               dedupe={snap}
               progress={progress}
@@ -218,6 +208,10 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
               onServiceChanged={reloadService}
             />
           </SheetCard>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/10 pt-3 text-[13px]">
+          <p className="m-0" style={{ color: MUTED }}>{canDelete ? "Contacts, linked documents, bookkeeping and messages" : "Contacts and job details"}</p>
+          <Link to={`/jobs/${jobId}`} className="inline-flex min-h-11 items-center gap-1.5 font-semibold hover:underline" style={{ color: TEAL }}>Job records<ArrowUpRight className="h-4 w-4" /></Link>
         </div>
       </div>
 
