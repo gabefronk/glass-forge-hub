@@ -10,7 +10,7 @@ import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
 import ProbuildReports from "@/pages/ProbuildReports";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { buildJobsOverview, sortJobGroups, builderOptions, needsYou, JOB_SORTS } from "@/lib/jobsOverview";
-import { denverDate } from "../../base44/shared/billingCore.js";
+import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
 import AddJobDialog from "@/components/jobs/AddJobDialog";
 import QuickFilterMenu from "@/components/jobs/QuickFilterMenu";
 import { jobMatchesSearch } from "@/lib/jobSearch";
@@ -96,7 +96,7 @@ export default function JobsHub() {
 
   // Merged jobs are hidden from the list and all matching unless an admin
   // turns on "Show merged". Sample jobs are always hidden.
-  const displayJobs = useMemo(() => jobs.filter((j) => !j.is_sample && (showMerged || !j.merged_into)), [jobs, showMerged]);
+  const displayJobs = useMemo(() => jobs.filter((j) => !isIgnoredWorkItem(j) && !j.is_sample && (showMerged || !j.merged_into)), [jobs, showMerged]);
 
   // Duplicate records (same customer + address) are shown as one job; weaker
   // matches stay separate and are flagged for review. Read-only, see jobDedupe.js.
