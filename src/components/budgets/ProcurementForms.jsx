@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { C } from '@/lib/feeUI';
-import { amount, prepareBudgetPO, activeBudgets, budgetVersion } from '../../../base44/shared/procurementCore.js';
+import { amount, prepareBudgetPO, activeBudgets, budgetVersion, validMonth } from '../../../base44/shared/procurementCore.js';
 import { denverDate } from '../../../base44/shared/billingCore.js';
 
 export const money = value => amount(value) === null ? '\u2014' : amount(value).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -139,7 +139,11 @@ export function OrderStatusForm({ row, supplier = false, onDone, onCancel }) {
 }
 
 export function InvoiceBridge({ job }) {
-  const [month, setMonth] = useState(() => denverDate().slice(0, 7));
+  const [params, setParams] = useSearchParams();
+  const requestedMonth = params.get('month') || '';
+  const [month, setMonth] = useState(() => validMonth(requestedMonth) ? requestedMonth : denverDate().slice(0, 7));
+  const changeMonth = value => { setMonth(value); const next = new URLSearchParams(params); next.set('month', value); setParams(next); };
+  useEffect(() => { if (validMonth(requestedMonth)) setMonth(requestedMonth); }, [requestedMonth]);
   const [preview, setPreview] = useState(null), [route, setRoute] = useState('');
   const [reviewed, setReviewed] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const key = useRef(crypto.randomUUID());
@@ -154,7 +158,7 @@ export function InvoiceBridge({ job }) {
     catch (e2) { setError(messageOf(e2)); } finally { setBusy(false); }
   }
   return <FormPanel title="Budget estimate & invoicing"><form onSubmit={sync}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
-    <div className="flex flex-wrap items-end justify-between gap-3"><Field label="Accounting month" type="month" value={month} onChange={setMonth} /><Link className={buttonClass} style={secondaryStyle} to={`/?job_id=${encodeURIComponent(job.id)}&month=${encodeURIComponent(month)}`}>Open this job in Invoicing</Link></div>
+    <div className="flex flex-wrap items-end justify-between gap-3"><Field label="Accounting month" type="month" value={month} onChange={changeMonth} /><Link className={buttonClass} style={secondaryStyle} to={`/?job_id=${encodeURIComponent(job.id)}&month=${encodeURIComponent(month)}`}>Open this job in Invoicing</Link></div>
     <p className="mt-3 text-sm leading-6 text-slate-600">Budgets are estimates. Invoice amounts, actual labor, customer payments and supplier payments remain separate records. Linking below does not create an invoice, approve an order or overwrite actual financial amounts.</p>
     {preview && <>
       <div className="my-4 grid gap-3 sm:grid-cols-3">{[['Budget cost', preview.estimate.cost], ['Budget customer total', preview.estimate.sell], ['Budget margin dollars', preview.estimate.margin_dollars]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">{label}</div><strong className="text-lg">{money(value)}</strong></div>)}</div>
