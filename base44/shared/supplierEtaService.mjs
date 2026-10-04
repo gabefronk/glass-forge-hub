@@ -74,7 +74,7 @@ export async function supplierEtaAction(api, body, user, deps = {}) {
       if (retry.response !== body.response || retry.eta_date !== (body.response === 'eta' ? body.eta_date : '')) fail(409, 'This response was already saved with different details. Refresh.');
       return { ok: true, duplicate: true, order: publicEtaOrder(po, data) };
     }
-    if (!body.expected_version || po.updated_date !== body.expected_version) fail(409, 'This order changed. Refresh and review its latest ETA before saving.');
+    if (!body.expected_version || publicEtaOrder(po, data).version !== body.expected_version) fail(409, 'This order changed. Refresh and review its latest ETA before saving.');
     if (history.length >= 1000) fail(409, 'This order needs review by Glass Forge before another response.');
     const supplier = linkedEtaSupplier(po, data.vendor_orders, data.purchase_orders);
     const previous = effectiveSupplierEta(po, supplier);
@@ -82,7 +82,7 @@ export async function supplierEtaAction(api, body, user, deps = {}) {
       responded_at: now(), previous_eta_date: previous.date || previous.previous_eta_date || '',
       request_id: body.request_id, link_id: grant.id, source: 'AMSCO supplier link' };
     // One atomic record update. No finance, status, received date, job links or calendar records are writable.
-    const result = await api.PurchaseOrders.updateMany({ id: po.id, updated_date: body.expected_version, job_id: po.job_id, vendor: po.vendor, status: po.status },
+    const result = await api.PurchaseOrders.updateMany({ id: po.id, updated_date: po.updated_date, job_id: po.job_id, vendor: po.vendor, status: po.status },
       { $set: { supplier_eta: { ...entry, history: [...history, entry] } } });
     if (result?.updated !== 1) fail(409, 'This order changed. Refresh before saving.');
     const fresh = await api.PurchaseOrders.get(po.id);
