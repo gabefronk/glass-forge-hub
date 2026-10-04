@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Check, FileText, Plus, Printer, Save } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -8,7 +8,7 @@ import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import { procurementPath } from "@/lib/procurementRoutes";
 import { setupBudgetSource } from '../../base44/shared/procurementCore.js';
 import { fetchAllPages } from '@/lib/pagination';
-import { buildSetupDraft, computeSetupTotals, contractTermsReady, toContractViewModel } from "@/lib/jobSetup";
+import { buildSetupDraft, computeSetupTotals, contractReviewIssues, contractTermsReady, toContractViewModel } from "@/lib/jobSetup";
 
 const money = (v) => v === "" || v === null || v === undefined || !Number.isFinite(Number(v)) ? "—" : Number(v).toLocaleString("en-US", { style: "currency", currency: "USD" });
 const field = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900";
@@ -27,8 +27,9 @@ function Card({ title, note = "", children }) {
 
 export default function JobSetup() {
   const { user } = useAuth();
+  const { id } = useParams();
   if (!isPurchaseOrderOwner(user)) return <PageNotFound />;
-  return <JobSetupOwner user={user} />;
+  return <JobSetupOwner key={id} user={user} />;
 }
 
 function JobSetupOwner({ user }) {
@@ -36,7 +37,10 @@ function JobSetupOwner({ user }) {
   const [job, setJob] = useState(null), [sheet, setSheet] = useState(null);
   const [recordId, setRecordId] = useState(""), [busy, setBusy] = useState(true), [message, setMessage] = useState("");
   const [contract, setContract] = useState(false);
-  const load = useCallback(async () => {
+  const saving = useRef(false);
+  useEffect(() => {
+    let active = true;
+    async function load() {
     setBusy(true); setMessage("");
     try {
       const [j, setups, budgets, costs] = await Promise.all([
@@ -45,28 +49,36 @@ function JobSetupOwner({ user }) {
         base44.entities.JobCostInputs.filter({ job_id: id }, "-updated_date", 1).catch(() => []),
       ]);
       const installs = j.source_window_quote_id ? await base44.entities.InstallBudgets.filter({ request_id: j.source_window_quote_id }, "-updated_date", 1).catch(() => []) : [];
+      if (!active) return;
+      if (j.merged_into || j.is_sample) throw new Error("Open the current, non-sample job to edit its setup sheet.");
+      if (setups.length > 1) throw new Error("More than one setup sheet exists for this job. Reconcile the saved versions before editing.");
       setJob(j);
-      if (setups[0]) { setSheet(setups[0]); setRecordId(setups[0].id); }
+      if (setups[0]) { setSheet({ ...setups[0], scope_lines: setups[0].scope_lines || [] }); setRecordId(setups[0].id); }
       else {
         const source = setupBudgetSource(budgets);
         setSheet(buildSetupDraft({ job: j, budget: source.budget, costInput: costs[0], installBudget: installs[0] }));
         if (source.warnings.length) setMessage('Budget totals need review before using them in this draft. ' + source.warnings.join(' '));
       }
-    } catch (e) { setMessage(e?.message || "Setup sheet could not load."); }
-    finally { setBusy(false); }
+    } catch (e) { if (active) setMessage(e?.message || "Setup sheet could not load."); }
+    finally { if (active) setBusy(false); }
+    }
+    load();
+    return () => { active = false; };
   }, [id]);
-  useEffect(() => { load(); }, [load]);
   const totals = useMemo(() => computeSetupTotals(sheet || {}), [sheet]);
+  const reviewIssues = useMemo(() => contractReviewIssues(sheet || {}), [sheet]);
   const setCustomer = (key, value) => setSheet((s) => ({ ...s, customer: { ...s.customer, [key]: value } }));
   const setCost = (key, value) => setSheet((s) => ({ ...s, costs: { ...s.costs, [key]: value } }));
   const setPricing = (key, value) => setSheet((s) => ({ ...s, pricing: { ...s.pricing, [key]: value } }));
   const setTerms = (key, value) => setSheet((s) => ({ ...s, terms: { ...s.terms, [key]: value } }));
   async function save(patch = {}) {
+    if (busy || saving.current || !sheet || job?.id !== id || sheet.job_id !== id) return;
     const next = { ...sheet, ...patch };
     if (next.status === "approved" && (!String(next.approver_name || "").trim() || !next.approved_date || !contractTermsReady(next))) {
       setMessage("Enter and review all contract terms, approver name, and date before marking this sheet approved. Typed fields do not verify the named person's approval.");
       return;
     }
+    saving.current = true;
     setBusy(true); setMessage("");
     try {
       const payload = { ...next, job_id: id, created_by_email: sheet.created_by_email || user.email };
@@ -74,7 +86,7 @@ function JobSetupOwner({ user }) {
       const saved = recordId ? await base44.entities.JobSetupSheets.update(recordId, payload) : await base44.entities.JobSetupSheets.create(payload);
       setRecordId(saved.id); setSheet(saved); setMessage("Setup sheet saved.");
     } catch (e) { setMessage(e?.message || "Could not save."); }
-    finally { setBusy(false); }
+    finally { saving.current = false; setBusy(false); }
   }
   if (busy && !sheet) return <div className="p-10 text-sm text-slate-500">Loading setup sheet…</div>;
   if (!job || !sheet) return <div className="p-10"><p className="text-red-700">{message || "Job not found."}</p><Link to={`/jobs/${id}`}>Back to job</Link></div>;
@@ -86,7 +98,8 @@ function JobSetupOwner({ user }) {
       <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"><strong>Budget & Orders is this job's working purchasing file.</strong> Add PDFs, review costs, prepare POs and return anytime. The setup and customer contract below remain saved snapshots; opening purchasing does not replace them.<div className="mt-3"><Link to={procurementPath(id)} target="_blank" rel="noopener noreferrer" className="inline-flex rounded-lg bg-emerald-950 px-4 py-2 font-semibold text-white">Open Budget & Orders</Link><span className="ml-3 text-xs">Opens separately so unsaved setup changes stay here.</span></div></div>
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Owner only</p><h1 className="text-3xl font-bold">Job Setup &amp; Contract</h1><p className="text-sm text-slate-500">{job.canonical_name}</p></div><div className="flex flex-wrap gap-2"><button className="rounded-lg border bg-white px-3 py-2 text-sm" onClick={() => setContract(true)}><FileText className="mr-1 inline" size={15} />Customer contract</button><button className="rounded-lg bg-[var(--gf-teal-600)] hover:bg-[var(--gf-teal-700)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy} onClick={() => save()}><Save className="mr-1 inline" size={15} />Save</button></div></div>
       {message && <p role="status" className="mt-3 rounded-lg bg-[var(--gf-teal-050)] p-3 text-sm text-[var(--gf-teal-800)]">{message}</p>}
-      <div className="mt-5 grid gap-5">
+      {reviewIssues.length > 0 && <section aria-label="Setup review checklist" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong>Before approval or printing</strong><ul className="mt-2 list-disc space-y-1 pl-5">{reviewIssues.map(issue => <li key={issue}>{issue}</li>)}</ul><p className="mt-2 text-xs">You can save a draft while these details are incomplete.</p></section>}
+      <fieldset disabled={busy} className="mt-5 grid min-w-0 gap-5 border-0 p-0">
         <Card title="Customer & job"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[["name","Customer name"],["phone","Phone"],["email","Email"],["billing_address","Billing address"],["job_site_address","Job site address"],["builder_gc","Builder / GC"]].map(([k,t]) => <Field key={k} title={t} value={sheet.customer?.[k]} onChange={(v) => setCustomer(k,v)} />)}</div></Card>
         <Card title="Scope schedule" note="Prefilled from the accepted quote when available, otherwise from the linked job budget. Customer prices are the only line prices printed on the contract.">
           <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead><tr>{["Mark","Qty","Size","Product","Description","Customer price",""] .map((x) => <th key={x} className="p-2 text-left text-xs text-slate-500">{x}</th>)}</tr></thead><tbody>{sheet.scope_lines.map((line,i) => <tr key={i} className="border-t"><td className="p-1"><input className={field} value={line.mark} onChange={(e) => setSheet(s => ({...s,scope_lines:s.scope_lines.map((x,j)=>j===i?{...x,mark:e.target.value}:x)}))}/></td>{["qty","size","product","description","customer_price"].map(k => <td className="p-1" key={k}><input className={field} type={["qty","customer_price"].includes(k)?"number":"text"} value={line[k] ?? ""} onChange={(e) => setSheet(s => ({...s,scope_lines:s.scope_lines.map((x,j)=>j===i?{...x,[k]:e.target.value}:x)}))}/></td>)}<td><button aria-label="Remove line" className="px-2 text-red-700" onClick={() => setSheet(s=>({...s,scope_lines:s.scope_lines.filter((_,j)=>j!==i)}))}>×</button></td></tr>)}</tbody></table></div>
@@ -100,7 +113,7 @@ function JobSetupOwner({ user }) {
         </Card>
         <Card title="Terms" note="No standard deposit, payment schedule, lead time, warranty or validity is assumed. Enter and verify each term for this job before marking the sheet approved or printing."><div className="grid gap-3 sm:grid-cols-2"><Field title="Deposit %" type="number" value={sheet.terms?.deposit_pct} onChange={v=>setTerms("deposit_pct",v)}/><Field title="Deposit amount (computed)" value={sheet.terms?.deposit_pct === "" ? "—" : money(totals.contract_total*Number(sheet.terms?.deposit_pct)/100)} onChange={()=>{}}/><Area title="Payment schedule" value={sheet.terms?.payment_schedule} onChange={v=>setTerms("payment_schedule",v)}/><Area title="Warranty" value={sheet.terms?.warranty_text} onChange={v=>setTerms("warranty_text",v)}/><Field title="Estimated lead time" value={sheet.terms?.estimated_lead_time} onChange={v=>setTerms("estimated_lead_time",v)}/><Field title="Estimated start" type="date" value={sheet.terms?.estimated_start} onChange={v=>setTerms("estimated_start",v)}/><Field title="Quote valid for days" type="number" value={sheet.terms?.quote_valid_days} onChange={v=>setTerms("quote_valid_days",v)}/></div></Card>
         <Card title="Approval" note="Approval only records status. It does not send anything or create a purchase order."><div className="flex flex-wrap items-end gap-3"><label><span className={label}>Status</span><select className={field} value={sheet.status} onChange={e=>setSheet(s=>({...s,status:e.target.value}))}><option value="draft">Draft</option><option value="sent_for_approval">Sent for approval</option><option value="approved">Approved</option></select></label>{sheet.status==="approved"&&<><Field title="Approver name (typed)" value={sheet.approver_name} onChange={v=>setSheet(s=>({...s,approver_name:v}))}/><Field title="Approved date" type="date" value={sheet.approved_date} onChange={v=>setSheet(s=>({...s,approved_date:v}))}/></>}<button className="rounded-lg bg-[var(--gf-teal-600)] hover:bg-[var(--gf-teal-700)] px-4 py-2 text-sm font-semibold text-white" onClick={()=>save()}><Check className="mr-1 inline" size={15}/>Save status</button></div>{sheet.status==="approved"&&<p className="mt-4 rounded-lg bg-amber-50 p-3 font-semibold text-amber-800">Marked approved in Hub; entered approver fields are not independently verified. Review before any order. · <Link className="underline" to={procurementPath(id, 'orders')}>Open this job's purchase orders</Link></p>}</Card>
-      </div>
+      </fieldset>
     </div>
   </main>;
 }
