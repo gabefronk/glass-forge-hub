@@ -74,6 +74,9 @@ export function parseAmscoQuoteText(text) {
     openings_qty: openings || null,
     material_true_cost: totals.dealer.sub_total,   // workbook C15
     actual_total_sell: totals.customer.total,      // workbook B28
+    dealer_subtotal: totals.dealer.sub_total,
+    customer_total: totals.customer.total,
+    price_levels: totals.dealer.sub_total && totals.customer.total ? 'dealer_and_customer' : null,
     customer_sub_total: totals.customer.sub_total,
     customer_tax: totals.customer.tax,
     parse_source: 'amsco_text',
