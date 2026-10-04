@@ -16,12 +16,13 @@
 
 export const REPORT_CLEARED_STATUSES = new Set(["ok", "waived", "rescheduled"]);
 
-// Photos alone count as a report (the matcher's raw result is "ok" for a photos-only post).
-// Visits before the compliance start date (pre_compliance) are never owed a report.
+// Photos alone count as a report: a photos-only post is "ok" to the matcher, and
+// "missing_notes" (photos in, no notes) clears too. A pre-compliance visit clears when the
+// matcher found its report (report_status_raw "ok"), same as any other visit.
 export function eventReportCleared(ev) {
   if (!ev) return false;
   return ev.report_required === false || REPORT_CLEARED_STATUSES.has(ev.report_status)
-    || ev.report_status === "pre_compliance" || ev.report_status_raw === "ok";
+    || ev.report_status === "missing_notes" || ev.report_status_raw === "ok";
 }
 
 export function isFieldReportNote(note) {
