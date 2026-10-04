@@ -97,7 +97,7 @@ function InlineEditor({ row, onSave, onCancel, onDelete }) {
         <div className="flex flex-wrap gap-2">
           <button onClick={() => onDelete(row.id)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-error-border, #F0C9C5)", backgroundColor: "transparent", color: "#A43432" }}>Delete line</button>
           <button onClick={onCancel} className="min-h-10 rounded-lg px-3 text-[13px] font-medium" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink-2)" }}>Cancel</button>
-          <button onClick={() => onSave(row.id, { line_description: description, note_text: detail, labor_amt: Number(labor) || 0, fee_pct: (Number(feePct) || 0) / 100, manually_adjusted: true })} className="min-h-10 rounded-lg px-4 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-teal-600)", backgroundColor: "var(--gf-teal-600)", color: "#FFFFFF" }}>Save</button>
+          <button onClick={() => onSave(row.id, { line_description: description, note_text: detail, labor_amt: Number(labor) || 0, fee_pct: (Number(feePct) || 0) / 100, manually_adjusted: true, ...(String(row.pricing_review_reason || "").startsWith("[Billing audit] Possible duplicate:") ? { pricing_review_reason: null, needs_review: false } : {}) })} className="min-h-10 rounded-lg px-4 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-teal-600)", backgroundColor: "var(--gf-teal-600)", color: "#FFFFFF" }}>Save</button>
         </div>
       </div>
     </div>
