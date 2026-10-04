@@ -86,7 +86,7 @@ export default function JobLinkedRecords({ jobId, memberIds, sourceQuoteId }) {
               <ul className="space-y-1.5">
                 {orders.map((o) => (
                   <li key={o.id} className="flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ border: `1px solid ${C.rowBorder}` }}>
-                    <span className="min-w-0 text-[13px]" style={{ color: C.text }}><span className="font-medium">{o.vendor || "Vendor"}</span>{o.order_number ? <span style={{ color: C.textMuted }}> · #{o.order_number}</span> : null}{o.eta_date ? <span style={{ color: C.textMuted }}> · ETA {o.eta_date}</span> : null}</span>
+                    <span className="min-w-0 text-[13px]" style={{ color: C.text }}><span className="font-medium">{o.vendor || "Vendor"}</span>{o.order_number ? <span style={{ color: C.textMuted }}> · #{o.order_number}</span> : null}<span style={{ color: C.textMuted }}> · Delivery dates shown above</span></span>
                     <span className="flex shrink-0 items-center gap-2 text-[12px] font-semibold" style={{ color: C.text }}>{money(o.amount)}<Chip tone={o.status === "reconciled" || o.status === "paid" ? "good" : "neutral"}>{statusWithDate(o)}</Chip></span>
                   </li>
                 ))}
