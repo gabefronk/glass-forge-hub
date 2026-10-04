@@ -122,7 +122,9 @@ export default async function probuildProjects(req) {
       const jobIds = [...new Set(events.filter((e) => e.job_id && e.event_date >= today && e.event_date <= addDays(today, days) && !/cancel/i.test(e.source_status || '')).map((e) => e.job_id))];
       const results = [];
       for (const id of jobIds) results.push(await buildOne(ctx, id, apply));
-      return json({ ok: true, apply, autobuild_on: settings.probuild_autobuild === true, results });
+      const shallow = await fetch(`${DB}.json?auth=${idToken}&shallow=true`).then((r) => r.ok ? r.json() : null).catch(() => null);
+      return json({ ok: true, apply, autobuild_on: settings.probuild_autobuild === true, token_user: uid, members, team_keys: shallow ? Object.keys(shallow) : null,
+        newest_project: sample ? { keys: Object.keys(sample), status: sample.status, createdBy: sample.createdBy } : null, results });
     }
 
     return json({ error: 'unknown_action' }, 400);
