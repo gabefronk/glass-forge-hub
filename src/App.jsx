@@ -34,6 +34,7 @@ import ResearchQueue from "@/pages/ResearchQueue";
 import Todos from '@/pages/Todos';
 import JobBudgets from '@/pages/JobBudgets';
 import PurchaseOrders from '@/pages/PurchaseOrders';
+import Procurement from '@/pages/Procurement';
 import Summit from '@/pages/Summit';
 import TeamStructure from '@/pages/TeamStructure';
 import UnlinkedJobRecords from '@/pages/UnlinkedJobRecords';
@@ -102,6 +103,8 @@ const AuthenticatedApp = () => {
           <Route path="/brands-specs" element={<BrandsSpecs />} />
           <Route path="/products" element={<Navigate to="/brands-specs" replace />} />
           <Route path="/research-queue" element={<QuotesOnlyRedirect><ResearchQueue /></QuotesOnlyRedirect>} />
+          <Route path="/purchasing" element={<QuotesOnlyRedirect><Procurement /></QuotesOnlyRedirect>} />
+          <Route path="/jobs/:id/budget-orders" element={<QuotesOnlyRedirect><Procurement /></QuotesOnlyRedirect>} />
           <Route path="/job-budgets" element={<QuotesOnlyRedirect><JobBudgets /></QuotesOnlyRedirect>} />
           <Route path="/purchase-orders" element={<QuotesOnlyRedirect><PurchaseOrders /></QuotesOnlyRedirect>} />
           <Route path="/admin/unlinked" element={<QuotesOnlyRedirect><UnlinkedJobRecords /></QuotesOnlyRedirect>} />
