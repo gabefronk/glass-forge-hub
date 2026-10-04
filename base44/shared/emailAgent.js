@@ -177,9 +177,10 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   // any open service item reordered under the same number. Independent of the job link.
   async function applyOrderEtas(api, row, cache, warn) {
     const changes = [];
+    if (!api.VendorOrders || !(row?.extracted?.dates || []).length) return changes;
     try {
       if (!cache.orders) cache.orders = await api.VendorOrders.filter({ status: { $in: ['ordered', 'eta_set', 'ach_link_received'] } }, '-created_date', 200);
-      if (!cache.items) cache.items = (await api.ServiceItems.filter({ status: { $in: ['reported', 'acknowledged', 'working', 'ordered', 'shipped'] } }, '-created_date', 200).catch(() => []))
+      if (!cache.items) cache.items = (!api.ServiceItems ? [] : await api.ServiceItems.filter({ status: { $in: ['reported', 'acknowledged', 'working', 'ordered', 'shipped'] } }, '-created_date', 200).catch(() => []))
         .filter((s) => s.order_ref).map((s) => ({ id: `svc:${s.id}`, status: 'ordered', order_number: '', po_name: s.order_ref, title: s.order_ref, notes: '', eta_date: s.eta_date, _item: s }));
       const from = row.from_name || row.from_email || 'vendor';
       const day = String(row.last_message_at || now()).slice(0, 10);
