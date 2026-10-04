@@ -48,7 +48,8 @@ function calendarTitle(events, today) {
   const evs = events.filter((e) => e.event_date && !/cancel/i.test(e.source_status || '') && e.job_name);
   const next = evs.filter((e) => e.event_date >= today).sort((a, b) => a.event_date.localeCompare(b.event_date))[0];
   const last = evs.sort((a, b) => b.event_date.localeCompare(a.event_date))[0];
-  return String((next || last)?.job_name || '').trim();
+  // Status words Israel puts in front of a title ("TENTATIVE:", "READY:", "PICKED UP:") aren't part of the job name.
+  return String((next || last)?.job_name || '').replace(/^\s*(?:tentative|ready|picked\s*up|confirmed|moved|cancel+ed)\s*:\s*/i, '').trim();
 }
 
 async function buildOne(ctx, jobId, apply) {
@@ -122,8 +123,10 @@ export default async function probuildProjects(req) {
       const jobIds = [...new Set(events.filter((e) => e.job_id && e.event_date >= today && e.event_date <= addDays(today, days) && !/cancel/i.test(e.source_status || '')).map((e) => e.job_id))];
       const results = [];
       for (const id of jobIds) results.push(await buildOne(ctx, id, apply));
-      const shallow = await fetch(`${DB}.json?auth=${idToken}&shallow=true`).then((r) => r.ok ? r.json() : null).catch(() => null);
-      return json({ ok: true, apply, autobuild_on: settings.probuild_autobuild === true, token_user: uid, members, team_keys: shallow ? Object.keys(shallow) : null,
+      const shallow = await fetch(`${DB}.json?auth=${idToken}&shallow=true`).then((r) => r.ok ? r.json() : r.text().then((t) => ({ _error: r.status, _t: t.slice(0, 120) }))).catch((e) => ({ _error: String(e) }));
+      const teamUsers = await fetch(`${DB}/users.json?auth=${idToken}`).then((r) => r.ok ? r.json() : null).catch(() => null);
+      const userSummary = teamUsers ? Object.fromEntries(Object.entries(teamUsers).map(([k, v]) => [k, v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([f, x]) => typeof x !== 'object' && !/phone|email|token|photo/i.test(f)).map(([f, x]) => [f, String(x).slice(0, 40)])) : v])) : null;
+      return json({ ok: true, apply, autobuild_on: settings.probuild_autobuild === true, token_user: uid, members, team_keys: shallow ? Object.keys(shallow) : null, team_users: userSummary,
         newest_project: sample ? { keys: Object.keys(sample), status: sample.status, createdBy: sample.createdBy } : null, results });
     }
 
