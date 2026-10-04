@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { C } from "@/lib/feeUI";
+import { procurementPath } from "@/lib/procurementRoutes";
 
 // Owner-only: window quotes and vendor orders filed against this job (or any of its
 // duplicate records), so the job page is the one place to reach every linked record.
@@ -78,7 +79,7 @@ export default function JobLinkedRecords({ jobId, memberIds, sourceQuoteId }) {
             <div>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.textMuted }}><Truck className="h-3.5 w-3.5" />Vendor orders</h3>
-                <Link to="/job-budgets" className="text-[11px] font-semibold hover:underline" style={{ color: C.accentText }}>Job Budgets</Link>
+                <Link to={procurementPath(jobId, 'tracking')} className="text-[11px] font-semibold hover:underline" style={{ color: C.accentText }}>Job supplier tracking</Link>
               </div>
               {!orders.length && <p className="text-[12px]" style={{ color: C.textFaint }}>No vendor orders linked yet.</p>}
               <ul className="space-y-1.5">
