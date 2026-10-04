@@ -76,7 +76,7 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
           <Metric label="PO dealer amount" value={data.totals.poDealer} note="Ordered amount; not proof of payment" />
           <Metric label="PO customer amount" value={data.totals.poCustomer} note="PO amount; not an invoice receipt" />
           <Metric label="Fees recorded" value={data.totals.feeRecorded} note="FeeLines using invoicing math" />
-          <Metric label="Fees confirmed paid" value={data.totals.feePaid} note="Only FeeLines marked paid to YA" />
+          <Metric label="Fee share on YA-paid work" value={data.totals.feePaid} note="YA received payment; does not confirm your fee was paid" />
         </div>
 
         <div>
@@ -99,7 +99,7 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
 
         <div>
           <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Invoicing sources</h3><RecordLink to={`/?job_id=${encodeURIComponent(jobId)}`}>Open job invoicing</RecordLink></div>
-          <p className="mb-2 text-[11px]" style={{ color: C.textMuted }}>Billed {money(data.totals.feeBilled)} · confirmed paid {money(data.totals.feePaid)}. Payment is shown only from “paid to YA.”</p>
+          <p className="mb-2 text-[11px]" style={{ color: C.textMuted }}>Billed {money(data.totals.feeBilled)} · fee share on YA-paid work {money(data.totals.feePaid)}. “Paid to YA” does not confirm payment of your fee.</p>
           {data.feeLines.length ? data.feeLines.map((row) => <div key={row.id} className="mb-2 rounded-lg p-2.5 text-[11px]" style={{ border: `1px solid ${C.rowBorder}` }}>
             <div className="font-semibold" style={{ color: C.text }}>{row.line_description || "Fee line"} · {money(row.fee_amt)}</div>
             <div style={{ color: C.textMuted }}>{date(row.job_date)} · {row.billed_to_bfs ? "billed to BFS" : "not billed to BFS"} · {row.paid_to_ya ? `paid to YA${row.paid_date ? ` ${date(row.paid_date)}` : ""}` : "payment not recorded"}</div>

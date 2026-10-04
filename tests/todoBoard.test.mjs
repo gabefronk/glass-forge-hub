@@ -71,7 +71,7 @@ const members=[
 const users={ga:{id:'ga',email:'gabefronk@gmail.com',role:'admin'},is:{id:'is',email:'iryedra@gmail.com',role:'admin'}};
 const task=(id,extra={})=>({id,title:'Task '+id,details:'',assignee_member_id:'mg',status:'open',progress_note:'',due_date:'',created_by_user_id:'ga',assigned_by_user_id:'ga',completed_at:'',completed_by_user_id:'',archived_at:'',revision:0,created_at:'2026-09-14T08:00:00.000Z',updated_at:'2026-09-14T08:00:00.000Z',...extra});
 function harness(user,tasks){
- const store={TeamMember:structuredClone(members),TodoTask:structuredClone(tasks),User:Object.values(users)};let serial=0;
+ const store={TeamMember:structuredClone(members),TodoTask:structuredClone(tasks),User:Object.values(users),Jobs:[],CalendarEvents:[]};let serial=0;
  const matches=(row,q)=>Object.entries(q).every(([k,v])=>row[k]===v||(v===''&&row[k]===undefined));
  const select=(name,q,sort,limit)=>{const desc=String(sort).startsWith('-'),key=String(sort).replace(/^-/,'');return structuredClone(store[name].filter(r=>matches(r,q)).sort((a,b)=>String(a[key]??'').localeCompare(String(b[key]??''))*(desc?-1:1)).slice(0,limit));};
  const entity=name=>({
