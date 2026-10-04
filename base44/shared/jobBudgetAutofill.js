@@ -142,7 +142,11 @@ export function autofillBudget(quote = {}, { fileName = '', glassEach = GLASS_LA
 
   // Total sell (B28).
   const printedTotal = pos(quote.customer_total) ?? pos(quote.actual_total_sell);
-  const twoLevels = quote.price_levels === 'dealer_and_customer' || (pos(quote.dealer_subtotal) !== null && printedTotal !== null && printedTotal > pos(quote.dealer_subtotal));
+  // Two price levels (AMSCO "Dealer Total Pricing"): a dealer cost AND a customer total well
+  // above it. A cost + tax pair is not two levels.
+  const dealerCost = pos(quote.dealer_subtotal) ?? pos(quote.material_true_cost);
+  const twoLevels = quote.price_levels === 'dealer_and_customer'
+    || (quote.price_levels !== 'single' && dealerCost !== null && printedTotal !== null && printedTotal > dealerCost * 1.1);
   let sell = null;
   if (ours && printedTotal !== null) { sell = printedTotal; sources.actual_total_sell = 'Your quote total to the customer'; }
   else if (twoLevels && printedTotal !== null) { sell = printedTotal; sources.actual_total_sell = 'Customer total printed on the quote'; }
