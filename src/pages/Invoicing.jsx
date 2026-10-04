@@ -20,6 +20,7 @@ import FloatingActionBar from "@/components/invoicing/FloatingActionBar";
 import UnprocessedEventsBanner from "@/components/invoicing/UnprocessedEventsBanner";
 import LineDetailsDrawer from "@/components/invoicing/LineDetailsDrawer";
 import JobProfitabilityPanel from "@/components/invoicing/JobProfitabilityPanel";
+import BudgetEstimateNote from "@/components/invoicing/BudgetEstimateNote";
 
 export default function Invoicing() {
   const navigate = useNavigate();
@@ -439,6 +440,7 @@ export default function Invoicing() {
       />
 
       <div className="mx-auto min-w-0 max-w-[1440px] px-5 sm:px-6 lg:px-8" style={{ paddingBottom: selectedIds.size > 0 ? "220px" : "60px" }}>
+        {focusedJobId && <BudgetEstimateNote jobId={focusedJobId} month={month} input={profitabilityInputs.costs.find(c => c.job_id === focusedJobId && c.month === month)} />}
         {showEmptyState ? (
           <div style={{ padding: "120px 0", textAlign: "center" }}>
             <p className="text-[17px]" style={{ color: "#53615B", marginBottom: "8px" }}>
