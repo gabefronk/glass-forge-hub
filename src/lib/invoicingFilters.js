@@ -1,4 +1,4 @@
-import { duplicatePostIds, feeCompanions, eventPostIndex } from "../../base44/shared/billingCore.js";
+import { isIgnoredWorkItem, duplicatePostIds, feeCompanions, eventPostIndex } from "../../base44/shared/billingCore.js";
 import { isFutureRow, isTripChargeAmount } from "./feeMath.js";
 
 // Companion lines (see feeCompanions in billingCore.js), for display only: a copy of
@@ -8,7 +8,7 @@ import { isFutureRow, isTripChargeAmount } from "./feeMath.js";
 // Never write these rows back: the underscore fields are not FeeLines fields.
 // events: CalendarEvents (optional), for the audit's matched posts.
 export function withCompanions(rows, events) {
-  const list = Array.isArray(rows) ? rows : [];
+  const list = (Array.isArray(rows) ? rows : []).filter(r => !isIgnoredWorkItem(r));
   const c = feeCompanions(list, { eventPosts: eventPostIndex(events) });
   return list.map((r) => {
     if (c.folded.has(r.id)) return { ...r, _companion_folded: true, _companion_of: c.companionOf.get(r.id) || null };
