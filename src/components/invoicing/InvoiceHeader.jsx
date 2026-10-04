@@ -14,7 +14,7 @@ function relativeTime(iso) {
   return `${days}d ago`;
 }
 
-export default function InvoiceHeader({ month, onMonthChange, onExportPdf, exporting, monthClosed, onCloseMonth, closing, onRefresh, refreshing, syncMessage, loadError }) {
+export default function InvoiceHeader({ month, onMonthChange, onExportPdf, exporting, monthClosed, onCloseMonth, closing, onRefresh, refreshing, syncMessage, loadError, jobScoped = false }) {
   const [probuildStatus, setProbuildStatus] = useState(null);
 
   useEffect(() => {
@@ -96,13 +96,13 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
         <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
           <button onClick={onRefresh} disabled={refreshing} aria-label={refreshing ? "Refreshing" : "Refresh"} title="Refresh" className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: refreshing ? "wait" : "pointer" }}>
             <RefreshCw className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" style={{ animation: refreshing ? "spin 1s linear infinite" : undefined }} />
-            <span className="hidden sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
+            <span className="hidden sm:inline">{refreshing ? "Refreshing…" : jobScoped ? "Reload job" : "Refresh"}</span>
           </button>
           <button onClick={onExportPdf} disabled={exporting} aria-label={exporting ? "Generating" : "Export"} title="Export" className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border-2)", boxShadow: "var(--shadow-control)", color: "var(--gf-ink-4)", fontSize: "13px", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0, cursor: exporting ? "wait" : "pointer" }}>
             <Download className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" />
             <span className="hidden sm:inline">{exporting ? "Generating…" : "Export"}</span>
           </button>
-          {monthClosed ? (
+          {jobScoped ? null : monthClosed ? (
             <div className="flex items-center gap-1.5" style={{ padding: "0 12px", height: "34px", borderRadius: "var(--r-button)", backgroundColor: "var(--gf-teal-050)", border: "1px solid var(--gf-teal-halo)", whiteSpace: "nowrap", flexShrink: 0 }} title={`Closed ${new Date(monthClosed.closed_at).toLocaleString()}\nBy ${monthClosed.closed_by}\nInvoiced: $${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)} (${monthClosed.invoiced_line_count ?? monthClosed.line_count} ready)\nEarned: $${monthClosed.earned_total?.toFixed(2)} (${monthClosed.earned_line_count} lines)\nTotal rows: ${monthClosed.total_rows}`}>
               <Lock style={{ width: "14px", height: "14px", color: "var(--gf-teal-600)" }} strokeWidth={1.8} strokeLinecap="round" />
               <span className="text-[12px] font-semibold" style={{ color: "var(--gf-teal-800)" }}>
