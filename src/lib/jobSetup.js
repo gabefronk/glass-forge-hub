@@ -65,9 +65,14 @@ export function buildSetupDraft({ job = {}, budget = {}, costInput = {}, install
     equipment: n(inputs.additional_equipment),
     other: n(inputs.overhead_adder),
   };
-  const sellPrice = n(first(inputs.actual_total_sell, totals.sell_subtotal, totals.subtotal, totals.customer_subtotal));
-  const tax = n(first(totals.tax, totals.tax_amount)); // Contract tax only when separately stated in accepted quote.
-  const contractTotal = n(first(totals.customer_total, totals.total, finite(sellPrice) && finite(tax) ? Number(sellPrice) + Number(tax) : ""));
+  // Budget actual_total_sell already includes customer tax. It must not be used as
+  // a subtotal and taxed again. This seeds new drafts only; saved contracts stay intact.
+  const tax = n(first(totals.tax, totals.tax_amount));
+  const acceptedSubtotal = n(first(totals.sell_subtotal, totals.subtotal, totals.customer_subtotal));
+  const contractTotal = n(first(totals.customer_total, totals.total, inputs.actual_total_sell,
+    finite(acceptedSubtotal) && finite(tax) ? roundMoney(Number(acceptedSubtotal) + Number(tax)) : ""));
+  const sellPrice = finite(acceptedSubtotal) ? acceptedSubtotal
+    : finite(contractTotal) && finite(tax) && Number(contractTotal) >= Number(tax) ? roundMoney(Number(contractTotal) - Number(tax)) : "";
   return {
     job_id: job.id || "",
     status: "draft",
@@ -82,7 +87,8 @@ export function buildSetupDraft({ job = {}, budget = {}, costInput = {}, install
     sources: {
       material_product: present(inputs.material_true_cost) ? "Job budget" : present(costInput.product_cost) ? "Job cost inputs" : present(totals.dealer_total ?? totals.dealer_cost) ? "Accepted quote" : "Manual",
       labor: present(inputs.labor_cost_sub_pay) ? "Job budget" : present(costInput.actual_labor_cost) ? "Job cost inputs" : present(install.cost) ? "Install budget" : "Manual",
-      sell_price: present(inputs.actual_total_sell) ? "Job budget" : present(sellPrice) ? "Accepted quote" : "Computed target",
+      sell_price: present(acceptedSubtotal) ? "Accepted quote subtotal" : present(sellPrice) ? "Contract total less stated customer tax" : "Customer tax / subtotal needs review",
+      contract_total: present(totals.customer_total ?? totals.total) ? "Accepted quote total" : present(inputs.actual_total_sell) ? "Included job budget total (tax included)" : "Manual",
       tax: present(tax) ? "Accepted quote" : "Manual customer tax - verify jurisdiction",
     },
     terms: { ...PLACEHOLDER_TERMS }, approved_date: "", approver_name: "",
