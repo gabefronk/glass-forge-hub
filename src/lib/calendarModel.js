@@ -3,6 +3,7 @@
 // days are YYYY-MM-DD strings in Denver time.
 
 export const KIND = {
+  purchasing: { label: "Purchasing", text: "#71511C", bg: "#FAF0DA", border: "#EFDFB7", bar: "#A77A2A" },
   install: { label: "Install", text: "#082F2C", bg: "#E2EEEB", border: "#C7E4D2", bar: "#0B3F3B" },
   service: { label: "Service", text: "#A43432", bg: "#FCEDEC", border: "#F0C9C5", bar: "#A43432" },
   outlook: { label: "Outlook", text: "#34506A", bg: "#E7EDF2", border: "#C7D8EF", bar: "#34506A" },
@@ -14,6 +15,7 @@ export const KIND = {
 // (Before, every Google-synced event counted as service, so installs showed red.)
 const SERVICE_RE = /service|warranty|wty|warr|per report/i;
 export function eventKind(e) {
+  if (e?.source === "purchasing") return "purchasing";
   if (e?.source === "outlook") return "outlook";
   const text = `${e?.job_name || ""} ${e?.scope_notes || ""}`;
   // Israel's "YA - #1 …" titles are return trips (service), per the calendar convention.
@@ -66,7 +68,7 @@ export function filterEvents(events, filter = "all", today) {
 }
 
 export function kindCounts(events, today) {
-  const c = { all: events.length, install: 0, service: 0, outlook: 0, needs_report: 0 };
+  const c = { all: events.length, install: 0, service: 0, outlook: 0, purchasing: 0, needs_report: 0 };
   for (const e of events) {
     c[eventKind(e)]++;
     if (needsReportFilter(e, today)) c.needs_report++;
