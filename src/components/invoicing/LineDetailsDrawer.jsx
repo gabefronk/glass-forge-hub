@@ -207,12 +207,13 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
                 </div>
               )}
               <div className="flex items-center justify-between" style={{ padding: "10px 14px", whiteSpace: "nowrap", backgroundColor: "var(--gf-card-band)" }}>
-                <span className="text-[13px] font-semibold" style={{ color: "var(--gf-ink)" }}>Counts toward Recorded fees</span>
+                <span className="text-[13px] font-semibold" style={{ color: "var(--gf-ink)" }}>Calculated fee</span>
                 <span className="font-mono-num-bold text-[15px]" style={{ color: "var(--gf-ink)", fontWeight: 600 }}>${formatMoney(fee)}</span>
               </div>
             </div>
             <div className="text-[12.5px] mt-2" style={{ color: "var(--gf-ink-2)", lineHeight: 1.5, wordBreak: "break-word" }}>
               {feeMathString(row)}
+              {row._customer_no_charge && <p className="mt-2 text-teal-800">No charge to the customer. This is authorized installer labor, not a customer invoice.</p>}
             </div>
           </div>
 

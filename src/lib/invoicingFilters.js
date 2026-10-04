@@ -20,9 +20,8 @@ export function withCompanions(rows, events) {
 }
 
 // Report statuses that are considered "ok" — no report blocking.
-// no_source_data is clear for billing: it means the Probuild pull failed that
-// morning (system fault), not that the crew failed to upload. Surfaced separately
-// in the UI so the user knows data is incomplete without it eating the invoice total.
+// Missing source data does not establish completion. Keep the source outage visible
+// while preventing unverified work from becoming ready to bill.
 const OK_REPORT_STATUSES = ["ok", "waived", "pre_compliance"];
 
 // Review block: the row's job match or pricing is uncertain, or it is a priced
