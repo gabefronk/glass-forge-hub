@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link2, Pencil, Plus, Search, X } from "lucide-react";
+import { Link2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { computeJobBudget } from "../../../base44/shared/jobBudgetMath.js";
@@ -33,7 +33,19 @@ const btnGhost = { border: `1px solid ${C.border}`, color: C.text, backgroundCol
 
 export const smallBtn = "inline-flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-[8px] disabled:opacity-50 whitespace-nowrap";
 
-export function BudgetRowButtons({ budget, mode, onMode }) {
+export function BudgetRowButtons({ budget, mode, onMode, onDelete }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const remove = async () => {
+    if (!window.confirm(`Delete "${budget.title}"? This removes the budget row and its numbers from the Hub. The quote PDF and sheet in Drive are not deleted.`)) return;
+    setBusy(true); setError("");
+    try {
+      const res = await base44.functions.invoke("jobBudgetIngest", { action: "delete", budget_id: budget.id });
+      const data = res?.data || res;
+      if (data?.error) { setError(data.error); setBusy(false); return; }
+      onDelete?.(budget);
+    } catch (e) { setError(e?.response?.data?.error || e?.message || "Could not delete."); setBusy(false); }
+  };
   return (
     <div className="flex items-center gap-1.5">
       <button type="button" onClick={() => onMode(mode === "numbers" ? "" : "numbers")} className={smallBtn} style={mode === "numbers" ? btnPrimary : btnGhost} title="Type the workbook numbers">
@@ -44,6 +56,10 @@ export function BudgetRowButtons({ budget, mode, onMode }) {
           <Link2 className="h-3.5 w-3.5" />Link job
         </button>
       ) : null}
+      <button type="button" disabled={busy} onClick={remove} className={smallBtn} style={{ border: `1px solid ${C.border}`, color: "#A43432", backgroundColor: C.card }} title="Delete this budget row">
+        <Trash2 className="h-3.5 w-3.5" />{busy ? "Deleting…" : "Delete"}
+      </button>
+      {error ? <span role="alert" className="text-[11px] font-medium" style={{ color: "#A43432" }}>{error}</span> : null}
     </div>
   );
 }

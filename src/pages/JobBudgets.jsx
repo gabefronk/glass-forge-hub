@@ -247,7 +247,7 @@ export default function JobBudgets() {
                       )}
                     </td>
                     <td className="px-4 py-3"><Tag status={b.status}>{b.status === "needs_review" ? "review" : b.status}</Tag></td>
-                    <td className="px-4 py-3"><BudgetRowButtons budget={b} mode={review.id === b.id ? review.mode : ""} onMode={(mode) => { setNotice(""); setReview(mode ? { id: b.id, mode } : { id: "", mode: "" }); }} /></td>
+                    <td className="px-4 py-3"><BudgetRowButtons budget={b} mode={review.id === b.id ? review.mode : ""} onMode={(mode) => { setNotice(""); setReview(mode ? { id: b.id, mode } : { id: "", mode: "" }); }} onDelete={() => { setReview({ id: "", mode: "" }); setNotice("Budget deleted."); loadSafely(); }} /></td>
                   </tr>
                   {review.id === b.id && review.mode ? (
                     <tr style={{ borderBottom: `1px solid ${C.rowBorder}` }}>

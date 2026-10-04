@@ -331,6 +331,19 @@ export default async function jobBudgetIngest(req) {
     return Response.json({ status: 'ok', budget_id: updated.id, computed: budget, cost_input: costInput, warnings });
   }
 
+  if (action === 'delete') {
+    const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
+    if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
+    await db.JobBudgets.delete(record.id);
+    // Refresh this month's JobCostInputs for the linked job so the deleted budget
+    // no longer counts toward the summed cost basis on the Invoicing page.
+    if (record.job_id) {
+      try { await upsertCostInputs(db, { id: record.job_id, canonical_name: record.job_name || '' }, null); }
+      catch (_e) { /* cost inputs left as-is */ }
+    }
+    return Response.json({ status: 'ok', deleted: true, budget_id: record.id });
+  }
+
   if (action === 'link_job') {
     const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
     if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
