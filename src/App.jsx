@@ -31,7 +31,7 @@ import ReportLibraryRedirect from '@/components/ReportLibraryRedirect';
 import ReportsRedirect from '@/components/ReportsRedirect';
 import SystemMap from "@/pages/SystemMap";
 import ResearchQueue from "@/pages/ResearchQueue";
-import Todos from '@/pages/Todos';
+import CompanyOverview from '@/pages/CompanyOverview';
 import JobBudgets from '@/pages/JobBudgets';
 import PurchaseOrders from '@/pages/PurchaseOrders';
 import Procurement from '@/pages/Procurement';
@@ -85,7 +85,8 @@ const AuthenticatedApp = () => {
           <Route path="/" element={<QuotesOnlyRedirect><Invoicing /></QuotesOnlyRedirect>} />
           <Route path="/calendar" element={<QuotesOnlyRedirect><CalendarPage /></QuotesOnlyRedirect>} />
           <Route path="/dashboard" element={<QuotesOnlyRedirect><Dashboard /></QuotesOnlyRedirect>} />
-          <Route path="/todos" element={<QuotesOnlyRedirect><Todos /></QuotesOnlyRedirect>} />
+          <Route path="/operations/overview" element={<QuotesOnlyRedirect><CompanyOverview /></QuotesOnlyRedirect>} />
+          <Route path="/todos" element={<QuotesOnlyRedirect><Navigate to="/dashboard?view=all" replace /></QuotesOnlyRedirect>} />
           <Route path="/inbox-agents" element={<QuotesOnlyRedirect><InboxAgents /></QuotesOnlyRedirect>} />
           <Route path="/window-quotes" element={<WindowQuotes />} />
           <Route path="/sales-tracker" element={<QuotesOnlyRedirect><SalesTracker /></QuotesOnlyRedirect>} />
