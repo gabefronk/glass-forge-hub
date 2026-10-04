@@ -26,7 +26,7 @@ export function purchasingWorkflow({ job, budgets = [], purchaseOrders = [], sup
   const waitingDelivery = suppliers.filter(row => !row.received_date);
   const needsETA = waitingDelivery.filter(row => !row.eta_date);
   const overdue = waitingDelivery.filter(row => row.eta_date && row.eta_date < today);
-  const reviewQuote = quotes.filter(row => included.some(b => b.id === row.id) || row.budget_usage === 'draft').find(row => !budgetFigures(row).ready) || (!included.length ? quotes.find(row => row.budget_usage !== 'reference') : null);
+  const reviewQuote = quotes.filter(row => included.some(b => b.id === row.id) || row.budget_usage === 'draft').find(row => row.budget_usage === 'draft' || !budgetFigures(row).ready) || (!included.length ? quotes.find(row => row.budget_usage !== 'reference') : null);
   const path = section => procurementPath(id, section, month);
   const steps = [
     { key: 'budgets', title: 'Quote & budget', href: path('budgets'), status: !included.length ? 'Review scope' : rollup.status === 'ready' ? 'Numbers reviewed' : 'Needs review', detail: `${quotes.length} quotes · ${included.length} included scopes` },
