@@ -7,7 +7,7 @@ export const amount = value => {
   return Number.isFinite(n) ? roundMoney(n) : null;
 };
 export const includedBudget = row => !['reference', 'draft'].includes(row?.budget_usage);
-export const budgetVersion = row => JSON.stringify([row?.id, row?.job_id, row?.updated_date, row?.budget_usage, row?.quote_number, row?.vendor, row?.manufacturer, row?.inputs, row?.numbers_reviewed_at]);
+export const budgetVersion = row => JSON.stringify([row?.id, row?.job_id, row?.updated_date, row?.budget_usage, row?.replaces_budget_id, row?.quote_number, row?.vendor, row?.manufacturer, row?.inputs, row?.numbers_reviewed_at]);
 
 const ref = value => text(value).toUpperCase();
 const vendorKey = value => text(value).toLowerCase().replace(/\b(windows?|doors?|and|llc|inc|the)\b/g, ' ').replace(/[^a-z0-9]/g, '');
@@ -64,7 +64,7 @@ export function supplierForPO(po, orders = []) {
 
 export function budgetFigures(row = {}) {
   const inputs = row.inputs || {};
-  const calculated = computeJobBudget(inputs);
+  const calculated = computeJobBudget(Object.fromEntries(Object.entries(inputs).map(([key, value]) => [key, amount(value)])));
   const material = amount(inputs.material_true_cost), sell = amount(inputs.actual_total_sell);
   const warnings = [];
   const hasCost = ['material_true_cost', 'labor_cost_sub_pay', 'additional_install_material', 'additional_equipment'].some(k => (amount(inputs[k]) ?? 0) > 0);
