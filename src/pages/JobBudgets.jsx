@@ -232,7 +232,8 @@ export default function JobBudgets() {
                   <tr style={{ borderBottom: review.id === b.id && review.mode ? "none" : `1px solid ${C.rowBorder}` }}>
                     <td className="px-4 py-3">
                       <div className="font-medium" style={{ color: C.text }}>{b.title}</div>
-                      <div className="text-[11px]" style={{ color: C.textFaint }}>{[b.quoted_by && `by ${b.quoted_by}`, b.openings_qty && `${b.openings_qty} openings`].filter(Boolean).join(" - ")}</div>
+                      <div className="text-[11px]" style={{ color: C.textFaint }}>{[b.quoted_by && `by ${b.quoted_by}`, b.openings_qty && `${b.openings_qty} openings`, b.autofill?.filled?.length ? `auto-filled ${b.autofill.filled.length}/4` : null].filter(Boolean).join(" - ")}</div>
+                      {b.autofill?.notes?.length ? <div className="text-[11px] font-medium" style={{ color: C.amber }}>{b.autofill.notes.length === 1 ? b.autofill.notes[0] : `${b.autofill.notes.length} things to check — open Numbers`}</div> : null}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.total_cost_overhead ?? b.computed?.cost_material_tax)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{money(b.computed?.actual_total_sell)}</td>
@@ -253,7 +254,7 @@ export default function JobBudgets() {
                     <tr style={{ borderBottom: `1px solid ${C.rowBorder}` }}>
                       <td colSpan={8} className="px-4 pb-4 pt-0">
                         {review.mode === "numbers"
-                          ? <NumbersEditor budget={b} onDone={reviewDone("numbers")} onCancel={() => setReview({ id: "", mode: "" })} />
+                          ? <NumbersEditor budget={b} onDone={reviewDone("numbers")} onRefilled={() => loadSafely()} onCancel={() => setReview({ id: "", mode: "" })} />
                           : <LinkJobEditor budget={b} jobs={jobs} onDone={reviewDone("link")} onCancel={() => setReview({ id: "", mode: "" })} />}
                       </td>
                     </tr>
