@@ -183,7 +183,7 @@ export default function JobBudgets() {
         {jobsError && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{jobsError}</p>}
 
         {/* Drop zone */}
-        <Section title="Drop quote PDFs" sub="Amsco dealer quotes parse automatically; other vendors are read by the document model. Multiple files at once are fine.">
+        <Section title="Drop quote PDFs" sub="Every box fills itself: material cost from the quote, labor from your 2026 install price sheet by opening size, total sell from the quote or the sheet's 30% target. Name files JOB - SCOPE - BRAND.pdf and the job name comes from the file. Multiple files at once are fine.">
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
