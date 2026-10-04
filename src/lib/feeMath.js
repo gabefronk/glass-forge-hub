@@ -4,13 +4,13 @@
 // Rows where manually_adjusted = true preserve their labor_amt (never recomputed from man_hours/trip_charges);
 // fee_amt is always derived from labor_amt × fee_pct.
 
-import { computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount, laborRate, denverDate } from "../../base44/shared/billingCore.js";
+import { isIgnoredWorkItem, computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount, laborRate, denverDate } from "../../base44/shared/billingCore.js";
 export { computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount };
 
 // Rows as the Invoicing page sees them: labor/fee recomputed from source fields.
 // Every "ready to bill" view (Invoicing, Dashboard, sidebar) must use this so their totals agree.
 export function withComputedAmounts(rows) {
-  return (Array.isArray(rows) ? rows : []).map((r) => ({ ...r, labor_amt: computeLaborAmt(r), fee_amt: computeFeeAmt(r) }));
+  return (Array.isArray(rows) ? rows : []).filter(r => !isIgnoredWorkItem(r)).map((r) => ({ ...r, labor_amt: computeLaborAmt(r), fee_amt: computeFeeAmt(r) }));
 }
 
 // Profit = sale_price − cost (display only, never stored).
