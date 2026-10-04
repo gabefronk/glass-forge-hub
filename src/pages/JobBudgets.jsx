@@ -18,7 +18,6 @@ const money = (n) => (n === null || n === undefined || n === "" || !Number.isFin
   ? "-" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n) => (n === null || n === undefined || !Number.isFinite(Number(n))) ? "-" : (Number(n) * 100).toFixed(1) + "%";
 
-const ORDER_CHAIN = ["ordered", "eta_set", "ach_link_received", "paid", "reconciled"];
 const ORDER_LABEL = { ordered: "Ordered", eta_set: "Ordered", ach_link_received: "ACH link in", paid: "Paid", reconciled: "Reconciled" };
 const NEXT_ACTION = { ordered: "ACH link received", eta_set: "ACH link received", ach_link_received: "Mark paid", paid: "Reconcile" };
 const NEXT_STATUS = { ordered: "ach_link_received", eta_set: "ach_link_received", ach_link_received: "paid", paid: "reconciled" };
