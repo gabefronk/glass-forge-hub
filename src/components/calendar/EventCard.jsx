@@ -30,7 +30,7 @@ export default function EventCard({ event, today, onSelect, compact = false, sho
           {!compact && <Chip tone={kind}>{kind.label}</Chip>}
         </div>
         <div className={`${compact ? "text-[12px]" : "text-[13.5px]"} font-semibold mt-0.5 break-words`} style={{ color: C.text, letterSpacing: "-0.01em" }}>{event.purchasing_label ? event.purchasing_label + " · " : ""}{event.job_name || "(untitled)"}</div>
-        {event.purchasing_summary && <div className="mt-1 text-[11px] text-slate-600">{event.purchasing_summary}</div>
+        {event.purchasing_summary && <div className="mt-1 text-[11px] text-slate-600">{event.purchasing_summary}</div>}
         {!compact && event.address && (
           <div className="mt-1 flex items-start gap-1.5 text-[12px]" style={{ color: C.textMuted }}>
             <MapPin className="h-3.5 w-3.5 mt-px shrink-0" aria-hidden="true" /><span className="break-words">{event.address}</span>
