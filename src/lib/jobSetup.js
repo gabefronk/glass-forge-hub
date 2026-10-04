@@ -100,7 +100,7 @@ export function buildSetupDraft({ job = {}, budget = {}, costInput = {}, install
     sources: {
       material_product: present(inputs.material_true_cost) ? "Job budget" : present(costInput.product_cost) ? "Job cost inputs" : present(totals.dealer_total ?? totals.dealer_cost) ? "Accepted quote" : "Manual",
       labor: present(inputs.labor_cost_sub_pay) ? "Job budget" : present(costInput.actual_labor_cost) ? "Job cost inputs" : present(install.cost) ? "Install budget" : "Manual",
-      sell_price: present(acceptedSubtotal) ? "Accepted quote subtotal" : present(sellPrice) ? "Contract total less stated customer tax" : "Customer tax / subtotal needs review",
+      sell_price: hasAcceptedInstall ? "Review subtotal and customer tax for the full installed package" : present(acceptedSubtotal) ? "Accepted quote subtotal" : present(sellPrice) ? "Contract total less stated customer tax" : "Customer tax / subtotal needs review",
       contract_total: hasAcceptedInstall ? finite(packageTotal) ? "Accepted products + installation + extras; reconcile customer tax" : "Accepted installation total unavailable - review quote" : present(totals.customer_total ?? totals.total) ? "Accepted quote total" : present(inputs.actual_total_sell) ? "Included job budget total (tax included)" : "Manual",
       tax: hasAcceptedInstall ? "Review customer tax for the full installed package" : present(tax) ? "Accepted quote" : "Manual customer tax - verify jurisdiction",
     },
