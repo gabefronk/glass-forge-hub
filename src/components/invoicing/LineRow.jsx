@@ -207,7 +207,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   if (blocked) {
     const isMatch = isMatchBlocked(row);
     if (isMatch) {
-      statusInfo = { label: row._billing_review ? "Check billing" : "Review pricing", dot: "var(--gf-amber-500)", text: "var(--gf-amber-700)", onClick: (e) => { e.stopPropagation(); setEditing(true); }, clickable: true };
+      statusInfo = { label: row._billing_review ? "Check billing" : "Review pricing", dot: "var(--gf-amber-500)", text: "var(--gf-amber-700)", onClick: (e) => { e.stopPropagation(); if (row._billing_review) onOpenDetails(row); else setEditing(true); }, clickable: true };
     } else {
       statusInfo = { label: "Needs report", dot: "var(--gf-stone-300)", text: "var(--gf-ink-2)", onClick: (e) => { e.stopPropagation(); onAddReport(row.id); }, clickable: true };
     }
