@@ -11,6 +11,8 @@ const hasPost = r => !!r.probuild_post_id;
 const result = (kind, reason, extra={}) => ({kind,reason,hidden:['ignored','scheduled','tracker_only','logistics','no_charge'].includes(kind),...extra});
 export function assessBillingLine(row, event, today=denverDate()) {
   if (isIgnoredWorkItem(row)) return result('ignored','Non-work reminder.');
+  // A documented duplicate hold preserves the amount while requiring an owner decision.
+  if (!row.billed_to_bfs && String(row.pricing_review_reason || '').startsWith('[Billing audit] Possible duplicate:')) return result('review', row.pricing_review_reason);
   // Preserve owner decisions and billing history; these are never automatically repriced.
   if (row.billed_to_bfs || row.manually_adjusted || row.source==='sheet-import') return result('preserved','Existing billed, imported invoice, or owner-adjusted record.');
   const name=String(row.job_name_raw||event?.job_name||'');
