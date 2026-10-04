@@ -110,7 +110,22 @@ export function normalizeVendorQuote(raw = {}) {
     actual_total_sell: money(raw.actual_total_sell),
     customer_sub_total: money(raw.customer_sub_total),
     customer_tax: money(raw.customer_tax),
-    lines: Array.isArray(raw.lines) ? raw.lines.slice(0, 500) : [],
+    customer_total: money(raw.customer_total),
+    dealer_subtotal: money(raw.dealer_subtotal),
+    net_total: money(raw.net_total),
+    price_levels: ['dealer_and_customer', 'single'].includes(raw.price_levels) ? raw.price_levels : null,
+    customer_po: clean(raw.customer_po),
+    project_name: clean(raw.project_name),
+    prepared_by: clean(raw.prepared_by),
+    lines: Array.isArray(raw.lines) ? raw.lines.slice(0, 500).filter((l) => l && typeof l === 'object').map((l) => ({
+      qty: qty(l.qty) ?? 1,
+      width_in: money(l.width_in),
+      height_in: money(l.height_in),
+      kind: clean(l.kind),
+      description: clean(l.description),
+      mark: clean(l.mark),
+      extended: money(l.extended),
+    })) : [],
     parse_source: clean(raw.parse_source) || 'llm',
   };
 }
