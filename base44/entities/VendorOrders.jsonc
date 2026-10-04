@@ -87,6 +87,10 @@
       },
       "default": []
     },
+    "eta_reviewed_at": {
+      "type": "string",
+      "description": "Timestamp of an explicit owner ETA correction; newer supplier responses supersede it."
+    },
     "eta_date": {
       "type": "string",
       "description": "Vendor ETA for the material/glass, ISO date."
