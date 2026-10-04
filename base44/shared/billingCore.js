@@ -1,4 +1,9 @@
 // Pure billing rules shared by browser and backend. No credentials or I/O.
+// Owner-designated non-work reminder. Read-time exclusion preserves source records.
+export function isIgnoredWorkItem(row) {
+  const title = typeof row === "string" ? row : row?.canonical_name || row?.job_name_raw || row?.job_name || row?.summary || row?.job_name_norm || "";
+  return String(title).normalize("NFKC").trim().toLowerCase().replace(/[.,;:!?]+$/, "").trim() === "renta";
+}
 export const MAN_HOUR_RATE = 100;
 export const TRIP_RATE = 75;
 export const MATERIAL_RATES = { vinyl: 100, composite: 125, aluminum: 150, wood: 150 };
