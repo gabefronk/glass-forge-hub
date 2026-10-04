@@ -5,7 +5,7 @@ function portalClient(previewOrders) {
   let orders = previewOrders || [];
   const list = document.getElementById('orders'), notice = document.getElementById('notice');
   const dateText = value => value ? new Date(value + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }) : 'Not confirmed';
-  const responseText = row => row.responded_at ? (row.response === 'pending' ? 'Still pending' : 'ETA supplied') + ' · response recorded ' + new Date(row.responded_at).toLocaleString('en-US', { timeZone: 'America/Denver', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' MT' : 'No supplier-link response yet';
+  const responseText = row => row.responded_at ? (row.response === 'owner' ? 'Glass Forge reviewed ETA' : row.response === 'pending' ? 'Still pending' : 'ETA supplied') + ' · response recorded ' + new Date(row.responded_at).toLocaleString('en-US', { timeZone: 'America/Denver', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' MT' : 'No supplier-link response yet';
   const el = (tag, cls, content) => { const node = document.createElement(tag); if (cls) node.className = cls; if (content) node.textContent = content; return node; };
   const call = async body => {
     const response = await fetch(location.pathname, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, token }) });
