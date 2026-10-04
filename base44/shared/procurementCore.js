@@ -108,6 +108,14 @@ export function budgetRollup(rows = []) {
     warnings: [...new Set(warnings)],
   };
 }
+export function setupBudgetSource(rows = []) {
+  const estimate = budgetRollup(rows);
+  if (estimate.status !== 'ready') return { budget: {}, warnings: estimate.warnings };
+  const active = activeBudgets(rows);
+  const fields = ['material_true_cost', 'labor_cost_sub_pay', 'labor_sell_price', 'additional_install_material', 'additional_equipment', 'actual_total_sell'];
+  const inputs = Object.fromEntries(fields.map(key => [key, roundMoney(active.reduce((sum, row) => sum + (amount(row.inputs?.[key]) || 0), 0))]));
+  return { budget: { inputs, quote: { lines: active.flatMap(row => row.quote?.lines || []) } }, warnings: [] };
+}
 export const validMonth = value => /^\d{4}-(0[1-9]|1[0-2])$/.test(text(value));
 export function validDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text(value))) return false;
