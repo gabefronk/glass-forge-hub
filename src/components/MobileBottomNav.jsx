@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, Mail } from "lucide-react";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
+import { Settings, Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
 import { useTodoAccess } from '@/hooks/use-todo-access';
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
@@ -110,12 +110,13 @@ export default function MobileBottomNav({ user }) {
               {visibleSecondary.map((item) => <SheetLink key={item.to} item={item} active={isSecondaryActive(item.to)} />)}
             </div>
             {visibleAdmin.length > 0 && (
-              <div role="group" aria-labelledby="mobile-admin-heading" className="mx-4 mb-2 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.08)" }}>
-                <div id="mobile-admin-heading" className="px-1 pb-2 text-[10.5px] font-medium uppercase" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.08em" }}>Admin</div>
+              <details className="mx-4 mb-2 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.08)" }}>
+                <summary className="flex min-h-11 cursor-pointer items-center gap-3 px-2 text-[13px] font-semibold" style={{ color: IDLE }}><Settings className="h-4 w-4" />Operations<span aria-hidden="true" className="ml-auto">⌄</span></summary>
+                <p className="px-2 pb-2 text-xs" style={{ color: "var(--gf-sidebar-muted)" }}>Automation, records and diagnostics</p>
                 <div className="grid grid-cols-3 gap-2 pb-2">
                   {visibleAdmin.map((item) => <SheetLink key={item.to} item={item} active={isSecondaryActive(item.to)} />)}
                 </div>
-              </div>
+              </details>
             )}
           </div>
         </>
