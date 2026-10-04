@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { supplierEtaAction, createSupplierEtaHandler } from '../base44/shared/supplierEtaService.mjs';
-import { effectiveSupplierEta, projectSupplierEtas, publicEtaOrder } from '../base44/shared/supplierEtaCore.mjs';
+import { effectiveSupplierEta, projectSupplierEtas, publicEtaOrder, supplierEtaCandidates, supplierEtaReview, supplierEtaFollowUp } from '../base44/shared/supplierEtaCore.mjs';
 import { purchasingCalendarEvents, etaText } from '../src/lib/purchasingDates.js';
 const sandy = {};
 function store(seed = {}) {
@@ -37,8 +37,8 @@ function store(seed = {}) {
 
 const owner={role:'admin',email:'gabriel.fronk.wd@gmail.com'};
 const stamp='2026-10-04T18:00:00.000Z',deps={now:()=>stamp};
-const po={id:'p1',job_id:'j1',vendor:'AMSCO',po_number:'TEST-ETA-1',vendor_quote_ref:'TEST-Q1',status:'confirmed',updated_date:'v0',amount_dealer:123,notes:'private'};
-const seed=()=>store({PurchaseOrders:[po,{...po,id:'p2',po_number:'TEST-ETA-2'}],SupplierEtaLinks:[],VendorOrders:[{id:'s1',job_id:'j1',vendor:'AMSCO',purchase_order_id:'p1',po_name:'TEST-ETA-1',eta_date:'2026-10-06',updated_date:'s0',amount:123,ach_link:'private'}]});
+const po={id:'p1',job_id:'j1',vendor:'AMSCO',po_number:'YA-0101',vendor_quote_ref:'TEST-Q1',status:'confirmed',updated_date:'v0',amount_dealer:123,notes:'private'};
+const seed=()=>store({PurchaseOrders:[po,{...po,id:'p2',po_number:'YA-0102'}],SupplierEtaLinks:[],VendorOrders:[{id:'s1',job_id:'j1',vendor:'AMSCO',purchase_order_id:'p1',po_name:'YA-0101',eta_date:'2026-10-06',updated_date:'s0',amount:123,ach_link:'private'}]});
 async function setup(){const s=seed();const grant=await supplierEtaAction(s.api,{action:'create',order_ids:['p1'],review_confirmed:true,expires_days:7},owner,deps);return {...s,token:grant.token,link:grant.link};}
 const read=s=>supplierEtaAction(s.api,{action:'read',token:s.token},null,deps);
 async function save(s,extra={}){const order=(await read(s)).orders[0];return supplierEtaAction(s.api,{action:'save',token:s.token,order_id:'p1',response:'eta',eta_date:'2026-10-09',expected_version:order.version,request_id:crypto.randomUUID(),...extra},null,deps);}
@@ -52,3 +52,44 @@ test('changed job or supplier cannot remain on existing link',async()=>{const s=
 test('newer explicit owner correction wins until a newer supplier response',()=>{const row={...po,supplier_eta:{response:'eta',eta_date:'2026-10-09',responded_at:'2026-10-04T17:00:00Z'}};const supplier={eta_date:'2026-10-11',eta_reviewed_at:'2026-10-04T18:00:00Z'};assert.equal(effectiveSupplierEta(row,supplier).date,'2026-10-11');row.supplier_eta.responded_at='2026-10-04T19:00:00Z';assert.equal(effectiveSupplierEta(row,supplier).date,'2026-10-09');});
 test('owner ETA edits invalidate a supplier form version',async()=>{const s=await setup();const old=(await read(s)).orders[0].version;s.data.VendorOrders[0].updated_date='new-owner-version';await assert.rejects(save(s,{expected_version:old}),{status:409});});
 test('HTTP handler rejects unauthenticated owner operations and hides internals',async()=>{const s=seed();const handler=createSupplierEtaHandler(()=>({auth:{me:async()=>null},asServiceRole:{entities:s.api}}));const r=await handler(new Request('https://example.test',{method:'POST',body:JSON.stringify({action:'manage'})}));assert.equal(r.status,401);const get=await handler(new Request('https://example.test'));assert.equal(get.headers.get('cache-control'),'no-store');assert.match(get.headers.get('content-security-policy'),/default-src 'none'/);assert.equal((await get.text()).includes('private'),true);});
+test('follow-up selection distinguishes missing, pending, overdue and upcoming Denver dates', () => {
+ const data={purchase_orders:[po],vendor_orders:[],jobs:[{id:'j1'}]};
+ assert.equal(supplierEtaFollowUp(po,data,stamp),'ETA not confirmed');
+ const row={...po,supplier_eta:{response:'pending'}};
+ assert.equal(supplierEtaFollowUp(row,data,stamp),'Still pending');
+ for(const [date,expected] of [['2026-10-03',true],['2026-10-04',false],['2026-10-06',false]]) {
+  row.supplier_eta={response:'eta',eta_date:date};
+  assert.equal(Boolean(supplierEtaFollowUp(row,data,stamp)),expected);
+ }
+ row.supplier_eta={response:'eta',eta_date:'2026-10-03'};
+ assert.equal(supplierEtaFollowUp(row,data,'2026-10-04T03:00:00Z'),'');
+});
+test('completed, received, sample, test and merged records cannot enter supplier scope', () => {
+ const base={purchase_orders:[po],vendor_orders:[],jobs:[{id:'j1',canonical_name:'Real job'}]};
+ for(const patch of [{stage:'closed'},{stage:'installed'},{is_sample:true},{merged_into:'other'},{canonical_name:'TEST ONLY - ETA probe'}]) {
+  assert.equal(supplierEtaCandidates({...base,jobs:[{...base.jobs[0],...patch}]}).length,0);
+ }
+ for(const patch of [{status:'cancelled'},{status:'received'},{is_sample:true},{po_number:'TEST-ETA-1'}]) {
+  assert.equal(supplierEtaCandidates({...base,purchase_orders:[{...po,...patch}]}).length,0);
+ }
+ for(const patch of [{received_date:'2026-10-03'},{picked_up_at:stamp}]) {
+  assert.equal(supplierEtaCandidates({...base,vendor_orders:[{id:'s',purchase_order_id:po.id,job_id:'j1',vendor:'AMSCO',...patch}]}).length,0);
+ }
+});
+test('ambiguous supplier links stay in owner review and never use guessed job names', () => {
+ const base={purchase_orders:[po],vendor_orders:[],jobs:[{id:'j1'}]};
+ const supplier={id:'s',vendor:'AMSCO',order_number:po.vendor_quote_ref,eta_date:'2026-11-02'};
+ assert.equal(supplierEtaCandidates({...base,vendor_orders:[supplier]}).length,0);
+ assert.match(supplierEtaReview({...base,vendor_orders:[supplier]})[0].reason,/link needs review/);
+ const linked={...supplier,purchase_order_id:po.id,job_id:'j1'};
+ assert.equal(supplierEtaCandidates({...base,vendor_orders:[linked]}).length,1);
+ assert.equal(supplierEtaCandidates({...base,vendor_orders:[linked,{...linked,id:'duplicate'}]}).length,0);
+});
+test('saving a future ETA leaves the granted order available for corrections', async () => {
+ const s=await setup(); await save(s,{eta_date:'2026-11-02'});
+ assert.equal((await read(s)).orders.length,1);
+ const result=await supplierEtaAction(s.api,{action:'manage'},owner,deps);
+ assert.equal(result.orders.find(o=>o.id==='p1').follow_up_reason,'');
+ assert.equal(result.orders.find(o=>o.id==='p2').follow_up_reason,'ETA not confirmed');
+});
+
