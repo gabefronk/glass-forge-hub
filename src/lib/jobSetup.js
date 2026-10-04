@@ -9,26 +9,29 @@ export const PLACEHOLDER_TERMS = Object.freeze({
   quote_valid_days: "",
 });
 
-export function contractTermsReady(sheet = {}) {
-  const t = sheet.terms || {};
-  const deposit = Number(t.deposit_pct);
-  const validity = Number(t.quote_valid_days);
-  const customer = sheet.customer || {};
-  const pricing = sheet.pricing || {};
-  const requiredCustomer = ["name", "job_site_address"].every(k => String(customer[k] || "").trim());
-  const requiredPricing = ["sell_price", "contract_total"].every(k =>
-    pricing[k] !== "" && pricing[k] !== null && pricing[k] !== undefined && Number.isFinite(Number(pricing[k])) && Number(pricing[k]) >= 0);
-  const taxExplicit = pricing.tax !== "" && pricing.tax !== null && pricing.tax !== undefined && Number.isFinite(Number(pricing.tax)) && Number(pricing.tax) >= 0;
-  const scopeReady = Array.isArray(sheet.scope_lines) && sheet.scope_lines.length > 0 &&
-    sheet.scope_lines.every(line => String(line.product || line.description || "").trim() && Number(line.qty) > 0 &&
-      line.customer_price !== "" && Number.isFinite(Number(line.customer_price)));
-  return requiredCustomer && requiredPricing && taxExplicit && scopeReady &&
-    t.deposit_pct !== "" && Number.isFinite(deposit) && deposit >= 0 && deposit <= 100 &&
-    t.quote_valid_days !== "" && Number.isInteger(validity) && validity > 0 &&
-    ["payment_schedule", "estimated_lead_time", "warranty_text"].every(k => String(t[k] || "").trim() && !/placeholder|confirm|tbd/i.test(String(t[k])));
+export function contractReviewIssues(sheet = {}) {
+  const t = sheet.terms || {}, customer = sheet.customer || {}, pricing = sheet.pricing || {};
+  const issues = [];
+  const nonnegative = value => finite(value) && Number(value) >= 0;
+  if (!["name", "job_site_address"].every(k => String(customer[k] || "").trim())) issues.push("Enter the customer name and job site address.");
+  const pricesReady = ["sell_price", "tax", "contract_total"].every(k => nonnegative(pricing[k]));
+  if (!pricesReady) issues.push("Enter the subtotal, customer tax and contract total (enter 0 when tax is zero).");
+  else if (Math.abs(roundMoney(Number(pricing.sell_price) + Number(pricing.tax)) - roundMoney(Number(pricing.contract_total))) > 0.01) issues.push("Contract total must equal subtotal plus customer tax.");
+  if (!Array.isArray(sheet.scope_lines) || !sheet.scope_lines.length ||
+      !sheet.scope_lines.every(line => String(line.product || line.description || "").trim() && finite(line.qty) && Number(line.qty) > 0 && nonnegative(line.customer_price))) {
+    issues.push("Each scope line needs a description, quantity and nonnegative customer price.");
+  }
+  if (!finite(t.deposit_pct) || Number(t.deposit_pct) < 0 || Number(t.deposit_pct) > 100) issues.push("Enter a deposit percentage from 0 to 100.");
+  if (!finite(t.quote_valid_days) || !Number.isInteger(Number(t.quote_valid_days)) || Number(t.quote_valid_days) <= 0) issues.push("Enter how many days the quote is valid.");
+  if (!["payment_schedule", "estimated_lead_time", "warranty_text"].every(k => String(t[k] || "").trim() && !/placeholder|confirm|tbd/i.test(String(t[k])))) issues.push("Review the payment schedule, lead time and warranty.");
+  return issues;
 }
 
-const present = (v) => v !== undefined && v !== null && v !== "";
+export function contractTermsReady(sheet = {}) {
+  return contractReviewIssues(sheet).length === 0;
+}
+
+const present = (v) => v !== undefined && v !== null && String(v).trim() !== "";
 const finite = (v) => present(v) && Number.isFinite(Number(v));
 const first = (...values) => values.find(present);
 const n = (v) => finite(v) ? Number(v) : "";
@@ -39,7 +42,7 @@ function normalizeLine(line = {}, index = 0) {
   return {
     mark: String(first(line.mark, line.id, line.tag, index + 1) || ""),
     qty: n(first(line.qty, line.quantity)),
-    size: String(first(line.size_label, line.size, width && height ? `${width} × ${height}` : "") || ""),
+    size: String(first(line.size_label, typeof line.size === "string" ? line.size : "", width && height ? `${width} × ${height}` : "") || ""),
     product: String(first(line.product, line.style, line.series, line.type) || ""),
     description: String(first(line.description, line.notes, line.configuration_description) || ""),
     customer_price: n(first(line.customer_extended, line.line_totals?.customer, line.extended_price, line.total)),
