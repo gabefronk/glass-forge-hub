@@ -21,6 +21,7 @@ import OwnerSection from "@/components/jobs/OwnerSection";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import { procurementPath } from "@/lib/procurementRoutes";
 import DeleteJobButton from "@/components/jobs/DeleteJobButton";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
 import { JobHero, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
@@ -208,6 +209,7 @@ export default function JobDetail() {
             extra={
               <>
                 {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
+                {owner ? <Link to={procurementPath(id)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link> : null}
                 {(owner || isAgentCenterOwner(user)) ? <DeleteJobButton job={job} onDeleted={() => navigate("/jobs")} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
               </>
             }
