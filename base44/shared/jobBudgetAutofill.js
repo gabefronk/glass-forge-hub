@@ -114,7 +114,8 @@ export function autofillBudget(quote = {}, { fileName = '', glassEach = GLASS_LA
   const ours = isOurQuote(quote);
 
   // Material (C15).
-  let material = pos(quote.dealer_subtotal) ?? pos(quote.material_true_cost);
+  // Gabe's own quote prints his sell, never his cost, unless it shows two price levels.
+  let material = pos(quote.dealer_subtotal) ?? (ours && quote.price_levels !== 'dealer_and_customer' ? null : pos(quote.material_true_cost));
   if (material !== null) sources.material_true_cost = 'Dealer cost on the quote';
   else if (!ours) {
     const sub = pos(quote.customer_sub_total) ?? pos(quote.net_total)
