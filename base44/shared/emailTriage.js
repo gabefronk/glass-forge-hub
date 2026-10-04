@@ -88,7 +88,7 @@ For each thread return:
 - action_items: short imperative items Gabe must actually do. Empty for FYI, promos, spam and threads Gabe already answered.
 - reply_needed: true only when the latest incoming message is waiting on a reply from Gabe and no reply exists yet in the thread.
 - next_step: one sentence, or empty.
-- extracted: builder, lot (lot/unit/building number as written), street address, PO numbers, OE numbers, dates (YYYY-MM-DD + label), contact name / phone / email, and contact_role (homeowner, superintendent, builder_office, vendor, installer, other) only when the email makes the person's role clear — only what the emails state. Never guess.
+- extracted: builder, lot (lot/unit/building number as written), street address, PO numbers, OE numbers, dates (YYYY-MM-DD + label; for a vendor ready / pickup / ship / delivery date, say which in the label and include the PO name or order number it belongs to when the email ties it to one, e.g. "2026-09-30 pickup YA-0002"), contact name / phone / email, and contact_role (homeowner, superintendent, builder_office, vendor, installer, other) only when the email makes the person's role clear — only what the emails state. Never guess.
 
 Return only the JSON described by the schema, one entry per thread key, in the same order.`;
 
