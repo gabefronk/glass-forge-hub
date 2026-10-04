@@ -1,5 +1,5 @@
 import { useState } from "react";
-import FeedImage from "./FeedImage";
+import { ThumbImage } from "./FeedImage";
 
 const MAX_THUMBS = 8;
 
@@ -17,7 +17,7 @@ export default function PhotoStrip({ urls, onPhotoClick, className = "mt-3" }) {
         const last = !all && extra > 0 && i === shown.length - 1;
         return (
           <button key={i} type="button" onClick={() => (last ? setAll(true) : onPhotoClick(url))} className="group relative aspect-[4/3] w-full overflow-hidden rounded-[10px]" style={{ backgroundColor: "#eee9e0", border: "1px solid #e2dcd1", boxShadow: "0 1px 2px rgba(10,29,31,.08)" }} aria-label={last ? `Show ${extra + 1} more photos` : `Open photo ${i + 1}`}>
-            <FeedImage src={url} alt="" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]" loading="lazy" />
+            <ThumbImage src={url} alt="" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]" />
             {last ? <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-[17px] font-bold text-white">+{extra + 1}</span> : null}
           </button>
         );
