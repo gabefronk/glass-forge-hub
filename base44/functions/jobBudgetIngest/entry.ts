@@ -9,6 +9,7 @@ import { denverDate } from '../../shared/billingCore.js';
 import { fetchCompleteEntity, matchJobTokens } from '../../shared/jobCatalog.js';
 import { validateLaborEntry, laborMargin, buildCostInputPatch, summarizeJobCosts } from '../../shared/jobLaborEntry.js';
 import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sheetValuesFor, sumBudgetInputs } from '../../shared/jobBudgetReview.js';
+import { autofillBudget, budgetNameFor, fileNameHints, GLASS_LABOR_COST_EACH } from '../../shared/jobBudgetAutofill.js';
 
 // Job Budgets ingest.
 // Gabriel drops one or more vendor quote PDFs on the Job Budgets page. For each:
@@ -39,28 +40,105 @@ const UNFILED_FOLDER_NAME = '_Unmatched Quote Drops';
 const QUOTE_SCHEMA = {
   type: 'object',
   properties: {
-    vendor: { type: ['string', 'null'] },
+    vendor: { type: ['string', 'null'], description: 'Company that issued the quote (letterhead), e.g. WTS Paradigm, AMSCO, Builders FirstSource' },
     manufacturer: { type: ['string', 'null'] },
     quote_number: { type: ['string', 'null'] },
-    quote_name: { type: ['string', 'null'] },
-    quoted_by: { type: ['string', 'null'] },
+    quote_name: { type: ['string', 'null'], description: '"Quote Name" field if printed' },
+    project_name: { type: ['string', 'null'], description: '"Project Name" field if printed' },
+    customer_po: { type: ['string', 'null'], description: 'Customer PO # / CPO if printed, e.g. YA-0007' },
+    quoted_by: { type: ['string', 'null'], description: 'Quoted by / entered by / sales rep' },
     bill_to: { type: ['string', 'null'] },
     ship_to: { type: ['string', 'null'] },
     builder: { type: ['string', 'null'], description: 'Builder/customer the job belongs to' },
-    lot_or_address: { type: ['string', 'null'], description: 'Lot number or street address if printed' },
+    lot_or_address: { type: ['string', 'null'], description: 'Jobsite lot number or street address if printed (not the vendor or bill-to address)' },
     openings_qty: { type: ['integer', 'null'], description: 'Total window/door/glass units across all lines' },
-    material_true_cost: { type: ['number', 'null'], description: 'Dealer cost subtotal (what Glass Forge pays), before tax' },
-    actual_total_sell: { type: ['number', 'null'], description: 'Customer TOTAL including tax (what the customer pays)' },
-    customer_sub_total: { type: ['number', 'null'] },
+    price_levels: { type: ['string', 'null'], enum: ['dealer_and_customer', 'single', null], description: 'dealer_and_customer when the quote prints BOTH a dealer/cost price and a separate customer/retail price; single when it prints one price level (list vs net counts as single: net is the price)' },
+    dealer_subtotal: { type: ['number', 'null'], description: 'Only when price_levels is dealer_and_customer: the dealer cost subtotal before tax (e.g. "Dealer Sub")' },
+    net_total: { type: ['number', 'null'], description: 'Single price level: the total the bill-to account pays before tax (sum of NET/extended prices, Sub Total, Balance Due before tax). Never the LIST price.' },
+    customer_sub_total: { type: ['number', 'null'], description: 'Customer price subtotal before tax, if printed' },
     customer_tax: { type: ['number', 'null'] },
+    customer_total: { type: ['number', 'null'], description: 'Grand TOTAL including tax as printed' },
+    lines: {
+      type: 'array',
+      description: 'One entry per quote line item',
+      items: {
+        type: 'object',
+        properties: {
+          qty: { type: ['integer', 'null'] },
+          width_in: { type: ['number', 'null'], description: 'Unit/overall width in inches (first number of e.g. 33.625 x 55.5)' },
+          height_in: { type: ['number', 'null'], description: 'Unit/overall height in inches' },
+          kind: { type: ['string', 'null'], enum: ['window', 'door', 'glass', 'part', null], description: 'glass = glass/IGU only (no frame); part = screens, mull kits, hardware, freight, fees' },
+          description: { type: ['string', 'null'], description: 'Product line text, e.g. "Glass Only", "Single Hung", "2 Panel Slider 6/8"' },
+          mark: { type: ['string', 'null'], description: 'Line #, mark or room location' },
+          extended: { type: ['number', 'null'], description: 'Extended (qty x net) price for the line' },
+        },
+      },
+    },
   },
 };
 
-const QUOTE_PROMPT = `You are reading a window/door/glass vendor quote PDF for a glazing contractor.
-Extract the quote header and totals exactly as printed. The dealer cost subtotal is what the
-contractor pays the vendor (may be labeled "Dealer Sub", dealer price, or net cost); the customer
-TOTAL is the sell price including tax. Count every window, door and glass unit across lines for
-openings_qty. Use null for anything not printed; never guess.`;
+const QUOTE_PROMPT = `You are reading a window/door/glass vendor quote PDF for a glazing contractor
+(Glass Forge; Gabriel Fronk). Extract the header, every line item and the totals exactly as printed.
+Price levels: AMSCO "Dealer Total Pricing" quotes print a dealer cost AND a customer price -> price_levels
+"dealer_and_customer", dealer_subtotal = the dealer sub total. Most other quotes (WTS Paradigm, AMSCO
+Studio, BFS order acknowledgements) print ONE price level -> "single": put the pre-tax total in net_total
+and customer_sub_total, the grand total in customer_total. A LIST PRICE column is not a price level; NET
+is the price. Count every window, door and glass unit for openings_qty. Use null for anything not
+printed; never guess.`;
+
+// The quote fields the old schema used, filled from the richer extraction.
+function legacyTotals(q) {
+  if (q.price_levels === 'dealer_and_customer') {
+    if (q.material_true_cost == null) q.material_true_cost = q.dealer_subtotal;
+    if (q.actual_total_sell == null) q.actual_total_sell = q.customer_total;
+  } else if (q.price_levels === 'single') {
+    q.material_true_cost = null;
+    if (q.actual_total_sell == null) q.actual_total_sell = q.customer_total;
+  }
+  return q;
+}
+
+async function extractQuote(core, { file_url, text }) {
+  if (text) {
+    const parsed = parseAmscoQuoteText(text);
+    if (parsed) return normalizeVendorQuote(parsed);
+  }
+  const extracted = await core.InvokeLLM({ prompt: QUOTE_PROMPT, response_json_schema: QUOTE_SCHEMA, file_urls: [file_url], add_context_from_internet: false });
+  return legacyTotals(normalizeVendorQuote(extracted || {}));
+}
+
+async function glassEach(db) {
+  const s = (await db.AppSettings.list('-created_date', 1).catch(() => []))[0];
+  const v = Number(s?.budget_glass_labor_each);
+  return Number.isFinite(v) && v > 0 ? v : GLASS_LABOR_COST_EACH;
+}
+
+// What the drop filled, stored on the budget row so the Numbers editor can say where each
+// number came from.
+function autofillRecord(fill) {
+  return {
+    sources: fill.sources, notes: fill.notes, filled: fill.filled,
+    install_material: fill.install_material,
+    labor_lines: fill.labor.lines, labor_unpriced: fill.labor.unpriced, trip_minimum: fill.labor.trip_minimum || null,
+    file_job_name: fill.hints.job_name || null, glass_only: !!fill.hints.glass_only,
+    at: new Date().toISOString(),
+  };
+}
+
+// Customer PO (YA-0007) -> the one job carrying it, directly or through a vendor order.
+async function matchByPo(db, po) {
+  const key = String(po || '').trim();
+  if (!key || /^(none|n\/a)$/i.test(key)) return null;
+  const ids = new Set();
+  const jobs = await db.Jobs.filter({ po_numbers: key }, '-created_date', 5).catch(() => []);
+  for (const j of jobs || []) ids.add(j.merged_into || j.id);
+  const orders = await db.VendorOrders.list('-created_date', 200).catch(() => []);
+  const re = new RegExp('^\\s*' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+  for (const o of orders || []) if (o.job_id && re.test(String(o.po_name || ''))) ids.add(o.job_id);
+  if (ids.size !== 1) return null;
+  const job = await db.Jobs.get([...ids][0]).catch(() => null);
+  return job ? { status: 'matched', job_id: job.id, job_name: job.canonical_name || job.name || '', reason: `customer PO ${key}` } : null;
+}
 
 async function driveJson(token, url, init = {}) {
   const res = await fetch(url, { ...init, headers: { Authorization: 'Bearer ' + token, ...(init.headers || {}) } });
@@ -185,6 +263,8 @@ async function matchJob(db, quote, forcedJobId) {
     if (!job) return { status: 'needs_review', reason: 'job not found', candidates: [] };
     return { status: 'matched', job_id: job.id, job_name: job.canonical_name || job.name || '', reason: 'chosen on the job page' };
   }
+  const byPo = await matchByPo(db, quote.customer_po);
+  if (byPo) return byPo;
   const tokens = quoteMatchTokens(quote);
   if (!tokens.length) return { status: 'needs_review', reason: 'no usable match tokens on quote', candidates: [] };
   // Matching is a uniqueness decision. Never match against a partial catalog and
@@ -198,24 +278,19 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
   if (!file_url && !text) return Response.json({ error: 'file_url (PDF) is required' }, { status: 400 });
 
   // 1. Extract.
-  let quote = null;
-  if (text) {
-    const parsed = parseAmscoQuoteText(text);
-    if (parsed) quote = normalizeVendorQuote(parsed);
-  }
-  if (!quote) {
-    const extracted = await core.InvokeLLM({ prompt: QUOTE_PROMPT, response_json_schema: QUOTE_SCHEMA, file_urls: [file_url], add_context_from_internet: false });
-    quote = normalizeVendorQuote(extracted || {});
-  }
-  if (!quote.material_true_cost && !quote.actual_total_sell) {
-    return Response.json({ status: 'needs_review', reason: 'no cost or sell totals could be extracted from the PDF', quote }, { status: 200 });
-  }
+  const quote = await extractQuote(core, { file_url, text });
+  // The quote's own name when it has one; Gabe's file name ("JOB - SCOPE - BRAND.pdf") when
+  // the quote only says CASH CUSTOMER.
+  const hints = fileNameHints(file_name);
+  const name = budgetNameFor(quote, hints);
+  if (name) quote.quote_name = name;
 
-  // 2. Budget math (same as the workbook).
-  const budget = computeJobBudget({
-    material_true_cost: quote.material_true_cost,
-    actual_total_sell: quote.actual_total_sell,
-  });
+  // 2. Autofill the sheet's yellow cells, then the workbook math.
+  const fill = autofillBudget(quote, { fileName: file_name, glassEach: await glassEach(db) });
+  if (!fill.inputs.material_true_cost && !fill.inputs.actual_total_sell) {
+    return Response.json({ status: 'needs_review', reason: 'no cost or sell totals could be extracted from the PDF', quote, notes: fill.notes }, { status: 200 });
+  }
+  const budget = computeJobBudget(fill.inputs);
 
   // 3. Job match.
   const match = await matchJob(db, quote, body.job_id);
@@ -258,8 +333,9 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
     quote_number: quote.quote_number || undefined, quote_name: quote.quote_name || undefined,
     quoted_by: quote.quoted_by || undefined, openings_qty: quote.openings_qty || undefined,
     quote,
-    inputs: { material_true_cost: quote.material_true_cost, actual_total_sell: quote.actual_total_sell },
+    inputs: fill.inputs,
     computed: budget,
+    autofill: autofillRecord(fill),
     source_pdf_url: file_url || undefined, source_pdf_name: file_name || undefined,
     drive_job_folder_id: folder.id, drive_job_folder_path: folder.path,
     drive_quote_file_id: quoteUp?.id, drive_budget_xlsx_file_id: xlsxUp?.id, drive_budget_csv_file_id: csvUp?.id,
@@ -280,9 +356,44 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
     matched_job: matched ? { id: match.job_id, name: match.job_name } : null,
     match_reason: matched ? undefined : match.reason,
     computed: budget,
+    inputs: fill.inputs, filled: fill.filled, notes: fill.notes,
     drive: { folder_path: folder.path, folder_id: folder.id, quote_file_id: quoteUp?.id, budget_xlsx_file_id: xlsxUp?.id, budget_csv_file_id: csvUp?.id },
     cost_inputs_month: costInput ? denverDate().slice(0, 7) : null,
   });
+}
+
+// Re-read a budget row's quote PDF and refill its numbers (rows dropped before autofill, or
+// after the install sheet changes). Overwrites the row's inputs; keeps its job link and files.
+async function refillBudget(base44, db, core, record) {
+  if (!record.source_pdf_url) return { error: 'this budget has no quote PDF to read' };
+  const quote = await extractQuote(core, { file_url: record.source_pdf_url });
+  const hints = fileNameHints(record.source_pdf_name);
+  const name = budgetNameFor(quote, hints);
+  if (name) quote.quote_name = name;
+  const fill = autofillBudget(quote, { fileName: record.source_pdf_name, glassEach: await glassEach(db) });
+  const budget = computeJobBudget(fill.inputs);
+  const patch = {
+    quote, inputs: fill.inputs, computed: budget, autofill: autofillRecord(fill),
+    openings_qty: quote.openings_qty || record.openings_qty || undefined,
+    quote_number: quote.quote_number || record.quote_number || undefined,
+  };
+  const warnings = [];
+  let job = record.job_id ? await db.Jobs.get(record.job_id).catch(() => null) : null;
+  if (!record.job_id) {
+    patch.quote_name = quote.quote_name || undefined;
+    patch.job_name = quote.quote_name || record.job_name;
+    patch.title = `${quote.quote_name || record.job_name || 'Quote'} (${quote.manufacturer || quote.vendor || record.manufacturer || 'vendor'}${quote.quote_number ? ' ' + quote.quote_number : ''})`;
+    const byPo = await matchByPo(db, quote.customer_po);
+    if (byPo) patch.job_match = { ...(record.job_match || {}), po_suggestion: byPo };
+  }
+  try {
+    const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
+    if (accessToken && record.drive_job_folder_id) Object.assign(patch, await writeBudgetSheets(accessToken, { ...record, ...patch }, budget, job, record.drive_job_folder_id));
+  } catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 200)}`); }
+  const updated = await db.JobBudgets.update(record.id, patch);
+  let costInput = null;
+  if (job) { try { costInput = await upsertCostInputs(db, job, { ...record, ...patch }); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 200)}`); } }
+  return { status: 'ok', budget_id: updated.id, inputs: fill.inputs, sources: fill.sources, notes: fill.notes, computed: budget, cost_input: costInput, warnings };
 }
 
 function stampHistory(order, status, by, note) {
@@ -329,6 +440,26 @@ export default async function jobBudgetIngest(req) {
     let costInput = null;
     if (job) { try { costInput = await upsertCostInputs(db, job, { ...record, inputs: values }); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 200)}`); } }
     return Response.json({ status: 'ok', budget_id: updated.id, computed: budget, cost_input: costInput, warnings });
+  }
+
+  if (action === 'refill') {
+    const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
+    if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
+    const out = await refillBudget(base44, db, core, record);
+    return Response.json(out, { status: out.error ? 400 : 200 });
+  }
+
+  // Dry run for a PDF URL: what the drop would fill, without filing anything.
+  if (action === 'preview_fill') {
+    if (!body.file_url) return Response.json({ error: 'file_url is required' }, { status: 400 });
+    const quote = await extractQuote(core, { file_url: body.file_url, text: body.text });
+    const hints = fileNameHints(body.file_name);
+    const name = budgetNameFor(quote, hints);
+    if (name) quote.quote_name = name;
+    const fill = autofillBudget(quote, { fileName: body.file_name, glassEach: await glassEach(db) });
+    const out = { quote, ...fill, computed: computeJobBudget(fill.inputs), po_match: await matchByPo(db, quote.customer_po) };
+    console.log(JSON.stringify(out));
+    return Response.json(out);
   }
 
   if (action === 'delete') {
