@@ -1,6 +1,6 @@
 import { refreshMonth } from "@/lib/refreshMonth";
 import { currentMonthStr, shiftMonthStr } from "@/lib/feeMath";
-import { denverDate } from "../../base44/shared/billingCore.js";
+import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
 import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, RefreshCw, Search, X } from "lucide-react";
@@ -110,6 +110,7 @@ export default function CalendarPage() {
   // Every group has verified tracker ownership. Choose one visible source per visit.
   const combined = useMemo(() => ({
     events: events.map(group => group.find(event => {
+      if (isIgnoredWorkItem(event)) return false;
       if (event.source === "outlook") return showOutlook;
       if (event.google_calendar_id === GF_JOBS_CAL_ID) return showGfJobs;
       return showIsrael;

@@ -1,5 +1,5 @@
 import { invoicingStats } from "@/lib/invoicingStats";
-import { denverDate } from "../../base44/shared/billingCore.js";
+import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -87,7 +87,7 @@ export default function Dashboard() {
       // Groups include unverified events (ownership: null) as their own groups; admins also get
       // them again as excluded_events. Split on ownership so each event appears exactly once:
       // verified visits on the run sheet, unverified ones in the review list (for every role).
-      const allEvents = (reconciliation?.data?.groups || []).map(group => group[0]).filter(Boolean);
+      const allEvents = (reconciliation?.data?.groups || []).map(group => group[0]).filter(e => e && !isIgnoredWorkItem(e));
       const verified = allEvents.filter((e) => e.ownership);
       setUnmatchedEvents(allEvents.filter((e) => !e.ownership));
       setReportStatusMap(new Map(calSource.filter(e => e.google_event_id).map(e => [e.google_event_id, e.report_status])));

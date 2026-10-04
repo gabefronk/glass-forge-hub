@@ -1,3 +1,4 @@
+import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
 import { refreshMonth } from "@/lib/refreshMonth";
 import { invoicingStats } from "@/lib/invoicingStats";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
@@ -97,7 +98,7 @@ export default function Invoicing() {
       // so only exclude zero-labor events whose notes carry no profit-split markers.
       const hasProfitSplitMarker = (notes) => /\$\s?\d/i.test(String(notes || "")) && /(sale\s+price|project\s+total|package\s+cost|material\s+cost|\bprofit\b|\bsplit\b)/i.test(String(notes || ""));
       const isExcludedFromBanner = (e) => {
-        if (e.source_status === "cancelled") return true; // canceled recurring placeholders never bill
+        if (isIgnoredWorkItem(e) || e.source_status === "cancelled") return true; // canceled recurring placeholders never bill
         if ((Number(e.labor_amt) || 0) === 0 && !hasProfitSplitMarker(e.scope_notes)) return true; // non-billing zero-labor (e.g. jobsite walks)
         return false;
       };

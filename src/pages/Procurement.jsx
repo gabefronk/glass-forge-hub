@@ -1,3 +1,4 @@
+import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { UploadCloud, ArrowLeft, FileText, RefreshCw, AlertTriangle, Plus } from 'lucide-react';
@@ -63,7 +64,7 @@ function ProcurementWorkspace() {
   }, [editor, uploading, load]);
   const current = data || emptyData;
   const job = current.jobs.find(j => j.id === jobId);
-  const availableJobs = useMemo(() => current.jobs.filter(j => !j.merged_into && !j.is_sample).sort((a, b) => String(a.canonical_name).localeCompare(String(b.canonical_name))), [current.jobs]);
+  const availableJobs = useMemo(() => current.jobs.filter(j => !isIgnoredWorkItem(j) && !j.merged_into && !j.is_sample).sort((a, b) => String(a.canonical_name).localeCompare(String(b.canonical_name))), [current.jobs]);
   const searchIndex = useMemo(() => purchasingSearchIndex(current), [current]);
   const matches = row => matchesPurchasingSearch(searchIndex.get(row) || purchasingText(row), query);
   const needle = query.trim().toLowerCase();
