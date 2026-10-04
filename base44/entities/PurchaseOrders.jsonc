@@ -2,6 +2,10 @@
   "name": "PurchaseOrders",
   "type": "object",
   "properties": {
+    "supplier_eta": {
+      "type": "object",
+      "description": "Latest scoped supplier-link ETA or pending response, server timestamp and append-only response history. Never proof of receipt."
+    },
     "budget_id": {
       "type": "string",
       "description": "Explicit source budget; job_id must match."
