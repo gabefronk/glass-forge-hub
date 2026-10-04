@@ -486,6 +486,7 @@ export default function Invoicing() {
                 onFilterMatchBlocked={() => setFilter("needs_review")}
               />
             </SheetCard>
+            <details className="mt-3"><summary className="min-h-11 cursor-pointer rounded-lg px-3 py-3 text-sm font-medium text-slate-600">Profit & cost details</summary>
             <JobProfitabilityPanel
               rows={monthRows.filter((r) => !supersededSet.has(r.id))}
               jobs={profitabilityInputs.jobs}
@@ -494,6 +495,7 @@ export default function Invoicing() {
               reportStatusMap={reportStatusMap}
               supersededSet={supersededSet}
             />
+            </details>
             <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "16px" }}>
             <InvoiceToolbar
               search={search}
