@@ -71,7 +71,7 @@ function fromBudget(b) {
   return out;
 }
 
-export function NumbersEditor({ budget, onDone, onCancel }) {
+export function NumbersEditor({ budget, onDone, onCancel, onRefilled }) {
   const [form, setForm] = useState(() => fromBudget(budget));
   const [fill, setFill] = useState(() => budget.autofill || null);
   const [touched, setTouched] = useState({});
@@ -95,6 +95,7 @@ export function NumbersEditor({ budget, onDone, onCancel }) {
       setForm(fromBudget({ inputs: data.inputs }));
       setFill({ sources: data.sources || {}, notes: data.notes || [] });
       setTouched({});
+      onRefilled?.(data);
     } catch (e) { setError(e?.response?.data?.error || e?.message || "Could not read the quote."); }
     finally { setRefilling(false); }
   };
@@ -179,7 +180,9 @@ export function LinkJobEditor({ budget, jobs, onDone, onCancel }) {
   const byId = useMemo(() => Object.fromEntries((jobs || []).map((j) => [j.id, j])), [jobs]);
   const candidates = useMemo(() => {
     const seen = new Set();
-    return (budget.job_match?.candidates || []).map((c) => byId[c.id] || { id: c.id, canonical_name: c.name }).filter((j) => (seen.has(j.id) ? false : seen.add(j.id)));
+    const po = budget.job_match?.po_suggestion;
+    const list = [...(po?.job_id ? [{ id: po.job_id, name: po.job_name }] : []), ...(budget.job_match?.candidates || [])];
+    return list.map((c) => byId[c.id] || { id: c.id, canonical_name: c.name }).filter((j) => (seen.has(j.id) ? false : seen.add(j.id)));
   }, [budget, byId]);
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
