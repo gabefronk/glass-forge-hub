@@ -36,7 +36,7 @@ function Buttons({ busy, enabled = true, label, onCancel }) {
 
 export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCancel }) {
   const eligible = useMemo(() => activeBudgets(budgets.filter(b => b.job_id === job.id)), [budgets, job.id]);
-  const [form, setForm] = useState(() => initialBudget ? prepareBudgetPO(initialBudget).form : { job_id: job.id, budget_id: '', vendor: '', vendor_quote_ref: '', amount_dealer: '', amount_customer: '', notes: '', budget_version: '' });
+  const [form, setForm] = useState(() => { const source = initialBudget || (eligible.length === 1 ? eligible[0] : null); return source ? prepareBudgetPO(source).form : { job_id: job.id, budget_id: '', vendor: '', vendor_quote_ref: '', amount_dealer: '', amount_customer: '', notes: '', budget_version: '' }; });
   const [reviewed, setReviewed] = useState(false), [zero, setZero] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const key = useRef(crypto.randomUUID());
@@ -148,7 +148,7 @@ export function InvoiceBridge({ job }) {
   const [reviewed, setReviewed] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const key = useRef(crypto.randomUUID());
   useEffect(() => {
-    let active = true; setPreview(null); setError(''); setReviewed(false); setNotice('');
+    let active = true; setPreview(null); setError(''); setReviewed(false); setNotice(''); setRoute(''); key.current = crypto.randomUUID();
     purchasingRequest({ action: 'invoice_preview', job_id: job.id, month }).then(p => { if (active) setPreview(p); }).catch(e => { if (active) setError(messageOf(e)); });
     return () => { active = false; };
   }, [job.id, month]);
@@ -164,7 +164,7 @@ export function InvoiceBridge({ job }) {
       <div className="my-4 grid gap-3 sm:grid-cols-3">{[['Budget cost', preview.estimate.cost], ['Budget customer total', preview.estimate.sell], ['Budget margin dollars', preview.estimate.margin_dollars]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">{label}</div><strong className="text-lg">{money(value)}</strong></div>)}</div>
       {preview.estimate.warnings.length > 0 && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{preview.estimate.warnings.join(' ')}</p>}
       {preview.existing ? <div className="mt-4 rounded-lg border p-3 text-sm text-slate-600"><strong>Existing accounting record (unchanged):</strong><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2"><span>Product revenue {money(preview.existing.product_sell)}</span><span>Recorded labor cost {money(preview.existing.actual_labor_cost)}</span><span>Recorded install revenue {money(preview.existing.installation_revenue)}</span></div><p className="mt-2 text-xs">Last estimate link: {preview.existing.budget_synced_at || 'Not linked yet'}. Historical figures are retained; differences require your review.</p></div>
-        : <div className="mt-4"><Field label="Business route for the new accounting record" value={route} onChange={setRoute}><option value="">Choose the job's route</option><option value="bfs_installed_sale">BFS installed sale</option><option value="bfs_supply_ya_install">BFS supply-only + Y.A. install</option><option value="bfs_to_ya_turnkey">BFS-to-Y.A. turnkey</option><option value="direct_manufacturer_turnkey">Direct manufacturer turnkey</option></Field></div>}
+        : <div className="mt-4"><Field label="Business route for the new accounting record" value={route} onChange={value => { setRoute(value); setReviewed(false); }}><option value="">Choose the job's route</option><option value="bfs_installed_sale">BFS installed sale</option><option value="bfs_supply_ya_install">BFS supply-only + Y.A. install</option><option value="bfs_to_ya_turnkey">BFS-to-Y.A. turnkey</option><option value="direct_manufacturer_turnkey">Direct manufacturer turnkey</option></Field></div>}
       {preview.closed ? <p className="mt-4 font-semibold text-amber-800">This month is closed. Its accounting records cannot be updated here.</p> : <>
         <Review checked={reviewed} onChange={setReviewed}>I reviewed the included scopes and accounting month. Link this estimate without changing actual costs, invoices or payments.</Review>
         <button className={buttonClass} style={primaryStyle} disabled={busy || !reviewed || preview.estimate.status !== 'ready' || (!preview.existing && !route)}>{busy ? 'Linking...' : 'Link / refresh budget estimate'}</button>
