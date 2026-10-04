@@ -85,9 +85,10 @@ export default async function(req) {
       // address, so a report opened from a duplicate record lands on the job that
       // ingest attaches new visits to. Doubtful groups keep the given record.
       let job = null;
+      let index = null;
       try {
         const jobs = await fetchAllPages(api.Jobs, '-created_date', 1000);
-        const index = createJobIndex(jobs);
+        index = createJobIndex(jobs);
         job = canonicalJob(index.byId.get(jobId), index);
       } catch (_) {
         job = null;
@@ -130,6 +131,22 @@ export default async function(req) {
               activity_log: [...(it.activity_log || []), { at: now, by: user.email, action: 'service visit report — complete', note: 'Ready to mark Fixed' }],
             }).catch(() => {});
           }
+        }
+      }
+
+      // Photos count as the report. A general report (no appointment picked) with photos clears
+      // this job's visit from today or the two days before that is still waiting on a report.
+      if (!event_id && (photos || []).length) {
+        const days = [0, 1, 2].map((n) => new Date(Date.parse(`${noteDate}T12:00:00Z`) - n * 86400000).toISOString().slice(0, 10));
+        const open = await api.CalendarEvents.filter({ event_date: { $in: days }, report_status: { $in: ['pending', 'missing_photos', 'missing_notes', 'missing_all', 'no_source_data'] } }, '-event_date', 200, 0).catch(() => []);
+        const sameJob = (ev) => {
+          if (!ev.job_id) return false;
+          if (ev.job_id === jobId) return true;
+          try { return index ? canonicalJob(index.byId.get(ev.job_id), index)?.id === jobId : false; } catch { return false; }
+        };
+        const hit = open.filter((ev) => ev.report_required !== false && sameJob(ev)).sort((a, b) => b.event_date.localeCompare(a.event_date))[0];
+        if (hit) {
+          await api.CalendarEvents.update(hit.id, { report_status: 'ok', match_method: 'manual', match_confidence: 1, report_checked_at: now, days_late: 0 }).catch(() => {});
         }
       }
 
