@@ -1,3 +1,4 @@
+import { projectSupplierEtas } from './supplierEtaCore.mjs';
 import { fetchCompleteEntity } from './jobCatalog.js';
 import { text, amount, budgetVersion, budgetRollup, activeBudgets, referenceConflicts, sameVendor, validMonth, validDate, estimatePatch, isLiveBudget } from './procurementCore.js';
 import { unusedQuoteDeletionPatch } from './unusedQuoteDeletion.mjs';
@@ -43,7 +44,7 @@ export async function procurementAction(api, body, user, deps = {}) {
       fetchCompleteEntity(api.JobBudgets), fetchCompleteEntity(api.PurchaseOrders),
       fetchCompleteEntity(api.VendorOrders), fetchCompleteEntity(api.Jobs),
     ]);
-    return { budgets: budgets.filter(isLiveBudget), purchase_orders, vendor_orders, jobs, conflicts: referenceConflicts(purchase_orders, vendor_orders, jobs) };
+    return projectSupplierEtas({ budgets: budgets.filter(isLiveBudget), purchase_orders, vendor_orders, jobs, conflicts: referenceConflicts(purchase_orders, vendor_orders, jobs) });
   }
   reviewRequired(body);
   const key = requestKey(body.request_key);
