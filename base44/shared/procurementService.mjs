@@ -1,5 +1,6 @@
 import { fetchCompleteEntity } from './jobCatalog.js';
-import { text, amount, budgetVersion, budgetRollup, activeBudgets, referenceConflicts, sameVendor, validMonth, validDate, estimatePatch } from './procurementCore.js';
+import { text, amount, budgetVersion, budgetRollup, activeBudgets, referenceConflicts, sameVendor, validMonth, validDate, estimatePatch, isLiveBudget } from './procurementCore.js';
+import { unusedQuoteDeletionPatch } from './unusedQuoteDeletion.mjs';
 import { procurementError as fail, requestKey, withProcurementLock } from './procurementLock.mjs';
 import { assertOwner, getPurchasingJob, issuePurchaseOrder } from './purchaseOrderService.mjs';
 
@@ -42,15 +43,29 @@ export async function procurementAction(api, body, user, deps = {}) {
       fetchCompleteEntity(api.JobBudgets), fetchCompleteEntity(api.PurchaseOrders),
       fetchCompleteEntity(api.VendorOrders), fetchCompleteEntity(api.Jobs),
     ]);
-    return { budgets, purchase_orders, vendor_orders, jobs, conflicts: referenceConflicts(purchase_orders, vendor_orders, jobs) };
+    return { budgets: budgets.filter(isLiveBudget), purchase_orders, vendor_orders, jobs, conflicts: referenceConflicts(purchase_orders, vendor_orders, jobs) };
   }
   reviewRequired(body);
   const key = requestKey(body.request_key);
   return withProcurementLock(api, key, async lock => {
+    if (action === 'delete_unused_quote') {
+      const [budgets, purchaseOrders, vendorOrders, costInputs, setupSheets] = await Promise.all([
+        fetchCompleteEntity(api.JobBudgets), fetchCompleteEntity(api.PurchaseOrders),
+        fetchCompleteEntity(api.VendorOrders), fetchCompleteEntity(api.JobCostInputs), fetchCompleteEntity(api.JobSetupSheets),
+      ]);
+      const row = budgets.find(b => b.id === text(body.budget_id));
+      if (!row) throw fail(404, 'Quote not found.');
+      if (!isLiveBudget(row)) return { ok: true, deleted: true, already_deleted: true, budget_id: row.id };
+      const patch = unusedQuoteDeletionPatch(row, { budgets, purchaseOrders, vendorOrders, costInputs, setupSheets }, body, user.email, now());
+      const updated = await saveCurrent(api.JobBudgets, row, row.updated_date, patch);
+      if (isLiveBudget(updated)) throw fail(503, 'Quote removal could not be verified. Refresh before trying again.');
+      return { ok: true, deleted: true, budget_id: updated.id, message: 'Unused quote deleted from the active list. Jobs, POs, invoices and Drive files were not changed.' };
+    }
     if (action === 'budget_usage') {
       const all = await fetchCompleteEntity(api.JobBudgets);
       const row = all.find(b => b.id === body.budget_id);
-      if (!row || !row.job_id) throw fail(400, 'Link this quote to its job before selecting its budget use.');
+      if (!row || !isLiveBudget(row)) throw fail(409, 'This quote is deleted or unavailable. Open the current quote instead.');
+      if (!row.job_id) throw fail(400, 'Link this quote to its job before selecting its budget use.');
       await getPurchasingJob(api, row.job_id);
       if (body.budget_version !== budgetVersion(row)) throw fail(409, 'The quote changed. Review it again.');
       if (!['included', 'reference', 'draft'].includes(body.budget_usage)) throw fail(400, 'Choose included, reference, or draft.');
