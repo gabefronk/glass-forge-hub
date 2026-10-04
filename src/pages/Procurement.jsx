@@ -46,14 +46,21 @@ function ProcurementWorkspace() {
   const [editor, setEditor] = useState(null), [notice, setNotice] = useState('');
   const [processing, setProcessing] = useState([]), [uploading, setUploading] = useState(false), [dragging, setDragging] = useState(false);
   const fileInput = useRef(null), uploadBusy = useRef(false), loadSeq = useRef(0);
-  const load = useCallback(async () => {
-    const version = ++loadSeq.current; setLoading(true); setError('');
+  const load = useCallback(async (quiet = false) => {
+    const version = ++loadSeq.current; if (quiet !== true) setLoading(true); setError('');
     try { const result = await purchasingRequest({ action: 'overview' }); if (version === loadSeq.current) setData({ ...result, budgets: result.budgets.filter(isLiveBudget) }); }
     catch (e) { if (version === loadSeq.current) setError(messageOf(e)); }
     finally { if (version === loadSeq.current) setLoading(false); }
   }, []);
   useEffect(() => { load(); return () => { loadSeq.current++; }; }, [load]);
   useEffect(() => { setEditor(null); setNotice(''); setQuery(''); setUnlinkedOnly(false); }, [jobId]);
+  useEffect(() => {
+    if (editor || uploading) return;
+    const refresh = () => { if (document.visibilityState === 'visible') load(true); };
+    const timer = window.setInterval(refresh, 90000);
+    window.addEventListener('focus', refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [editor, uploading, load]);
   const current = data || emptyData;
   const job = current.jobs.find(j => j.id === jobId);
   const availableJobs = useMemo(() => current.jobs.filter(j => !j.merged_into && !j.is_sample).sort((a, b) => String(a.canonical_name).localeCompare(String(b.canonical_name))), [current.jobs]);
@@ -145,10 +152,10 @@ function ProcurementWorkspace() {
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-700"><span>Material before tax: <strong>{money(b.inputs?.material_true_cost)}</strong></span>{b.openings_qty > 0 && <span>{b.openings_qty} window / door units</span>}{supplierOrders.map(o => <span key={o.id}>Supplier amount: <strong>{money(o.amount)}</strong> <Link className="font-semibold underline" to={procurementPath(b.job_id, 'tracking')}>Order {o.order_number}</Link></span>)}</div>
             {b.budget_usage === 'draft' && <p className="mt-2 text-xs text-slate-500">Saved on this job. Fill in labor and your customer price, then include the reviewed scope in the budget. Nothing has been ordered or invoiced by this draft.</p>}
             <Metrics figures={figures} />{figures.warnings.length > 0 && <p className="mb-3 text-sm font-medium text-amber-800">{figures.warnings.join(' \u00b7 ')}</p>}
-            <div className="flex flex-wrap gap-2"><button className={buttonClass} style={secondaryStyle} onClick={() => openEditor({ mode: 'numbers', budget_id: b.id })}>Review numbers</button>{b.job_id ? <button className={buttonClass} style={secondaryStyle} onClick={() => openEditor({ mode: 'usage', budget_id: b.id })}>Scope / revision</button> : <button className={buttonClass} style={primaryStyle} onClick={() => openEditor({ mode: 'link', budget_id: b.id })}>Link existing job</button>}
+            <details><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-slate-700">Quote options</summary><div className="flex flex-wrap gap-2"><button className={buttonClass} style={secondaryStyle} onClick={() => openEditor({ mode: 'numbers', budget_id: b.id })}>Review numbers</button>{b.job_id ? <button className={buttonClass} style={secondaryStyle} onClick={() => openEditor({ mode: 'usage', budget_id: b.id })}>Scope / revision</button> : <button className={buttonClass} style={primaryStyle} onClick={() => openEditor({ mode: 'link', budget_id: b.id })}>Link existing job</button>}
               {related.length ? related.map(p => <Link key={p.id} className={buttonClass} style={secondaryStyle} to={procurementPath(p.job_id, 'orders')}>{p.po_number}{p.budget_id ? '' : ' (matching quote)'}</Link>) : <button disabled={!b.job_id || !included || !figures.ready} className={buttonClass} style={primaryStyle} onClick={() => { changeSection('orders'); openEditor({ mode: 'po', budget_id: b.id, job_id: b.job_id }); }}>Prepare PO</button>}
               <DeleteUnusedQuoteButton budget={b} onDeleted={done} />
-            </div><div className="mt-3 flex flex-wrap gap-2"><External href={b.source_pdf_url || fileHref(b.drive_quote_file_id)}><FileText size={13} />Source quote</External><External href={fileHref(b.drive_budget_xlsx_file_id)}>Budget sheet</External><External href={b.drive_job_folder_id ? `https://drive.google.com/drive/folders/${b.drive_job_folder_id}` : ''}>Drive folder</External></div>
+            </div></details><div className="mt-3 flex flex-wrap gap-2"><External href={b.source_pdf_url || fileHref(b.drive_quote_file_id)}><FileText size={13} />Source quote</External><External href={fileHref(b.drive_budget_xlsx_file_id)}>Budget sheet</External><External href={b.drive_job_folder_id ? `https://drive.google.com/drive/folders/${b.drive_job_folder_id}` : ''}>Drive folder</External></div>
             {b.input_history?.length > 0 && <details className="mt-3 text-xs text-slate-600"><summary className="cursor-pointer">Previous saved inputs ({b.input_history.length})</summary>{b.input_history.map((h, i) => <p key={i} className="mt-2">{h.at} / {h.action} / material {money(h.inputs?.material_true_cost)} / customer total {money(h.inputs?.actual_total_sell)}</p>)}</details>}
           </Card>;
         })}
