@@ -1,3 +1,4 @@
+import { effectiveSupplierEta } from '../../base44/shared/supplierEtaCore.mjs';
 import { validDate, supplierForPO, referenceConflicts } from '../../base44/shared/procurementCore.js';
 import { isIgnoredWorkItem } from '../../base44/shared/billingCore.js';
 
@@ -36,7 +37,11 @@ export function originalOrderDate(row) {
   const dates = [...new Set((row?.status_history || []).map(h => h.source?.original_order_date).filter(validDate))];
   return dates.length === 1 ? dates[0] : '';
 }
-export const etaText = row => displayDate(row?.eta_date) || 'Not confirmed';
+export const etaText = (supplier, po) => { const eta = effectiveSupplierEta(po, supplier); return eta.response === 'pending' ? 'Awaiting supplier ETA' : displayDate(eta.date) || 'Not confirmed'; };
+export function supplierReplyText(po, supplier) {
+  const eta = effectiveSupplierEta(po, supplier);
+  return eta.responded_at ? (eta.response === 'pending' ? 'Supplier replied: still pending' : 'Supplier supplied ETA') + ' · ' + displayDate(recordedDay(eta.responded_at)) : 'No supplier-link response yet';
+}
 
 // Each supplier may supply timing to only one PO, with conflicts withheld.
 export function purchasingRows(data = {}) {
@@ -60,18 +65,18 @@ export function purchasingCalendarEvents(data = {}) {
     const reference = [po?.po_number || supplier?.po_name, row.vendor].filter(Boolean).join(' · ');
     const common = { source: 'purchasing', job_id: row.job_id || '', job_name: purchasingJobName(row, data.jobs),
       address: job?.address || '', po_number: po?.po_number || supplier?.po_name || '', report_required: false,
-      purchasing: item, purchasing_summary: reference + ' · ' + statusWithDate(row) + ' · ETA ' + etaText(supplier) };
+      purchasing: item, purchasing_summary: reference + ' · ' + statusWithDate(row) + ' · ETA ' + etaText(supplier, po) };
     const add = (id, date, label) => { if (validDate(date)) events.push({ ...common, id: 'purchasing:' + id, event_date: date, purchasing_label: label }); };
     const timing = statusDate(row);
     const ordered = originalOrderDate(po || row);
     if (row.status !== 'ordered' || timing.date !== ordered) add(key + ':status', timing.date, statusLabel(row.status) + ' recorded');
     if (ordered) add(key + ':ordered', ordered, 'Ordered');
-    if (supplier) {
-      // ETA key depends only on source ID, so a revised ETA replaces its old entry.
-      const cancelled = (data.purchase_orders || []).some(p => p.id === supplier.purchase_order_id && p.status === 'cancelled');
-      if (!validDate(supplier.received_date) && !cancelled && po?.status !== 'cancelled') add('supplier:' + supplier.id + ':eta', supplier.eta_date, 'ETA');
-      add('supplier:' + supplier.id + ':received', supplier.received_date, 'Received');
-    }
+    const eta = effectiveSupplierEta(po, supplier);
+    const cancelled = (data.purchase_orders || []).some(p => p.id === supplier?.purchase_order_id && p.status === 'cancelled');
+    // One derived entry per PO (or unpaired supplier); corrections move the same entry.
+    if (!validDate(supplier?.received_date) && !cancelled && !['cancelled', 'received'].includes(po?.status)) add(key + ':eta', eta.date, 'ETA');
+    if (eta.responded_at) add(key + ':reply', recordedDay(eta.responded_at), eta.response === 'pending' ? 'ETA pending response' : 'ETA response');
+    if (supplier) add('supplier:' + supplier.id + ':received', supplier.received_date, 'Received');
   }
   return events;
 }
