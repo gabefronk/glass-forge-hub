@@ -77,7 +77,7 @@ async function makeThumb(src) {
     let out;
     if (typeof createImageBitmap === "function") {
       try {
-        const bmp = await createImageBitmap(blob);
+        const bmp = await createImageBitmap(blob, { imageOrientation: "from-image" });
         out = await drawThumb(bmp, bmp.width, bmp.height);
         bmp.close?.();
       } catch { out = null; }
