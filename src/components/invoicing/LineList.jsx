@@ -42,7 +42,7 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
         <div style={{ width: "28px", flexShrink: 0 }} />
         <div style={{ width: "30px", flexShrink: 0 }} />
         <span className="text-[11px] font-semibold uppercase" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", flex: "1 1 auto" }}>Job</span>
-        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "80px", flexShrink: 0 }}>Labor</span>
+        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "80px", flexShrink: 0 }}>Labor / sale</span>
         <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "128px", flexShrink: 0 }}>Status</span>
         <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "100px", flexShrink: 0 }}>Fee</span>
         <div style={{ width: "28px", flexShrink: 0 }} />
