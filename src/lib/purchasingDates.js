@@ -40,7 +40,7 @@ export function originalOrderDate(row) {
 export const etaText = (supplier, po) => { const eta = effectiveSupplierEta(po, supplier); return eta.response === 'pending' ? 'Awaiting supplier ETA' : displayDate(eta.date) || 'Not confirmed'; };
 export function supplierReplyText(po, supplier) {
   const eta = effectiveSupplierEta(po, supplier);
-  return eta.responded_at ? (eta.response === 'pending' ? 'Supplier replied: still pending' : 'Supplier supplied ETA') + ' · ' + displayDate(recordedDay(eta.responded_at)) : 'No supplier-link response yet';
+  return eta.responded_at ? (eta.response === 'owner' ? 'Owner reviewed ETA' : eta.response === 'pending' ? 'Supplier replied: still pending' : 'Supplier supplied ETA') + ' · ' + displayDate(recordedDay(eta.responded_at)) : 'No supplier-link response yet';
 }
 
 // Each supplier may supply timing to only one PO, with conflicts withheld.
