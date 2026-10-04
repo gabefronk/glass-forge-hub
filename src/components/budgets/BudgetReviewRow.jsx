@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Link2, Pencil, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { computeJobBudget } from "../../../base44/shared/jobBudgetMath.js";
@@ -73,11 +73,31 @@ function fromBudget(b) {
 
 export function NumbersEditor({ budget, onDone, onCancel }) {
   const [form, setForm] = useState(() => fromBudget(budget));
+  const [fill, setFill] = useState(() => budget.autofill || null);
+  const [touched, setTouched] = useState({});
   const [more, setMore] = useState(() => num(form.additional_install_material) > 0 || num(form.additional_equipment) > 0);
   const [busy, setBusy] = useState(false);
+  const [refilling, setRefilling] = useState(false);
   const [error, setError] = useState("");
   const preview = useMemo(() => computeJobBudget(Object.fromEntries(Object.entries(form).map(([k, v]) => [k, num(v)]))), [form]);
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k) => (e) => { setTouched((t) => ({ ...t, [k]: true })); setForm((f) => ({ ...f, [k]: e.target.value })); };
+  const sources = fill?.sources || {};
+
+  // Read the quote PDF again and refill every box it can (saves straight to the row).
+  const refill = async () => {
+    if (!budget.source_pdf_url) return;
+    if (Object.keys(touched).length && !window.confirm("Re-reading the quote replaces the numbers you typed here. Continue?")) return;
+    setRefilling(true); setError("");
+    try {
+      const res = await base44.functions.invoke("jobBudgetIngest", { action: "refill", budget_id: budget.id });
+      const data = res?.data || res;
+      if (data?.error) { setError(data.error); return; }
+      setForm(fromBudget({ inputs: data.inputs }));
+      setFill({ sources: data.sources || {}, notes: data.notes || [] });
+      setTouched({});
+    } catch (e) { setError(e?.response?.data?.error || e?.message || "Could not read the quote."); }
+    finally { setRefilling(false); }
+  };
 
   const save = async () => {
     setBusy(true); setError("");
@@ -94,15 +114,33 @@ export function NumbersEditor({ budget, onDone, onCancel }) {
 
   return (
     <div className="flex flex-col gap-3 rounded-[12px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <p className="m-0 text-[12.5px]" style={{ color: C.textMuted }}>The yellow cells of the Window Budget Sheet. Saving recomputes the margin and rewrites the sheet and CSV in Drive{budget.job_id ? " and updates this month's cost inputs for invoicing" : ""}.</p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="m-0 text-[12.5px] flex-1 min-w-[240px]" style={{ color: C.textMuted }}>The yellow cells of the Window Budget Sheet{fill ? ", filled from the quote and your install price sheet — fix anything that's off" : ""}. Saving recomputes the margin and rewrites the sheet and CSV in Drive{budget.job_id ? " and updates this month's cost inputs for invoicing" : ""}.</p>
+        {budget.source_pdf_url ? (
+          <button type="button" disabled={busy || refilling} onClick={refill} className={smallBtn} style={btnGhost} title="Read the quote PDF again and fill every box it can">
+            <RefreshCw className={`h-3.5 w-3.5${refilling ? " animate-spin" : ""}`} />{refilling ? "Reading quote…" : fill ? "Re-read quote" : "Fill from quote"}
+          </button>
+        ) : null}
+      </div>
       <div className="grid grid-cols-4 gap-2 max-[899px]:grid-cols-2 max-[599px]:grid-cols-1">
         {FIELDS.map(([k, label, ph]) => (
           <label key={k} className="flex flex-col gap-1 text-[12px] font-medium" style={{ color: C.textMuted }}>
             {label}
-            <input inputMode="decimal" value={form[k]} onChange={set(k)} placeholder={ph} className={inputCls} style={inputStyle} />
+            <input inputMode="decimal" value={form[k]} onChange={set(k)} placeholder={ph} className={inputCls}
+              style={sources[k] && !touched[k] ? { ...inputStyle, backgroundColor: "#FFF8DB", borderColor: "#E9D78A" } : inputStyle} />
+            {sources[k] ? (
+              <span className="text-[11px] font-normal leading-snug" style={{ color: touched[k] ? C.textFaint : C.textSecondary }}>
+                {touched[k] ? "Edited — was " : "Auto · "}{touched[k] ? sources[k].toLowerCase() : sources[k]}
+              </span>
+            ) : fill ? <span className="text-[11px] font-normal" style={{ color: C.amber }}>Not on the quote — type it</span> : null}
           </label>
         ))}
       </div>
+      {fill?.notes?.length ? (
+        <ul className="m-0 pl-4 text-[12px] flex flex-col gap-0.5" style={{ color: C.amber }}>
+          {fill.notes.map((t, i) => <li key={i}>{t}</li>)}
+        </ul>
+      ) : null}
       {more ? (
         <div className="grid grid-cols-4 gap-2 max-[899px]:grid-cols-2 max-[599px]:grid-cols-1">
           {EXTRA.map(([k, label]) => (
