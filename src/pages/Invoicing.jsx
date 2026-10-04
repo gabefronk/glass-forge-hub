@@ -296,19 +296,20 @@ export default function Invoicing() {
   const handleDeleteSelected = useCallback(async () => {
     const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
-    const deletedData = selected.map((r) => { const { id, created_date, updated_date, created_by_id, ...rest } = r; return rest; });
-    const deletingIds = new Set(selected.map(row => row.id));
-    setFeeLines((prev) => prev.filter((r) => !deletingIds.has(r.id)));
-    try {
-      await Promise.all(selected.map((r) => base44.entities.FeeLines.delete(r.id)));
-    } catch (err) {
-      setFeeLines((prev) => [...prev, ...selected]);
-      performAction(`Delete failed: ${err?.message || err}`, () => {}, () => {});
-      return;
+    if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before deleting lines."); return; }
+    const { deleted, failed } = await deleteInvoiceRows(selected, id => base44.entities.FeeLines.delete(id));
+    const deletedIds = new Set(deleted.map(row => row.id));
+    setFeeLines(prev => prev.filter(row => !deletedIds.has(row.id)));
+    if (failed.length) setSyncMessage(`${failed.length} lines could not be deleted and remain in the list. ${deleted.length} were deleted.`);
+    if (deleted.length) {
+      const deletedData = deleted.map(row => { const { id, created_date, updated_date, created_by_id, ...rest } = row; return rest; });
+      performAction(`${deleted.length} lines deleted`, () => {}, async () => {
+        try { const restored = await base44.entities.FeeLines.bulkCreate(deletedData); setFeeLines(prev => [...prev, ...restored]); }
+        catch (error) { setSyncMessage(`Undo could not restore the deleted lines. Refresh before retrying. ${error?.message || ""}`); }
+      });
     }
-    performAction(`${selected.length} lines deleted`, () => {}, async () => { const restored = await base44.entities.FeeLines.bulkCreate(deletedData); setFeeLines((prev) => [...prev, ...restored]); });
     clearSelection();
-  }, [feeLines, selectedIds, month, focusedJobId, performAction, clearSelection]);
+  }, [feeLines, selectedIds, month, focusedJobId, loading, loadError, monthClosed, performAction, clearSelection]);
 
   const handleExportSelected = useCallback(() => {
     const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
