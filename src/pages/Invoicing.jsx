@@ -195,7 +195,7 @@ export default function Invoicing() {
 
   const handleEdit = useCallback(async (id, patch) => {
     const row = feeLines.find((r) => r.id === id);
-    if (!row) return;
+    if (!row || (focusedJobId && !inInvoiceScope(row, month, focusedJobId))) return;
     // A patch may carry manually_adjusted explicitly (undo restores the prior value).
     const merged = { ...row, manually_adjusted: true, ...patch };
     const isProfitSplit = merged.fee_type === "profit_split";
@@ -221,7 +221,7 @@ export default function Invoicing() {
       setFeeLines((prev) => prev.map((r) => (r.id === id ? row : r)));
       setSyncMessage(`Save failed; the line was restored. ${err?.message || ""}`.trim());
     }
-  }, [feeLines]);
+  }, [feeLines, month, focusedJobId]);
 
   // Optimistic bulk writes: restore the previous values if the save fails.
   const persistBulk = useCallback((updates, restore) => {
@@ -233,7 +233,7 @@ export default function Invoicing() {
 
   const handleDelete = useCallback(async (id) => {
     const row = feeLines.find((r) => r.id === id);
-    if (!row) return;
+    if (!row || (focusedJobId && !inInvoiceScope(row, month, focusedJobId))) return;
     const { id: _id, created_date, updated_date, created_by_id, ...rest } = row;
     setFeeLines((prev) => prev.filter((r) => r.id !== id));
     try {
@@ -245,7 +245,7 @@ export default function Invoicing() {
     }
     performAction("Line deleted", () => {}, async () => { const restored = await base44.entities.FeeLines.create(rest); setFeeLines((prev) => [...prev, restored]); });
     setDetailRow(null);
-  }, [feeLines, performAction]);
+  }, [feeLines, month, focusedJobId, performAction]);
 
   const handleAddReport = useCallback(() => { navigate("/calendar"); }, [navigate]);
 
@@ -289,7 +289,8 @@ export default function Invoicing() {
     const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
     const deletedData = selected.map((r) => { const { id, created_date, updated_date, created_by_id, ...rest } = r; return rest; });
-    setFeeLines((prev) => prev.filter((r) => !selectedIds.has(r.id)));
+    const deletingIds = new Set(selected.map(row => row.id));
+    setFeeLines((prev) => prev.filter((r) => !deletingIds.has(r.id)));
     try {
       await Promise.all(selected.map((r) => base44.entities.FeeLines.delete(r.id)));
     } catch (err) {
@@ -313,7 +314,7 @@ export default function Invoicing() {
   }, [feeLines, selectedIds, month, focusedJobId]);
 
   // Only lines that are ready to bill; held, scheduled, superseded and excluded lines stay put.
-  const isLineReady = useCallback((r) => isReady(r, reportStatusMap, supersededSet), [reportStatusMap, supersededSet]);
+  const isLineReady = useCallback((r) => inInvoiceScope(r, month, focusedJobId) && isReady(r, reportStatusMap, supersededSet), [month, focusedJobId, reportStatusMap, supersededSet]);
 
   const handleBillJob = useCallback((job) => {
     const lines = job.lines.filter(isLineReady);
@@ -446,16 +447,16 @@ export default function Invoicing() {
             <p className="text-[13px]" style={{ color: "#8A958F", marginBottom: "20px" }}>
               {isPast ? "Refresh this month to check the source calendars and ProBuild." : "Come back after the first jobs are posted."}
             </p>
-            <button onClick={() => setMonth(currentMonth)} className="min-h-10 rounded-lg px-5 text-[13px] font-medium" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#104E44", cursor: "pointer" }}>
+            <button onClick={() => changeMonth(currentMonth)} className="min-h-10 rounded-lg px-5 text-[13px] font-medium" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#104E44", cursor: "pointer" }}>
               Back to {new Date().toLocaleDateString("en-US", { month: "long" })}
             </button>
           </div>
         ) : (
           <>
-            {unprocessedCount > 0 && (
+            {unprocessedCount > 0 && !focusedJobId && (
               <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
             )}
-            <SheetCard icon={Receipt} tile={TILE.teal} title="This month" sub="the total is what is done and reported — nothing counts until it is" className="mt-4" bodyClassName="px-5 max-[699px]:px-4">
+            <SheetCard icon={Receipt} tile={TILE.teal} title={focusedJobId ? 'This job / this month' : 'This month'} sub="the total is what is done and reported — nothing counts until it is" className="mt-4" bodyClassName="px-5 max-[699px]:px-4">
               <InvoiceSummary
                 {...heroStats}
                 month={month}
