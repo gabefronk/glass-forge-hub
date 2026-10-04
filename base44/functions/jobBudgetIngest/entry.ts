@@ -263,6 +263,7 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
   const retry = body.request_key ? prior.find(b => b.request_key === body.request_key) : null;
   if (retry && (retry.source_sha256 !== source_sha256 || (body.job_id && retry.job_id !== body.job_id))) throw procurementError(409, 'This upload request was already used for another source or job.');
   const duplicate = retry || prior.find(b => b.source_sha256 === source_sha256 && String(b.job_id || '') === String(body.job_id || ''));
+  if (duplicate?.deleted_at) return Response.json({ error: 'This source belongs to a deleted unused quote. Open the current quote or recover the deleted attempt before re-uploading it.' }, { status: 409 });
   if (duplicate) return Response.json({ status: duplicate.status, budget_id: duplicate.id, title: duplicate.title, duplicate: true, notes: ['This PDF is already saved. Open the existing quote instead of counting it twice.'] });
 
   // 1. Extract.
