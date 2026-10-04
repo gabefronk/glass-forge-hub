@@ -164,6 +164,25 @@ test('supplier save refuses a colliding PO reference without rewriting existing 
   await assert.rejects(procurementAction(s.api, { action: 'save_supplier_order', job_id: 'j1', purchase_order_id: 'p1', order_number: '09-1234', amount: 116.3, review_confirmed: true, request_key: 'supplier-test-01' }, owner, deps), /conflicting jobs/);
   assert.equal(s.data.VendorOrders.length, 1);
 });
+test('future status transitions automatically retain a dated history without changing source amounts', async () => {
+  const s = store({ PurchaseOrders: [{ ...existingPO, updated_date: 'original' }] });
+  const response = await procurementAction(s.api, { action: 'po_status', po_id: 'p1', status: 'confirmed', note: 'Supplier confirmed', expected_updated_date: 'original', request_key: 'status-date-test-01', review_confirmed: true }, owner, deps);
+  assert.equal(response.purchase_order.status_history.at(-1).at, stamp);
+  assert.equal(response.purchase_order.status_history.at(-1).status, 'confirmed');
+  assert.equal(response.purchase_order.amount_dealer, existingPO.amount_dealer);
+});
+test('supplier confirmation history matches its initial status with or without ETA', async () => {
+  for (const eta_date of ['', '2026-10-06']) {
+    const s = store({ PurchaseOrders: [existingPO] });
+    const response = await procurementAction(s.api, { action: 'save_supplier_order', job_id: 'j1', purchase_order_id: 'p1', order_number: '09-1234', amount: 116.3, eta_date, review_confirmed: true, request_key: 'supplier-date-test-01' }, owner, deps);
+    assert.equal(response.order.status, eta_date ? 'eta_set' : 'ordered');
+    assert.equal(response.order.status_history.at(-1).status, response.order.status);
+    assert.equal(response.order.status_history.at(-1).at, stamp);
+    const paid = await procurementAction(s.api, { action: 'vendor_status', order_id: response.order.id, status: 'paid', note: 'ACH receipt reviewed', expected_updated_date: response.order.updated_date, request_key: 'supplier-paid-test-01', review_confirmed: true }, owner, deps);
+    assert.equal(paid.order.status_history.at(-1).at, stamp);
+    assert.equal(paid.order.paid_at, stamp);
+  }
+});
 test('API handler refuses crew before any private entity read', async () => {
   const handler = createProcurementHandler(() => ({ auth: { me: async () => ({ role: 'user', email: 'crew@example.com' }) }, get asServiceRole() { throw new Error('must not read'); } }));
   const res = await handler(new Request('https://unit.test', { method: 'POST', body: '{}' }));
