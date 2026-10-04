@@ -2,20 +2,18 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, Mail } from "lucide-react";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { Settings, Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
-import { useTodoAccess } from '@/hooks/use-todo-access';
+import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
 // labels because five slots share the phone width.
 const PRIMARY_NAV = [
+  { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Today", to: "/dashboard", icon: BarChart3 },
-  { label: "To-do", to: "/todos", icon: CheckSquare, todoOnly: true },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Calendar", to: "/calendar", icon: Calendar },
 ];
 
 const SECONDARY_NAV = [
-  { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Team Structure", to: "/team-structure", icon: GitBranch },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
@@ -25,6 +23,7 @@ const SECONDARY_NAV = [
 ];
 
 const ADMIN_NAV = [
+  { label: "Company overview", to: "/operations/overview", icon: BarChart3 },
   { label: "Agent Center", to: "/admin/agents", icon: Bot },
   { label: "System Map", to: "/system-map", icon: Network },
   { label: "Research Queue", to: "/research-queue", icon: Search },
@@ -58,7 +57,6 @@ function SheetLink({ item, active }) {
 export default function MobileBottomNav({ user }) {
   const { pathname } = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
-  const todoAccess = useTodoAccess(user);
 
   useEffect(() => { setMoreOpen(false); }, [pathname]);
   useEffect(() => {
@@ -72,7 +70,7 @@ export default function MobileBottomNav({ user }) {
   const isSecondaryActive = (to) => pathname === to;
   const quotesOnly = isWindowQuotesOnly(user);
   const owner = isAgentCenterOwner(user);
-  const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV.filter(item => !item.todoOnly || todoAccess);
+  const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV;
   const visibleSecondary = quotesOnly ? SECONDARY_NAV.filter((s) => s.to === "/brands-specs" || s.to === "/summit") : SECONDARY_NAV.filter((s) => !s.ownerOnly || owner);
   const visibleAdmin = owner && !quotesOnly ? ADMIN_NAV : [];
   const moreActive = [...visibleSecondary, ...visibleAdmin].some((s) => isSecondaryActive(s.to));
