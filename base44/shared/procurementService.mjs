@@ -127,7 +127,7 @@ export async function procurementAction(api, body, user, deps = {}) {
       if (existing) return { ok: true, order: await saveCurrent(api.VendorOrders, existing, body.expected_updated_date, payload) };
       try {
         const created = await api.VendorOrders.create({ ...payload, request_key: key, created_by_email: user.email,
-          status: payload.eta_date ? 'eta_set' : 'ordered', status_history: [{ status: 'ordered', at: now(), by: user.email, note: 'Supplier confirmation recorded by owner. No purchase submitted.' }],
+          status: payload.eta_date ? 'eta_set' : 'ordered', status_history: [{ status: payload.eta_date ? 'eta_set' : 'ordered', at: now(), by: user.email, note: 'Supplier confirmation recorded by owner. No purchase submitted.' }],
         });
         return { ok: true, order: created };
       } catch {
