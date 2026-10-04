@@ -299,7 +299,7 @@ export default function JobBudgets() {
                   {o.po_name && <span>PO "{o.po_name}"</span>}
                   {o.billed_account && <span>billed under {o.billed_account}</span>}
                   {o.payer && <span>pays: {o.payer}</span>}
-                  {o.payment_route && o.payment_route !== "unknown" && <span>via {o.payment_route.replace(/_/g, " ")}</span>}
+                  {o.payment_route && o.payment_route !== "unknown" && <span>{o.payment_route === "ach_link" ? "pay by the vendor's link" : `via ${o.payment_route.replace(/_/g, " ")}`}</span>}
                   {o.notes && <span>note: {o.notes}</span>}
                   {!isPaid(o) && progress?.tone !== "done" ? (
                     <span>
