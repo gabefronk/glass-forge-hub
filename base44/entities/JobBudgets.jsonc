@@ -1,6 +1,19 @@
 {
   "name": "JobBudgets",
   "properties": {
+    "deleted_at": {
+      "type": "string",
+      "description": "Unused quote removed from active lists; source record and files retained for recovery."
+    },
+    "deleted_by": {
+      "type": "string"
+    },
+    "deletion_reason": {
+      "type": "string"
+    },
+    "deletion_request_key": {
+      "type": "string"
+    },
     "budget_usage": {
       "type": "string",
       "enum": [
