@@ -54,7 +54,13 @@ export function mapScopeLines(job = {}, budget = {}) {
   const resultLines = Array.isArray(snap.result?.lines) ? snap.result.lines : [];
   const quoteLines = resultLines.length ? resultLines : (Array.isArray(snap.lines) ? snap.lines : []);
   const budgetLines = budget.quote?.lines || budget.quote?.items || budget.lines || [];
-  return (quoteLines.length ? quoteLines : budgetLines).map(normalizeLine);
+  const lines = (quoteLines.length ? quoteLines : budgetLines).map(normalizeLine);
+  const install = snap.install_summary;
+  if (install?.enabled && install.complete) {
+    if (finite(install.sell) && Number(install.sell) > 0) lines.push({ mark: "INSTALL", qty: 1, size: "", product: "Installation", description: "Accepted installation scope, including installation extras and trip minimum where applicable", customer_price: Number(install.sell) });
+    if (finite(install.extra_sell) && Number(install.extra_sell) > 0) lines.push({ mark: "EXTRAS", qty: 1, size: "", product: "Installation materials / equipment", description: "Accepted additional materials and equipment", customer_price: Number(install.extra_sell) });
+  }
+  return lines;
 }
 
 export function buildSetupDraft({ job = {}, budget = {}, costInput = {}, installBudget = {} } = {}) {
@@ -70,11 +76,15 @@ export function buildSetupDraft({ job = {}, budget = {}, costInput = {}, install
   };
   // Budget actual_total_sell already includes customer tax. It must not be used as
   // a subtotal and taxed again. This seeds new drafts only; saved contracts stay intact.
-  const tax = n(first(totals.tax, totals.tax_amount));
+  const acceptedInstall = job.accepted_quote_snapshot?.install_summary;
+  const hasAcceptedInstall = acceptedInstall?.enabled === true;
+  const packageTotal = hasAcceptedInstall && acceptedInstall.complete ? n(acceptedInstall.customer_total) : "";
+  // Product tax cannot stand in for tax on the combined installed package.
+  const tax = hasAcceptedInstall ? "" : n(first(totals.tax, totals.tax_amount));
   const acceptedSubtotal = n(first(totals.sell_subtotal, totals.subtotal, totals.customer_subtotal));
-  const contractTotal = n(first(totals.customer_total, totals.total, inputs.actual_total_sell,
+  const contractTotal = hasAcceptedInstall ? packageTotal : n(first(totals.customer_total, totals.total, inputs.actual_total_sell,
     finite(acceptedSubtotal) && finite(tax) ? roundMoney(Number(acceptedSubtotal) + Number(tax)) : ""));
-  const sellPrice = finite(acceptedSubtotal) ? acceptedSubtotal
+  const sellPrice = hasAcceptedInstall ? "" : finite(acceptedSubtotal) ? acceptedSubtotal
     : finite(contractTotal) && finite(tax) && Number(contractTotal) >= Number(tax) ? roundMoney(Number(contractTotal) - Number(tax)) : "";
   return {
     job_id: job.id || "",
@@ -91,8 +101,8 @@ export function buildSetupDraft({ job = {}, budget = {}, costInput = {}, install
       material_product: present(inputs.material_true_cost) ? "Job budget" : present(costInput.product_cost) ? "Job cost inputs" : present(totals.dealer_total ?? totals.dealer_cost) ? "Accepted quote" : "Manual",
       labor: present(inputs.labor_cost_sub_pay) ? "Job budget" : present(costInput.actual_labor_cost) ? "Job cost inputs" : present(install.cost) ? "Install budget" : "Manual",
       sell_price: present(acceptedSubtotal) ? "Accepted quote subtotal" : present(sellPrice) ? "Contract total less stated customer tax" : "Customer tax / subtotal needs review",
-      contract_total: present(totals.customer_total ?? totals.total) ? "Accepted quote total" : present(inputs.actual_total_sell) ? "Included job budget total (tax included)" : "Manual",
-      tax: present(tax) ? "Accepted quote" : "Manual customer tax - verify jurisdiction",
+      contract_total: hasAcceptedInstall ? finite(packageTotal) ? "Accepted products + installation + extras; reconcile customer tax" : "Accepted installation total unavailable - review quote" : present(totals.customer_total ?? totals.total) ? "Accepted quote total" : present(inputs.actual_total_sell) ? "Included job budget total (tax included)" : "Manual",
+      tax: hasAcceptedInstall ? "Review customer tax for the full installed package" : present(tax) ? "Accepted quote" : "Manual customer tax - verify jurisdiction",
     },
     terms: { ...PLACEHOLDER_TERMS }, approved_date: "", approver_name: "",
   };
