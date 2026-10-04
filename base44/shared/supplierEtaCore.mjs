@@ -16,6 +16,9 @@ export function linkedEtaSupplier(po, orders = [], pos = []) {
 }
 export function effectiveSupplierEta(po, supplier) {
   const response = po?.supplier_eta || supplier?.supplier_eta;
+  if (supplier?.eta_reviewed_at && Date.parse(supplier.eta_reviewed_at) > (Date.parse(response?.responded_at) || 0)) {
+    return { date: validDate(supplier.eta_date) ? supplier.eta_date : '', response: 'owner', responded_at: supplier.eta_reviewed_at, previous_eta_date: '', source: 'Owner reviewed ETA' };
+  }
   if (response && ['eta', 'pending'].includes(response.response)) {
     return { date: response.response === 'eta' && validDate(response.eta_date) ? response.eta_date : '',
       response: response.response, responded_at: response.responded_at, previous_eta_date: response.previous_eta_date || '',
@@ -27,7 +30,7 @@ export function effectiveSupplierEta(po, supplier) {
 // Financial/source records are never returned by the public endpoint.
 export function projectSupplierEtas(data) {
   const pos = data.purchase_orders || [], orders = data.vendor_orders || [];
-  const eligible = supplierEtaCandidates(data);
+  const eligible = pos.filter(po => isAmsco(po.vendor));
   return { ...data, vendor_orders: orders.map(order => {
     const matches = eligible.filter(po => linkedEtaSupplier(po, orders, pos)?.id === order.id && po.supplier_eta);
     if (matches.length !== 1) return order;
@@ -43,5 +46,5 @@ export function publicEtaOrder(po, data) {
   return { id: po.id, job_name: text(job?.canonical_name) || text(job?.display_name) || 'Unnamed linked job',
     po_number: text(po.po_number), quote_number: text(po.vendor_quote_ref), supplier_order: text(supplier?.order_number),
     eta_date: eta.date, response: eta.response, responded_at: eta.responded_at, previous_eta_date: eta.previous_eta_date,
-    version: po.updated_date, supplier: 'AMSCO' };
+    version: po.updated_date + '|' + (supplier?.updated_date || ''), supplier: 'AMSCO' };
 }
