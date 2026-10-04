@@ -13,6 +13,7 @@ import { jobSnapshot } from "@/lib/jobWorkspace";
 import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import { procurementPath } from "@/lib/procurementRoutes";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import MergedJobBanner from "@/components/jobs/MergedJobBanner";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
@@ -48,6 +49,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const jobContacts = useJobContacts(jobId);
   const [currentUser, setCurrentUser] = useState("");
   const [canDelete, setCanDelete] = useState(false);
+  const [canPurchase, setCanPurchase] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
@@ -57,7 +59,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const folder = useJobFolderFiles(job);
 
   useEffect(() => {
-    base44.auth.me().then((m) => { setCurrentUser(m?.email || m?.full_name || ""); setCanDelete(isAgentCenterOwner(m) || isPurchaseOrderOwner(m)); }).catch(() => {});
+    base44.auth.me().then((m) => { setCurrentUser(m?.email || m?.full_name || ""); setCanDelete(isAgentCenterOwner(m) || isPurchaseOrderOwner(m)); setCanPurchase(isPurchaseOrderOwner(m)); }).catch(() => {});
   }, []);
 
   const load = async ({ quiet = false, skipActivity = false } = {}) => {
@@ -185,6 +187,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           extra={
             <>
               <Link to={`/jobs/${jobId}`} className={heroLinkClass} style={heroLinkStyle} title="Open the full job page">Full page<ArrowUpRight className="h-[15px] w-[15px]" style={{ color: "#e0c994" }} /></Link>
+              {canPurchase && <Link to={procurementPath(jobId)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link>}
               {canDelete ? <DeleteJobButton job={job} onDeleted={() => onJobDeleted?.(job.id)} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
             </>
           }
