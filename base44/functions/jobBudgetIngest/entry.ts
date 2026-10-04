@@ -113,6 +113,23 @@ async function ensureJobFolder(token, builderRaw, jobRaw, unmatched) {
   return { id: jobId, path: `Glass Forge Jobs/${unmatched ? UNFILED_FOLDER_NAME : builder}/${jobName}`, builder, jobName };
 }
 
+async function folderForJob(token, job, builder, name, unmatched) {
+  if (!job?.drive_job_folder_id) return ensureJobFolder(token, builder, name, unmatched);
+  const id = job.drive_job_folder_id;
+  const meta = await driveJson(token, `${DRIVE}/files/${encodeURIComponent(id)}?fields=id,name,mimeType,parents,trashed`);
+  if (meta.trashed || meta.mimeType !== 'application/vnd.google-apps.folder') throw new Error('The linked job folder is unavailable. Existing links were not changed.');
+  let current = meta;
+  const seen = new Set();
+  for (let depth = 0; depth < 20; depth++) {
+    if ((current.parents || []).includes(JOBS_ROOT_FOLDER)) return { id, path: `Linked job folder / ${meta.name}`, builder, jobName: name };
+    const parent = current.parents?.[0];
+    if (!parent || seen.has(parent)) break;
+    seen.add(parent);
+    current = await driveJson(token, `${DRIVE}/files/${encodeURIComponent(parent)}?fields=id,parents`);
+  }
+  throw new Error('The linked folder is not inside Glass Forge Jobs. No alternate folder was created.');
+}
+
 function concatBytes(parts) {
   const total = parts.reduce((n, p) => n + p.length, 0);
   const out = new Uint8Array(total);
@@ -229,6 +246,24 @@ async function matchJob(db, quote, forcedJobId) {
 async function processQuote(base44, db, core, accessToken, body, userEmail) {
   const { file_url, file_name, text } = body;
   if (!file_url && !text) return Response.json({ error: 'file_url (PDF) is required' }, { status: 400 });
+  if (body.job_id) await matchJob(db, {}, body.job_id);
+  let pdfBytes = null;
+  if (file_url) {
+    const url = new URL(file_url);
+    if (url.protocol !== 'https:' || url.username || url.password) throw procurementError(400, 'Use the uploaded HTTPS PDF URL.');
+    const response = await fetch(file_url);
+    if (!response.ok) throw new Error('The source PDF could not be downloaded. No budget was created.');
+    pdfBytes = new Uint8Array(await response.arrayBuffer());
+    if (pdfBytes.length > 30 * 1024 * 1024) throw procurementError(400, 'Use a quote PDF smaller than 30 MB.');
+    if (new TextDecoder().decode(pdfBytes.slice(0, 5)) !== '%PDF-') throw procurementError(400, 'The uploaded file is not a readable PDF.');
+  }
+  const bytes = pdfBytes || new TextEncoder().encode(text || '');
+  const source_sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
+  const prior = await fetchCompleteEntity(db.JobBudgets);
+  const retry = body.request_key ? prior.find(b => b.request_key === body.request_key) : null;
+  if (retry && (retry.source_sha256 !== source_sha256 || (body.job_id && retry.job_id !== body.job_id))) throw procurementError(409, 'This upload request was already used for another source or job.');
+  const duplicate = retry || prior.find(b => b.source_sha256 === source_sha256 && String(b.job_id || '') === String(body.job_id || ''));
+  if (duplicate) return Response.json({ status: duplicate.status, budget_id: duplicate.id, title: duplicate.title, duplicate: true, notes: ['This PDF is already saved. Open the existing quote instead of counting it twice.'] });
 
   // 1. Extract.
   const quote = await extractQuote(core, { file_url, text });
@@ -240,9 +275,7 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
 
   // 2. Autofill the sheet's yellow cells, then the workbook math.
   const fill = autofillBudget(quote, { fileName: file_name, glassEach: await glassEach(db) });
-  if (!fill.inputs.material_true_cost && !fill.inputs.actual_total_sell) {
-    return Response.json({ status: 'needs_review', reason: 'no cost or sell totals could be extracted from the PDF', quote, notes: fill.notes }, { status: 200 });
-  }
+  if (!fill.inputs.material_true_cost && !fill.inputs.actual_total_sell) fill.notes.push('No cost or sell totals were extracted. Source saved as a draft; enter the missing numbers.');
   const budget = computeJobBudget(fill.inputs);
 
   // 3. Job match.
@@ -253,12 +286,8 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
   const jobName = matched ? match.job_name : (quote.quote_name || cleanName((file_name || 'quote').replace(/\.pdf$/i, ''), 'Unnamed Job'));
 
   // 4. Drive filing.
-  const folder = await ensureJobFolder(accessToken, builder, jobName, !matched);
-  let pdfBytes = null;
-  if (file_url) {
-    const res = await fetch(file_url);
-    if (res.ok) pdfBytes = new Uint8Array(await res.arrayBuffer());
-  }
+  const linkedJob = matched ? (forcedJob || await db.Jobs.get(match.job_id)) : null;
+  const folder = await folderForJob(accessToken, linkedJob, builder, jobName, !matched);
   const stamp = denverDate();
   const base = cleanName(`${quote.quote_name || jobName} - ${quote.manufacturer || quote.vendor || 'vendor'} ${quote.quote_number || ''}`.trim(), 'quote');
   const quoteUp = pdfBytes ? await uploadFile(accessToken, `${base}.pdf`, pdfBytes, 'application/pdf', folder.id) : null;
@@ -277,8 +306,10 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
 
   // 5. Records.
   const title = `${quote.quote_name || jobName} (${quote.manufacturer || quote.vendor || 'vendor'}${quote.quote_number ? ' ' + quote.quote_number : ''})`;
-  const record = await db.JobBudgets.create({
-    title,
+  let record;
+  try { record = await db.JobBudgets.create({
+    title, budget_usage: 'draft', numbers_reviewed_at: '', numbers_reviewed_by: '',
+    source_sha256, request_key: String(body.request_key || ''),
     status: matched ? 'filed' : 'needs_review',
     builder, job_name: jobName, job_id: matched ? match.job_id : undefined,
     job_match: match,
@@ -294,7 +325,11 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
     drive_quote_file_id: quoteUp?.id, drive_budget_xlsx_file_id: xlsxUp?.id, drive_budget_csv_file_id: csvUp?.id,
     glass_eta_status: 'waiting',
     created_by_email: userEmail,
-  });
+  }); } catch {
+    const saved = body.request_key ? await db.JobBudgets.filter({ request_key: body.request_key }, 'id', 2).catch(() => []) : [];
+    if (saved.length === 1 && saved[0].source_sha256 === source_sha256) record = saved[0];
+    else throw procurementError(503, 'Budget save outcome is uncertain. Source files remain in Drive; reconcile before uploading again.', { uncertain: true });
+  }
 
   // Invoicing-page hook: this month's cost basis for the matched job (summed with any
   // budget already on the job).
@@ -311,7 +346,9 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
     computed: budget,
     inputs: fill.inputs, filled: fill.filled, notes: fill.notes,
     drive: { folder_path: folder.path, folder_id: folder.id, quote_file_id: quoteUp?.id, budget_xlsx_file_id: xlsxUp?.id, budget_csv_file_id: csvUp?.id },
-    cost_inputs_month: costInput ? denverDate().slice(0, 7) : null,
+    cost_inputs_month: costInput?.id ? denverDate().slice(0, 7) : null,
+    budget_usage: 'draft',
+    next_step: 'Review the numbers, then include this scope in the job budget. No purchase or invoice was created.',
   });
 }
 
@@ -454,7 +491,7 @@ export default async function jobBudgetIngest(req) {
     try {
       const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
       if (accessToken) {
-        folder = await ensureJobFolder(accessToken, job.builder || record.builder, job.canonical_name || job.name || record.job_name, false);
+        folder = await folderForJob(accessToken, job, job.builder || record.builder, job.canonical_name || job.name || record.job_name, false);
         for (const id of [record.drive_quote_file_id, record.drive_budget_xlsx_file_id, record.drive_budget_csv_file_id]) {
           try { await moveFile(accessToken, id, folder.id); } catch (e) { warnings.push(`Drive move failed: ${String(e?.message || e).slice(0, 160)}`); }
         }
