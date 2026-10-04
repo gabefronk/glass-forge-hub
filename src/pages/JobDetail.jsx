@@ -54,7 +54,6 @@ export default function JobDetail() {
   const [loadError, setLoadError] = useState("");
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
-  const [openFormKey, setOpenFormKey] = useState(0);
   const loadVersion = useRef(0);
   const folder = useJobFolderFiles(job);
   // Service items on this job and its duplicate records: shown on their field report in History.
@@ -179,10 +178,6 @@ export default function JobDetail() {
 
   const owner = isPurchaseOrderOwner(user);
   const canContacts = jobContacts.phase !== "private";
-  const logInteraction = () => {
-    setOpenFormKey((k) => k + 1);
-    document.getElementById("add-note")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   return (
     <div style={{ backgroundColor: SHEET_BG, minHeight: "100vh" }}>
@@ -202,7 +197,6 @@ export default function JobDetail() {
             folder={folder}
             plans={plans}
             onFieldReport={() => setShowReport(true)}
-            onLog={logInteraction}
             onRename={async (name) => setJob(await renameJob(job, name))}
             progress={progress}
             alert={<ServiceMarker open={service.open} />}
@@ -232,7 +226,6 @@ export default function JobDetail() {
                 currentUser={user?.email || user?.full_name || ""}
                 onChanged={() => loadAll({ quiet: true })}
                 onPhotoClick={setLightbox}
-                openFormKey={openFormKey}
                 title="History"
                 dedupe={snap}
                 progress={progress}
