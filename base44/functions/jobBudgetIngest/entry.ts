@@ -358,6 +358,7 @@ function stampHistory(order, status, by, note) {
 }
 
 export default async function jobBudgetIngest(req) {
+  try {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me().catch(() => null);
   if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
@@ -367,6 +368,7 @@ export default async function jobBudgetIngest(req) {
   const db = base44.asServiceRole.entities;
   const core = base44.asServiceRole.integrations.Core;
   const action = body.action || 'process';
+  const handle = async () => {
 
   if (action === 'process') {
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
@@ -424,19 +426,14 @@ export default async function jobBudgetIngest(req) {
   if (action === 'delete') {
     const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
     if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
-    await db.JobBudgets.delete(record.id);
-    // Refresh this month's JobCostInputs for the linked job so the deleted budget
-    // no longer counts toward the summed cost basis on the Invoicing page.
-    if (record.job_id) {
-      try { await upsertCostInputs(db, { id: record.job_id, canonical_name: record.job_name || '' }, null); }
-      catch (_e) { /* cost inputs left as-is */ }
-    }
-    return Response.json({ status: 'ok', deleted: true, budget_id: record.id });
+    return Response.json({ error: 'Budget history is preserved. Use Keep as reference in Budget & Orders to exclude a quote without deleting it.' }, { status: 409 });
   }
 
   if (action === 'link_job') {
     const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
     if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
+    assertBudgetVersion(record, body.expected_version);
+    if (record.job_id && String(body.job_id || '') !== record.job_id) throw procurementError(409, 'This quote is already linked. Review existing PO and accounting links before moving it to another job.');
     let job = null;
     if (body.job_id) {
       job = await db.Jobs.get(String(body.job_id)).catch(() => null);
@@ -450,6 +447,7 @@ export default async function jobBudgetIngest(req) {
     } else {
       return Response.json({ error: 'job_id or new_job is required' }, { status: 400 });
     }
+    if (job.merged_into || job.is_sample) throw procurementError(409, 'Select the current, non-sample job.');
     const warnings = [];
     let folder = { id: record.drive_job_folder_id, path: record.drive_job_folder_path };
     const budget = record.computed && Object.keys(record.computed).length ? record.computed : computeJobBudget(inputsOf(record));
@@ -464,7 +462,10 @@ export default async function jobBudgetIngest(req) {
         catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 160)}`); }
       } else warnings.push('Drive not connected: files stay where they are.');
     } catch (e) { warnings.push(`Drive: ${String(e?.message || e).slice(0, 160)}`); }
-    const patch = { ...linkedBudgetPatch(job, user.email, folder), inputs: inputsOf(record), computed: budget, drive_budget_xlsx_file_id: record.drive_budget_xlsx_file_id, drive_budget_csv_file_id: record.drive_budget_csv_file_id };
+    const patch = { ...linkedBudgetPatch(job, user.email, folder), inputs: inputsOf(record), computed: budget, drive_budget_xlsx_file_id: record.drive_budget_xlsx_file_id, drive_budget_csv_file_id: record.drive_budget_csv_file_id,
+      status: warnings.length ? 'needs_review' : 'filed',
+      link_history: [...(record.link_history || []), { at: new Date().toISOString(), by: user.email, previous_job_id: record.job_id || '', job_id: job.id, warnings }],
+    };
     const updated = await db.JobBudgets.update(record.id, patch);
     let costInput = null;
     try { costInput = await upsertCostInputs(db, job, { ...record, job_id: job.id, inputs: inputsOf(record) }); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 160)}`); }
@@ -593,4 +594,12 @@ export default async function jobBudgetIngest(req) {
   }
 
   return Response.json({ error: 'unknown action' }, { status: 400 });
+  };
+  if (['process', 'set_inputs', 'refill', 'link_job'].includes(action)) {
+    return await withProcurementLock(db, String(body.request_key || crypto.randomUUID()), handle);
+  }
+  return await handle();
+  } catch (error) {
+    return Response.json({ error: String(error?.message || error), fields: error?.fields || [] }, { status: error?.status || 500 });
+  }
 }
