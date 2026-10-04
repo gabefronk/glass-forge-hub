@@ -33,8 +33,8 @@ export function assessBillingLine(row, event, today=denverDate()) {
     if(labor>0)return result('review','No-charge/included-work instructions conflict with recorded labor. Confirm who pays YA; do not assume a customer charge.');
     return result('no_charge',sheetrock?'Sheetrock window visit is included; no separate labor charge stated.':'Explicit no-charge visit; no separate installer payment authorized.');
   }
-  const service=serviceWords.test(text)||/\bchargeable\b/i.test(scope);
-  const logistics=!service && /\b(?:pick[ -]?up|will[ -]?call|rough openings?|ro check)\b/i.test(name+'\n'+scope);
+  const service=serviceWords.test(text)||/\bchargeable\b|\bpunch\s*list\b|\b(?:screen|hardware)s?\b/i.test(scope);
+  const logistics=!service && /\b(?:pick[ -]?up|will[ -]?call|rough openings?|ro check|send\s+coi|certificate\s+of\s+insurance)\b/i.test(name+'\n'+scope);
   const arrivalOnly=!service && /\b(?:del(?:ivery)?\s+to\s+bfs|arrival:)\b/i.test(scope);
   if(!(labor>0)&&row.fee_type!=='profit_split'&&(logistics||arrivalOnly))
     return result('logistics','Pickup, measurement or material-arrival reminder; no separate YA labor or sales fee stated.');
@@ -42,6 +42,7 @@ export function assessBillingLine(row, event, today=denverDate()) {
     /\bchargeable\b/i.test(scope)
       ? 'Chargeable service has no labor amount. Israel needs to record total man-hours/material rate or an approved labor price; do not use the product quote as labor.'
       : 'Service work has no labor amount or explicit no-charge decision. Confirm Israel’s hours/material rate, approved labor price, or included callback.');
+  if (!(labor>0) && row.fee_type!=='profit_split' && reported) return result('review','Work was reported without a separate labor charge. Confirm it is covered by the original install, or record the additional hours/material rate or approved price.');
   return result('standard',free&&approved>0?'Customer no-charge; installer labor is explicitly authorized.':'', {customer_no_charge:free&&approved>0});
 }
 
