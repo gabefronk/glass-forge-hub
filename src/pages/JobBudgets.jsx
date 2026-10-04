@@ -9,16 +9,26 @@ import { fetchAllPages } from "@/lib/pagination";
 import { BudgetRowButtons, NumbersEditor, LinkJobEditor } from "@/components/budgets/BudgetReviewRow";
 
 // Job Budgets: drop vendor quote PDFs -> cost basis + margins -> Drive filing ->
-// invoicing cost inputs. Plus the unpaid-jobs tracker (ordered -> ETA -> ACH link
-// -> paid -> reconciled) so every open payable is one list.
+// invoicing cost inputs. Plus the unpaid-jobs tracker (ordered -> ACH link -> paid ->
+// reconciled) so every open payable is one list. The ETA is a fact on the order, not a step:
+// the inbox agent fills it from the vendor's emails (Steve's "ready / pickup" dates), and it
+// can be set or changed by hand, but paying an order never waits on it.
 
 const money = (n) => (n === null || n === undefined || n === "" || !Number.isFinite(Number(n)))
   ? "-" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n) => (n === null || n === undefined || !Number.isFinite(Number(n))) ? "-" : (Number(n) * 100).toFixed(1) + "%";
 
 const ORDER_CHAIN = ["ordered", "eta_set", "ach_link_received", "paid", "reconciled"];
-const ORDER_LABEL = { ordered: "Ordered", eta_set: "ETA set", ach_link_received: "ACH link in", paid: "Paid", reconciled: "Reconciled" };
-const NEXT_ACTION = { ordered: "Set ETA", eta_set: "ACH link received", ach_link_received: "Mark paid", paid: "Reconcile" };
+const ORDER_LABEL = { ordered: "Ordered", eta_set: "Ordered", ach_link_received: "ACH link in", paid: "Paid", reconciled: "Reconciled" };
+const NEXT_ACTION = { ordered: "ACH link received", eta_set: "ACH link received", ach_link_received: "Mark paid", paid: "Reconcile" };
+const NEXT_STATUS = { ordered: "ach_link_received", eta_set: "ach_link_received", ach_link_received: "paid", paid: "reconciled" };
+// "Steve Chapman email 2026-09-25 (inbox agent, thread …)" -> "Steve Chapman's email 9/25"
+function etaFrom(source) {
+  const s = String(source || "");
+  const m = s.match(/^(.+?)\s+email\s+(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2}\/\d{1,2}))/i);
+  if (m) return `from ${m[1]}'s email ${m[5] || `${Number(m[3])}/${Number(m[4])}`}`;
+  return /manual/i.test(s) ? "set by hand" : "";
+}
 
 function statusTag(status) {
   if (status === "filed" || status === "reconciled" || status === "paid") return C.tagBillable;
@@ -105,10 +115,16 @@ export default function JobBudgets() {
     loadSafely();
   }
 
+  async function setEta(order) {
+    const eta = window.prompt("ETA date (yyyy-mm-dd):", order.eta_date || "");
+    if (!eta || !/^\d{4}-\d{2}-\d{2}$/.test(eta.trim())) return;
+    await base44.functions.invoke("jobBudgetIngest", { action: "set_glass_eta", order_id: order.id, eta_date: eta.trim(), source: "manual" });
+    loadSafely();
+  }
+
   async function advanceOrder(order) {
-    const idx = ORDER_CHAIN.indexOf(order.status);
-    if (idx < 0 || idx >= ORDER_CHAIN.length - 1) return;
-    const next = ORDER_CHAIN[idx + 1];
+    const next = NEXT_STATUS[order.status];
+    if (!next) return;
     const extra = {};
     if (next === "ach_link_received") {
       const link = window.prompt("Paste the ACH link from the vendor:");
@@ -232,10 +248,9 @@ export default function JobBudgets() {
         {/* Unpaid jobs tracker */}
         <Section
           title="Unpaid vendor orders"
-          sub={`${openPayables.length} open - ${money(openPayableTotal)} outstanding - ordered -> ETA -> ACH link -> paid -> reconciled`}>
+          sub={`${openPayables.length} open - ${money(openPayableTotal)} outstanding - ordered -> ACH link -> paid -> reconciled. ETAs fill in from the vendor's emails.`}>
           {orders.length === 0 && <p className="text-[13px]" style={{ color: C.textMuted }}>No vendor orders logged yet.</p>}
           {orders.map((o) => {
-            const idx = ORDER_CHAIN.indexOf(o.status);
             return (
               <div key={o.id} className="rounded-[12px] px-4 py-3 flex flex-col gap-2" style={{ border: `1px solid ${C.rowBorder}`, backgroundColor: C.cardAlt }}>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -243,7 +258,7 @@ export default function JobBudgets() {
                   <span className="text-[14px] font-semibold" style={{ color: C.text }}>{o.title}</span>
                   <span className="text-[13px] font-medium" style={{ color: C.textSecondary }}>{money(o.amount)}</span>
                   <Tag status={o.status}>{ORDER_LABEL[o.status] || o.status}</Tag>
-                  {idx >= 0 && idx < ORDER_CHAIN.length - 1 && (
+                  {NEXT_STATUS[o.status] && (
                     <button onClick={() => advanceOrder(o)} className="text-[12px] font-semibold px-3 py-1.5 rounded-[8px]"
                       style={{ backgroundColor: C.accent, color: "#fff" }}>
                       {NEXT_ACTION[o.status]}
@@ -257,7 +272,12 @@ export default function JobBudgets() {
                   {o.payer && <span>pays: {o.payer}</span>}
                   {o.payment_route && o.payment_route !== "unknown" && <span>via {o.payment_route.replace(/_/g, " ")}</span>}
                   {o.notes && <span>note: {o.notes}</span>}
-                  {o.eta_date && <span>ETA {o.eta_date}</span>}
+                  {o.status !== "paid" && o.status !== "reconciled" ? (
+                    <span>
+                      {o.eta_date ? <>ETA <span className="font-semibold" style={{ color: C.text }}>{o.eta_date}</span>{etaFrom(o.eta_source) ? ` ${etaFrom(o.eta_source)}` : ""}</> : "No ETA yet"}
+                      <button type="button" onClick={() => setEta(o)} className="ml-1.5 underline" style={{ color: C.accentText }}>{o.eta_date ? "change" : "set"}</button>
+                    </span>
+                  ) : null}
                   {o.ach_link && <a href={o.ach_link} target="_blank" rel="noreferrer" className="font-medium" style={{ color: C.accentText }}>ACH link</a>}
                   {o.job_id && <Link to={`/jobs/${o.job_id}`} className="font-medium hover:underline" style={{ color: C.accentText }}>job: {jobName(o.job_id) || "open"}</Link>}
                 </div>
