@@ -26,6 +26,8 @@ test('service quantities are missing until explicitly supplied; headcount is not
 test('included work remains separate from chargeable installer compensation',()=>{
  assert.equal(assessBillingLine(fee,{scope_notes:'Please install sheetrock windows.',report_status:'ok'},day).kind,'no_charge');
  assert.equal(assessBillingLine(fee,{scope_notes:'No charge per Gabe. Replace screen.'},day).kind,'no_charge');
+ assert.equal(assessBillingLine(fee,{scope_notes:'No pay on this one - good favor.'},day).kind,'no_charge');
+ assert.equal(assessBillingLine({...fee,probuild_note_text:'Checked windows, no charge'},{scope_notes:'Check window operations'},day).kind,'no_charge');
  assert.equal(assessBillingLine({...fee,man_hours:2},{scope_notes:'No charge per Gabe. Replace screen.'},day).kind,'review');
  assert.equal(assessBillingLine(fee,{scope_notes:'Warranty. Replace glass.',report_status:'ok'},day).kind,'review');
 });
