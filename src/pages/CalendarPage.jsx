@@ -1,3 +1,6 @@
+import { usePurchasingDates } from "@/lib/usePurchasingDates";
+import { purchasingCalendarEvents } from "@/lib/purchasingDates";
+import { PurchasingCalendarDetails } from "@/components/budgets/PurchasingDates";
 import { refreshMonth } from "@/lib/refreshMonth";
 import { currentMonthStr, shiftMonthStr } from "@/lib/feeMath";
 import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
@@ -72,11 +75,15 @@ export default function CalendarPage() {
   const [filter, setFilter] = useState("all"); // all | install | service | outlook | needs_report
   const [query, setQuery] = useState("");
   const [user, setUser] = useState(null);
+  const [purchasingRevision, setPurchasingRevision] = useState(0);
+  const purchasing = usePurchasingDates(user, purchasingRevision);
+  const purchasingEvents = useMemo(() => purchasingCalendarEvents(purchasing.data || {}), [purchasing.data]);
+  useEffect(() => { setSelected(current => current?.source === "purchasing" ? purchasingEvents.find(e => e.id === current.id) || null : current); }, [purchasingEvents]);
   const today = denverDate();
   const isAdmin = user?.role === "admin";
 
   const load = async () => {
-    setLoading(true); setOwnershipError(""); setSelected(null);
+    setLoading(true); setOwnershipError(""); setSelected(null); setPurchasingRevision(v => v + 1);
     // The Jobs list only feeds the event form's job picker, so it loads alongside
     // and never holds up the calendar.
     fetchAllPages(base44.entities.Jobs, "-created_date", 1000).then(setJobs).catch(() => {});
@@ -109,13 +116,13 @@ export default function CalendarPage() {
 
   // Every group has verified tracker ownership. Choose one visible source per visit.
   const combined = useMemo(() => ({
-    events: events.map(group => group.find(event => {
+    events: [...events.map(group => group.find(event => {
       if (isIgnoredWorkItem(event)) return false;
       if (event.source === "outlook") return showOutlook;
       if (event.google_calendar_id === GF_JOBS_CAL_ID) return showGfJobs;
       return showIsrael;
-    })).filter(Boolean),
-  }), [events, showIsrael, showOutlook, showGfJobs]);
+    })).filter(Boolean), ...purchasingEvents],
+  }), [events, showIsrael, showOutlook, showGfJobs, purchasingEvents]);
   const ownershipCounts = ownership?.by_month?.[month];
   const monthAll = useMemo(() => combined.events.filter((e) => (e.event_date || "").slice(0, 7) === month), [combined, month]);
   const monthEvents = useMemo(() => filterEvents(monthAll, filter, today), [monthAll, filter, today]);
@@ -187,6 +194,7 @@ export default function CalendarPage() {
   // Two-way move: drag writes the REAL Google calendar via moveCalendarEvent.
   // Optimistic UI; on any failure the snapshot is restored and the error shown.
   const handleMoveEvent = async (id, newDate, fromDate) => {
+    if (!events.flat().some(event => event.id === id && event.google_event_id)) return;
     const snapshot = events;
     const label = events.flat().find((e) => e.id === id)?.job_name || "Event";
     setEvents(events.map((group) => group.map((e) => (e.id === id ? { ...e, event_date: newDate } : e))));
@@ -233,6 +241,7 @@ export default function CalendarPage() {
     { key: "install", label: "Installs", count: counts.install, dot: KIND.install.bar },
     { key: "service", label: "Service", count: counts.service, dot: KIND.service.bar },
     ...(counts.outlook ? [{ key: "outlook", label: "Outlook", count: counts.outlook, dot: KIND.outlook.bar }] : []),
+    ...(purchasing.data ? [{ key: "purchasing", label: "Purchasing", count: counts.purchasing, dot: KIND.purchasing.bar }] : []),
     { key: "needs_report", label: "Needs report", count: counts.needs_report, dot: "#C08B2E" },
   ];
   const openCreate = (d) => { setSelected(null); setCreating({ event_date: d || selectedDay }); };
@@ -249,7 +258,7 @@ export default function CalendarPage() {
               <div className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>SCHEDULE</div>
               <div className="flex flex-wrap items-baseline gap-x-3">
                 <h1 className="m-0 text-[28px] font-bold leading-[34px] max-[699px]:text-[24px]" style={{ color: "#f2eee8", letterSpacing: "-0.035em" }}>{periodLabel}</h1>
-                <span className="font-mono-num text-[13px]" style={{ color: "#aeb5b7" }}>{periodCount} {periodCount === 1 ? "visit" : "visits"}</span>
+                <span className="font-mono-num text-[13px]" style={{ color: "#aeb5b7" }}>{periodCount} {periodCount === 1 ? "entry" : "entries"}</span>
               </div>
             </div>
             <div className="flex items-center gap-1" aria-label={view === "week" ? "Choose week" : "Choose month"}>
@@ -328,7 +337,7 @@ export default function CalendarPage() {
                 return (
                   <button key={m.id} type="button" onClick={() => { goToDay(d.slice(0, 10)); setSelected(m); }} className="flex items-center gap-3 rounded-md px-2 py-2 text-left text-sm hover:bg-[#F6F3EC]">
                     <span className="font-mono-num text-[12px] w-[92px] shrink-0 whitespace-nowrap" style={{ color: C.textSecondary }}>{d.slice(5, 10)} {m.start_time || ""}</span>
-                    <span className="truncate font-medium" style={{ color: C.text }}>{m.job_name || "(untitled)"}</span>
+                    <span className="truncate font-medium" style={{ color: C.text }}>{m.purchasing_label ? m.purchasing_label + " · " : ""}{m.job_name || "(untitled)"}</span>
                     {m.address && <span className="truncate text-[12px] max-[699px]:hidden" style={{ color: C.textMuted }}>{m.address}</span>}
                   </button>
                 );
@@ -355,13 +364,16 @@ export default function CalendarPage() {
           setShowOutlook={setShowOutlook}
           onReload={load}
         />
+        {purchasing.error && <p role="alert" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{purchasing.error}</p>}
+        {purchasing.data && <p className="mb-3 text-xs text-slate-500">Purchasing dates come from order records. ETAs are estimates; they do not book installation or create Google appointments.</p>}
         {creating && (
           <div className="mb-4">
             <EventForm initial={creating} jobs={jobs} onSave={handleSave} onCancel={() => setCreating(null)} saving={saving} />
           </div>
         )}
         {selected?.source === "outlook" && <OutlookEventDetails event={selected} onClose={() => setSelected(null)} />}
-        {selected && selected.source !== "outlook" && (
+        {selected?.source === "purchasing" && <PurchasingCalendarDetails event={selected} onClose={() => setSelected(null)} />}
+        {selected && selected.source !== "outlook" && selected.source !== "purchasing" && (
           <EventBubble event={selected} jobs={jobs} onEdit={handleSave} onDelete={handleDelete} onClose={() => setSelected(null)} saving={saving} user={user} onChanged={load} />
         )}
 
@@ -385,7 +397,7 @@ export default function CalendarPage() {
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>{selectedDay === today ? `Today · ${dayLabel(selectedDay)}` : dayLabel(selectedDay)}</h2>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>{selectedDayEvents.length} {selectedDayEvents.length === 1 ? "visit" : "visits"}</span>
+                  <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>{selectedDayEvents.length} {selectedDayEvents.length === 1 ? "entry" : "entries"}</span>
                   <button type="button" onClick={() => { setView("week"); }} className="inline-flex min-h-8 items-center px-3 rounded-full text-[12px] font-medium transition-colors hover:bg-[#F6F3EC]" style={ghostBtn}>See week</button>
                 </div>
               </div>
