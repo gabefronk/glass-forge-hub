@@ -16,7 +16,7 @@ test('unknown setup and same-number unlinked supplier records never imply readin
     supplierOrders: [{ id: 's', job_id: 'j', po_name: 'YA-1' }] });
   assert.equal(model.steps[1].status, 'Status unavailable');
   assert.equal(model.steps[3].status, 'Check PO links');
-  assert.match(model.steps[3].detail, /1 POs without an explicit confirmation/);
+  assert.match(model.steps[3].detail, /1 POs without a matching confirmation/);
 });
 test('workflow does not count cancelled or other-job orders', () => {
   const model = purchasingWorkflow({ job: { id: 'j' }, purchaseOrders: [
