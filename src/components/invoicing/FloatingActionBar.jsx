@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { formatMoney } from "@/lib/feeMath";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
-export default function FloatingActionBar({ selectedCount, selectedFee, onClear, onSetFeePct, onDelete, onExport, onMarkBilled }) {
+export default function FloatingActionBar({ selectedCount, selectedFee, onClear, onSetFeePct, onDelete, onExport, onMarkBilled, disabled = false }) {
   const [feeMenuOpen, setFeeMenuOpen] = useState(false);
 
   return (
@@ -14,7 +14,9 @@ export default function FloatingActionBar({ selectedCount, selectedFee, onClear,
         backgroundColor: "var(--gf-graphite-900)",
         border: "1px solid rgba(255,255,255,.08)",
         padding: "0 6px 0 16px",
-        height: "46px",
+        minHeight: "46px",
+        paddingTop: "6px",
+        paddingBottom: "6px",
         boxShadow: "var(--shadow-float)",
         maxWidth: "calc(100vw - 32px)",
       }}
@@ -27,28 +29,28 @@ export default function FloatingActionBar({ selectedCount, selectedFee, onClear,
 
       <Popover open={feeMenuOpen} onOpenChange={setFeeMenuOpen}>
         <PopoverTrigger asChild>
-          <button type="button" className="min-h-9 rounded-lg px-3 text-[12px] font-medium whitespace-nowrap" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)", cursor: "pointer" }}>
+          <button type="button" disabled={disabled} className="min-h-9 rounded-lg px-3 text-[12px] font-medium whitespace-nowrap" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)", cursor: "pointer" }}>
             Fee %
           </button>
         </PopoverTrigger>
         <PopoverContent side="top" align="start" collisionPadding={16} className="z-[70] w-24 overflow-y-auto overscroll-contain p-1" style={{ maxHeight: "min(240px, var(--radix-popover-content-available-height))", backgroundColor: "#FFFFFF", border: "1px solid var(--gf-border)", borderRadius: "8px", padding: "4px", minWidth: "80px" }}>
           {[0, 8, 10, 12, 15].map((pct) => (
-            <button key={pct} onClick={() => { onSetFeePct(pct); setFeeMenuOpen(false); }} className="block w-full rounded-md px-2.5 py-1.5 text-[13px] font-medium text-left" style={{ border: "none", backgroundColor: "transparent", color: "var(--gf-ink)", cursor: "pointer" }}>
+            <button key={pct} disabled={disabled} onClick={() => { onSetFeePct(pct); setFeeMenuOpen(false); }} className="block w-full rounded-md px-2.5 py-1.5 text-[13px] font-medium text-left" style={{ border: "none", backgroundColor: "transparent", color: "var(--gf-ink)", cursor: "pointer" }}>
               {pct}%
             </button>
           ))}
         </PopoverContent>
       </Popover>
 
-      <button onClick={onDelete} className="min-h-9 rounded-lg px-3 text-[12px] font-medium whitespace-nowrap" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "#E8807E", cursor: "pointer" }}>
-        Delete
+      <button disabled={disabled} onClick={onDelete} className="min-h-9 rounded-lg px-3 text-[12px] font-medium whitespace-nowrap" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "#E8807E", cursor: "pointer" }}>
+        {disabled ? "Deleting…" : "Delete"}
       </button>
 
       <button onClick={onExport} className="min-h-9 rounded-lg px-3 text-[12px] font-medium whitespace-nowrap" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)", cursor: "pointer" }}>
         Export CSV
       </button>
 
-      <button onClick={onMarkBilled} className="min-h-9 rounded-lg px-3.5 text-[12px] font-semibold whitespace-nowrap flex items-center gap-1.5" style={{ border: "none", backgroundColor: "var(--gf-brass-400)", color: "var(--gf-on-brass)", cursor: "pointer" }}>
+      <button disabled={disabled} onClick={onMarkBilled} className="min-h-9 rounded-lg px-3.5 text-[12px] font-semibold whitespace-nowrap flex items-center gap-1.5" style={{ border: "none", backgroundColor: "var(--gf-brass-400)", color: "var(--gf-on-brass)", cursor: "pointer" }}>
         Mark billed
         <span className="max-[699px]:hidden text-[9px] rounded px-1" style={{ backgroundColor: "rgba(0,0,0,.15)" }}>⌘↵</span>
       </button>
