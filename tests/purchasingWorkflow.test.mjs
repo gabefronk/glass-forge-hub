@@ -24,6 +24,15 @@ test('workflow does not count cancelled or other-job orders', () => {
   ] });
   assert.equal(model.steps[2].detail, '0 active POs');
 });
+test('existing installation work is not forced through a new customer contract', () => {
+  const model = purchasingWorkflow({ job: { id: 'bfs-install', po_numbers: ['BFS-1'] }, month: '2026-09' });
+  assert.equal(model.next.key, 'invoicing');
+  assert.equal(model.steps[1].status, 'Available if needed');
+});
+test('a converted window sale continues its customer setup', () => {
+  const model = purchasingWorkflow({ job: { id: 'direct', source_window_quote_id: 'q1' } });
+  assert.equal(model.next.key, 'setup');
+});
 test('accepted installed package autofill retains installation selling price and extras', () => {
   const sheet = buildSetupDraft({ job: { id: 'j', accepted_quote_snapshot: {
     result: { totals: { customer_total: 1000, subtotal: 950, tax: 50 }, lines: [{ qty: 1, product: 'Window', customer_extended: 950 }] },
