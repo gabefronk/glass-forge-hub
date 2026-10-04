@@ -35,12 +35,16 @@ function tokenUid(idToken) {
   } catch { return ''; }
 }
 
-// The crew's recent projects carry the whole team; reuse that member list.
-function teamMembers(projects, uid) {
+// The crew's recent projects carry the whole team; reuse that member list. Members are ProBuild
+// user ids (push ids like -O7aXd5nzdH2wo3MsSg1), not login ids. The oldest one is the account
+// that created the team (Gabe's), which is who the new project is "created by".
+const PUSH_ID = /^-[A-Za-z0-9_-]{19}$/;
+function teamMembers(projects) {
   const live = projects.filter((p) => p && !p.deletedAt && p.users).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-  const ids = new Set(uid ? [uid] : []);
-  for (const p of live.slice(0, 5)) for (const k of Object.keys(p.users || {})) ids.add(k);
-  return { ids: [...ids], sample: live[0] || null };
+  const ids = new Set();
+  for (const p of live.slice(0, 5)) for (const k of Object.keys(p.users || {})) if (PUSH_ID.test(k)) ids.add(k);
+  const list = [...ids].sort();
+  return { ids: list, owner: list[0] || '', sample: live[0] || null };
 }
 
 // Calendar title for the job: the next upcoming visit, else the most recent one.
@@ -98,9 +102,10 @@ export default async function probuildProjects(req) {
     const idToken = await getProbuildIdToken(base44);
     const uid = tokenUid(idToken);
     const projects = await fetchProbuildProjects(idToken);
-    const { ids: members, sample } = teamMembers(projects, uid);
+    const { ids: members, owner, sample } = teamMembers(projects);
     const today = denverDate();
-    const ctx = { api, idToken, uid, projects, members, today };
+    const ctx = { api, idToken, uid: owner, projects, members, today };
+    if (!owner) return json({ error: 'no ProBuild team members found on recent projects' }, 200);
 
     if (action === 'inspect') {
       const shallow = await fetch(`${DB}.json?auth=${idToken}&shallow=true`).then((r) => r.ok ? r.json() : null).catch(() => null);
