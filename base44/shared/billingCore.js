@@ -34,7 +34,14 @@ export function computeFeeAmt(row) {
   return roundMoney(computeLaborAmt(row) * (row.fee_pct == null ? .1 : Number(row.fee_pct)));
 }
 export function extractLaborAmount(description) {
-  const lines = String(description || "").split(/\r?\n/);
+  const active = String(description || "").split(/\n\s*[_=]{8,}[^\n]*(?:\n|$)/)[0];
+  const lines = active.split(/\r?\n/);
+  // Explicit installer payment is separate from whether the customer is charged.
+  const payments = [...active.matchAll(/\b(?:we\s+can\s+pay|we\s+will\s+pay|pay)\s+(?:him|israel|ya(?:\s+windows)?|the\s+installer)\s+\$\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/gi)]
+    .filter(m => !/\b(?:not|don't|do\s+not|cannot|can't)\s*$/i.test(active.slice(Math.max(0,m.index-20),m.index)));
+  const paymentAmounts = [...new Set(payments.map(m=>Number(m[1].replace(/,/g,""))))];
+  if (paymentAmounts.length === 1) return paymentAmounts[0];
+  if (paymentAmounts.length > 1) return null;
   const label = /\b(?:sub\s*pay|sub\s*labor|labor)\b\s*(?:amount|pay|cost)?\s*[:=]?\s*/i;
   for (let i = 0; i < lines.length; i++) {
     const hit = label.exec(lines[i]);
@@ -50,7 +57,7 @@ export function extractLaborAmount(description) {
     // followed by a digit is a thousands separator, never the end ("$3,168" is not $3).
     const amount = tail.match(/^\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?=\s|$|[-–—;]|,(?!\d)|\.(?!\d)|\/?win\d*\b)/i);
     if (!amount || /\b(?:man\s*)?(?:hours?|hrs?)\b/i.test(tail.slice(amount[0].length, amount[0].length + 20))) continue;
-    if (separator && !/^\s*(?:[-–—/]\s*)?win\d*\b/i.test(tail.slice(amount[0].length))) continue;
+    if (separator && !/^\s*(?:[-–—/]\s*)*win\d*\b/i.test(tail.slice(amount[0].length))) continue;
     return Number(amount[1].replace(/,/g, ""));
   }
   return null;
