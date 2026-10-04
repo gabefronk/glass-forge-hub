@@ -40,8 +40,9 @@ export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], fe
   const linkedPurchaseOrders = purchaseOrders.filter((row) => ids.has(row.job_id));
   const activePurchaseOrders = linkedPurchaseOrders.filter(row => row.status !== 'cancelled');
   const computed = withComputedAmounts(feeLines);
-  const excluded = buildSupersededSet(withCompanions(computed, calendarEvents), calendarEvents);
-  const linkedFeeLines = computed.filter(row => ids.has(row.job_id) && !excluded.has(row.id));
+  const audited = withCompanions(computed, calendarEvents);
+  const excluded = buildSupersededSet(audited, calendarEvents);
+  const linkedFeeLines = audited.filter(row => ids.has(row.job_id) && !excluded.has(row.id));
 
   return {
     budgets: linkedBudgets.map(row => ({ ...row, included_in_budget: activeIds.has(row.id) })),
