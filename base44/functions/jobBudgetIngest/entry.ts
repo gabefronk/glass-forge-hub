@@ -11,6 +11,7 @@ import { validateLaborEntry, laborMargin, buildCostInputPatch, summarizeJobCosts
 import { validateBudgetInputs, newJobFromBudget, linkedBudgetPatch, sheetValuesFor } from '../../shared/jobBudgetReview.js';
 import { budgetRollup, budgetVersion, estimatePatch, poRefs } from '../../shared/procurementCore.js';
 import { withProcurementLock, procurementError } from '../../shared/procurementLock.mjs';
+import { assertBudgetVersion, budgetInputPatch, rereadPatch } from '../../shared/budgetMutationPolicy.mjs';
 import { QUOTE_SCHEMA, QUOTE_PROMPT, legacyTotals } from '../../shared/vendorQuoteSchema.js';
 import { autofillBudget, budgetNameFor, fileNameHints, GLASS_LABOR_COST_EACH } from '../../shared/jobBudgetAutofill.js';
 
@@ -316,7 +317,7 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
 
 // Re-read a budget row's quote PDF and refill its numbers (rows dropped before autofill, or
 // after the install sheet changes). Overwrites the row's inputs; keeps its job link and files.
-async function refillBudget(base44, db, core, record) {
+async function refillBudget(base44, db, core, record, userEmail) {
   if (!record.source_pdf_url) return { error: 'this budget has no quote PDF to read' };
   const quote = await extractQuote(core, { file_url: record.source_pdf_url });
   const hints = fileNameHints(record.source_pdf_name);
@@ -325,7 +326,7 @@ async function refillBudget(base44, db, core, record) {
   const fill = autofillBudget(quote, { fileName: record.source_pdf_name, glassEach: await glassEach(db) });
   const budget = computeJobBudget(fill.inputs);
   const patch = {
-    quote, inputs: fill.inputs, computed: budget, autofill: autofillRecord(fill),
+    ...rereadPatch(record, quote, fill, new Date().toISOString(), userEmail), autofill: autofillRecord(fill),
     openings_qty: quote.openings_qty || record.openings_qty || undefined,
     quote_number: quote.quote_number || record.quote_number || undefined,
   };
@@ -342,10 +343,12 @@ async function refillBudget(base44, db, core, record) {
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
     if (accessToken && record.drive_job_folder_id) Object.assign(patch, await writeBudgetSheets(accessToken, { ...record, ...patch }, budget, job, record.drive_job_folder_id));
   } catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 200)}`); }
-  const updated = await db.JobBudgets.update(record.id, patch);
+  const saved = await db.JobBudgets.updateMany({ id: record.id, updated_date: record.updated_date }, { $set: patch });
+  if (saved.updated !== 1) throw procurementError(409, 'The budget changed during extraction. Reload before applying new values.');
+  const updated = await db.JobBudgets.get(record.id);
   let costInput = null;
-  if (job) { try { costInput = await upsertCostInputs(db, job, { ...record, ...patch }); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 200)}`); } }
-  return { status: 'ok', budget_id: updated.id, inputs: fill.inputs, sources: fill.sources, notes: fill.notes, computed: budget, cost_input: costInput, warnings };
+  if (job) { try { costInput = await upsertCostInputs(db, job, updated); } catch (e) { warnings.push(`Estimate link not refreshed: ${String(e?.message || e).slice(0, 200)}`); } }
+  return { status: 'ok', budget_id: updated.id, budget: updated, inputs: fill.inputs, sources: fill.sources, notes: fill.notes, computed: budget, cost_input: costInput, warnings };
 }
 
 function stampHistory(order, status, by, note) {
@@ -376,28 +379,32 @@ export default async function jobBudgetIngest(req) {
   if (action === 'set_inputs') {
     const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
     if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
-    const check = validateBudgetInputs(body.inputs || {});
-    if (!check.ok) return Response.json({ error: 'invalid inputs', fields: check.errors }, { status: 400 });
-    const values = check.values;
-    const budget = computeJobBudget(values);
-    const job = record.job_id ? await db.Jobs.get(record.job_id).catch(() => null) : null;
-    const patch = { inputs: values, computed: budget };
+    const patch = budgetInputPatch(record, body, user.email, new Date().toISOString());
+    const values = patch.inputs;
+    const budget = patch.computed;
+    const job = record.job_id ? await db.Jobs.get(record.job_id) : null;
+    const saved = await db.JobBudgets.updateMany({ id: record.id, updated_date: record.updated_date }, { $set: patch });
+    if (saved.updated !== 1) throw procurementError(409, 'The budget changed before save. Reload.');
     const warnings = [];
     try {
       const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
       if (accessToken && record.drive_job_folder_id) Object.assign(patch, await writeBudgetSheets(accessToken, record, budget, job, record.drive_job_folder_id));
       else warnings.push('Drive sheet not rewritten: no folder on this budget.');
     } catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 200)}`); }
-    const updated = await db.JobBudgets.update(record.id, patch);
+    const filePatch = Object.fromEntries(Object.entries(patch).filter(([key]) => key.startsWith('drive_')));
+    if (Object.keys(filePatch).length) await db.JobBudgets.update(record.id, filePatch);
+    const updated = await db.JobBudgets.get(record.id);
     let costInput = null;
-    if (job) { try { costInput = await upsertCostInputs(db, job, { ...record, inputs: values }); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 200)}`); } }
-    return Response.json({ status: 'ok', budget_id: updated.id, computed: budget, cost_input: costInput, warnings });
+    if (job) { try { costInput = await upsertCostInputs(db, job, updated); } catch (e) { warnings.push(`Estimate link not refreshed: ${String(e?.message || e).slice(0, 200)}`); } }
+    return Response.json({ status: 'ok', budget_id: updated.id, budget: updated, computed: budget, cost_input: costInput, warnings });
   }
 
   if (action === 'refill') {
     const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
     if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
-    const out = await refillBudget(base44, db, core, record);
+    assertBudgetVersion(record, body.expected_version);
+    if (body.review_confirmed !== true) throw procurementError(400, 'Confirm replacing working inputs from the source PDF. Previous inputs remain in history.');
+    const out = await refillBudget(base44, db, core, record, user.email);
     return Response.json(out, { status: out.error ? 400 : 200 });
   }
 
