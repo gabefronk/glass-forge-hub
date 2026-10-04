@@ -6,8 +6,9 @@ export const amount = value => {
   const n = Number(text(value).replace(/[$,\s]/g, ''));
   return Number.isFinite(n) ? roundMoney(n) : null;
 };
-export const includedBudget = row => !['reference', 'draft'].includes(row?.budget_usage);
-export const budgetVersion = row => JSON.stringify([row?.id, row?.job_id, row?.updated_date, row?.budget_usage, row?.replaces_budget_id, row?.quote_number, row?.vendor, row?.manufacturer, row?.inputs, row?.numbers_reviewed_at]);
+export const isLiveBudget = row => Boolean(row) && !text(row.deleted_at);
+export const includedBudget = row => isLiveBudget(row) && !['reference', 'draft'].includes(row?.budget_usage);
+export const budgetVersion = row => JSON.stringify([row?.id, row?.job_id, row?.updated_date, row?.budget_usage, row?.replaces_budget_id, row?.quote_number, row?.vendor, row?.manufacturer, row?.inputs, row?.numbers_reviewed_at, row?.deleted_at]);
 
 const ref = value => text(value).toUpperCase();
 const vendorKey = value => text(value).toLowerCase().replace(/\b(windows?|doors?|and|llc|inc|the)\b/g, ' ').replace(/[^a-z0-9]/g, '');
@@ -25,6 +26,7 @@ export function budgetForPO(po, budgets = []) {
   return candidates.length === 1 ? { budget: candidates[0], explicit: false } : { budget: null, reason: candidates.length > 1 ? 'More than one source quote matches' : 'No source budget linked' };
 }
 export function prepareBudgetPO(budget) {
+  if (!isLiveBudget(budget)) throw new Error('This quote was deleted. Open the current quote instead.');
   if (!budget?.id || !budget.job_id) throw new Error('Link the quote to an existing job first.');
   const q = budget.quote || {};
   const ownQuote = /gabriel|\bgabe\b|fronk|glass\s*forge/i.test(`${q.quoted_by || ''} ${q.prepared_by || ''}`);
