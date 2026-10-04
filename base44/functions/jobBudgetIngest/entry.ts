@@ -8,7 +8,9 @@ import { normalizeCustomer } from '../../shared/jobIdentity.js';
 import { denverDate } from '../../shared/billingCore.js';
 import { fetchCompleteEntity, matchJobTokens } from '../../shared/jobCatalog.js';
 import { validateLaborEntry, laborMargin, buildCostInputPatch, summarizeJobCosts } from '../../shared/jobLaborEntry.js';
-import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sheetValuesFor, sumBudgetInputs } from '../../shared/jobBudgetReview.js';
+import { validateBudgetInputs, newJobFromBudget, linkedBudgetPatch, sheetValuesFor } from '../../shared/jobBudgetReview.js';
+import { budgetRollup, budgetVersion, estimatePatch, poRefs } from '../../shared/procurementCore.js';
+import { withProcurementLock, procurementError } from '../../shared/procurementLock.mjs';
 import { QUOTE_SCHEMA, QUOTE_PROMPT, legacyTotals } from '../../shared/vendorQuoteSchema.js';
 import { autofillBudget, budgetNameFor, fileNameHints, GLASS_LABOR_COST_EACH } from '../../shared/jobBudgetAutofill.js';
 
@@ -171,12 +173,21 @@ async function writeBudgetSheets(token, record, budget, job, folderId) {
 // numbers, in place of whatever the database still holds for it.
 async function upsertCostInputs(db, job, current) {
   const month = denverDate().slice(0, 7);
-  const siblings = await db.JobBudgets.filter({ job_id: job.id }, '-created_date', 50).catch(() => []);
-  const sum = sumBudgetInputs(siblings || [], current);
-  const existing = (await db.JobCostInputs.filter({ month, job_id: job.id }, '-created_date', 1).catch(() => []))[0] || null;
-  const patch = reviewCostInputPatch(existing, sum.values, { jobId: job.id, jobNameNorm: normalizeCustomer(job.canonical_name || job.name || ''), month, quoteNumber: sum.quote_number });
-  const row = existing ? await db.JobCostInputs.update(existing.id, patch) : await db.JobCostInputs.create(patch);
-  return { id: row.id, month, budgets_summed: sum.count, product_cost: sum.values.material_true_cost, product_sell: sum.values.actual_total_sell };
+  const [allBudgets, allCosts, closed] = await Promise.all([
+    fetchCompleteEntity(db.JobBudgets), fetchCompleteEntity(db.JobCostInputs), fetchCompleteEntity(db.MonthCloseSnapshot),
+  ]);
+  const siblings = allBudgets.filter(b => b.job_id === job.id && b.id !== current?.id);
+  const estimate = budgetRollup(current ? [...siblings, current] : siblings);
+  const matches = allCosts.filter(c => c.month === month && c.job_id === job.id);
+  if (matches.length > 1) throw new Error('Multiple accounting records for this job/month require review.');
+  const existing = matches[0];
+  // Existing amounts are historical facts. Never copy whole-job sell into product revenue
+  // or estimated labor into actual labor. First-time linking is an explicit reviewed step.
+  if (!existing?.budget_snapshot || closed.some(s => s.month === month)) return { month, estimate, pending_review: true };
+  const patch = estimatePatch(estimate, current?.numbers_reviewed_by || current?.created_by_email || 'budget workflow', new Date().toISOString());
+  const result = await db.JobCostInputs.updateMany({ id: existing.id, updated_date: existing.updated_date }, { $set: patch });
+  if (result.updated !== 1) throw new Error('The accounting record changed; refresh the estimate from Budget & Orders.');
+  return { id: existing.id, month, estimate, estimates_only: true };
 }
 
 // The budget row's yellow-cell inputs as the math expects them (older rows only stored
