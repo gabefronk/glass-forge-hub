@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { procurementPath } from "@/lib/procurementRoutes";
 import { inInvoiceScope, selectedInvoiceRows } from "@/lib/invoiceScope";
+import { selectedReadyInvoiceRows, selectedLaborFeeRows, deleteInvoiceRows } from "@/lib/invoiceActions";
 import { validMonth } from "../../base44/shared/procurementCore.js";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
@@ -259,7 +260,10 @@ export default function Invoicing() {
   }, [feeLines, handleEdit, performAction]);
 
   const handleMarkBilledSelected = useCallback(() => {
-    const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
+    if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before marking lines billed."); return; }
+    const selected = selectedReadyInvoiceRows(feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet);
+    const skipped = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId).length - selected.length;
+    if (skipped) setSyncMessage(`${skipped} selected lines were skipped because they are not ready to bill. Review their status first.`);
     if (!selected.length) return;
     const updates = selected.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
     const prevStates = selected.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs, manually_adjusted: !!r.manually_adjusted }));
@@ -270,11 +274,14 @@ export default function Invoicing() {
       persistBulk(prevStates, updates);
     });
     clearSelection();
-  }, [feeLines, selectedIds, month, focusedJobId, performAction, clearSelection, persistBulk]);
+  }, [feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet, loading, loadError, monthClosed, performAction, clearSelection, persistBulk]);
 
   const handleSetFeePctSelected = useCallback((pct) => {
-    const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
-    if (!selected.length) return;
+    if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before changing fees."); return; }
+    const selected = selectedLaborFeeRows(feeLines, selectedIds, month, focusedJobId);
+    const skipped = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId).length - selected.length;
+    if (skipped) setSyncMessage(`${skipped} profit-split lines were skipped. Edit sale, cost and split on each line instead.`);
+    if (!selected.length || !Number.isFinite(pct) || pct < 0 || pct > 100) return;
     const feePct = pct / 100;
     const updates = selected.map((r) => ({ id: r.id, fee_pct: feePct, fee_amt: Math.round((Number(r.labor_amt) || 0) * feePct * 100) / 100, manually_adjusted: true }));
     const prevStates = selected.map((r) => ({ id: r.id, fee_pct: r.fee_pct, fee_amt: r.fee_amt, manually_adjusted: !!r.manually_adjusted }));
@@ -284,7 +291,7 @@ export default function Invoicing() {
       setFeeLines((prev) => prev.map((r) => { const u = prevStates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
       persistBulk(prevStates, updates);
     });
-  }, [feeLines, selectedIds, month, focusedJobId, performAction, persistBulk]);
+  }, [feeLines, selectedIds, month, focusedJobId, loading, loadError, monthClosed, performAction, persistBulk]);
 
   const handleDeleteSelected = useCallback(async () => {
     const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
