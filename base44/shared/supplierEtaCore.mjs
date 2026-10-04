@@ -1,13 +1,33 @@
-import { referenceConflicts, supplierForPO, validDate, text } from './procurementCore.js';
+import { referenceConflicts, supplierForPO, validDate, text, poRefs } from './procurementCore.js';
 
 export const isAmsco = vendor => /^(amsco|amsco windows)$/i.test(text(vendor));
-export function supplierEtaCandidates({ purchase_orders = [], vendor_orders = [], jobs = [] }) {
+const testRecord = row => row?.is_sample || /^(test(?: only)?|sample)(?:\b|[-_])/i.test(text(row?.canonical_name || row?.job_name || row?.title || row?.po_number));
+export function supplierEtaReview(data) {
+  const { purchase_orders = [], vendor_orders = [], jobs = [] } = data;
   const conflicts = new Set(referenceConflicts(purchase_orders, vendor_orders, jobs).map(c => c.number));
-  return purchase_orders.filter(po => {
+  return purchase_orders.filter(po => isAmsco(po.vendor)).map(po => {
     const job = jobs.find(j => j.id === po.job_id);
-    return isAmsco(po.vendor) && ['emailed', 'ordered', 'confirmed'].includes(po.status) &&
-      job && !job.merged_into && !job.is_sample && !conflicts.has(text(po.po_number).toUpperCase());
+    const supplier = linkedEtaSupplier(po, vendor_orders, purchase_orders);
+    const related = vendor_orders.filter(o => isAmsco(o.vendor) && (o.purchase_order_id === po.id ||
+      poRefs(o.po_name).includes(text(po.po_number).toUpperCase()) ||
+      (text(po.vendor_quote_ref) && text(o.order_number).toUpperCase() === text(po.vendor_quote_ref).toUpperCase())));
+    let reason = '';
+    if (testRecord(po) || testRecord(job) || po.merged_into || job?.merged_into) reason = 'Test, sample or merged record';
+    else if (['cancelled', 'received', 'completed', 'delivered'].includes(po.status) || ['installed', 'closed'].includes(job?.stage) || po.received_date || supplier?.received_date || supplier?.picked_up_at) reason = 'Completed, cancelled or received';
+    else if (conflicts.has(text(po.po_number).toUpperCase())) reason = 'Conflicting job / PO references';
+    else if (!job) reason = 'Missing linked job';
+    else if (related.some(o => o.id !== supplier?.id)) reason = 'Supplier order link needs review';
+    else if (!['emailed', 'ordered', 'confirmed'].includes(po.status)) reason = 'Order not yet sent or confirmed';
+    return { po, reason };
   });
+}
+export function supplierEtaCandidates(data) {
+  return supplierEtaReview(data).filter(row => !row.reason).map(row => row.po);
+}
+export function supplierEtaFollowUp(po, data, now = new Date().toISOString()) {
+  const eta = effectiveSupplierEta(po, linkedEtaSupplier(po, data.vendor_orders, data.purchase_orders));
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now));
+  return eta.response === 'pending' ? 'Still pending' : !eta.date ? 'ETA not confirmed' : eta.date < today ? 'Past estimate — confirm current ETA' : '';
 }
 export function linkedEtaSupplier(po, orders = [], pos = []) {
   const supplier = supplierForPO(po, orders);
