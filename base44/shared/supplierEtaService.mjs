@@ -12,7 +12,7 @@ const loadData = async api => {
   const [purchase_orders, vendor_orders, jobs] = await Promise.all([fetchCompleteEntity(api.PurchaseOrders), fetchCompleteEntity(api.VendorOrders), fetchCompleteEntity(api.Jobs)]);
   return { purchase_orders, vendor_orders, jobs };
 };
-const scopeOrders = (grant, data) => supplierEtaCandidates(data).filter(po => grant.orders.some(s => s.po_id === po.id && s.job_id === po.job_id && s.po_number === po.po_number && s.quote_number === po.vendor_quote_ref));
+const scopeOrders = (grant, data) => supplierEtaCandidates(data).filter(po => grant.orders.some(s => s.po_id === po.id && text(s.job_id) === text(po.job_id) && text(s.po_number) === text(po.po_number) && text(s.quote_number) === text(po.vendor_quote_ref)));
 const validGrant = (grant, now) => grant?.enabled === true && Number.isFinite(Date.parse(grant.expires_at)) && Date.parse(grant.expires_at) > Date.parse(now);
 
 export async function supplierEtaAction(api, body, user, deps = {}) {
@@ -42,7 +42,7 @@ export async function supplierEtaAction(api, body, user, deps = {}) {
     const grant = await api.SupplierEtaLinks.create({ label: text(body.label).slice(0, 100) || 'Steve · AMSCO', vendor: 'AMSCO',
       token_hash: await digest(token), enabled: true, issued_at: stamp, expires_at: new Date(Date.parse(stamp) + days * 86400000).toISOString(),
       created_by_email: user.email, lock_token: '', revision: 0,
-      orders: selected.map(po => ({ po_id: po.id, job_id: po.job_id, po_number: po.po_number, quote_number: po.vendor_quote_ref })) });
+      orders: selected.map(po => ({ po_id: po.id, job_id: text(po.job_id), po_number: text(po.po_number), quote_number: text(po.vendor_quote_ref) })) });
     // Bearer secret is returned exactly once, never stored or logged.
     return { link: safeLink(grant), token };
   }
