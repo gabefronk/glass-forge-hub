@@ -103,7 +103,8 @@ test('board jobs are exact-person or existing active task links; crew cannot boo
  const made=await h.call({action:'create',title:'Allowed',job_id:'ja',request_key:'good-link'});assert.equal(made.status,200);
  assert.equal((await h.call({action:'update_task',id:made.body.task.id,expected_revision:0,patch:{job_id:'jc'}})).status,403);
  assert.equal((await h.call({action:'update_task',id:made.body.task.id,expected_revision:0,patch:{job_id:''}})).status,200);
- assert.equal((await harness(users[0],{jobs:jobsFixture}).call({action:'board'})).body.jobs.length,4);
+ // Owner board only needs labels already linked to tasks; company lookup is searched on demand.
+ assert.equal((await harness(users[0],{jobs:jobsFixture}).call({action:'board'})).body.jobs.length,0);
 });
 
 test('request keys are member-scoped and all new payload fields participate in replay',async()=>{
