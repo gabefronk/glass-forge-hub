@@ -46,8 +46,9 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
       base44.entities.JobBudgets.filter(byJob, "-created_date", 200),
       base44.entities.PurchaseOrders.filter(byJob, "-created_date", 500),
       base44.entities.FeeLines.filter(byJob, "-job_date", 5000),
-    ]).then(([budgets, purchaseOrders, feeLines]) => {
-      if (active) setState({ loading: false, error: "", data: aggregateJobMoney(ids, { budgets, purchaseOrders, feeLines }) });
+      base44.entities.CalendarEvents.filter(byJob, "-event_date", 5000),
+    ]).then(([budgets, purchaseOrders, feeLines, calendarEvents]) => {
+      if (active) setState({ loading: false, error: "", data: aggregateJobMoney(ids, { budgets, purchaseOrders, feeLines, calendarEvents }) });
     }).catch(() => {
       if (active) setState({ loading: false, error: "Financial records could not be loaded.", data: null });
     });
