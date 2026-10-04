@@ -217,6 +217,7 @@ export default function CalendarPage() {
   };
 
   const handleSync = async () => {
+    setPurchasingRevision(value => value + 1);
     setSyncing(true);
     try {
       await refreshMonth(month, setSyncMessage);
