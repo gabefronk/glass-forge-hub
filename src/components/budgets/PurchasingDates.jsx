@@ -9,7 +9,7 @@ export default function PurchasingDates({ row, supplier, showStatus = true }) {
     {supplier && supplier.id !== row.id && <span>Supplier: {statusWithDate(supplier)}</span>}
     {ordered && <span>Ordered <strong>{displayDate(ordered)}</strong></span>}
     <span>ETA <strong>{etaText(supplier, row)}</strong></span>
-    {(row.supplier_eta || supplier?.supplier_eta) && <span>{supplierReplyText(row, supplier)}</span>
+    {(row.supplier_eta || supplier?.supplier_eta) && <span>{supplierReplyText(row, supplier)}</span>}
     {supplier?.received_date && <span>Received <strong>{displayDate(supplier.received_date) || 'Date unknown'}</strong></span>}
   </div>;
 }
