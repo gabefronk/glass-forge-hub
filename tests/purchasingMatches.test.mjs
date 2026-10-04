@@ -37,6 +37,11 @@ test('missing confirmation opens its existing PO, and late delivery opens its su
  assert.equal(purchasingWorkflow({...input,supplierOrders:[s]}).next.editor.order_id,'s');
  assert.equal(purchasingWorkflow({...input,supplierOrders:[{...s,received_date:'2026-10-16'}]}).next.key,'invoicing');
 });
+test('reviewed new draft still needs its include or replace decision', () => {
+ const draft={...b,id:'draft',quote_number:'Q2',budget_usage:'draft',numbers_reviewed_at:'2026-10-01'};
+ const result=purchasingWorkflow({job:{id:'j'},budgets:[b,draft],purchaseOrders:[p]});
+ assert.deepEqual(result.next.editor,{mode:'usage',budget_id:'draft'});
+});
 test('future delivery does not create an unnecessary review action', () => {
  const result=purchasingWorkflow({job:{id:'j'},budgets:[b],purchaseOrders:[p],supplierOrders:[s],today:'2026-10-01'});
  assert.equal(result.next.key,'invoicing'); assert.equal(result.matchedCount,2);
