@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, ClipboardList, Mail } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
@@ -16,12 +16,11 @@ const NAV_ITEMS = [
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Invoicing", to: "/", icon: Receipt },
-  { label: "Job Budgets", to: "/job-budgets", icon: DollarSign, ownerOnly: true },
+  { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
   { label: "Calendar", to: "/calendar", icon: Calendar },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
-  { label: "Purchase Orders", to: "/purchase-orders", icon: ClipboardList, ownerOnly: true },
 ];
 
 // Owner-only admin tools (mirrored in MobileBottomNav's More sheet).
