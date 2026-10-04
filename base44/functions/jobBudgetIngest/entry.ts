@@ -378,7 +378,7 @@ async function refillBudget(base44, db, core, record) {
     quote_number: quote.quote_number || record.quote_number || undefined,
   };
   const warnings = [];
-  let job = record.job_id ? await db.Jobs.get(record.job_id).catch(() => null) : null;
+  const job = record.job_id ? await db.Jobs.get(record.job_id).catch(() => null) : null;
   if (!record.job_id) {
     patch.quote_name = quote.quote_name || undefined;
     patch.job_name = quote.quote_name || record.job_name;
