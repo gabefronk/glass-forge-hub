@@ -1,5 +1,6 @@
 import { activeBudgets, budgetFigures, budgetRollup } from "../../base44/shared/procurementCore.js";
 import { withComputedAmounts } from "./feeMath.js";
+import { withCompanions, buildSupersededSet } from "./invoicingFilters.js";
 import { isAgentCenterOwner } from "./agentCenterAccess.js";
 
 const amount = (value) => {
@@ -19,7 +20,7 @@ export const canLoadJobMoney = (user) => isAgentCenterOwner(user);
 
 // jobId may be one id or a list (the job plus its duplicate records), so money
 // attached to any record in the duplicate group shows on the job page.
-export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], feeLines = [] } = {}) {
+export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], feeLines = [], calendarEvents = [] } = {}) {
   const ids = new Set(Array.isArray(jobId) ? jobId : [jobId]);
   const linkedBudgets = budgets
     .filter((row) => ids.has(row.job_id))
@@ -38,8 +39,9 @@ export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], fe
   const estimate = budgetRollup(linkedBudgets);
   const linkedPurchaseOrders = purchaseOrders.filter((row) => ids.has(row.job_id));
   const activePurchaseOrders = linkedPurchaseOrders.filter(row => row.status !== 'cancelled');
-  const linkedFeeLines = withComputedAmounts(feeLines)
-    .filter((row) => ids.has(row.job_id) && !row.superseded_by);
+  const computed = withComputedAmounts(feeLines);
+  const excluded = buildSupersededSet(withCompanions(computed, calendarEvents), calendarEvents);
+  const linkedFeeLines = computed.filter(row => ids.has(row.job_id) && !excluded.has(row.id));
 
   return {
     budgets: linkedBudgets.map(row => ({ ...row, included_in_budget: activeIds.has(row.id) })),
