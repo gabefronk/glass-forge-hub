@@ -3,7 +3,7 @@ import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch, Sparkles } from "lucide-react";
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
@@ -33,6 +33,7 @@ const ADMIN_ITEMS = [
   { label: "Sales Tracker", to: "/sales-tracker", icon: TrendingUp },
   { label: "Messages", to: "/messages", icon: MessageSquare },
   { label: "Inbox Agents", to: "/inbox-agents", icon: Mail },
+  { label: "Invoicing Agent", to: "/invoicing-agent", icon: Sparkles },
   { label: "Unlinked Records", to: "/admin/unlinked", icon: Unlink },
   { label: "ProBuild Daily", to: "/admin/probuild-daily", icon: FileText },
   { label: "Match Debug", to: "/match-debug", icon: Bug },

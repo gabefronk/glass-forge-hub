@@ -9,6 +9,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 import Invoicing from '@/pages/Invoicing';
+import InvoicingAgent from '@/pages/InvoicingAgent';
 import CalendarPage from '@/pages/CalendarPage';
 import JobsHub from '@/pages/JobsHub';
 import JobDetail from '@/pages/JobDetail';
@@ -84,6 +85,7 @@ const AuthenticatedApp = () => {
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
           <Route path="/" element={<QuotesOnlyRedirect><Invoicing /></QuotesOnlyRedirect>} />
+          <Route path="/invoicing-agent" element={<QuotesOnlyRedirect><InvoicingAgent /></QuotesOnlyRedirect>} />
           <Route path="/calendar" element={<QuotesOnlyRedirect><CalendarPage /></QuotesOnlyRedirect>} />
           <Route path="/dashboard" element={<QuotesOnlyRedirect><Dashboard /></QuotesOnlyRedirect>} />
           <Route path="/operations/overview" element={<QuotesOnlyRedirect><CompanyOverview /></QuotesOnlyRedirect>} />
