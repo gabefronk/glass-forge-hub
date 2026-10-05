@@ -4,7 +4,6 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { PageShell, PageHero, HeroStat, heroBtn, heroPrimary } from "@/components/PageShell";
 import { SheetCard, TILE } from "@/components/jobs/JobSheet";
-import { Button } from "@/components/ui/button";
 import { RefreshCw, AlertTriangle, Link2, DollarSign, CheckCircle2, Sparkles, ArrowUpRight } from "lucide-react";
 
 const REASON_LABELS = {
