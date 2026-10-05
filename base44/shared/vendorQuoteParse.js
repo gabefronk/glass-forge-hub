@@ -131,6 +131,14 @@ export function normalizeVendorQuote(raw = {}) {
     })) : [],
     parse_source: clean(raw.parse_source) || 'llm',
   };
+  // The top-level openings_qty is whatever the extractor reported (the LLM often
+  // undercounts: it returns a number that is neither the line-item count nor the
+  // sum of quantities). When line items are present, the real unit count is the
+  // sum of their quantities (excluding parts — screens, mull kits, freight),
+  // so recompute it from the lines and trust that over the extractor's guess.
+  const lineUnits = out.lines.reduce((sum, l) => sum + (l.kind === 'part' ? 0 : (l.qty || 0)), 0);
+  if (lineUnits > 0) out.openings_qty = lineUnits;
+  return out;
 }
 
 // Job-match tokens: what we use to find the Hub job / Drive folder.
