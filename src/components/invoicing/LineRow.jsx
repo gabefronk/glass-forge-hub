@@ -78,7 +78,7 @@ function StatusDot({ label, dot, text, onClick, clickable }) {
   );
 }
 
-export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, expanded, onToggleExpand, onReady, onSendForReview, onCollapse }) {
+export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, expanded, onToggleExpand, onReady, onSendForReview, onCollapse, jobs, onLinkJob }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUp, setMenuUp] = useState(false);
@@ -363,6 +363,8 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           onDelete={onDelete}
           onSendForReview={onSendForReview}
           onClose={onCollapse}
+          jobs={jobs}
+          onLinkJob={onLinkJob}
         />
       )}
     </>

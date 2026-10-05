@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ExternalLink, Trash2 } from "lucide-react";
+import { Check, ExternalLink, Pencil, Trash2 } from "lucide-react";
 import { computeFeeAmt, computeLaborAmt, formatMoney } from "@/lib/feeMath";
 import { isMatchBlocked } from "@/lib/invoicingFilters";
 import { base44 } from "@/api/base44Client";
+import JobPicker from "./JobPicker";
 
 // Inline expansion shown directly under a clicked invoicing line row.
-// Reads only: it pulls the latest FieldReports for the job to show a field-report
-// note block. It never writes, syncs or backfills anything; the only writes are
-// the explicit Ready / Delete / Send for Review actions the user triggers here.
+// Pulls the latest FieldReports for the job to show a field-report note block,
+// which is editable here and writes through to the FieldReports record so the
+// job page, field reports page and this line all show the same text. The only
+// other writes are the explicit Ready / Delete / Send for Review / Link to Job
+// actions the user triggers here.
 const inputStyle = {
   backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-control)",
   padding: "8px 10px", color: "var(--gf-ink)", fontFamily: "var(--font-body)",
@@ -24,7 +27,7 @@ function NoteBlock({ label, children }) {
   );
 }
 
-export default function LineInlineExpansion({ row, onReady, onDelete, onSendForReview, onClose }) {
+export default function LineInlineExpansion({ row, jobs, onReady, onDelete, onSendForReview, onLinkJob, onClose }) {
   const navigate = useNavigate();
   const [description, setDescription] = useState(row.line_description || "");
   const [detail, setDetail] = useState(row.note_text || "");
@@ -32,6 +35,15 @@ export default function LineInlineExpansion({ row, onReady, onDelete, onSendForR
   const [feePct, setFeePct] = useState(Math.round((row.fee_pct || 0) * 100));
   const [reports, setReports] = useState(null); // null = loading, [] = loaded
   const [reportsHasMore, setReportsHasMore] = useState(false);
+
+  // Field-report inline edit state.
+  const [editingReport, setEditingReport] = useState(false);
+  const [reportText, setReportText] = useState("");
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportError, setReportError] = useState("");
+
+  // Job picker state.
+  const [jobPickerOpen, setJobPickerOpen] = useState(false);
 
   const isProfitSplit = row.fee_type === "profit_split";
   const liveFee = useMemo(() => {
@@ -59,6 +71,7 @@ export default function LineInlineExpansion({ row, onReady, onDelete, onSendForR
   const serviceNote = row.calendar_note_text || row.note_text || "";
   const latestReport = reports && reports.length > 0 ? reports[0] : null;
   const reportCount = reports ? reports.length : 0;
+  const reportEdited = !!(latestReport && (latestReport.edited_at || latestReport.original_text));
   const statusLabel = row.billed_to_bfs ? "Billed" : needsReview ? "Review pricing" : fee > 0 ? "Ready" : "—";
   const statusColor = row.billed_to_bfs ? "var(--gf-ink-3)" : needsReview ? "var(--gf-amber-700)" : "var(--gf-teal-800)";
 
@@ -76,6 +89,39 @@ export default function LineInlineExpansion({ row, onReady, onDelete, onSendForR
     onDelete(row.id);
   };
   const cancel = () => { onClose?.(); };
+
+  const startEditReport = () => {
+    setReportText(latestReport?.message || "");
+    setReportError("");
+    setEditingReport(true);
+  };
+  const cancelEditReport = () => { setEditingReport(false); setReportError(""); };
+  const saveReport = async () => {
+    if (!latestReport) return;
+    setReportSaving(true); setReportError("");
+    const me = await base44.auth.me().catch(() => null);
+    const patch = {
+      message: reportText,
+      edited_at: new Date().toISOString(),
+      edited_by: me?.email || "",
+    };
+    // Keep the original text the first time only, so the source wording survives.
+    if (!latestReport.original_text && latestReport.message) patch.original_text = latestReport.message;
+    try {
+      await base44.entities.FieldReports.update(latestReport.id, patch);
+      setReports((prev) => (prev || []).map((r) => (r.id === latestReport.id ? { ...r, ...patch } : r)));
+      setEditingReport(false);
+    } catch (err) {
+      setReportError(err?.response?.data?.error || err?.message || "Could not save the report text.");
+    } finally {
+      setReportSaving(false);
+    }
+  };
+
+  const confirmLinkJob = (job) => {
+    onLinkJob?.(row.id, job);
+    setJobPickerOpen(false);
+  };
 
   return (
     <div className="rounded-xl mx-[10px] my-1" style={{ border: "1px solid var(--gf-teal-halo)", backgroundColor: "var(--gf-field)", boxShadow: "var(--shadow-row)" }}>
@@ -126,14 +172,35 @@ export default function LineInlineExpansion({ row, onReady, onDelete, onSendForR
             ) : latestReport ? (
               <div>
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[11.5px]" style={{ color: "var(--gf-ink-3)" }}>{latestReport.job_date || ""}</span>
-                  {(reportCount > 1 || reportsHasMore) && row.job_id && (
-                    <button onClick={() => navigate(`/jobs/${row.job_id}`)} className="text-[11.5px] font-medium" style={{ color: "var(--gf-teal-600)", background: "none", border: "none", padding: 0, cursor: "pointer" }}>
-                      {reportsHasMore ? `${reportCount}+ reports — view job ↗` : `${reportCount} reports — view job ↗`}
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[11.5px] whitespace-nowrap" style={{ color: "var(--gf-ink-3)" }}>{latestReport.job_date || ""}</span>
+                    {reportEdited && <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ backgroundColor: "var(--gf-teal-050)", border: "1px solid var(--gf-teal-halo)", color: "var(--gf-teal-600)" }}>Edited</span>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {(reportCount > 1 || reportsHasMore) && row.job_id && (
+                      <button onClick={() => navigate(`/jobs/${row.job_id}`)} className="text-[11.5px] font-medium whitespace-nowrap" style={{ color: "var(--gf-teal-600)", background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+                        {reportsHasMore ? `${reportCount}+ reports — view job ↗` : `${reportCount} reports — view job ↗`}
+                      </button>
+                    )}
+                    {!editingReport && (
+                      <button onClick={startEditReport} aria-label="Edit field report text" className="inline-flex items-center gap-1 text-[11.5px] font-medium whitespace-nowrap" style={{ color: "var(--gf-ink-2)", background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+                        <Pencil className="h-3.5 w-3.5" />Edit
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="text-[13px]" style={{ color: "var(--gf-ink)", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{latestReport.message || "—"}</div>
+                {editingReport ? (
+                  <div>
+                    <textarea value={reportText} onChange={(e) => setReportText(e.target.value)} rows={4} style={{ ...inputStyle, minHeight: "88px", resize: "vertical" }} />
+                    {reportError && <p role="alert" className="mt-1 text-[12px] font-medium" style={{ color: "#A43432" }}>{reportError}</p>}
+                    <div className="mt-2 flex items-center gap-2">
+                      <button onClick={saveReport} disabled={reportSaving} className="min-h-9 rounded-lg px-3 text-[12.5px] font-semibold" style={{ border: "1px solid var(--gf-teal-700)", backgroundColor: "var(--gf-teal-600)", color: "#FFFFFF" }}>{reportSaving ? "Saving…" : "Save"}</button>
+                      <button onClick={cancelEditReport} disabled={reportSaving} className="min-h-9 rounded-lg px-3 text-[12.5px] font-semibold" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink)" }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[13px]" style={{ color: "var(--gf-ink)", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{latestReport.message || "—"}</div>
+                )}
               </div>
             ) : (
               <div className="text-[12.5px]" style={{ color: "var(--gf-ink-3)" }}>None on file</div>
@@ -163,11 +230,20 @@ export default function LineInlineExpansion({ row, onReady, onDelete, onSendForR
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={ready} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-teal-700)", backgroundColor: "var(--gf-teal-600)", color: "#FFFFFF" }}><Check className="h-4 w-4" />Ready</button>
             <button onClick={sendForReview} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink)" }}>Send for Review</button>
-            {row.job_id && <button onClick={() => navigate(`/jobs/${row.job_id}`)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink)" }}><ExternalLink className="h-4 w-4" />Link to Job</button>}
+            <button onClick={() => setJobPickerOpen((v) => !v)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: row.job_id ? "var(--gf-teal-600)" : "var(--gf-ink)" }}><ExternalLink className="h-4 w-4" />{row.job_id ? "Change job" : "Link to Job"}</button>
             <button onClick={cancel} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink)" }}>Cancel</button>
             <button onClick={remove} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "#A43432" }}><Trash2 className="h-4 w-4" />Delete</button>
           </div>
         </div>
+
+        {jobPickerOpen && (
+          <JobPicker
+            jobs={jobs}
+            currentJobId={row.job_id}
+            onConfirm={confirmLinkJob}
+            onCancel={() => setJobPickerOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

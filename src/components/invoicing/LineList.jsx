@@ -5,7 +5,7 @@ import { isMatchBlocked } from "@/lib/invoicingFilters";
 import DayHeader from "./DayHeader";
 import LineRow from "./LineRow";
 
-export default function LineList({ rows, sort, selectedIds, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, reportAttached, onToggleDay, onClearFilters, editRequestId, onEditRequestHandled, onReady, onSendForReview }) {
+export default function LineList({ rows, sort, selectedIds, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, reportAttached, onToggleDay, onClearFilters, editRequestId, onEditRequestHandled, onReady, onSendForReview, jobs, onLinkJob }) {
   const [expandedId, setExpandedId] = useState(null);
   // The drawer's Edit button asks a row to open its inline expansion.
   useEffect(() => {
@@ -91,6 +91,8 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
               onReady={onReady}
               onSendForReview={onSendForReview}
               onCollapse={collapse}
+              jobs={jobs}
+              onLinkJob={onLinkJob}
             />
           ))}
         </div>

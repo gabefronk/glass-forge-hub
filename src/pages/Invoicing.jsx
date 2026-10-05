@@ -279,6 +279,22 @@ export default function Invoicing() {
     catch (err) { setFeeLines((prev) => prev.map((r) => (r.id === id ? row : r))); setSyncMessage(`Could not send for review. ${err?.message || ""}`.trim()); }
   }, [feeLines]);
 
+  // Link to Job: save the chosen job's id (and the denormalized name the list and
+  // job page read) on the fee line. Manual only — the picker never auto-links.
+  const handleLinkJob = useCallback(async (id, job) => {
+    if (deleting.current) return;
+    const row = feeLines.find((r) => r.id === id);
+    if (!row) return;
+    const prev = { job_id: row.job_id, job_name_norm: row.job_name_norm };
+    const patch = { job_id: job.id, job_name_norm: job.canonical_name || job.name || "" };
+    setFeeLines((cur) => cur.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    try { await base44.entities.FeeLines.update(id, patch); }
+    catch (err) {
+      setFeeLines((cur) => cur.map((r) => (r.id === id ? { ...r, ...prev } : r)));
+      setSyncMessage(`Could not link job. ${err?.message || ""}`.trim());
+    }
+  }, [feeLines]);
+
   const handleMarkBilled = useCallback((id, value = true) => {
     if (deleting.current) return;
     const row = feeLines.find((r) => r.id === id);
@@ -561,6 +577,8 @@ export default function Invoicing() {
                 onEditRequestHandled={clearEditRequest}
                 onReady={handleReady}
                 onSendForReview={handleSendForReview}
+                jobs={profitabilityInputs.jobs}
+                onLinkJob={handleLinkJob}
               />
             ) : (
               <JobsView
