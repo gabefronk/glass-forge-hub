@@ -78,7 +78,7 @@ function StatusDot({ label, dot, text, onClick, clickable }) {
   );
 }
 
-export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, expanded, onToggleExpand }) {
+export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, expanded, onToggleExpand, onReady, onSendForReview, onCollapse }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUp, setMenuUp] = useState(false);
@@ -135,7 +135,9 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
   // Status info
   let statusInfo = null;
-  if (blocked) {
+  if (row.sent_for_review) {
+    statusInfo = { label: "Sent for review", dot: "var(--gf-amber-500)", text: "var(--gf-amber-700)" };
+  } else if (blocked) {
     const isMatch = isMatchBlocked(row);
     if (isMatch) {
       statusInfo = { label: row._billing_review ? "Check billing" : "Review pricing", dot: "var(--gf-amber-500)", text: "var(--gf-amber-700)", onClick: (e) => { e.stopPropagation(); if (row._billing_review) onOpenDetails(row); else onToggleExpand(row); }, clickable: true };
@@ -357,9 +359,10 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
       {expanded && (
         <LineInlineExpansion
           row={row}
-          onSave={onEdit}
+          onReady={onReady}
           onDelete={onDelete}
-          onMarkBilled={onMarkBilled}
+          onSendForReview={onSendForReview}
+          onClose={onCollapse}
         />
       )}
     </>

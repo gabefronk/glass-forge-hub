@@ -8,7 +8,7 @@ import { base44 } from "@/api/base44Client";
 // Inline expansion shown directly under a clicked invoicing line row.
 // Reads only: it pulls the latest FieldReports for the job to show a field-report
 // note block. It never writes, syncs or backfills anything; the only writes are
-// the explicit Save / Delete / Mark billed actions the user triggers here.
+// the explicit Ready / Delete / Send for Review actions the user triggers here.
 const inputStyle = {
   backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-control)",
   padding: "8px 10px", color: "var(--gf-ink)", fontFamily: "var(--font-body)",
@@ -24,7 +24,7 @@ function NoteBlock({ label, children }) {
   );
 }
 
-export default function LineInlineExpansion({ row, onSave, onDelete, onMarkBilled }) {
+export default function LineInlineExpansion({ row, onReady, onDelete, onSendForReview, onClose }) {
   const navigate = useNavigate();
   const [description, setDescription] = useState(row.line_description || "");
   const [detail, setDetail] = useState(row.note_text || "");
@@ -53,33 +53,29 @@ export default function LineInlineExpansion({ row, onSave, onDelete, onMarkBille
 
   const fee = computeFeeAmt(row);
   const laborSaved = computeLaborAmt(row);
-  const isBilled = !!row.billed_to_bfs;
   const needsReview = isMatchBlocked(row);
   const reviewReason = row._billing_review || (!row.manually_adjusted && row._companion_review) || row.pricing_review_reason;
   const orderRef = row.po_number || row.oe_number || "";
   const serviceNote = row.calendar_note_text || row.note_text || "";
   const latestReport = reports && reports.length > 0 ? reports[0] : null;
   const reportCount = reports ? reports.length : 0;
-  const statusLabel = isBilled ? "Billed" : needsReview ? "Review pricing" : fee > 0 ? "Ready" : "—";
-  const statusColor = isBilled ? "var(--gf-ink-3)" : needsReview ? "var(--gf-amber-700)" : "var(--gf-teal-800)";
+  const statusLabel = row.billed_to_bfs ? "Billed" : needsReview ? "Review pricing" : fee > 0 ? "Ready" : "—";
+  const statusColor = row.billed_to_bfs ? "var(--gf-ink-3)" : needsReview ? "var(--gf-amber-700)" : "var(--gf-teal-800)";
 
-  const save = () => {
-    onSave(row.id, {
-      line_description: description,
-      note_text: detail,
-      labor_amt: Number(labor) || 0,
-      fee_pct: (Number(feePct) || 0) / 100,
-      manually_adjusted: true,
-      ...(String(row.pricing_review_reason || "").startsWith("[Billing audit] Possible duplicate:") ? { pricing_review_reason: null, needs_review: false } : {}),
-    });
+  const editedFields = {
+    line_description: description,
+    note_text: detail,
+    labor_amt: Number(labor) || 0,
+    fee_pct: (Number(feePct) || 0) / 100,
   };
 
-  const cancel = () => {
-    setDescription(row.line_description || "");
-    setDetail(row.note_text || "");
-    setLabor(row.labor_amt || 0);
-    setFeePct(Math.round((row.fee_pct || 0) * 100));
+  const ready = () => { onReady(row.id, editedFields); onClose?.(); };
+  const sendForReview = () => { onSendForReview(row.id); onClose?.(); };
+  const remove = () => {
+    if (!window.confirm(`Delete this line for "${row.job_name_raw || row.job_name_norm || ""}"?`)) return;
+    onDelete(row.id);
   };
+  const cancel = () => { onClose?.(); };
 
   return (
     <div className="rounded-xl mx-[10px] my-1" style={{ border: "1px solid var(--gf-teal-halo)", backgroundColor: "var(--gf-field)", boxShadow: "var(--shadow-row)" }}>
@@ -165,22 +161,18 @@ export default function LineInlineExpansion({ row, onSave, onDelete, onMarkBille
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Action row: Ready, Link to Job, Delete, Cancel, Send for Review */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <span className="text-[12px]" style={{ color: "var(--gf-ink-2)" }}>Fee </span>
             <span className="font-mono-num-bold text-[18px]" style={{ color: "var(--gf-teal-600)" }}>${formatMoney(liveFee)}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => onDelete(row.id)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-error-border, #F0C9C5)", backgroundColor: "transparent", color: "#A43432" }}>Delete line</button>
+            <button onClick={ready} className="min-h-10 rounded-lg px-4 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-teal-700)", backgroundColor: "var(--gf-teal-600)", color: "#FFFFFF" }}><Check className="h-4 w-4" />Ready</button>
+            {row.job_id && <button onClick={() => navigate(`/jobs/${row.job_id}`)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink)" }}><ExternalLink className="h-4 w-4" />Link to Job</button>}
+            <button onClick={remove} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-error-border, #F0C9C5)", backgroundColor: "transparent", color: "#A43432" }}><Trash2 className="h-4 w-4" />Delete</button>
             <button onClick={cancel} className="min-h-10 rounded-lg px-3 text-[13px] font-medium" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink-2)" }}>Cancel</button>
-            {row.job_id && <button onClick={() => navigate(`/jobs/${row.job_id}`)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink)" }}><ExternalLink className="h-4 w-4" />Job</button>}
-            {isBilled ? (
-              <button onClick={() => onMarkBilled(row.id, false)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink-2)" }}>Reopen</button>
-            ) : (
-              <button onClick={() => onMarkBilled(row.id, true)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-teal-700)", backgroundColor: "var(--gf-teal-600)", color: "#FFFFFF" }}><Check className="h-4 w-4" />Mark billed</button>
-            )}
-            <button onClick={save} className="min-h-10 rounded-lg px-4 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-teal-600)", backgroundColor: "var(--gf-teal-600)", color: "#FFFFFF" }}>Save</button>
+            <button onClick={sendForReview} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-amber-100)", backgroundColor: "var(--gf-amber-050)", color: "var(--gf-amber-700)" }}>Send for Review</button>
           </div>
         </div>
       </div>
