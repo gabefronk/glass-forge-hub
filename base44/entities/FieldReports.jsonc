@@ -37,6 +37,22 @@
       "title": "Message",
       "description": "Verbatim post message / notes"
     },
+    "original_text": {
+      "type": "string",
+      "title": "Original Text",
+      "description": "Snapshot of the original Probuild message the first time the report text is edited from the Hub. Set once and never overwritten, so the source wording survives later edits and re-syncs."
+    },
+    "edited_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Edited At",
+      "description": "When the report text was last edited from the Hub."
+    },
+    "edited_by": {
+      "type": "string",
+      "title": "Edited By",
+      "description": "Email of the user who last edited the report text from the Hub."
+    },
     "photo_urls": {
       "type": "array",
       "items": {

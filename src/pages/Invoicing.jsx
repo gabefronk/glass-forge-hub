@@ -23,9 +23,12 @@ import UnprocessedEventsBanner from "@/components/invoicing/UnprocessedEventsBan
 import LineDetailsDrawer from "@/components/invoicing/LineDetailsDrawer";
 import JobProfitabilityPanel from "@/components/invoicing/JobProfitabilityPanel";
 import BudgetEstimateNote from "@/components/invoicing/BudgetEstimateNote";
+import NeedsConfirmationList from "@/components/invoicing/NeedsConfirmationList";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function Invoicing() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const focusedJobId = params.get('job_id') || '';
   const requestedMonth = params.get('month') || '';
@@ -117,7 +120,7 @@ export default function Invoicing() {
       if (!stale()) setLoading(false);
     }
   };
-  useEffect(() => { load(); }, [month, focusedJobId]);
+  useEffect(() => { if (user?.role === 'user') { setLoading(false); return; } load(); }, [month, focusedJobId, user?.role]);
 
   // Display copies: $0 ProBuild twins fold into their calendar labor line and priced
   // companions are held for review. Writes always start from the raw feeLines rows.
@@ -255,6 +258,42 @@ export default function Invoicing() {
   }, [feeLines, month, focusedJobId, performAction]);
 
   const handleAddReport = useCallback(() => { navigate("/calendar"); }, [navigate]);
+
+  // Ready: save the edits and clear the review hold so the line shows as Ready
+  // (the same Ready status the list already derives via isReady). Replaces the old
+  // Save + Mark billed buttons. Does not touch fee_pct beyond the edited value.
+  const handleReady = useCallback((id, patch) => {
+    handleEdit(id, { ...patch, needs_review: false, pricing_review_reason: null, billable: true });
+  }, [handleEdit]);
+
+  // Send for Review: flag the line for the YA crew (Israel) to confirm labor/details.
+  // Only the new optional flag fields are written; no existing data is changed.
+  const handleSendForReview = useCallback(async (id) => {
+    if (deleting.current) return;
+    const row = feeLines.find((r) => r.id === id);
+    if (!row) return;
+    const me = await base44.auth.me().catch(() => null);
+    const patch = { sent_for_review: true, sent_for_review_at: new Date().toISOString(), sent_for_review_by: me?.email || "" };
+    setFeeLines((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    try { await base44.entities.FeeLines.update(id, patch); }
+    catch (err) { setFeeLines((prev) => prev.map((r) => (r.id === id ? row : r))); setSyncMessage(`Could not send for review. ${err?.message || ""}`.trim()); }
+  }, [feeLines]);
+
+  // Link to Job: save the chosen job's id (and the denormalized name the list and
+  // job page read) on the fee line. Manual only — the picker never auto-links.
+  const handleLinkJob = useCallback(async (id, job) => {
+    if (deleting.current) return;
+    const row = feeLines.find((r) => r.id === id);
+    if (!row) return;
+    const prev = { job_id: row.job_id, job_name_norm: row.job_name_norm };
+    const patch = { job_id: job.id, job_name_norm: job.canonical_name || job.name || "" };
+    setFeeLines((cur) => cur.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    try { await base44.entities.FeeLines.update(id, patch); }
+    catch (err) {
+      setFeeLines((cur) => cur.map((r) => (r.id === id ? { ...r, ...prev } : r)));
+      setSyncMessage(`Could not link job. ${err?.message || ""}`.trim());
+    }
+  }, [feeLines]);
 
   const handleMarkBilled = useCallback((id, value = true) => {
     if (deleting.current) return;
@@ -442,6 +481,9 @@ export default function Invoicing() {
     );
   }
 
+  // YA crew (Israel) only sees the crew confirmation list, never owner-only pricing.
+  if (user?.role === 'user') return <NeedsConfirmationList />;
+
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
       {focusedJobId && <div className="mx-auto max-w-[1440px] px-5 pt-5 sm:px-6 lg:px-8"><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div><p className="text-sm font-bold text-emerald-950">Job invoicing: {profitabilityInputs.jobs.find(j => j.id === focusedJobId)?.canonical_name || focusedJobId}</p><p className="mt-1 text-xs text-emerald-900">Only records linked to this job. Global ingest and month-close actions stay in the all-jobs view.</p></div><div className="flex flex-wrap gap-3 text-sm font-semibold text-emerald-950"><Link className="underline" to={procurementPath(focusedJobId, 'invoicing', month)}>Budget & Orders</Link><Link className="underline" to={`/?month=${encodeURIComponent(month)}`}>Show all jobs</Link></div></div></div>}
@@ -533,6 +575,10 @@ export default function Invoicing() {
                 onClearFilters={() => { setFilter("all"); setSearch(""); setHideZeros(false); }}
                 editRequestId={editRequestId}
                 onEditRequestHandled={clearEditRequest}
+                onReady={handleReady}
+                onSendForReview={handleSendForReview}
+                jobs={profitabilityInputs.jobs}
+                onLinkJob={handleLinkJob}
               />
             ) : (
               <JobsView
