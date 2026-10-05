@@ -3,7 +3,7 @@ import { validDate, supplierForPO, referenceConflicts } from '../../base44/share
 import { isIgnoredWorkItem } from '../../base44/shared/billingCore.js';
 
 export function purchasingJobName(row, jobs = []) {
-  if (!row?.job_id) return 'No job linked';
+  if (!row?.job_id) return row?.purchase_type === 'shop' ? 'Shop purchase' : 'No job linked';
   const job = jobs.find(j => j.id === row.job_id);
   if (!job) return 'Linked job unavailable';
   return String(job.canonical_name || '').trim() || String(job.display_name || '').trim() || 'Unnamed linked job';
