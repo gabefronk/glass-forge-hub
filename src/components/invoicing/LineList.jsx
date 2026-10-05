@@ -1,11 +1,19 @@
 import { isFutureRow } from "@/lib/feeMath";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { computeFeeAmt } from "@/lib/feeMath";
 import { isMatchBlocked } from "@/lib/invoicingFilters";
 import DayHeader from "./DayHeader";
 import LineRow from "./LineRow";
 
 export default function LineList({ rows, sort, selectedIds, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, reportAttached, onToggleDay, onClearFilters, editRequestId, onEditRequestHandled }) {
+  const [expandedId, setExpandedId] = useState(null);
+  // The drawer's Edit button asks a row to open its inline expansion.
+  useEffect(() => {
+    if (!editRequestId) return;
+    setExpandedId(editRequestId);
+    onEditRequestHandled?.();
+  }, [editRequestId, onEditRequestHandled]);
+  const toggleExpand = (row) => setExpandedId((prev) => (prev === row.id ? null : row.id));
   const grouped = useMemo(() => {
     if (sort === "fee") {
       return [{ date: null, rows: [...rows].sort((a, b) => computeFeeAmt(b) - computeFeeAmt(a)) }];
@@ -77,8 +85,8 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
               onMarkBilled={onMarkBilled}
               onOpenJob={onOpenJob}
               onOpenDetails={onOpenDetails}
-              editRequested={editRequestId === row.id}
-              onEditRequestHandled={onEditRequestHandled}
+              expanded={expandedId === row.id}
+              onToggleExpand={toggleExpand}
             />
           ))}
         </div>

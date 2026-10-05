@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, MoreHorizontal, ExternalLink, Trash2, Pencil } from "lucide-react";
+import { Check, MoreHorizontal, ExternalLink, Trash2, Pencil, ChevronDown } from "lucide-react";
 import { computeFeeAmt, formatMoney } from "@/lib/feeMath";
 import { crewName, noteTokens } from "@/lib/feeUI";
 import { isMatchBlocked } from "@/lib/invoicingFilters";
+import LineInlineExpansion from "./LineInlineExpansion";
 
 const TILES = [
   { bg: "var(--gf-tile-teal)", ink: "var(--gf-tile-teal-ink)" },
@@ -51,59 +52,6 @@ function MenuItem({ icon: Icon, label, onClick, danger }) {
   );
 }
 
-function InlineEditor({ row, onSave, onCancel, onDelete }) {
-  const [description, setDescription] = useState(row.line_description || "");
-  const [detail, setDetail] = useState(row.note_text || "");
-  const [labor, setLabor] = useState(row.labor_amt || 0);
-  const [feePct, setFeePct] = useState(Math.round((row.fee_pct || 0) * 100));
-
-  const liveFee = useMemo(() => {
-    const l = Number(labor) || 0;
-    const p = (Number(feePct) || 0) / 100;
-    return Math.round(l * p * 100) / 100;
-  }, [labor, feePct]);
-
-  const inputStyle = {
-    backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-control)",
-    padding: "8px 10px", color: "var(--gf-ink)", fontFamily: "var(--font-body)",
-    fontSize: "14px", outline: "none", width: "100%",
-  };
-
-  return (
-    <div className="rounded-xl p-4 my-1" style={{ backgroundColor: "var(--gf-field)", border: "1px solid var(--gf-border)" }}>
-      <div className="mb-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--gf-ink-2)" }}>Description</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
-        </div>
-        <div>
-          <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--gf-ink-2)" }}>Detail</label>
-          <input value={detail} onChange={(e) => setDetail(e.target.value)} style={inputStyle} />
-        </div>
-        <div>
-          <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--gf-ink-2)" }}>Labor $</label>
-          <input type="number" value={labor} onChange={(e) => setLabor(e.target.value)} style={inputStyle} />
-        </div>
-        <div>
-          <label className="text-[12px] font-medium block mb-1" style={{ color: "var(--gf-ink-2)" }}>Fee %</label>
-          <input type="number" value={feePct} onChange={(e) => setFeePct(e.target.value)} style={inputStyle} />
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <span className="text-[12px]" style={{ color: "var(--gf-ink-2)" }}>Fee </span>
-          <span className="font-mono-num-bold text-[18px]" style={{ color: "var(--gf-teal-600)" }}>${formatMoney(liveFee)}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => onDelete(row.id)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-error-border, #F0C9C5)", backgroundColor: "transparent", color: "#A43432" }}>Delete line</button>
-          <button onClick={onCancel} className="min-h-10 rounded-lg px-3 text-[13px] font-medium" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink-2)" }}>Cancel</button>
-          <button onClick={() => onSave(row.id, { line_description: description, note_text: detail, labor_amt: Number(labor) || 0, fee_pct: (Number(feePct) || 0) / 100, manually_adjusted: true, ...(String(row.pricing_review_reason || "").startsWith("[Billing audit] Possible duplicate:") ? { pricing_review_reason: null, needs_review: false } : {}) })} className="min-h-10 rounded-lg px-4 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-teal-600)", backgroundColor: "var(--gf-teal-600)", color: "#FFFFFF" }}>Save</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function StatusDot({ label, dot, text, onClick, clickable }) {
   const Tag = clickable ? "button" : "span";
   return (
@@ -130,11 +78,10 @@ function StatusDot({ label, dot, text, onClick, clickable }) {
   );
 }
 
-export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, editRequested, onEditRequestHandled }) {
+export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, expanded, onToggleExpand }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUp, setMenuUp] = useState(false);
-  const [editing, setEditing] = useState(false);
   const menuRef = useRef(null);
   const menuRefMobile = useRef(null);
 
@@ -149,13 +96,6 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
     setMenuOpen(!menuOpen);
   };
 
-  // The details drawer's Edit button asks the row to open its inline editor.
-  useEffect(() => {
-    if (!editRequested) return;
-    setEditing(true);
-    onEditRequestHandled?.();
-  }, [editRequested, onEditRequestHandled]);
-
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e) => {
@@ -166,17 +106,6 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
-
-  if (editing) {
-    return (
-      <InlineEditor
-        row={row}
-        onSave={(id, patch) => { onEdit(id, patch); setEditing(false); }}
-        onCancel={() => setEditing(false)}
-        onDelete={onDelete}
-      />
-    );
-  }
 
   const fee = computeFeeAmt(row);
   const isProfitSplit = row.fee_type === "profit_split";
@@ -201,7 +130,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
   const handleRowClick = (e) => {
     if (e.target.closest("[data-no-open]")) return;
-    onOpenDetails(row);
+    onToggleExpand(row);
   };
 
   // Status info
@@ -209,7 +138,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   if (blocked) {
     const isMatch = isMatchBlocked(row);
     if (isMatch) {
-      statusInfo = { label: row._billing_review ? "Check billing" : "Review pricing", dot: "var(--gf-amber-500)", text: "var(--gf-amber-700)", onClick: (e) => { e.stopPropagation(); if (row._billing_review) onOpenDetails(row); else setEditing(true); }, clickable: true };
+      statusInfo = { label: row._billing_review ? "Check billing" : "Review pricing", dot: "var(--gf-amber-500)", text: "var(--gf-amber-700)", onClick: (e) => { e.stopPropagation(); if (row._billing_review) onOpenDetails(row); else onToggleExpand(row); }, clickable: true };
     } else {
       statusInfo = { label: "Needs report", dot: "var(--gf-stone-300)", text: "var(--gf-ink-2)", onClick: (e) => { e.stopPropagation(); onAddReport(row.id); }, clickable: true };
     }
@@ -225,14 +154,26 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
     margin: "4px 10px",
     border: "1px solid var(--gf-hairline)",
     borderRadius: "var(--r-row)",
-    backgroundColor: selected ? "var(--gf-teal-050)" : "var(--gf-card)",
-    boxShadow: selected ? `inset 2px 0 0 var(--gf-teal-600), var(--shadow-row)` : "var(--shadow-row)",
+    backgroundColor: selected || expanded ? "var(--gf-teal-050)" : "var(--gf-card)",
+    boxShadow: selected || expanded ? `inset 2px 0 0 var(--gf-teal-600), var(--shadow-row)` : "var(--shadow-row)",
     cursor: "pointer",
     transition: "background-color .15s, box-shadow .15s",
   };
 
-  const hoverBg = (e) => { if (!selected) { e.currentTarget.style.backgroundColor = "var(--gf-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-row-hover)"; } };
-  const leaveBg = (e) => { if (!selected) { e.currentTarget.style.backgroundColor = "var(--gf-card)"; e.currentTarget.style.boxShadow = "var(--shadow-row)"; } };
+  const hoverBg = (e) => { if (!selected && !expanded) { e.currentTarget.style.backgroundColor = "var(--gf-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-row-hover)"; } };
+  const leaveBg = (e) => { if (!selected && !expanded) { e.currentTarget.style.backgroundColor = "var(--gf-card)"; e.currentTarget.style.boxShadow = "var(--shadow-row)"; } };
+
+  const chevronBtn = (
+    <button
+      data-no-open
+      onClick={(e) => { e.stopPropagation(); onToggleExpand(row); }}
+      aria-label={expanded ? "Collapse line" : "Expand line"}
+      aria-expanded={expanded}
+      style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "var(--gf-ink-3)", cursor: "pointer", flexShrink: 0 }}
+    >
+      <ChevronDown style={{ width: "16px", height: "16px", transition: "transform .15s", transform: expanded ? "rotate(180deg)" : "none" }} />
+    </button>
+  );
 
   return (
     <>
@@ -266,7 +207,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
         <div className="flex items-baseline gap-2 min-w-0" style={{ flex: "1 1 auto" }}>
           <button
             data-no-open
-            onClick={(e) => { e.stopPropagation(); onOpenDetails(row); }}
+            onClick={(e) => { e.stopPropagation(); onToggleExpand(row); }}
             className="text-[14px] font-medium truncate text-left"
             style={{ color: "var(--gf-ink)", textDecoration: isBilled ? "line-through" : "none", flexShrink: 0, flexBasis: "220px", minWidth: "180px", maxWidth: "280px", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit" }}
           >
@@ -311,7 +252,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           {menuOpen && (
             <div style={{ position: "absolute", right: 0, ...(menuUp ? { bottom: "100%", marginBottom: "4px" } : { top: "100%" }), zIndex: 30, backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "var(--shadow-float)" }}>
               <MenuItem icon={ExternalLink} label="Open details" onClick={() => { onOpenDetails(row); setMenuOpen(false); }} />
-              <MenuItem icon={Pencil} label="Edit line" onClick={() => { setEditing(true); setMenuOpen(false); }} />
+              <MenuItem icon={Pencil} label="Edit line" onClick={() => { onToggleExpand(row); setMenuOpen(false); }} />
               {row.job_id && <MenuItem icon={ExternalLink} label="Open job ↗" onClick={() => { navigate(`/jobs/${row.job_id}`); setMenuOpen(false); }} />}
               {isBilled ? (
                 <MenuItem label="Reopen line" onClick={() => { onMarkBilled(row.id, false); setMenuOpen(false); }} />
@@ -323,6 +264,9 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
             </div>
           )}
         </div>
+
+        {/* Chevron */}
+        {chevronBtn}
       </div>
 
       {/* Mobile row */}
@@ -358,7 +302,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
             <div className="flex items-center justify-between gap-2">
               <button
                 data-no-open
-                onClick={(e) => { e.stopPropagation(); onOpenDetails(row); }}
+                onClick={(e) => { e.stopPropagation(); onToggleExpand(row); }}
                 className="text-[14px] font-medium truncate text-left"
                 style={{ color: "var(--gf-ink)", textDecoration: isBilled ? "line-through" : "none", minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit" }}
               >
@@ -392,7 +336,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
             {menuOpen && (
               <div style={{ position: "absolute", right: 0, ...(menuUp ? { bottom: "100%", marginBottom: "4px" } : { top: "100%" }), zIndex: 30, backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "var(--shadow-float)" }}>
                 <MenuItem icon={ExternalLink} label="Open details" onClick={() => { onOpenDetails(row); setMenuOpen(false); }} />
-                <MenuItem icon={Pencil} label="Edit line" onClick={() => { setEditing(true); setMenuOpen(false); }} />
+                <MenuItem icon={Pencil} label="Edit line" onClick={() => { onToggleExpand(row); setMenuOpen(false); }} />
                 {row.job_id && <MenuItem icon={ExternalLink} label="Open job ↗" onClick={() => { navigate(`/jobs/${row.job_id}`); setMenuOpen(false); }} />}
                 {isBilled ? (
                   <MenuItem label="Reopen line" onClick={() => { onMarkBilled(row.id, false); setMenuOpen(false); }} />
@@ -404,8 +348,20 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
               </div>
             )}
           </div>
+
+          {/* Chevron */}
+          {chevronBtn}
         </div>
       </div>
+
+      {expanded && (
+        <LineInlineExpansion
+          row={row}
+          onSave={onEdit}
+          onDelete={onDelete}
+          onMarkBilled={onMarkBilled}
+        />
+      )}
     </>
   );
 }
