@@ -36,3 +36,30 @@ test("normalizeVendorQuote cleans LLM-shaped JSON", () => {
   assert.equal(q.openings_qty, 4);
   assert.deepEqual(quoteMatchTokens(q), ["baxter"]);
 });
+
+test("openings_qty is recomputed from line quantities when the extractor undercounts", () => {
+  // The LLM often returns a top-level openings_qty that is neither the line count
+  // nor the sum of quantities (e.g. Taira Res: 8 lines, 19 units, LLM said 14).
+  // The real unit count is the sum of the line quantities, excluding parts.
+  const q = normalizeVendorQuote({
+    vendor: "Nu Vista", quote_number: "1050", openings_qty: 14,
+    lines: [
+      { qty: 1, kind: "door", description: "Multi Slider" },
+      { qty: 4, kind: "glass", description: "Glass D19" },
+      { qty: 1, kind: "door", description: "Multi Slider" },
+      { qty: 4, kind: "glass", description: "Glass D8" },
+      { qty: 1, kind: "door", description: "Multi Slider" },
+      { qty: 4, kind: "glass", description: "Glass D8" },
+      { qty: 2, kind: "door", description: "Patio Door" },
+      { qty: 2, kind: "door", description: "Patio Door" },
+      { qty: 3, kind: "part", description: "Mull kit" },
+    ],
+  });
+  assert.equal(q.lines.length, 9);
+  assert.equal(q.openings_qty, 19); // 1+4+1+4+1+4+2+2, parts excluded
+});
+
+test("openings_qty falls back to the raw value when there are no lines", () => {
+  const q = normalizeVendorQuote({ vendor: "Amsco", openings_qty: 7 });
+  assert.equal(q.openings_qty, 7);
+});

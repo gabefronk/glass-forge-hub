@@ -1,7 +1,7 @@
 import PurchasingDates from '@/components/budgets/PurchasingDates';
 import { purchasingJobName, purchasingRows, statusWithDate, etaText, supplierReplyText } from '@/lib/purchasingDates';
 import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { UploadCloud, ArrowLeft, FileText, RefreshCw, AlertTriangle, Plus } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -145,15 +145,7 @@ function ProcurementWorkspace() {
     <Card><div className="grid items-end gap-3 sm:grid-cols-2"><Field label={job ? 'Search this job\u2019s purchasing records' : 'Find a job or quote'} value={query} onChange={setQuery} />{!job && <Field label="Open an existing job" value="" onChange={id => id && navigate(pathFor(id))}><option value="">Choose job...</option>{availableJobs.filter(j => !needle || matches(j)).map(j => <option key={j.id} value={j.id}>{jobLabel(j)}</option>)}</Field>}</div>{!job && <label className="mt-3 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={unlinkedOnly} onChange={e => setUnlinkedOnly(e.target.checked)} />Show records that still need a job</label>}</Card>
     <div className="flex flex-wrap gap-2" role="tablist" aria-label="Purchasing sections">{SECTIONS.map(([key, label]) => <button key={key} role="tab" aria-selected={section === key} onClick={() => changeSection(key)} className={buttonClass} style={section === key ? primaryStyle : secondaryStyle}>{label}{sectionCounts[key] !== undefined ? ` (${sectionCounts[key]})` : ''}</button>)}</div>
     <fieldset disabled={incomplete || Boolean(job?.merged_into || job?.is_sample)} className="min-w-0 space-y-4 border-0 p-0">
-      {editor && <div key={editor.key}>
-        {editor.mode === 'po' && <PurchaseOrderForm job={editorJob} budgets={current.budgets} initialBudget={currentBudget} onDone={done} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'usage' && currentBudget && <BudgetUsageForm budget={currentBudget} budgets={current.budgets} onDone={done} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'numbers' && currentBudget && <NumbersEditor budget={currentBudget} onDone={budgetDone} onRefilled={load} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'link' && currentBudget && <LinkJobEditor budget={currentBudget} jobs={availableJobs} allowCreate={false} onDone={budgetDone} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'supplier' && <SupplierOrderForm jobs={current.jobs} purchaseOrders={current.purchase_orders} initialJobId={jobId} initialPO={currentPO} order={currentOrder} onDone={done} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'po_status' && currentPO && <OrderStatusForm row={currentPO} onDone={done} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'vendor_status' && currentOrder && <OrderStatusForm row={currentOrder} supplier onDone={done} onCancel={() => setEditor(null)} />}
-      </div>}
+      {editor && !editor.budget_id && editorPanel(editor)}
       {section === 'budgets' && <>
         <Card><h2 className="text-base font-bold text-slate-900">Add supplier quote PDFs</h2><p className="mt-1 text-sm text-slate-600">{job ? `New PDFs are attached to ${job.canonical_name}.` : 'Open a job first for direct filing, or upload here and choose its job afterward.'} New quotes start as drafts, not additional budget totals.</p>
           <button type="button" disabled={uploading} onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); }} onClick={() => fileInput.current?.click()} className={`mt-4 flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-7 text-sm ${dragging ? 'border-emerald-700 bg-emerald-50' : 'border-slate-300 bg-slate-50'}`}><UploadCloud size={26} /><strong>{uploading ? 'Saving quote drafts...' : 'Drop PDFs or choose files'}</strong><span>Up to 10 files, 30 MB each</span></button><input ref={fileInput} type="file" accept="application/pdf" multiple className="hidden" onChange={e => { processFiles(e.target.files); e.target.value = ''; }} />
@@ -175,7 +167,7 @@ function ProcurementWorkspace() {
               <DeleteUnusedQuoteButton budget={b} onDeleted={done} />
             </div></details><div className="mt-3 flex flex-wrap gap-2"><External href={b.source_pdf_url || fileHref(b.drive_quote_file_id)}><FileText size={13} />Source quote</External><External href={fileHref(b.drive_budget_xlsx_file_id)}>Budget sheet</External><External href={b.drive_job_folder_id ? `https://drive.google.com/drive/folders/${b.drive_job_folder_id}` : ''}>Drive folder</External></div>
             {b.input_history?.length > 0 && <details className="mt-3 text-xs text-slate-600"><summary className="cursor-pointer">Previous saved inputs ({b.input_history.length})</summary>{b.input_history.map((h, i) => <p key={i} className="mt-2">{h.at} / {h.action} / material {money(h.inputs?.material_true_cost)} / customer total {money(h.inputs?.actual_total_sell)}</p>)}</details>}
-          </Card>;
+          {editor && editor.budget_id === b.id && <div className="mt-3">{editorPanel(editor)}</div>}</Card>;
         })}
       </>}
       {section === 'orders' && <>
