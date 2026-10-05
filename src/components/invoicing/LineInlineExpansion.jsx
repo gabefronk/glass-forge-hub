@@ -161,18 +161,19 @@ export default function LineInlineExpansion({ row, onReady, onDelete, onSendForR
           </div>
         </div>
 
-        {/* Action row: Ready, Link to Job, Delete, Cancel, Send for Review */}
+        {/* Action row: Ready | Send for Review | Link to Job | Cancel | Delete */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <span className="text-[12px]" style={{ color: "var(--gf-ink-2)" }}>Fee </span>
             <span className="font-mono-num-bold text-[18px]" style={{ color: "var(--gf-teal-600)" }}>${formatMoney(liveFee)}</span>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={ready} className="min-h-10 rounded-lg px-4 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-teal-700)", backgroundColor: "var(--gf-teal-600)", color: "#FFFFFF" }}><Check className="h-4 w-4" />Ready</button>
-            {row.job_id && <button onClick={() => navigate(`/jobs/${row.job_id}`)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink)" }}><ExternalLink className="h-4 w-4" />Link to Job</button>}
-            <button onClick={remove} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-error-border, #F0C9C5)", backgroundColor: "transparent", color: "#A43432" }}><Trash2 className="h-4 w-4" />Delete</button>
-            <button onClick={cancel} className="min-h-10 rounded-lg px-3 text-[13px] font-medium" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink-2)" }}>Cancel</button>
             <button onClick={sendForReview} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold" style={{ border: "1px solid var(--gf-amber-100)", backgroundColor: "var(--gf-amber-050)", color: "var(--gf-amber-700)" }}>Send for Review</button>
+            {row.job_id && <button onClick={() => navigate(`/jobs/${row.job_id}`)} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink)" }}><ExternalLink className="h-4 w-4" />Link to Job</button>}
+            <button onClick={cancel} className="min-h-10 rounded-lg px-3 text-[13px] font-medium" style={{ border: "1px solid var(--gf-border)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink-2)" }}>Cancel</button>
+            <span className="mx-1 hidden h-6 w-px sm:inline-block" style={{ backgroundColor: "var(--gf-hairline)" }} />
+            <button onClick={remove} className="min-h-10 rounded-lg px-3 text-[13px] font-semibold flex items-center gap-1.5" style={{ border: "1px solid var(--gf-error-border, #F0C9C5)", backgroundColor: "transparent", color: "#A43432" }}><Trash2 className="h-4 w-4" />Delete</button>
           </div>
         </div>
       </div>
