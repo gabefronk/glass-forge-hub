@@ -70,7 +70,7 @@ function ProcurementWorkspace() {
   const searchIndex = useMemo(() => purchasingSearchIndex(current), [current]);
   const matches = row => matchesPurchasingSearch(searchIndex.get(row) || purchasingText(row), query);
   const needle = query.trim().toLowerCase();
-  const visible = rows => rows.filter(r => (!jobId || r.job_id === jobId) && (!unlinkedOnly || !r.job_id) && (!needle || matches(r)));
+  const visible = rows => rows.filter(r => (!jobId || r.job_id === jobId) && (!unlinkedOnly || (!r.job_id && r.purchase_type !== 'shop')) && (!needle || matches(r)));
   const budgets = visible(current.budgets), pos = visible(current.purchase_orders), orders = visible(current.vendor_orders);
   const jobBudgets = current.budgets.filter(b => b.job_id === jobId);
   const sectionCounts = { budgets: budgets.length, orders: pos.length, tracking: orders.length };
@@ -131,7 +131,7 @@ function ProcurementWorkspace() {
     <div className="flex flex-wrap gap-2" role="tablist" aria-label="Purchasing sections">{SECTIONS.map(([key, label]) => <button key={key} role="tab" aria-selected={section === key} onClick={() => changeSection(key)} className={buttonClass} style={section === key ? primaryStyle : secondaryStyle}>{label}{sectionCounts[key] !== undefined ? ` (${sectionCounts[key]})` : ''}</button>)}</div>
     <fieldset disabled={incomplete || Boolean(job?.merged_into || job?.is_sample)} className="min-w-0 space-y-4 border-0 p-0">
       {editor && <div key={editor.key}>
-        {editor.mode === 'po' && editorJob && <PurchaseOrderForm job={editorJob} budgets={current.budgets} initialBudget={currentBudget} onDone={done} onCancel={() => setEditor(null)} />}
+        {editor.mode === 'po' && <PurchaseOrderForm job={editorJob} budgets={current.budgets} initialBudget={currentBudget} onDone={done} onCancel={() => setEditor(null)} />}
         {editor.mode === 'usage' && currentBudget && <BudgetUsageForm budget={currentBudget} budgets={current.budgets} onDone={done} onCancel={() => setEditor(null)} />}
         {editor.mode === 'numbers' && currentBudget && <NumbersEditor budget={currentBudget} onDone={budgetDone} onRefilled={load} onCancel={() => setEditor(null)} />}
         {editor.mode === 'link' && currentBudget && <LinkJobEditor budget={currentBudget} jobs={availableJobs} allowCreate={false} onDone={budgetDone} onCancel={() => setEditor(null)} />}
@@ -164,7 +164,7 @@ function ProcurementWorkspace() {
         })}
       </>}
       {section === 'orders' && <>
-        <Card><div className="flex flex-wrap items-center justify-between gap-3"><p className="max-w-2xl text-sm text-slate-600">Issue a PO from an included quote, or prepare a manual PO for this job. Supplier confirmation and payment are separate. Issued amounts are kept as reviewed snapshots.</p><button disabled={!job} className={buttonClass} style={primaryStyle} onClick={() => openEditor({ mode: 'po', job_id: jobId })}><Plus size={15} />Prepare PO</button></div>{!job && <p className="mt-2 text-xs text-slate-500">Choose an existing job above before preparing a PO.</p>}</Card>
+        <Card><div className="flex flex-wrap items-center justify-between gap-3"><p className="max-w-2xl text-sm text-slate-600">Prepare a shop purchase without a job, or open a job to issue its PO from a quote or manual details. Supplier confirmation and payment are separate. Issued amounts are kept as reviewed snapshots.</p><button className={buttonClass} style={primaryStyle} onClick={() => openEditor({ mode: 'po', job_id: jobId })}><Plus size={15} />Prepare PO</button></div>{!job && <p className="mt-2 text-xs text-slate-500">No job selected: Prepare PO creates a shop purchase. Customer names can be included as references in the ordering notes.</p>}</Card>
         {!pos.length && <Card><p className="text-sm text-slate-600">No purchase orders in this view.</p></Card>}
         {pos.map(p => {
           const source = budgetForPO(p, current.budgets);

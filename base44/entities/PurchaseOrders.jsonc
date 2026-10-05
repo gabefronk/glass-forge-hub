@@ -101,6 +101,14 @@
     "owner_reviewed_at": {
       "type": "string",
       "description": "Timestamp of the owner's explicit PO review and submit."
+    },
+    "purchase_type": {
+      "type": "string",
+      "enum": [
+        "job",
+        "shop"
+      ],
+      "description": "Explicit shop purchases need no job and must not be treated as unlinked job costs."
     }
   },
   "required": [

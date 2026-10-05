@@ -36,8 +36,10 @@ function Buttons({ busy, enabled = true, label, onCancel }) {
 }
 
 export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCancel }) {
-  const eligible = useMemo(() => activeBudgets(budgets.filter(b => b.job_id === job.id)), [budgets, job.id]);
-  const [form, setForm] = useState(() => { const source = initialBudget || (eligible.length === 1 ? eligible[0] : null); return source ? prepareBudgetPO(source).form : { job_id: job.id, budget_id: '', vendor: '', vendor_quote_ref: '', amount_dealer: '', amount_customer: '', notes: '', budget_version: '' }; });
+  const shop = !job;
+  const jobName = job?.canonical_name || 'Shop purchase';
+  const eligible = useMemo(() => job ? activeBudgets(budgets.filter(b => b.job_id === job.id)) : [], [budgets, job]);
+  const [form, setForm] = useState(() => { const source = initialBudget || (eligible.length === 1 ? eligible[0] : null); return source ? prepareBudgetPO(source).form : { job_id: job?.id || '', budget_id: '', vendor: '', vendor_quote_ref: '', amount_dealer: '', amount_customer: '', notes: '', budget_version: '' }; });
   const [reviewed, setReviewed] = useState(false), [zero, setZero] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const key = useRef(crypto.randomUUID());
@@ -45,31 +47,32 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
   const set = (name, value) => { setForm(f => ({ ...f, [name]: value })); setReviewed(false); };
   function selectBudget(id) {
     const b = eligible.find(x => x.id === id);
-    setForm(b ? prepareBudgetPO(b).form : { job_id: job.id, budget_id: '', vendor: '', vendor_quote_ref: '', amount_dealer: '', amount_customer: '', notes: '', budget_version: '' });
+    setForm(b ? prepareBudgetPO(b).form : { job_id: job?.id || '', budget_id: '', vendor: '', vendor_quote_ref: '', amount_dealer: '', amount_customer: '', notes: '', budget_version: '' });
     setReviewed(false); setZero(false); setError('');
   }
   async function submit(event) {
     event.preventDefault(); if (busy || !reviewed) return;
     setBusy(true); setError('');
     try {
-      const result = await purchasingRequest({ ...form, action: 'issue_po', request_key: key.current, review_confirmed: reviewed, zero_amount_confirmed: zero });
-      onDone(result, result.job_update?.ok === false ? `${result.po_number} was saved, but its job reference needs review. Do not issue it again.` : `${result.po_number} issued and linked to ${job.canonical_name}. Not sent to the supplier.`);
+      const result = await purchasingRequest({ ...form, purchase_type: shop ? 'shop' : 'job', action: 'issue_po', request_key: key.current, review_confirmed: reviewed, zero_amount_confirmed: zero });
+      onDone(result, result.job_update?.ok === false ? `${result.po_number} was saved, but its job reference needs review. Do not issue it again.` : `${result.po_number} issued for ${jobName}. Not sent to the supplier.`);
     } catch (e) { setError(messageOf(e)); }
     finally { setBusy(false); }
   }
-  return <FormPanel title={`Prepare PO \u00b7 ${job.canonical_name}`}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
+  return <FormPanel title={`Prepare PO \u00b7 ${jobName}`}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
+    {shop && <p className="mb-3 text-sm text-slate-600">Shop purchase: supplies, packaging or stock. No job will be created. Enter item quantities, prices and any customer references in the scope notes.</p>}
     <div className="grid gap-3 sm:grid-cols-2">
-      <Field label="Source quote / budget" value={form.budget_id} onChange={selectBudget}><option value="">Manual PO (no budget source)</option>{eligible.map(b => <option value={b.id} key={b.id}>{b.title}</option>)}</Field>
+      <Field disabled={shop} label="Source quote / budget" value={form.budget_id} onChange={selectBudget}><option value="">Manual PO (no budget source)</option>{eligible.map(b => <option value={b.id} key={b.id}>{b.title}</option>)}</Field>
       <Field label="Supplier" value={form.vendor} onChange={v => set('vendor', v)} />
       <Field label="Supplier quote / reference" value={form.vendor_quote_ref} onChange={v => set('vendor_quote_ref', v)} />
       <Field label="Supplier payable for this PO" type="number" value={form.amount_dealer} onChange={v => { set('amount_dealer', v); setZero(false); }} hint="Review supplier tax and freight. This is not the whole-job budget cost." />
-      <Field label="Customer amount for this PO scope (optional)" type="number" value={form.amount_customer} onChange={v => set('amount_customer', v)} hint="Leave blank when the customer price belongs to the whole job, not this order." />
+      <Field disabled={shop} label="Customer amount for this PO scope (optional)" type="number" value={form.amount_customer} onChange={v => set('amount_customer', v)} hint="Leave blank when the customer price belongs to the whole job, not this order." />
       <Field label="Reason for an additional PO for the same quote (when needed)" value={form.additional_order_reason || ''} onChange={v => set('additional_order_reason', v)} />
     </div>
     {source && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Budget customer total: <strong>{money(source.inputs?.actual_total_sell)}</strong> (context only). {prepareBudgetPO(source).supplier_hint}</p>}
     <label className="mt-3 block text-xs font-semibold text-slate-600">Scope / ordering notes<textarea className="mt-1 min-h-20 w-full rounded-lg border p-3 text-sm" value={form.notes} onChange={e => set('notes', e.target.value)} /></label>
     {amount(form.amount_dealer) === 0 && <Review checked={zero} onChange={setZero}>The supplier payable is intentionally zero.</Review>}
-    <Review checked={reviewed} onChange={setReviewed}>I reviewed the job, supplier, source quote, scope and payable. Issue a PO record only; do not place or email an order.</Review>
+    <Review checked={reviewed} onChange={setReviewed}>I reviewed the purchase purpose, supplier, reference, scope and payable. Issue a PO record only; do not place or email an order.</Review>
     <ErrorLine error={error} /><Buttons busy={busy} enabled={reviewed && !!form.vendor && !!form.vendor_quote_ref && amount(form.amount_dealer) !== null && (amount(form.amount_dealer) !== 0 || zero)} label="Issue reviewed PO" onCancel={onCancel} />
   </fieldset></form></FormPanel>;
 }

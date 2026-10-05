@@ -19,6 +19,7 @@ export async function getPurchasingJob(api, jobId) {
 }
 
 async function appendPoToJob(api, row) {
+  if (row.purchase_type === 'shop' && !row.job_id) return { ok: true, skipped: true };
   try {
     await api.Jobs.updateMany({ id: row.job_id }, { $addToSet: { po_numbers: row.po_number } });
     const fresh = await api.Jobs.get(row.job_id);
@@ -45,6 +46,13 @@ export async function issuePurchaseOrder(api, body, user, deps = {}) {
     setup_sheet_id: cleanField(body.setup_sheet_id, 100),
   };
   if (!payload.vendor || !payload.vendor_quote_ref) throw fail(400, 'Supplier and quote/reference are required.');
+  const shop = body.purchase_type === 'shop';
+  if (body.purchase_type && !['job', 'shop'].includes(body.purchase_type)) throw fail(400, 'Choose a job or shop purchase.');
+  if (shop) {
+    if (payload.job_id || payload.budget_id || payload.setup_sheet_id || customer !== null) throw fail(400, 'Shop purchases cannot carry job, budget, setup or customer pricing links.');
+    if (payload.notes.length < 10) throw fail(400, 'Describe the items and purpose of this shop purchase.');
+    payload.purchase_type = 'shop';
+  }
   const fingerprint = JSON.stringify(payload);
   const now = deps.now || (() => new Date().toISOString());
   const findExisting = async () => {
@@ -61,7 +69,7 @@ export async function issuePurchaseOrder(api, body, user, deps = {}) {
     // Recheck after acquiring the lock; a previous caller may have just finished.
     const existingRetry = await findExisting();
     if (existingRetry) return { ...existingRetry, duplicate: true, job_update: await appendPoToJob(api, existingRetry) };
-    const job = await getPurchasingJob(api, payload.job_id);
+    const job = shop ? { id: '', canonical_name: 'Shop purchase' } : await getPurchasingJob(api, payload.job_id);
     const [pos, vendorOrders, jobs, budgets] = await Promise.all([
       fetchCompleteEntity(api.PurchaseOrders), fetchCompleteEntity(api.VendorOrders),
       fetchCompleteEntity(api.Jobs), fetchCompleteEntity(api.JobBudgets),
@@ -75,7 +83,7 @@ export async function issuePurchaseOrder(api, body, user, deps = {}) {
       if (!budgetFigures(budget).ready) throw fail(409, 'Review and save the budget numbers first.');
       if (text(budget.quote_number).toUpperCase() !== payload.vendor_quote_ref.toUpperCase()) throw fail(409, 'The PO quote reference must match its selected source quote.');
     }
-    const duplicates = pos.filter(po => po.status !== 'cancelled' && po.job_id === job.id && (
+    const duplicates = pos.filter(po => po.status !== 'cancelled' && text(po.job_id) === job.id && (
       (budget && po.budget_id === budget.id) ||
       (text(po.vendor_quote_ref).toUpperCase() === payload.vendor_quote_ref.toUpperCase() && sameVendor(po, { vendor: payload.vendor, manufacturer: budget?.manufacturer }))
     ));
@@ -91,7 +99,7 @@ export async function issuePurchaseOrder(api, body, user, deps = {}) {
     await lock.reserveNumber(Number(po_number.slice(3)));
     const stamp = now();
     const row = {
-      po_number, status: 'issued', job_id: job.id, job_name: job.canonical_name || job.name || '',
+      po_number, status: 'issued', purchase_type: shop ? 'shop' : 'job', job_id: job.id, job_name: job.canonical_name || job.name || '',
       builder: job.builder || '', customer_name: job.customer_name || '', vendor: payload.vendor,
       vendor_quote_ref: payload.vendor_quote_ref, amount_dealer: payable,
       ...(customer !== null ? { amount_customer: customer } : {}),
