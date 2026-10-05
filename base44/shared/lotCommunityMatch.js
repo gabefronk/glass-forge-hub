@@ -18,16 +18,17 @@ const COMMUNITY_TOKENS = [
 
 // Extract lot numbers from text, expanding ranges:
 //   "388-390"   → {388, 389, 390}
-//   "177 & 180" → {177, 180}
+//   "177 & 180" → {177, 180}  (& joins discrete lots, not a range)
 //   "Lot 12"    → {12}
+//   "Move Up 177" → {177}  (number after a community token is the lot)
 // Returns a Set of integers.
 export function extractLots(text) {
   const lots = new Set();
   if (!text) return lots;
   const s = String(text).toLowerCase();
   let m;
-  // Ranges: 388-390, 388–390, 388 to 390, 177 & 180
-  const rangeRe = /(\d{1,5})\s*(?:[-–—]|to|&)\s*(\d{1,5})/g;
+  // Ranges: 388-390, 388–390, 388 to 390 (NOT & — & connects discrete lots).
+  const rangeRe = /(\d{1,5})\s*(?:[-–—]|to)\s*(\d{1,5})/g;
   while ((m = rangeRe.exec(s))) {
     const lo = parseInt(m[1], 10);
     const hi = parseInt(m[2], 10);
@@ -35,11 +36,27 @@ export function extractLots(text) {
       for (let i = lo; i <= hi; i++) lots.add(i);
     }
   }
+  // Discrete lots joined by &: "177 & 180"
+  const ampRe = /(\d{1,5})\s*&\s*(\d{1,5})/g;
+  while ((m = ampRe.exec(s))) {
+    lots.add(parseInt(m[1], 10));
+    lots.add(parseInt(m[2], 10));
+  }
   // Explicit lot/unit/building labels: "Lot 12", "Unit 5", "#12"
   const labelRe = /(?:lot|lt|unit|bldg|building|#)\s*(\d{1,5})\b/g;
   while ((m = labelRe.exec(s))) {
     const n = parseInt(m[1], 10);
     if (n) lots.add(n);
+  }
+  // Numbers after a community token: "Move Up 177", "Villages 12". In Daybreak
+  // the lot follows the community name, so the number right after a community
+  // token is the lot, not a street number.
+  for (const token of COMMUNITY_TOKENS) {
+    const afterCommunity = new RegExp(token + "\\s+(\\d{1,5})\\b", "g");
+    while ((m = afterCommunity.exec(s))) {
+      const n = parseInt(m[1], 10);
+      if (n) lots.add(n);
+    }
   }
   return lots;
 }
