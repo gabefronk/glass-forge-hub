@@ -52,7 +52,7 @@ export function extractLots(text) {
   // the lot follows the community name, so the number right after a community
   // token is the lot, not a street number.
   for (const token of COMMUNITY_TOKENS) {
-    const afterCommunity = new RegExp(token + "\\s+(\\d{1,5})\\b", "g");
+    const afterCommunity = new RegExp("\\b" + token.replace(/ /g, "\\s+") + "s?\\s+(\\d{1,5})\\b", "g");
     while ((m = afterCommunity.exec(s))) {
       const n = parseInt(m[1], 10);
       if (n) lots.add(n);
@@ -61,12 +61,19 @@ export function extractLots(text) {
   return lots;
 }
 
+// Match a community token as a whole word, allowing a trailing "s" for plurals
+// ("villages" matches "village", "towns" matches "towns"). Multi-word tokens like
+// "move up" match across whitespace.
+function communityWordRe(token) {
+  return new RegExp("\\b" + token.replace(/ /g, "\\s+") + "s?\\b");
+}
+
 // Extract the first community token from text, lowercased, or "".
 export function extractCommunity(text) {
   if (!text) return "";
   const s = String(text).toLowerCase();
   for (const token of COMMUNITY_TOKENS) {
-    if (s.includes(token)) return token;
+    if (communityWordRe(token).test(s)) return token;
   }
   return "";
 }
