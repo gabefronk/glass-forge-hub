@@ -188,3 +188,20 @@ test('API handler refuses crew before any private entity read', async () => {
   const res = await handler(new Request('https://unit.test', { method: 'POST', body: '{}' }));
   assert.equal(res.status, 403);
 });
+
+test('shop PO issues and retries without creating or touching jobs and blocks duplicate scope', async () => {
+ const s = store(); const before = structuredClone(s.data.Jobs);
+ const body = form({job_id:'', purchase_type:'shop', vendor:'FHC',vendor_quote_ref:'GAFRAME pallets',amount_dealer:1254.48,notes:'Five pallets: three for shipment and two spares.'});
+ const po = await issuePurchaseOrder(s.api, body, owner, deps);
+ assert.equal(po.purchase_type,'shop');assert.equal(po.job_id,'');assert.equal(po.amount_dealer,1254.48);assert.equal(po.job_update.skipped,true);
+ assert.deepEqual(s.data.Jobs,before);
+ const retry = await issuePurchaseOrder(s.api,body,owner,deps);assert.equal(retry.id,po.id);assert.equal(s.data.PurchaseOrders.length,1);
+ await assert.rejects(issuePurchaseOrder(s.api,{...body,request_key:'second-shop-request'},owner,deps),/already has/);
+});
+test('shop PO rejects hidden job links, customer amounts and missing purpose', async () => {
+ for (const extra of [{job_id:'j1'},{budget_id:'b1'},{setup_sheet_id:'sheet'},{amount_customer:1500},{notes:''}]) {
+  const s=store();await assert.rejects(issuePurchaseOrder(s.api,form({job_id:'',purchase_type:'shop',notes:'Packaging supplies for shop',...extra}),owner,deps));
+  assert.equal(s.data.PurchaseOrders.length,0);
+ }
+ const s=store();await assert.rejects(issuePurchaseOrder(s.api,form({job_id:''}),owner,deps),/existing job/);
+});
