@@ -1,7 +1,7 @@
 import PurchasingDates from '@/components/budgets/PurchasingDates';
 import { purchasingJobName, purchasingRows, statusWithDate, etaText, supplierReplyText } from '@/lib/purchasingDates';
 import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { UploadCloud, ArrowLeft, FileText, RefreshCw, AlertTriangle, Plus } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -114,6 +114,21 @@ function ProcurementWorkspace() {
   const currentPO = editor?.po_id ? current.purchase_orders.find(p => p.id === editor.po_id) : null;
   const currentOrder = editor?.order_id ? current.vendor_orders.find(o => o.id === editor.order_id) : null;
   const editorJob = current.jobs.find(j => j.id === (editor?.job_id || jobId));
+  // Render the active editor. Budget-card editors (numbers / usage / link / po
+  // with a budget_id) render inline under their card so the quote card stays on
+  // top and the editor sits below it — no layout jump. Non-budget editors
+  // (supplier, po_status, vendor_status, po without a budget) render at the top.
+  const editorPanel = ed => ed && (
+    <div key={ed.key}>
+      {ed.mode === 'po' && <PurchaseOrderForm job={editorJob} budgets={current.budgets} initialBudget={currentBudget} onDone={done} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'usage' && currentBudget && <BudgetUsageForm budget={currentBudget} budgets={current.budgets} onDone={done} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'numbers' && currentBudget && <NumbersEditor budget={currentBudget} onDone={budgetDone} onRefilled={load} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'link' && currentBudget && <LinkJobEditor budget={currentBudget} jobs={availableJobs} allowCreate={false} onDone={budgetDone} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'supplier' && <SupplierOrderForm jobs={current.jobs} purchaseOrders={current.purchase_orders} initialJobId={jobId} initialPO={currentPO} order={currentOrder} onDone={done} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'po_status' && currentPO && <OrderStatusForm row={currentPO} onDone={done} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'vendor_status' && currentOrder && <OrderStatusForm row={currentOrder} supplier onDone={done} onCancel={() => setEditor(null)} />}
+    </div>
+  );
   return <PageShell width="max-w-[1240px]">
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
       <Link to={job ? `/jobs/${job.id}` : '/jobs'} className="inline-flex items-center gap-1 font-semibold" style={{ color: C.text }}><ArrowLeft size={15} />{job ? 'Back to job' : 'Back to Jobs'}</Link>

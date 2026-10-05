@@ -20,8 +20,12 @@
 //   B27  =C21+C24+(C16-(C16*0.8))  total cost of material and labor (overhead)
 //   B29  =(C27/C28-1)*-1   actual margin % vs the real sell
 
+// Single named sales-tax rate for the purchasing/budget side. Applied
+// automatically by computeJobBudget and shown in the Numbers editor.
+export const SALES_TAX_RATE = 0.0745;
+
 export const BUDGET_DEFAULTS = Object.freeze({
-  tax_rate: 0.0745,          // workbook use-tax rate
+  tax_rate: SALES_TAX_RATE,  // workbook use-tax rate
   material_margin: 0.30,     // desired margin on material
   labor_margin: 0.27,        // desired margin on labor
   labor_overhead_factor: 0.74, // B16 divisor
