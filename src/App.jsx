@@ -9,6 +9,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 import Invoicing from '@/pages/Invoicing';
+import InvoicingAgent from '@/pages/InvoicingAgent';
 import CalendarPage from '@/pages/CalendarPage';
 import JobsHub from '@/pages/JobsHub';
 import JobDetail from '@/pages/JobDetail';
@@ -24,7 +25,6 @@ import OAuthConsent from '@/pages/OAuthConsent';
 import SalesTracker from '@/pages/SalesTracker';
 import AdminAgentCenter from "@/pages/AdminAgentCenter";
 import BrandsSpecs from "@/pages/BrandsSpecs";
-import Products from "@/pages/Products";
 import ProbuildDailyPreview from "@/pages/ProbuildDailyPreview";
 import MessagesInbox from "@/pages/MessagesInbox";
 import ContactsDirectory from "@/pages/ContactsDirectory";
@@ -32,10 +32,17 @@ import ReportLibraryRedirect from '@/components/ReportLibraryRedirect';
 import ReportsRedirect from '@/components/ReportsRedirect';
 import SystemMap from "@/pages/SystemMap";
 import ResearchQueue from "@/pages/ResearchQueue";
-import Todos from '@/pages/Todos';
-import CommandHud from '@/pages/CommandHud';
+import CompanyOverview from '@/pages/CompanyOverview';
 import JobBudgets from '@/pages/JobBudgets';
 import PurchaseOrders from '@/pages/PurchaseOrders';
+import Procurement from '@/pages/Procurement';
+import NewJobBuilder from '@/pages/NewJobBuilder';
+import SupplierEtaLinks from '@/pages/SupplierEtaLinks';
+import Summit from '@/pages/Summit';
+import TeamStructure from '@/pages/TeamStructure';
+import UnlinkedJobRecords from '@/pages/UnlinkedJobRecords';
+import JobSetup from '@/pages/JobSetup';
+import InboxAgents from '@/pages/InboxAgents';
 import QuoteBuilder from '@/pages/QuoteBuilder';
 import { isWindowQuotesOnly } from '@/lib/agentCenterAccess';
 // Add page imports here
@@ -80,10 +87,12 @@ const AuthenticatedApp = () => {
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
           <Route path="/" element={<QuotesOnlyRedirect><Invoicing /></QuotesOnlyRedirect>} />
+          <Route path="/invoicing-agent" element={<QuotesOnlyRedirect><InvoicingAgent /></QuotesOnlyRedirect>} />
           <Route path="/calendar" element={<QuotesOnlyRedirect><CalendarPage /></QuotesOnlyRedirect>} />
           <Route path="/dashboard" element={<QuotesOnlyRedirect><Dashboard /></QuotesOnlyRedirect>} />
-          <Route path="/todos" element={<QuotesOnlyRedirect><Todos /></QuotesOnlyRedirect>} />
-          <Route path="/command-hud" element={<CommandHud />} />
+          <Route path="/operations/overview" element={<QuotesOnlyRedirect><CompanyOverview /></QuotesOnlyRedirect>} />
+          <Route path="/todos" element={<QuotesOnlyRedirect><Navigate to="/dashboard?view=all" replace /></QuotesOnlyRedirect>} />
+          <Route path="/inbox-agents" element={<QuotesOnlyRedirect><InboxAgents /></QuotesOnlyRedirect>} />
           <Route path="/window-quotes" element={<WindowQuotes />} />
           <Route path="/sales-tracker" element={<QuotesOnlyRedirect><SalesTracker /></QuotesOnlyRedirect>} />
           <Route path="/admin/agents" element={<QuotesOnlyRedirect><AdminAgentCenter /></QuotesOnlyRedirect>} />
@@ -95,12 +104,20 @@ const AuthenticatedApp = () => {
           <Route path="/report-library" element={<QuotesOnlyRedirect><ReportLibraryRedirect /></QuotesOnlyRedirect>} />
           <Route path="/jobs" element={<QuotesOnlyRedirect><JobsHub /></QuotesOnlyRedirect>} />
           <Route path="/jobs/:id" element={<QuotesOnlyRedirect><JobDetail /></QuotesOnlyRedirect>} />
+          <Route path="/jobs/:id/setup" element={<QuotesOnlyRedirect><JobSetup /></QuotesOnlyRedirect>} />
           <Route path="/match-debug" element={<QuotesOnlyRedirect><MatchDebug /></QuotesOnlyRedirect>} />
-          <Route path="/brands-specs" element={<QuotesOnlyRedirect><BrandsSpecs /></QuotesOnlyRedirect>} />
-          <Route path="/products" element={<Products />} />
+          <Route path="/brands-specs" element={<BrandsSpecs />} />
+          <Route path="/products" element={<Navigate to="/brands-specs" replace />} />
           <Route path="/research-queue" element={<QuotesOnlyRedirect><ResearchQueue /></QuotesOnlyRedirect>} />
+          <Route path="/purchasing/supplier-eta" element={<QuotesOnlyRedirect><SupplierEtaLinks /></QuotesOnlyRedirect>} />
+          <Route path="/purchasing" element={<QuotesOnlyRedirect><Procurement /></QuotesOnlyRedirect>} />
+      <Route path="/purchasing/new-job" element={<QuotesOnlyRedirect><NewJobBuilder /></QuotesOnlyRedirect>} />
+          <Route path="/jobs/:id/budget-orders" element={<QuotesOnlyRedirect><Procurement /></QuotesOnlyRedirect>} />
           <Route path="/job-budgets" element={<QuotesOnlyRedirect><JobBudgets /></QuotesOnlyRedirect>} />
           <Route path="/purchase-orders" element={<QuotesOnlyRedirect><PurchaseOrders /></QuotesOnlyRedirect>} />
+          <Route path="/admin/unlinked" element={<QuotesOnlyRedirect><UnlinkedJobRecords /></QuotesOnlyRedirect>} />
+          <Route path="/summit" element={<Summit />} />
+          <Route path="/team-structure" element={<QuotesOnlyRedirect><TeamStructure /></QuotesOnlyRedirect>} />
           <Route path="/QuoteBuilder" element={<QuoteBuilder />} />
         </Route>
       </Route>

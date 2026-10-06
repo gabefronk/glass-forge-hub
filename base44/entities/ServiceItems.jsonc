@@ -1,0 +1,254 @@
+{
+  "name": "ServiceItems",
+  "type": "object",
+  "description": "A service item on a job: something the crew reported that needs fixing (wrong size, damaged, missing unit, missing part, install defect). Lives on the job page as the red banner; one open item per job at a time is the norm. Status chain: reported \u2192 acknowledged \u2192 working \u2192 ordered \u2192 shipped \u2192 delivered \u2192 scheduled \u2192 fixed \u2192 closed.",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "description": "Jobs record id"
+    },
+    "job_name": {
+      "type": "string"
+    },
+    "source_note_id": {
+      "type": "string",
+      "description": "JobNotes id of the field report that raised it"
+    },
+    "source_event_id": {
+      "type": "string",
+      "description": "CalendarEvents id of the visit it was reported on, if any"
+    },
+    "service_type": {
+      "type": "string",
+      "enum": [
+        "wrong_size",
+        "damaged",
+        "missing_unit",
+        "missing_part",
+        "install_defect",
+        "other"
+      ],
+      "description": "What's needed, picked by the crew on an incomplete field report"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "Crew note / what is wrong"
+    },
+    "unit": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Which unit (e.g. 305 SH, door panels)"
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "reported",
+        "acknowledged",
+        "working",
+        "ordered",
+        "shipped",
+        "delivered",
+        "scheduled",
+        "fixed",
+        "closed",
+        "on_hold",
+        "cancelled"
+      ],
+      "default": "reported"
+    },
+    "owner_member_key": {
+      "type": "string",
+      "description": "TeamMember.member_key of who is driving it (defaults to Milan)"
+    },
+    "escalate_to_email": {
+      "type": "string",
+      "description": "Who gets copied after two quiet days (Gabe)"
+    },
+    "cause": {
+      "type": "string",
+      "enum": [
+        "",
+        "measure",
+        "supplier",
+        "site",
+        "install",
+        "unknown"
+      ],
+      "default": ""
+    },
+    "cost_owner": {
+      "type": "string",
+      "enum": [
+        "",
+        "us",
+        "supplier_claim",
+        "builder_backcharge"
+      ],
+      "default": ""
+    },
+    "supplier": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "order_ref": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "PO / OE / supplier order number for the reorder"
+    },
+    "eta_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Expected delivery date once ordered or shipped"
+    },
+    "tracking": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "service_event_id": {
+      "type": "string",
+      "description": "CalendarEvents id of the service visit, once scheduled"
+    },
+    "service_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "service_event_draft": {
+      "type": "boolean",
+      "default": false,
+      "description": "True while the service visit is the auto-drafted date from Delivered; false once confirmed (Service scheduled)"
+    },
+    "service_report_note_id": {
+      "type": "string",
+      "description": "JobNotes id of the service visit's field report"
+    },
+    "service_report_complete_at": {
+      "type": "string",
+      "description": "Set when the service visit's field report comes in marked complete; required before Fixed"
+    },
+    "last_activity_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Any status change, note or ETA update resets the daily ping clock"
+    },
+    "last_ping_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ping_count": {
+      "type": "integer",
+      "default": 0,
+      "description": "Consecutive daily pings sent without activity"
+    },
+    "activity_log": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "request_key": {
+      "type": "string",
+      "description": "Dedupe key from the field report submit"
+    },
+    "closed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "closed_by": {
+      "type": "string"
+    },
+    "created_by_email": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "job_id",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "TroubleshootSession",
+  "type": "object",
+  "properties": {
+    "system_type": {
+      "type": "string",
+      "title": "System Type",
+      "description": "Door/system type selected at the start of the walkthrough."
+    },
+    "motor": {
+      "type": "string",
+      "title": "Motor",
+      "description": "Motor model selected at the start of the walkthrough."
+    },
+    "control_type": {
+      "type": "string",
+      "title": "Control Type",
+      "description": "Wall control selected at the start of the walkthrough."
+    },
+    "symptom": {
+      "type": "string",
+      "title": "Symptom",
+      "description": "Entry branch / top-level symptom for the walkthrough."
+    },
+    "node_path": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Ordered list of node_ids visited during the walkthrough."
+    },
+    "resolution": {
+      "type": "string",
+      "title": "Resolution",
+      "description": "Free-text resolution (e.g. 'Soft reset', 'Escalated to Summit')."
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes",
+      "description": "Optional tech notes from the walkthrough."
+    },
+    "tech_support_answer": {
+      "type": "string",
+      "title": "Tech Support Answer",
+      "description": "Verbatim answer from Summit tech support, recorded at a call node."
+    }
+  },
+  "required": [
+    "node_path"
+  ]
+}

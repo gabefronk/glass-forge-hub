@@ -1,0 +1,326 @@
+{
+  "name": "JobMergeLog",
+  "type": "object",
+  "properties": {
+    "source_job_id": {
+      "type": "string",
+      "title": "Source Job Id",
+      "description": "The job that was merged away (duplicate)."
+    },
+    "source_job_name": {
+      "type": "string",
+      "title": "Source Job Name",
+      "description": "Canonical name of the source job at merge time, for readable audit."
+    },
+    "target_job_id": {
+      "type": "string",
+      "title": "Target Job Id",
+      "description": "The job that survives and absorbs the source's links."
+    },
+    "target_job_name": {
+      "type": "string",
+      "title": "Target Job Name",
+      "description": "Canonical name of the target job at merge time."
+    },
+    "merged_by": {
+      "type": "string",
+      "title": "Merged By",
+      "description": "Email of the admin who performed the merge."
+    },
+    "merged_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Merged At"
+    },
+    "relocated_fields": {
+      "type": "object",
+      "title": "Relocated Fields",
+      "description": "Snapshot of source fields moved onto the target (po_numbers, oe_numbers, aliases, etc.) so the merge can be reversed.",
+      "properties": {
+        "po_numbers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "oe_numbers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "default": {}
+    },
+    "relocated_link_counts": {
+      "type": "object",
+      "title": "Relocated Link Counts",
+      "description": "How many linked records (FeeLines, FieldReports, CalendarEvents, JobNotes, ContactJobLinks) were re-pointed from source to target.",
+      "properties": {
+        "fee_lines": {
+          "type": "integer",
+          "default": 0
+        },
+        "field_reports": {
+          "type": "integer",
+          "default": 0
+        },
+        "calendar_events": {
+          "type": "integer",
+          "default": 0
+        },
+        "job_notes": {
+          "type": "integer",
+          "default": 0
+        },
+        "contact_job_links": {
+          "type": "integer",
+          "default": 0
+        }
+      },
+      "default": {}
+    },
+    "reversed": {
+      "type": "boolean",
+      "title": "Reversed",
+      "default": false,
+      "description": "True if this merge was later reversed by reverseMerge."
+    },
+    "reversed_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Reversed At"
+    },
+    "reversed_by": {
+      "type": "string",
+      "title": "Reversed By"
+    },
+    "relocated_link_ids": {
+      "type": "object",
+      "title": "Relocated Link Ids",
+      "description": "The EXACT record ids that were moved from source to target, per entity. reverseMerge moves only these ids back, so the survivor's own records and records moved from other sources are never touched. Absent on logs created before exact-ID auditing (those cannot be safely reversed automatically).",
+      "properties": {
+        "fee_lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "field_reports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "calendar_events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "contact_job_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_budgets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "probuild_project_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "default": {}
+    },
+    "planned_link_ids": {
+      "type": "object",
+      "title": "Planned Link Ids",
+      "description": "The record ids that were PLANNED to move, written to the log BEFORE any link mutation so provenance is durable even if a later step crashes. reverseMerge falls back to these when relocated_link_ids is empty (the job_id guard makes moving-back of unmoved ids a no-op).",
+      "properties": {
+        "fee_lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "field_reports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "calendar_events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "contact_job_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_budgets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "probuild_project_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "default": {}
+    },
+    "audit_version": {
+      "type": "integer",
+      "title": "Audit Version",
+      "description": "1 for logs created with exact-ID auditing. Absent on legacy logs (predate exact-ID auditing) \u2014 reverseMerge refuses those rather than guess. An audited log with zero moved links is a valid stub-job merge and can be undone (just clears the marker)."
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "description": "Lifecycle of this merge: planned (log created before any move) \u2192 relocated / relocated_partial (links moved) \u2192 complete / partial (fields + mark done) / failed (execute threw).",
+      "enum": [
+        "planned",
+        "relocated",
+        "relocated_partial",
+        "complete",
+        "partial",
+        "failed"
+      ]
+    },
+    "partial": {
+      "type": "boolean",
+      "title": "Partial",
+      "default": false,
+      "description": "True if some records moved but a later step (relocate batch, field merge, or marking merged) failed. The source was NOT hidden when partial is true; the moved ids are still recorded so the merge can be reversed or investigated."
+    },
+    "relocate_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Relocate Errors",
+      "default": [],
+      "description": "Per-entity error messages from the relocate step (empty on full success)."
+    },
+    "fields_error": {
+      "type": "string",
+      "title": "Fields Error",
+      "description": "Error from the identity-field merge / survivor update step, if it failed."
+    },
+    "mark_error": {
+      "type": "string",
+      "title": "Mark Error",
+      "description": "Error from marking the source merged_into, if that step failed after records were moved."
+    },
+    "reconciled_link_ids": {
+      "type": "object",
+      "title": "Reconciled Link Ids",
+      "description": "Record ids that were linked to the source AFTER the first plan (e.g. a sync or a new note during the combine). Written to the log before they were moved; also included in planned_link_ids.",
+      "additionalProperties": true,
+      "default": {}
+    },
+    "unsupported_links": {
+      "type": "object",
+      "title": "Unsupported Links",
+      "description": "Job-linked records the combine cannot move (service items, setup sheets, job knowledge, orders...) found on the source right before hiding. When present the source was left visible.",
+      "additionalProperties": true,
+      "default": {}
+    },
+    "reverse_status": {
+      "type": "string",
+      "title": "Reverse Status",
+      "description": "Last undo attempt: partial (some recorded records could not be moved back; safe to run again) or complete."
+    },
+    "reverse_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Reverse Errors",
+      "default": [],
+      "description": "Why the last undo attempt did not finish."
+    },
+    "reverse_attempted_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Reverse Attempted At"
+    }
+  },
+  "required": [
+    "source_job_id",
+    "target_job_id",
+    "merged_by",
+    "merged_at"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
