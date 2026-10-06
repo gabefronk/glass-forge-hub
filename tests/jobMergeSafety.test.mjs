@@ -274,8 +274,9 @@ test("merge log state: undo offered for audited complete/partial/unfinished logs
 });
 
 test("lost response: updateMany throws but the id stays in planned and undo recovers it", async () => {
+  // Throw only for the merge direction (job_id "S"); undo moves from "T" and must not hit the hook.
   const db = makeDb({ Jobs: jobs(), FeeLines: [{ id: "f1", job_id: "S" }] }, {
-    updateMany(name) { if (name === "FeeLines") throw new Error("connection lost"); },
+    updateMany(name, q) { if (name === "FeeLines" && q.job_id === "S") throw new Error("connection lost"); },
   });
   const r = await merge(db);
   assert.equal(r.ok, false);
@@ -289,8 +290,12 @@ test("lost response: updateMany throws but the id stays in planned and undo reco
 });
 
 test("verification failure: verify filter throws over-records the batch so undo covers it", async () => {
+  // Verify fails only during the merge (job_id "T" right after the S→T move). A flag
+  // turns the hook off once the merge's move ran, so undo's own verifies are clean.
+  let mergeMoved = false;
   const db = makeDb({ Jobs: jobs(), FeeLines: [{ id: "f1", job_id: "S" }] }, {
-    filter(name, q) { if (name === "FeeLines" && q.job_id === "T" && q.id) throw new Error("verify down"); },
+    filter(name, q) { if (name === "FeeLines" && q.job_id === "T" && q.id && !mergeMoved) throw new Error("verify down"); },
+    afterUpdateMany(name, q) { if (name === "FeeLines" && q.job_id === "S") mergeMoved = true; },
   });
   const r = await merge(db);
   assert.equal(r.ok, false);
@@ -319,7 +324,7 @@ test("post-move audit-failure undo recovery: log update throws, noLog halt, undo
 
 test("failed unknown relocation cannot disappear from planned/reconciled ids", async () => {
   const db = makeDb({ Jobs: jobs(), FeeLines: [{ id: "f1", job_id: "S" }], FieldReports: [{ id: "r1", job_id: "S" }] }, {
-    updateMany(name) { if (name === "FieldReports") throw new Error("timeout"); },
+    updateMany(name, q) { if (name === "FieldReports" && q.job_id === "S") throw new Error("timeout"); },
   });
   const r = await merge(db);
   assert.equal(r.ok, false);
