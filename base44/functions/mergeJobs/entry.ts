@@ -28,9 +28,22 @@ export default async function(req) {
     // 1. Relocate all linked records from source → target.
     const counts = await relocateLinks(base44, source_job_id, target_job_id);
 
-    // 2. Merge identity fields (po_numbers, oe_numbers, aliases) onto target.
-    const { patch, relocated } = mergeJobFields(source, target);
+    // 2. Merge identity fields (po_numbers, oe_numbers, aliases, and blank
+    //    identity/document scalars) onto target. A conflict note records any
+    //    source value that differed from a non-empty target value, so it is
+    //    never lost. The survivor's value always wins.
+    const { patch, relocated, conflict_note } = mergeJobFields(source, target);
     if (Object.keys(patch).length) await base44.asServiceRole.entities.Jobs.update(target_job_id, patch);
+    if (conflict_note) {
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Denver" });
+      await base44.asServiceRole.entities.JobNotes.create({
+        job_id: target_job_id,
+        note_date: today,
+        interaction_type: "note",
+        body: conflict_note,
+        author: user.email || user.id || "Glass Forge Hub",
+      }).catch(() => { /* a failed conflict note must not fail the merge */ });
+    }
 
     // 3. Mark source as merged.
     const now = new Date().toISOString();
@@ -55,6 +68,7 @@ export default async function(req) {
       relocated_link_counts: counts,
       relocated_fields: relocated,
       target_patch: patch,
+      conflict_note_recorded: !!conflict_note,
       merge_log_id: log.id,
     });
   } catch (error) {
