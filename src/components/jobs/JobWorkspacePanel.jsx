@@ -27,7 +27,7 @@ import { AttachmentViewer } from "@/components/jobs/FeedImage";
 import { denverDate } from "../../../base44/shared/billingCore.js";
 import JobUpcomingCard from "@/components/jobs/JobUpcomingCard";
 import JobCreateEventModal from "@/components/jobs/JobCreateEventModal";
-import { isJobCalendarOwner } from "@/lib/jobCalendarShared";
+import { isJobCalendarOwner, JOB_CREATE_ENABLED } from "@/lib/jobCalendarShared";
 import { useJobUpcoming } from "@/hooks/use-job-upcoming";
 
 const MUTED = "#566063", TEAL = "#0b3f3b";
@@ -193,7 +193,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           upcoming={upcoming}
           extra={
             <>
-              {isJobCalendarOwner(me) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
+              {JOB_CREATE_ENABLED && isJobCalendarOwner(me) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
               {canPurchase && <Link to={procurementPath(jobId)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link>}
               {canDelete ? <DeleteJobButton job={job} onDeleted={() => onJobDeleted?.(job.id)} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
             </>

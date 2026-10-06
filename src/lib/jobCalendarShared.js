@@ -10,6 +10,12 @@ export const JOB_CALENDAR_OWNER_IDS = new Set([
 ]);
 export const isJobCalendarOwner = (user) => !!user && JOB_CALENDAR_OWNER_IDS.has(user.id);
 
+// Create transport availability. Hard off while the server create path is staged
+// (jobCalendar returns disabled). Gating the Add-visit button on this keeps a dead
+// button and the staged modal off production; the modal code is preserved for later
+// verification. Flip to true only when create is enabled end-to-end.
+export const JOB_CREATE_ENABLED = false;
+
 export const CREW_CALENDAR_LABEL = 'Israel crew calendar (iryedra@gmail.com)';
 export const HUB_BASE = 'https://gfglassforge.com';
 

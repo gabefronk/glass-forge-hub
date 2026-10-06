@@ -37,7 +37,7 @@ import { useJobLive } from "@/hooks/use-job-live";
 import { ServiceMarker, useServiceItems } from "@/components/jobs/ServiceItems";
 import JobUpcomingCard from "@/components/jobs/JobUpcomingCard";
 import JobCreateEventModal from "@/components/jobs/JobCreateEventModal";
-import { isJobCalendarOwner } from "@/lib/jobCalendarShared";
+import { isJobCalendarOwner, JOB_CREATE_ENABLED } from "@/lib/jobCalendarShared";
 import { useJobUpcoming } from "@/hooks/use-job-upcoming";
 
 export default function JobDetail() {
@@ -213,7 +213,7 @@ export default function JobDetail() {
             upcoming={upcoming}
             extra={
               <>
-                {isJobCalendarOwner(user) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
+                {JOB_CREATE_ENABLED && isJobCalendarOwner(user) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
                 {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
                 {owner ? <Link to={procurementPath(id)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link> : null}
                 {(owner || isAgentCenterOwner(user)) ? <DeleteJobButton job={job} onDeleted={() => navigate("/jobs")} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
