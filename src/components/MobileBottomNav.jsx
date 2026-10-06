@@ -1,31 +1,29 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, ClipboardList, Mail } from "lucide-react";
+import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, Mail } from "lucide-react";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
-import { useTodoAccess } from '@/hooks/use-todo-access';
+import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
 // labels because five slots share the phone width.
 const PRIMARY_NAV = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
-  { label: "To-do", to: "/todos", icon: CheckSquare, todoOnly: true },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Calendar", to: "/calendar", icon: Calendar },
+  { label: "Invoicing", to: "/", icon: Receipt },
 ];
 
 const SECONDARY_NAV = [
-  { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Team Structure", to: "/team-structure", icon: GitBranch },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
-  { label: "Job Budgets", to: "/job-budgets", icon: DollarSign, ownerOnly: true },
+  { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", ariaLabel: "Summit door service", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
-  { label: "Purchase Orders", to: "/purchase-orders", icon: ClipboardList, ownerOnly: true },
 ];
 
 const ADMIN_NAV = [
+  { label: "Company overview", to: "/operations/overview", icon: BarChart3 },
   { label: "Agent Center", to: "/admin/agents", icon: Bot },
   { label: "System Map", to: "/system-map", icon: Network },
   { label: "Research Queue", to: "/research-queue", icon: Search },
@@ -59,7 +57,6 @@ function SheetLink({ item, active }) {
 export default function MobileBottomNav({ user }) {
   const { pathname } = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
-  const todoAccess = useTodoAccess(user);
 
   useEffect(() => { setMoreOpen(false); }, [pathname]);
   useEffect(() => {
@@ -73,7 +70,7 @@ export default function MobileBottomNav({ user }) {
   const isSecondaryActive = (to) => pathname === to;
   const quotesOnly = isWindowQuotesOnly(user);
   const owner = isAgentCenterOwner(user);
-  const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV.filter(item => !item.todoOnly || todoAccess);
+  const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV;
   const visibleSecondary = quotesOnly ? SECONDARY_NAV.filter((s) => s.to === "/brands-specs" || s.to === "/summit") : SECONDARY_NAV.filter((s) => !s.ownerOnly || owner);
   const visibleAdmin = owner && !quotesOnly ? ADMIN_NAV : [];
   const moreActive = [...visibleSecondary, ...visibleAdmin].some((s) => isSecondaryActive(s.to));
@@ -111,12 +108,13 @@ export default function MobileBottomNav({ user }) {
               {visibleSecondary.map((item) => <SheetLink key={item.to} item={item} active={isSecondaryActive(item.to)} />)}
             </div>
             {visibleAdmin.length > 0 && (
-              <div role="group" aria-labelledby="mobile-admin-heading" className="mx-4 mb-2 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.08)" }}>
-                <div id="mobile-admin-heading" className="px-1 pb-2 text-[10.5px] font-medium uppercase" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.08em" }}>Admin</div>
+              <details className="mx-4 mb-2 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.08)" }}>
+                <summary className="flex min-h-11 cursor-pointer items-center gap-3 px-2 text-[13px] font-semibold" style={{ color: IDLE }}><Settings className="h-4 w-4" />Operations<span aria-hidden="true" className="ml-auto">⌄</span></summary>
+                <p className="px-2 pb-2 text-xs" style={{ color: "var(--gf-sidebar-muted)" }}>Automation, records and diagnostics</p>
                 <div className="grid grid-cols-3 gap-2 pb-2">
                   {visibleAdmin.map((item) => <SheetLink key={item.to} item={item} active={isSecondaryActive(item.to)} />)}
                 </div>
-              </div>
+              </details>
             )}
           </div>
         </>

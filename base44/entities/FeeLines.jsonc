@@ -253,6 +253,23 @@
       ],
       "title": "Service Review Status",
       "default": "not_applicable"
+    },
+    "sent_for_review": {
+      "type": "boolean",
+      "title": "Sent For Review",
+      "default": false,
+      "description": "True when Gabriel sent this line to the YA crew (Israel) to confirm missing labor or details. Cleared on confirm."
+    },
+    "sent_for_review_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Sent For Review At",
+      "description": "When the line was sent for crew review."
+    },
+    "sent_for_review_by": {
+      "type": "string",
+      "title": "Sent For Review By",
+      "description": "Email of the user who sent the line for crew review."
     }
   },
   "required": [

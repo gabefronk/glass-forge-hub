@@ -1,5 +1,7 @@
 // Conservative identity resolver shared by report/calendar ingestion and repair.
 // Hard identifiers win; names only link when the exact normalized name/alias is unique.
+import { lotCommunityCheck, lotCommunityScore } from "./lotCommunityMatch.js";
+
 export function normalizeJobLinkValue(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -7,17 +9,43 @@ export function normalizeJobLinkValue(value) {
 const exactId = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
 export function resolveJobLink(row, jobs, projectLinks = []) {
+  // Never re-evaluate or overwrite an owner-confirmed link (job_link_source "owner").
+  if (row?.job_id && row?.job_link_source === "owner") return { job_id: row.job_id, source: "owner", unchanged: true };
   if (row?.job_id) return { job_id: row.job_id, source: row.job_link_source || null, unchanged: true };
   if (row?.project_id) {
     const ids = [...new Set(projectLinks.filter((l) => String(l.project_id) === String(row.project_id) && l.job_id).map((l) => l.job_id))];
-    if (ids.length === 1 && jobs.some((j) => j.id === ids[0])) return { job_id: ids[0], source: 'probuild_project' };
+    if (ids.length === 1 && jobs.some((j) => j.id === ids[0])) {
+      // Lot + community veto before trusting the project link.
+      const eventTitle = row?.job_name || "";
+      if (eventTitle && lotCommunityCheck(eventTitle, jobs.find((j) => j.id === ids[0])).veto) {
+        return { job_id: '', source: null, needs_review: true, reason: "lot_community_mismatch" };
+      }
+      return { job_id: ids[0], source: 'probuild_project' };
+    }
   }
   for (const [field, jobField] of [['po_number', 'po_numbers'], ['oe_number', 'oe_numbers']]) {
     const needle = exactId(row?.[field]);
     if (!needle) continue;
     const candidates = jobs.filter((j) => (j[jobField] || []).some((v) => exactId(v) === needle));
-    if (candidates.length === 1) return { job_id: candidates[0].id, source: 'po_oe' };
-    if (candidates.length > 1) return { job_id: '', source: null, ambiguous: true };
+    if (candidates.length === 1) {
+      // Lot + community veto before trusting the PO/OE hard ID.
+      const eventTitle = row?.job_name || "";
+      if (eventTitle && lotCommunityCheck(eventTitle, candidates[0]).veto) {
+        return { job_id: '', source: null, needs_review: true, reason: "lot_community_mismatch" };
+      }
+      return { job_id: candidates[0].id, source: 'po_oe' };
+    }
+    if (candidates.length > 1) {
+      // Lot + community tiebreaker among several hard-ID candidates.
+      const eventTitle = row?.job_name || "";
+      if (eventTitle) {
+        const ok = candidates.filter((j) => !lotCommunityCheck(eventTitle, j).veto);
+        if (ok.length === 1) return { job_id: ok[0].id, source: 'po_oe' };
+        if (!ok.length) return { job_id: '', source: null, needs_review: true, reason: "lot_community_mismatch" };
+        return { job_id: '', source: null, ambiguous: true };
+      }
+      return { job_id: '', source: null, ambiguous: true };
+    }
   }
   const name = normalizeJobLinkValue(row?.job_name);
   if (!name) return { job_id: '', source: null };

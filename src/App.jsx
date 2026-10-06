@@ -9,6 +9,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 import Invoicing from '@/pages/Invoicing';
+import InvoicingAgent from '@/pages/InvoicingAgent';
 import CalendarPage from '@/pages/CalendarPage';
 import JobsHub from '@/pages/JobsHub';
 import JobDetail from '@/pages/JobDetail';
@@ -31,9 +32,12 @@ import ReportLibraryRedirect from '@/components/ReportLibraryRedirect';
 import ReportsRedirect from '@/components/ReportsRedirect';
 import SystemMap from "@/pages/SystemMap";
 import ResearchQueue from "@/pages/ResearchQueue";
-import Todos from '@/pages/Todos';
+import CompanyOverview from '@/pages/CompanyOverview';
 import JobBudgets from '@/pages/JobBudgets';
 import PurchaseOrders from '@/pages/PurchaseOrders';
+import Procurement from '@/pages/Procurement';
+import NewJobBuilder from '@/pages/NewJobBuilder';
+import SupplierEtaLinks from '@/pages/SupplierEtaLinks';
 import Summit from '@/pages/Summit';
 import TeamStructure from '@/pages/TeamStructure';
 import UnlinkedJobRecords from '@/pages/UnlinkedJobRecords';
@@ -82,9 +86,11 @@ const AuthenticatedApp = () => {
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
           <Route path="/" element={<QuotesOnlyRedirect><Invoicing /></QuotesOnlyRedirect>} />
+          <Route path="/invoicing-agent" element={<QuotesOnlyRedirect><InvoicingAgent /></QuotesOnlyRedirect>} />
           <Route path="/calendar" element={<QuotesOnlyRedirect><CalendarPage /></QuotesOnlyRedirect>} />
           <Route path="/dashboard" element={<QuotesOnlyRedirect><Dashboard /></QuotesOnlyRedirect>} />
-          <Route path="/todos" element={<QuotesOnlyRedirect><Todos /></QuotesOnlyRedirect>} />
+          <Route path="/operations/overview" element={<QuotesOnlyRedirect><CompanyOverview /></QuotesOnlyRedirect>} />
+          <Route path="/todos" element={<QuotesOnlyRedirect><Navigate to="/dashboard?view=all" replace /></QuotesOnlyRedirect>} />
           <Route path="/inbox-agents" element={<QuotesOnlyRedirect><InboxAgents /></QuotesOnlyRedirect>} />
           <Route path="/window-quotes" element={<WindowQuotes />} />
           <Route path="/sales-tracker" element={<QuotesOnlyRedirect><SalesTracker /></QuotesOnlyRedirect>} />
@@ -102,6 +108,10 @@ const AuthenticatedApp = () => {
           <Route path="/brands-specs" element={<BrandsSpecs />} />
           <Route path="/products" element={<Navigate to="/brands-specs" replace />} />
           <Route path="/research-queue" element={<QuotesOnlyRedirect><ResearchQueue /></QuotesOnlyRedirect>} />
+          <Route path="/purchasing/supplier-eta" element={<QuotesOnlyRedirect><SupplierEtaLinks /></QuotesOnlyRedirect>} />
+          <Route path="/purchasing" element={<QuotesOnlyRedirect><Procurement /></QuotesOnlyRedirect>} />
+      <Route path="/purchasing/new-job" element={<QuotesOnlyRedirect><NewJobBuilder /></QuotesOnlyRedirect>} />
+          <Route path="/jobs/:id/budget-orders" element={<QuotesOnlyRedirect><Procurement /></QuotesOnlyRedirect>} />
           <Route path="/job-budgets" element={<QuotesOnlyRedirect><JobBudgets /></QuotesOnlyRedirect>} />
           <Route path="/purchase-orders" element={<QuotesOnlyRedirect><PurchaseOrders /></QuotesOnlyRedirect>} />
           <Route path="/admin/unlinked" element={<QuotesOnlyRedirect><UnlinkedJobRecords /></QuotesOnlyRedirect>} />

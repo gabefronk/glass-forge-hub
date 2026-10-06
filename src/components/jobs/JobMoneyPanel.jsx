@@ -1,3 +1,4 @@
+import { statusWithDate } from "@/lib/purchasingDates";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, Landmark } from "lucide-react";
@@ -5,6 +6,8 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { C } from "@/lib/feeUI";
 import { aggregateJobMoney, canLoadJobMoney } from "@/lib/jobMoneyPanel";
+import { procurementPath } from "@/lib/procurementRoutes";
+import { ticketLabel } from "@/lib/jobHistory";
 
 const money = (value) => value === null || value === undefined
   ? "—"
@@ -45,8 +48,9 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
       base44.entities.JobBudgets.filter(byJob, "-created_date", 200),
       base44.entities.PurchaseOrders.filter(byJob, "-created_date", 500),
       base44.entities.FeeLines.filter(byJob, "-job_date", 5000),
-    ]).then(([budgets, purchaseOrders, feeLines]) => {
-      if (active) setState({ loading: false, error: "", data: aggregateJobMoney(ids, { budgets, purchaseOrders, feeLines }) });
+      base44.entities.CalendarEvents.filter(byJob, "-event_date", 5000),
+    ]).then(([budgets, purchaseOrders, feeLines, calendarEvents]) => {
+      if (active) setState({ loading: false, error: "", data: aggregateJobMoney(ids, { budgets, purchaseOrders, feeLines, calendarEvents }) });
     }).catch(() => {
       if (active) setState({ loading: false, error: "Financial records could not be loaded.", data: null });
     });
@@ -67,38 +71,39 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
       {state.loading && <p className="text-[12px]" style={{ color: C.textMuted }}>Loading private financial records…</p>}
       {state.error && <p role="alert" className="text-[12px]" style={{ color: "#A43432" }}>{state.error}</p>}
       {data && <>
+        {data.budgetWarnings?.length > 0 && <p className="rounded-lg bg-amber-50 p-3 text-[12px] text-amber-900">Budget totals need review: {data.budgetWarnings.join(' ')}</p>}
         <div className="grid grid-cols-2 gap-2">
-          <Metric label="Budget cost estimate" value={data.totals.budgetCost} note="JobBudgets workbook math" />
+          <Metric label="Budget cost estimate" value={data.totals.budgetCost} note="Included scopes only; incomplete totals are withheld" />
           <Metric label="Budget customer sell" value={data.totals.budgetSell} note="Estimate / entered sell, not cash" />
           <Metric label="PO dealer amount" value={data.totals.poDealer} note="Ordered amount; not proof of payment" />
           <Metric label="PO customer amount" value={data.totals.poCustomer} note="PO amount; not an invoice receipt" />
           <Metric label="Fees recorded" value={data.totals.feeRecorded} note="FeeLines using invoicing math" />
-          <Metric label="Fees confirmed paid" value={data.totals.feePaid} note="Only FeeLines marked paid to YA" />
+          <Metric label="Fee share on YA-paid work" value={data.totals.feePaid} note="YA received payment; does not confirm your fee was paid" />
         </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Budget / estimate sources</h3><RecordLink to="/job-budgets">All budgets</RecordLink></div>
+          <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Budget / estimate sources</h3><RecordLink to={procurementPath(jobId)}>Review job budget</RecordLink></div>
           {data.budgets.length ? data.budgets.map((row) => <div key={row.id} className="mb-2 rounded-lg p-2.5 text-[11px]" style={{ border: `1px solid ${C.rowBorder}` }}>
-            <div className="font-semibold" style={{ color: C.text }}>{row.title || row.id}</div>
+            <div className="font-semibold" style={{ color: C.text }}>{row.title || row.id}{!row.included_in_budget ? ' - reference / draft, not counted' : ''}</div>
             <div style={{ color: C.textMuted }}>Cost estimate {money(row.displayComputed.total_cost_overhead)} · customer sell {money(row.displayComputed.actual_total_sell)} · {row.status || "no status"}</div>
             {row.source_pdf_url && <a href={row.source_pdf_url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 font-semibold" style={{ color: C.accentText }}>Source quote PDF<ExternalLink className="h-3 w-3" /></a>}
           </div>) : <p className="text-[11px]" style={{ color: C.textMuted }}>No linked JobBudgets records.</p>}
         </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Purchase order sources</h3><RecordLink to="/purchase-orders">All POs</RecordLink></div>
+          <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Purchase order sources</h3><RecordLink to={procurementPath(jobId, 'orders')}>Job purchase orders</RecordLink></div>
           {data.purchaseOrders.length ? data.purchaseOrders.map((row) => <div key={row.id} className="mb-2 rounded-lg p-2.5 text-[11px]" style={{ border: `1px solid ${C.rowBorder}` }}>
             <div className="font-semibold" style={{ color: C.text }}>{row.po_number || row.id} · {row.vendor || "Vendor not recorded"}</div>
-            <div style={{ color: C.textMuted }}>Dealer {money(row.amount_dealer)} · customer {money(row.amount_customer)} · status {row.status || "not recorded"}</div>
+            <div style={{ color: C.textMuted }}>Dealer {money(row.amount_dealer)} · customer {money(row.amount_customer)} · {statusWithDate(row)}</div>
             <div className="mt-1 font-medium" style={{ color: C.amber }}>PO status does not indicate payment.</div>
           </div>) : <p className="text-[11px]" style={{ color: C.textMuted }}>No linked PurchaseOrders records.</p>}
         </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Invoicing sources</h3><RecordLink to="/">Open invoicing</RecordLink></div>
-          <p className="mb-2 text-[11px]" style={{ color: C.textMuted }}>Billed {money(data.totals.feeBilled)} · confirmed paid {money(data.totals.feePaid)}. Payment is shown only from “paid to YA.”</p>
+          <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Invoicing sources</h3><RecordLink to={`/?job_id=${encodeURIComponent(jobId)}`}>Open job invoicing</RecordLink></div>
+          <p className="mb-2 text-[11px]" style={{ color: C.textMuted }}>Billed {money(data.totals.feeBilled)} · fee share on YA-paid work {money(data.totals.feePaid)}. “Paid to YA” does not confirm payment of your fee.</p>
           {data.feeLines.length ? data.feeLines.map((row) => <div key={row.id} className="mb-2 rounded-lg p-2.5 text-[11px]" style={{ border: `1px solid ${C.rowBorder}` }}>
-            <div className="font-semibold" style={{ color: C.text }}>{row.line_description || "Fee line"} · {money(row.fee_amt)}</div>
+            <div className="font-semibold" style={{ color: C.text }}>{row.line_description || "Fee line"}{row.ticket_sequence != null ? ` · ${ticketLabel(row.ticket_sequence)}` : ""} · {money(row.fee_amt)}</div>
             <div style={{ color: C.textMuted }}>{date(row.job_date)} · {row.billed_to_bfs ? "billed to BFS" : "not billed to BFS"} · {row.paid_to_ya ? `paid to YA${row.paid_date ? ` ${date(row.paid_date)}` : ""}` : "payment not recorded"}</div>
           </div>) : <p className="text-[11px]" style={{ color: C.textMuted }}>No linked FeeLines records.</p>}
         </div>

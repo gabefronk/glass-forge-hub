@@ -22,7 +22,7 @@ export default function InvoiceSummary({ readyTotal, readyCount, recordedLaborTo
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-[12px]">
       {matchBlockedCount > 0 && (
         <button onClick={onFilterMatchBlocked} className="font-medium hover:underline" style={{ color: "var(--gf-amber-700)" }}>
-          {matchBlockedCount} {matchBlockedCount === 1 ? "line" : "lines"} · ${formatMoney(matchBlockedTotal)} in the total at a provisional price · review →
+          {matchBlockedCount} {matchBlockedCount === 1 ? "line" : "lines"} · ${formatMoney(matchBlockedTotal)} needs pricing or job review →
         </button>
       )}
       {reportBlockedCount > 0 && (

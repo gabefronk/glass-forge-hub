@@ -1,4 +1,5 @@
-import { pricingReview, canonicalPostRows, COMPANION_WINDOW_DAYS } from "../../shared/billingCore.js";
+import { assessBillingLine, isSalesTrackerOnlyEvent } from "../../shared/billingAudit.js";
+import { isIgnoredWorkItem, pricingReview, canonicalPostRows, COMPANION_WINDOW_DAYS } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit, isTripChargeAmount } from '../../shared/ingestShared.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
@@ -121,6 +122,7 @@ export default async function(req) {
     const backfillIds = new Set();
     const lockedLaborGaps = [];
     calEvents = calEvents.filter((e) => {
+      if (isIgnoredWorkItem(e) || isSalesTrackerOnlyEvent(e)) return false;
       const month = invoiceMonthFromDate(e.event_date || '');
       if (!lockedMonths.has(month)) return true;
       if (e.source_status === 'cancelled') return false;
@@ -253,10 +255,10 @@ export default async function(req) {
             row.pricing_review_reason = 'Calendar was rescheduled after a ProBuild charge was recorded; confirm the billing date.';
             row.needs_review = true;
           }
-          if (ex.pricing_review_reason && !row.pricing_review_reason) { row.pricing_review_reason = ex.pricing_review_reason; row.needs_review = true; }
+          if (ex.pricing_review_reason && !ex.pricing_review_reason.startsWith("[Billing audit]") && !row.pricing_review_reason) { row.pricing_review_reason = ex.pricing_review_reason; row.needs_review = true; }
         }
         row.fee_pct = ex.fee_pct ?? row.fee_pct;
-        row.billable = ex.billable ?? row.billable;
+        row.billable = ex.pricing_review_reason?.startsWith("[Billing audit]") ? true : (ex.billable ?? row.billable);
         // Reverse merge: if this existing calendar row has no Probuild data yet,
         // check for a standalone Probuild row (same job, ±3 days) with man_hours
         // or trip_charges that should be folded in. Fixes the timing gap where
@@ -349,6 +351,9 @@ export default async function(req) {
 
     for (const patch of [...toCreate, ...toUpdate]) {
       const event = allCalEvents.find(e => e.google_event_id === patch.calendar_event_id);
+      const assessment = assessBillingLine(patch, event);
+      if (assessment.hidden && !patch.probuild_post_id) { patch.billable = false; patch.pricing_review_reason = "[Billing audit] " + assessment.reason; }
+      if (assessment.kind === "review") { patch.needs_review = true; patch.pricing_review_reason = "[Billing audit] " + assessment.reason; }
       if (event?.source_status === 'cancelled') {
         patch.needs_review = true; patch.pricing_review_reason = 'Source calendar event was cancelled; confirm any completed work.';
         if (!patch.probuild_post_id) patch.billable = false;

@@ -1,4 +1,5 @@
 import { jobsStatus } from "@/lib/jobsSanitize";
+import { holdForService } from "@/lib/serviceHold";
 import { groupJobs } from "@/lib/jobDedupe";
 import { buildReportEvidence } from "@/lib/jobReports";
 import { denverDate } from "../../base44/shared/billingCore.js";
@@ -41,7 +42,8 @@ export function visitSummary({ events = [], lines = [], today }) {
   return { nextVisit: next, lastVisit: past.length ? past[past.length - 1] : null, latestVisit, visitCount: sorted.length };
 }
 
-export function buildJobsOverview({ jobs = [], feeLines = [], events = null, notes = null, today = denverDate() } = {}) {
+// serviceByJob: { [jobId]: openServiceItemCount } — a group with any open item is never "Complete".
+export function buildJobsOverview({ jobs = [], feeLines = [], events = null, notes = null, serviceByJob = null, today = denverDate() } = {}) {
   const { groups, groupByJobId } = groupJobs(jobs);
   const groupIdOf = (jobId) => groupByJobId.get(jobId)?.id || jobId;
   const evidenceAvailable = Boolean(events || notes);
@@ -67,7 +69,8 @@ export function buildJobsOverview({ jobs = [], feeLines = [], events = null, not
   const counts = { needs_report: 0, needs_review: 0, active: 0, complete: 0, duplicates: 0, this_week: 0, today: 0, needs_you: 0, records: jobs.length };
   for (const g of groups) {
     const rows = rowsByGroup.get(g.id) || [];
-    const status = jobsStatus(rows, evidence, today);
+    const openService = serviceByJob ? (g.members || []).reduce((n, m) => n + (serviceByJob[m.id] || 0), 0) : 0;
+    const status = holdForService(jobsStatus(rows, evidence, today), openService);
     const probuildDates = rows.filter((r) => r.source === "probuild" || r.source === "both").map((r) => r.job_date).filter(Boolean).sort();
     const visits = visitSummary({ events: eventsByGroup.get(g.id) || [], lines: rows, today });
     const thisWeek = Boolean(visits.nextVisit && visits.nextVisit <= weekEnd);
@@ -123,6 +126,16 @@ export function sortJobGroups(groups, stats, sort = "recent") {
   }
   // Newest record in the group first, so a freshly added duplicate stays near the top.
   return list.sort((a, b) => newest(b).localeCompare(newest(a)));
+}
+
+// Flatten filtered groups into individual raw jobs for combine-select mode, so
+// every active record (including non-canonical duplicate siblings hidden inside
+// a presentation group) is independently checkable. Pure; returns a new array.
+// Each job appears once — groupJobs assigns every job to exactly one group.
+export function flattenForSelect(groups) {
+  const out = [];
+  for (const g of groups) for (const m of g.members || []) out.push(m);
+  return out;
 }
 
 // Distinct builders across visible groups, with counts, for the builder filter.

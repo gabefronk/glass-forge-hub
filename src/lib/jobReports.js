@@ -16,9 +16,13 @@
 
 export const REPORT_CLEARED_STATUSES = new Set(["ok", "waived", "rescheduled"]);
 
+// Photos alone count as a report: a photos-only post is "ok" to the matcher, and
+// "missing_notes" (photos in, no notes) clears too. A pre-compliance visit clears when the
+// matcher found its report (report_status_raw "ok"), same as any other visit.
 export function eventReportCleared(ev) {
   if (!ev) return false;
-  return ev.report_required === false || REPORT_CLEARED_STATUSES.has(ev.report_status);
+  return ev.report_required === false || REPORT_CLEARED_STATUSES.has(ev.report_status)
+    || ev.report_status === "missing_notes" || ev.report_status_raw === "ok";
 }
 
 export function isFieldReportNote(note) {
@@ -68,7 +72,15 @@ export function visitsMissingReport(rows, evidence, today) {
     const key = `${groupOf(r.job_id)}|${dayOf(r.job_date)}`;
     if (probuildDates.has(key) || (r.id && supersededBy.has(r.id))) continue;
     if (linked) {
+      // Pre-compliance and no-source-data visits are not owed a report (they predate
+      // the compliance start date, or the Probuild pull found nothing to match). The
+      // visit card suppresses them too (visitBadge returns null), so the job-level
+      // "Needs report" status must not flag them either — otherwise a job with only
+      // a pre-compliance visit plus a reported later visit still reads "Needs report".
+      if (linked.report_status === "pre_compliance" || linked.report_status === "no_source_data") continue;
       if (eventReportCleared(linked)) continue;
+      // Photos uploaded in the Hub for this job on the visit day count as its report.
+      if (ev?.noteJobDates.has(key)) continue;
     } else if (ev && (ev.clearedJobDates.has(key) || ev.noteJobDates.has(key))) {
       continue;
     }

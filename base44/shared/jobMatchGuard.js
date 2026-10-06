@@ -16,9 +16,12 @@
 //   WEAK: same normName and at least one address blank.
 //   If both addresses are present and different, never match.
 
+// "way" is NOT stripped: it is frequently part of a meaningful street name
+// (e.g. "Smart Way"), and stripping it conflates distinct streets. The other
+// suffixes are safe to remove because they rarely appear inside a street name.
 const STREET_SUFFIX_WORDS = new Set([
   "lane", "ln", "drive", "dr", "street", "st", "road", "rd", "court", "ct",
-  "way", "avenue", "ave", "circle", "cir", "loop", "blvd", "pkwy", "parkway",
+  "avenue", "ave", "circle", "cir", "loop", "blvd", "pkwy", "parkway",
   "trail", "trl", "place", "pl",
 ]);
 
@@ -38,7 +41,10 @@ export function normAddress(a) {
   if (comma > -1) s = s.slice(0, comma);
   s = s.replace(/[^a-z0-9\s]/g, " ");
   s = s.split(/\s+/).filter((w) => w && !STREET_SUFFIX_WORDS.has(w)).join(" ");
-  return s.length <= 5 ? "" : s;
+  // Empty or <=5 chars counts as "no address", but a bare house number ("123")
+  // is a valid short address even though it is <=5 chars.
+  if (!s) return "";
+  return s.length <= 5 && !/^\d+$/.test(s) ? "" : s;
 }
 
 // normName: lowercase, strip a leading ready:/done:/pickup:/delivery:, strip

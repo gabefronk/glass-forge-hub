@@ -3,7 +3,7 @@ import { C, formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { splitFolderFiles, fileBadge, fileLabel } from "@/lib/jobHistory";
 import JobEventDocuments, { eventAttachments } from "@/components/jobs/JobEventDocuments";
-import FeedImage from "@/components/jobs/FeedImage";
+import { ThumbImage } from "@/components/jobs/FeedImage";
 
 const day = (v) => (v ? formatShort(String(v).slice(0, 10)) : "");
 
@@ -86,7 +86,7 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
             <div className="grid grid-cols-3 gap-1.5">
               {(sitePhotos || []).map((p) => (
                 <button key={p.url} type="button" onClick={() => onPhotoClick(p.url)} className="relative aspect-square overflow-hidden rounded-[8px]" style={{ border: `1px solid ${C.border}` }} aria-label={`Site photo from ${day(p.date)}`}>
-                  <FeedImage src={p.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  <ThumbImage src={p.url} alt="" className="h-full w-full object-cover" />
                   <span className="absolute bottom-1 left-1 rounded bg-black/55 px-1 text-[10px] text-white">{day(p.date)}</span>
                 </button>
               ))}

@@ -1,7 +1,12 @@
+import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
 import { refreshMonth } from "@/lib/refreshMonth";
 import { invoicingStats } from "@/lib/invoicingStats";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { procurementPath } from "@/lib/procurementRoutes";
+import { inInvoiceScope, selectedInvoiceRows } from "@/lib/invoiceScope";
+import { selectedReadyInvoiceRows, selectedLaborFeeRows, deleteInvoiceRows } from "@/lib/invoiceActions";
+import { validMonth } from "../../base44/shared/procurementCore.js";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { SheetCard, TILE } from "@/components/PageShell";
@@ -17,10 +22,19 @@ import FloatingActionBar from "@/components/invoicing/FloatingActionBar";
 import UnprocessedEventsBanner from "@/components/invoicing/UnprocessedEventsBanner";
 import LineDetailsDrawer from "@/components/invoicing/LineDetailsDrawer";
 import JobProfitabilityPanel from "@/components/invoicing/JobProfitabilityPanel";
+import BudgetEstimateNote from "@/components/invoicing/BudgetEstimateNote";
+import NeedsConfirmationList from "@/components/invoicing/NeedsConfirmationList";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function Invoicing() {
   const navigate = useNavigate();
-  const [month, setMonth] = useState(currentMonthStr());
+  const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const focusedJobId = params.get('job_id') || '';
+  const requestedMonth = params.get('month') || '';
+  const [month, setMonth] = useState(() => validMonth(requestedMonth) ? requestedMonth : currentMonthStr());
+  useEffect(() => { if (validMonth(requestedMonth)) setMonth(requestedMonth); }, [requestedMonth]);
+  const changeMonth = value => { setMonth(value); const p = new URLSearchParams(params); p.set('month', value); setParams(p); };
   const [feeLines, setFeeLines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState(() => localStorage.getItem("inv_view") || "lines");
@@ -48,7 +62,10 @@ export default function Invoicing() {
   const lastClickedIndex = useRef(null);
   const searchRef = useRef(null);
   const undoTimer = useRef(null);
+  const deleting = useRef(false);
+  const [deletingRows, setDeletingRows] = useState(false);
 
+  useEffect(() => { setSelectedIds(new Set()); setDetailRow(null); setUndo(null); lastClickedIndex.current = null; clearTimeout(undoTimer.current); }, [month, focusedJobId]);
   useEffect(() => { localStorage.setItem("inv_view", view); }, [view]);
   useEffect(() => { localStorage.setItem("inv_sort", sort); }, [sort]);
   useEffect(() => { localStorage.setItem("inv_hideZeros", String(hideZeros)); }, [hideZeros]);
@@ -84,12 +101,12 @@ export default function Invoicing() {
       // so only exclude zero-labor events whose notes carry no profit-split markers.
       const hasProfitSplitMarker = (notes) => /\$\s?\d/i.test(String(notes || "")) && /(sale\s+price|project\s+total|package\s+cost|material\s+cost|\bprofit\b|\bsplit\b)/i.test(String(notes || ""));
       const isExcludedFromBanner = (e) => {
-        if (e.source_status === "cancelled") return true; // canceled recurring placeholders never bill
+        if (isIgnoredWorkItem(e) || e.source_status === "cancelled") return true; // canceled recurring placeholders never bill
         if ((Number(e.labor_amt) || 0) === 0 && !hasProfitSplitMarker(e.scope_notes)) return true; // non-billing zero-labor (e.g. jobsite walks)
         return false;
       };
       const unprocessed = (Array.isArray(calEvents) ? calEvents : []).filter(
-        (e) => (e.event_date || "").startsWith(month) && e.source === "google" && e.google_event_id && !feeEventIds.has(e.google_event_id) && !isExcludedFromBanner(e)
+        (e) => (!focusedJobId || e.job_id === focusedJobId) && (e.event_date || "").startsWith(month) && e.source === "google" && e.google_event_id && !feeEventIds.has(e.google_event_id) && !isExcludedFromBanner(e)
       );
       setUnprocessedCount(unprocessed.length);
       try {
@@ -103,12 +120,12 @@ export default function Invoicing() {
       if (!stale()) setLoading(false);
     }
   };
-  useEffect(() => { load(); }, [month]);
+  useEffect(() => { if (user?.role === 'user') { setLoading(false); return; } load(); }, [month, focusedJobId, user?.role]);
 
   // Display copies: $0 ProBuild twins fold into their calendar labor line and priced
   // companions are held for review. Writes always start from the raw feeLines rows.
   const billingRows = useMemo(() => withCompanions(feeLines, billingEvents), [feeLines, billingEvents]);
-  const monthRows = useMemo(() => billingRows.filter((r) => r.invoice_month === month), [billingRows, month]);
+  const monthRows = useMemo(() => billingRows.filter(r => inInvoiceScope(r, month, focusedJobId)), [billingRows, month, focusedJobId]);
   const supersededSet = useMemo(() => buildSupersededSet(billingRows, billingEvents), [billingRows, billingEvents]);
 
   const filteredRows = useMemo(() => {
@@ -185,8 +202,9 @@ export default function Invoicing() {
   }, [monthRows, reportStatusMap, supersededSet]);
 
   const handleEdit = useCallback(async (id, patch) => {
+    if (deleting.current) return;
     const row = feeLines.find((r) => r.id === id);
-    if (!row) return;
+    if (!row || (focusedJobId && !inInvoiceScope(row, month, focusedJobId))) return;
     // A patch may carry manually_adjusted explicitly (undo restores the prior value).
     const merged = { ...row, manually_adjusted: true, ...patch };
     const isProfitSplit = merged.fee_type === "profit_split";
@@ -212,7 +230,7 @@ export default function Invoicing() {
       setFeeLines((prev) => prev.map((r) => (r.id === id ? row : r)));
       setSyncMessage(`Save failed; the line was restored. ${err?.message || ""}`.trim());
     }
-  }, [feeLines]);
+  }, [feeLines, month, focusedJobId]);
 
   // Optimistic bulk writes: restore the previous values if the save fails.
   const persistBulk = useCallback((updates, restore) => {
@@ -223,8 +241,9 @@ export default function Invoicing() {
   }, []);
 
   const handleDelete = useCallback(async (id) => {
+    if (deleting.current) return;
     const row = feeLines.find((r) => r.id === id);
-    if (!row) return;
+    if (!row || (focusedJobId && !inInvoiceScope(row, month, focusedJobId))) return;
     const { id: _id, created_date, updated_date, created_by_id, ...rest } = row;
     setFeeLines((prev) => prev.filter((r) => r.id !== id));
     try {
@@ -236,11 +255,48 @@ export default function Invoicing() {
     }
     performAction("Line deleted", () => {}, async () => { const restored = await base44.entities.FeeLines.create(rest); setFeeLines((prev) => [...prev, restored]); });
     setDetailRow(null);
-  }, [feeLines, performAction]);
+  }, [feeLines, month, focusedJobId, performAction]);
 
   const handleAddReport = useCallback(() => { navigate("/calendar"); }, [navigate]);
 
+  // Ready: save the edits and clear the review hold so the line shows as Ready
+  // (the same Ready status the list already derives via isReady). Replaces the old
+  // Save + Mark billed buttons. Does not touch fee_pct beyond the edited value.
+  const handleReady = useCallback((id, patch) => {
+    handleEdit(id, { ...patch, needs_review: false, pricing_review_reason: null, billable: true });
+  }, [handleEdit]);
+
+  // Send for Review: flag the line for the YA crew (Israel) to confirm labor/details.
+  // Only the new optional flag fields are written; no existing data is changed.
+  const handleSendForReview = useCallback(async (id) => {
+    if (deleting.current) return;
+    const row = feeLines.find((r) => r.id === id);
+    if (!row) return;
+    const me = await base44.auth.me().catch(() => null);
+    const patch = { sent_for_review: true, sent_for_review_at: new Date().toISOString(), sent_for_review_by: me?.email || "" };
+    setFeeLines((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    try { await base44.entities.FeeLines.update(id, patch); }
+    catch (err) { setFeeLines((prev) => prev.map((r) => (r.id === id ? row : r))); setSyncMessage(`Could not send for review. ${err?.message || ""}`.trim()); }
+  }, [feeLines]);
+
+  // Link to Job: save the chosen job's id (and the denormalized name the list and
+  // job page read) on the fee line. Manual only — the picker never auto-links.
+  const handleLinkJob = useCallback(async (id, job) => {
+    if (deleting.current) return;
+    const row = feeLines.find((r) => r.id === id);
+    if (!row) return;
+    const prev = { job_id: row.job_id, job_name_norm: row.job_name_norm };
+    const patch = { job_id: job.id, job_name_norm: job.canonical_name || job.name || "" };
+    setFeeLines((cur) => cur.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    try { await base44.entities.FeeLines.update(id, patch); }
+    catch (err) {
+      setFeeLines((cur) => cur.map((r) => (r.id === id ? { ...r, ...prev } : r)));
+      setSyncMessage(`Could not link job. ${err?.message || ""}`.trim());
+    }
+  }, [feeLines]);
+
   const handleMarkBilled = useCallback((id, value = true) => {
+    if (deleting.current) return;
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
     const prev = { billed_to_bfs: row.billed_to_bfs, manually_adjusted: !!row.manually_adjusted };
@@ -249,7 +305,11 @@ export default function Invoicing() {
   }, [feeLines, handleEdit, performAction]);
 
   const handleMarkBilledSelected = useCallback(() => {
-    const selected = feeLines.filter((r) => selectedIds.has(r.id));
+    if (deleting.current) return;
+    if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before marking lines billed."); return; }
+    const selected = selectedReadyInvoiceRows(feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet);
+    const skipped = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId).length - selected.length;
+    if (skipped) setSyncMessage(`${skipped} selected lines were skipped because they are not ready to bill. Review their status first.`);
     if (!selected.length) return;
     const updates = selected.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
     const prevStates = selected.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs, manually_adjusted: !!r.manually_adjusted }));
@@ -260,11 +320,15 @@ export default function Invoicing() {
       persistBulk(prevStates, updates);
     });
     clearSelection();
-  }, [feeLines, selectedIds, performAction, clearSelection, persistBulk]);
+  }, [feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet, loading, loadError, monthClosed, performAction, clearSelection, persistBulk]);
 
   const handleSetFeePctSelected = useCallback((pct) => {
-    const selected = feeLines.filter((r) => selectedIds.has(r.id));
-    if (!selected.length) return;
+    if (deleting.current) return;
+    if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before changing fees."); return; }
+    const selected = selectedLaborFeeRows(feeLines, selectedIds, month, focusedJobId);
+    const skipped = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId).length - selected.length;
+    if (skipped) setSyncMessage(`${skipped} profit-split lines were skipped. Edit sale, cost and split on each line instead.`);
+    if (!selected.length || !Number.isFinite(pct) || pct < 0 || pct > 100) return;
     const feePct = pct / 100;
     const updates = selected.map((r) => ({ id: r.id, fee_pct: feePct, fee_amt: Math.round((Number(r.labor_amt) || 0) * feePct * 100) / 100, manually_adjusted: true }));
     const prevStates = selected.map((r) => ({ id: r.id, fee_pct: r.fee_pct, fee_amt: r.fee_amt, manually_adjusted: !!r.manually_adjusted }));
@@ -274,26 +338,32 @@ export default function Invoicing() {
       setFeeLines((prev) => prev.map((r) => { const u = prevStates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
       persistBulk(prevStates, updates);
     });
-  }, [feeLines, selectedIds, performAction, persistBulk]);
+  }, [feeLines, selectedIds, month, focusedJobId, loading, loadError, monthClosed, performAction, persistBulk]);
 
   const handleDeleteSelected = useCallback(async () => {
-    const selected = feeLines.filter((r) => selectedIds.has(r.id));
+    if (deleting.current) return;
+    const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
-    const deletedData = selected.map((r) => { const { id, created_date, updated_date, created_by_id, ...rest } = r; return rest; });
-    setFeeLines((prev) => prev.filter((r) => !selectedIds.has(r.id)));
+    if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before deleting lines."); return; }
+    deleting.current = true; setDeletingRows(true);
     try {
-      await Promise.all(selected.map((r) => base44.entities.FeeLines.delete(r.id)));
-    } catch (err) {
-      setFeeLines((prev) => [...prev, ...selected]);
-      performAction(`Delete failed: ${err?.message || err}`, () => {}, () => {});
-      return;
+    const { deleted, failed } = await deleteInvoiceRows(selected, id => base44.entities.FeeLines.delete(id));
+    const deletedIds = new Set(deleted.map(row => row.id));
+    setFeeLines(prev => prev.filter(row => !deletedIds.has(row.id)));
+    if (failed.length) setSyncMessage(`${failed.length} lines could not be deleted and remain in the list. ${deleted.length} were deleted.`);
+    if (deleted.length) {
+      const deletedData = deleted.map(row => { const { id, created_date, updated_date, created_by_id, ...rest } = row; return rest; });
+      performAction(`${deleted.length} lines deleted`, () => {}, async () => {
+        try { const restored = await base44.entities.FeeLines.bulkCreate(deletedData); setFeeLines(prev => [...prev, ...restored]); }
+        catch (error) { setSyncMessage(`Undo could not restore the deleted lines. Refresh before retrying. ${error?.message || ""}`); }
+      });
     }
-    performAction(`${selected.length} lines deleted`, () => {}, async () => { const restored = await base44.entities.FeeLines.bulkCreate(deletedData); setFeeLines((prev) => [...prev, ...restored]); });
     clearSelection();
-  }, [feeLines, selectedIds, performAction, clearSelection]);
+    } finally { deleting.current = false; setDeletingRows(false); }
+  }, [feeLines, selectedIds, month, focusedJobId, loading, loadError, monthClosed, performAction, clearSelection]);
 
   const handleExportSelected = useCallback(() => {
-    const selected = feeLines.filter((r) => selectedIds.has(r.id));
+    const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
     const cols = ["job_date", "job_name_norm", "line_description", "labor_amt", "fee_pct", "fee_amt", "billable", "source", "billed_to_bfs"];
     const header = cols.join(",");
@@ -301,12 +371,13 @@ export default function Invoicing() {
     const blob = new Blob([header + "\n" + body], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `selected-lines-${month}.csv`; a.click(); URL.revokeObjectURL(url);
-  }, [feeLines, selectedIds, month]);
+  }, [feeLines, selectedIds, month, focusedJobId]);
 
   // Only lines that are ready to bill; held, scheduled, superseded and excluded lines stay put.
-  const isLineReady = useCallback((r) => isReady(r, reportStatusMap, supersededSet), [reportStatusMap, supersededSet]);
+  const isLineReady = useCallback((r) => inInvoiceScope(r, month, focusedJobId) && isReady(r, reportStatusMap, supersededSet), [month, focusedJobId, reportStatusMap, supersededSet]);
 
   const handleBillJob = useCallback((job) => {
+    if (deleting.current) return;
     const lines = job.lines.filter(isLineReady);
     if (!lines.length) return;
     const updates = lines.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
@@ -329,6 +400,7 @@ export default function Invoicing() {
   }, [month]);
 
   const handleRunIngest = async () => {
+    if (focusedJobId) { await load(); setSyncMessage('Job billing records reloaded. Global calendar and billing ingest were not run.'); return; }
     setRunningIngest(true);
     try {
       const result = await refreshMonth(month, setSyncMessage);
@@ -343,6 +415,7 @@ export default function Invoicing() {
   };
 
   const handleCloseMonth = async () => {
+    if (focusedJobId) { setSyncMessage('Month close applies to all jobs. Return to the all-jobs view to close a month.'); return; }
     if (monthClosed) {
       if (!window.confirm(`This month is already closed ($${(monthClosed.invoiced_subtotal ?? monthClosed.total_fee)?.toFixed(2)} invoiced on ${new Date(monthClosed.closed_at).toLocaleDateString()}). Create a new snapshot with current values?`)) return;
     } else {
@@ -408,11 +481,16 @@ export default function Invoicing() {
     );
   }
 
+  // YA crew (Israel) only sees the crew confirmation list, never owner-only pricing.
+  if (user?.role === 'user') return <NeedsConfirmationList />;
+
   return (
     <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
+      {focusedJobId && <div className="mx-auto max-w-[1440px] px-5 pt-5 sm:px-6 lg:px-8"><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div><p className="text-sm font-bold text-emerald-950">Job invoicing: {profitabilityInputs.jobs.find(j => j.id === focusedJobId)?.canonical_name || focusedJobId}</p><p className="mt-1 text-xs text-emerald-900">Only records linked to this job. Global ingest and month-close actions stay in the all-jobs view.</p></div><div className="flex flex-wrap gap-3 text-sm font-semibold text-emerald-950"><Link className="underline" to={procurementPath(focusedJobId, 'invoicing', month)}>Budget & Orders</Link><Link className="underline" to={`/?month=${encodeURIComponent(month)}`}>Show all jobs</Link></div></div></div>}
       <InvoiceHeader
+        jobScoped={Boolean(focusedJobId)}
         month={month}
-        onMonthChange={setMonth}
+        onMonthChange={changeMonth}
         onExportPdf={handleExportPdf}
         exporting={exporting}
         monthClosed={monthClosed}
@@ -425,6 +503,7 @@ export default function Invoicing() {
       />
 
       <div className="mx-auto min-w-0 max-w-[1440px] px-5 sm:px-6 lg:px-8" style={{ paddingBottom: selectedIds.size > 0 ? "220px" : "60px" }}>
+        {focusedJobId && <BudgetEstimateNote jobId={focusedJobId} month={month} input={profitabilityInputs.costs.find(c => c.job_id === focusedJobId && c.month === month)} />}
         {showEmptyState ? (
           <div style={{ padding: "120px 0", textAlign: "center" }}>
             <p className="text-[17px]" style={{ color: "#53615B", marginBottom: "8px" }}>
@@ -433,16 +512,16 @@ export default function Invoicing() {
             <p className="text-[13px]" style={{ color: "#8A958F", marginBottom: "20px" }}>
               {isPast ? "Refresh this month to check the source calendars and ProBuild." : "Come back after the first jobs are posted."}
             </p>
-            <button onClick={() => setMonth(currentMonth)} className="min-h-10 rounded-lg px-5 text-[13px] font-medium" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#104E44", cursor: "pointer" }}>
+            <button onClick={() => changeMonth(currentMonth)} className="min-h-10 rounded-lg px-5 text-[13px] font-medium" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF", color: "#104E44", cursor: "pointer" }}>
               Back to {new Date().toLocaleDateString("en-US", { month: "long" })}
             </button>
           </div>
         ) : (
           <>
-            {unprocessedCount > 0 && (
+            {unprocessedCount > 0 && !focusedJobId && (
               <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
             )}
-            <SheetCard icon={Receipt} tile={TILE.teal} title="This month" sub="the total is what is done and reported — nothing counts until it is" className="mt-4" bodyClassName="px-5 max-[699px]:px-4">
+            <SheetCard icon={Receipt} tile={TILE.teal} title={focusedJobId ? 'This job / this month' : 'This month'} sub="the total is what is done and reported — nothing counts until it is" className="mt-4" bodyClassName="px-5 max-[699px]:px-4">
               <InvoiceSummary
                 {...heroStats}
                 month={month}
@@ -450,6 +529,7 @@ export default function Invoicing() {
                 onFilterMatchBlocked={() => setFilter("needs_review")}
               />
             </SheetCard>
+            <details className="mt-3"><summary className="min-h-11 cursor-pointer rounded-lg px-3 py-3 text-sm font-medium text-slate-600">Profit & cost details</summary>
             <JobProfitabilityPanel
               rows={monthRows.filter((r) => !supersededSet.has(r.id))}
               jobs={profitabilityInputs.jobs}
@@ -458,6 +538,7 @@ export default function Invoicing() {
               reportStatusMap={reportStatusMap}
               supersededSet={supersededSet}
             />
+            </details>
             <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "16px" }}>
             <InvoiceToolbar
               search={search}
@@ -494,6 +575,10 @@ export default function Invoicing() {
                 onClearFilters={() => { setFilter("all"); setSearch(""); setHideZeros(false); }}
                 editRequestId={editRequestId}
                 onEditRequestHandled={clearEditRequest}
+                onReady={handleReady}
+                onSendForReview={handleSendForReview}
+                jobs={profitabilityInputs.jobs}
+                onLinkJob={handleLinkJob}
               />
             ) : (
               <JobsView
@@ -511,7 +596,11 @@ export default function Invoicing() {
 
       {selectedIds.size > 0 && (
         <FloatingActionBar
+          disabled={deletingRows}
           selectedCount={selectedIds.size}
+          eligibleCount={loading || loadError || monthClosed ? 0 : selectedReadyInvoiceRows(feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet).length}
+          laborCount={loading || loadError || monthClosed ? 0 : selectedLaborFeeRows(feeLines, selectedIds, month, focusedJobId).length}
+          monthLabel={month}
           selectedFee={selectedFee}
           onClear={clearSelection}
           onSetFeePct={handleSetFeePctSelected}

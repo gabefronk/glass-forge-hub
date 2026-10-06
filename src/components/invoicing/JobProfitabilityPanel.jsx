@@ -28,7 +28,7 @@ function SplitTotalsStrip({ records }) {
   const items = [
     ["customer sell", totals.customer_sell],
     ["Y.A. cost basis", totals.ya_cost_basis],
-    ["product profit", totals.product_profit],
+    ["margin to split", totals.product_profit],
     ["Y.A. share", totals.ya_share],
     ["Glass Forge share", totals.glass_forge_share],
     ["invoice amt", totals.invoice_amount],
@@ -42,7 +42,7 @@ function SplitTotalsStrip({ records }) {
         </div>
       ))}
       <div className="sm:col-span-3 xl:col-span-6 text-[11px]" style={{ color: totals.missing_inputs.length ? C.warn : C.muted }}>
-        {totals.count} profit-split job{totals.count === 1 ? "" : "s"} in the current filter · product profit split only{totals.missing_inputs.length ? ` · missing ${totals.missing_inputs.join(", ")}` : ""}
+        {totals.count} profit-split job{totals.count === 1 ? "" : "s"} in the current filter · split on recorded sale less cost; may include labor and product margin{totals.missing_inputs.length ? ` · missing ${totals.missing_inputs.join(", ")}` : ""}
       </div>
     </div>
   );
@@ -58,7 +58,7 @@ function SourceLines({ job }) {
             <th className="px-3 py-2 font-medium">Source line</th>
             <th className="px-3 py-2 text-right font-medium">Sell</th>
             <th className="px-3 py-2 text-right font-medium">Cost</th>
-            <th className="px-3 py-2 text-right font-medium">Product profit</th>
+            <th className="px-3 py-2 text-right font-medium">Margin to split</th>
             <th className="px-3 py-2 text-right font-medium">Y.A. share</th>
             <th className="px-3 py-2 text-right font-medium">GF share</th>
             <th className="px-3 py-2 text-right font-medium">Invoice</th>
@@ -133,10 +133,10 @@ export default function JobProfitabilityPanel({ rows, jobs, quotes, costInputs, 
                   <div className="grid gap-4 rounded-md p-3 sm:grid-cols-2 lg:grid-cols-4" style={{ backgroundColor: C.soft, border: `1px solid ${C.line}` }}>
                     <DetailPair label="Customer sell price">{moneyOrDash(job.customer_revenue)}</DetailPair>
                     <DetailPair label="Y.A. cost basis">{moneyOrDash(job.product_cost)}</DetailPair>
-                    <DetailPair label="Total product profit">{moneyOrDash(job.product_profit)}</DetailPair>
+                    <DetailPair label="Total margin to split">{moneyOrDash(job.product_profit)}</DetailPair>
                     <DetailPair label="Split percentage">{percentOrDash(job.product_split_pct)}</DetailPair>
-                    <DetailPair label="Glass Forge product share">{moneyOrDash(job.glass_forge_profit_share)}</DetailPair>
-                    <DetailPair label="Y.A. product share">{moneyOrDash(job.ya_profit_share)}</DetailPair>
+                    <DetailPair label="Glass Forge split share">{moneyOrDash(job.glass_forge_profit_share)}</DetailPair>
+                    <DetailPair label="Y.A. split share">{moneyOrDash(job.ya_profit_share)}</DetailPair>
                     <DetailPair label="Invoice amount/status">{moneyOrDash(job.invoice_fee_total)} · {job.completion_chain.billed_or_paid ? "billed/paid" : job.completion_chain.ready_to_invoice ? "ready" : "not ready"}</DetailPair>
                     <DetailPair label="Install revenue">{moneyOrDash(job.installation_revenue)}</DetailPair>
                     <DetailPair label="Install labor cost">{moneyOrDash(job.installation_labor_cost)}{job.installation_labor_estimated ? " estimated" : ""}</DetailPair>

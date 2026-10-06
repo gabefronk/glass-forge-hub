@@ -2,6 +2,16 @@
   "name": "JobCostInputs",
   "type": "object",
   "properties": {
+    "budget_snapshot": {
+      "type": "object",
+      "description": "Reviewed estimate, separate from actual costs, revenue, invoicing and payments."
+    },
+    "budget_synced_at": {
+      "type": "string"
+    },
+    "budget_synced_by": {
+      "type": "string"
+    },
     "month": {
       "type": "string",
       "title": "Month",

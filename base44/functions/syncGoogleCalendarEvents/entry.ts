@@ -1,4 +1,4 @@
-import { denverMidnight, denverDate } from "../../shared/billingCore.js";
+import { isIgnoredWorkItem, denverMidnight, denverDate } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmount, htmlToText } from '../../shared/ingestShared.ts';
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
@@ -82,8 +82,9 @@ export default async function(req) {
 
     const toUpdate = [];
     const toCreate = [];
-    let skippedApp = 0;
+    let skippedApp = 0, skippedIgnored = 0;
     for (const ev of items) {
+      if (isIgnoredWorkItem(ev)) { skippedIgnored++; continue; }
       if (ev.extendedProperties?.private?.appSource === 'glassforge') { skippedApp++; continue; }
       if (ev.status === 'cancelled') {
         const ex = byGoogleId.get(ev.id);
@@ -182,7 +183,7 @@ export default async function(req) {
     const installerFailures = [];
     const installerIdUpdates = [];
     for (const ev of pushCandidates) {
-      if (!ev.event_date || !ev.job_name) { installerSkipped++; continue; }
+      if (isIgnoredWorkItem(ev) || !ev.event_date || !ev.job_name) { installerSkipped++; continue; }
       const eventBody = buildInstallerEvent(ev);
       const existingId = ev.installer_event_id || (ev.google_event_id ? installerMap.get(ev.google_event_id) : null);
       const result = await upsertInstallerEvent(existingId, eventBody, headers);
@@ -299,6 +300,7 @@ export default async function(req) {
       updated: toUpdate.length,
       job_folder_copy: jobFolderCopy,
       skipped_app: skippedApp,
+      skipped_ignored: skippedIgnored,
       force_repush: forceRepush,
       push_candidates: pushCandidates.length,
       installer_pushed: installerPushed,

@@ -12,6 +12,10 @@ import { fetchAllPages } from '../../shared/pagination.ts';
 //                   dynamically from TeamMember by display name) so he can check and get it fixed.
 //                   Deduped by request_key so a retried submit does not create a second alert.
 //                   Works with either event_id (appointment report) or job_id (general report).
+//                   When the crew also picked "What's needed?" (service_type), the job page opens a
+//                   service item instead, and that item carries Milan's one to-do — so no to-do here.
+//                   A report filed against a service item's own visit is stamped on that item
+//                   (complete → it can be marked Fixed).
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -19,7 +23,7 @@ export default async function(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
-    const { event_id, action, photos, notes, reason, completion, job_id, request_key } = body;
+    const { event_id, action, photos, notes, reason, completion, job_id, request_key, service_type } = body;
     if (!action) return Response.json({ error: 'missing_params' }, { status: 200 });
 
     const now = new Date().toISOString();
@@ -81,9 +85,10 @@ export default async function(req) {
       // address, so a report opened from a duplicate record lands on the job that
       // ingest attaches new visits to. Doubtful groups keep the given record.
       let job = null;
+      let index = null;
       try {
         const jobs = await fetchAllPages(api.Jobs, '-created_date', 1000);
-        const index = createJobIndex(jobs);
+        index = createJobIndex(jobs);
         job = canonicalJob(index.byId.get(jobId), index);
       } catch (_) {
         job = null;
@@ -94,7 +99,7 @@ export default async function(req) {
         jobName = job?.canonical_name || '';
       }
 
-      await api.JobNotes.create({
+      const note = await api.JobNotes.create({
         job_id: jobId,
         note_date: noteDate,
         body: notes || 'Field report photos uploaded',
@@ -112,9 +117,40 @@ export default async function(req) {
           report_checked_at: now,
           days_late: 0,
         });
+
+        // Service visit for an open service item: a complete report clears it to be marked Fixed.
+        if (completionValue === 'complete') {
+          const items = await api.ServiceItems.filter({ service_event_id: event_id }, '-created_date', 5, 0).catch(() => []);
+          for (const it of items) {
+            if (['fixed', 'closed', 'cancelled'].includes(it.status)) continue;
+            await api.ServiceItems.update(it.id, {
+              service_report_note_id: note?.id || '',
+              service_report_complete_at: now,
+              last_activity_at: now,
+              ping_count: 0,
+              activity_log: [...(it.activity_log || []), { at: now, by: user.email, action: 'service visit report — complete', note: 'Ready to mark Fixed' }],
+            }).catch(() => {});
+          }
+        }
       }
 
-      if (completionValue === 'incomplete') {
+      // Photos count as the report. A general report (no appointment picked) with photos clears
+      // this job's visit from today or the two days before that is still waiting on a report.
+      if (!event_id && (photos || []).length) {
+        const days = [0, 1, 2].map((n) => new Date(Date.parse(`${noteDate}T12:00:00Z`) - n * 86400000).toISOString().slice(0, 10));
+        const open = await api.CalendarEvents.filter({ event_date: { $in: days }, report_status: { $in: ['pending', 'missing_photos', 'missing_notes', 'missing_all', 'no_source_data'] } }, '-event_date', 200, 0).catch(() => []);
+        const sameJob = (ev) => {
+          if (!ev.job_id) return false;
+          if (ev.job_id === jobId) return true;
+          try { return index ? canonicalJob(index.byId.get(ev.job_id), index)?.id === jobId : false; } catch { return false; }
+        };
+        const hit = open.filter((ev) => ev.report_required !== false && sameJob(ev)).sort((a, b) => b.event_date.localeCompare(a.event_date))[0];
+        if (hit) {
+          await api.CalendarEvents.update(hit.id, { report_status: 'ok', match_method: 'manual', match_confidence: 1, report_checked_at: now, days_late: 0 }).catch(() => {});
+        }
+      }
+
+      if (completionValue === 'incomplete' && !service_type) {
         const members = await api.TeamMember.list('id', 50, 0);
         const milan = members.find((m) => /^milan/i.test(String(m.display_name || '')));
         if (milan) {
@@ -152,7 +188,7 @@ export default async function(req) {
         }
       }
 
-      return Response.json({ ok: true, action: 'upload', completion: completionValue, job_id: jobId });
+      return Response.json({ ok: true, action: 'upload', completion: completionValue, job_id: jobId, note_id: note?.id || '' });
     }
 
     return Response.json({ error: 'unknown_action' }, { status: 200 });

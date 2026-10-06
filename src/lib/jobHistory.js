@@ -16,13 +16,11 @@ export function interactionLabel(value) {
   return (INTERACTION_TYPES.find((t) => t.value === value) || INTERACTION_TYPES[0]).label;
 }
 
-// Three things Gabe tracks on a job for now: when we were there, what was said, and the
-// pictures. Field reports fold into those (a report with photos is a photo entry, one without
-// is a note); Drive files ride along in All, and image files count as photos.
+// Two things Gabe wants to flip to on a job: the milestones (added by the feed when the job
+// has stage days) and the pictures. Visits and Notes chips were dropped (Oct 2026) to keep the
+// page light; everything still shows under All. Drive image files count as photos.
 export const HISTORY_FILTERS = [
   { key: "all", label: "All" },
-  { key: "visits", label: "Visits" },
-  { key: "notes", label: "Notes" },
   { key: "photos", label: "Photos" },
 ];
 
@@ -193,6 +191,36 @@ export function touchesJob(event, memberIds, shownIds = []) {
   if (rec.job_id && ids.has(rec.job_id)) return true;
   const id = event?.id || rec.id;
   return !!id && new Set(shownIds).has(id);
+}
+
+// Invoice-line ticket numbers per calendar visit. FeeLines.calendar_event_id is
+// the Google event id, so look a visit up by ev.google_event_id (then ev.id).
+export function ticketsByEvent(rows) {
+  const map = new Map();
+  for (const r of rows || []) {
+    const n = Number(r?.ticket_sequence);
+    if (!r?.calendar_event_id || r.ticket_sequence == null || !Number.isFinite(n) || n < 1) continue;
+    const set = map.get(r.calendar_event_id) || new Set();
+    set.add(n);
+    map.set(r.calendar_event_id, set);
+  }
+  const out = new Map();
+  for (const [k, set] of map) out.set(k, [...set].sort((a, b) => a - b));
+  return out;
+}
+
+export function visitTickets(tickets, ev) {
+  return tickets?.get(ev?.google_event_id) || tickets?.get(ev?.id) || [];
+}
+
+export function ticketLabel(n) {
+  return Number(n) >= 2 ? `Ticket ${n} · rework` : `Ticket ${n}`;
+}
+
+// Where a calendar visit attachment lives, so a reader knows what they open.
+export function attachmentProvenance(a) {
+  const where = a?.hub_file_uri ? "Hub copy" : (a?.drive_url || a?.drive_file_id) ? "Google Drive" : "Calendar link";
+  return `Calendar attachment · ${where}`;
 }
 
 // Small type badge for a file, by extension first, then MIME type.

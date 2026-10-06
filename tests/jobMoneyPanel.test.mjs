@@ -57,3 +57,15 @@ test("missing source amounts remain unavailable instead of becoming invented zer
   assert.equal(result.totals.poCustomer, null);
   assert.equal(result.totals.feeRecorded, null);
 });
+
+test("job totals use the same eligibility audit as invoicing, preserving source rows", () => {
+ const rows = [
+  {id:"future",job_id:"j",source:"calendar",job_date:"2099-01-01",labor_amt:1000,fee_pct:0.1},
+  {id:"renta",job_id:"j",job_name_raw:"Renta",labor_amt:200,fee_pct:0.1},
+  {id:"valid",job_id:"j",manually_adjusted:true,labor_amt:350,fee_pct:0.1}
+ ];
+ const result=aggregateJobMoney("j",{feeLines:rows});
+ assert.deepEqual(result.feeLines.map(r=>r.id),["valid"]);
+ assert.equal(result.totals.feeRecorded,35);
+ assert.equal(rows.length,3);
+});

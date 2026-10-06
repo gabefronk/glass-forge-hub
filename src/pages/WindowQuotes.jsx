@@ -247,7 +247,7 @@ export default function WindowQuotes() {
   const selectedID = params.get("quote");
   const [revisionSeed, setRevisionSeed] = useState(null);
   const [form, setForm] = useState(params.get("new") === "1" ? "new" : null);
-  const [tab, setTab] = useState(params.get("section") === "install" ? "install" : "conversation");
+  const [tab, setTab] = useState(["install", "result"].includes(params.get("section")) ? params.get("section") : "conversation");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");

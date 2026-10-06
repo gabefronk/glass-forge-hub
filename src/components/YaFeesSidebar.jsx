@@ -1,37 +1,39 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, ClipboardList, Mail } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
-import { Users, CheckSquare, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
-import { useTodoAccess } from '@/hooks/use-todo-access';
+import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch, Sparkles } from "lucide-react";
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
 // Owner-only admin/background routes are grouped under ADMIN_ITEMS below.
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
-  { label: "To-do", to: "/todos", icon: CheckSquare, todoOnly: true },
-  { label: "Team Structure", to: "/team-structure", icon: GitBranch },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Invoicing", to: "/", icon: Receipt },
-  { label: "Job Budgets", to: "/job-budgets", icon: DollarSign, ownerOnly: true },
+  { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
   { label: "Calendar", to: "/calendar", icon: Calendar },
+];
+
+const MORE_ITEMS = [
+  { label: "Team Structure", to: "/team-structure", icon: GitBranch },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
-  { label: "Purchase Orders", to: "/purchase-orders", icon: ClipboardList, ownerOnly: true },
 ];
 
 // Owner-only admin tools (mirrored in MobileBottomNav's More sheet).
 const ADMIN_ITEMS = [
+  { label: "Company overview", to: "/operations/overview", icon: BarChart3 },
   { label: "Agent Center", to: "/admin/agents", icon: Bot },
   { label: "System Map", to: "/system-map", icon: Network },
   { label: "Research Queue", to: "/research-queue", icon: Search },
   { label: "Sales Tracker", to: "/sales-tracker", icon: TrendingUp },
   { label: "Messages", to: "/messages", icon: MessageSquare },
   { label: "Inbox Agents", to: "/inbox-agents", icon: Mail },
+  { label: "Invoicing Agent", to: "/invoicing-agent", icon: Sparkles },
   { label: "Unlinked Records", to: "/admin/unlinked", icon: Unlink },
   { label: "ProBuild Daily", to: "/admin/probuild-daily", icon: FileText },
   { label: "Match Debug", to: "/match-debug", icon: Bug },
@@ -68,7 +70,6 @@ export default function YaFeesSidebar() {
   const { pathname } = useLocation();
   const [unbilled, setUnbilled] = useState({ total: 0, count: 0 });
   const [user, setUser] = useState(null);
-  const todoAccess = useTodoAccess(user);
   const [billingRevision, setBillingRevision] = useState(0);
   useEffect(() => { const update = () => setBillingRevision(n => n + 1); window.addEventListener("billing-updated", update); return () => window.removeEventListener("billing-updated", update); }, []);
   const [signingOut, setSigningOut] = useState(false);
@@ -95,7 +96,7 @@ export default function YaFeesSidebar() {
     (async () => {
       try {
         const me = await base44.auth.me();
-        if (isWindowQuotesOnly(me)) { setUnbilled({ total: 0, count: 0 }); return; }
+        if (!isAgentCenterOwner(me)) { setUnbilled({ total: 0, count: 0 }); return; }
         const month = currentMonthStr();
         const [rawRows, calEvents] = await Promise.all([
           base44.entities.FeeLines.filter({ invoice_month: month }, "-job_date", 5000),
@@ -134,21 +135,26 @@ export default function YaFeesSidebar() {
 
       {/* Nav */}
       <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-3 space-y-0.5 overflow-y-auto obsidian-scroll">
-        {NAV_ITEMS.filter(item => (!item.ownerOnly || owner) && (!item.todoOnly || todoAccess) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes" || item.to === "/brands-specs" || item.to === "/summit")).map((item) => (
+        {NAV_ITEMS.filter(item => (!item.ownerOnly || owner) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes" || item.to === "/brands-specs" || item.to === "/summit")).map((item) => (
           <SidebarLink key={item.to} item={item} active={pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"))} />
         ))}
+        <details key={"more-"+pathname} open={MORE_ITEMS.some(item => item.to === pathname)} className="pt-2">
+          <summary className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-[13.5px]" style={{color:"var(--gf-sidebar-muted)"}}>More<span aria-hidden="true" className="ml-auto">⌄</span></summary>
+          {MORE_ITEMS.filter(item => (!item.ownerOnly || owner) && (!isWindowQuotesOnly(user) || ["/brands-specs","/summit"].includes(item.to))).map(item => <SidebarLink key={item.to} item={item} active={pathname===item.to} />)}
+        </details>
         {owner && (
-          <div role="group" aria-labelledby="sidebar-admin-heading" className="mt-3 space-y-0.5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
-            <div id="sidebar-admin-heading" className="px-3 pb-1 text-[10.5px] font-medium uppercase" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.08em" }}>Admin</div>
+          <details key={pathname} className="mt-3 space-y-0.5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}>
+            <summary className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium hover:bg-white/5" style={{ color: ADMIN_ITEMS.some(item => item.to === pathname) ? "var(--gf-brass-300)" : "var(--gf-sidebar-muted)" }}><Settings className="h-4 w-4" />Operations<span aria-hidden="true" className="ml-auto text-xs">⌄</span></summary>
+            <p className="px-3 py-1 text-xs" style={{ color: "var(--gf-sidebar-muted)" }}>Automation, records and diagnostics</p>
             {ADMIN_ITEMS.map((item) => (
               <SidebarLink key={item.to} item={item} active={pathname === item.to} />
             ))}
-          </div>
+          </details>
         )}
       </nav>
 
       {/* Unbilled mini card */}
-      {!isWindowQuotesOnly(user) && <div className="px-3 pb-3">
+      {owner && <div className="px-3 pb-3">
         <div className="rounded-xl px-3.5 py-3" style={{ backgroundColor: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)" }}>
           <div className="text-[11px] font-medium mb-1.5" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.01em" }}>Ready to bill · {monthLabel(currentMonthStr())}</div>
           <div className="flex flex-wrap items-baseline gap-1.5 break-all">

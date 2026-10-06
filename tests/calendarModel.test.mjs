@@ -37,7 +37,7 @@ test('filters and counts', () => {
   ];
   assert.deepEqual(filterEvents(events, 'install', TODAY).map((e) => e.id), [1]);
   assert.deepEqual(filterEvents(events, 'needs_report', TODAY).map((e) => e.id), [1]);
-  assert.deepEqual(kindCounts(events, TODAY), { all: 3, install: 1, service: 1, outlook: 1, needs_report: 1 });
+  assert.deepEqual(kindCounts(events, TODAY), { all: 3, install: 1, service: 1, outlook: 1, purchasing: 0, needs_report: 1 });
 });
 
 test('week math: Sunday start, crosses months', () => {

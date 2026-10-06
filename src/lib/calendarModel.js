@@ -3,6 +3,7 @@
 // days are YYYY-MM-DD strings in Denver time.
 
 export const KIND = {
+  purchasing: { label: "Purchasing", text: "#71511C", bg: "#FAF0DA", border: "#EFDFB7", bar: "#A77A2A" },
   install: { label: "Install", text: "#082F2C", bg: "#E2EEEB", border: "#C7E4D2", bar: "#0B3F3B" },
   service: { label: "Service", text: "#A43432", bg: "#FCEDEC", border: "#F0C9C5", bar: "#A43432" },
   outlook: { label: "Outlook", text: "#34506A", bg: "#E7EDF2", border: "#C7D8EF", bar: "#34506A" },
@@ -14,6 +15,7 @@ export const KIND = {
 // (Before, every Google-synced event counted as service, so installs showed red.)
 const SERVICE_RE = /service|warranty|wty|warr|per report/i;
 export function eventKind(e) {
+  if (e?.source === "purchasing") return "purchasing";
   if (e?.source === "outlook") return "outlook";
   const text = `${e?.job_name || ""} ${e?.scope_notes || ""}`;
   // Israel's "YA - #1 …" titles are return trips (service), per the calendar convention.
@@ -21,7 +23,8 @@ export function eventKind(e) {
   return SERVICE_RE.test(text) ? "service" : "install";
 }
 
-const OPEN_REPORT = ["pending", "missing_photos", "missing_notes", "missing_all"];
+// Photos alone are a report, so "missing_notes" (photos in, no notes) is never open.
+const OPEN_REPORT = ["pending", "missing_photos", "missing_all"];
 
 // A visit on or before `today` still waiting on its field report. Future visits
 // default to "pending" in the data, so they are never flagged.
@@ -43,14 +46,14 @@ export function reportBadge(e, today) {
   if (today && dayOf(e) > today) return null;
   const late = Number(e.days_late) || 0;
   switch (e.report_status) {
-    case "ok": return { label: "Reported", text: "#082F2C", bg: "#E2EEEB", border: "#C7E4D2" };
+    case "ok":
+    case "missing_notes": return { label: "Reported", text: "#082F2C", bg: "#E2EEEB", border: "#C7E4D2" };
     case "waived": return { label: "Report waived", text: "#566063", bg: "#F3EFE7", border: "#E2DCD1" };
     case "rescheduled": return { label: "Rescheduled", text: "#566063", bg: "#F3EFE7", border: "#E2DCD1" };
     case "pending":
     case "missing_photos":
-    case "missing_notes":
     case "missing_all": {
-      const what = { missing_photos: "Needs photos", missing_notes: "Needs notes" }[e.report_status] || "Needs report";
+      const what = { missing_photos: "Needs photos" }[e.report_status] || "Needs report";
       if (late > 0) return { label: `${what} · ${late}d late`, text: "#A43432", bg: "#FCEDEC", border: "#F0C9C5" };
       return { label: what, text: "#6F4E10", bg: "#FAF0DA", border: "#EFDFB7" };
     }
@@ -65,7 +68,7 @@ export function filterEvents(events, filter = "all", today) {
 }
 
 export function kindCounts(events, today) {
-  const c = { all: events.length, install: 0, service: 0, outlook: 0, needs_report: 0 };
+  const c = { all: events.length, install: 0, service: 0, outlook: 0, purchasing: 0, needs_report: 0 };
   for (const e of events) {
     c[eventKind(e)]++;
     if (needsReportFilter(e, today)) c.needs_report++;

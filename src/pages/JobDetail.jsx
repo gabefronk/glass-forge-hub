@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, FolderOpen, HardHat, Users } from "lucide-react";
+import { ArrowLeft, Camera, FolderOpen, GitMerge, HardHat, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { jobsStatus } from "@/lib/jobsSanitize";
+import { holdForService } from "@/lib/serviceHold";
 import JobFactsRail from "@/components/jobs/JobFactsRail";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
@@ -13,6 +14,7 @@ import { useJobContacts } from "@/hooks/use-job-contacts";
 import { loadJobGroup, loadJobActivity, jobEventsAndEvidence, reportsForJob, loadUniqueLegacyNames } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import MergedJobBanner from "@/components/jobs/MergedJobBanner";
+import CombinedRecordsPanel from "@/components/jobs/CombinedRecordsPanel";
 import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
 import JobLinkedRecords from "@/components/jobs/JobLinkedRecords";
 import JobMessageThreads from "@/components/jobs/JobMessageThreads";
@@ -20,7 +22,9 @@ import OwnerSection from "@/components/jobs/OwnerSection";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import { procurementPath } from "@/lib/procurementRoutes";
 import DeleteJobButton from "@/components/jobs/DeleteJobButton";
+import CombineJobsDialog from "@/components/jobs/CombineJobsDialog";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
 import { JobHero, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
 import { jobProgress } from "@/lib/jobStages";
@@ -30,6 +34,7 @@ import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import { denverDate } from "../../base44/shared/billingCore.js";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
+import { ServiceMarker, useServiceItems } from "@/components/jobs/ServiceItems";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -51,9 +56,11 @@ export default function JobDetail() {
   const [loadError, setLoadError] = useState("");
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
-  const [openFormKey, setOpenFormKey] = useState(0);
+  const [showCombine, setShowCombine] = useState(false);
   const loadVersion = useRef(0);
   const folder = useJobFolderFiles(job);
+  // Service items on this job and its duplicate records: shown on their field report in History.
+  const service = useServiceItems([id, ...(group?.memberIds || [])]);
   // Kept in refs so the realtime listener always sees the current job.
   const liveRef = useRef({ memberIds: [id], shownIds: [] });
   liveRef.current = {
@@ -143,7 +150,8 @@ export default function JobDetail() {
     },
   });
 
-  const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
+  // Open service item: the job is never "Complete" until it's fixed.
+  const status = useMemo(() => holdForService(jobsStatus(rows, evidence), service.open.length), [rows, evidence, service.open.length]);
   const today = denverDate();
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
   const progress = useMemo(() => jobProgress({ events: calEvents, reports: buildReports(rows, fieldReports), status, today }), [calEvents, rows, fieldReports, status, today]);
@@ -173,10 +181,6 @@ export default function JobDetail() {
 
   const owner = isPurchaseOrderOwner(user);
   const canContacts = jobContacts.phase !== "private";
-  const logInteraction = () => {
-    setOpenFormKey((k) => k + 1);
-    document.getElementById("add-note")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   return (
     <div style={{ backgroundColor: SHEET_BG, minHeight: "100vh" }}>
@@ -196,22 +200,29 @@ export default function JobDetail() {
             folder={folder}
             plans={plans}
             onFieldReport={() => setShowReport(true)}
-            onLog={logInteraction}
             onRename={async (name) => setJob(await renameJob(job, name))}
             progress={progress}
+            alert={<ServiceMarker open={service.open} />}
             extra={
               <>
                 {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
+                {owner ? <Link to={procurementPath(id)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link> : null}
                 {(owner || isAgentCenterOwner(user)) ? <DeleteJobButton job={job} onDeleted={() => navigate("/jobs")} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
+                {user?.role === "admin" && !job.merged_into ? (
+                  <button type="button" onClick={() => setShowCombine(true)} className={heroLinkClass} style={heroLinkStyle} title="Combine with another job">
+                    <GitMerge className="h-[15px] w-[15px]" />Combine
+                  </button>
+                ) : null}
               </>
             }
           />
 
-          <MergedJobBanner job={job} />
+          <MergedJobBanner job={job} onReversed={() => loadAll()} />
           <DuplicateJobNotice group={group} currentId={id} />
+          {user?.role === "admin" ? <CombinedRecordsPanel job={job} onChanged={() => loadAll({ quiet: true })} /> : null}
 
           <div id="add-note" className="scroll-mt-4">
-            <SheetCard icon={HardHat} tile={TILE.green} title="Visits" sub="notes, reports and calls, newest first" right={<LiveMark live={live} />}>
+            <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
               <JobActivityFeed
                 ledger
                 jobId={id}
@@ -224,10 +235,11 @@ export default function JobDetail() {
                 currentUser={user?.email || user?.full_name || ""}
                 onChanged={() => loadAll({ quiet: true })}
                 onPhotoClick={setLightbox}
-                openFormKey={openFormKey}
-                title="Visits"
+                title="History"
                 dedupe={snap}
                 progress={progress}
+                serviceItems={service.items}
+                onServiceChanged={service.reload}
               />
             </SheetCard>
           </div>
@@ -267,7 +279,11 @@ export default function JobDetail() {
       </div>
 
       {showReport && (
-        <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); loadAll(); }} />
+        <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); service.reload(); loadAll(); }} />
+      )}
+
+      {showCombine && (
+        <CombineJobsDialog job={job} onClose={() => setShowCombine(false)} onDone={() => loadAll()} />
       )}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}

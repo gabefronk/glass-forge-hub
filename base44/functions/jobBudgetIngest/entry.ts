@@ -8,7 +8,12 @@ import { normalizeCustomer } from '../../shared/jobIdentity.js';
 import { denverDate } from '../../shared/billingCore.js';
 import { fetchCompleteEntity, matchJobTokens } from '../../shared/jobCatalog.js';
 import { validateLaborEntry, laborMargin, buildCostInputPatch, summarizeJobCosts } from '../../shared/jobLaborEntry.js';
-import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sheetValuesFor, sumBudgetInputs } from '../../shared/jobBudgetReview.js';
+import { validateBudgetInputs, newJobFromBudget, linkedBudgetPatch, sheetValuesFor } from '../../shared/jobBudgetReview.js';
+import { budgetRollup, budgetVersion, estimatePatch, poRefs } from '../../shared/procurementCore.js';
+import { withProcurementLock, procurementError } from '../../shared/procurementLock.mjs';
+import { assertBudgetVersion, budgetInputPatch, rereadPatch } from '../../shared/budgetMutationPolicy.mjs';
+import { QUOTE_SCHEMA, QUOTE_PROMPT, legacyTotals } from '../../shared/vendorQuoteSchema.js';
+import { autofillBudget, budgetNameFor, fileNameHints, GLASS_LABOR_COST_EACH } from '../../shared/jobBudgetAutofill.js';
 
 // Job Budgets ingest.
 // Gabriel drops one or more vendor quote PDFs on the Job Budgets page. For each:
@@ -36,31 +41,48 @@ const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const JOBS_ROOT_FOLDER = '1F_PgUPEuvyvzCk92tdaFiwioLSack4iS'; // Glass Forge Jobs / <Builder> / <Job>
 const UNFILED_FOLDER_NAME = '_Unmatched Quote Drops';
 
-const QUOTE_SCHEMA = {
-  type: 'object',
-  properties: {
-    vendor: { type: ['string', 'null'] },
-    manufacturer: { type: ['string', 'null'] },
-    quote_number: { type: ['string', 'null'] },
-    quote_name: { type: ['string', 'null'] },
-    quoted_by: { type: ['string', 'null'] },
-    bill_to: { type: ['string', 'null'] },
-    ship_to: { type: ['string', 'null'] },
-    builder: { type: ['string', 'null'], description: 'Builder/customer the job belongs to' },
-    lot_or_address: { type: ['string', 'null'], description: 'Lot number or street address if printed' },
-    openings_qty: { type: ['integer', 'null'], description: 'Total window/door/glass units across all lines' },
-    material_true_cost: { type: ['number', 'null'], description: 'Dealer cost subtotal (what Glass Forge pays), before tax' },
-    actual_total_sell: { type: ['number', 'null'], description: 'Customer TOTAL including tax (what the customer pays)' },
-    customer_sub_total: { type: ['number', 'null'] },
-    customer_tax: { type: ['number', 'null'] },
-  },
-};
+async function extractQuote(core, { file_url, text }) {
+  if (text) {
+    const parsed = parseAmscoQuoteText(text);
+    if (parsed) return normalizeVendorQuote(parsed);
+  }
+  const extracted = await core.InvokeLLM({ prompt: QUOTE_PROMPT, response_json_schema: QUOTE_SCHEMA, file_urls: [file_url], add_context_from_internet: false });
+  return legacyTotals(normalizeVendorQuote(extracted || {}));
+}
 
-const QUOTE_PROMPT = `You are reading a window/door/glass vendor quote PDF for a glazing contractor.
-Extract the quote header and totals exactly as printed. The dealer cost subtotal is what the
-contractor pays the vendor (may be labeled "Dealer Sub", dealer price, or net cost); the customer
-TOTAL is the sell price including tax. Count every window, door and glass unit across lines for
-openings_qty. Use null for anything not printed; never guess.`;
+async function glassEach(db) {
+  const s = (await db.AppSettings.list('-created_date', 1).catch(() => []))[0];
+  const v = Number(s?.budget_glass_labor_each);
+  return Number.isFinite(v) && v > 0 ? v : GLASS_LABOR_COST_EACH;
+}
+
+// What the drop filled, stored on the budget row so the Numbers editor can say where each
+// number came from.
+function autofillRecord(fill) {
+  return {
+    sources: fill.sources, notes: fill.notes, filled: fill.filled,
+    install_material: fill.install_material,
+    labor_lines: fill.labor.lines, labor_unpriced: fill.labor.unpriced, trip_minimum: fill.labor.trip_minimum || null,
+    file_job_name: fill.hints.job_name || null, glass_only: !!fill.hints.glass_only,
+    at: new Date().toISOString(),
+  };
+}
+
+// Customer PO (YA-0007) -> the one job carrying it, directly or through a vendor order.
+async function matchByPo(db, po) {
+  const key = String(po || '').trim().toUpperCase();
+  if (!key || /^(NONE|N\/A)$/.test(key)) return null;
+  const [jobs, orders, pos] = await Promise.all([
+    fetchCompleteEntity(db.Jobs), fetchCompleteEntity(db.VendorOrders), fetchCompleteEntity(db.PurchaseOrders),
+  ]);
+  const ids = new Set();
+  for (const j of jobs) if (!j.is_sample && (j.po_numbers || []).some(p => String(p).trim().toUpperCase() === key)) ids.add(j.merged_into || j.id);
+  for (const o of orders) if (o.job_id && (poRefs(o.po_name).includes(key) || String(o.po_name || '').trim().toUpperCase() === key)) ids.add(o.job_id);
+  for (const p of pos) if (p.job_id && String(p.po_number || '').trim().toUpperCase() === key) ids.add(p.job_id);
+  if (ids.size !== 1) return null;
+  const job = jobs.find(j => j.id === [...ids][0] && !j.merged_into && !j.is_sample);
+  return job ? { status: 'matched', job_id: job.id, job_name: job.canonical_name || job.name || '', reason: `unique customer PO ${key}` } : null;
+}
 
 async function driveJson(token, url, init = {}) {
   const res = await fetch(url, { ...init, headers: { Authorization: 'Bearer ' + token, ...(init.headers || {}) } });
@@ -89,6 +111,23 @@ async function ensureJobFolder(token, builderRaw, jobRaw, unmatched) {
   const builderId = await ensureFolder(token, unmatched ? UNFILED_FOLDER_NAME : builder, JOBS_ROOT_FOLDER);
   const jobId = await ensureFolder(token, jobName, builderId);
   return { id: jobId, path: `Glass Forge Jobs/${unmatched ? UNFILED_FOLDER_NAME : builder}/${jobName}`, builder, jobName };
+}
+
+async function folderForJob(token, job, builder, name, unmatched) {
+  if (!job?.drive_job_folder_id) return ensureJobFolder(token, builder, name, unmatched);
+  const id = job.drive_job_folder_id;
+  const meta = await driveJson(token, `${DRIVE}/files/${encodeURIComponent(id)}?fields=id,name,mimeType,parents,trashed`);
+  if (meta.trashed || meta.mimeType !== 'application/vnd.google-apps.folder') throw new Error('The linked job folder is unavailable. Existing links were not changed.');
+  let current = meta;
+  const seen = new Set();
+  for (let depth = 0; depth < 20; depth++) {
+    if ((current.parents || []).includes(JOBS_ROOT_FOLDER)) return { id, path: `Linked job folder / ${meta.name}`, builder, jobName: name };
+    const parent = current.parents?.[0];
+    if (!parent || seen.has(parent)) break;
+    seen.add(parent);
+    current = await driveJson(token, `${DRIVE}/files/${encodeURIComponent(parent)}?fields=id,parents`);
+  }
+  throw new Error('The linked folder is not inside Glass Forge Jobs. No alternate folder was created.');
 }
 
 function concatBytes(parts) {
@@ -153,12 +192,21 @@ async function writeBudgetSheets(token, record, budget, job, folderId) {
 // numbers, in place of whatever the database still holds for it.
 async function upsertCostInputs(db, job, current) {
   const month = denverDate().slice(0, 7);
-  const siblings = await db.JobBudgets.filter({ job_id: job.id }, '-created_date', 50).catch(() => []);
-  const sum = sumBudgetInputs(siblings || [], current);
-  const existing = (await db.JobCostInputs.filter({ month, job_id: job.id }, '-created_date', 1).catch(() => []))[0] || null;
-  const patch = reviewCostInputPatch(existing, sum.values, { jobId: job.id, jobNameNorm: normalizeCustomer(job.canonical_name || job.name || ''), month, quoteNumber: sum.quote_number });
-  const row = existing ? await db.JobCostInputs.update(existing.id, patch) : await db.JobCostInputs.create(patch);
-  return { id: row.id, month, budgets_summed: sum.count, product_cost: sum.values.material_true_cost, product_sell: sum.values.actual_total_sell };
+  const [allBudgets, allCosts, closed] = await Promise.all([
+    fetchCompleteEntity(db.JobBudgets), fetchCompleteEntity(db.JobCostInputs), fetchCompleteEntity(db.MonthCloseSnapshot),
+  ]);
+  const siblings = allBudgets.filter(b => b.job_id === job.id && b.id !== current?.id);
+  const estimate = budgetRollup(current ? [...siblings, current] : siblings);
+  const matches = allCosts.filter(c => c.month === month && c.job_id === job.id);
+  if (matches.length > 1) throw new Error('Multiple accounting records for this job/month require review.');
+  const existing = matches[0];
+  // Existing amounts are historical facts. Never copy whole-job sell into product revenue
+  // or estimated labor into actual labor. First-time linking is an explicit reviewed step.
+  if (!existing?.budget_snapshot || closed.some(s => s.month === month)) return { month, estimate, pending_review: true };
+  const patch = estimatePatch(estimate, current?.numbers_reviewed_by || current?.created_by_email || 'budget workflow', new Date().toISOString());
+  const result = await db.JobCostInputs.updateMany({ id: existing.id, updated_date: existing.updated_date }, { $set: patch });
+  if (result.updated !== 1) throw new Error('The accounting record changed; refresh the estimate from Budget & Orders.');
+  return { id: existing.id, month, estimate, estimates_only: true };
 }
 
 // The budget row's yellow-cell inputs as the math expects them (older rows only stored
@@ -182,9 +230,11 @@ async function matchJob(db, quote, forcedJobId) {
   // Dropped from a job page: that job is the match, no guessing.
   if (forcedJobId) {
     const job = await db.Jobs.get(String(forcedJobId)).catch(() => null);
-    if (!job) return { status: 'needs_review', reason: 'job not found', candidates: [] };
+    if (!job || job.merged_into || job.is_sample) throw procurementError(409, 'Choose the current existing job before uploading a quote.');
     return { status: 'matched', job_id: job.id, job_name: job.canonical_name || job.name || '', reason: 'chosen on the job page' };
   }
+  const byPo = await matchByPo(db, quote.customer_po);
+  if (byPo) return byPo;
   const tokens = quoteMatchTokens(quote);
   if (!tokens.length) return { status: 'needs_review', reason: 'no usable match tokens on quote', candidates: [] };
   // Matching is a uniqueness decision. Never match against a partial catalog and
@@ -196,26 +246,38 @@ async function matchJob(db, quote, forcedJobId) {
 async function processQuote(base44, db, core, accessToken, body, userEmail) {
   const { file_url, file_name, text } = body;
   if (!file_url && !text) return Response.json({ error: 'file_url (PDF) is required' }, { status: 400 });
+  if (body.job_id) await matchJob(db, {}, body.job_id);
+  let pdfBytes = null;
+  if (file_url) {
+    const url = new URL(file_url);
+    if (url.protocol !== 'https:' || url.username || url.password) throw procurementError(400, 'Use the uploaded HTTPS PDF URL.');
+    const response = await fetch(file_url);
+    if (!response.ok) throw new Error('The source PDF could not be downloaded. No budget was created.');
+    pdfBytes = new Uint8Array(await response.arrayBuffer());
+    if (pdfBytes.length > 30 * 1024 * 1024) throw procurementError(400, 'Use a quote PDF smaller than 30 MB.');
+    if (new TextDecoder().decode(pdfBytes.slice(0, 5)) !== '%PDF-') throw procurementError(400, 'The uploaded file is not a readable PDF.');
+  }
+  const bytes = pdfBytes || new TextEncoder().encode(text || '');
+  const source_sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
+  const prior = await fetchCompleteEntity(db.JobBudgets);
+  const retry = body.request_key ? prior.find(b => b.request_key === body.request_key) : null;
+  if (retry && (retry.source_sha256 !== source_sha256 || (body.job_id && retry.job_id !== body.job_id))) throw procurementError(409, 'This upload request was already used for another source or job.');
+  const duplicate = retry || prior.find(b => b.source_sha256 === source_sha256 && String(b.job_id || '') === String(body.job_id || ''));
+  if (duplicate?.deleted_at) return Response.json({ error: 'This source belongs to a deleted unused quote. Open the current quote or recover the deleted attempt before re-uploading it.' }, { status: 409 });
+  if (duplicate) return Response.json({ status: duplicate.status, budget_id: duplicate.id, title: duplicate.title, duplicate: true, notes: ['This PDF is already saved. Open the existing quote instead of counting it twice.'] });
 
   // 1. Extract.
-  let quote = null;
-  if (text) {
-    const parsed = parseAmscoQuoteText(text);
-    if (parsed) quote = normalizeVendorQuote(parsed);
-  }
-  if (!quote) {
-    const extracted = await core.InvokeLLM({ prompt: QUOTE_PROMPT, response_json_schema: QUOTE_SCHEMA, file_urls: [file_url], add_context_from_internet: false });
-    quote = normalizeVendorQuote(extracted || {});
-  }
-  if (!quote.material_true_cost && !quote.actual_total_sell) {
-    return Response.json({ status: 'needs_review', reason: 'no cost or sell totals could be extracted from the PDF', quote }, { status: 200 });
-  }
+  const quote = await extractQuote(core, { file_url, text });
+  // The quote's own name when it has one; Gabe's file name ("JOB - SCOPE - BRAND.pdf") when
+  // the quote only says CASH CUSTOMER.
+  const hints = fileNameHints(file_name);
+  const name = budgetNameFor(quote, hints);
+  if (name) quote.quote_name = name;
 
-  // 2. Budget math (same as the workbook).
-  const budget = computeJobBudget({
-    material_true_cost: quote.material_true_cost,
-    actual_total_sell: quote.actual_total_sell,
-  });
+  // 2. Autofill the sheet's yellow cells, then the workbook math.
+  const fill = autofillBudget(quote, { fileName: file_name, glassEach: await glassEach(db) });
+  if (!fill.inputs.material_true_cost && !fill.inputs.actual_total_sell) fill.notes.push('No cost or sell totals were extracted. Source saved as a draft; enter the missing numbers.');
+  const budget = computeJobBudget(fill.inputs);
 
   // 3. Job match.
   const match = await matchJob(db, quote, body.job_id);
@@ -225,12 +287,8 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
   const jobName = matched ? match.job_name : (quote.quote_name || cleanName((file_name || 'quote').replace(/\.pdf$/i, ''), 'Unnamed Job'));
 
   // 4. Drive filing.
-  const folder = await ensureJobFolder(accessToken, builder, jobName, !matched);
-  let pdfBytes = null;
-  if (file_url) {
-    const res = await fetch(file_url);
-    if (res.ok) pdfBytes = new Uint8Array(await res.arrayBuffer());
-  }
+  const linkedJob = matched ? (forcedJob || await db.Jobs.get(match.job_id)) : null;
+  const folder = await folderForJob(accessToken, linkedJob, builder, jobName, !matched);
   const stamp = denverDate();
   const base = cleanName(`${quote.quote_name || jobName} - ${quote.manufacturer || quote.vendor || 'vendor'} ${quote.quote_number || ''}`.trim(), 'quote');
   const quoteUp = pdfBytes ? await uploadFile(accessToken, `${base}.pdf`, pdfBytes, 'application/pdf', folder.id) : null;
@@ -249,8 +307,10 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
 
   // 5. Records.
   const title = `${quote.quote_name || jobName} (${quote.manufacturer || quote.vendor || 'vendor'}${quote.quote_number ? ' ' + quote.quote_number : ''})`;
-  const record = await db.JobBudgets.create({
-    title,
+  let record;
+  try { record = await db.JobBudgets.create({
+    title, budget_usage: 'draft', numbers_reviewed_at: '', numbers_reviewed_by: '',
+    source_sha256, request_key: String(body.request_key || ''),
     status: matched ? 'filed' : 'needs_review',
     builder, job_name: jobName, job_id: matched ? match.job_id : undefined,
     job_match: match,
@@ -258,14 +318,19 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
     quote_number: quote.quote_number || undefined, quote_name: quote.quote_name || undefined,
     quoted_by: quote.quoted_by || undefined, openings_qty: quote.openings_qty || undefined,
     quote,
-    inputs: { material_true_cost: quote.material_true_cost, actual_total_sell: quote.actual_total_sell },
+    inputs: fill.inputs,
     computed: budget,
+    autofill: autofillRecord(fill),
     source_pdf_url: file_url || undefined, source_pdf_name: file_name || undefined,
     drive_job_folder_id: folder.id, drive_job_folder_path: folder.path,
     drive_quote_file_id: quoteUp?.id, drive_budget_xlsx_file_id: xlsxUp?.id, drive_budget_csv_file_id: csvUp?.id,
     glass_eta_status: 'waiting',
     created_by_email: userEmail,
-  });
+  }); } catch {
+    const saved = body.request_key ? await db.JobBudgets.filter({ request_key: body.request_key }, 'id', 2).catch(() => []) : [];
+    if (saved.length === 1 && saved[0].source_sha256 === source_sha256) record = saved[0];
+    else throw procurementError(503, 'Budget save outcome is uncertain. Source files remain in Drive; reconcile before uploading again.', { uncertain: true });
+  }
 
   // Invoicing-page hook: this month's cost basis for the matched job (summed with any
   // budget already on the job).
@@ -280,9 +345,48 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
     matched_job: matched ? { id: match.job_id, name: match.job_name } : null,
     match_reason: matched ? undefined : match.reason,
     computed: budget,
+    inputs: fill.inputs, filled: fill.filled, notes: fill.notes,
     drive: { folder_path: folder.path, folder_id: folder.id, quote_file_id: quoteUp?.id, budget_xlsx_file_id: xlsxUp?.id, budget_csv_file_id: csvUp?.id },
-    cost_inputs_month: costInput ? denverDate().slice(0, 7) : null,
+    cost_inputs_month: costInput?.id ? denverDate().slice(0, 7) : null,
+    budget_usage: 'draft',
+    next_step: 'Review the numbers, then include this scope in the job budget. No purchase or invoice was created.',
   });
+}
+
+// Re-read a budget row's quote PDF and refill its numbers (rows dropped before autofill, or
+// after the install sheet changes). Overwrites the row's inputs; keeps its job link and files.
+async function refillBudget(base44, db, core, record, userEmail) {
+  if (!record.source_pdf_url) return { error: 'this budget has no quote PDF to read' };
+  const quote = await extractQuote(core, { file_url: record.source_pdf_url });
+  const hints = fileNameHints(record.source_pdf_name);
+  const name = budgetNameFor(quote, hints);
+  if (name) quote.quote_name = name;
+  const fill = autofillBudget(quote, { fileName: record.source_pdf_name, glassEach: await glassEach(db) });
+  const budget = computeJobBudget(fill.inputs);
+  const patch = {
+    ...rereadPatch(record, quote, fill, new Date().toISOString(), userEmail), autofill: autofillRecord(fill),
+    openings_qty: quote.openings_qty || record.openings_qty || undefined,
+    quote_number: quote.quote_number || record.quote_number || undefined,
+  };
+  const warnings = [];
+  const job = record.job_id ? await db.Jobs.get(record.job_id).catch(() => null) : null;
+  if (!record.job_id) {
+    patch.quote_name = quote.quote_name || undefined;
+    patch.job_name = quote.quote_name || record.job_name;
+    patch.title = `${quote.quote_name || record.job_name || 'Quote'} (${quote.manufacturer || quote.vendor || record.manufacturer || 'vendor'}${quote.quote_number ? ' ' + quote.quote_number : ''})`;
+    const byPo = await matchByPo(db, quote.customer_po);
+    if (byPo) patch.job_match = { ...(record.job_match || {}), po_suggestion: byPo };
+  }
+  try {
+    const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
+    if (accessToken && record.drive_job_folder_id) Object.assign(patch, await writeBudgetSheets(accessToken, { ...record, ...patch }, budget, job, record.drive_job_folder_id));
+  } catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 200)}`); }
+  const saved = await db.JobBudgets.updateMany({ id: record.id, updated_date: record.updated_date }, { $set: patch });
+  if (saved.updated !== 1) throw procurementError(409, 'The budget changed during extraction. Reload before applying new values.');
+  const updated = await db.JobBudgets.get(record.id);
+  let costInput = null;
+  if (job) { try { costInput = await upsertCostInputs(db, job, updated); } catch (e) { warnings.push(`Estimate link not refreshed: ${String(e?.message || e).slice(0, 200)}`); } }
+  return { status: 'ok', budget_id: updated.id, budget: updated, inputs: fill.inputs, sources: fill.sources, notes: fill.notes, computed: budget, cost_input: costInput, warnings };
 }
 
 function stampHistory(order, status, by, note) {
@@ -292,6 +396,7 @@ function stampHistory(order, status, by, note) {
 }
 
 export default async function jobBudgetIngest(req) {
+  try {
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me().catch(() => null);
   if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
@@ -301,6 +406,7 @@ export default async function jobBudgetIngest(req) {
   const db = base44.asServiceRole.entities;
   const core = base44.asServiceRole.integrations.Core;
   const action = body.action || 'process';
+  const handle = async () => {
 
   if (action === 'process') {
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
@@ -313,27 +419,59 @@ export default async function jobBudgetIngest(req) {
   if (action === 'set_inputs') {
     const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
     if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
-    const check = validateBudgetInputs(body.inputs || {});
-    if (!check.ok) return Response.json({ error: 'invalid inputs', fields: check.errors }, { status: 400 });
-    const values = check.values;
-    const budget = computeJobBudget(values);
-    const job = record.job_id ? await db.Jobs.get(record.job_id).catch(() => null) : null;
-    const patch = { inputs: values, computed: budget };
+    const patch = budgetInputPatch(record, body, user.email, new Date().toISOString());
+    const values = patch.inputs;
+    const budget = patch.computed;
+    const job = record.job_id ? await db.Jobs.get(record.job_id) : null;
+    const saved = await db.JobBudgets.updateMany({ id: record.id, updated_date: record.updated_date }, { $set: patch });
+    if (saved.updated !== 1) throw procurementError(409, 'The budget changed before save. Reload.');
     const warnings = [];
     try {
       const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
       if (accessToken && record.drive_job_folder_id) Object.assign(patch, await writeBudgetSheets(accessToken, record, budget, job, record.drive_job_folder_id));
       else warnings.push('Drive sheet not rewritten: no folder on this budget.');
     } catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 200)}`); }
-    const updated = await db.JobBudgets.update(record.id, patch);
+    const filePatch = Object.fromEntries(Object.entries(patch).filter(([key]) => key.startsWith('drive_')));
+    if (Object.keys(filePatch).length) await db.JobBudgets.update(record.id, filePatch);
+    const updated = await db.JobBudgets.get(record.id);
     let costInput = null;
-    if (job) { try { costInput = await upsertCostInputs(db, job, { ...record, inputs: values }); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 200)}`); } }
-    return Response.json({ status: 'ok', budget_id: updated.id, computed: budget, cost_input: costInput, warnings });
+    if (job) { try { costInput = await upsertCostInputs(db, job, updated); } catch (e) { warnings.push(`Estimate link not refreshed: ${String(e?.message || e).slice(0, 200)}`); } }
+    return Response.json({ status: 'ok', budget_id: updated.id, budget: updated, computed: budget, cost_input: costInput, warnings });
+  }
+
+  if (action === 'refill') {
+    const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
+    if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
+    assertBudgetVersion(record, body.expected_version);
+    if (body.review_confirmed !== true) throw procurementError(400, 'Confirm replacing working inputs from the source PDF. Previous inputs remain in history.');
+    const out = await refillBudget(base44, db, core, record, user.email);
+    return Response.json(out, { status: out.error ? 400 : 200 });
+  }
+
+  // Dry run for a PDF URL: what the drop would fill, without filing anything.
+  if (action === 'preview_fill') {
+    if (!body.file_url) return Response.json({ error: 'file_url is required' }, { status: 400 });
+    const quote = await extractQuote(core, { file_url: body.file_url, text: body.text });
+    const hints = fileNameHints(body.file_name);
+    const name = budgetNameFor(quote, hints);
+    if (name) quote.quote_name = name;
+    const fill = autofillBudget(quote, { fileName: body.file_name, glassEach: await glassEach(db) });
+    const out = { quote, ...fill, computed: computeJobBudget(fill.inputs), po_match: await matchByPo(db, quote.customer_po) };
+    console.log(JSON.stringify(out));
+    return Response.json(out);
+  }
+
+  if (action === 'delete') {
+    const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
+    if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
+    return Response.json({ error: 'Budget history is preserved. Use Keep as reference in Budget & Orders to exclude a quote without deleting it.' }, { status: 409 });
   }
 
   if (action === 'link_job') {
     const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
     if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
+    assertBudgetVersion(record, body.expected_version);
+    if (record.job_id && String(body.job_id || '') !== record.job_id) throw procurementError(409, 'This quote is already linked. Review existing PO and accounting links before moving it to another job.');
     let job = null;
     if (body.job_id) {
       job = await db.Jobs.get(String(body.job_id)).catch(() => null);
@@ -347,13 +485,14 @@ export default async function jobBudgetIngest(req) {
     } else {
       return Response.json({ error: 'job_id or new_job is required' }, { status: 400 });
     }
+    if (job.merged_into || job.is_sample) throw procurementError(409, 'Select the current, non-sample job.');
     const warnings = [];
     let folder = { id: record.drive_job_folder_id, path: record.drive_job_folder_path };
     const budget = record.computed && Object.keys(record.computed).length ? record.computed : computeJobBudget(inputsOf(record));
     try {
       const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
       if (accessToken) {
-        folder = await ensureJobFolder(accessToken, job.builder || record.builder, job.canonical_name || job.name || record.job_name, false);
+        folder = await folderForJob(accessToken, job, job.builder || record.builder, job.canonical_name || job.name || record.job_name, false);
         for (const id of [record.drive_quote_file_id, record.drive_budget_xlsx_file_id, record.drive_budget_csv_file_id]) {
           try { await moveFile(accessToken, id, folder.id); } catch (e) { warnings.push(`Drive move failed: ${String(e?.message || e).slice(0, 160)}`); }
         }
@@ -361,7 +500,10 @@ export default async function jobBudgetIngest(req) {
         catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 160)}`); }
       } else warnings.push('Drive not connected: files stay where they are.');
     } catch (e) { warnings.push(`Drive: ${String(e?.message || e).slice(0, 160)}`); }
-    const patch = { ...linkedBudgetPatch(job, user.email, folder), inputs: inputsOf(record), computed: budget, drive_budget_xlsx_file_id: record.drive_budget_xlsx_file_id, drive_budget_csv_file_id: record.drive_budget_csv_file_id };
+    const patch = { ...linkedBudgetPatch(job, user.email, folder), inputs: inputsOf(record), computed: budget, drive_budget_xlsx_file_id: record.drive_budget_xlsx_file_id, drive_budget_csv_file_id: record.drive_budget_csv_file_id,
+      status: warnings.length ? 'needs_review' : 'filed',
+      link_history: [...(record.link_history || []), { at: new Date().toISOString(), by: user.email, previous_job_id: record.job_id || '', job_id: job.id, warnings }],
+    };
     const updated = await db.JobBudgets.update(record.id, patch);
     let costInput = null;
     try { costInput = await upsertCostInputs(db, job, { ...record, job_id: job.id, inputs: inputsOf(record) }); } catch (e) { warnings.push(`Cost inputs not updated: ${String(e?.message || e).slice(0, 160)}`); }
@@ -490,4 +632,12 @@ export default async function jobBudgetIngest(req) {
   }
 
   return Response.json({ error: 'unknown action' }, { status: 400 });
+  };
+  if (['process', 'set_inputs', 'refill', 'link_job'].includes(action)) {
+    return await withProcurementLock(db, String(body.request_key || crypto.randomUUID()), handle);
+  }
+  return await handle();
+  } catch (error) {
+    return Response.json({ error: String(error?.message || error), fields: error?.fields || [] }, { status: error?.status || 500 });
+  }
 }

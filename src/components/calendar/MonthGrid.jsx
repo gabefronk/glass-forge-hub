@@ -63,7 +63,7 @@ function DesktopEventBlock({ event, onClick }) {
           {event.start_time}
         </span>
       )}
-      <span className="truncate">{event.job_name}</span>
+      <span className="truncate">{event.purchasing_label ? event.purchasing_label + " · " : ""}{event.job_name}</span>
       {flagged && (
         <span className="inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle shrink-0" style={{ backgroundColor: FLAG }} title="Needs report" />
       )}

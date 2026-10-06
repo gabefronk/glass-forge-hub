@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase, Camera, ChevronDown, Pencil, ClipboardCheck, ExternalLink, FileText, Home, MapPin, MessageSquare, Navigation, Phone, Plus, HardHat, UserPlus } from "lucide-react";
+import { Briefcase, Camera, ChevronDown, Pencil, ClipboardCheck, ExternalLink, FileText, Home, MapPin, MessageSquare, Phone, HardHat, UserPlus } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
@@ -580,8 +580,8 @@ function JobInfo({ snap, folder }) {
 }
 
 // progress (optional): jobProgress() from jobStages — shows a small "Stage n of 7" chip.
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onLog, onRename, extra, headingLevel = "h1", progress = null }) {
-  const mapHref = job?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}` : null;
+// alert (optional): a node shown first in the chip row by the job name — the red service-item marker.
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, extra, headingLevel = "h1", progress = null, alert = null }) {
   const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
   // The builder already leads most job names ("Bangerter Homes - Gomez Res"); only add it
   // to the eyebrow when the title doesn't carry it.
@@ -598,6 +598,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
         <div className="flex flex-wrap items-stretch gap-6 max-[699px]:gap-4">
           <div className="min-w-[240px] flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
+              {alert}
               {eyebrow ? <span className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>{eyebrow}</span> : null}
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.14)", color: BRASS_LT, border: "1px solid rgba(224,201,148,.35)" }}>
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "currentColor" }} />{status.label}
@@ -610,7 +611,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
             </div>
             <JobTitle job={job} onRename={onRename} headingLevel={headingLevel} />
             {job.address ? (
-              <a href={mapHref} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-[7px] text-[14.5px] font-medium hover:underline" style={{ color: "#c9d0d1" }}>
+              <a href={dirHref} target="_blank" rel="noopener noreferrer" title="Get directions" aria-label={`Get directions to ${sanitizeText(job.address)}`} className="mt-2 inline-flex min-h-11 items-center gap-[7px] text-[14.5px] font-medium hover:underline" style={{ color: "#c9d0d1" }}>
                 <MapPin className="h-[15px] w-[15px] shrink-0" style={{ color: BRASS_LT }} />{sanitizeText(job.address)}
               </a>
             ) : null}
@@ -629,8 +630,6 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={onFieldReport} className={HERO_BTN} style={{ backgroundColor: BRASS, color: "#1d160a" }}><Camera className="h-[15px] w-[15px]" />Field report</button>
-            {dirHref ? <a href={dirHref} target="_blank" rel="noreferrer" className={HERO_BTN} style={HERO_SEC}><Navigation className="h-[15px] w-[15px]" style={{ color: BRASS_LT }} />Directions</a> : null}
-            <button type="button" onClick={onLog} className={HERO_BTN} style={HERO_SEC}><Plus className="h-[15px] w-[15px]" style={{ color: BRASS_LT }} />Log</button>
             <FilesMenu folder={folder} plans={plans} events={events} />
             {extra}
           </div>

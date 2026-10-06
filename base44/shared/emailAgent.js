@@ -175,6 +175,39 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     return { patch, changes };
   }
 
+  // Vendor ETAs: an email that names an open order (YA-0003, 09-4307, 3517590…) and gives a
+  // ready / pickup / ship date moves that order's ETA in the unpaid-orders tracker, and the ETA on
+  // any open service item reordered under the same number. Independent of the job link.
+  async function applyOrderEtas(api, row, cache, warn) {
+    const changes = [];
+    if (!api.VendorOrders || !(row?.extracted?.dates || []).length) return changes;
+    try {
+      if (!cache.orders) cache.orders = await api.VendorOrders.filter({ status: { $in: ['ordered', 'eta_set', 'ach_link_received'] } }, '-created_date', 200);
+      if (!cache.items) cache.items = (!api.ServiceItems ? [] : await api.ServiceItems.filter({ status: { $in: ['reported', 'acknowledged', 'working', 'ordered', 'shipped'] } }, '-created_date', 200).catch(() => []))
+        .filter((s) => s.order_ref).map((s) => ({ id: `svc:${s.id}`, status: 'ordered', order_number: '', po_name: s.order_ref, title: s.order_ref, notes: '', eta_date: s.eta_date, _item: s }));
+      const from = row.from_name || row.from_email || 'vendor';
+      const day = String(row.last_message_at || now()).slice(0, 10);
+      const source = `${from} email ${day} (inbox agent, thread ${row.thread_id})`;
+      for (const u of T.planOrderEtas([...cache.orders, ...cache.items], row)) {
+        if (u.order_id.startsWith('svc:')) {
+          const it = cache.items.find((x) => x.id === u.order_id)._item;
+          const at = now();
+          await api.ServiceItems.update(it.id, { eta_date: u.eta_date, last_activity_at: at, ping_count: 0,
+            activity_log: [...(it.activity_log || []), { at, by: from, action: 'ETA from email', note: `${u.eta_date} (${u.label})` }] });
+          it.eta_date = u.eta_date;
+          changes.push(`ETA ${u.eta_date} set on service item ${it.unit || it.job_name || ''}`.trim());
+          continue;
+        }
+        const o = cache.orders.find((x) => x.id === u.order_id);
+        const history = [...(o.status_history || []), { status: o.status === 'ordered' ? 'eta_set' : o.status, at: now(), by: from, note: `ETA ${u.eta_date} — ${u.label}${u.previous ? ` (was ${u.previous})` : ''}` }];
+        await api.VendorOrders.update(o.id, { eta_date: u.eta_date, eta_source: source, status: o.status === 'ordered' ? 'eta_set' : o.status, status_history: history });
+        Object.assign(o, { eta_date: u.eta_date, status: o.status === 'ordered' ? 'eta_set' : o.status, status_history: history });
+        changes.push(`ETA ${u.eta_date} set on ${o.po_name || o.title}${u.previous ? ` (was ${u.previous})` : ''}`);
+      }
+    } catch (e) { warn(`order ETA failed: ${errText(e)}`); }
+    return changes;
+  }
+
   async function relayNote(api, row, mailbox, changes, job) {
     if (!T.shouldRelay(row)) return null;
     const note = await api.JobNotes.create(T.buildNotePayload(row, mailbox, changes));
@@ -385,6 +418,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     // 4. Job match, apply facts, relay note, to-do, label, archive, draft.
     let index = null;
     const today = denverDate();
+    const etaCache = {};
     let assignee; // undefined = not looked up yet, null = missing
     for (let i = 0; i < triaged.length; i++) {
       const t = triaged[i];
@@ -419,6 +453,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
         }
       } catch (e) { warn(`job match failed: ${errText(e)}`); }
       let cur = { ...row, ...patch };
+      changes.push(...await applyOrderEtas(api, cur, etaCache, warn));
       const trusted = cur.job_link_source === 'owner' || cur.job_match_confidence === 'high';
       if (job && trusted) {
         const r = await applyJobFacts(api, cur, job, warn);

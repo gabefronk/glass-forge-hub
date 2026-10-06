@@ -1,5 +1,6 @@
-import { computeJobBudget } from "../../base44/shared/jobBudgetMath.js";
+import { activeBudgets, budgetFigures, budgetRollup } from "../../base44/shared/procurementCore.js";
 import { withComputedAmounts } from "./feeMath.js";
+import { withCompanions, buildSupersededSet } from "./invoicingFilters.js";
 import { isAgentCenterOwner } from "./agentCenterAccess.js";
 
 const amount = (value) => {
@@ -13,42 +14,46 @@ const total = (rows, field) => {
   return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
 };
 
-const BUDGET_COST_INPUTS = ["material_true_cost", "overhead_adder", "additional_install_material", "additional_equipment", "labor_cost_sub_pay", "labor_sell_price"];
-
 // Keep the client-side owner check in one testable place. Entity RLS is the second
 // boundary; this check prevents a crew browser from making a financial request at all.
 export const canLoadJobMoney = (user) => isAgentCenterOwner(user);
 
 // jobId may be one id or a list (the job plus its duplicate records), so money
 // attached to any record in the duplicate group shows on the job page.
-export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], feeLines = [] } = {}) {
+export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], feeLines = [], calendarEvents = [] } = {}) {
   const ids = new Set(Array.isArray(jobId) ? jobId : [jobId]);
   const linkedBudgets = budgets
     .filter((row) => ids.has(row.job_id))
     .map((row) => {
-      const computed = computeJobBudget(row.inputs || {});
+      const figures = budgetFigures(row);
       return {
         ...row,
         displayComputed: {
-          ...computed,
-          total_cost_overhead: BUDGET_COST_INPUTS.some((field) => amount(row.inputs?.[field]) !== null) ? computed.total_cost_overhead : null,
-          actual_total_sell: amount(row.inputs?.actual_total_sell) === null ? null : computed.actual_total_sell,
+          ...figures.calculated,
+          total_cost_overhead: figures.cost,
+          actual_total_sell: figures.sell,
         },
       };
     });
+  const activeIds = new Set(activeBudgets(linkedBudgets).map(row => row.id));
+  const estimate = budgetRollup(linkedBudgets);
   const linkedPurchaseOrders = purchaseOrders.filter((row) => ids.has(row.job_id));
-  const linkedFeeLines = withComputedAmounts(feeLines)
-    .filter((row) => ids.has(row.job_id) && !row.superseded_by);
+  const activePurchaseOrders = linkedPurchaseOrders.filter(row => row.status !== 'cancelled');
+  const computed = withComputedAmounts(feeLines);
+  const audited = withCompanions(computed, calendarEvents);
+  const excluded = buildSupersededSet(audited, calendarEvents);
+  const linkedFeeLines = audited.filter(row => ids.has(row.job_id) && !excluded.has(row.id));
 
   return {
-    budgets: linkedBudgets,
+    budgets: linkedBudgets.map(row => ({ ...row, included_in_budget: activeIds.has(row.id) })),
+    budgetWarnings: estimate.warnings,
     purchaseOrders: linkedPurchaseOrders,
     feeLines: linkedFeeLines,
     totals: {
-      budgetCost: total(linkedBudgets.map((row) => row.displayComputed), "total_cost_overhead"),
-      budgetSell: total(linkedBudgets.map((row) => row.displayComputed), "actual_total_sell"),
-      poDealer: total(linkedPurchaseOrders, "amount_dealer"),
-      poCustomer: total(linkedPurchaseOrders, "amount_customer"),
+      budgetCost: estimate.cost,
+      budgetSell: estimate.sell,
+      poDealer: total(activePurchaseOrders, "amount_dealer"),
+      poCustomer: total(activePurchaseOrders, "amount_customer"),
       feeRecorded: total(linkedFeeLines, "fee_amt"),
       feeBilled: linkedFeeLines.length ? (total(linkedFeeLines.filter((row) => row.billed_to_bfs), "fee_amt") ?? 0) : null,
       feePaid: linkedFeeLines.length ? (total(linkedFeeLines.filter((row) => row.paid_to_ya), "fee_amt") ?? 0) : null,
