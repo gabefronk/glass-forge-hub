@@ -18,6 +18,14 @@ const ACH_RE = /\b(ACH|bank\s+(?:account|withdrawal|transfer|debit|payment)|e-?c
 const CARD_RE = /\b(visa|master\s*card|amex|american\s+express|discover|credit\s+card|debit\s+card|card\s+(?:ending|number))\b/i;
 const NOT_PAID_RE = /\b(upcoming|scheduled|pending|will\s+be\s+(?:processed|withdrawn|charged|debited)|failed|declined|returned|reversed|past\s+due|unpaid|overdue|payment\s+request)\b/i;
 const AMOUNT_RE = /\b(?:amount\s+paid|total\s+paid|payment\s+amount|amount|total)\s*:?\s*(-?\$\s*[\d,]+\.\d{2})/i;
+// Real template (work Gmail, INV001186): "BANK Withdrawal APPROVED", "Amount Due $0". A balance
+// still due means it is not a full payment confirmation.
+const AMOUNT_DUE_RE = /\bamount\s+due\s*:?\s*\$\s*([\d,]+(?:\.\d+)?)/i;
+
+// HOLD: the Helcim merchant "Wasatch windows llc" is a candidate alias for the vendor; the
+// mapping is not confirmed yet. Until it is, nothing is filed automatically or by the admin
+// action (the matcher still runs in tests via the handler's taxFilingEnabled option).
+export const WASATCH_FILING_CONFIRMED = false;
 
 const denverYmd = (iso) => {
   const t = Date.parse(iso || '');
@@ -25,6 +33,8 @@ const denverYmd = (iso) => {
 };
 
 // message: a normalized message (emailParse.js). Returns the tax fields for the ledger row, or null.
+// Which mailbox a message belongs to comes from the connection it was read through
+// (mailbox.visibility), never from its To / Delivered-To headers.
 export function matchWasatchAchPaid(mailbox, message) {
   if (mailbox?.visibility !== 'owner' || !message || message.direction !== 'incoming' || message.is_draft) return null;
   if (String(message.from_email || '').trim().toLowerCase() !== WASATCH_SENDER) return null;
@@ -33,6 +43,8 @@ export function matchWasatchAchPaid(mailbox, message) {
   if (!m) return null;
   const text = String(message.text || '');
   if (!MERCHANT_RE.test(text) || !ACH_RE.test(text) || CARD_RE.test(text) || NOT_PAID_RE.test(text)) return null;
+  const due = text.match(AMOUNT_DUE_RE);
+  if (due && normalizeMoney(due[1]) !== 0) return null;
   const amt = text.match(AMOUNT_RE);
   return { tax_record: true, vendor: WASATCH_VENDOR, reference: m[1].toUpperCase(), amount_total: amt ? normalizeMoney(amt[1]) : null, receipt_date: denverYmd(message.sent_at) || null };
 }

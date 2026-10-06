@@ -15,7 +15,7 @@ import { findJobs, denverDate } from './jobFinder.js';
 import { normalizeGmailMessage, normalizeGraphMessage, aggregateThread, lowerEmail } from './emailParse.js';
 import * as T from './emailTriage.js';
 import { saveTaxRecord } from './emailTaxDrive.js';
-import { findWasatchAchPaid } from './wasatchAch.js';
+import { findWasatchAchPaid, WASATCH_FILING_CONFIRMED } from './wasatchAch.js';
 import { createProviderClient, buildRawReply, ProviderError } from './emailProviders.js';
 import { phoneKey } from './contactMatching.js';
 
@@ -89,7 +89,7 @@ export function publicMailbox(m) {
 const canSeeMailbox = (mailbox, user) => (mailbox?.visibility === 'owner' ? isOwner(user) : isStaff(user));
 const withChanges = (row, more) => [...(row.hub_changes || []), ...more].slice(-HUB_CHANGES_CAP);
 
-export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), nowMs = () => Date.now(), budgetMs = 50_000, sleep } = {}) {
+export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), nowMs = () => Date.now(), budgetMs = 50_000, sleep, taxFilingEnabled = WASATCH_FILING_CONFIRMED } = {}) {
   if (typeof getClient !== 'function') throw new Error('emailAgent: getClient is required');
 
   // ---- shared helpers ------------------------------------------------------------------------
@@ -437,7 +437,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       // Tax filing: only a Wasatch Windows ACH paid confirmation in the owner mailbox (see
       // wasatchAch.js). Filed to Drive automatically; a failure never fails the sync.
       try {
-        const hit = findWasatchAchPaid(mailbox, t.messages);
+        const hit = taxFilingEnabled ? findWasatchAchPaid(mailbox, t.messages) : null;
         if (hit && cur.tax_save_state !== 'saved') {
           Object.assign(patch, hit.fields); cur = { ...cur, ...hit.fields };
           await api.EmailRelay.update(row.id, hit.fields);
@@ -453,7 +453,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     // and must still match; 'unknown' rows are only looked up in Drive, never created again.
     try {
       const inRun = new Set(threads.map((t) => t.row.thread_id));
-      const candidates = await api.EmailRelay.filter({ mailbox_key: mailbox.key, tax_record: true, tax_save_state: { $ne: 'saved' } }, '-last_message_at', 50);
+      const candidates = taxFilingEnabled ? await api.EmailRelay.filter({ mailbox_key: mailbox.key, tax_record: true, tax_save_state: { $ne: 'saved' } }, '-last_message_at', 50) : [];
       for (const prev of candidates) {
         if (inRun.has(prev.thread_id) || overBudget()) continue;
         let hit = null;
@@ -681,6 +681,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     if (!ctx.user) fail(401, 'Sign in required.');
     if (ctx.user.role !== 'admin') fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
+    if (!taxFilingEnabled) fail(409, 'Tax filing is on hold until the Wasatch vendor mapping is confirmed.');
     const provider = await connect(ctx, mailbox);
     const hit = findWasatchAchPaid(mailbox, await fetchThreadMessages(provider, mailbox, row.thread_id));
     if (!hit) fail(409, 'Not a Wasatch Windows ACH payment confirmation.');
