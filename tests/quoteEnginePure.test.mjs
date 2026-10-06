@@ -228,10 +228,26 @@ test('projectPricing manager strips pella anchor provenance and size_deviation',
   assert.ok('unit_list_estimated' in p && 'line_list_estimated' in p && 'estimated' in p && 'confidence' in p && 'evidence' in p);
 });
 
-test('projectPricing admin retains pella anchor provenance', () => {
-  const est = pricePella({ series: '250', width: 24, height: 48, qty: 1, description: '250 SH white' }, pellaAnchors);
-  const p = projectPricing(est, { isAdmin: true });
-  assert.ok('anchor' in p && 'source' in p && 'anchor_dims' in p && 'size_deviation' in p);
+test('projectPricing admin retains pella exact-match anchor provenance (anchor + source)', () => {
+  // 24x48 has NO exact anchor → interpolation payload (anchor + anchor_dims + size_deviation, NO source).
+  // 48x72 IS an exact anchor → empirical_anchor payload (anchor + source, NO anchor_dims/size_deviation).
+  const exact = pricePella({ series: '250', width: 48, height: 72, qty: 1, description: '250 casement white' }, pellaAnchors);
+  assert.equal(exact.confidence, 'high');
+  assert.ok(!('anchor_dims' in exact) && !('size_deviation' in exact), 'exact-match payload has no anchor_dims/size_deviation');
+  const p = projectPricing(exact, { isAdmin: true });
+  assert.ok('anchor' in p && 'source' in p, 'admin retains exact-match anchor + source');
+});
+
+test('projectPricing admin deep-equals raw pricing across high/medium/low/error (no field dropped or added)', () => {
+  const high = pricePella({ series: '250', width: 48, height: 72, qty: 1, description: '250 casement white' }, pellaAnchors);
+  const medium = pricePella({ series: '250', width: 36, height: 60, qty: 1, description: '250 SH white' }, pellaAnchors);
+  const low = pricePella({ series: '250', width: 24, height: 48, qty: 1, description: '250 SH white' }, pellaAnchors);
+  const pellaErr = pricePella({ series: '999', width: 36, height: 60, qty: 1, description: '' }, pellaAnchors);
+  const amscoErr = priceAmsco({ product: 'Mystery', width: 24, height: 48, qty: 1, ext_color: 'White' }, grid, adders, tiers, series);
+  const cases = { high, medium, low, pellaErr, amscoErr, fullAmsco };
+  for (const [label, pricing] of Object.entries(cases)) {
+    assert.deepEqual(projectPricing(pricing, { isAdmin: true }), pricing, `admin must not drop/add any field for ${label}`);
+  }
 });
 
 test('projectPricing keeps anchor_conflict (sale-price uncertainty) for manager and admin', () => {

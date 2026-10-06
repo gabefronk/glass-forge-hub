@@ -317,6 +317,10 @@ export default function QuoteBuilder() {
       {/* Priced results */}
       {hasPriced && (
         <div className="rounded-[12px] overflow-hidden" style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)", boxShadow: "0 1px 2px rgba(24,36,34,.04), 0 4px 12px -8px rgba(24,36,34,.10)" }}>
+          <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: "1px solid var(--border)", backgroundColor: "var(--review-bg)" }}>
+            <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: "var(--review)" }}>List price only — review-only</span>
+            <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>No 30% markup or labor applied; not a final sale price until a grounded sale calculation is added.</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
