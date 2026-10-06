@@ -30,6 +30,7 @@ export default function MonthAchievement({ thisJob = 24900 }) {
       <div className="flex items-center gap-1.5">
         <TrendingUp size={14} style={{ color: "#0b3f3b" }} />
         <h3 className="m-0 text-[13px] font-bold" style={{ color: "#082f2c" }}>This month</h3>
+        <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold tracking-[.1em]" style={{ backgroundColor: "#faf0da", color: "#6f4e10", border: "1px solid #efdfb7" }}>SAMPLE</span>
         <span className="ml-auto text-[11px] font-semibold" style={{ color: "#8a8f93" }}>Goal {cur(GOAL)}</span>
       </div>
 
@@ -47,6 +48,7 @@ export default function MonthAchievement({ thisJob = 24900 }) {
       </div>
 
       <p className="mt-1.5 text-[12px] font-semibold" style={{ color: "#082f2c" }}>This sale moves you to <strong>{pct}%</strong> of goal.</p>
+      <p className="mt-0.5 text-[10.5px]" style={{ color: "#8a8f93" }}>Sample — goal, booked and chart numbers are placeholders until real monthly data is wired.</p>
 
       <div className="mt-2.5 flex items-end gap-1.5" style={{ height: 56 }}>
         {MONTHS.concat([{ m: "Oct", v: total, current: true }]).map((x) => {

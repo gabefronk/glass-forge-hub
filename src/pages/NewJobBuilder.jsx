@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, Check, UploadCloud, Building2, MapPin, User, Calendar,
-  FileText, DollarSign, CheckCircle2, Pencil,
+  FileText, DollarSign, CheckCircle2, Pencil, Loader2,
 } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
 import { SheetCard, TILE } from "@/components/jobs/JobSheet";
@@ -10,9 +10,17 @@ import { C } from "@/lib/feeUI";
 import { money, percent, buttonClass, primaryStyle, secondaryStyle, Field } from "@/components/budgets/ProcurementForms";
 import SaleWonBanner from "@/components/new-job/SaleWonBanner";
 import MonthAchievement from "@/components/new-job/MonthAchievement";
+import { base44 } from "@/api/base44Client";
+import { findMatchWarnings } from "@/lib/newJob";
+import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import JobMatchWarningDialog from "@/components/jobs/JobMatchWarningDialog";
+import { createWizardBudgetSaver, wizardRequestKey } from "@/lib/newJobBudgetDraft";
+import NewJobOwnerGate from "@/components/new-job/NewJobOwnerGate";
+import { createJobGuard } from "@/lib/newJobCreateGuard";
+import UncertainJobCreate from "@/components/new-job/UncertainJobCreate";
 
-// DEMO ONLY — sample data, no entity writes. "Create job" stays disabled.
 const SALES_TAX_RATE = 0.0745;
+const newWizardId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const BUILDER_PRESETS = [
   { key: "shelby", name: "Shelby Homes", contact: "Camden Brien", phone: "801-555-0142", email: "camden@shelbyhomes.com", billing: "Net 30", leadWeeks: 4, blurb: "Production · vinyl package" },
@@ -20,19 +28,21 @@ const BUILDER_PRESETS = [
   { key: "other", name: "Someone else", contact: "", phone: "", email: "", billing: "", leadWeeks: 4, blurb: "Custom or one-off" },
 ];
 
-const SAMPLE = {
-  jobName: "Shelby Homes - 215 Skyridge",
-  jobCode: "SH-215SK",
-  windowPO: "PO-7215606",
-  mfgOrder: "",
-  builderKey: "shelby",
-  builderCustom: { contact: "", phone: "", email: "", billing: "", leadWeeks: 4 },
-  address: { street: "215 Skyridge Dr", city: "Lehi, UT", lot: "Lot 12" },
-  contact: { name: "Jared Pew", phone: "385-555-0188", email: "jared.pew@gmail.com" },
-  leads: { orderDate: "2026-10-12", delivery: "2026-11-09", install: "2026-11-16" },
-  quote: { vendor: "AMSCO Windows", quoteNumber: "Q-3517590", units: 14, material: 18400, fileName: "AMSCO_215Skyridge_Q3517590.pdf" },
-  money: { cost: 18400, sale: 24900 },
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const addWeeks = (dateStr, weeks) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + weeks * 7);
+  return d.toISOString().slice(0, 10);
 };
+
+// Auto-suggest a short job code from the job name + builder, e.g.
+// "Shelby Homes - 215 Skyridge" + "Shelby Homes" -> "SH215". Editable.
+function suggestJobCode(name, builderName) {
+  const digits = (String(name || "").match(/\d+/g) || []).join("");
+  const prefix = (builderName || "").replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase();
+  return digits ? `${prefix}${digits}` : "";
+}
 
 const STEPS = [
   { key: "builder", title: "Builder", icon: Building2 },
@@ -110,12 +120,73 @@ function MoneyStat({ label, value, tone }) {
 }
 
 export default function NewJobBuilder() {
-  const [s, setS] = useState(SAMPLE);
+  const navigate = useNavigate();
+  const [s, setS] = useState(() => ({
+    jobName: "",
+    jobCode: "",
+    windowPO: "",
+    mfgOrder: "",
+    builderKey: "shelby",
+    builderCustom: { contact: "", phone: "", email: "", billing: "", leadWeeks: 4 },
+    address: { street: "", city: "", lot: "" },
+    contact: { name: "", phone: "", email: "" },
+    leads: { orderDate: todayStr(), delivery: addWeeks(todayStr(), 4), install: addWeeks(todayStr(), 5) },
+    quote: { vendor: "", quoteNumber: "", units: "", material: "", fileName: "" },
+    money: { cost: "", sale: "" },
+  }));
   const [step, setStep] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [jobs, setJobs] = useState([]);
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState(null);
+  const [formError, setFormError] = useState("");
+  const [matchWarning, setMatchWarning] = useState(null);
+  const [forceCreate, setForceCreate] = useState(false);
+  const [leadsTouched, setLeadsTouched] = useState(false);
+  const [jobCodeTouched, setJobCodeTouched] = useState(false);
+  const [authState, setAuthState] = useState("loading"); // loading | owner | denied
+  const [budgetState, setBudgetState] = useState("pending"); // pending | saved | failed | uncertain | conflict | not_allowed
+  const [budgetError, setBudgetError] = useState("");
+  const [wizardId, setWizardId] = useState(newWizardId);
+  const creatingRef = useRef(false);
+  const [jobUncertain, setJobUncertain] = useState(null);
+  const jobGuardRef = useRef(null);
+  if (!jobGuardRef.current) jobGuardRef.current = createJobGuard({ api: base44.entities.Jobs });
+  const saverRef = useRef(null);
+  if (!saverRef.current) saverRef.current = createWizardBudgetSaver({ api: base44.entities.JobBudgets, getUser: () => base44.auth.me(), isOwner: isAgentCenterOwner });
   const set = (patch) => setS(prev => ({ ...prev, ...patch }));
 
+  useEffect(() => {
+    let active = true;
+    base44.auth.me()
+      .then(u => { if (active) setAuthState(isAgentCenterOwner(u) ? "owner" : "denied"); })
+      .catch(() => { if (active) setAuthState("denied"); });
+    return () => { active = false; };
+  }, []);
+
+  // Load existing eligible jobs once for the duplicate guard (owner only).
+  useEffect(() => {
+    if (authState !== "owner") return;
+    let active = true;
+    (async () => {
+      const out = [];
+      let cursor;
+      for (;;) {
+        const page = await base44.entities.Jobs.filter(
+          { is_sample: { $ne: true }, merged_into: { $exists: false } },
+          { sort: "-created_date", limit: 1000, cursor, fields: ["id", "canonical_name", "address", "builder", "po_numbers", "stage"] }
+        );
+        out.push(...(page.items || []));
+        if (!page.has_more) break;
+        cursor = page.next_cursor;
+      }
+      if (active) setJobs(out);
+    })().catch(() => {});
+    return () => { active = false; };
+  }, [authState]);
+
   const builder = BUILDER_PRESETS.find(p => p.key === s.builderKey) || BUILDER_PRESETS[2];
+  const builderName = builder.key === "other" ? (s.builderCustom.name || "") : builder.name;
   const builderFields = builder.key === "other" ? s.builderCustom : builder;
   const tax = Math.round((Number(s.money.sale) || 0) * SALES_TAX_RATE * 100) / 100;
   const cost = Number(s.money.cost) || 0;
@@ -125,12 +196,119 @@ export default function NewJobBuilder() {
   const customerTotal = sale + tax;
   const atReview = step === STEPS.length;
 
-  function pickBuilder(key) { set({ builderKey: key }); }
+  // Auto-suggest a job code from the job name until the user manually edits it.
+  useEffect(() => {
+    if (jobCodeTouched) return;
+    set({ jobCode: suggestJobCode(s.jobName, builderName) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.jobName, builderName]);
+
+  function pickBuilder(key) {
+    set({ builderKey: key });
+    if (!leadsTouched) {
+      const lw = (BUILDER_PRESETS.find(p => p.key === key) || {}).leadWeeks || 4;
+      set({ leads: { ...s.leads, delivery: addWeeks(s.leads.orderDate || todayStr(), lw), install: addWeeks(s.leads.orderDate || todayStr(), lw + 1) } });
+    }
+    if (key === "other") set({ builderCustom: { ...s.builderCustom, name: s.builderCustom.name || "" } });
+  }
+
+  const fullAddress = useMemo(() => {
+    const head = [s.address.street.trim(), s.address.lot.trim()].filter(Boolean).join(" ");
+    return [head, s.address.city.trim()].filter(Boolean).join(", ");
+  }, [s.address]);
+
   function onDrop(e) {
     e.preventDefault(); setDragging(false);
     const file = e.dataTransfer?.files?.[0];
     set({ quote: { ...s.quote, fileName: file ? file.name : s.quote.fileName } });
   }
+
+  function validateRequired() {
+    if (!s.jobName.trim()) return "Job name is required.";
+    if (!builderName.trim()) return "Builder is required.";
+    if (!s.address.street.trim()) return "Address is required.";
+    return "";
+  }
+
+  async function doCreate() {
+    if (authState !== "owner") { setFormError("Only the owner can create jobs from this builder."); return; }
+    const err = validateRequired();
+    if (err) { setFormError(err); return; }
+    if (created?.jobId) { setFormError("This job was already created. Open it instead of submitting twice."); return; }
+    if (jobUncertain) return;
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    setCreating(true); setFormError(""); setBudgetState("pending"); setBudgetError("");
+    try {
+      const jobPayload = {
+        canonical_name: s.jobName.trim(),
+        builder: builderName.trim(),
+        address: fullAddress,
+        stage: "sold",
+        ...(s.windowPO.trim() ? { po_numbers: [s.windowPO.trim()] } : {}),
+      };
+      const r = await jobGuardRef.current(jobPayload);
+      if (r.state === "rejected") { setFormError(r.error); return; }
+      if (r.state === "uncertain") { setJobUncertain({ error: r.error, matches: r.matches }); return; }
+      if (r.state !== "created") return;
+      setCreated({ jobId: r.job.id });
+      // Cost / sale go to a JobBudgets draft (admin-only RLS), keyed to this
+      // wizard session so a retry reconciles instead of duplicating.
+      if (cost > 0 || sale > 0) await saveBudget(r.job.id);
+    } finally { creatingRef.current = false; setCreating(false); }
+  }
+
+  // Save (or reconcile) the draft budget for the already-created job. Used by
+  // the initial create and the retry button — never recreates the job.
+  async function saveBudget(jobId) {
+    setBudgetState("pending"); setBudgetError("");
+    const r = await saverRef.current({
+      jobId,
+      requestKey: wizardRequestKey(wizardId),
+      payload: {
+        title: `${s.jobName.trim()} - initial budget`,
+        status: "draft",
+        budget_usage: "draft",
+        job_name: s.jobName.trim(),
+        builder: builderName.trim(),
+        ...(s.quote.vendor ? { manufacturer: s.quote.vendor } : {}),
+        ...(s.quote.quoteNumber ? { quote_number: s.quote.quoteNumber } : {}),
+        ...(Number(s.quote.units) > 0 ? { openings_qty: Number(s.quote.units) } : {}),
+        inputs: { material_true_cost: cost || null, actual_total_sell: sale || null },
+      },
+    });
+    if (r.state === "busy") return;
+    setBudgetState(r.state);
+    setBudgetError(r.state === "conflict" ? `More than one draft budget matches this job (${r.ids.join(", ")}).` : r.error || "");
+  }
+
+  function retryBudget() {
+    if (!created?.jobId || authState !== "owner" || budgetState === "pending") return;
+    saveBudget(created.jobId);
+  }
+
+  function handleCreate() {
+    if (created?.jobId) { setFormError("This job was already created. Open it instead of submitting twice."); return; }
+    const err = validateRequired();
+    if (err) { setFormError(err); return; }
+    setFormError("");
+    if (forceCreate) { doCreate(); return; }
+    const warnings = findMatchWarnings(jobs, { canonical_name: s.jobName, address: fullAddress, po_number: s.windowPO });
+    if (warnings.strong.length || warnings.medium.length) {
+      setMatchWarning({ strong: warnings.strong, medium: warnings.medium });
+      return;
+    }
+    doCreate();
+  }
+
+  function handleOpenExisting() {
+    const first = [...(matchWarning?.strong || []), ...(matchWarning?.medium || [])][0];
+    setMatchWarning(null);
+    if (first) navigate(`/jobs/${first.id}`);
+  }
+  function handleCreateAnyway() { setMatchWarning(null); setForceCreate(true); doCreate(); }
+
+  if (authState !== "owner") return <NewJobOwnerGate loading={authState === "loading"} />;
 
   return (
     <PageShell width="max-w-[960px]">
@@ -141,21 +319,18 @@ export default function NewJobBuilder() {
         <div className="px-4 py-2.5 max-[699px]:px-3">
           <div className="flex items-center gap-2.5">
             <h1 className="m-0 text-[15px] font-bold" style={{ color: "#f2eee8", letterSpacing: "-0.02em" }}>New job</h1>
-            <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.14)", color: "#e0c994", border: "1px solid rgba(224,201,148,.3)" }}>
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "currentColor" }} />Demo
-            </span>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 lg:grid-cols-4">
             {[
               { label: "Job name", value: s.jobName, key: "jobName", placeholder: "Job name" },
-              { label: "Job code", value: s.jobCode, key: "jobCode", mono: true, placeholder: "SH-215SK" },
-              { label: "Window PO", value: s.windowPO, key: "windowPO", mono: true, placeholder: "PO-7215606" },
+              { label: "Job code", value: s.jobCode, key: "jobCode", mono: true, placeholder: "SH215" },
+              { label: "Window PO", value: s.windowPO, key: "windowPO", mono: true, placeholder: "Optional" },
               { label: "Mfg order #", value: s.mfgOrder, key: "mfgOrder", mono: true, placeholder: "Not ordered" },
             ].map(f => (
               <label key={f.key} className="block min-w-0">
                 <span className="block text-[9.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>{f.label.toUpperCase()}</span>
                 <div className="mt-0.5">
-                  <InlineEdit value={f.value} mono={f.mono} placeholder={f.placeholder} onCommit={v => set({ [f.key]: v })} />
+                  <InlineEdit value={f.value} mono={f.mono} placeholder={f.placeholder} onCommit={v => { if (f.key === "jobCode") setJobCodeTouched(true); set({ [f.key]: v }); }} />
                 </div>
               </label>
             ))}
@@ -199,6 +374,9 @@ export default function NewJobBuilder() {
                   })}
                 </div>
                 <div className="mt-3 grid gap-2.5 rounded-[10px] p-3 sm:grid-cols-2" style={{ backgroundColor: "#f4f1ea", border: "1px solid #e0dacf" }}>
+                  {builder.key === "other"
+                    ? <Field label="Builder name" value={s.builderCustom.name || ""} onChange={v => set({ builderCustom: { ...s.builderCustom, name: v } })} />
+                    : <div className="text-[12px]" style={{ color: "#566063" }}>Preset values below are editable defaults. Override them for this job as needed.</div>}
                   <Field label="Contact" value={builderFields.contact} onChange={v => builder.key === "other" ? set({ builderCustom: { ...s.builderCustom, contact: v } }) : set({})} />
                   <Field label="Phone" value={builderFields.phone} onChange={v => builder.key === "other" ? set({ builderCustom: { ...s.builderCustom, phone: v } }) : set({})} />
                   <Field label="Email" value={builderFields.email} onChange={v => builder.key === "other" ? set({ builderCustom: { ...s.builderCustom, email: v } }) : set({})} />
@@ -212,6 +390,9 @@ export default function NewJobBuilder() {
                 <div className="sm:col-span-2"><Field label="Street address" value={s.address.street} onChange={v => set({ address: { ...s.address, street: v } })} /></div>
                 <Field label="City, State" value={s.address.city} onChange={v => set({ address: { ...s.address, city: v } })} />
                 <Field label="Lot / unit" value={s.address.lot} onChange={v => set({ address: { ...s.address, lot: v } })} />
+                <div className="sm:col-span-2 rounded-[8px] px-3 py-2 text-[12px]" style={{ backgroundColor: "#eef5f3", color: "#082f2c", border: "1px solid #c7e4d2" }}>
+                  Lot is matched against existing jobs to catch duplicates. For Daybreak, lot numbers repeat across communities, so the full street address keeps communities from cross-linking.
+                </div>
               </div>
             )}
 
@@ -220,16 +401,17 @@ export default function NewJobBuilder() {
                 <Field label="Name" value={s.contact.name} onChange={v => set({ contact: { ...s.contact, name: v } })} />
                 <Field label="Phone" value={s.contact.phone} onChange={v => set({ contact: { ...s.contact, phone: v } })} />
                 <div className="sm:col-span-2"><Field label="Email" value={s.contact.email} onChange={v => set({ contact: { ...s.contact, email: v } })} /></div>
+                <div className="sm:col-span-2 text-[11.5px]" style={{ color: "#8a8f93" }}>Saved to the job after creation — link a contact from the job page.</div>
               </div>
             )}
 
             {step === 3 && (
               <div className="grid gap-2.5 sm:grid-cols-3">
-                <Field label="Order date" type="date" value={s.leads.orderDate} onChange={v => set({ leads: { ...s.leads, orderDate: v } })} />
-                <Field label="Delivery" type="date" value={s.leads.delivery} onChange={v => set({ leads: { ...s.leads, delivery: v } })} />
-                <Field label="Install" type="date" value={s.leads.install} onChange={v => set({ leads: { ...s.leads, install: v } })} />
+                <Field label="Order date" type="date" value={s.leads.orderDate} onChange={v => { setLeadsTouched(true); set({ leads: { ...s.leads, orderDate: v } }); }} />
+                <Field label="Delivery" type="date" value={s.leads.delivery} onChange={v => { setLeadsTouched(true); set({ leads: { ...s.leads, delivery: v } }); }} />
+                <Field label="Install" type="date" value={s.leads.install} onChange={v => { setLeadsTouched(true); set({ leads: { ...s.leads, install: v } }); }} />
                 <div className="sm:col-span-3 rounded-[8px] px-3 py-2 text-[12px]" style={{ backgroundColor: "#eef5f3", color: "#082f2c", border: "1px solid #c7e4d2" }}>
-                  ~{builderFields.leadWeeks} weeks order-to-delivery. Set the mfg order # when you order.
+                  ~{builderFields.leadWeeks} weeks order-to-delivery (default from the builder preset). Set the mfg order # when you order.
                 </div>
               </div>
             )}
@@ -238,22 +420,21 @@ export default function NewJobBuilder() {
               <div>
                 <div onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop} className="flex flex-col items-center gap-1.5 rounded-[10px] border-2 border-dashed px-4 py-5 text-center" style={{ borderColor: dragging ? "#0b3f3b" : "#d3cabb", backgroundColor: dragging ? "#eef5f3" : "#f4f1ea" }}>
                   <UploadCloud size={22} style={{ color: "#0b3f3b" }} />
-                  <strong className="text-[13px]" style={{ color: "#101617" }}>Drop quote PDF</strong>
-                  <span className="text-[11px]" style={{ color: "#8a8f93" }}>Demo — parsed sample below</span>
+                  <strong className="text-[13px]" style={{ color: "#101617" }}>Drop quote PDF (optional)</strong>
+                  <span className="text-[11px]" style={{ color: "#8a8f93" }}>Enter the quote details below, or add the PDF later from the job.</span>
                 </div>
                 <div className="mt-3 rounded-[10px] p-3" style={{ backgroundColor: "#ffffff", border: "1px solid #e0dacf" }}>
                   <div className="flex items-center gap-2">
                     <FileText size={15} style={{ color: "#0b3f3b" }} />
-                    <span className="truncate text-[13px] font-bold" style={{ color: "#101617" }}>{s.quote.fileName}</span>
-                    <span className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "#e2eeeb", color: "#082f2c", border: "1px solid #c7e4d2" }}>Parsed</span>
+                    <span className="truncate text-[13px] font-bold" style={{ color: "#101617" }}>{s.quote.fileName || "No file attached"}</span>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-4">
-                    <div><div className="text-[10px]" style={{ color: "#8a8f93" }}>Vendor</div><strong>{s.quote.vendor}</strong></div>
-                    <div><div className="text-[10px]" style={{ color: "#8a8f93" }}>Quote #</div><strong className="font-ref">{s.quote.quoteNumber}</strong></div>
-                    <div><div className="text-[10px]" style={{ color: "#8a8f93" }}>Units</div><strong>{s.quote.units}</strong></div>
-                    <div><div className="text-[10px]" style={{ color: "#8a8f93" }}>Material</div><strong>{money(s.quote.material)}</strong></div>
+                    <div><div className="text-[10px]" style={{ color: "#8a8f93" }}>Vendor</div><input className="mt-0.5 w-full rounded-[6px] px-1.5 py-1 text-[12px] font-bold" style={{ border: "1px solid #d3cabb", color: "#101617" }} value={s.quote.vendor} onChange={e => set({ quote: { ...s.quote, vendor: e.target.value } })} /></div>
+                    <div><div className="text-[10px]" style={{ color: "#8a8f93" }}>Quote #</div><input className="mt-0.5 w-full rounded-[6px] px-1.5 py-1 text-[12px] font-bold font-ref" style={{ border: "1px solid #d3cabb", color: "#101617" }} value={s.quote.quoteNumber} onChange={e => set({ quote: { ...s.quote, quoteNumber: e.target.value } })} /></div>
+                    <div><div className="text-[10px]" style={{ color: "#8a8f93" }}>Units</div><input type="number" min="0" className="mt-0.5 w-full rounded-[6px] px-1.5 py-1 text-[12px] font-bold" style={{ border: "1px solid #d3cabb", color: "#101617" }} value={s.quote.units} onChange={e => set({ quote: { ...s.quote, units: e.target.value } })} /></div>
+                    <div><div className="text-[10px]" style={{ color: "#8a8f93" }}>Material</div><input type="number" min="0" step="any" className="mt-0.5 w-full rounded-[6px] px-1.5 py-1 text-[12px] font-bold" style={{ border: "1px solid #d3cabb", color: "#101617" }} value={s.quote.material} onChange={e => set({ quote: { ...s.quote, material: e.target.value } })} /></div>
                   </div>
-                  <button className={buttonClass + " mt-2.5"} style={secondaryStyle} onClick={() => set({ money: { ...s.money, cost: s.quote.material } })}>Use as my cost</button>
+                  <button className={buttonClass + " mt-2.5"} style={secondaryStyle} onClick={() => set({ money: { ...s.money, cost: s.quote.material } })}>Use material as my cost</button>
                 </div>
               </div>
             )}
@@ -277,7 +458,7 @@ export default function NewJobBuilder() {
                   <div className="mt-1 flex items-center justify-between" style={{ borderTop: "1px solid #d3cabb", paddingTop: 6 }}><span style={{ color: "#566063" }}>Customer total</span><strong>{money(customerTotal)}</strong></div>
                   <div className="mt-1 flex items-center justify-between"><span style={{ color: "#566063" }}>Profit</span><strong style={{ color: profit >= 0 ? "#166447" : "#a43432" }}>{money(profit)} · {percent(profitPct)}</strong></div>
                 </div>
-                <div className="mt-1.5 text-[10.5px] font-medium" style={{ color: "#8a8f93" }}>No auto margin — you set the price; tax is the only thing added.</div>
+                <div className="mt-1.5 text-[10.5px] font-medium" style={{ color: "#8a8f93" }}>No auto margin — you set the price; tax is the only thing added. Cost and sale are saved to a draft budget (admin-only).</div>
                 <MonthAchievement thisJob={sale} />
               </div>
             )}
@@ -291,13 +472,13 @@ export default function NewJobBuilder() {
       })()}
 
       {/* Review — every value taps to edit in place */}
-      {atReview && (
-        <SheetCard icon={CheckCircle2} tile={TILE.teal} title="Review" sub="Tap any value to edit. Sample data — not saved." bodyClassName="px-4 py-3 max-[699px]:px-3">
+      {atReview && !created && (
+        <SheetCard icon={CheckCircle2} tile={TILE.teal} title="Review" sub="Tap any value to edit, then create the job." bodyClassName="px-4 py-3 max-[699px]:px-3">
           <SaleWonBanner cost={cost} sale={sale} profit={profit} profitPct={profitPct} />
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: "Job name", value: s.jobName, onCommit: v => set({ jobName: v }) },
-              { label: "Job code", value: s.jobCode, mono: true, onCommit: v => set({ jobCode: v }) },
+              { label: "Job code", value: s.jobCode, mono: true, onCommit: v => { setJobCodeTouched(true); set({ jobCode: v }); } },
               { label: "Window PO", value: s.windowPO, mono: true, onCommit: v => set({ windowPO: v }) },
               { label: "Mfg order #", value: s.mfgOrder, mono: true, placeholder: "Not ordered", onCommit: v => set({ mfgOrder: v }) },
             ].map(f => (
@@ -310,7 +491,7 @@ export default function NewJobBuilder() {
 
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
             <ReviewBlock title="Builder" icon={Building2} fields={[
-              { label: "Name", value: builder.name },
+              { label: "Name", value: builderName },
               { label: "Contact", value: builderFields.contact, onCommit: v => builder.key === "other" ? set({ builderCustom: { ...s.builderCustom, contact: v } }) : set({}) },
               { label: "Phone", value: builderFields.phone, onCommit: v => builder.key === "other" ? set({ builderCustom: { ...s.builderCustom, phone: v } }) : set({}) },
               { label: "Email", value: builderFields.email, onCommit: v => builder.key === "other" ? set({ builderCustom: { ...s.builderCustom, email: v } }) : set({}) },
@@ -351,13 +532,64 @@ export default function NewJobBuilder() {
             Tax (7.45%): <strong>{money(tax)}</strong> · Customer total: <strong>{money(customerTotal)}</strong>
           </div>
 
+          <div className="mt-3 rounded-[10px] px-3 py-2 text-[11.5px]" style={{ backgroundColor: "#f4f1ea", color: "#566063", border: "1px solid #e0dacf" }}>
+            <strong style={{ color: "#34403f" }}>Setup info not saved with the job record:</strong> job code, manufacturer order #, site contact, and order/delivery/install dates are for your reference only. They are not stored on the Jobs record. Add them from the job page after creation (contacts via the Contacts directory, dates as notes or calendar events).
+          </div>
+
+          {formError && <p role="alert" className="mt-3 rounded-[10px] border border-red-200 bg-red-50 p-3 text-[13px] text-red-800">{formError}</p>}
+          {jobUncertain && <UncertainJobCreate error={jobUncertain.error} matches={jobUncertain.matches} />}
+
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5">
             <button className={buttonClass} style={secondaryStyle} onClick={() => setStep(STEPS.length - 1)}><ArrowLeft size={14} />Back to money</button>
-            <button disabled className={buttonClass} style={{ ...primaryStyle, opacity: 0.6, cursor: "not-allowed" }}><Check size={14} />Demo only - not saved</button>
+            <button className={buttonClass} style={primaryStyle} disabled={creating || !!created?.jobId || !!jobUncertain} onClick={handleCreate}>
+              {creating ? <><Loader2 size={14} className="animate-spin" />Creating…</> : <><Check size={14} />Create job</>}
+            </button>
           </div>
-          <div className="mt-2 text-[11px]" style={{ color: "#8a8f93" }}>Demo — nothing is saved. The button is disabled.</div>
+          <div className="mt-2 text-[11px]" style={{ color: "#8a8f93" }}>Creates one job record. Cost and sale price are saved to a draft budget you can edit on the job.</div>
         </SheetCard>
       )}
+
+      {/* Success state */}
+      {created && (
+        <SheetCard icon={CheckCircle2} tile={TILE.teal} title="Job created" bodyClassName="px-4 py-4">
+          <div className="rounded-[10px] p-3" style={{ backgroundColor: "#eef5f3", border: "1px solid #c7e4d2" }}>
+            <div className="text-[13px] font-bold" style={{ color: "#082f2c" }}>{s.jobName}</div>
+            <div className="mt-0.5 text-[12px]" style={{ color: "#3e5a55" }}>{fullAddress || builderName}</div>
+            {(cost > 0 || sale > 0) && budgetState === "saved" && <div className="mt-1 text-[12px]" style={{ color: "#3e5a55" }}>Draft budget saved · Cost {money(cost)} · Sale {money(sale)}</div>}
+          </div>
+          {(cost > 0 || sale > 0) && budgetState === "not_allowed" && (
+            <div className="mt-2 rounded-[10px] px-3 py-2 text-[12px]" style={{ backgroundColor: "#faf0da", color: "#6f4e10", border: "1px solid #efdfb7" }}>
+              The job was created, but cost/sale pricing was not saved — only the owner can save a draft budget. Open the job and have an owner add the budget there.
+            </div>
+          )}
+          {(cost > 0 || sale > 0) && budgetState === "pending" && !creating && (
+            <div className="mt-2 flex items-center gap-1.5 text-[12px]" style={{ color: "#566063" }}><Loader2 size={14} className="animate-spin" />Saving draft budget…</div>
+          )}
+          {(cost > 0 || sale > 0) && ["failed", "uncertain", "conflict"].includes(budgetState) && (
+            <div className="mt-2 rounded-[10px] px-3 py-2 text-[12px]" style={{ backgroundColor: "#fcedec", color: "#a43432", border: "1px solid #f0c9c5" }}>
+              {budgetState === "failed" && <div>The job was created, but the draft budget was not saved: {budgetError || "unknown error"}</div>}
+              {budgetState === "uncertain" && <div>The job was created, but we could not confirm whether the draft budget saved{budgetError ? ` (${budgetError})` : ""}. Check again only looks for it; it never creates a second budget. If it still isn't found, open the job's budgets and add it by hand.</div>}
+              {budgetState === "conflict" && <div>The job was created. {budgetError} Review them on the budget page; nothing new was created.</div>}
+              <div className="mt-1">Do not create the job again.</div>
+              {budgetState !== "conflict" && (
+                <button className={buttonClass + " mt-2"} style={secondaryStyle} onClick={retryBudget}>{budgetState === "uncertain" ? "Check again" : "Retry budget save"}</button>
+              )}
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link to={`/jobs/${created.jobId}`} className={buttonClass} style={primaryStyle}><Check size={14} />Open the new job</Link>
+            <Link to={`/jobs/${created.jobId}/budget-orders`} className={buttonClass} style={secondaryStyle}>Edit budget & orders</Link>
+            <Link to="/purchasing/new-job" onClick={() => { setCreated(null); setWizardId(newWizardId()); setForceCreate(false); setFormError(""); setBudgetState("pending"); setBudgetError(""); setS(prev => ({ ...prev, jobName: "", jobCode: "", windowPO: "", mfgOrder: "", address: { street: "", city: "", lot: "" }, contact: { name: "", phone: "", email: "" }, money: { cost: "", sale: "" } })); }} className={buttonClass} style={secondaryStyle}>Create another</Link>
+          </div>
+        </SheetCard>
+      )}
+
+      <JobMatchWarningDialog
+        matches={matchWarning || { strong: [], medium: [] }}
+        onOpenExisting={handleOpenExisting}
+        onCreateAnyway={handleCreateAnyway}
+        onCancel={() => setMatchWarning(null)}
+      />
     </PageShell>
   );
 }
