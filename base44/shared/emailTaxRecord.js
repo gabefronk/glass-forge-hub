@@ -1,6 +1,6 @@
 // Inbox agent: tax-record save step — pure helpers. No I/O here; emailTaxDrive.js drives the
-// Drive calls and the provider attachment downloads. Email content stays untrusted
-// evidence (see emailTriage.js); a tax_record flag never carries an instruction.
+// Drive calls and the provider attachment downloads. What gets filed is decided by the
+// deterministic Wasatch ACH matcher (wasatchAch.js), never by the LLM.
 
 const clean = (v, cap = 120) => String(v ?? '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, cap);
 
@@ -121,16 +121,4 @@ export function taxDocHtml({ from = '', date = '', subject = '', mailbox = '', b
   ].join('');
   const body = bodyText ? `<div>${esc(bodyText).replace(/\n/g, '<br>')}</div>` : '';
   return header + body;
-}
-
-// Normalize the LLM's tax fields into the exact shape stored on the EmailRelay row.
-export function parseTaxRecord(raw) {
-  const r = raw && typeof raw === 'object' ? raw : {};
-  return {
-    tax_record: r.tax_record === true,
-    receipt_date: clean(r.receipt_date, 10),
-    vendor: clean(r.vendor, 120),
-    amount_total: normalizeMoney(r.amount_total),
-    reference: clean(r.reference, 80),
-  };
 }

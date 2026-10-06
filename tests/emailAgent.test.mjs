@@ -120,7 +120,7 @@ function triageFor(t) {
   if (/412/.test(s)) return { key: t.key, category: 'schedule', priority: 'normal', summary: 'Kyle (Ivory Homes) wants the lot 412 install on Tue Oct 6 confirmed and the COI sent before crews arrive.', action_items: ['Confirm Oct 6 install with Kyle', 'Send COI to Ivory Homes'], reply_needed: true, next_step: 'Reply to Kyle', extracted: { builder: 'Ivory Homes', lot: '412', address: 'Oquirrh West', po_numbers: [], oe_numbers: [], dates: ['2026-10-06 install'], contact_name: 'Kyle', contact_phone: '801-555-0142', contact_email: 'kyle@ivoryhomes.com', contact_role: 'superintendent' } };
   if (/off blinds/.test(s)) return { key: t.key, category: 'newsletter_promo', priority: 'low', summary: 'Vendor promo for blinds.', action_items: [], reply_needed: false, next_step: '', extracted: {} };
   if (/sash/.test(s)) return { key: t.key, category: 'service_warranty', priority: 'urgent', summary: 'Maria reports a cracked bottom sash in the master bedroom and asks for a service visit this week.', action_items: ['Schedule a service visit with Maria'], reply_needed: true, next_step: 'Offer a service window', extracted: { builder: 'Ivory Homes', lot: '413', address: 'Oquirrh West', po_numbers: [], oe_numbers: [], dates: [], contact_name: 'Maria Ortiz', contact_phone: '' } };
-  if (/PAID/i.test(s) && /INV00\d+/.test(s)) return { key: t.key, category: 'invoice_billing', priority: 'normal', summary: 'Helcim PAID receipt for Wasatch Windows.', action_items: [], reply_needed: false, next_step: '', tax_record: true, receipt_date: '2026-10-03', vendor: 'Wasatch Windows LLC', amount_total: 1842.5, reference: 'INV001184', extracted: {} };
+  if (/PAID/i.test(s) && /INV00\d+/.test(s)) return { key: t.key, category: 'invoice_billing', priority: 'normal', summary: 'Helcim PAID notice.', action_items: [], reply_needed: false, next_step: '', tax_record: true, vendor: 'LLC says so', extracted: {} };
   return { key: t.key, category: 'other', priority: 'normal', summary: 'Other.', action_items: [], reply_needed: false, next_step: '', extracted: {} };
 }
 function makeLLM(log) {
@@ -675,84 +675,94 @@ test('mailboxes / seed_mailboxes are admin-only; seeding is an upsert that keeps
   assert.match(mb.body.mailboxes[1].connection_detail, /not connected/);
 });
 
-// ---- tax-record save to Drive ----------------------------------------------------------------
-const HELCIM = gmailMessage({ id: 'mh', threadId: 'th', from: 'Helcim <noreply@helcim.com>', to: 'gabefronk@gmail.com', subject: 'Invoice INV001184 (PAID)', text: 'Your card was charged $1,842.50 by Wasatch Windows LLC.', internalDate: AT(15), attachments: [
-  { name: 'INV001184.pdf', mime: 'application/pdf', size: 40_000, attachment_id: 'attH' },
+// ---- Wasatch Windows ACH confirmation filing to Drive -----------------------------------------
+const HELCIM_FROM = 'Wasatch windows llc <donotreply@app.helcim.com>';
+const ACH_TEXT = 'Wasatch Windows LLC\nInvoice INV001186 has been paid.\nAmount Paid: $7,787.92\nPayment Method: ACH (bank account ending 6612)';
+const helcim = (id, subject, text, extra = {}) => gmailMessage({ id: `m-${id}`, threadId: `t-${id}`, from: HELCIM_FROM, to: 'gabefronk@gmail.com', subject, text, internalDate: AT(15), ...extra });
+const PAID = helcim('paid', 'Invoice - INV001186 (PAID)', ACH_TEXT, { attachments: [
+  { name: 'INV001186.pdf', mime: 'application/pdf', size: 40_000, attachment_id: 'attH' },
   { name: 'helcim-logo.png', mime: 'image/png', size: 60_000, attachment_id: 'attLogo' },
   { name: 'banner.jpg', mime: 'image/jpeg', size: 80_000, attachment_id: 'attInline', headers: [{ name: 'Content-ID', value: '<img1>' }] },
 ] });
+const mailOf = (...msgs) => ({ scan: msgs.map((m) => ({ id: m.id, threadId: m.threadId })), messages: Object.fromEntries(msgs.map((m) => [m.id, m])), threads: Object.fromEntries(msgs.map((m) => [m.threadId, [m]])) });
 const DRIVE_ON = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' }, googledrive: { accessToken: 'd-token' } };
-const helcimMail = { scan: [{ id: 'mh', threadId: 'th' }], messages: { mh: HELCIM }, threads: { th: [HELCIM] } };
+const paidMail = mailOf(PAID);
 
-test('tax record: a PAID receipt is saved to Drive/Taxes/<year> as a Google Doc + only its PDF; never saved twice; no body stored in the Hub', async () => {
-  const h = harness({ gmail: helcimMail, connections: DRIVE_ON });
+test('tax: a Wasatch ACH paid confirmation is filed to Drive/Taxes/2026 as a Doc + only its PDF; never twice; no body in the Hub', async () => {
+  const h = harness({ gmail: paidMail, connections: DRIVE_ON });
   const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
-  assert.equal(r.status, 200);
   assert.equal(r.body.mailboxes[0].status, 'ok');
-  const row = thread(h, 'th');
-  assert.equal(row.tax_record, true);
-  assert.equal(row.amount_total, 1842.5);
+  const row = thread(h, 't-paid');
+  assert.deepEqual([row.tax_record, row.vendor, row.reference, row.amount_total, row.receipt_date], [true, 'Wasatch Windows LLC', 'INV001186', 7787.92, '2026-09-26']);
   assert.equal(row.tax_save_state, 'saved');
-  assert.equal(row.tax_save_error, '');
   assert.equal(row.tax_lock_id, '');
-  assert.equal('text' in row, false, 'no message body stored in the Hub');
+  for (const k of ['text', 'snippet', 'body', 'attachments']) assert.equal(k in row, false, `${k} never lands in the Hub row`);
   assert.deepEqual(h.drive.folders().map((f) => f.name), ['Taxes', '2026']);
   const [doc] = h.drive.byKind('doc');
   assert.equal(row.drive_file_id, doc.id);
-  assert.equal(doc.name, '2026-10-03 Wasatch Windows LLC - $1842.50 - INV001184');
-  assert.deepEqual(h.drive.byKind('attachment').map((f) => f.name), ['INV001184.pdf'], 'logo and inline banner stay in the mailbox');
-  assert.deepEqual(h.hits.filter((x) => /\/messages\/mh\/attachments\//.test(x.url)).map((x) => x.url.split('/').pop()), ['attH']);
+  assert.equal(doc.name, '2026-09-26 Wasatch Windows LLC - $7787.92 - INV001186');
+  assert.deepEqual(h.drive.byKind('attachment').map((f) => f.name), ['INV001186.pdf'], 'logo and inline banner stay in the mailbox');
   const creates = h.drive.state.creates.length;
   h.gstate.history = [];
   await h.call({ action: 'sync', mailbox_key: 'gf-gmail', fresh: true });
-  assert.equal(h.drive.state.creates.length, creates, 'never saved twice');
+  assert.equal(h.drive.state.creates.length, creates, 'never filed twice');
 });
 
-test('tax record: Drive not connected -> failed, the sync still succeeds, and the next run retries and saves', async () => {
-  const h = harness({ gmail: helcimMail, connections: { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } } });
+test('tax: other merchants, upcoming / agreement / request notices, card payments and spoofed senders are never filed', async () => {
+  const msgs = [
+    helcim('up', 'You have an upcoming payment to Wasatch windows llc', 'Wasatch Windows LLC will withdraw $7,787.92 from your bank account by ACH on 2026-10-06.'),
+    helcim('agr', 'Confirmation of ACH Payment Agreement with Wasatch windows llc', 'Wasatch Windows LLC ACH agreement confirmed.'),
+    helcim('req', 'New Payment Request', 'Wasatch Windows LLC sent invoice INV001186 for $7,787.92. Pay by ACH.'),
+    helcim('other', 'Invoice - INV000500 (PAID)', 'Acme Glass Supply\nAmount Paid: $50.00\nPayment Method: ACH'),
+    helcim('card', 'Invoice - INV001184 (PAID)', 'Wasatch Windows LLC\nAmount Paid: $84.00\nPaid with Visa ending 4242'),
+    gmailMessage({ id: 'm-spoof', threadId: 't-spoof', from: 'Wasatch windows llc <billing@wasatch-pay.com>', subject: 'Invoice - INV001186 (PAID)', text: ACH_TEXT, internalDate: AT(15) }),
+  ];
+  const h = harness({ gmail: mailOf(...msgs), connections: DRIVE_ON });
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  for (const id of ['up', 'agr', 'req', 'other', 'card', 'spoof']) assert.notEqual(thread(h, `t-${id}`).tax_record, true, id);
+  assert.equal(h.drive.state.finds + h.drive.state.creates.length, 0, 'no Drive call at all');
+});
+
+test('tax: Drive not connected -> failed, the sync still succeeds, and the next run retries and saves', async () => {
+  const h = harness({ gmail: paidMail });
   const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
-  assert.equal(r.body.mailboxes[0].status, 'ok', 'a tax save failure never fails the sync');
-  const row = thread(h, 'th');
-  assert.equal(row.tax_save_state, 'failed');
-  assert.match(row.tax_save_error, /tax save failed: .*not connected/);
-  assert.equal(h.drive.state.finds + h.drive.state.creates.length, 0, 'no Drive call attempted');
-  const h2 = harness({ seed: { EmailRelay: h.store.EmailRelay, EmailMailbox: h.store.EmailMailbox }, gmail: { history: [], threads: { th: [HELCIM] } }, connections: DRIVE_ON });
+  assert.equal(r.body.mailboxes[0].status, 'ok');
+  assert.equal(thread(h, 't-paid').tax_save_state, 'failed');
+  assert.match(thread(h, 't-paid').tax_save_error, /not connected/);
+  const h2 = harness({ seed: { EmailRelay: h.store.EmailRelay, EmailMailbox: h.store.EmailMailbox }, gmail: { history: [], threads: paidMail.threads }, connections: DRIVE_ON });
   await h2.call({ action: 'sync', mailbox_key: 'gf-gmail' });
-  assert.equal(thread(h2, 'th').tax_save_state, 'saved', 'saved on the retry scan');
-  assert.ok(thread(h2, 'th').drive_file_id);
+  assert.equal(thread(h2, 't-paid').tax_save_state, 'saved', 'saved on the retry scan');
 });
 
-test('tax record: an unknown doc-create outcome is not retried by the sync; only an admin confirm re-creates', async () => {
-  const h = harness({ gmail: helcimMail, connections: DRIVE_ON });
+test('tax: an unknown doc-create outcome is never retried automatically; only an admin confirm on that unknown row re-creates', async () => {
+  const h = harness({ gmail: paidMail, connections: DRIVE_ON });
   h.drive.state.faults.push({ kind: 'doc', mode: '503' });
   await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
-  const row = thread(h, 'th');
+  const row = thread(h, 't-paid');
   assert.equal(row.tax_save_state, 'unknown');
   const docCreates = () => h.drive.state.creates.filter((c) => c.kind === 'doc').length;
   h.gstate.history = [];
   await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
   assert.equal(docCreates(), 1, 'retry scan only looks it up');
-  const plain = await h.as(OWNER).call({ action: 'save_tax_record', id: row.id });
-  assert.equal(plain.body.ok, false);
-  assert.equal(docCreates(), 1, 'admin save without confirm stays read-only');
-  const ok = await h.as(OWNER).call({ action: 'save_tax_record', id: row.id, confirm_recreate: true });
-  assert.equal(ok.body.ok, true);
+  assert.equal((await h.as(OWNER).call({ action: 'save_tax_record', id: row.id })).body.ok, false);
+  assert.equal(docCreates(), 1, 'save without confirm stays read-only');
+  assert.equal((await h.as(OWNER).call({ action: 'save_tax_record', id: row.id, confirm_recreate: true })).body.ok, true);
   assert.equal(docCreates(), 2);
+  await h.as(OWNER).call({ action: 'save_tax_record', id: row.id, confirm_recreate: true });
+  assert.equal(docCreates(), 2, 'confirm on a saved row is not a reset');
 });
 
-test('save_tax_record: admin force-saves one thread (even unflagged); manager gets 403; never creates a second file', async () => {
-  const h = harness({ gmail: { scan: [{ id: 'm3', threadId: 't3' }], messages: { m3: GMAIL_PROMO }, threads: { t3: [GMAIL_PROMO] } }, connections: DRIVE_ON });
+test('tax permissions: managers and non-owner admins never see or save owner-mailbox tax rows; non-matching threads are refused', async () => {
+  const h = harness({ gmail: mailOf(PAID, GMAIL_PROMO), connections: DRIVE_ON });
   await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
-  const t3 = thread(h, 't3');
-  assert.equal(t3.tax_record, false, 'promo is not a tax record');
-  assert.equal(h.drive.state.creates.length, 0);
-  assert.equal((await h.as(MANAGER).call({ action: 'save_tax_record', id: t3.id })).status, 403);
-  assert.equal((await h.as(ADMIN).call({ action: 'save_tax_record', id: t3.id })).status, 404, 'owner-only mailbox: non-owner admin cannot see it');
-  const r = await h.as(OWNER).call({ action: 'save_tax_record', id: t3.id });
-  assert.equal(r.status, 200);
-  assert.equal(r.body.ok, true);
+  const paid = thread(h, 't-paid');
+  const promo = thread(h, 't3');
+  const mgr = await h.as(MANAGER).call({ action: 'list' });
+  assert.equal(mgr.body.entries.some((e) => e.tax_record || e.mailbox_key === 'gf-gmail'), false);
+  assert.equal((await h.as(MANAGER).call({ action: 'entry', id: paid.id })).status, 404);
+  assert.equal((await h.as(MANAGER).call({ action: 'save_tax_record', id: paid.id })).status, 403);
+  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: paid.id })).status, 404);
+  assert.equal((await h.as(ADMIN).call({ action: 'save_tax_record', id: paid.id })).status, 404);
+  assert.equal((await h.as(OWNER).call({ action: 'save_tax_record', id: promo.id })).status, 409, 'only a Wasatch ACH confirmation can be filed');
   assert.equal(h.drive.byKind('doc').length, 1);
-  const again = await h.as(OWNER).call({ action: 'save_tax_record', id: t3.id });
-  assert.equal(again.body.ok, true, 'already saved');
-  assert.equal(h.drive.byKind('doc').length, 1, 'never a second file');
 });

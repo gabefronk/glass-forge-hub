@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { taxDocName, formatAmount, taxYear, findFolder, receiptAttachments, taxDocHtml, parseTaxRecord, normalizeMoney, centsOf, canonicalFile, taxKey, attachmentKey } from '../base44/shared/emailTaxRecord.js';
+import { taxDocName, formatAmount, taxYear, findFolder, receiptAttachments, taxDocHtml, normalizeMoney, centsOf, canonicalFile, taxKey, attachmentKey } from '../base44/shared/emailTaxRecord.js';
 
 test('normalizeMoney: decimal-text half-up rounding, no binary float drift', () => {
   assert.equal(normalizeMoney(1.005), 1.01, 'float 1.005 would round to 1.00');
@@ -27,16 +27,6 @@ test('identity: thread and attachment keys are deterministic and distinct; canon
   assert.equal(canonicalFile([]), null);
 });
 
-test('parseTaxRecord: only true is true; amount rounded to cents; missing amount is null not 0', () => {
-  assert.deepEqual(parseTaxRecord({ tax_record: true, receipt_date: '2026-10-03', vendor: 'Wasatch Windows LLC', amount_total: '1842.5', reference: 'INV001184' }), { tax_record: true, receipt_date: '2026-10-03', vendor: 'Wasatch Windows LLC', amount_total: 1842.5, reference: 'INV001184' });
-  assert.deepEqual(parseTaxRecord({ tax_record: false }), { tax_record: false, receipt_date: '', vendor: '', amount_total: null, reference: '' });
-  assert.deepEqual(parseTaxRecord({ tax_record: 'yes' }), { tax_record: false, receipt_date: '', vendor: '', amount_total: null, reference: '' });
-  assert.equal(parseTaxRecord({ tax_record: true, amount_total: 12.345 }).amount_total, 12.35);
-  assert.equal(parseTaxRecord({ amount_total: 0 }).amount_total, 0, 'an explicit $0 is kept');
-  assert.equal(parseTaxRecord({}).amount_total, null, 'a missing amount is null, not 0');
-  // filesystem-unsafe characters in a vendor are stripped
-  assert.equal(parseTaxRecord({ tax_record: true, vendor: 'A/B:C*?' }).vendor, 'A B C');
-});
 
 test('taxDocName: "YYYY-MM-DD Vendor - Amount - Ref", only the parts that exist; falls back to Receipt', () => {
   assert.equal(taxDocName({ receipt_date: '2026-10-03', vendor: 'Wasatch Windows LLC', amount_total: 1842.5, reference: 'INV001184' }, ''), '2026-10-03 Wasatch Windows LLC - $1842.50 - INV001184');

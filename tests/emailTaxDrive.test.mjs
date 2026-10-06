@@ -76,7 +76,7 @@ test('lease: a live lease from another run blocks; an expired one does not; losi
   assert.ok(LEASE_MS > 0);
 });
 
-test('lease is not atomic: two runs that both pass it converge on the earliest doc and record the extra as a duplicate', async () => {
+test('KNOWN DEFECT (not solved): two runs forced through the same lease window both create a doc; the extra is only surfaced', async () => {
   // Both runs see an empty lease and each re-read returns its own id (the race the lease cannot stop).
   const s = setup();
   // Barrier: hold the first doc lookup of each run until both runs have looked, so both miss.
@@ -157,10 +157,20 @@ test('Drive not connected: failed, no Drive call; an earlier unknown stays unkno
   assert.equal((await u.run()).tax_save_state, 'unknown');
 });
 
-test('decimal money: 1.005 and 0.285 keep exact cents in the doc name', async () => {
-  const { parseTaxRecord } = await import('../base44/shared/emailTaxRecord.js');
-  const s = setup({ row: { ...ROW, ...parseTaxRecord({ tax_record: true, receipt_date: '2026-10-03', vendor: 'Helcim', amount_total: '1.005', reference: 'X1' }) } });
-  assert.equal(s.row().amount_total, 1.01);
+test('decimal money: 1.005 keeps exact cents in the doc name', async () => {
+  const { normalizeMoney } = await import('../base44/shared/emailTaxRecord.js');
+  const s = setup({ row: { ...ROW, vendor: 'Wasatch Windows LLC', reference: 'X1', amount_total: normalizeMoney('1.005') } });
   await s.run();
-  assert.equal(s.drive.byKind('doc')[0].name, '2026-10-03 Helcim - $1.01 - X1');
+  assert.equal(s.drive.byKind('doc')[0].name, '2026-10-03 Wasatch Windows LLC - $1.01 - X1');
+});
+
+test('a row not flagged by the Wasatch matcher is never saved; confirm on a saved row is not a reset', async () => {
+  const off = setup({ row: { ...ROW, tax_record: false } });
+  assert.equal(await off.run({ confirmRecreate: true }), null);
+  assert.equal(off.drive.state.finds + off.drive.state.creates.length, 0);
+  const s = setup();
+  await s.run();
+  const creates = s.drive.state.creates.length;
+  assert.equal(await s.run({ confirmRecreate: true }), null);
+  assert.equal(s.drive.state.creates.length, creates);
 });
