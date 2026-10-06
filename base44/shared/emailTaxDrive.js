@@ -1,17 +1,15 @@
 // Inbox agent: save receipt / paid-invoice emails to Drive/Taxes/<year>.
 //
-// Save receipt / paid-invoice emails to Drive/Taxes/<year>. Called ONLY by the admin
-// save_tax_record action — the inbox sync does NOT auto-save, because Drive has no atomic or
-// idempotent create (generateIds returns random IDs, not deterministic; there is no unique
-// constraint on appProperties), so two concurrent automatic runs could create duplicate docs.
-//
-// Idempotency for the manual path (best-effort, NOT atomic):
+// File a Wasatch Windows ACH payment confirmation (matched by wasatchAch.js) to
+// Drive/Taxes/<year>: a Google Doc of the email plus its receipt PDF/scan attachments.
+// Drive has no atomic or idempotent create (generateIds returns fresh random IDs; nothing
+// enforces uniqueness on appProperties), so dedupe is best-effort, NOT atomic:
 //   - Every created folder / doc / attachment carries Drive appProperties with a deterministic
 //     key (provider + mailbox + thread, and per attachment its message + name/mime/size). Before
 //     any create the saver looks the key up and adopts what exists; after a create it looks again
 //     and converges on the earliest-created file, recording any extra as a duplicate (never
-//     deleted, never overwritten). Two concurrent admin saves can still produce a duplicate; it
-//     is surfaced in tax_duplicate_ids for the owner to review.
+//     deleted, never overwritten). Two runs working the same thread at the same moment can
+//     still both create; the extra is surfaced in tax_duplicate_ids for the owner to review.
 //   - A best-effort lease on the EmailRelay row (write, then re-read) narrows the race window
 //     but is not atomic.
 //   - A create whose outcome is unknown (network error, 5xx, no id in the reply) is never retried
@@ -87,8 +85,8 @@ async function ensureFolder(drive, parentId, name, tag, readOnly) {
 const stateOf = (docId, atts) => (!docId ? 'pending' : atts.every((a) => a.status === 'saved') ? 'saved' : 'partial');
 
 // Returns the EmailRelay patch, or null when there is nothing to do / another run holds the lease.
-export async function saveTaxRecord({ api, connectors, fetchImpl, now }, mailbox, provider, row, messages, { force = false, confirmRecreate = false } = {}) {
-  if (!force && !row.tax_record) return null;
+export async function saveTaxRecord({ api, connectors, fetchImpl, now }, mailbox, provider, row, messages, { confirmRecreate = false } = {}) {
+  if (!row.tax_record) return null;
   row = { ...row, ...(await api.EmailRelay.get(row.id)) }; // the caller's copy may be stale
   const prevAtts = Array.isArray(row.tax_attachments) ? row.tax_attachments : [];
   if (row.tax_save_state === 'saved' && row.drive_file_id && prevAtts.every((a) => a.status === 'saved')) return null;

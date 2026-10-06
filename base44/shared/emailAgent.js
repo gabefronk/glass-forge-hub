@@ -15,6 +15,7 @@ import { findJobs, denverDate } from './jobFinder.js';
 import { normalizeGmailMessage, normalizeGraphMessage, aggregateThread, lowerEmail } from './emailParse.js';
 import * as T from './emailTriage.js';
 import { saveTaxRecord } from './emailTaxDrive.js';
+import { findWasatchAchPaid } from './wasatchAch.js';
 import { createProviderClient, buildRawReply, ProviderError } from './emailProviders.js';
 import { phoneKey } from './contactMatching.js';
 
@@ -433,16 +434,36 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       try { Object.assign(patch, await labelThread(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; } catch (e) { warn(`label failed: ${errText(e)}`); }
       try { if (T.shouldArchive(cur, mailbox)) { Object.assign(patch, await archiveInProvider(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; counts.archived++; } } catch (e) { warn(`archive failed: ${errText(e)}`); }
       try { if (T.shouldDraft(cur, mailbox)) { Object.assign(patch, await generateDraft(ctx, mailbox, provider, cur, t.messages || [], jobFacts)); counts.drafted++; } } catch (e) { warn(`draft failed: ${errText(e)}`); }
-      // Automatic Drive save is disabled: Drive has no atomic / idempotent create (generateIds
-      // returns random IDs, not deterministic; no unique constraint on appProperties), so two
-      // concurrent runs could create duplicate docs. An admin saves a receipt by hand via
-      // save_tax_record. Triage still sets tax_record + fields; tax_save_state stays pending.
-      if (cur.tax_record && !cur.tax_save_state) patch.tax_save_state = 'pending';
+      // Tax filing: only a Wasatch Windows ACH paid confirmation in the owner mailbox (see
+      // wasatchAch.js). Filed to Drive automatically; a failure never fails the sync.
+      try {
+        const hit = findWasatchAchPaid(mailbox, t.messages);
+        if (hit && cur.tax_save_state !== 'saved') {
+          Object.assign(patch, hit.fields); cur = { ...cur, ...hit.fields };
+          await api.EmailRelay.update(row.id, hit.fields);
+          const r = await saveTax(ctx, mailbox, provider, cur, [hit.message]);
+          if (r) { Object.assign(patch, r); cur = { ...cur, ...r }; if (r.tax_save_error) warn(r.tax_save_error); }
+        }
+      } catch (e) { warn(`tax save failed: ${errText(e)}`); patch.tax_save_error = `tax save failed: ${errText(e)}`; }
       if (changes.length) patch.hub_changes = withChanges(row, changes);
       if (Object.keys(patch).length) { try { await api.EmailRelay.update(row.id, patch); } catch (e) { warn(`ledger update failed: ${errText(e)}`); } }
     }
 
-    // Automatic tax-record retry is disabled (see the relay loop above); an admin saves by hand.
+    // Tax retry: matched rows whose doc or attachments are not all saved. The thread is re-read
+    // and must still match; 'unknown' rows are only looked up in Drive, never created again.
+    try {
+      const inRun = new Set(threads.map((t) => t.row.thread_id));
+      const candidates = await api.EmailRelay.filter({ mailbox_key: mailbox.key, tax_record: true, tax_save_state: { $ne: 'saved' } }, '-last_message_at', 50);
+      for (const prev of candidates) {
+        if (inRun.has(prev.thread_id) || overBudget()) continue;
+        let hit = null;
+        try { hit = findWasatchAchPaid(mailbox, await fetchThreadMessages(provider, mailbox, prev.thread_id)); } catch (e) { warn(`tax reread failed: ${errText(e)}`); continue; }
+        if (!hit) { warn(`tax retry skipped: ${prev.thread_id} no longer matches`); continue; }
+        const r = await saveTax(ctx, mailbox, provider, prev, [hit.message]);
+        if (r?.tax_save_error) warn(r.tax_save_error);
+        if (r) { try { await api.EmailRelay.update(prev.id, r); } catch (e) { warn(`tax ledger update failed: ${errText(e)}`); } }
+      }
+    } catch (e) { warn(`tax retry scan failed: ${errText(e)}`); }
 
     // Warnings stay in the run record; last_error is only for a failed run.
     return finish('ok', '');
@@ -653,18 +674,19 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     return { ok: true, entry: { ...row, ...patch } };
   }
 
-  // Save one thread's receipt email to Drive by hand (e.g. the two Helcim PAID receipts).
-  // Admin only. Force-saves even when triage did not set tax_record; never overwrites or deletes
-  // a Drive file. A row whose earlier create had an unknown outcome is only re-created when the
-  // admin passes confirm_recreate: true after checking Drive.
+  // Re-run the tax save for one matched thread (admin). Only a Wasatch ACH paid confirmation
+  // qualifies. confirm_recreate only lifts the read-only hold on an 'unknown' create after the
+  // admin checked Drive; it never resets a saved or partial doc.
   async function actionSaveTaxRecord(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (ctx.user.role !== 'admin') fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     const provider = await connect(ctx, mailbox);
-    let messages = null;
-    try { messages = await fetchThreadMessages(provider, mailbox, row.thread_id); } catch (e) { /* proceed without */ }
-    const r = await saveTax(ctx, mailbox, provider, row, messages || [], { force: true, confirmRecreate: ctx.body.confirm_recreate === true });
+    const hit = findWasatchAchPaid(mailbox, await fetchThreadMessages(provider, mailbox, row.thread_id));
+    if (!hit) fail(409, 'Not a Wasatch Windows ACH payment confirmation.');
+    const cur = { ...row, ...hit.fields };
+    await ctx.api.EmailRelay.update(row.id, hit.fields);
+    const r = await saveTax(ctx, mailbox, provider, cur, [hit.message], { confirmRecreate: ctx.body.confirm_recreate === true });
     if (!r) {
       const cur = await ctx.api.EmailRelay.get(row.id);
       if (cur.tax_save_state === 'saved') return { ok: true, entry: cur };
