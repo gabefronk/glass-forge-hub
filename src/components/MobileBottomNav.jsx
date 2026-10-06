@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, Mail } from "lucide-react";
+import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, Mail, Calculator } from "lucide-react";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
 
@@ -16,6 +16,7 @@ const PRIMARY_NAV = [
 const SECONDARY_NAV = [
   { label: "Team Structure", to: "/team-structure", icon: GitBranch },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
+  { label: "Quote Builder", to: "/QuoteBuilder", icon: Calculator },
   { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", ariaLabel: "Summit door service", to: "/summit", icon: Mountain },
