@@ -89,6 +89,88 @@
       },
       "default": {}
     },
+    "relocated_link_ids": {
+      "type": "object",
+      "title": "Relocated Link Ids",
+      "description": "The EXACT record ids that were moved from source to target, per entity. reverseMerge moves only these ids back, so the survivor's own records and records moved from other sources are never touched. Absent on logs created before exact-ID auditing (those cannot be safely reversed automatically).",
+      "properties": {
+        "fee_lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "field_reports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "calendar_events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "contact_job_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_budgets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "probuild_project_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "default": {}
+    },
+    "partial": {
+      "type": "boolean",
+      "title": "Partial",
+      "default": false,
+      "description": "True if some records moved but a later step (relocate batch, field merge, or marking merged) failed. The source was NOT hidden when partial is true; the moved ids are still recorded so the merge can be reversed or investigated."
+    },
+    "relocate_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Relocate Errors",
+      "default": [],
+      "description": "Per-entity error messages from the relocate step (empty on full success)."
+    },
+    "fields_error": {
+      "type": "string",
+      "title": "Fields Error",
+      "description": "Error from the identity-field merge / survivor update step, if it failed."
+    },
+    "mark_error": {
+      "type": "string",
+      "title": "Mark Error",
+      "description": "Error from marking the source merged_into, if that step failed after records were moved."
+    },
     "reversed": {
       "type": "boolean",
       "title": "Reversed",
