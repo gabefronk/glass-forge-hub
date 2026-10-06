@@ -273,6 +273,67 @@ test("merge log state: undo offered for audited complete/partial/unfinished logs
   assert.equal(movedSummary({ relocated_link_ids: { calendar_events: ["a", "b"], fee_lines: ["f"] } }), "2 visits, 1 invoice line");
 });
 
+test("lost response: updateMany throws but the id stays in planned and undo recovers it", async () => {
+  const db = makeDb({ Jobs: jobs(), FeeLines: [{ id: "f1", job_id: "S" }] }, {
+    updateMany(name) { if (name === "FeeLines") throw new Error("connection lost"); },
+  });
+  const r = await merge(db);
+  assert.equal(r.ok, false);
+  assert.equal(r.hidden, false);
+  // The attempted id is durable in planned_link_ids even though the move outcome was unknown.
+  assert.ok(db.log().planned_link_ids.fee_lines.includes("f1"));
+  // Undo still recovers it (job_id guard makes a never-moved id a no-op; a really-moved id moves back).
+  const u = await reverseMergeLog(db.base44, db.log(), { actor: "admin@x" });
+  assert.equal(u.ok, true);
+  assert.deepEqual(db.onJob("FeeLines", "S"), ["f1"]);
+});
+
+test("verification failure: verify filter throws over-records the batch so undo covers it", async () => {
+  const db = makeDb({ Jobs: jobs(), FeeLines: [{ id: "f1", job_id: "S" }] }, {
+    filter(name, q) { if (name === "FeeLines" && q.job_id === "T" && q.id) throw new Error("verify down"); },
+  });
+  const r = await merge(db);
+  assert.equal(r.ok, false);
+  // Over-recorded as moved (conservative) so undo attempts it.
+  assert.deepEqual(r.relocated_link_ids.fee_lines, ["f1"]);
+  assert.ok(db.log().planned_link_ids.fee_lines.includes("f1"));
+  const u = await reverseMergeLog(db.base44, db.log(), { actor: "admin@x" });
+  assert.equal(u.ok, true);
+});
+
+test("post-move audit-failure undo recovery: log update throws, noLog halt, undo still recovers via planned", async () => {
+  const db = makeDb({ Jobs: jobs(), FeeLines: [{ id: "f1", job_id: "S" }] }, {
+    update(name, id, patch) { if (name === "JobMergeLog" && patch.relocated_link_ids) throw new Error("write refused"); },
+  });
+  const r = await merge(db);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /could not update the audit log/);
+  assert.equal(db.tables.Jobs.get("S").merged_into, undefined);
+  // The log exists with planned_link_ids from the create-before-move step.
+  assert.ok(db.log().planned_link_ids.fee_lines.includes("f1"));
+  // Undo reads planned_link_ids (union of relocated + planned + reconciled) and recovers.
+  const u = await reverseMergeLog(db.base44, db.log(), { actor: "admin@x" });
+  assert.equal(u.ok, true);
+  assert.deepEqual(db.onJob("FeeLines", "S"), ["f1"]);
+});
+
+test("failed unknown relocation cannot disappear from planned/reconciled ids", async () => {
+  const db = makeDb({ Jobs: jobs(), FeeLines: [{ id: "f1", job_id: "S" }], FieldReports: [{ id: "r1", job_id: "S" }] }, {
+    updateMany(name) { if (name === "FieldReports") throw new Error("timeout"); },
+  });
+  const r = await merge(db);
+  assert.equal(r.ok, false);
+  // r1's move failed/unknown, but it remains in planned_link_ids on the log.
+  assert.ok(db.log().planned_link_ids.field_reports.includes("r1"));
+  // f1 moved cleanly and is in relocated_link_ids.
+  assert.deepEqual(r.relocated_link_ids.fee_lines, ["f1"]);
+  // Undo unions planned + relocated, so r1 is attempted (no-op if never moved) and f1 returns.
+  const u = await reverseMergeLog(db.base44, db.log(), { actor: "admin@x" });
+  assert.equal(u.ok, true);
+  assert.deepEqual(db.onJob("FeeLines", "S"), ["f1"]);
+  assert.deepEqual(db.onJob("FieldReports", "S"), ["r1"]);
+});
+
 test("history: invoice-line tickets per visit and attachment provenance", () => {
   const t = ticketsByEvent([
     { calendar_event_id: "g1", ticket_sequence: 2 }, { calendar_event_id: "g1", ticket_sequence: 1 },

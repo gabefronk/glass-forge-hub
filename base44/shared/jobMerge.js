@@ -342,10 +342,17 @@ export async function mergeSourceIntoTarget(base44, { sourceId, targetId, actor,
     const exec = await executeRelocateLinks(base44, ids, sourceId, targetId);
     moved = unionIds(moved, exec.moved);
     errors.push(...exec.errors);
+    // Ensure a failed/unknown relocation can never disappear from the recorded
+    // ids. Every attempted id is already in `planned` by construction (the first
+    // plan or a reconcile union), but when a move or verify failed we re-persist
+    // planned so the log itself is a durable superset an undo can always read —
+    // even if relocated_link_ids missed an id whose move outcome was unknown.
+    if (exec.errors.length) planned = unionIds(planned, ids);
     try {
       await db.JobMergeLog.update(logId, {
         relocated_link_ids: moved,
         relocated_link_counts: countIds(moved),
+        planned_link_ids: planned,
         status: errors.length ? "relocated_partial" : "relocated",
       });
     } catch (e) {

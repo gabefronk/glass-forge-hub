@@ -27,7 +27,7 @@ export default function MergeLogRow({ log, job, other, onUndone }) {
   const when = log.merged_at ? new Date(log.merged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
 
   const undo = async () => {
-    if (!window.confirm(`${state.undoLabel}? Only the records this combine recorded are moved back to ${sanitizeText(log.source_job_name || "the combined record")}. The surviving job's own records are not touched.`)) return;
+    if (!window.confirm(`${state.undoLabel}? Only the linked records this combine recorded (visits, reports, notes, invoice lines, budgets) move back to ${sanitizeText(log.source_job_name || "the combined record")}. The surviving job keeps its own records, the merged identity fields (PO/OE numbers, aliases and any other filled-in scalar values), and any conflict note — this is not a full rollback.`)) return;
     setBusy(true); setMessage(null);
     try {
       const res = await base44.functions.invoke("reverseMerge", { merge_log_id: log.id });
