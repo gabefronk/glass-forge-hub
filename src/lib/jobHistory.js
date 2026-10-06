@@ -193,6 +193,36 @@ export function touchesJob(event, memberIds, shownIds = []) {
   return !!id && new Set(shownIds).has(id);
 }
 
+// Invoice-line ticket numbers per calendar visit. FeeLines.calendar_event_id is
+// the Google event id, so look a visit up by ev.google_event_id (then ev.id).
+export function ticketsByEvent(rows) {
+  const map = new Map();
+  for (const r of rows || []) {
+    const n = Number(r?.ticket_sequence);
+    if (!r?.calendar_event_id || r.ticket_sequence == null || !Number.isFinite(n) || n < 1) continue;
+    const set = map.get(r.calendar_event_id) || new Set();
+    set.add(n);
+    map.set(r.calendar_event_id, set);
+  }
+  const out = new Map();
+  for (const [k, set] of map) out.set(k, [...set].sort((a, b) => a - b));
+  return out;
+}
+
+export function visitTickets(tickets, ev) {
+  return tickets?.get(ev?.google_event_id) || tickets?.get(ev?.id) || [];
+}
+
+export function ticketLabel(n) {
+  return Number(n) >= 2 ? `Ticket ${n} · rework` : `Ticket ${n}`;
+}
+
+// Where a calendar visit attachment lives, so a reader knows what they open.
+export function attachmentProvenance(a) {
+  const where = a?.hub_file_uri ? "Hub copy" : (a?.drive_url || a?.drive_file_id) ? "Google Drive" : "Calendar link";
+  return `Calendar attachment · ${where}`;
+}
+
 // Small type badge for a file, by extension first, then MIME type.
 export function fileBadge(name, mime) {
   const n = String(name || "").toLowerCase(), m = String(mime || "").toLowerCase();

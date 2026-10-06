@@ -89,6 +89,21 @@
       },
       "default": {}
     },
+    "reversed": {
+      "type": "boolean",
+      "title": "Reversed",
+      "default": false,
+      "description": "True if this merge was later reversed by reverseMerge."
+    },
+    "reversed_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Reversed At"
+    },
+    "reversed_by": {
+      "type": "string",
+      "title": "Reversed By"
+    },
     "relocated_link_ids": {
       "type": "object",
       "title": "Relocated Link Ids",
@@ -246,20 +261,38 @@
       "title": "Mark Error",
       "description": "Error from marking the source merged_into, if that step failed after records were moved."
     },
-    "reversed": {
-      "type": "boolean",
-      "title": "Reversed",
-      "default": false,
-      "description": "True if this merge was later reversed by reverseMerge."
+    "reconciled_link_ids": {
+      "type": "object",
+      "title": "Reconciled Link Ids",
+      "description": "Record ids that were linked to the source AFTER the first plan (e.g. a sync or a new note during the combine). Written to the log before they were moved; also included in planned_link_ids.",
+      "additionalProperties": true,
+      "default": {}
     },
-    "reversed_at": {
+    "unsupported_links": {
+      "type": "object",
+      "title": "Unsupported Links",
+      "description": "Job-linked records the combine cannot move (service items, setup sheets, job knowledge, orders...) found on the source right before hiding. When present the source was left visible.",
+      "additionalProperties": true,
+      "default": {}
+    },
+    "reverse_status": {
+      "type": "string",
+      "title": "Reverse Status",
+      "description": "Last undo attempt: partial (some recorded records could not be moved back; safe to run again) or complete."
+    },
+    "reverse_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Reverse Errors",
+      "default": [],
+      "description": "Why the last undo attempt did not finish."
+    },
+    "reverse_attempted_at": {
       "type": "string",
       "format": "date-time",
-      "title": "Reversed At"
-    },
-    "reversed_by": {
-      "type": "string",
-      "title": "Reversed By"
+      "title": "Reverse Attempted At"
     }
   },
   "required": [
