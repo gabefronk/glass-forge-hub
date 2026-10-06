@@ -255,7 +255,7 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
               ) : (
                 <>
                   <p className="m-0 text-[13px]" style={{ color: MUTED }}>
-                    Tap a record to choose the one that stays. Its calendar visits, field reports, notes, invoice lines, contact links, budgets and Probuild links move to the survivor; the others are hidden, not deleted.
+                    These are duplicate job rows for the same house, not duplicate visits. Tap the one record that stays. Each calendar visit, field report, photo, note and visit PO/OE keeps its own date and re-links to the surviving job so its History shows them all together. The other job rows are tucked away (hidden from lists, not deleted).
                   </p>
                   <div className="space-y-2">
                     {jobs.map((j) => (
@@ -275,19 +275,21 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
 
               {step === "confirm" && survivor && (
                 <div className="rounded-[10px] px-3 py-3 text-[13.5px] leading-[20px]" style={{ backgroundColor: FIELD, border: `1px solid ${BORDER}`, color: INK }}>
-                  <p className="m-0"><b>{sanitizeText(survivor.canonical_name)}</b> stays and holds everything from the other {mergedAway.length} {mergedAway.length === 1 ? "record" : "records"}:</p>
+                  <p className="m-0"><b>{sanitizeText(survivor.canonical_name)}</b> stays as the one job record. The visits, field reports, photos, notes and ticket refs from the other {mergedAway.length} {mergedAway.length === 1 ? "record" : "records"} re-link to it so its History shows them all:</p>
                   <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-[12.5px]" style={{ color: MUTED }}>
                     {mergedAway.map((j) => (
-                      <li key={j.id}><b style={{ color: INK }}>{sanitizeText(j.canonical_name)}</b> is combined into the survivor and disappears from lists.</li>
+                      <li key={j.id}><b style={{ color: INK }}>{sanitizeText(j.canonical_name)}</b> is tucked away (hidden from lists, not deleted).</li>
                     ))}
                   </ul>
                   <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-[12.5px]" style={{ color: MUTED }}>
-                    <li>Calendar visits, field reports, notes, invoice lines, contact links, job budgets and Probuild project links move to the surviving record.</li>
-                    <li>Install budgets, setup sheets, service items and job knowledge are NOT moved — they stay on the hidden record and resolve through it.</li>
+                    <li>Each calendar visit re-links to the surviving job and stays its own dated visit — visits are not merged into one. Field reports and their photos, notes and their attachments, invoice lines, contact links, job budgets and Probuild project links re-link to it too.</li>
+                    <li>Visit PO/OE ticket refs move with each visit.</li>
+                    <li>Install budgets, setup sheets, service items and job knowledge do NOT re-link — they stay on the tucked-away record and resolve through it.</li>
+                    <li>The tucked-away record's Drive job-folder link is not adopted (the survivor keeps its own; a different folder is recorded in a note).</li>
                     <li>PO numbers and aliases are added to the survivor.</li>
                     <li>Where they disagree, the survivor's value wins; the other value is saved in a note.</li>
                     <li>Invoice marks, fees and statuses are never changed.</li>
-                    <li>Each hidden record can be undone on its own page.</li>
+                    <li>Undo restores each tucked-away record and moves its re-linked visits, reports, photos, notes and lines back to it.</li>
                   </ul>
                 </div>
               )}
@@ -324,7 +326,7 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
             <div className="space-y-3">
               {result.ok ? (
                 <div className="rounded-[10px] px-3 py-3 text-[13.5px]" style={{ backgroundColor: "#eaf5ee", border: "1px solid #c7e4d2", color: "#166447" }}>
-                  <p className="m-0 font-semibold">{sanitizeText(result.survivor_name)} now holds everything from {result.merged_count} {result.merged_count === 1 ? "record" : "records"}.</p>
+                  <p className="m-0 font-semibold">{sanitizeText(result.survivor_name)} now shows the combined history from {result.merged_count} {result.merged_count === 1 ? "record" : "records"}.</p>
                   <p className="m-0 mt-1 text-[12.5px]" style={{ color: "#3b5a3a" }}>
                     Moved: {result.totals?.fee_lines || 0} invoice lines, {result.totals?.calendar_events || 0} visits, {result.totals?.field_reports || 0} reports, {result.totals?.job_notes || 0} notes, {result.totals?.job_budgets || 0} budgets.
                   </p>

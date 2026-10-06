@@ -296,12 +296,12 @@ export default function CombineJobsDialog({ job, onClose, onDone }) {
                 </div>
               )}
               <p className="m-0 text-[13px]" style={{ color: MUTED }}>
-                Tap a record to choose which one stays. Its calendar visits, field reports, notes, invoice lines, contact links, budgets and Probuild links move to the survivor; the other is hidden, not deleted.
+                These are duplicate job rows for the same house, not duplicate visits. Tap the one record that stays. Each visit, field report, photo, note and visit PO/OE keeps its own date and re-links to the surviving job so its History shows them all. The other job row is tucked away (hidden from lists, not deleted).
               </p>
               <ScoreBar job={job} counts={counts[job.id] || {}} survivor={survivorId} onFlip={() => setSurvivorId(job.id)} />
               <ScoreBar job={picked} counts={counts[picked.id] || {}} survivor={survivorId} onFlip={() => setSurvivorId(picked.id)} />
               <div className="rounded-[10px] px-3 py-2.5 text-[12.5px]" style={{ backgroundColor: FIELD, border: `1px solid ${BORDER}`, color: MUTED }}>
-                <b style={{ color: INK }}>{sanitizeText(survivor.canonical_name)}</b> stays. <b style={{ color: INK }}>{sanitizeText(mergedAway.canonical_name)}</b> is combined into it and hidden from lists. You can undo this from the hidden record.
+                <b style={{ color: INK }}>{sanitizeText(survivor.canonical_name)}</b> stays as the one job record. <b style={{ color: INK }}>{sanitizeText(mergedAway.canonical_name)}</b> is tucked away (hidden from lists, not deleted). Its visits, reports, photos, notes and ticket refs re-link to the survivor. You can undo this from the tucked-away record.
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setStep("search")} className="inline-flex h-[40px] items-center rounded-[10px] px-4 text-[13.5px] font-semibold" style={{ backgroundColor: FIELD, color: INK, border: `1px solid ${BORDER}` }}>Back</button>
@@ -315,14 +315,16 @@ export default function CombineJobsDialog({ job, onClose, onDone }) {
           {step === "confirm" && picked && (
             <div className="space-y-3">
               <div className="rounded-[10px] px-3 py-3 text-[13.5px] leading-[20px]" style={{ backgroundColor: FIELD, border: `1px solid ${BORDER}`, color: INK }}>
-                <p className="m-0"><b>{sanitizeText(mergedAway.canonical_name)}</b> will be combined into <b>{sanitizeText(survivor.canonical_name)}</b>.</p>
+                <p className="m-0"><b>{sanitizeText(mergedAway.canonical_name)}</b> is tucked away and its visits, reports, photos, notes and ticket refs re-link to <b>{sanitizeText(survivor.canonical_name)}</b>.</p>
                 <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-[12.5px]" style={{ color: MUTED }}>
-                  <li>Calendar visits, field reports, notes, invoice lines, contact links, job budgets and Probuild project links move to the surviving record.</li>
-                  <li>Install budgets, setup sheets, service items and job knowledge are NOT moved — they stay on the hidden record and resolve through it.</li>
+                  <li>Each calendar visit re-links to the surviving job and stays its own dated visit — visits are not merged into one. Field reports and their photos, notes and their attachments, invoice lines, contact links, job budgets and Probuild project links re-link to it too.</li>
+                  <li>Visit PO/OE ticket refs move with each visit.</li>
+                  <li>Install budgets, setup sheets, service items and job knowledge do NOT re-link — they stay on the tucked-away record and resolve through it.</li>
+                  <li>The tucked-away record's Drive job-folder link is not adopted (the survivor keeps its own; a different folder is recorded in a note).</li>
                   <li>PO numbers and aliases are added to the survivor.</li>
                   <li>Where the two disagree, the survivor's value wins; the other value is saved in a note.</li>
                   <li>Invoice marks, fees and statuses are never changed.</li>
-                  <li>The merged-away record is hidden, not deleted, and can be undone.</li>
+                  <li>Undo restores the tucked-away record and moves its re-linked visits, reports, photos, notes and lines back to it.</li>
                 </ul>
               </div>
               <div className="flex justify-end gap-2">
