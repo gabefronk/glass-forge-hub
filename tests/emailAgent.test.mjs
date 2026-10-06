@@ -146,7 +146,10 @@ const JOBS = [
 const EVENTS = [{ id: 'ev1', job_id: 'job1', event_date: nextYear(), start_time: '08:00', job_name: 'Oquirrh West 412', address: '412 Oquirrh West Dr Herriman', source_status: 'confirmed', google_event_id: 'g1' }];
 const MEMBERS = [{ id: 'mg', member_key: 'gabriel', display_name: 'Gabriel', auth_user_ids: ['ga', 'gw'], active: true, revision: 0, management_lock: '', seed_state: 'complete' }];
 
-function harness({ user = null, seed = {}, gmail = {}, graph = {}, drive = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES, llmImpl = null, budgetMs = 50_000, taxFilingEnabled } = {}) {
+function harness({ user = OWNER, seed = {}, gmail = {}, graph = {}, drive = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES, llmImpl = null, budgetMs = 50_000, taxFilingEnabled } = {}) {
+  // Default caller is an authenticated owner: anonymous (null-user) sync is no longer
+  // allowed (fail-closed), so tests that seed via sync run as OWNER. Unauthenticated
+  // paths are exercised explicitly via h.as(null).
   resetJobCache();
   const { store, api, calls } = makeStore({ EmailMailbox: mailboxes, Jobs: JOBS, CalendarEvents: EVENTS, TeamMember: MEMBERS, ...seed });
   const gstate = { scan: [{ id: 'm1', threadId: 't1' }, { id: 'm3', threadId: 't3' }], messages: { m1: GMAIL_SCHEDULE, m3: GMAIL_PROMO }, threads: { t1: [GMAIL_SCHEDULE], t3: [GMAIL_PROMO] }, labels: [{ id: 'Label_1', name: 'Hub' }], history: [], ...gmail };
@@ -178,17 +181,32 @@ const thread = (h, threadId) => h.store.EmailRelay.find((t) => t.thread_id === t
 
 // ---- tests ---------------------------------------------------------------------------------------------------
 
-test('auth: scheduled sync (no user) is allowed; role user gets 403 on sync and list; managers cannot sync', async () => {
+test('auth: sync is owner-only and fail-closed — anonymous (null user) is rejected before any read; a forged scheduler flag does not bypass it', async () => {
   const h = harness();
-  const r = await h.call({ action: 'sync' });
+  // anonymous (null user) sync is rejected BEFORE any mailbox/entity/provider read
+  const before = h.calls.length;
+  const anon = await h.as(null).call({ action: 'sync' });
+  assert.equal(anon.status, 401);
+  assert.equal(anon.body.ok, false);
+  assert.equal(h.calls.length, before, 'no mailbox/entity/provider read before the null-user reject');
+  // a forged scheduler flag in the body does NOT bypass the null-user reject
+  const forged = await h.as(null).call({ action: 'sync', scheduler: true, scheduled: true, source: 'workflow', run_id: 'r1' });
+  assert.equal(forged.status, 401);
+  assert.equal(forged.body.ok, false);
+  // owner manual sync still works
+  const r = await h.as(OWNER).call({ action: 'sync' });
   assert.equal(r.status, 200);
   assert.equal(r.body.ok, true);
+  // non-owner roles are denied on sync
   assert.equal((await h.as(CREW).call({ action: 'sync' })).status, 403);
-  assert.equal((await h.as(CREW).call({ action: 'list' })).status, 403);
   assert.equal((await h.as(MANAGER).call({ action: 'sync' })).status, 403);
-  assert.equal((await h.as(null).call({ action: 'list' })).status, 401);
+  assert.equal((await h.as(ADMIN).call({ action: 'sync' })).status, 403);
+  // unrelated action validation + non-existent send action (pre-auth, user-independent)
   assert.equal((await h.call({ action: 'bogus' })).status, 400);
   assert.equal((await h.call({ action: 'send_draft', id: 'x' })).status, 400, 'the agent has no send action at all');
+  // list/entry stay owner-only; crew and unauthenticated are denied
+  assert.equal((await h.as(CREW).call({ action: 'list' })).status, 403);
+  assert.equal((await h.as(null).call({ action: 'list' })).status, 401);
   assert.equal((await h.as(OWNER).call({ action: 'entry', id: 'nope' })).status, 404);
 });
 
@@ -610,9 +628,11 @@ test('auth regression: every disclosing action denies manager, crew, non-owner a
     assert.equal((await h.as(CREW).call(payload)).status, 403, `crew denied ${payload.action}`);
     assert.equal((await h.as(null).call(payload)).status, 401, `unauthenticated denied ${payload.action}`);
   }
-  // sync is admin-only (or scheduled null); manager and crew are denied
+  // sync is owner-only and fail-closed; manager, crew, non-owner admin and anonymous are denied
   assert.equal((await h.as(MANAGER).call({ action: 'sync' })).status, 403);
   assert.equal((await h.as(CREW).call({ action: 'sync' })).status, 403);
+  assert.equal((await h.as(ADMIN).call({ action: 'sync' })).status, 403);
+  assert.equal((await h.as(null).call({ action: 'sync' })).status, 401);
   // non-owner admin is denied on every disclosing action (owner-only, not admin-only)
   const adm = await h.as(ADMIN).call({ action: 'set_status', id: ya.id, status: 'done' });
   assert.equal(adm.status, 403);
@@ -624,7 +644,7 @@ test('auth regression: every disclosing action denies manager, crew, non-owner a
   assert.equal((await h.as(ADMIN).call({ action: 'seed_mailboxes' })).status, 403);
 });
 
-test('owner ids: both Gabriel auth ids are allowed on every disclosing route; scheduled sync (null user) preserved', async () => {
+test('owner ids: both Gabriel auth ids are allowed on every disclosing route; anonymous sync is rejected (fail-closed)', async () => {
   const h = harness();
   await h.call({ action: 'sync' });
   const ya = thread(h, 'AAQk1');
@@ -640,10 +660,10 @@ test('owner ids: both Gabriel auth ids are allowed on every disclosing route; sc
     const st = await h.as(owner).call({ action: 'set_status', id: ya.id, status: 'done' });
     assert.equal(st.status, 200, `${owner.email} can set_status`);
   }
-  // scheduled sync (null user) is preserved — non-disclosing, runs without a user
-  const sched = await h.call({ action: 'sync' });
-  assert.equal(sched.status, 200);
-  assert.equal(sched.body.ok, true);
+  // anonymous (null user) sync is rejected (fail-closed) — never left anonymous
+  const sched = await h.as(null).call({ action: 'sync' });
+  assert.equal(sched.status, 401);
+  assert.equal(sched.body.ok, false);
   // a non-owner admin (Trevor) is denied on every disclosing route
   const disclosing = [
     { action: 'list' },

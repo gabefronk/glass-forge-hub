@@ -518,7 +518,14 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   }
 
   async function actionSync(ctx) {
-    if (ctx.user && !isOwner(ctx.user)) fail(403, 'Owner access required.');
+    // Fail-closed (owner ruling 2026-10-06: never leave anonymous sync). A sync must
+    // run as an authenticated owner. Anonymous (null user) sync is rejected BEFORE any
+    // mailbox, entity or provider read — a forged scheduler flag in the body does NOT
+    // bypass this. Only the configured owner auth ids may run sync. The scheduled
+    // workflow must run as an authenticated owner (route in design); until then a
+    // scheduled run fails closed (401) and owner manual sync still works.
+    if (!ctx.user) fail(401, 'Sign in required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const body = ctx.body;
     const max = Math.max(1, Math.min(500, Number(body.max) || DEFAULT_MAX));
     let mailboxes = (await loadMailboxes(ctx.api)).filter((m) => m.enabled !== false);
