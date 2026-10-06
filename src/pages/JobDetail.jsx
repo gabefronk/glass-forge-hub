@@ -35,6 +35,9 @@ import { denverDate } from "../../base44/shared/billingCore.js";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
 import { ServiceMarker, useServiceItems } from "@/components/jobs/ServiceItems";
+import JobUpcomingCard from "@/components/jobs/JobUpcomingCard";
+import JobCreateEventModal from "@/components/jobs/JobCreateEventModal";
+import { isJobCalendarOwner } from "@/lib/jobCalendarShared";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -57,6 +60,7 @@ export default function JobDetail() {
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [showCombine, setShowCombine] = useState(false);
+  const [showCreateEvent, setShowCreateEvent] = useState(false);
   const loadVersion = useRef(0);
   const folder = useJobFolderFiles(job);
   // Service items on this job and its duplicate records: shown on their field report in History.
@@ -205,6 +209,7 @@ export default function JobDetail() {
             alert={<ServiceMarker open={service.open} />}
             extra={
               <>
+                {isJobCalendarOwner(user) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
                 {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
                 {owner ? <Link to={procurementPath(id)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link> : null}
                 {(owner || isAgentCenterOwner(user)) ? <DeleteJobButton job={job} onDeleted={() => navigate("/jobs")} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
@@ -221,6 +226,7 @@ export default function JobDetail() {
           <DuplicateJobNotice group={group} currentId={id} />
           {user?.role === "admin" ? <CombinedRecordsPanel job={job} onChanged={() => loadAll({ quiet: true })} /> : null}
 
+          {isJobCalendarOwner(user) ? <JobUpcomingCard jobId={id} /> : null}
           <div id="add-note" className="scroll-mt-4">
             <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
               <JobActivityFeed
@@ -285,6 +291,10 @@ export default function JobDetail() {
       {showCombine && (
         <CombineJobsDialog job={job} onClose={() => setShowCombine(false)} onDone={() => loadAll()} />
       )}
+
+      {showCreateEvent && isJobCalendarOwner(user) ? (
+        <JobCreateEventModal job={job} user={user} open={showCreateEvent} onOpenChange={setShowCreateEvent} />
+      ) : null}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
     </div>
