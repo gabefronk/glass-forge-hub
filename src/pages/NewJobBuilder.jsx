@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, Check, UploadCloud, Building2, MapPin, User, Calendar,
@@ -14,8 +14,11 @@ import { base44 } from "@/api/base44Client";
 import { findMatchWarnings } from "@/lib/newJob";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import JobMatchWarningDialog from "@/components/jobs/JobMatchWarningDialog";
+import { createWizardBudgetSaver, wizardRequestKey } from "@/lib/newJobBudgetDraft";
+import NewJobOwnerGate from "@/components/new-job/NewJobOwnerGate";
 
 const SALES_TAX_RATE = 0.0745;
+const newWizardId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const BUILDER_PRESETS = [
   { key: "shelby", name: "Shelby Homes", contact: "Camden Brien", phone: "801-555-0142", email: "camden@shelbyhomes.com", billing: "Net 30", leadWeeks: 4, blurb: "Production · vinyl package" },
@@ -139,19 +142,26 @@ export default function NewJobBuilder() {
   const [forceCreate, setForceCreate] = useState(false);
   const [leadsTouched, setLeadsTouched] = useState(false);
   const [jobCodeTouched, setJobCodeTouched] = useState(false);
-  const [owner, setOwner] = useState(false);
-  const [budgetState, setBudgetState] = useState("pending"); // pending | saved | failed | not_allowed
+  const [authState, setAuthState] = useState("loading"); // loading | owner | denied
+  const [budgetState, setBudgetState] = useState("pending"); // pending | saved | failed | uncertain | conflict | not_allowed
   const [budgetError, setBudgetError] = useState("");
+  const [wizardId, setWizardId] = useState(newWizardId);
+  const creatingRef = useRef(false);
+  const saverRef = useRef(null);
+  if (!saverRef.current) saverRef.current = createWizardBudgetSaver({ api: base44.entities.JobBudgets, getUser: () => base44.auth.me(), isOwner: isAgentCenterOwner });
   const set = (patch) => setS(prev => ({ ...prev, ...patch }));
 
   useEffect(() => {
     let active = true;
-    base44.auth.me().then(u => { if (active) setOwner(isAgentCenterOwner(u)); }).catch(() => {});
+    base44.auth.me()
+      .then(u => { if (active) setAuthState(isAgentCenterOwner(u) ? "owner" : "denied"); })
+      .catch(() => { if (active) setAuthState("denied"); });
     return () => { active = false; };
   }, []);
 
-  // Load existing eligible jobs once for the duplicate guard.
+  // Load existing eligible jobs once for the duplicate guard (owner only).
   useEffect(() => {
+    if (authState !== "owner") return;
     let active = true;
     (async () => {
       const out = [];
@@ -168,7 +178,7 @@ export default function NewJobBuilder() {
       if (active) setJobs(out);
     })().catch(() => {});
     return () => { active = false; };
-  }, []);
+  }, [authState]);
 
   const builder = BUILDER_PRESETS.find(p => p.key === s.builderKey) || BUILDER_PRESETS[2];
   const builderName = builder.key === "other" ? (s.builderCustom.name || "") : builder.name;
@@ -216,9 +226,12 @@ export default function NewJobBuilder() {
   }
 
   async function doCreate() {
+    if (authState !== "owner") { setFormError("Only the owner can create jobs from this builder."); return; }
     const err = validateRequired();
     if (err) { setFormError(err); return; }
     if (created?.jobId) { setFormError("This job was already created. Open it instead of submitting twice."); return; }
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setCreating(true); setFormError(""); setBudgetState("pending"); setBudgetError("");
     try {
       const jobPayload = {
@@ -230,49 +243,40 @@ export default function NewJobBuilder() {
       };
       const job = await base44.entities.Jobs.create(jobPayload);
       setCreated({ jobId: job.id });
-      // Cost / sale price go to a JobBudgets draft (admin-only RLS). Only the
-      // owner/admin may write pricing; never silently swallow a failure.
-      if (cost > 0 || sale > 0) {
-        if (!owner) {
-          setBudgetState("not_allowed");
-        } else {
-          await saveBudget(job.id);
-        }
-      }
+      // Cost / sale go to a JobBudgets draft (admin-only RLS), keyed to this
+      // wizard session so a retry reconciles instead of duplicating.
+      if (cost > 0 || sale > 0) await saveBudget(job.id);
     } catch (e) {
       setFormError(e?.response?.data?.error || e?.message || "The job could not be created. Please try again.");
-    } finally { setCreating(false); }
+    } finally { creatingRef.current = false; setCreating(false); }
   }
 
-  // Save the draft budget for an already-created job. Used by the initial create
-  // and by the retry button — never recreates the job.
+  // Save (or reconcile) the draft budget for the already-created job. Used by
+  // the initial create and the retry button — never recreates the job.
   async function saveBudget(jobId) {
     setBudgetState("pending"); setBudgetError("");
-    try {
-      await base44.entities.JobBudgets.create({
+    const r = await saverRef.current({
+      jobId,
+      requestKey: wizardRequestKey(wizardId),
+      payload: {
         title: `${s.jobName.trim()} - initial budget`,
         status: "draft",
         budget_usage: "draft",
-        job_id: jobId,
         job_name: s.jobName.trim(),
         builder: builderName.trim(),
         ...(s.quote.vendor ? { manufacturer: s.quote.vendor } : {}),
         ...(s.quote.quoteNumber ? { quote_number: s.quote.quoteNumber } : {}),
         ...(Number(s.quote.units) > 0 ? { openings_qty: Number(s.quote.units) } : {}),
-        inputs: {
-          material_true_cost: cost || null,
-          actual_total_sell: sale || null,
-        },
-      });
-      setBudgetState("saved");
-    } catch (e) {
-      setBudgetState("failed");
-      setBudgetError(e?.response?.data?.error || e?.message || "The budget could not be saved.");
-    }
+        inputs: { material_true_cost: cost || null, actual_total_sell: sale || null },
+      },
+    });
+    if (r.state === "busy") return;
+    setBudgetState(r.state);
+    setBudgetError(r.state === "conflict" ? `More than one draft budget matches this job (${r.ids.join(", ")}).` : r.error || "");
   }
 
   function retryBudget() {
-    if (!created?.jobId) return;
+    if (!created?.jobId || authState !== "owner" || budgetState === "pending") return;
     saveBudget(created.jobId);
   }
 
@@ -296,6 +300,8 @@ export default function NewJobBuilder() {
     if (first) navigate(`/jobs/${first.id}`);
   }
   function handleCreateAnyway() { setMatchWarning(null); setForceCreate(true); doCreate(); }
+
+  if (authState !== "owner") return <NewJobOwnerGate loading={authState === "loading"} />;
 
   return (
     <PageShell width="max-w-[960px]">
@@ -531,7 +537,7 @@ export default function NewJobBuilder() {
               {creating ? <><Loader2 size={14} className="animate-spin" />Creating…</> : <><Check size={14} />Create job</>}
             </button>
           </div>
-          <div className="mt-2 text-[11px]" style={{ color: "#8a8f93" }}>Creates one job record. {owner ? "Cost and sale price are saved to a draft budget you can edit on the job." : "Cost and sale price require the owner to save a draft budget; they will not be stored with this job."}</div>
+          <div className="mt-2 text-[11px]" style={{ color: "#8a8f93" }}>Creates one job record. Cost and sale price are saved to a draft budget you can edit on the job.</div>
         </SheetCard>
       )}
 
@@ -548,17 +554,24 @@ export default function NewJobBuilder() {
               The job was created, but cost/sale pricing was not saved — only the owner can save a draft budget. Open the job and have an owner add the budget there.
             </div>
           )}
-          {(cost > 0 || sale > 0) && budgetState === "failed" && (
+          {(cost > 0 || sale > 0) && budgetState === "pending" && !creating && (
+            <div className="mt-2 flex items-center gap-1.5 text-[12px]" style={{ color: "#566063" }}><Loader2 size={14} className="animate-spin" />Saving draft budget…</div>
+          )}
+          {(cost > 0 || sale > 0) && ["failed", "uncertain", "conflict"].includes(budgetState) && (
             <div className="mt-2 rounded-[10px] px-3 py-2 text-[12px]" style={{ backgroundColor: "#fcedec", color: "#a43432", border: "1px solid #f0c9c5" }}>
-              <div>The job was created, but the draft budget could not be saved: {budgetError || "unknown error"}</div>
-              <div className="mt-1">Do not create the job again. Retry the budget save, or open the job and add the budget manually.</div>
-              <button className={buttonClass + " mt-2"} style={secondaryStyle} disabled={creating} onClick={retryBudget}><Loader2 size={14} className={creating ? "animate-spin" : ""} />Retry budget save</button>
+              {budgetState === "failed" && <div>The job was created, but the draft budget was not saved: {budgetError || "unknown error"}</div>}
+              {budgetState === "uncertain" && <div>The job was created, but we could not confirm whether the draft budget saved{budgetError ? ` (${budgetError})` : ""}. Checking again reads current records first and only creates the budget if none exists.</div>}
+              {budgetState === "conflict" && <div>The job was created. {budgetError} Review them on the budget page; nothing new was created.</div>}
+              <div className="mt-1">Do not create the job again.</div>
+              {budgetState !== "conflict" && (
+                <button className={buttonClass + " mt-2"} style={secondaryStyle} onClick={retryBudget}>{budgetState === "uncertain" ? "Check again" : "Retry budget save"}</button>
+              )}
             </div>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
             <Link to={`/jobs/${created.jobId}`} className={buttonClass} style={primaryStyle}><Check size={14} />Open the new job</Link>
             <Link to={`/jobs/${created.jobId}/budget-orders`} className={buttonClass} style={secondaryStyle}>Edit budget & orders</Link>
-            <Link to="/purchasing/new-job" onClick={() => { setCreated(null); setForceCreate(false); setFormError(""); setBudgetState("pending"); setBudgetError(""); setS(prev => ({ ...prev, jobName: "", jobCode: "", windowPO: "", mfgOrder: "", address: { street: "", city: "", lot: "" }, contact: { name: "", phone: "", email: "" }, money: { cost: "", sale: "" } })); }} className={buttonClass} style={secondaryStyle}>Create another</Link>
+            <Link to="/purchasing/new-job" onClick={() => { setCreated(null); setWizardId(newWizardId()); setForceCreate(false); setFormError(""); setBudgetState("pending"); setBudgetError(""); setS(prev => ({ ...prev, jobName: "", jobCode: "", windowPO: "", mfgOrder: "", address: { street: "", city: "", lot: "" }, contact: { name: "", phone: "", email: "" }, money: { cost: "", sale: "" } })); }} className={buttonClass} style={secondaryStyle}>Create another</Link>
           </div>
         </SheetCard>
       )}
