@@ -3,6 +3,7 @@ import { HardHat, ShoppingCart, Package, CalendarClock, Paperclip } from "lucide
 import { crewName } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { visitFields, visibleNotes } from "@/lib/visitFields";
+import { attachmentProvenance, fileBadge, ticketLabel } from "@/lib/jobHistory";
 import ClampedText from "./ClampedText";
 import PhotoStrip from "./PhotoStrip";
 import { ServiceItemPanel } from "./ServiceItems";
@@ -144,7 +145,8 @@ function Files({ files }) {
     <span className="flex flex-col gap-0.5">
       {files.map((a, i) => (
         <a key={i} href={a.drive_url || a.file_url} target="_blank" rel="noreferrer" title={a.title} className="inline-flex w-fit items-center gap-1.5 text-[13.5px] font-semibold hover:underline" style={{ color: TEAL }}>
-          <Paperclip className="h-3.5 w-3.5 shrink-0" style={{ color: MUTED }} />{clean(fileName(a.title))}{/\.pdf$/i.test(a.title || "") ? <span className="text-[11.5px] font-medium" style={{ color: MUTED }}>PDF</span> : null}
+          <Paperclip className="h-3.5 w-3.5 shrink-0" style={{ color: MUTED }} />{clean(fileName(a.title))}
+          <span className="text-[11.5px] font-medium" style={{ color: MUTED }}>{fileBadge(a.title, a.mime_type).label} · {attachmentProvenance(a)}</span>
         </a>
       ))}
     </span>
@@ -162,7 +164,7 @@ const joinMeta = (...parts) => parts.filter(Boolean).join(" · ");
 // One calendar visit, laid out as rows. badge: the visit's report pill from the feed.
 // services: the service items this visit is the fix for (their service_event_id). The item is
 // tracked here — one place — and the report it came from just points to it.
-export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [], onServiceChanged }) {
+export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [], onServiceChanged, tickets = [] }) {
   const f = useMemo(() => visitFields(ev), [ev]);
   const [showOther, setShowOther] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -199,7 +201,7 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [
       <div className="flex items-start gap-2.5">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px]" style={{ backgroundColor: TEAL050, color: TEAL, border: `1px solid ${MINT}` }}><Icon className="h-[15px] w-[15px]" /></span>
         <div className="min-w-0 flex-1">
-          <h4 className="m-0 flex flex-wrap items-center gap-1.5 text-[15.5px] font-bold leading-tight" style={{ color: INK }}>{title}{chips.map((c) => <Chip key={c} tone="teal">{c}</Chip>)}</h4>
+          <h4 className="m-0 flex flex-wrap items-center gap-1.5 text-[15.5px] font-bold leading-tight" style={{ color: INK }}>{title}{chips.map((c) => <Chip key={c} tone="teal">{c}</Chip>)}{tickets.map((n) => <Chip key={`ticket-${n}`} tone={n >= 2 ? "amber" : "sand"}>{ticketLabel(n)}</Chip>)}</h4>
           <div className="mt-0.5 text-[12.5px]" style={{ color: MUTED }}>{meta}</div>
         </div>
         {badge ? <span className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-semibold" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span> : null}

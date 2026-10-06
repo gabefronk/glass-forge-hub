@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search, X } from "lucide-react";
+import { Search, X, GitMerge, CheckSquare } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import JobBrowserRow from "@/components/jobs/JobBrowserRow";
 import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
+import CombineJobsReview from "@/components/jobs/CombineJobsReview";
 import ProbuildReports from "@/pages/ProbuildReports";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { buildJobsOverview, sortJobGroups, builderOptions, needsYou, JOB_SORTS } from "@/lib/jobsOverview";
+import { buildJobsOverview, sortJobGroups, builderOptions, needsYou, JOB_SORTS, flattenForSelect } from "@/lib/jobsOverview";
 import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
 import AddJobDialog from "@/components/jobs/AddJobDialog";
 import QuickFilterMenu from "@/components/jobs/QuickFilterMenu";
@@ -40,6 +41,13 @@ export default function JobsHub() {
   const [view, setView] = useState("jobs");
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [showMerged, setShowMerged] = useState(false);
+  // Admin-only "Combine jobs" selection mode: selectedIds persists across
+  // search/filter/paging because it's keyed by job id, independent of the
+  // filtered list. No write happens until the review dialog is confirmed.
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [showReview, setShowReview] = useState(false);
 
   useEffect(() => {
     const p = new URLSearchParams(searchParams);
@@ -51,35 +59,44 @@ export default function JobsHub() {
     if (p.toString() !== searchParams.toString()) setSearchParams(p, { replace: true });
   }, [search, segment, sort, builder]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        // Calendar events and notes are report evidence for "Needs report"; if they
-        // can't load, statuses fall back to fee lines alone and a notice says so.
-        const [jb, fl, ev, nt] = await Promise.all([
-          fetchAllPages(base44.entities.Jobs, '-created_date', 1000),
-          fetchAllPages(base44.entities.FeeLines, '-created_date', 1000),
-          fetchAllPages(base44.entities.CalendarEvents, '-event_date', 1000).catch(() => null),
-          fetchAllPages(base44.entities.JobNotes, '-note_date', 1000).catch(() => null),
-        ]);
-        setJobs(jb);
-        setFeeLines(fl);
-        setCalEvents(ev);
-        setJobNotes(nt);
-        loadService();
-      } catch (e) {
-        setLoadError("Jobs could not load. Reload to try again. " + (e?.message || ""));
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
+  // Fetch jobs, fee lines, calendar events and notes. Called on mount and again
+  // after a combine so merged-away rows drop out of the list without a full reload.
+  const reloadJobs = async () => {
+    try {
+      // Calendar events and notes are report evidence for "Needs report"; if they
+      // can't load, statuses fall back to fee lines alone and a notice says so.
+      const [jb, fl, ev, nt] = await Promise.all([
+        fetchAllPages(base44.entities.Jobs, '-created_date', 1000),
+        fetchAllPages(base44.entities.FeeLines, '-created_date', 1000),
+        fetchAllPages(base44.entities.CalendarEvents, '-event_date', 1000).catch(() => null),
+        fetchAllPages(base44.entities.JobNotes, '-note_date', 1000).catch(() => null),
+      ]);
+      setJobs(jb);
+      setFeeLines(fl);
+      setCalEvents(ev);
+      setJobNotes(nt);
+      loadService();
+    } catch (e) {
+      setLoadError("Jobs could not load. Reload to try again. " + (e?.message || ""));
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { reloadJobs(); }, []);
 
   useEffect(() => {
-    base44.auth.me().then((u) => setOwner(isAgentCenterOwner(u))).catch(() => setOwner(false));
+    base44.auth.me().then((u) => { setOwner(isAgentCenterOwner(u)); setIsAdmin(u?.role === "admin"); }).catch(() => { setOwner(false); setIsAdmin(false); });
     if (searchParams.get("report") || searchParams.get("project") || searchParams.get("conversation")) setView("reports");
   }, []);
+
+  const toggleSelect = (id) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearSelection = () => setSelectedIds(new Set());
+  const exitSelectMode = () => { setSelectMode(false); clearSelection(); };
+  const selectedCount = selectedIds.size;
 
   const switchView = (k) => {
     setView(k);
@@ -122,6 +139,11 @@ export default function JobsHub() {
     if (builder) base = base.filter(g => sanitizeText(String(g.job?.builder || "").trim()) === builder);
     return sortJobGroups(base, jobStats, sort);
   }, [groups, search, segment, jobStats, sort, builder, serviceByJob]);
+  // In combine-select mode, show every active raw Jobs record independently
+  // (including non-canonical duplicate siblings hidden inside a group) so each
+  // can be checked on its own. Normal mode keeps presentation groups (one row
+  // per duplicate set). No siblings are auto-selected — each toggle is its own.
+  const selectModeJobs = useMemo(() => flattenForSelect(filtered), [filtered]);
   const serviceCount = useMemo(() => groups.filter((g) => g.members.some((m) => serviceByJob[m.id])).length, [groups, serviceByJob]);
 
   const builders = useMemo(() => builderOptions(groups, sanitizeText), [groups]);
@@ -191,13 +213,14 @@ export default function JobsHub() {
     );
   }
 
-  const visibleJobs = filtered.slice(0, visibleCount);
+  const visibleJobs = selectMode ? selectModeJobs.slice(0, visibleCount) : filtered.slice(0, visibleCount);
   const emptyMessage = loadError ? "Jobs could not load."
     : search.trim() ? `No jobs match "${search.trim()}".`
     : segment !== "all" || builder ? "No jobs match these filters."
     : "No jobs yet.";
   const todayLabel = new Date(`${denverDate()}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  const summary = `${filtered.length.toLocaleString()} ${filtered.length === 1 ? "job" : "jobs"}${builder ? ` · ${builder}` : ""}`;
+  const listTotal = selectMode ? selectModeJobs.length : filtered.length;
+  const summary = `${listTotal.toLocaleString()} ${selectMode ? (listTotal === 1 ? "record" : "records") : (filtered.length === 1 ? "job" : "jobs")}${builder ? ` · ${builder}` : ""}`;
   const fieldStyle = { backgroundColor: "rgba(255,255,255,.08)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.16)" };
   const HERO_INK = "#f2eee8", HERO_MUTED = "#aeb5b7";
 
@@ -209,6 +232,29 @@ export default function JobsHub() {
         <span className="text-[12.5px]" style={{ color: HERO_MUTED }}>{todayLabel} · <span style={{ color: "#e0c994", fontWeight: 600 }}>{counts.today}</span> {counts.today === 1 ? "visit" : "visits"} today</span>
       </div>
       {owner && <div>{renderToggle(true)}</div>}
+      {isAdmin && !selectMode && (
+        <div>
+          <button type="button" onClick={() => setSelectMode(true)} className="inline-flex h-[36px] items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold" style={{ backgroundColor: "rgba(184,149,90,.16)", color: "#e0c994", border: "1px solid rgba(224,201,148,.4)" }}>
+            <GitMerge className="h-4 w-4" />Combine jobs
+          </button>
+        </div>
+      )}
+      {isAdmin && selectMode && (
+        <div className="flex flex-wrap items-center gap-2 rounded-[10px] px-3 py-2" style={{ backgroundColor: "rgba(11,63,59,.22)", border: "1px solid rgba(224,201,148,.35)" }}>
+          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: HERO_INK }}>
+            <CheckSquare className="h-4 w-4" style={{ color: "#e0c994" }} />
+            {selectedCount} selected
+          </span>
+          <span className="text-[12px]" style={{ color: HERO_MUTED }}>Check 2 or more, then combine. Already-merged jobs can't be selected.</span>
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={clearSelection} disabled={selectedCount === 0} className="inline-flex h-[34px] items-center rounded-[9px] px-3 text-[13px] font-semibold disabled:opacity-50" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>Clear</button>
+            <button type="button" onClick={exitSelectMode} className="inline-flex h-[34px] items-center rounded-[9px] px-3 text-[13px] font-semibold" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>Cancel</button>
+            <button type="button" onClick={() => setShowReview(true)} disabled={selectedCount < 2} className="inline-flex h-[34px] items-center gap-1.5 rounded-[9px] px-3.5 text-[13px] font-semibold text-white disabled:opacity-50" style={{ backgroundColor: "#b8955a", color: "#1d160a" }}>
+              <GitMerge className="h-4 w-4" />Combine{selectedCount >= 2 ? ` ${selectedCount}` : ""}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex gap-2">
         <label className="relative flex flex-1 items-center">
           <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: HERO_MUTED }} />
@@ -266,9 +312,9 @@ export default function JobsHub() {
     </div>
   );
 
-  const loadMore = (step) => filtered.length > visibleCount && (
+  const loadMore = (step) => (selectMode ? selectModeJobs.length : filtered.length) > visibleCount && (
     <div className="flex items-center justify-between px-1 py-3">
-      <span className="text-[12px]" style={{ color: "#6b7477" }}>{visibleCount} of {filtered.length.toLocaleString()}</span>
+      <span className="text-[12px]" style={{ color: "#6b7477" }}>{visibleCount} of {(selectMode ? selectModeJobs.length : filtered.length).toLocaleString()}</span>
       <button type="button" onClick={() => setVisibleCount((c) => c + step)} className="min-h-10 rounded-full bg-white px-4 text-[13px] font-semibold shadow-[0_1px_2px_rgba(16,22,23,.08)]" style={{ color: "#0b3f3b" }}>Load more</button>
     </div>
   );
@@ -282,8 +328,10 @@ export default function JobsHub() {
           {notices}
           <div className="mt-3 flex-1 min-h-0 overflow-y-auto obsidian-scroll -mx-1 px-1 pb-6">
             <div className="flex flex-col gap-2">
-              {visibleJobs.map((g) => (
-                <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} serviceCount={g.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} selected={g.id === selectedJobId} onSelect={() => setSelectedJobId(g.id)} />
+              {visibleJobs.map((item) => selectMode ? (
+                <JobBrowserRow key={item.id} job={item} group={groupByJobId.get(item.id)} stats={jobStats[groupByJobId.get(item.id)?.id]} serviceCount={serviceByJob[item.id] || 0} selectMode combineSelected={selectedIds.has(item.id)} onToggleCombine={toggleSelect} />
+              ) : (
+                <JobBrowserRow key={item.id} job={item.job} group={item} stats={jobStats[item.id]} serviceCount={item.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} selected={item.id === selectedJobId} onSelect={() => setSelectedJobId(item.id)} />
               ))}
             </div>
             {!visibleJobs.length && emptyState}
@@ -302,13 +350,23 @@ export default function JobsHub() {
         {listHeader}
         {notices}
         <div className="mt-3.5 grid grid-cols-1 gap-2 lg:grid-cols-2">
-          {visibleJobs.map((g) => (
-            <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} serviceCount={g.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} href={`/jobs/${g.job.id}`} />
+          {visibleJobs.map((item) => selectMode ? (
+            <JobBrowserRow key={item.id} job={item} group={groupByJobId.get(item.id)} stats={jobStats[groupByJobId.get(item.id)?.id]} serviceCount={serviceByJob[item.id] || 0} selectMode combineSelected={selectedIds.has(item.id)} onToggleCombine={toggleSelect} />
+          ) : (
+            <JobBrowserRow key={item.id} job={item.job} group={item} stats={jobStats[item.id]} serviceCount={item.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} href={`/jobs/${item.job.id}`} />
           ))}
         </div>
         {!visibleJobs.length && emptyState}
         {loadMore(20)}
       </div>
+
+      {showReview && (
+        <CombineJobsReview
+          jobIds={[...selectedIds]}
+          onClose={() => setShowReview(false)}
+          onDone={() => { exitSelectMode(); reloadJobs(); }}
+        />
+      )}
     </div>
   );
 }

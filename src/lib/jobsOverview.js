@@ -128,6 +128,16 @@ export function sortJobGroups(groups, stats, sort = "recent") {
   return list.sort((a, b) => newest(b).localeCompare(newest(a)));
 }
 
+// Flatten filtered groups into individual raw jobs for combine-select mode, so
+// every active record (including non-canonical duplicate siblings hidden inside
+// a presentation group) is independently checkable. Pure; returns a new array.
+// Each job appears once — groupJobs assigns every job to exactly one group.
+export function flattenForSelect(groups) {
+  const out = [];
+  for (const g of groups) for (const m of g.members || []) out.push(m);
+  return out;
+}
+
 // Distinct builders across visible groups, with counts, for the builder filter.
 export function builderOptions(groups, clean = (s) => s) {
   const counts = new Map();
