@@ -2,6 +2,8 @@
 // Extracted from quoteEngine/entry.ts so it can be unit-tested with node:test
 // without the Base44 SDK or any database access. No side effects, no I/O.
 
+import { QUOTE_FULL_ACCESS_IDS } from './quoteAccess.js';
+
 export function rnd01(x) { return Math.ceil(Number((x * 10).toFixed(6))) / 10; }
 export function frameArea(tw, th) { return Math.ceil(tw * th / 144); }
 
@@ -99,16 +101,19 @@ export function pricePella(line, anchors) {
   };
 }
 
-// Authorize a quote request per vendor. FINAL owner decision (Oct 6, 9:16): AMSCO
-// quoting is open to every authenticated Hub user, including role 'user' and Jeremy Burr
-// (burcco). Pella remains admin/manager only. A user-role request carrying any Pella line
-// (Pella-only or AMSCO+Pella mixed) is denied here, before any catalog read. Admins retain
-// full cost; managers (and any non-admin) receive sale-only fields via the projection.
+// Authorize a quote request per vendor. AMSCO quoting is open to every authenticated Hub
+// user (including role 'user'). Pella is admin/manager only, PLUS a narrow id allowlist
+// (QUOTE_FULL_ACCESS_IDS — Jeremy Burr, Israel Yedra) bound by auth.me().id, never request
+// payload or names. A user-role request carrying any Pella line (Pella-only or AMSCO+Pella
+// mixed) is denied here unless the caller's id is allowlisted, before any catalog read.
+// Admins retain full cost; managers (and any non-admin) receive sale-only fields via the
+// projection. The allowlisted ids also receive full cost (canSeeCost) via the projection.
 // Returns { allowed, reason }.
 export function authorizeQuoteRequest(user, lines) {
   if (!user) return { allowed: false, reason: 'unauthenticated' };
   const role = String(user.role || '').toLowerCase();
   if (role === 'admin' || role === 'manager') return { allowed: true };
+  if (QUOTE_FULL_ACCESS_IDS.has(user.id)) return { allowed: true };
   const hasPella = Array.isArray(lines) && lines.some(l => l && l.vendor === 'Pella');
   if (hasPella) return { allowed: false, reason: "role 'user' may not view Pella pricing" };
   return { allowed: true };

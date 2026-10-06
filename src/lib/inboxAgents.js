@@ -3,9 +3,10 @@
 // no mail here — every row is what an agent concluded and changed, with a link back to the
 // mailbox. Unit-tested in tests/inboxAgents.test.mjs.
 
-// The ledger is an owner tool. Managers can query the YA mailbox rows through the API
-// (inbox_search) but the page lives under Admin.
-export const canViewInboxAgents = (user) => user?.role === "admin";
+// The ledger is an owner tool. Only Gabriel's auth ids may read mailbox content — admin-only
+// is NOT enough (multiple users are admin). id-based, never email or names.
+import { isEmailOwner } from "@/lib/ownerAccess";
+export const canViewInboxAgents = (user) => isEmailOwner(user);
 
 export const OPEN_STATUSES = ["new", "needs_reply", "waiting"];
 

@@ -7,6 +7,7 @@ import {
   priceAmsco, pricePella, authorizeQuoteRequest, validateQuoteLines, summarizeValidationRules,
   projectQuoteResult
 } from '../../shared/quoteEnginePure.js';
+import { canQuoteFull } from '../../shared/quoteAccess.js';
 
 Deno.serve(async (req) => {
   try {
@@ -21,7 +22,9 @@ Deno.serve(async (req) => {
     // internal cost is redacted. Admins retain full costs.
     const access = authorizeQuoteRequest(user, lines);
     if (!access.allowed) return Response.json({ ok: false, error: 'forbidden', reason: access.reason }, { status: 403 });
-    const isAdmin = !!user && String(user.role || '').toLowerCase() === 'admin';
+    // canSeeCost: admins (full cost) OR the narrow id allowlist (Jeremy/Israel). The projection
+    // redacts dealer/internal fields for everyone else. isAdmin param is the "show full cost" flag.
+    const canSeeCost = !!user && (String(user.role || '').toLowerCase() === 'admin' || canQuoteFull(user));
 
     const inputErrors = validateQuoteLines(lines);
     if (inputErrors.length) return Response.json({ ok: false, error: 'invalid input', details: inputErrors }, { status: 400 });
@@ -48,7 +51,7 @@ Deno.serve(async (req) => {
       const pricing = line.vendor === 'AMSCO'
         ? priceAmsco(line, gridRows, adders, tiers, seriesRows)
         : pricePella(line, pellaAnchors);
-      return projectQuoteResult(line, pricing, { isAdmin });
+      return projectQuoteResult(line, pricing, { isAdmin: canSeeCost });
     });
     return Response.json({ ok: true, results, validation: summarizeValidationRules(validationRules) });
   } catch (error) {
