@@ -72,6 +72,12 @@ export function visitsMissingReport(rows, evidence, today) {
     const key = `${groupOf(r.job_id)}|${dayOf(r.job_date)}`;
     if (probuildDates.has(key) || (r.id && supersededBy.has(r.id))) continue;
     if (linked) {
+      // Pre-compliance and no-source-data visits are not owed a report (they predate
+      // the compliance start date, or the Probuild pull found nothing to match). The
+      // visit card suppresses them too (visitBadge returns null), so the job-level
+      // "Needs report" status must not flag them either — otherwise a job with only
+      // a pre-compliance visit plus a reported later visit still reads "Needs report".
+      if (linked.report_status === "pre_compliance" || linked.report_status === "no_source_data") continue;
       if (eventReportCleared(linked)) continue;
       // Photos uploaded in the Hub for this job on the visit day count as its report.
       if (ev?.noteJobDates.has(key)) continue;
