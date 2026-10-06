@@ -1,5 +1,6 @@
 import PurchasingDates from '@/components/budgets/PurchasingDates';
 import { purchasingJobName, purchasingRows, statusWithDate, etaText, supplierReplyText } from '@/lib/purchasingDates';
+import { quantityReviewLabel } from '@/lib/quantityReview';
 import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -186,7 +187,7 @@ function ProcurementWorkspace() {
               <Badge warning={chip.warning}>{chip.text}</Badge>
             </div>
             {!job && matchedJob && <Link className="mt-1 inline-block text-sm font-semibold underline" to={procurementPath(b.job_id)}>{matchedJob.canonical_name || b.job_name || 'Open job workspace'}</Link>}
-            <div className="mt-2 text-sm text-slate-700">Material before tax: <strong>{money(b.inputs?.material_true_cost)}</strong>{b.openings_qty > 0 ? <span className="text-slate-500"> · {b.openings_qty} window / door units</span> : null}</div>
+            <div className="mt-2 text-sm text-slate-700">Material before tax: <strong>{money(b.inputs?.material_true_cost)}</strong>{b.openings_qty > 0 ? <span className="text-slate-500"> · {b.openings_qty} window / door units</span> : null}{quantityReviewLabel(b) && <span className="text-amber-700"> · Quantity needs review</span>}</div>
             <p className={`mt-1 text-xs ${figures.warnings.length ? 'font-medium text-amber-800' : 'text-slate-500'}`}>{statusLine}</p>
             <div className="mt-2 text-sm text-slate-700">Cost basis <strong className="tabular-nums">{money(figures.cost)}</strong></div>
             <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">
