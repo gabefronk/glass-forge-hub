@@ -48,9 +48,6 @@ export function createVisitController({ store, invoke }) {
     load: (userId, jobId) => (store ? readFrozen(store, userId, jobId) : { state: 'none' }),
     submit: (userId, jobId, reviewed) => run(userId, jobId, reviewed),
     retry: (userId, jobId) => run(userId, jobId, null),
-    discardDamaged: (userId, jobId) => {
-      if (store && readFrozen(store, userId, jobId).state === 'damaged') clearFrozen(store, userId, jobId);
-    },
     isInflight: () => inflight,
   };
 }

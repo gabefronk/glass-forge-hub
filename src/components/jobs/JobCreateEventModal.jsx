@@ -69,7 +69,6 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
     else { setStep("form"); setError(r.error); }
   };
 
-  const discard = () => { ctrl.current.discardDamaged(user.id, job.id); setForm(EMPTY); setRequestId(newRequestId()); setReviewed(null); setError(""); setStep("form"); };
   const close = () => onOpenChange(false); // never clears a frozen request
 
   if (!owner) {
@@ -125,7 +124,12 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
             <JobCreateEventReview payload={reviewed} heading="Locked request — only this exact visit can be retried." />
           </div>
         )}
-        {step === "damaged" && <p className="text-[12.5px]" style={MUTED}>Check the crew calendar for this job first. Discarding lets you start a new request.</p>}
+        {step === "damaged" && (
+          <div className="space-y-2 rounded-[9px] px-3 py-2.5" style={{ backgroundColor: "#fcedec", border: "1px solid #f0c9c5" }}>
+            <p className="m-0 text-[12.5px] font-semibold" style={{ color: "#a43432" }}>Manual reconciliation required.</p>
+            <p className="m-0 text-[12px]" style={MUTED}>A saved request for this job is unreadable, so an earlier attempt cannot be ruled out. Do not start a new request with a fresh id. Open the crew calendar, find any event whose description links to this job, and confirm whether it matches the visit you intended. Only an owner who has checked the calendar should clear this device&apos;s saved request.</p>
+          </div>
+        )}
         {step === "done" && (
           <div className="space-y-2">
             <p className="text-[13px] font-semibold" style={{ color: "#082f2c" }}>
@@ -144,7 +148,6 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
           {step === "review" && <Button variant="ghost" disabled={busy} onClick={() => setStep("form")}>Back to edit</Button>}
           {step === "review" && <Button onClick={send} disabled={busy}>{busy ? "Creating…" : "Create"}</Button>}
           {step === "locked" && <Button onClick={send} disabled={busy}>{busy ? "Retrying…" : "Retry same request"}</Button>}
-          {step === "damaged" && <Button variant="destructive" onClick={discard}>I checked the calendar — discard</Button>}
           <Button variant="ghost" onClick={close}>Close</Button>
         </DialogFooter>
       </DialogContent>
