@@ -544,16 +544,21 @@ test('rerun: flags an entry pending; the next sync re-reads it and relays withou
   assert.equal(h2.store.JobNotes.length, 1); assert.equal(h2.store.TodoTask.length, 1);
 });
 
-test('list / entry: owner-only mailbox is hidden from managers and non-owner admins; owner sees both; filters and q work; entries carry no mail text', async () => {
+test('list / entry: admin-only — managers and crew get 403; owner-only mailbox still restricted to the owner emails; owner sees both; filters and q work; entries carry no mail text', async () => {
   const h = harness();
   await h.call({ action: 'sync' });
-  const mgr = await h.as(MANAGER).call({ action: 'list' });
-  assert.equal(mgr.status, 200);
-  assert.deepEqual([...new Set(mgr.body.entries.map((t) => t.mailbox_key))], ['ya-outlook']);
-  assert.deepEqual(mgr.body.mailboxes.map((m) => m.key), ['ya-outlook']);
+  // Owner's ruling: no manager reads any mailbox (incl. the former 'managers'-visibility YA Outlook).
+  assert.equal((await h.as(MANAGER).call({ action: 'list' })).status, 403);
+  assert.equal((await h.as(CREW).call({ action: 'list' })).status, 403);
+  assert.equal((await h.as(null).call({ action: 'list' })).status, 401);
   assert.equal((await h.as(MANAGER).call({ action: 'list', mailbox_key: 'gf-gmail' })).status, 403);
+  assert.equal((await h.as(MANAGER).call({ action: 'list', mailbox_key: 'nope' })).status, 403, 'gate fires before the mailbox lookup');
+  // owner-only mailbox stays restricted to the owner emails even among admins
   assert.equal((await h.as(ADMIN).call({ action: 'list', mailbox_key: 'gf-gmail' })).status, 403, 'non-owner admin is not the owner');
-  assert.equal((await h.as(MANAGER).call({ action: 'list', mailbox_key: 'nope' })).status, 404);
+  // a non-owner admin can still list the admin-visible YA mailbox
+  const adm = await h.as(ADMIN).call({ action: 'list' });
+  assert.equal(adm.status, 200);
+  assert.deepEqual([...new Set(adm.body.entries.map((t) => t.mailbox_key))], ['ya-outlook']);
   const own = await h.as(OWNER).call({ action: 'list' });
   assert.equal(own.body.entries.length, 3);
   assert.equal(own.body.entries[0].thread_id, 'AAQk1', 'sorted by -last_message_at');
@@ -576,31 +581,71 @@ test('list / entry: owner-only mailbox is hidden from managers and non-owner adm
   assert.equal('messages' in detail.body, false);
   assert.equal(detail.body.entry.thread_id, 't1');
   assert.equal(detail.body.mailbox.key, 'gf-gmail');
-  assert.equal((await h.as(MANAGER).call({ action: 'entry', id: t1.id })).status, 404, 'owner-only entry is invisible to managers');
+  assert.equal((await h.as(MANAGER).call({ action: 'entry', id: t1.id })).status, 403, 'managers cannot read any entry');
+  assert.equal((await h.as(CREW).call({ action: 'entry', id: t1.id })).status, 403);
+  assert.equal((await h.as(null).call({ action: 'entry', id: t1.id })).status, 401);
+  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: t1.id })).status, 404, 'owner-only entry is invisible to a non-owner admin (404, not 403, so existence does not leak)');
   const ya = thread(h, 'AAQk1');
-  assert.equal((await h.as(MANAGER).call({ action: 'entry', id: ya.id })).status, 200);
+  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: ya.id })).status, 200, 'non-owner admin can read the admin-visible mailbox');
+  assert.equal((await h.as(MANAGER).call({ action: 'entry', id: ya.id })).status, 403, 'managers cannot read the YA mailbox either');
 });
 
-test('mutations: set_status / set_category / link_job (applies facts + relays) / unlink_job / discard / regenerate (re-reads the mailbox) / archive', async () => {
+test('auth regression: every disclosing action denies manager, crew and unauthenticated; admin is allowed; sync stays admin/scheduled-only', async () => {
   const h = harness();
   await h.call({ action: 'sync' });
   const ya = thread(h, 'AAQk1');
-  // set_status by a manager on the YA thread
-  const st = await h.as(MANAGER).call({ action: 'set_status', id: ya.id, status: 'done' });
+  const disclosing = [
+    { action: 'list' },
+    { action: 'entry', id: ya.id },
+    { action: 'set_status', id: ya.id, status: 'done' },
+    { action: 'rerun', id: ya.id },
+    { action: 'set_category', id: ya.id, category: 'schedule' },
+    { action: 'link_job', id: ya.id, job_id: 'job2' },
+    { action: 'unlink_job', id: ya.id },
+    { action: 'discard_draft', id: ya.id },
+    { action: 'regenerate_draft', id: ya.id },
+    { action: 'archive', id: ya.id },
+  ];
+  for (const payload of disclosing) {
+    assert.equal((await h.as(MANAGER).call(payload)).status, 403, `manager denied ${payload.action}`);
+    assert.equal((await h.as(CREW).call(payload)).status, 403, `crew denied ${payload.action}`);
+    assert.equal((await h.as(null).call(payload)).status, 401, `unauthenticated denied ${payload.action}`);
+  }
+  // sync is admin-only (or scheduled null); manager and crew are denied
+  assert.equal((await h.as(MANAGER).call({ action: 'sync' })).status, 403);
+  assert.equal((await h.as(CREW).call({ action: 'sync' })).status, 403);
+  // admin can run the disclosing actions on the admin-visible mailbox
+  const adm = await h.as(ADMIN).call({ action: 'set_status', id: ya.id, status: 'done' });
+  assert.equal(adm.status, 200);
+  // mailboxes / seed_mailboxes stay admin-only
+  assert.equal((await h.as(MANAGER).call({ action: 'mailboxes' })).status, 403);
+  assert.equal((await h.as(MANAGER).call({ action: 'seed_mailboxes' })).status, 403);
+});
+
+test('mutations: set_status / set_category / link_job (applies facts + relays) / unlink_job / discard / regenerate (re-reads the mailbox) / archive — admin only', async () => {
+  const h = harness();
+  await h.call({ action: 'sync' });
+  const ya = thread(h, 'AAQk1');
+  // managers are denied every mutating action on the YA thread (owner's ruling)
+  assert.equal((await h.as(MANAGER).call({ action: 'set_status', id: ya.id, status: 'done' })).status, 403);
+  assert.equal((await h.as(MANAGER).call({ action: 'link_job', id: ya.id, job_id: 'job2' })).status, 403);
+  assert.equal((await h.as(MANAGER).call({ action: 'archive', id: ya.id })).status, 403);
+  // set_status by the owner on the YA thread
+  const st = await h.as(OWNER).call({ action: 'set_status', id: ya.id, status: 'done' });
   assert.equal(st.status, 200);
   assert.equal(thread(h, 'AAQk1').status, 'done');
   assert.equal(thread(h, 'AAQk1').reply_needed, false);
-  assert.equal((await h.as(MANAGER).call({ action: 'set_status', id: ya.id, status: 'nah' })).status, 400);
+  assert.equal((await h.as(OWNER).call({ action: 'set_status', id: ya.id, status: 'nah' })).status, 400);
   // set_category relabels in the provider (Outlook needs the message ids: re-read from Graph)
-  const sc = await h.as(MANAGER).call({ action: 'set_category', id: ya.id, category: 'schedule' });
+  const sc = await h.as(OWNER).call({ action: 'set_category', id: ya.id, category: 'schedule' });
   assert.equal(sc.status, 200);
   assert.equal(thread(h, 'AAQk1').category, 'schedule');
   const lastPatch = h.hits.filter((x) => x.method === 'PATCH' && /messages\/AAMk1$/.test(x.url)).pop();
   assert.deepEqual(lastPatch.body.categories, ['Hub', 'Hub/Schedule']);
   // link_job on the unlinked YA thread relays a note; relinking does not duplicate; unlink clears the link only
-  assert.equal((await h.as(MANAGER).call({ action: 'link_job', id: ya.id, job_id: 'missing' })).status, 404);
+  assert.equal((await h.as(OWNER).call({ action: 'link_job', id: ya.id, job_id: 'missing' })).status, 404);
   const notesBefore = h.store.JobNotes.length;
-  const lk = await h.as(MANAGER).call({ action: 'link_job', id: ya.id, job_id: 'job2' });
+  const lk = await h.as(OWNER).call({ action: 'link_job', id: ya.id, job_id: 'job2' });
   assert.equal(lk.status, 200);
   assert.equal(thread(h, 'AAQk1').job_id, 'job2');
   assert.equal(thread(h, 'AAQk1').job_link_source, 'owner');
@@ -608,9 +653,9 @@ test('mutations: set_status / set_category / link_job (applies facts + relays) /
   assert.equal(h.store.JobNotes.at(-1).author, 'Inbox agent · YA Install (Outlook)');
   assert.ok(thread(h, 'AAQk1').note_id);
   assert.deepEqual(thread(h, 'AAQk1').hub_changes, ['To-do created', 'Note added to Summit Creek 14']);
-  await h.as(MANAGER).call({ action: 'link_job', id: ya.id, job_id: 'job2' });
+  await h.as(OWNER).call({ action: 'link_job', id: ya.id, job_id: 'job2' });
   assert.equal(h.store.JobNotes.length, notesBefore + 1, 'relinking does not duplicate the note');
-  const ul = await h.as(MANAGER).call({ action: 'unlink_job', id: ya.id });
+  const ul = await h.as(OWNER).call({ action: 'unlink_job', id: ya.id });
   assert.equal(ul.status, 200);
   assert.equal(thread(h, 'AAQk1').job_id, null);
   assert.equal(thread(h, 'AAQk1').note_id, null);
@@ -625,20 +670,20 @@ test('mutations: set_status / set_category / link_job (applies facts + relays) /
   assert.deepEqual(h.store.Jobs.find((j) => j.id === 'job2').po_numbers, ['NEW-77']);
   assert.ok(thread(h, 't1').hub_changes.includes('PO NEW-77 added to the job'));
   // discard + regenerate on the YA draft; regenerate reads the thread back from Graph
-  const dc = await h.as(MANAGER).call({ action: 'discard_draft', id: ya.id });
+  const dc = await h.as(OWNER).call({ action: 'discard_draft', id: ya.id });
   assert.equal(dc.status, 200);
   assert.equal(thread(h, 'AAQk1').draft_status, 'discarded');
   assert.ok(h.hits.some((x) => x.method === 'DELETE' && /messages\/draft-o1$/.test(x.url)));
-  assert.equal((await h.as(MANAGER).call({ action: 'discard_draft', id: ya.id })).status, 409);
+  assert.equal((await h.as(OWNER).call({ action: 'discard_draft', id: ya.id })).status, 409);
   const reads = h.hits.filter((x) => x.url.includes('/me/messages?')).length;
-  const rg = await h.as(MANAGER).call({ action: 'regenerate_draft', id: ya.id });
+  const rg = await h.as(OWNER).call({ action: 'regenerate_draft', id: ya.id });
   assert.equal(rg.status, 200);
   assert.equal(rg.body.entry.draft_status, 'drafted');
   assert.equal(rg.body.entry.draft_id, 'draft-o1');
   assert.equal('draft_preview' in rg.body.entry, false);
   assert.equal(h.hits.filter((x) => x.url.includes('/me/messages?')).length, reads + 1);
-  // archive action (manager) on the YA thread moves incoming messages
-  const ar = await h.as(MANAGER).call({ action: 'archive', id: ya.id });
+  // archive action (owner) on the YA thread moves incoming messages
+  const ar = await h.as(OWNER).call({ action: 'archive', id: ya.id });
   assert.equal(ar.status, 200);
   assert.equal(thread(h, 'AAQk1').archived, true);
   assert.ok(h.hits.some((x) => /AAMk1\/move$/.test(x.url) && x.body.destinationId === 'archive'));
@@ -779,9 +824,11 @@ test('tax permissions: managers and non-owner admins never see or save owner-mai
   await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
   const paid = thread(h, 't-paid');
   const promo = thread(h, 't3');
-  const mgr = await h.as(MANAGER).call({ action: 'list' });
-  assert.equal(mgr.body.entries.some((e) => e.tax_record || e.mailbox_key === 'gf-gmail'), false);
-  assert.equal((await h.as(MANAGER).call({ action: 'entry', id: paid.id })).status, 404);
+  // Main's admin-only server gating: managers are denied (403) on every disclosing action,
+  // not handed a filtered list or a 404. Only the owner (and the non-owner admin for non-owner
+  // mailboxes) can read; the owner mailbox stays owner-only even for other admins.
+  assert.equal((await h.as(MANAGER).call({ action: 'list' })).status, 403);
+  assert.equal((await h.as(MANAGER).call({ action: 'entry', id: paid.id })).status, 403);
   assert.equal((await h.as(MANAGER).call({ action: 'save_tax_record', id: paid.id })).status, 403);
   assert.equal((await h.as(ADMIN).call({ action: 'entry', id: paid.id })).status, 404);
   assert.equal((await h.as(ADMIN).call({ action: 'save_tax_record', id: paid.id })).status, 404);

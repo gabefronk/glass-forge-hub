@@ -6,9 +6,10 @@ import { createEmailAgentHandler } from '../../shared/emailAgent.js';
 // agent concluded and what it changed). POST { action, ... }:
 //   sync            scheduled (no user) or admin — pull, triage, apply job facts, relay a note +
 //                   to-do, label in the mailbox, draft a reply in the mailbox (never sends)
-//   list / entry    admin + manager; owner-only mailboxes only for the owner emails
+//   list / entry    admin only (owner-only mailboxes still restricted to the owner emails)
 //   set_status, rerun, set_category, link_job, unlink_job, regenerate_draft, discard_draft, archive
-//                   admin + manager
+//                   admin only — no manager may read any mailbox body, metadata, attachment,
+//                   draft or tax row (owner's ruling 2026-10-06)
 //   mailboxes, seed_mailboxes   admin only
 // All logic lives in base44/shared/emailAgent.js (+ emailParse / emailTriage / emailProviders)
 // so it is unit-tested under Node; this entry only wires the SDK client.
