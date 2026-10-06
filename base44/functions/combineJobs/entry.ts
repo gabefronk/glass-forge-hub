@@ -58,39 +58,64 @@ export default async function(req) {
       if (source.merged_into) { results.push({ source_job_id: sourceId, ok: false, error: 'Already merged into ' + source.merged_into }); anyFailed = true; continue; }
       if (source.is_sample) { results.push({ source_job_id: sourceId, ok: false, error: 'Cannot combine sample jobs' }); anyFailed = true; continue; }
 
+      // 1. Relocate. Capture the EXACT moved ids + any per-entity errors so the
+      //    audit log can record them and reverseMerge can move exactly these back.
+      let relocate;
       try {
-        // 1. Relocate all linked records from this source → survivor.
-        const counts = await relocateLinks(base44, sourceId, survivor_job_id);
+        relocate = await relocateLinks(base44, sourceId, survivor_job_id);
+      } catch (e) {
+        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: 'Relocate threw unexpectedly: ' + (e?.message || e) });
+        anyFailed = true;
+        continue;
+      }
+      const { counts, ids, errors: relocateErrors } = relocate;
+      const partial = relocateErrors.length > 0;
 
-        // 2. Merge identity fields onto the (fresh) survivor.
-        const { patch, relocated, conflict_note } = mergeJobFields(source, target);
+      // 2. Merge identity fields onto the (fresh) survivor.
+      let patch = {}, relocated = {}, conflict_note = "", fieldsError = "";
+      try {
+        ({ patch, relocated, conflict_note } = mergeJobFields(source, target));
         if (Object.keys(patch).length) await base44.asServiceRole.entities.Jobs.update(survivor_job_id, patch);
-        let conflictNoteRecorded = false;
-        let conflictNoteError = "";
-        if (conflict_note) {
-          const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Denver" });
-          try {
-            await base44.asServiceRole.entities.JobNotes.create({
-              job_id: survivor_job_id,
-              note_date: today,
-              interaction_type: "note",
-              body: conflict_note,
-              author: user.email || user.id || "Glass Forge Hub",
-            });
-            conflictNoteRecorded = true;
-          } catch (e) {
-            // A failed conflict note must not fail the merge, but we surface it
-            // so the conflicting value is not silently lost: record the error
-            // in this source's result so the admin knows the note did not save.
-            conflictNoteError = 'Could not save conflict note: ' + (e?.message || String(e));
-          }
+      } catch (e) {
+        fieldsError = e?.message || String(e);
+      }
+
+      // 3. Conflict note (non-fatal if it fails, but always surfaced).
+      let conflictNoteRecorded = false, conflictNoteError = "";
+      if (conflict_note) {
+        const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Denver" });
+        try {
+          await base44.asServiceRole.entities.JobNotes.create({
+            job_id: survivor_job_id,
+            note_date: today,
+            interaction_type: "note",
+            body: conflict_note,
+            author: user.email || user.id || "Glass Forge Hub",
+          });
+          conflictNoteRecorded = true;
+        } catch (e) {
+          conflictNoteError = 'Could not save conflict note: ' + (e?.message || String(e));
         }
+      }
 
-        // 3. Mark this source as merged.
-        const now = new Date().toISOString();
-        await base44.asServiceRole.entities.Jobs.update(sourceId, { merged_into: survivor_job_id, merged_at: now });
+      // 4. Mark this source as merged ONLY when relocate + fields fully succeeded.
+      const now = new Date().toISOString();
+      let markError = "";
+      const fullyOk = !partial && !fieldsError;
+      if (fullyOk) {
+        try {
+          await base44.asServiceRole.entities.Jobs.update(sourceId, { merged_into: survivor_job_id, merged_at: now });
+        } catch (e) {
+          markError = e?.message || String(e);
+        }
+      }
 
-        // 4. Append-only audit log — one row per source, so each can be undone.
+      // 5. ALWAYS write an audit log row with the exact moved ids, so provenance
+      //    is never lost even when later steps failed. partial=true means some
+      //    records moved but the source was NOT hidden (still visible) — the
+      //    admin can reverse this log to put the moved ids back, or investigate.
+      let logId = "";
+      try {
         const log = await base44.asServiceRole.entities.JobMergeLog.create({
           source_job_id: sourceId,
           source_job_name: source.canonical_name,
@@ -100,13 +125,37 @@ export default async function(req) {
           merged_at: now,
           relocated_fields: relocated,
           relocated_link_counts: counts,
+          relocated_link_ids: ids,
+          partial: partial || !!fieldsError || !!markError,
+          relocate_errors: relocateErrors.length ? relocateErrors : undefined,
+          fields_error: fieldsError || undefined,
+          mark_error: markError || undefined,
         });
-
-        results.push({ source_job_id: sourceId, source_job_name: source.canonical_name, ok: true, relocated_link_counts: counts, relocated_fields: relocated, conflict_note_recorded: conflictNoteRecorded, conflict_note_error: conflictNoteError || undefined, merge_log_id: log.id });
+        logId = log.id;
       } catch (e) {
-        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: e?.message || String(e) });
+        // The audit log itself failed to write — serious: records may have
+        // moved with no provenance. Surface it loudly with the ids we have.
+        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: 'Moved records but FAILED to write audit log: ' + (e?.message || e), relocated_link_ids: ids, relocated_link_counts: counts });
         anyFailed = true;
+        continue;
       }
+
+      const ok = fullyOk && !markError;
+      if (!ok) anyFailed = true;
+      results.push({
+        source_job_id: sourceId,
+        source_job_name: source.canonical_name,
+        ok,
+        partial: !ok,
+        relocated_link_counts: counts,
+        relocated_link_ids: ids,
+        relocate_errors: relocateErrors.length ? relocateErrors : undefined,
+        fields_error: fieldsError || undefined,
+        mark_error: markError || undefined,
+        conflict_note_recorded: conflictNoteRecorded,
+        conflict_note_error: conflictNoteError || undefined,
+        merge_log_id: logId,
+      });
     }
 
     // Totals across the sources that succeeded.

@@ -329,22 +329,32 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
                 </div>
               ) : (
                 <div className="rounded-[10px] px-3 py-3 text-[13.5px]" style={{ backgroundColor: "#fff3df", border: "1px solid #f0dba8", color: "#89511a" }}>
-                  <p className="m-0 font-semibold flex items-center gap-2"><AlertCircle className="h-4 w-4" />Partial combine: {result.merged_count} succeeded, {result.failed_count} failed.</p>
-                  <p className="m-0 mt-1 text-[12.5px]" style={{ color: "#6f4e10" }}>The failed records were not merged. Use undo on any record that did merge if you need to reverse it.</p>
+                  <p className="m-0 font-semibold flex items-center gap-2"><AlertCircle className="h-4 w-4" />Partial combine: {result.merged_count} fully merged, {result.failed_count} not fully merged.</p>
+                  <p className="m-0 mt-1 text-[12.5px]" style={{ color: "#6f4e10" }}>Sources that partially moved were left visible (not hidden) and each wrote an undo log. Reverse a source's log to put its moved records back, or investigate on its job page.</p>
                 </div>
               )}
               <ul className="m-0 space-y-1.5">
-                {result.results?.map((r) => (
-                  <li key={r.source_job_id} className="flex items-start gap-2 rounded-[8px] px-3 py-2 text-[12.5px]" style={{ backgroundColor: r.ok ? "#f4f8f5" : "#fcedec", border: `1px solid ${r.ok ? "#d6e8de" : "#f0c9c5"}` }}>
-                    <span className="mt-0.5 shrink-0">{r.ok ? <Check className="h-3.5 w-3.5" style={{ color: "#166447" }} /> : <AlertCircle className="h-3.5 w-3.5" style={{ color: "#a43432" }} />}</span>
-                    <span className="min-w-0 flex-1">
-                      <b style={{ color: INK }}>{sanitizeText(r.source_job_name || r.source_job_id)}</b>
-                      {r.ok
-                        ? <span style={{ color: MUTED }}> — moved {r.relocated_link_counts?.fee_lines || 0} lines, {r.relocated_link_counts?.calendar_events || 0} visits, {r.relocated_link_counts?.field_reports || 0} reports{r.conflict_note_recorded ? " · a conflict note was added" : r.conflict_note_error ? ` · ${r.conflict_note_error}` : ""}.</span>
-                        : <span style={{ color: "#a43432" }}> — {r.error}</span>}
-                    </span>
-                  </li>
-                ))}
+                {result.results?.map((r) => {
+                  const isPartial = !r.ok && r.partial;
+                  const bg = r.ok ? "#f4f8f5" : isPartial ? "#fff3df" : "#fcedec";
+                  const bd = r.ok ? "#d6e8de" : isPartial ? "#f0dba8" : "#f0c9c5";
+                  const ic = r.ok ? "#166447" : isPartial ? "#89511a" : "#a43432";
+                  return (
+                    <li key={r.source_job_id} className="flex items-start gap-2 rounded-[8px] px-3 py-2 text-[12.5px]" style={{ backgroundColor: bg, border: `1px solid ${bd}` }}>
+                      <span className="mt-0.5 shrink-0">{r.ok ? <Check className="h-3.5 w-3.5" style={{ color: ic }} /> : <AlertCircle className="h-3.5 w-3.5" style={{ color: ic }} />}</span>
+                      <span className="min-w-0 flex-1">
+                        <b style={{ color: INK }}>{sanitizeText(r.source_job_name || r.source_job_id)}</b>
+                        {r.ok ? (
+                          <span style={{ color: MUTED }}> — moved {r.relocated_link_counts?.fee_lines || 0} lines, {r.relocated_link_counts?.calendar_events || 0} visits, {r.relocated_link_counts?.field_reports || 0} reports{r.conflict_note_recorded ? " · a conflict note was added" : r.conflict_note_error ? ` · ${r.conflict_note_error}` : ""}.</span>
+                        ) : isPartial ? (
+                          <span style={{ color: "#89511a" }}> — partially moved {r.relocated_link_counts?.fee_lines || 0} lines but was NOT hidden (some records failed to move). {[(r.relocate_errors || []).join("; "), r.fields_error, r.mark_error].filter(Boolean).join(" · ") || "See the undo log on this job."} Reverse its log to put the moved records back.</span>
+                        ) : (
+                          <span style={{ color: "#a43432" }}> — {r.error}</span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={finish} className="inline-flex h-[40px] items-center gap-1.5 rounded-[10px] px-4 text-[13.5px] font-semibold text-white" style={{ backgroundColor: TEAL }}>

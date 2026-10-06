@@ -82,86 +82,92 @@ export function mergeJobFields(source, target) {
   return { patch, relocated, conflict_note };
 }
 
-// Relocate all linked records from fromJobId to toJobId. Returns counts per
-// entity type. Uses updateMany in a loop (500-record batches).
+// Entity entries processed during a relocation. required = true means a write
+// failure is a hard partial failure; optional entities may not exist on every
+// app, but their errors are still surfaced so the caller can mark partial.
+export const LINK_ENTITIES = [
+  { key: "fee_lines", entity: "FeeLines", required: true },
+  { key: "field_reports", entity: "FieldReports", required: true },
+  { key: "calendar_events", entity: "CalendarEvents", required: true },
+  { key: "job_notes", entity: "JobNotes", required: true },
+  { key: "contact_job_links", entity: "ContactJobLink", required: false },
+  { key: "job_budgets", entity: "JobBudgets", required: false },
+  { key: "probuild_project_links", entity: "ProbuildProjectLink", required: false },
+];
+
+// Relocate linked records from fromJobId to toJobId. Returns { counts, ids, errors }:
+//   counts — per-entity count of records moved.
+//   ids   — per-entity array of the EXACT record ids moved (for exact reversal).
+//   errors— per-entity error strings; non-empty means a partial failure.
+//
+// To guarantee exact reversal, we first list the ids of every record linked to
+// fromJobId, then update exactly those ids (by {id: {$in: [...]}}) in 500-record
+// batches. The logged ids are exactly the ids that moved, so a later reverse can
+// move exactly those back without touching the target's own records or records
+// moved by other merges. A batch that fails is reported in errors; ids from
+// batches that succeeded are still returned so provenance is never lost.
 export async function relocateLinks(base44, fromJobId, toJobId) {
-  const counts = { fee_lines: 0, field_reports: 0, calendar_events: 0, job_notes: 0, contact_job_links: 0, job_budgets: 0, probuild_project_links: 0 };
+  const counts = {};
+  const ids = {};
+  const errors = [];
+  for (const { key, entity, required } of LINK_ENTITIES) {
+    counts[key] = 0;
+    ids[key] = [];
+    let listedIds = [];
+    try {
+      let cursor;
+      for (;;) {
+        const page = await base44.asServiceRole.entities[entity].filter(
+          { job_id: fromJobId },
+          { fields: ["id"], limit: 500, cursor }
+        );
+        listedIds.push(...(page.items || []).map((r) => r.id));
+        if (!page.has_more) break;
+        cursor = page.next_cursor;
+      }
+    } catch (e) {
+      errors.push(`${entity}: could not list records (${e?.message || e})${required ? "" : " (optional entity)"}`);
+      continue;
+    }
+    for (let i = 0; i < listedIds.length; i += 500) {
+      const batch = listedIds.slice(i, i + 500);
+      try {
+        const res = await base44.asServiceRole.entities[entity].updateMany(
+          { id: { $in: batch } },
+          { $set: { job_id: toJobId } }
+        );
+        counts[key] += res.updated || 0;
+        ids[key].push(...batch);
+      } catch (e) {
+        errors.push(`${entity}: moved ${ids[key].length} of ${listedIds.length} before failure (${e?.message || e})`);
+      }
+    }
+  }
+  return { counts, ids, errors };
+}
 
-  // FeeLines
-  for (;;) {
-    const res = await base44.asServiceRole.entities.FeeLines.updateMany(
-      { job_id: fromJobId },
-      { $set: { job_id: toJobId } }
-    );
-    counts.fee_lines += res.updated || 0;
-    if (!res.has_more) break;
-  }
-  // FieldReports
-  for (;;) {
-    const res = await base44.asServiceRole.entities.FieldReports.updateMany(
-      { job_id: fromJobId },
-      { $set: { job_id: toJobId } }
-    );
-    counts.field_reports += res.updated || 0;
-    if (!res.has_more) break;
-  }
-  // CalendarEvents
-  for (;;) {
-    const res = await base44.asServiceRole.entities.CalendarEvents.updateMany(
-      { job_id: fromJobId },
-      { $set: { job_id: toJobId } }
-    );
-    counts.calendar_events += res.updated || 0;
-    if (!res.has_more) break;
-  }
-  // JobNotes
-  for (;;) {
-    const res = await base44.asServiceRole.entities.JobNotes.updateMany(
-      { job_id: fromJobId },
-      { $set: { job_id: toJobId } }
-    );
-    counts.job_notes += res.updated || 0;
-    if (!res.has_more) break;
-  }
-  // ContactJobLink (optional — may not exist on all apps)
-  try {
-    for (;;) {
-      const res = await base44.asServiceRole.entities.ContactJobLink.updateMany(
-        { job_id: fromJobId },
-        { $set: { job_id: toJobId } }
-      );
-      counts.contact_job_links += res.updated || 0;
-      if (!res.has_more) break;
+// Move a specific set of record ids back to a job, guarded by their current
+// job_id, so only records still on the expected job are moved. Used by
+// reverseMerge to undo exactly the ids a merge logged — never a blind relocate
+// of everything currently on the survivor.
+export async function relocateLinksByIds(base44, idsByEntity, fromJobId, toJobId) {
+  const counts = {};
+  const errors = [];
+  for (const { key, entity } of LINK_ENTITIES) {
+    counts[key] = 0;
+    const entityIds = idsByEntity[key] || [];
+    for (let i = 0; i < entityIds.length; i += 500) {
+      const batch = entityIds.slice(i, i + 500);
+      try {
+        const res = await base44.asServiceRole.entities[entity].updateMany(
+          { id: { $in: batch }, job_id: fromJobId },
+          { $set: { job_id: toJobId } }
+        );
+        counts[key] += res.updated || 0;
+      } catch (e) {
+        errors.push(`${entity}: ${e?.message || e}`);
+      }
     }
-  } catch (_) {
-    // ContactJobLink entity may not be present; non-fatal.
   }
-  // JobBudgets (optional — admin-only procurement budgets keyed by job_id)
-  try {
-    for (;;) {
-      const res = await base44.asServiceRole.entities.JobBudgets.updateMany(
-        { job_id: fromJobId },
-        { $set: { job_id: toJobId } }
-      );
-      counts.job_budgets += res.updated || 0;
-      if (!res.has_more) break;
-    }
-  } catch (_) {
-    // JobBudgets entity may not be present; non-fatal.
-  }
-  // ProbuildProjectLink (optional — owner-confirmed project → job links)
-  try {
-    for (;;) {
-      const res = await base44.asServiceRole.entities.ProbuildProjectLink.updateMany(
-        { job_id: fromJobId },
-        { $set: { job_id: toJobId } }
-      );
-      counts.probuild_project_links += res.updated || 0;
-      if (!res.has_more) break;
-    }
-  } catch (_) {
-    // ProbuildProjectLink entity may not be present; non-fatal.
-  }
-
-  return counts;
+  return { counts, errors };
 }
