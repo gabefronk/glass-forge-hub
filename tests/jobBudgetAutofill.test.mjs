@@ -26,15 +26,16 @@ test('generic quote names fall back to the file name', () => {
   assert.equal(budgetNameFor({ quote_name: 'AGREN RES', project_name: 'CASH CUSTOMER' }, {}), 'AGREN RES');
 });
 
-test('WTS glass-only quote fills every box', () => {
+test('WTS glass-only quote fills cost + labor, sell left for the owner', () => {
   const f = autofillBudget(wts, { fileName: 'SANDY EAGLE MTN - GLASSS REPLACEMENT - AMSCO.pdf' });
   assert.equal(f.inputs.material_true_cost, 108.24); // net price, not list, and never the sell
   assert.equal(f.inputs.labor_cost_sub_pay, 125);
   assert.equal(f.inputs.labor_sell_price, 275); // trip minimum
-  assert.ok(f.inputs.actual_total_sell > 400 && f.inputs.actual_total_sell < 500);
-  assert.deepEqual(f.filled.sort(), ['actual_total_sell', 'labor_cost_sub_pay', 'labor_sell_price', 'material_true_cost']);
-  assert.match(f.sources.actual_total_sell, /Sheet target/);
-  assert.deepEqual(f.notes, []);
+  // Purchasing side: no 30% margin auto-adder — the owner types his own sell.
+  assert.equal(f.inputs.actual_total_sell, 0);
+  assert.ok(!f.filled.includes('actual_total_sell'));
+  assert.deepEqual(f.filled.sort(), ['labor_cost_sub_pay', 'labor_sell_price', 'material_true_cost']);
+  assert.ok(f.notes.some((t) => /total sell/i.test(t)));
 });
 
 test('old-schema Agren extraction (studio quote, no lines) still fills', () => {
@@ -43,7 +44,9 @@ test('old-schema Agren extraction (studio quote, no lines) still fills', () => {
   assert.equal(f.inputs.material_true_cost, 78.15); // what Gabe typed
   assert.equal(f.inputs.labor_cost_sub_pay, 125);
   assert.equal(f.inputs.labor_sell_price, 275);
-  assert.equal(f.inputs.actual_total_sell, 407.51);
+  // Purchasing side: no 30% margin auto-adder — the owner types the sell.
+  assert.equal(f.inputs.actual_total_sell, 0);
+  assert.ok(f.notes.some((t) => /total sell/i.test(t)));
 });
 
 test('AMSCO dealer pricing keeps the printed customer total as the sell', () => {

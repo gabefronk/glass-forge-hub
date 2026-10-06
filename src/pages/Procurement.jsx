@@ -1,5 +1,6 @@
 import PurchasingDates from '@/components/budgets/PurchasingDates';
 import { purchasingJobName, purchasingRows, statusWithDate, etaText, supplierReplyText } from '@/lib/purchasingDates';
+import { quantityReviewLabel } from '@/lib/quantityReview';
 import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -24,10 +25,9 @@ const safeHref = value => { try { const url = new URL(value); return url.protoco
 const fileHref = id => id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : '';
 const isPaid = row => ['paid', 'reconciled'].includes(row.status);
 const jobLabel = job => [job.canonical_name || job.id, job.address || job.builder, String(job.id).slice(-6)].filter(Boolean).join(' - ');
-function External({ href, children }) { const url = safeHref(href); return url ? <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold" style={secondaryStyle}>{children}</a> : null; }
+function External({ href, children }) { const url = safeHref(href); return url ? <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-semibold" style={secondaryStyle}>{children}</a> : null; }
 function Card({ children, id }) { return <article id={id} className="min-w-0 rounded-xl border bg-white p-4 sm:p-5" style={{ borderColor: C.border }}>{children}</article>; }
 function Badge({ children, warning = false }) { return <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${warning ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}>{children}</span>; }
-function Metrics({ figures }) { return <dl className="my-3 grid grid-cols-2 gap-2 lg:grid-cols-4">{[['Cost basis', money(figures.cost)], ['Customer total', money(figures.sell)], ['Margin dollars', money(figures.margin_dollars)], ['Margin', percent(figures.margin_pct)]].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><dt className="text-xs text-slate-500">{label}</dt><dd className={`mt-1 text-base font-bold tabular-nums ${label.startsWith('Margin') && figures.margin_dollars < 0 ? 'text-amber-800' : 'text-slate-900'}`}>{value}</dd></div>)}</dl>; }
 
 export function LegacyPurchasingRedirect({ section }) {
   const [params] = useSearchParams();
@@ -114,6 +114,21 @@ function ProcurementWorkspace() {
   const currentPO = editor?.po_id ? current.purchase_orders.find(p => p.id === editor.po_id) : null;
   const currentOrder = editor?.order_id ? current.vendor_orders.find(o => o.id === editor.order_id) : null;
   const editorJob = current.jobs.find(j => j.id === (editor?.job_id || jobId));
+  // Render the active editor. Budget-card editors (numbers / usage / link / po
+  // with a budget_id) render inline under their card so the quote card stays on
+  // top and the editor sits below it — no layout jump. Non-budget editors
+  // (supplier, po_status, vendor_status, po without a budget) render at the top.
+  const editorPanel = ed => ed && (
+    <div key={ed.key}>
+      {ed.mode === 'po' && <PurchaseOrderForm job={editorJob} budgets={current.budgets} initialBudget={currentBudget} onDone={done} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'usage' && currentBudget && <BudgetUsageForm budget={currentBudget} budgets={current.budgets} onDone={done} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'numbers' && currentBudget && <NumbersEditor budget={currentBudget} onDone={budgetDone} onRefilled={load} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'link' && currentBudget && <LinkJobEditor budget={currentBudget} jobs={availableJobs} allowCreate={false} onDone={budgetDone} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'supplier' && <SupplierOrderForm jobs={current.jobs} purchaseOrders={current.purchase_orders} initialJobId={jobId} initialPO={currentPO} order={currentOrder} onDone={done} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'po_status' && currentPO && <OrderStatusForm row={currentPO} onDone={done} onCancel={() => setEditor(null)} />}
+      {ed.mode === 'vendor_status' && currentOrder && <OrderStatusForm row={currentOrder} supplier onDone={done} onCancel={() => setEditor(null)} />}
+    </div>
+  );
   return <PageShell width="max-w-[1240px]">
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
       <Link to={job ? `/jobs/${job.id}` : '/jobs'} className="inline-flex items-center gap-1 font-semibold" style={{ color: C.text }}><ArrowLeft size={15} />{job ? 'Back to job' : 'Back to Jobs'}</Link>
@@ -130,15 +145,7 @@ function ProcurementWorkspace() {
     <Card><div className="grid items-end gap-3 sm:grid-cols-2"><Field label={job ? 'Search this job\u2019s purchasing records' : 'Find a job or quote'} value={query} onChange={setQuery} />{!job && <Field label="Open an existing job" value="" onChange={id => id && navigate(pathFor(id))}><option value="">Choose job...</option>{availableJobs.filter(j => !needle || matches(j)).map(j => <option key={j.id} value={j.id}>{jobLabel(j)}</option>)}</Field>}</div>{!job && <label className="mt-3 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={unlinkedOnly} onChange={e => setUnlinkedOnly(e.target.checked)} />Show records that still need a job</label>}</Card>
     <div className="flex flex-wrap gap-2" role="tablist" aria-label="Purchasing sections">{SECTIONS.map(([key, label]) => <button key={key} role="tab" aria-selected={section === key} onClick={() => changeSection(key)} className={buttonClass} style={section === key ? primaryStyle : secondaryStyle}>{label}{sectionCounts[key] !== undefined ? ` (${sectionCounts[key]})` : ''}</button>)}</div>
     <fieldset disabled={incomplete || Boolean(job?.merged_into || job?.is_sample)} className="min-w-0 space-y-4 border-0 p-0">
-      {editor && <div key={editor.key}>
-        {editor.mode === 'po' && <PurchaseOrderForm job={editorJob} budgets={current.budgets} initialBudget={currentBudget} onDone={done} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'usage' && currentBudget && <BudgetUsageForm budget={currentBudget} budgets={current.budgets} onDone={done} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'numbers' && currentBudget && <NumbersEditor budget={currentBudget} onDone={budgetDone} onRefilled={load} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'link' && currentBudget && <LinkJobEditor budget={currentBudget} jobs={availableJobs} allowCreate={false} onDone={budgetDone} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'supplier' && <SupplierOrderForm jobs={current.jobs} purchaseOrders={current.purchase_orders} initialJobId={jobId} initialPO={currentPO} order={currentOrder} onDone={done} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'po_status' && currentPO && <OrderStatusForm row={currentPO} onDone={done} onCancel={() => setEditor(null)} />}
-        {editor.mode === 'vendor_status' && currentOrder && <OrderStatusForm row={currentOrder} supplier onDone={done} onCancel={() => setEditor(null)} />}
-      </div>}
+      {editor && !editor.budget_id && editorPanel(editor)}
       {section === 'budgets' && <>
         <Card><h2 className="text-base font-bold text-slate-900">Add supplier quote PDFs</h2><p className="mt-1 text-sm text-slate-600">{job ? `New PDFs are attached to ${job.canonical_name}.` : 'Open a job first for direct filing, or upload here and choose its job afterward.'} New quotes start as drafts, not additional budget totals.</p>
           <button type="button" disabled={uploading} onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); }} onClick={() => fileInput.current?.click()} className={`mt-4 flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-7 text-sm ${dragging ? 'border-emerald-700 bg-emerald-50' : 'border-slate-300 bg-slate-50'}`}><UploadCloud size={26} /><strong>{uploading ? 'Saving quote drafts...' : 'Drop PDFs or choose files'}</strong><span>Up to 10 files, 30 MB each</span></button><input ref={fileInput} type="file" accept="application/pdf" multiple className="hidden" onChange={e => { processFiles(e.target.files); e.target.value = ''; }} />
@@ -148,18 +155,55 @@ function ProcurementWorkspace() {
         {budgets.map(b => {
           const figures = budgetFigures(b);
           const related = current.purchase_orders.filter(p => budgetForPO(p, current.budgets).budget?.id === b.id);
-          const supplierOrders = current.vendor_orders.filter(o => o.budget_id === b.id && o.job_id === b.job_id);
           const included = Boolean(b.job_id) && (job ? active.has(b.id) : activeBudgets(current.budgets.filter(r => r.job_id === b.job_id)).some(r => r.id === b.id));
-          return <Card key={b.id} id={`budget-${b.id}`}><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h3 className="break-words text-base font-bold text-slate-900">{b.title}</h3><p className="mt-1 text-xs text-slate-500">{b.vendor || b.manufacturer || 'Supplier needs review'}{b.quote_number ? ` / Quote ${b.quote_number}` : ''}</p></div><div className="flex flex-wrap gap-1"><Badge warning={!included}>{!b.job_id ? 'Needs a job' : included ? 'Included scope' : b.budget_usage === 'draft' ? 'Draft' : 'Reference / replaced'}</Badge>{!b.job_id && <Badge warning>Needs job</Badge>}{b.status === 'needs_review' && <Badge warning>Filing / match review</Badge>}</div></div>
-            {!job && b.job_id && <Link className="mt-2 inline-block text-sm font-semibold underline" to={procurementPath(b.job_id)}>{current.jobs.find(j => j.id === b.job_id)?.canonical_name || b.job_name || 'Open job workspace'}</Link>}
-            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-700"><span>Material before tax: <strong>{money(b.inputs?.material_true_cost)}</strong></span>{b.openings_qty > 0 && <span>{b.openings_qty} window / door units</span>}{supplierOrders.map(o => <span key={o.id}>Supplier amount: <strong>{money(o.amount)}</strong> <Link className="font-semibold underline" to={procurementPath(b.job_id, 'tracking')}>Order {o.order_number}</Link></span>)}</div>
-            {b.budget_usage === 'draft' && <p className="mt-2 text-xs text-slate-500">Saved on this job. Fill in labor and your customer price, then include the reviewed scope in the budget. Nothing has been ordered or invoiced by this draft.</p>}
-            <Metrics figures={figures} />{figures.warnings.length > 0 && <p className="mb-3 text-sm font-medium text-amber-800">{figures.warnings.join(' \u00b7 ')}</p>}
-            <details><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-slate-700">Quote options</summary><div className="flex flex-wrap gap-2"><button className={buttonClass} style={secondaryStyle} onClick={() => openEditor({ mode: 'numbers', budget_id: b.id })}>Review numbers</button>{b.job_id ? <button className={buttonClass} style={secondaryStyle} onClick={() => openEditor({ mode: 'usage', budget_id: b.id })}>Scope / revision</button> : <button className={buttonClass} style={primaryStyle} onClick={() => openEditor({ mode: 'link', budget_id: b.id })}>Link existing job</button>}
+          const matchedJob = b.job_id ? current.jobs.find(j => j.id === b.job_id) : null;
+          const jobName = b.job_name || matchedJob?.canonical_name || b.title;
+          const supplier = b.vendor || b.manufacturer || 'Supplier needs review';
+          const subtitle = [supplier, b.quote_number ? `Quote ${b.quote_number}` : ''].filter(Boolean).join(' · ');
+          // One status chip, in priority order — no duplicated "Needs a job" chips.
+          const chip = b.status === 'needs_review' ? { text: 'Filing / match review', warning: true }
+            : !b.job_id ? { text: 'Needs a job', warning: true }
+            : included ? { text: 'Included scope', warning: false }
+            : b.budget_usage === 'draft' ? { text: 'Draft', warning: true }
+            : { text: 'Reference / replaced', warning: true };
+          // Drive folder: prefer the matched job's real folder link/id; fall back to the
+          // budget's (unmatched drafts) folder only when no job is matched.
+          const folderHref = matchedJob
+            ? (matchedJob.drive_job_folder_url || (matchedJob.drive_job_folder_id ? `https://drive.google.com/drive/folders/${matchedJob.drive_job_folder_id}` : ''))
+            : (b.drive_job_folder_id ? `https://drive.google.com/drive/folders/${b.drive_job_folder_id}` : '');
+          // One primary action: link the job when missing, otherwise review the numbers.
+          const primary = !b.job_id
+            ? { label: 'Link existing job', onClick: () => openEditor({ mode: 'link', budget_id: b.id }) }
+            : { label: 'Review numbers', onClick: () => openEditor({ mode: 'numbers', budget_id: b.id }) };
+          const statusLine = figures.warnings.length ? figures.warnings[0]
+            : b.budget_usage === 'draft' ? 'Draft — review numbers and your customer price, then include this scope.'
+            : 'Reviewed and ready to include.';
+          return <Card key={b.id} id={`budget-${b.id}`}>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="break-words text-base font-bold text-slate-900">{jobName}</h3>
+                <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+              </div>
+              <Badge warning={chip.warning}>{chip.text}</Badge>
+            </div>
+            {!job && matchedJob && <Link className="mt-1 inline-block text-sm font-semibold underline" to={procurementPath(b.job_id)}>{matchedJob.canonical_name || b.job_name || 'Open job workspace'}</Link>}
+            <div className="mt-2 text-sm text-slate-700">Material before tax: <strong>{money(b.inputs?.material_true_cost)}</strong>{b.openings_qty > 0 ? <span className="text-slate-500"> · {b.openings_qty} window / door units</span> : null}{quantityReviewLabel(b) && <span className="text-amber-700"> · Quantity needs review</span>}</div>
+            <p className={`mt-1 text-xs ${figures.warnings.length ? 'font-medium text-amber-800' : 'text-slate-500'}`}>{statusLine}</p>
+            <div className="mt-2 text-sm text-slate-700">Cost basis <strong className="tabular-nums">{money(figures.cost)}</strong></div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">
+              <button className={buttonClass} style={primaryStyle} onClick={primary.onClick}>{primary.label}</button>
+              <External href={b.source_pdf_url || fileHref(b.drive_quote_file_id)}><FileText size={14} />Source quote</External>
+              <External href={fileHref(b.drive_budget_xlsx_file_id)}>Budget sheet</External>
+              <External href={folderHref}>Drive folder</External>
+            </div>
+            <details className="mt-3"><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-slate-700">Quote options</summary><div className="flex flex-wrap gap-2">
+              <button className={buttonClass} style={secondaryStyle} onClick={() => openEditor({ mode: 'numbers', budget_id: b.id })}>Review numbers</button>
+              {b.job_id ? <button className={buttonClass} style={secondaryStyle} onClick={() => openEditor({ mode: 'usage', budget_id: b.id })}>Scope / revision</button> : null}
               {related.length ? related.map(p => <Link key={p.id} className={buttonClass} style={secondaryStyle} to={procurementPath(p.job_id, 'orders')}>{p.po_number}{p.budget_id ? '' : ' (matching quote)'}</Link>) : <button disabled={!b.job_id || !included || !figures.ready} className={buttonClass} style={primaryStyle} onClick={() => { changeSection('orders'); openEditor({ mode: 'po', budget_id: b.id, job_id: b.job_id }); }}>Prepare PO</button>}
               <DeleteUnusedQuoteButton budget={b} onDeleted={done} />
-            </div></details><div className="mt-3 flex flex-wrap gap-2"><External href={b.source_pdf_url || fileHref(b.drive_quote_file_id)}><FileText size={13} />Source quote</External><External href={fileHref(b.drive_budget_xlsx_file_id)}>Budget sheet</External><External href={b.drive_job_folder_id ? `https://drive.google.com/drive/folders/${b.drive_job_folder_id}` : ''}>Drive folder</External></div>
+            </div></details>
             {b.input_history?.length > 0 && <details className="mt-3 text-xs text-slate-600"><summary className="cursor-pointer">Previous saved inputs ({b.input_history.length})</summary>{b.input_history.map((h, i) => <p key={i} className="mt-2">{h.at} / {h.action} / material {money(h.inputs?.material_true_cost)} / customer total {money(h.inputs?.actual_total_sell)}</p>)}</details>}
+            {editor && editor.budget_id === b.id && <div className="mt-3">{editorPanel(editor)}</div>}
           </Card>;
         })}
       </>}

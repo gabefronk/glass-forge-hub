@@ -13,7 +13,7 @@
 //                       Gabe's own quote); otherwise the sheet target: material @30% + labor.
 
 import { INSTALL_CATALOG, INSTALL_TRIP_MINIMUM, automaticBaseRate } from './installBudget.js';
-import { computeJobBudget, roundMoney, BUDGET_DEFAULTS } from './jobBudgetMath.js';
+import { roundMoney, BUDGET_DEFAULTS } from './jobBudgetMath.js';
 
 export const GLASS_LABOR_COST_EACH = 125; // Agren glass replacement, Oct 2026
 const rateById = new Map(INSTALL_CATALOG.rates.map((r) => [r.id, r]));
@@ -159,9 +159,13 @@ export function autofillBudget(quote = {}, { fileName = '', glassEach = GLASS_LA
     additional_equipment: 0,
     actual_total_sell: 0,
   };
-  if (sell === null && material !== null) {
-    sell = computeJobBudget(inputs).suggested_total_sell;
-    sources.actual_total_sell = 'Sheet target: material @30% margin + labor sell';
+  // Purchasing side: never auto-add a margin to the customer sell. The owner types
+  // his own sell numbers in the review step. The 30% material margin stays on the
+  // window-quoting side (WindowQuoteBuilder / InstallBudgetEditor) only.
+  if (sell === null) {
+    if (material !== null) notes.push('Type your total sell to the customer — no margin is added automatically on the purchasing side.');
+  } else {
+    sources.actual_total_sell = sources.actual_total_sell || 'Customer total printed on the quote';
   }
   inputs.actual_total_sell = sell ?? 0;
   return { inputs, sources, notes, hints, install_material, labor, filled: Object.keys(sources) };

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link2, Pencil, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
-import { computeJobBudget } from "../../../base44/shared/jobBudgetMath.js";
+import { computeJobBudget, SALES_TAX_RATE } from "../../../base44/shared/jobBudgetMath.js";
 import { budgetVersion } from "../../../base44/shared/procurementCore.js";
 
 // The review step under a Job Budgets row: type the workbook's yellow-cell numbers
@@ -163,8 +163,7 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled }) {
       )}
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-[13px]" style={{ color: C.textSecondary }}>
         <span>Cost basis <b style={{ color: C.text }}>{money(preview.total_cost_overhead)}</b></span>
-        <span>Use tax <b style={{ color: C.text }}>{money(preview.use_tax)}</b></span>
-        <span>Target sell @30% <b style={{ color: C.text }}>{money(preview.suggested_total_sell)}</b></span>
+        <span>Use tax (auto {(SALES_TAX_RATE * 100).toFixed(2)}%) <b style={{ color: C.text }}>{money(preview.use_tax)}</b></span>
         <span>Margin <b style={{ color: (preview.actual_margin_pct ?? 0) >= 0.3 ? C.accentText : C.amber }}>{pct(num(form.material_true_cost) === 0 && !zeroConfirmed ? null : preview.actual_margin_pct)}</b></span>
       </div>
       {error ? <p role="alert" className="m-0 text-[12.5px] font-medium" style={{ color: C.amber }}>{error}</p> : null}
