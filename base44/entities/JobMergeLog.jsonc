@@ -146,6 +146,81 @@
       },
       "default": {}
     },
+    "planned_link_ids": {
+      "type": "object",
+      "title": "Planned Link Ids",
+      "description": "The record ids that were PLANNED to move, written to the log BEFORE any link mutation so provenance is durable even if a later step crashes. reverseMerge falls back to these when relocated_link_ids is empty (the job_id guard makes moving-back of unmoved ids a no-op).",
+      "properties": {
+        "fee_lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "field_reports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "calendar_events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "contact_job_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_budgets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "probuild_project_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "default": {}
+    },
+    "audit_version": {
+      "type": "integer",
+      "title": "Audit Version",
+      "description": "1 for logs created with exact-ID auditing. Absent on legacy logs (predate exact-ID auditing) \u2014 reverseMerge refuses those rather than guess. An audited log with zero moved links is a valid stub-job merge and can be undone (just clears the marker)."
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "description": "Lifecycle of this merge: planned (log created before any move) \u2192 relocated / relocated_partial (links moved) \u2192 complete / partial (fields + mark done) / failed (execute threw).",
+      "enum": [
+        "planned",
+        "relocated",
+        "relocated_partial",
+        "complete",
+        "partial",
+        "failed"
+      ]
+    },
     "partial": {
       "type": "boolean",
       "title": "Partial",

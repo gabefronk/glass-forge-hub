@@ -34,24 +34,35 @@ export default async function(req) {
     if (!log) return Response.json({ error: 'Merge log not found' }, { status: 404 });
     if (log.reversed) return Response.json({ error: 'This merge was already reversed' }, { status: 400 });
 
-    // Move ONLY the exact record ids this merge originally moved, back from
-    // target → source. We must NOT blindly relocate every record currently on
-    // the target: in an N-job combine the target also holds its own originals
-    // and records moved from other sources, which belong to the target and
-    // must stay. Old logs created before exact-ID auditing have no
-    // relocated_link_ids and cannot be safely reversed automatically — refuse
-    // rather than guess.
-    const loggedIds = log.relocated_link_ids || {};
-    const hasIds = Object.values(loggedIds).some((arr) => Array.isArray(arr) && arr.length);
-    if (!hasIds) {
+    // Distinguish audited logs (audit_version >= 1) from legacy logs that
+    // predate exact-ID auditing. Legacy logs have no recorded ids and cannot be
+    // safely reversed — a blind relocate would also move the survivor's own
+    // records, so refuse. An audited log may legitimately have moved ZERO links
+    // (a stub job): in that case there is nothing to move back, so we just clear
+    // the marker. Otherwise move exactly the ids that actually moved, falling
+    // back to the planned ids (the job_id guard makes moving-back of unmoved ids
+    // a no-op, so the fallback is safe).
+    const audited = typeof log.audit_version === "number" && log.audit_version >= 1;
+    if (!audited) {
       return Response.json({
         error: "This merge log predates exact-ID auditing and cannot be safely reversed automatically. Its moved records are not individually recorded, so a blind relocate would also move the survivor's own records. Leave the merge in place or contact support.",
       }, { status: 409 });
     }
 
-    const { counts: backCounts, errors: reverseErrors } = await relocateLinksByIds(
-      base44, loggedIds, log.target_job_id, log.source_job_id
-    );
+    const movedIds = log.relocated_link_ids || {};
+    const plannedIds = log.planned_link_ids || {};
+    const hasMovedIds = Object.values(movedIds).some((arr) => Array.isArray(arr) && arr.length);
+    const hasPlannedIds = Object.values(plannedIds).some((arr) => Array.isArray(arr) && arr.length);
+    const idsToReverse = hasMovedIds ? movedIds : (hasPlannedIds ? plannedIds : {});
+
+    let backCounts = {};
+    let reverseErrors = [];
+    if (hasMovedIds || hasPlannedIds) {
+      const r = await relocateLinksByIds(base44, idsToReverse, log.target_job_id, log.source_job_id);
+      backCounts = r.counts;
+      reverseErrors = r.errors;
+    }
+    // Audited but zero links ever moved: nothing to relocate, just clear marker.
 
     // Clear the source's merged flags.
     await base44.asServiceRole.entities.Jobs.update(log.source_job_id, { merged_into: null, merged_at: null });

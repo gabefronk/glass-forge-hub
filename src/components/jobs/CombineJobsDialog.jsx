@@ -296,7 +296,7 @@ export default function CombineJobsDialog({ job, onClose, onDone }) {
                 </div>
               )}
               <p className="m-0 text-[13px]" style={{ color: MUTED }}>
-                Tap a record to choose which one stays. Everything linked to the other moves to the survivor; the other is hidden, not deleted.
+                Tap a record to choose which one stays. Its calendar visits, field reports, notes, invoice lines, contact links, budgets and Probuild links move to the survivor; the other is hidden, not deleted.
               </p>
               <ScoreBar job={job} counts={counts[job.id] || {}} survivor={survivorId} onFlip={() => setSurvivorId(job.id)} />
               <ScoreBar job={picked} counts={counts[picked.id] || {}} survivor={survivorId} onFlip={() => setSurvivorId(picked.id)} />
@@ -317,7 +317,8 @@ export default function CombineJobsDialog({ job, onClose, onDone }) {
               <div className="rounded-[10px] px-3 py-3 text-[13.5px] leading-[20px]" style={{ backgroundColor: FIELD, border: `1px solid ${BORDER}`, color: INK }}>
                 <p className="m-0"><b>{sanitizeText(mergedAway.canonical_name)}</b> will be combined into <b>{sanitizeText(survivor.canonical_name)}</b>.</p>
                 <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-[12.5px]" style={{ color: MUTED }}>
-                  <li>All visits, reports, notes, budgets and invoice lines move to the surviving record.</li>
+                  <li>Calendar visits, field reports, notes, invoice lines, contact links, job budgets and Probuild project links move to the surviving record.</li>
+                  <li>Install budgets, setup sheets, service items and job knowledge are NOT moved — they stay on the hidden record and resolve through it.</li>
                   <li>PO numbers and aliases are added to the survivor.</li>
                   <li>Where the two disagree, the survivor's value wins; the other value is saved in a note.</li>
                   <li>Invoice marks, fees and statuses are never changed.</li>

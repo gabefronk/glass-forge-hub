@@ -95,25 +95,16 @@ export const LINK_ENTITIES = [
   { key: "probuild_project_links", entity: "ProbuildProjectLink", required: false },
 ];
 
-// Relocate linked records from fromJobId to toJobId. Returns { counts, ids, errors }:
-//   counts — per-entity count of records moved.
-//   ids   — per-entity array of the EXACT record ids moved (for exact reversal).
-//   errors— per-entity error strings; non-empty means a partial failure.
-//
-// To guarantee exact reversal, we first list the ids of every record linked to
-// fromJobId, then update exactly those ids (by {id: {$in: [...]}}) in 500-record
-// batches. The logged ids are exactly the ids that moved, so a later reverse can
-// move exactly those back without touching the target's own records or records
-// moved by other merges. A batch that fails is reported in errors; ids from
-// batches that succeeded are still returned so provenance is never lost.
-export async function relocateLinks(base44, fromJobId, toJobId) {
-  const counts = {};
-  const ids = {};
+// Phase 1 of a safe relocation: list the exact ids of every record linked to
+// fromJobId, WITHOUT mutating anything. The caller writes these planned ids into
+// the audit log BEFORE any move, so provenance is durable even if a later step
+// crashes. Returns { plan, errors } where plan is { <entityKey>: [...ids] } and
+// errors lists any per-entity listing failures (non-empty => partial).
+export async function planRelocateLinks(base44, fromJobId) {
+  const plan = {};
   const errors = [];
   for (const { key, entity, required } of LINK_ENTITIES) {
-    counts[key] = 0;
-    ids[key] = [];
-    let listedIds = [];
+    plan[key] = [];
     try {
       let cursor;
       for (;;) {
@@ -121,29 +112,46 @@ export async function relocateLinks(base44, fromJobId, toJobId) {
           { job_id: fromJobId },
           { fields: ["id"], limit: 500, cursor }
         );
-        listedIds.push(...(page.items || []).map((r) => r.id));
+        plan[key].push(...(page.items || []).map((r) => r.id));
         if (!page.has_more) break;
         cursor = page.next_cursor;
       }
     } catch (e) {
       errors.push(`${entity}: could not list records (${e?.message || e})${required ? "" : " (optional entity)"}`);
-      continue;
     }
-    for (let i = 0; i < listedIds.length; i += 500) {
-      const batch = listedIds.slice(i, i + 500);
+  }
+  return { plan, errors };
+}
+
+// Phase 2: move exactly the planned ids from fromJobId to toJobId, guarded by
+// each record's current job_id so only records still on the source move. Returns
+// { moved, counts, errors } where moved is the per-entity array of ids that
+// successfully moved (a subset of plan). A batch failure is reported in errors;
+// ids from batches that succeeded are still returned so the caller can update
+// the audit log with exactly what moved.
+export async function executeRelocateLinks(base44, plan, fromJobId, toJobId) {
+  const moved = {};
+  const counts = {};
+  const errors = [];
+  for (const { key, entity } of LINK_ENTITIES) {
+    moved[key] = [];
+    counts[key] = 0;
+    const ids = plan[key] || [];
+    for (let i = 0; i < ids.length; i += 500) {
+      const batch = ids.slice(i, i + 500);
       try {
         const res = await base44.asServiceRole.entities[entity].updateMany(
-          { id: { $in: batch } },
+          { id: { $in: batch }, job_id: fromJobId },
           { $set: { job_id: toJobId } }
         );
         counts[key] += res.updated || 0;
-        ids[key].push(...batch);
+        moved[key].push(...batch);
       } catch (e) {
-        errors.push(`${entity}: moved ${ids[key].length} of ${listedIds.length} before failure (${e?.message || e})`);
+        errors.push(`${entity}: moved ${moved[key].length} of ${ids.length} before failure (${e?.message || e})`);
       }
     }
   }
-  return { counts, ids, errors };
+  return { moved, counts, errors };
 }
 
 // Move a specific set of record ids back to a job, guarded by their current

@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { relocateLinks, mergeJobFields } from '../../shared/jobMerge.js';
+import { planRelocateLinks, executeRelocateLinks, mergeJobFields } from '../../shared/jobMerge.js';
 
 // Combine N jobs (N >= 2) into one surviving record. Admin-only. Reuses the
 // existing soft-merge model: Jobs.merged_into/merged_at, JobMergeLog, and the
@@ -58,20 +58,87 @@ export default async function(req) {
       if (source.merged_into) { results.push({ source_job_id: sourceId, ok: false, error: 'Already merged into ' + source.merged_into }); anyFailed = true; continue; }
       if (source.is_sample) { results.push({ source_job_id: sourceId, ok: false, error: 'Cannot combine sample jobs' }); anyFailed = true; continue; }
 
-      // 1. Relocate. Capture the EXACT moved ids + any per-entity errors so the
-      //    audit log can record them and reverseMerge can move exactly these back.
-      let relocate;
+      const now = new Date().toISOString();
+
+      // 1. PLAN — list the exact source link ids WITHOUT mutating. This lets us
+      //    write the audit log before any move so provenance is durable.
+      let planRes;
       try {
-        relocate = await relocateLinks(base44, sourceId, survivor_job_id);
+        planRes = await planRelocateLinks(base44, sourceId);
       } catch (e) {
-        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: 'Relocate threw unexpectedly: ' + (e?.message || e) });
+        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: 'Plan threw unexpectedly: ' + (e?.message || e) });
         anyFailed = true;
         continue;
       }
-      const { counts, ids, errors: relocateErrors } = relocate;
-      const partial = relocateErrors.length > 0;
+      const { plan, errors: planErrors } = planRes;
+      const planPartial = planErrors.length > 0;
 
-      // 2. Merge identity fields onto the (fresh) survivor.
+      // 2. CREATE the per-source audit log BEFORE any link mutation, with the
+      //    planned ids. If this save fails we ABORT with zero moves — no records
+      //    are touched, so there is nothing to reverse. (No transaction is
+      //    claimed; this is just "write the receipt before spending".)
+      let log;
+      try {
+        log = await base44.asServiceRole.entities.JobMergeLog.create({
+          source_job_id: sourceId,
+          source_job_name: source.canonical_name,
+          target_job_id: survivor_job_id,
+          target_job_name: target.canonical_name,
+          merged_by: user.email || user.id,
+          merged_at: now,
+          planned_link_ids: plan,
+          relocated_link_ids: {},
+          relocated_link_counts: {},
+          relocated_fields: {},
+          audit_version: 1,
+          status: "planned",
+          partial: true,
+          relocate_errors: planErrors.length ? planErrors : undefined,
+        });
+      } catch (e) {
+        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: 'Could not create audit log before moving; aborted with zero moves: ' + (e?.message || e) });
+        anyFailed = true;
+        continue;
+      }
+
+      // 3. EXECUTE — move exactly the planned ids, guarded by current job_id.
+      let exec;
+      try {
+        exec = await executeRelocateLinks(base44, plan, sourceId, survivor_job_id);
+      } catch (e) {
+        // Execution threw. Some ids may have moved. Record what we know, then
+        // stop. The log holds the planned ids; reverseMerge can use them (the
+        // job_id guard makes moving-back of unmoved ids a no-op).
+        await base44.asServiceRole.entities.JobMergeLog.update(log.id, {
+          status: "failed",
+          relocate_errors: ['execute threw: ' + (e?.message || e)],
+        }).catch(() => {});
+        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: 'Relocate threw after audit created; see log ' + log.id, merge_log_id: log.id });
+        anyFailed = true;
+        continue;
+      }
+      const { moved, counts, errors: execErrors } = exec;
+      const relocateErrors = [...planErrors, ...execErrors];
+      const relocatePartial = relocateErrors.length > 0;
+
+      // 4. UPDATE the audit log with the ids that actually moved + progress. If
+      //    this update fails AFTER records moved, STOP — do not continue to
+      //    fields / mark / next source. Return the log id + recovery info. The
+      //    log still holds the planned ids; reverseMerge can move those back.
+      try {
+        await base44.asServiceRole.entities.JobMergeLog.update(log.id, {
+          relocated_link_ids: moved,
+          relocated_link_counts: counts,
+          relocate_errors: relocateErrors.length ? relocateErrors : undefined,
+          status: relocatePartial ? "relocated_partial" : "relocated",
+        });
+      } catch (e) {
+        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: 'Moved records but could not update audit log. Stopped before field merge. Reverse log ' + log.id + ' to recover (planned ids are recorded).', merge_log_id: log.id, relocated_link_ids: moved, relocated_link_counts: counts });
+        anyFailed = true;
+        continue;
+      }
+
+      // 5. Merge identity fields onto the (fresh) survivor.
       let patch = {}, relocated = {}, conflict_note = "", fieldsError = "";
       try {
         ({ patch, relocated, conflict_note } = mergeJobFields(source, target));
@@ -80,7 +147,8 @@ export default async function(req) {
         fieldsError = e?.message || String(e);
       }
 
-      // 3. Conflict note (non-fatal if it fails, but always surfaced).
+      // 6. Conflict note (non-fatal if it fails, but always surfaced — never
+      //    claim full success when the conflicting value could not be saved).
       let conflictNoteRecorded = false, conflictNoteError = "";
       if (conflict_note) {
         const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Denver" });
@@ -98,10 +166,9 @@ export default async function(req) {
         }
       }
 
-      // 4. Mark this source as merged ONLY when relocate + fields fully succeeded.
-      const now = new Date().toISOString();
+      // 7. Mark this source as merged ONLY when relocate + fields fully succeeded.
       let markError = "";
-      const fullyOk = !partial && !fieldsError;
+      const fullyOk = !relocatePartial && !fieldsError;
       if (fullyOk) {
         try {
           await base44.asServiceRole.entities.Jobs.update(sourceId, { merged_into: survivor_job_id, merged_at: now });
@@ -110,51 +177,43 @@ export default async function(req) {
         }
       }
 
-      // 5. ALWAYS write an audit log row with the exact moved ids, so provenance
-      //    is never lost even when later steps failed. partial=true means some
-      //    records moved but the source was NOT hidden (still visible) — the
-      //    admin can reverse this log to put the moved ids back, or investigate.
-      let logId = "";
+      // 8. Final audit update. A conflict-note save failure or a mark failure
+      //    never claims full success (ok stays false). If this final update
+      //    fails the merge state is already applied — surface it, don't claim
+      //    success. Source-specific reversal remains usable: the log id is
+      //    returned in every result, and reverseMerge accepts merge_log_id, so
+      //    an admin can undo this one source even when merged_into was not set
+      //    (partial). Admins reach it from the Combine results list, which shows
+      //    the log id and a "reverse its log" hint for partial sources.
+      const ok = fullyOk && !markError && !conflictNoteError;
+      if (!ok) anyFailed = true;
       try {
-        const log = await base44.asServiceRole.entities.JobMergeLog.create({
-          source_job_id: sourceId,
-          source_job_name: source.canonical_name,
-          target_job_id: survivor_job_id,
-          target_job_name: target.canonical_name,
-          merged_by: user.email || user.id,
-          merged_at: now,
+        await base44.asServiceRole.entities.JobMergeLog.update(log.id, {
           relocated_fields: relocated,
-          relocated_link_counts: counts,
-          relocated_link_ids: ids,
-          partial: partial || !!fieldsError || !!markError,
-          relocate_errors: relocateErrors.length ? relocateErrors : undefined,
+          partial: !ok,
           fields_error: fieldsError || undefined,
           mark_error: markError || undefined,
+          status: ok ? "complete" : "partial",
         });
-        logId = log.id;
       } catch (e) {
-        // The audit log itself failed to write — serious: records may have
-        // moved with no provenance. Surface it loudly with the ids we have.
-        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: 'Moved records but FAILED to write audit log: ' + (e?.message || e), relocated_link_ids: ids, relocated_link_counts: counts });
+        results.push({ source_job_id: sourceId, source_job_name: source?.canonical_name, ok: false, error: 'Merge proceeded but final audit update failed: ' + (e?.message || e), merge_log_id: log.id, relocated_link_ids: moved });
         anyFailed = true;
         continue;
       }
 
-      const ok = fullyOk && !markError;
-      if (!ok) anyFailed = true;
       results.push({
         source_job_id: sourceId,
         source_job_name: source.canonical_name,
         ok,
         partial: !ok,
         relocated_link_counts: counts,
-        relocated_link_ids: ids,
+        relocated_link_ids: moved,
         relocate_errors: relocateErrors.length ? relocateErrors : undefined,
         fields_error: fieldsError || undefined,
         mark_error: markError || undefined,
         conflict_note_recorded: conflictNoteRecorded,
         conflict_note_error: conflictNoteError || undefined,
-        merge_log_id: logId,
+        merge_log_id: log.id,
       });
     }
 

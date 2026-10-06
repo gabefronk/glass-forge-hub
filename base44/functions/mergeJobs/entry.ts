@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { relocateLinks, mergeJobFields } from '../../shared/jobMerge.js';
+import { planRelocateLinks, executeRelocateLinks, mergeJobFields } from '../../shared/jobMerge.js';
 
 // Merge a duplicate job (source) into the surviving job (target).
 // Admin-only. Relocates all linked records, merges identity fields onto the
@@ -25,12 +25,65 @@ export default async function(req) {
     if (target.merged_into) return Response.json({ error: 'Target job is itself merged into ' + target.merged_into }, { status: 400 });
     if (source.is_sample || target.is_sample) return Response.json({ error: 'Cannot merge sample jobs' }, { status: 400 });
 
-    // 1. Relocate. Capture the EXACT moved ids + per-entity errors so the audit
-    //    log records them and reverseMerge can move exactly these back.
-    const { counts, ids, errors: relocateErrors } = await relocateLinks(base44, source_job_id, target_job_id);
-    const partial = relocateErrors.length > 0;
+    const now = new Date().toISOString();
 
-    // 2. Merge identity fields (po_numbers, oe_numbers, aliases, and blank
+    // 1. PLAN — list the exact source link ids WITHOUT mutating.
+    const { plan, errors: planErrors } = await planRelocateLinks(base44, source_job_id);
+    const planPartial = planErrors.length > 0;
+
+    // 2. CREATE the audit log BEFORE any move, with planned ids. If this fails
+    //    we abort with zero moves — nothing to reverse.
+    let log;
+    try {
+      log = await base44.asServiceRole.entities.JobMergeLog.create({
+        source_job_id,
+        source_job_name: source.canonical_name,
+        target_job_id,
+        target_job_name: target.canonical_name,
+        merged_by: user.email || user.id,
+        merged_at: now,
+        planned_link_ids: plan,
+        relocated_link_ids: {},
+        relocated_link_counts: {},
+        relocated_fields: {},
+        audit_version: 1,
+        status: "planned",
+        partial: true,
+        relocate_errors: planErrors.length ? planErrors : undefined,
+      });
+    } catch (e) {
+      return Response.json({ error: 'Could not create audit log before moving; aborted with zero moves: ' + (e?.message || e) }, { status: 500 });
+    }
+
+    // 3. EXECUTE — move exactly the planned ids, guarded by current job_id.
+    let exec;
+    try {
+      exec = await executeRelocateLinks(base44, plan, source_job_id, target_job_id);
+    } catch (e) {
+      await base44.asServiceRole.entities.JobMergeLog.update(log.id, {
+        status: "failed",
+        relocate_errors: ['execute threw: ' + (e?.message || e)],
+      }).catch(() => {});
+      return Response.json({ error: 'Relocate threw after audit created; see log ' + log.id, merge_log_id: log.id }, { status: 500 });
+    }
+    const { moved, counts, errors: execErrors } = exec;
+    const relocateErrors = [...planErrors, ...execErrors];
+    const relocatePartial = relocateErrors.length > 0;
+
+    // 4. UPDATE the audit log with the ids that actually moved. If this fails
+    //    after records moved, STOP and return the log id + recovery info.
+    try {
+      await base44.asServiceRole.entities.JobMergeLog.update(log.id, {
+        relocated_link_ids: moved,
+        relocated_link_counts: counts,
+        relocate_errors: relocateErrors.length ? relocateErrors : undefined,
+        status: relocatePartial ? "relocated_partial" : "relocated",
+      });
+    } catch (e) {
+      return Response.json({ error: 'Moved records but could not update audit log. Stopped before field merge. Reverse log ' + log.id + ' to recover (planned ids are recorded).', merge_log_id: log.id, relocated_link_ids: moved, relocated_link_counts: counts }, { status: 500 });
+    }
+
+    // 5. Merge identity fields (po_numbers, oe_numbers, aliases, and blank
     //    identity/document scalars) onto target. A conflict note records any
     //    source value that differed from a non-empty target value, so it is
     //    never lost. The survivor's value always wins.
@@ -58,10 +111,9 @@ export default async function(req) {
       }
     }
 
-    // 3. Mark source as merged ONLY when relocate + fields fully succeeded.
-    const now = new Date().toISOString();
+    // 6. Mark source as merged ONLY when relocate + fields fully succeeded.
     let markError = "";
-    const fullyOk = !partial && !fieldsError;
+    const fullyOk = !relocatePartial && !fieldsError;
     if (fullyOk) {
       try {
         await base44.asServiceRole.entities.Jobs.update(source_job_id, { merged_into: target_job_id, merged_at: now });
@@ -70,31 +122,27 @@ export default async function(req) {
       }
     }
 
-    // 4. Always write an audit log with the exact moved ids, so provenance is
-    //    never lost even when later steps failed.
-    const log = await base44.asServiceRole.entities.JobMergeLog.create({
-      source_job_id,
-      source_job_name: source.canonical_name,
-      target_job_id,
-      target_job_name: target.canonical_name,
-      merged_by: user.email || user.id,
-      merged_at: now,
-      relocated_fields: relocated,
-      relocated_link_counts: counts,
-      relocated_link_ids: ids,
-      partial: partial || !!fieldsError || !!markError,
-      relocate_errors: relocateErrors.length ? relocateErrors : undefined,
-      fields_error: fieldsError || undefined,
-      mark_error: markError || undefined,
-    });
+    // 7. Final audit update. Conflict-note or mark failures never claim full
+    //    success. Source-specific reversal stays usable via merge_log_id.
+    const ok = fullyOk && !markError && !conflictNoteError;
+    try {
+      await base44.asServiceRole.entities.JobMergeLog.update(log.id, {
+        relocated_fields: relocated,
+        partial: !ok,
+        fields_error: fieldsError || undefined,
+        mark_error: markError || undefined,
+        status: ok ? "complete" : "partial",
+      });
+    } catch (e) {
+      return Response.json({ error: 'Merge proceeded but final audit update failed: ' + (e?.message || e), merge_log_id: log.id, relocated_link_ids: moved }, { status: 500 });
+    }
 
-    const ok = fullyOk && !markError;
     return Response.json({
       ok,
       source_job_id,
       target_job_id,
       relocated_link_counts: counts,
-      relocated_link_ids: ids,
+      relocated_link_ids: moved,
       relocated_fields: relocated,
       target_patch: patch,
       partial: !ok,

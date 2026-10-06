@@ -67,7 +67,7 @@ function JobCounts({ counts }) {
   );
 }
 
-function JobRow({ job, counts, isSurvivor, onPick, disabled }) {
+function JobRow({ job, counts, isSurvivor, anySurvivor, onPick, disabled }) {
   const total = COUNT_ENTITIES.reduce((s, { key }) => s + ((counts && counts[key]) || 0), 0);
   return (
     <button
@@ -97,7 +97,7 @@ function JobRow({ job, counts, isSurvivor, onPick, disabled }) {
         <span className="mt-1 block"><JobCounts counts={counts || {}} /></span>
       </span>
       <span className="shrink-0 text-right">
-        <span className="block text-[10.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: isSurvivor ? "#166447" : MUTED }}>{isSurvivor ? "Survives" : "Merged away"}</span>
+        <span className="block text-[10.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: isSurvivor ? "#166447" : MUTED }}>{isSurvivor ? "Survives" : anySurvivor ? "Merged away" : "Choose"}</span>
         <span className="block text-[11px]" style={{ color: MUTED }}>{total} records</span>
       </span>
     </button>
@@ -255,7 +255,7 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
               ) : (
                 <>
                   <p className="m-0 text-[13px]" style={{ color: MUTED }}>
-                    Tap a record to choose the one that stays. Everything linked to the others moves to it; the others are hidden, not deleted.
+                    Tap a record to choose the one that stays. Its calendar visits, field reports, notes, invoice lines, contact links, budgets and Probuild links move to the survivor; the others are hidden, not deleted.
                   </p>
                   <div className="space-y-2">
                     {jobs.map((j) => (
@@ -264,6 +264,7 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
                         job={j}
                         counts={counts[j.id]}
                         isSurvivor={survivorId === j.id}
+                        anySurvivor={!!survivorId}
                         onPick={() => setSurvivorId(j.id)}
                         disabled={step === "confirm"}
                       />
@@ -281,7 +282,8 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
                     ))}
                   </ul>
                   <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-[12.5px]" style={{ color: MUTED }}>
-                    <li>All visits, reports, notes, budgets and invoice lines move to the surviving record.</li>
+                    <li>Calendar visits, field reports, notes, invoice lines, contact links, job budgets and Probuild project links move to the surviving record.</li>
+                    <li>Install budgets, setup sheets, service items and job knowledge are NOT moved — they stay on the hidden record and resolve through it.</li>
                     <li>PO numbers and aliases are added to the survivor.</li>
                     <li>Where they disagree, the survivor's value wins; the other value is saved in a note.</li>
                     <li>Invoice marks, fees and statuses are never changed.</li>
