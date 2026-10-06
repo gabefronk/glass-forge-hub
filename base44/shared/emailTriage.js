@@ -88,7 +88,7 @@ For each thread return:
 - action_items: short imperative items Gabe must actually do. Empty for FYI, promos, spam and threads Gabe already answered.
 - reply_needed: true only when the latest incoming message is waiting on a reply from Gabe and no reply exists yet in the thread.
 - next_step: one sentence, or empty.
-- extracted: builder, lot (lot/unit/building number as written), street address, PO numbers, OE numbers, dates (YYYY-MM-DD + label), contact name / phone / email, and contact_role (homeowner, superintendent, builder_office, vendor, installer, other) only when the email makes the person's role clear — only what the emails state. Never guess.
+- extracted: builder, lot (lot/unit/building number as written), street address, PO numbers, OE numbers, dates (YYYY-MM-DD + label; for a vendor ready / pickup / ship / delivery date, say which in the label and include the PO name or order number it belongs to when the email ties it to one, e.g. "2026-09-30 pickup YA-0002"), contact name / phone / email, and contact_role (homeowner, superintendent, builder_office, vendor, installer, other) only when the email makes the person's role clear — only what the emails state. Never guess.
 
 Return only the JSON described by the schema, one entry per thread key, in the same order.`;
 
@@ -368,3 +368,61 @@ export function cleanDraftReply(result, mailbox) {
 }
 
 export const replySubject = (subject) => (/^\s*re\s*:/i.test(String(subject || '')) ? String(subject).trim() : `Re: ${String(subject || '').trim()}`.trim());
+
+// ---- Vendor ETAs (Steve's "ready / pickup / ships" emails) ------------------------------------
+// An email that names an open vendor order (its PO name like YA-0003, its order / confirmation
+// number) and gives an arrival-type date moves that order's ETA. Pure: returns the updates;
+// emailAgent.js writes them. Never guesses: a date only lands on an order when the date's own
+// label names the order, or when the email names exactly one open order and gives exactly one
+// arrival-type date.
+const ETA_LABEL_RE = /\b(eta|arriv\w*|ready|pick\s*-?up|pickup|ship\w*|deliver\w*|will\s*call|in\s*stock|available|lands?|due)\b/i;
+const NOT_ETA_RE = /\b(email|sent|order(ed)?\s*date|quote|invoice|paid|payment)\b/i;
+const refTokens = (s) => String(s || '').toUpperCase().match(/\bYA-\d{3,5}\b|\b\d{2}-\d{4}(?:\.\d+)?\b|\b\d{7}\b/g) || [];
+const keyNorm = (s) => String(s || '').toUpperCase().replace(/\.\d+$/, '');
+
+// The numbers that identify an order: its order number, its PO name, and numbers in its title
+// and notes (AMSCO confirmation numbers get written there).
+export function orderKeys(order) {
+  const keys = new Set();
+  const add = (v) => { const k = keyNorm(v); if (k && k !== 'PENDING') keys.add(k); };
+  if (order?.order_number && !/pending/i.test(order.order_number)) add(String(order.order_number).trim());
+  for (const t of [...refTokens(order?.po_name), ...refTokens(order?.title), ...refTokens(order?.notes)]) add(t);
+  return keys;
+}
+
+// "2026-09-30 pickup YA-0002" / "2026-10-06: Expected ready date" -> { date, label }
+export function parseDateEntry(entry) {
+  const m = String(entry || '').match(/(\d{4}-\d{2}-\d{2})\s*[:\-–]?\s*(.*)$/);
+  return m ? { date: m[1], label: m[2].trim() } : null;
+}
+
+// orders: open VendorOrders. thread: an EmailRelay row (subject + extracted). Returns
+// [{ order_id, eta_date, label }] for orders whose ETA should change.
+export function planOrderEtas(orders, thread) {
+  const ex = thread?.extracted || {};
+  const dates = (ex.dates || []).map(parseDateEntry).filter((d) => d && ETA_LABEL_RE.test(d.label) && !NOT_ETA_RE.test(d.label));
+  if (!dates.length) return [];
+  const threadTokens = new Set([...(ex.po_numbers || []), ...(ex.oe_numbers || []), ...refTokens(thread?.subject), ...refTokens(thread?.summary)].map(keyNorm));
+  const open = (orders || []).filter((o) => o && o.status !== 'reconciled' && o.status !== 'paid');
+  const out = new Map();
+  for (const o of open) {
+    const keys = orderKeys(o);
+    if (!keys.size) continue;
+    // 1) a date whose own label names this order
+    const named = dates.filter((d) => refTokens(d.label).some((t) => keys.has(keyNorm(t))));
+    if (named.length) { out.set(o.id, named[named.length - 1]); continue; }
+  }
+  // 2) the email names exactly one open order and has exactly one arrival-type date with no
+  //    order named in its label
+  const loose = dates.filter((d) => !refTokens(d.label).length);
+  if (loose.length === 1) {
+    const hits = open.filter((o) => !out.has(o.id) && [...orderKeys(o)].some((k) => threadTokens.has(k)));
+    if (hits.length === 1) out.set(hits[0].id, loose[0]);
+  }
+  const res = [];
+  for (const [id, d] of out) {
+    const o = open.find((x) => x.id === id);
+    if (o && o.eta_date !== d.date) res.push({ order_id: id, eta_date: d.date, label: d.label, previous: o.eta_date || '' });
+  }
+  return res;
+}

@@ -146,7 +146,7 @@ const JOBS = [
 const EVENTS = [{ id: 'ev1', job_id: 'job1', event_date: nextYear(), start_time: '08:00', job_name: 'Oquirrh West 412', address: '412 Oquirrh West Dr Herriman', source_status: 'confirmed', google_event_id: 'g1' }];
 const MEMBERS = [{ id: 'mg', member_key: 'gabriel', display_name: 'Gabriel', auth_user_ids: ['ga', 'gw'], active: true, revision: 0, management_lock: '', seed_state: 'complete' }];
 
-function harness({ user = null, seed = {}, gmail = {}, graph = {}, drive = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES, llmImpl = null, budgetMs = 50_000 } = {}) {
+function harness({ user = null, seed = {}, gmail = {}, graph = {}, drive = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES, llmImpl = null, budgetMs = 50_000, taxFilingEnabled = true } = {}) {
   resetJobCache();
   const { store, api, calls } = makeStore({ EmailMailbox: mailboxes, Jobs: JOBS, CalendarEvents: EVENTS, TeamMember: MEMBERS, ...seed });
   const gstate = { scan: [{ id: 'm1', threadId: 't1' }, { id: 'm3', threadId: 't3' }], messages: { m1: GMAIL_SCHEDULE, m3: GMAIL_PROMO }, threads: { t1: [GMAIL_SCHEDULE], t3: [GMAIL_PROMO] }, labels: [{ id: 'Label_1', name: 'Hub' }], history: [], ...gmail };
@@ -165,7 +165,7 @@ function harness({ user = null, seed = {}, gmail = {}, graph = {}, drive = {}, c
   };
   let clock = '2026-09-26T17:00:00.000Z';
   let ms = 0;
-  const h = createEmailAgentHandler({ getClient: async () => client, fetchImpl, now: () => clock, nowMs: () => ms, budgetMs, sleep: async () => {} });
+  const h = createEmailAgentHandler({ getClient: async () => client, fetchImpl, now: () => clock, nowMs: () => ms, budgetMs, sleep: async () => {}, taxFilingEnabled });
   const call = async (body, u = user) => {
     const r = await h(new Request('https://test.local/emailAgent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
     return { status: r.status, body: await r.json() };
@@ -721,6 +721,28 @@ test('tax: other merchants, upcoming / agreement / request notices, card payment
   await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
   for (const id of ['up', 'agr', 'req', 'other', 'card', 'spoof']) assert.notEqual(thread(h, `t-${id}`).tax_record, true, id);
   assert.equal(h.drive.state.finds + h.drive.state.creates.length, 0, 'no Drive call at all');
+});
+
+// Source-observed template (work Gmail, INV001186): bank withdrawal approved, $0 due, no attachment.
+const OBSERVED = helcim('obs', 'Invoice - INV001186 (PAID)', 'Wasatch windows llc\nInvoice INV001186\nPaid Oct 6, 2026\nBANK Withdrawal APPROVED\nAmount Paid: $7,787.92\nAmount Due $0.00');
+
+test('tax: the observed bank-approved template is filed as a body Doc only (no attachment)', async () => {
+  const h = harness({ gmail: mailOf(OBSERVED), connections: DRIVE_ON });
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  const row = thread(h, 't-obs');
+  assert.equal(row.tax_save_state, 'saved');
+  assert.equal(row.reference, 'INV001186');
+  assert.equal(h.drive.byKind('doc').length, 1);
+  assert.equal(h.drive.byKind('attachment').length, 0);
+});
+
+test('tax HOLD (default handler): a match is reported in the run warnings, nothing is filed or written to the row', async () => {
+  const h = harness({ gmail: mailOf(OBSERVED), connections: DRIVE_ON, taxFilingEnabled: false });
+  const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.ok(r.body.mailboxes[0].errors.some((e) => /tax filing on hold.*INV001186/.test(e)), 'not silent');
+  assert.notEqual(thread(h, 't-obs').tax_record, true);
+  assert.equal(h.drive.state.finds + h.drive.state.creates.length, 0);
+  assert.equal((await h.as(OWNER).call({ action: 'save_tax_record', id: thread(h, 't-obs').id })).status, 409);
 });
 
 test('tax: Drive not connected -> failed, the sync still succeeds, and the next run retries and saves', async () => {

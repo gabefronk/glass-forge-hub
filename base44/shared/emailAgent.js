@@ -435,10 +435,12 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       try { if (T.shouldArchive(cur, mailbox)) { Object.assign(patch, await archiveInProvider(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; counts.archived++; } } catch (e) { warn(`archive failed: ${errText(e)}`); }
       try { if (T.shouldDraft(cur, mailbox)) { Object.assign(patch, await generateDraft(ctx, mailbox, provider, cur, t.messages || [], jobFacts)); counts.drafted++; } } catch (e) { warn(`draft failed: ${errText(e)}`); }
       // Tax filing: only a Wasatch Windows ACH paid confirmation in the owner mailbox (see
-      // wasatchAch.js). Filed to Drive automatically; a failure never fails the sync.
+      // wasatchAch.js). Filed to Drive automatically; a failure never fails the sync. While the
+      // temporary HOLD is on, a match is reported in the run warnings and nothing is written.
       try {
-        const hit = taxFilingEnabled ? findWasatchAchPaid(mailbox, t.messages) : null;
-        if (hit && cur.tax_save_state !== 'saved') {
+        const hit = findWasatchAchPaid(mailbox, t.messages);
+        if (hit && !taxFilingEnabled) warn(`tax filing on hold (vendor mapping unconfirmed): ${hit.fields.reference} not filed`);
+        else if (hit && cur.tax_save_state !== 'saved') {
           Object.assign(patch, hit.fields); cur = { ...cur, ...hit.fields };
           await api.EmailRelay.update(row.id, hit.fields);
           const r = await saveTax(ctx, mailbox, provider, cur, [hit.message]);

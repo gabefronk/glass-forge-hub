@@ -31,6 +31,15 @@ test('rejects other merchants, spoofed senders, display-name-only identity, non-
   no({}, 'manager mailbox', MANAGER_MB);
 });
 
+test('observed template: bank withdrawal approved, $0 due matches; a balance still due does not; To header is ignored', () => {
+  const obs = 'Wasatch windows llc\nInvoice INV001186\nPaid Oct 6, 2026\nBANK Withdrawal APPROVED\nAmount Due $0';
+  assert.equal(matchWasatchAchPaid(OWNER_MB, msg({ text: obs })).reference, 'INV001186');
+  assert.equal(matchWasatchAchPaid(OWNER_MB, msg({ text: obs })).amount_total, null, 'Amount Due is never taken as the amount paid');
+  assert.equal(matchWasatchAchPaid(OWNER_MB, msg({ text: obs.replace('$0', '$120.00') })), null);
+  assert.ok(matchWasatchAchPaid(OWNER_MB, msg({ text: obs, to: ['someone-else@example.com'], account_hint: 'yawindowinstall@outlook.com' })), 'mailbox comes from the binding');
+  assert.equal(matchWasatchAchPaid(MANAGER_MB, msg({ text: obs, to: ['gabefronk@gmail.com'], account_hint: 'gabefronk@gmail.com' })), null, 'To: gabefronk does not make it owner mail');
+});
+
 test('findWasatchAchPaid returns the newest matching message only', () => {
   const a = msg({ message_id: 'a' });
   const b = msg({ message_id: 'b', subject: 'New Payment Request' });
