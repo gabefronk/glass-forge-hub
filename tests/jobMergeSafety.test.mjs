@@ -226,7 +226,6 @@ test("a failed undo is resumable: log stays unreversed, rerun finishes", async (
   const first = await reverseMergeLog(db.base44, db.log(), { actor: "a" });
   assert.equal(first.ok, false);
   assert.equal(first.resumable, true);
-  assert.equal(db.log().reversed, false === db.log().reversed ? false : db.log().reversed);
   assert.notEqual(db.log().reversed, true);
   assert.equal(db.log().reverse_status, "partial");
   assert.equal(db.tables.Jobs.get("S").merged_into, null, "source is visible again even though undo did not finish");
