@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { GitMerge, Search, X, AlertTriangle, ArrowRight, Undo2, Check } from "lucide-react";
+import { GitMerge, Search, X, AlertTriangle, ArrowRight, Check } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { sanitizeText } from "@/lib/jobsSanitize";
 
