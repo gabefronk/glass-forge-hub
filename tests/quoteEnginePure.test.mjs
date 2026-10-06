@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   rnd01, frameArea, ceilCell, priceAmsco, pricePella, strSim,
-  checkQuoteAccess, validateQuoteLines, summarizeValidationRules,
+  authorizeQuoteRequest, validateQuoteLines, summarizeValidationRules,
   projectPricing, projectQuoteResult
 } from '../base44/shared/quoteEnginePure.js';
 
@@ -145,16 +145,44 @@ test('strSim scores identical strings at 1 and disjoint at 0', () => {
   assert.ok(strSim('white casement', 'white awning') > 0 && strSim('white casement', 'white awning') < 1);
 });
 
-test('checkQuoteAccess denies crew and unauthenticated callers', () => {
-  assert.equal(checkQuoteAccess(null).allowed, false);
-  assert.equal(checkQuoteAccess({ role: 'user' }).allowed, false);
-  assert.equal(checkQuoteAccess({ role: 'user' }).reason, "role 'user' may not view pricing");
+test('authorizeQuoteRequest denies unauthenticated callers (AMSCO or empty)', () => {
+  const amsco = [{ vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio' }];
+  assert.equal(authorizeQuoteRequest(null, amsco).allowed, false);
+  assert.equal(authorizeQuoteRequest(null, amsco).reason, 'unauthenticated');
+  assert.equal(authorizeQuoteRequest(null, []).allowed, false);
 });
 
-test('checkQuoteAccess allows admin and manager', () => {
-  assert.equal(checkQuoteAccess({ role: 'admin' }).allowed, true);
-  assert.equal(checkQuoteAccess({ role: 'manager' }).allowed, true);
-  assert.equal(checkQuoteAccess({ role: 'MANAGER' }).allowed, true); // case-insensitive
+test('authorizeQuoteRequest allows any authenticated user for AMSCO-only requests', () => {
+  const amsco = [{ vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio' }];
+  assert.equal(authorizeQuoteRequest({ role: 'user' }, amsco).allowed, true);
+  assert.equal(authorizeQuoteRequest({ role: 'manager' }, amsco).allowed, true);
+  assert.equal(authorizeQuoteRequest({ role: 'admin' }, amsco).allowed, true);
+  // empty request is allowed for any authenticated user (no Pella present)
+  assert.equal(authorizeQuoteRequest({ role: 'user' }, []).allowed, true);
+});
+
+test('authorizeQuoteRequest denies user role for Pella and mixed requests (before catalog reads)', () => {
+  const pella = [{ vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250' }];
+  const mixed = [
+    { vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio' },
+    { vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250' },
+  ];
+  const p = authorizeQuoteRequest({ role: 'user' }, pella);
+  assert.equal(p.allowed, false);
+  assert.match(p.reason, /Pella/);
+  const m = authorizeQuoteRequest({ role: 'user' }, mixed);
+  assert.equal(m.allowed, false);
+  assert.match(m.reason, /Pella/, 'mixed request denied because of the Pella line');
+});
+
+test('authorizeQuoteRequest preserves admin/manager access to both vendors', () => {
+  const both = [
+    { vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio' },
+    { vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250' },
+  ];
+  assert.equal(authorizeQuoteRequest({ role: 'admin' }, both).allowed, true);
+  assert.equal(authorizeQuoteRequest({ role: 'manager' }, both).allowed, true);
+  assert.equal(authorizeQuoteRequest({ role: 'MANAGER' }, both).allowed, true); // case-insensitive
 });
 
 test('validateQuoteLines rejects non-array, bad dims, bad vendor, missing product/series', () => {

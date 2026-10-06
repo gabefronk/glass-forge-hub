@@ -131,7 +131,7 @@ export default function QuoteBuilder() {
     try {
       const res = await base44.functions.invoke("quoteEngine", { lines: buildPayload() });
       const data = res?.data || {};
-      if (data.ok === false) throw new Error(data.error || "quoteEngine failed");
+      if (data.ok === false) throw new Error(data.reason || data.error || "quoteEngine failed");
       setPricing(data.results || []);
     } catch (e) {
       setError(e?.message || "Pricing failed.");

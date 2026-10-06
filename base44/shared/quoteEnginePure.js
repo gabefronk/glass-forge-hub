@@ -99,13 +99,17 @@ export function pricePella(line, anchors) {
   };
 }
 
-// Authorize the caller. Pricing/cost data is admin + manager only; crew (role 'user')
-// and unauthenticated callers are denied. Returns { allowed, reason }.
-export function checkQuoteAccess(user) {
+// Authorize a quote request per vendor (owner directive Oct 6: AMSCO quoting is open
+// to any authenticated Hub user; Pella remains admin/manager only). A user-role request
+// that carries any Pella line is denied here, before any catalog read. Admins and
+// managers retain their existing access to both vendors. Returns { allowed, reason }.
+export function authorizeQuoteRequest(user, lines) {
   if (!user) return { allowed: false, reason: 'unauthenticated' };
   const role = String(user.role || '').toLowerCase();
   if (role === 'admin' || role === 'manager') return { allowed: true };
-  return { allowed: false, reason: `role '${user.role || 'none'}' may not view pricing` };
+  const hasPella = Array.isArray(lines) && lines.some(l => l && l.vendor === 'Pella');
+  if (hasPella) return { allowed: false, reason: "role 'user' may not view Pella pricing" };
+  return { allowed: true };
 }
 
 // Validate the inbound lines payload before any pricing work. Returns an array

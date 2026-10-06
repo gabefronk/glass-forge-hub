@@ -4,22 +4,24 @@
 // Pure pricing/validation logic lives in ../../shared/quoteEnginePure.js and is unit-tested.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 import {
-  priceAmsco, pricePella, checkQuoteAccess, validateQuoteLines, summarizeValidationRules,
+  priceAmsco, pricePella, authorizeQuoteRequest, validateQuoteLines, summarizeValidationRules,
   projectQuoteResult
 } from '../../shared/quoteEnginePure.js';
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    // Authorize: pricing access is admin + manager only. Crew may not call this.
-    // Managers receive sale-only fields; internal cost/catalog basis is redacted. Admins retain full costs.
     const user = await base44.auth.me().catch(() => null);
-    const access = checkQuoteAccess(user);
+    const body = await req.json();
+    const lines = body?.lines || [];
+    // Authorize per vendor (owner directive Oct 6): AMSCO is open to any authenticated Hub
+    // user; Pella stays admin/manager only. A user-role request carrying any Pella line is
+    // denied here, before any catalog read. Managers receive sale-only fields; internal
+    // cost/catalog basis is redacted. Admins retain full costs.
+    const access = authorizeQuoteRequest(user, lines);
     if (!access.allowed) return Response.json({ ok: false, error: 'forbidden', reason: access.reason }, { status: 403 });
     const isAdmin = !!user && String(user.role || '').toLowerCase() === 'admin';
 
-    const body = await req.json();
-    const lines = body?.lines || [];
     const inputErrors = validateQuoteLines(lines);
     if (inputErrors.length) return Response.json({ ok: false, error: 'invalid input', details: inputErrors }, { status: 400 });
 
