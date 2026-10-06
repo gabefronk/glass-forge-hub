@@ -29,7 +29,7 @@ export function gmailMessage({
   if (html) alt.parts.push({ mimeType: 'text/html', body: { size: html.length, data: b64url(html) } });
   let payload;
   if (attachments.length) {
-    payload = { mimeType: 'multipart/mixed', headers, parts: [alt, ...attachments.map((a, i) => ({ mimeType: a.mime || 'application/pdf', filename: a.name, body: { size: a.size || 1234, attachmentId: a.attachment_id || `att${i}` } }))] };
+    payload = { mimeType: 'multipart/mixed', headers, parts: [alt, ...attachments.map((a, i) => ({ mimeType: a.mime || 'application/pdf', filename: a.name, ...(a.headers ? { headers: a.headers } : {}), body: { size: a.size || 1234, attachmentId: a.attachment_id || `att${i}` } }))] };
   } else if (alt.parts.length === 1) {
     payload = { ...alt.parts[0], headers };
   } else {

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEmailAgentHandler, resetJobCache, SEED_MAILBOXES } from '../base44/shared/emailAgent.js';
 import { gmailMessage, graphMessage, REPLY_TEXT, AT } from './fixtures/emailFixtures.mjs';
+import { makeDriveMock } from './fixtures/driveMock.mjs';
 
 // ---- users ---------------------------------------------------------------------------------------
 const OWNER = { id: 'ga', email: 'gabefronk@gmail.com', role: 'admin', full_name: 'Gabriel' };
@@ -54,7 +55,9 @@ function makeFetch(routes) {
     const method = init.method || 'GET';
     const u = new URL(url);
     const path = u.pathname + (u.search ? '?' + u.search.slice(1) : '');
-    hits.push({ method, url, path, body: init.body ? JSON.parse(init.body) : null, headers: init.headers || {} });
+    let parsedBody = null;
+    if (init.body) { try { parsedBody = JSON.parse(init.body); } catch { parsedBody = String(init.body); } }
+    hits.push({ method, url, path, body: parsedBody, headers: init.headers || {} });
     for (const r of routes) {
       if (r.method !== method) continue;
       if (typeof r.match === 'string' ? url.includes(r.match) : r.match.test(url)) {
@@ -86,6 +89,7 @@ function gmailRoutes(state) {
     { method: 'POST', match: '/gmail/v1/users/me/drafts/send', data: {} },
     { method: 'POST', match: '/gmail/v1/users/me/drafts', data: { id: 'draft-1', message: { id: 'm9' } } },
     { method: 'DELETE', match: '/gmail/v1/users/me/drafts/', data: undefined },
+    { method: 'GET', match: /\/gmail\/v1\/users\/me\/messages\/[^/]+\/attachments\//, data: () => ({ data: Buffer.from('PDF-BYTES').toString('base64url'), size: 8, mimeType: 'application/pdf' }) },
   ];
 }
 
@@ -116,6 +120,7 @@ function triageFor(t) {
   if (/412/.test(s)) return { key: t.key, category: 'schedule', priority: 'normal', summary: 'Kyle (Ivory Homes) wants the lot 412 install on Tue Oct 6 confirmed and the COI sent before crews arrive.', action_items: ['Confirm Oct 6 install with Kyle', 'Send COI to Ivory Homes'], reply_needed: true, next_step: 'Reply to Kyle', extracted: { builder: 'Ivory Homes', lot: '412', address: 'Oquirrh West', po_numbers: [], oe_numbers: [], dates: ['2026-10-06 install'], contact_name: 'Kyle', contact_phone: '801-555-0142', contact_email: 'kyle@ivoryhomes.com', contact_role: 'superintendent' } };
   if (/off blinds/.test(s)) return { key: t.key, category: 'newsletter_promo', priority: 'low', summary: 'Vendor promo for blinds.', action_items: [], reply_needed: false, next_step: '', extracted: {} };
   if (/sash/.test(s)) return { key: t.key, category: 'service_warranty', priority: 'urgent', summary: 'Maria reports a cracked bottom sash in the master bedroom and asks for a service visit this week.', action_items: ['Schedule a service visit with Maria'], reply_needed: true, next_step: 'Offer a service window', extracted: { builder: 'Ivory Homes', lot: '413', address: 'Oquirrh West', po_numbers: [], oe_numbers: [], dates: [], contact_name: 'Maria Ortiz', contact_phone: '' } };
+  if (/PAID/i.test(s) && /INV00\d+/.test(s)) return { key: t.key, category: 'invoice_billing', priority: 'normal', summary: 'Helcim PAID notice.', action_items: [], reply_needed: false, next_step: '', tax_record: true, vendor: 'LLC says so', extracted: {} };
   return { key: t.key, category: 'other', priority: 'normal', summary: 'Other.', action_items: [], reply_needed: false, next_step: '', extracted: {} };
 }
 function makeLLM(log) {
@@ -141,12 +146,14 @@ const JOBS = [
 const EVENTS = [{ id: 'ev1', job_id: 'job1', event_date: nextYear(), start_time: '08:00', job_name: 'Oquirrh West 412', address: '412 Oquirrh West Dr Herriman', source_status: 'confirmed', google_event_id: 'g1' }];
 const MEMBERS = [{ id: 'mg', member_key: 'gabriel', display_name: 'Gabriel', auth_user_ids: ['ga', 'gw'], active: true, revision: 0, management_lock: '', seed_state: 'complete' }];
 
-function harness({ user = null, seed = {}, gmail = {}, graph = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES, llmImpl = null, budgetMs = 50_000 } = {}) {
+function harness({ user = null, seed = {}, gmail = {}, graph = {}, drive = {}, connections = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, mailboxes = MAILBOXES, llmImpl = null, budgetMs = 50_000, taxFilingEnabled } = {}) {
   resetJobCache();
   const { store, api, calls } = makeStore({ EmailMailbox: mailboxes, Jobs: JOBS, CalendarEvents: EVENTS, TeamMember: MEMBERS, ...seed });
   const gstate = { scan: [{ id: 'm1', threadId: 't1' }, { id: 'm3', threadId: 't3' }], messages: { m1: GMAIL_SCHEDULE, m3: GMAIL_PROMO }, threads: { t1: [GMAIL_SCHEDULE], t3: [GMAIL_PROMO] }, labels: [{ id: 'Label_1', name: 'Hub' }], history: [], ...gmail };
   const ostate = { delta: [{ id: 'AAMk1', conversationId: 'AAQk1' }], messages: { AAMk1: GRAPH_SERVICE }, conversations: { AAQk1: [GRAPH_SERVICE] }, categories: [], ...graph };
-  const { fetchImpl, hits } = makeFetch([...gmailRoutes(gstate), ...graphRoutes(ostate)]);
+  const dmock = makeDriveMock(drive.files || []);
+  const { fetchImpl: routed, hits } = makeFetch([...gmailRoutes(gstate), ...graphRoutes(ostate)]);
+  const fetchImpl = async (url, init) => (await dmock.fetchImpl(url, init)) || routed(url, init);
   const llm = [];
   const client = {
     auth: { me: async () => (user ? clone(user) : null) },
@@ -158,13 +165,13 @@ function harness({ user = null, seed = {}, gmail = {}, graph = {}, connections =
   };
   let clock = '2026-09-26T17:00:00.000Z';
   let ms = 0;
-  const h = createEmailAgentHandler({ getClient: async () => client, fetchImpl, now: () => clock, nowMs: () => ms, budgetMs, sleep: async () => {} });
+  const h = createEmailAgentHandler({ getClient: async () => client, fetchImpl, now: () => clock, nowMs: () => ms, budgetMs, sleep: async () => {}, taxFilingEnabled });
   const call = async (body, u = user) => {
     const r = await h(new Request('https://test.local/emailAgent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
     return { status: r.status, body: await r.json() };
   };
   const as = (u) => { user = u; return { call: (body) => call(body, u) }; };
-  return { call, as, store, calls, hits, llm, gstate, ostate, setClock: (v) => { clock = v; }, tick: (n) => { ms += n; } };
+  return { call, as, store, calls, hits, llm, gstate, ostate, drive: dmock, setClock: (v) => { clock = v; }, tick: (n) => { ms += n; } };
 }
 
 const thread = (h, threadId) => h.store.EmailRelay.find((t) => t.thread_id === threadId);
@@ -711,4 +718,121 @@ test('mailboxes / seed_mailboxes are admin-only; seeding is an upsert that keeps
   assert.equal(mb.status, 200);
   assert.deepEqual(mb.body.mailboxes.map((m) => [m.key, m.connected]), [['gf-gmail', true], ['ya-outlook', false]]);
   assert.match(mb.body.mailboxes[1].connection_detail, /not connected/);
+});
+
+// ---- Wasatch Windows ACH confirmation filing to Drive -----------------------------------------
+const HELCIM_FROM = 'Wasatch windows llc <donotreply@app.helcim.com>';
+const ACH_TEXT = 'Wasatch Windows LLC\nInvoice INV001186 has been paid.\nAmount Paid: $7,787.92\nPayment Method: ACH (bank account ending 6612)';
+const helcim = (id, subject, text, extra = {}) => gmailMessage({ id: `m-${id}`, threadId: `t-${id}`, from: HELCIM_FROM, to: 'gabefronk@gmail.com', subject, text, internalDate: AT(15), ...extra });
+const PAID = helcim('paid', 'Invoice - INV001186 (PAID)', ACH_TEXT, { attachments: [
+  { name: 'INV001186.pdf', mime: 'application/pdf', size: 40_000, attachment_id: 'attH' },
+  { name: 'helcim-logo.png', mime: 'image/png', size: 60_000, attachment_id: 'attLogo' },
+  { name: 'banner.jpg', mime: 'image/jpeg', size: 80_000, attachment_id: 'attInline', headers: [{ name: 'Content-ID', value: '<img1>' }] },
+] });
+const mailOf = (...msgs) => ({ scan: msgs.map((m) => ({ id: m.id, threadId: m.threadId })), messages: Object.fromEntries(msgs.map((m) => [m.id, m])), threads: Object.fromEntries(msgs.map((m) => [m.threadId, [m]])) });
+const DRIVE_ON = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' }, googledrive: { accessToken: 'd-token' } };
+const paidMail = mailOf(PAID);
+
+test('tax: a Wasatch ACH paid confirmation is filed to Drive/Taxes/2026 as a Doc + only its PDF; never twice; no body in the Hub', async () => {
+  const h = harness({ gmail: paidMail, connections: DRIVE_ON });
+  const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.equal(r.body.mailboxes[0].status, 'ok');
+  const row = thread(h, 't-paid');
+  assert.deepEqual([row.tax_record, row.vendor, row.reference, row.amount_total, row.receipt_date], [true, 'Wasatch Windows LLC', 'INV001186', 7787.92, '2026-09-26']);
+  assert.equal(row.tax_save_state, 'saved');
+  assert.equal(row.tax_lock_id, '');
+  for (const k of ['text', 'snippet', 'body', 'attachments']) assert.equal(k in row, false, `${k} never lands in the Hub row`);
+  assert.deepEqual(h.drive.folders().map((f) => f.name), ['Taxes', '2026']);
+  const [doc] = h.drive.byKind('doc');
+  assert.equal(row.drive_file_id, doc.id);
+  assert.equal(doc.name, '2026-09-26 Wasatch Windows LLC - $7787.92 - INV001186');
+  assert.deepEqual(h.drive.byKind('attachment').map((f) => f.name), ['INV001186.pdf'], 'logo and inline banner stay in the mailbox');
+  const creates = h.drive.state.creates.length;
+  h.gstate.history = [];
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail', fresh: true });
+  assert.equal(h.drive.state.creates.length, creates, 'never filed twice');
+});
+
+test('tax: other merchants, upcoming / agreement / request notices, card payments and spoofed senders are never filed', async () => {
+  const msgs = [
+    helcim('up', 'You have an upcoming payment to Wasatch windows llc', 'Wasatch Windows LLC will withdraw $7,787.92 from your bank account by ACH on 2026-10-06.'),
+    helcim('agr', 'Confirmation of ACH Payment Agreement with Wasatch windows llc', 'Wasatch Windows LLC ACH agreement confirmed.'),
+    helcim('req', 'New Payment Request', 'Wasatch Windows LLC sent invoice INV001186 for $7,787.92. Pay by ACH.'),
+    helcim('other', 'Invoice - INV000500 (PAID)', 'Acme Glass Supply\nAmount Paid: $50.00\nPayment Method: ACH'),
+    helcim('card', 'Invoice - INV001184 (PAID)', 'Wasatch Windows LLC\nAmount Paid: $84.00\nPaid with Visa ending 4242'),
+    gmailMessage({ id: 'm-spoof', threadId: 't-spoof', from: 'Wasatch windows llc <billing@wasatch-pay.com>', subject: 'Invoice - INV001186 (PAID)', text: ACH_TEXT, internalDate: AT(15) }),
+  ];
+  const h = harness({ gmail: mailOf(...msgs), connections: DRIVE_ON });
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  for (const id of ['up', 'agr', 'req', 'other', 'card', 'spoof']) assert.notEqual(thread(h, `t-${id}`).tax_record, true, id);
+  assert.equal(h.drive.state.finds + h.drive.state.creates.length, 0, 'no Drive call at all');
+});
+
+// Source-observed template (work Gmail, INV001186): bank withdrawal approved, $0 due, no attachment.
+const OBSERVED = helcim('obs', 'Invoice - INV001186 (PAID)', 'Wasatch windows llc\nInvoice INV001186\nPaid Oct 6, 2026\nBANK Withdrawal APPROVED\nAmount Paid: $ 7,787.92\nAmount Due $ 0.00');
+
+test('tax: the observed bank-approved template (exact spaced layout) is filed as a body Doc only; amount 7787.92', async () => {
+  const h = harness({ gmail: mailOf(OBSERVED), connections: DRIVE_ON });
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  const row = thread(h, 't-obs');
+  assert.equal(row.tax_save_state, 'saved');
+  assert.equal(row.reference, 'INV001186');
+  assert.equal(row.amount_total, 7787.92, 'spaced "$ 7,787.92" parses to 7787.92');
+  assert.equal(h.drive.byKind('doc').length, 1);
+  assert.equal(h.drive.byKind('attachment').length, 0);
+});
+
+test('tax: explicit false override holds filing (match reported in warnings, nothing filed or written)', async () => {
+  const h = harness({ gmail: mailOf(OBSERVED), connections: DRIVE_ON, taxFilingEnabled: false });
+  const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.ok(r.body.mailboxes[0].errors.some((e) => /tax filing disabled for this run.*INV001186/.test(e)), 'not silent');
+  assert.notEqual(thread(h, 't-obs').tax_record, true);
+  assert.equal(h.drive.state.finds + h.drive.state.creates.length, 0);
+  assert.equal((await h.as(OWNER).call({ action: 'save_tax_record', id: thread(h, 't-obs').id })).status, 409);
+});
+
+test('tax: Drive not connected -> failed, the sync still succeeds, and the next run retries and saves', async () => {
+  const h = harness({ gmail: paidMail });
+  const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.equal(r.body.mailboxes[0].status, 'ok');
+  assert.equal(thread(h, 't-paid').tax_save_state, 'failed');
+  assert.match(thread(h, 't-paid').tax_save_error, /not connected/);
+  const h2 = harness({ seed: { EmailRelay: h.store.EmailRelay, EmailMailbox: h.store.EmailMailbox }, gmail: { history: [], threads: paidMail.threads }, connections: DRIVE_ON });
+  await h2.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.equal(thread(h2, 't-paid').tax_save_state, 'saved', 'saved on the retry scan');
+});
+
+test('tax: an unknown doc-create outcome is never retried automatically; only an admin confirm on that unknown row re-creates', async () => {
+  const h = harness({ gmail: paidMail, connections: DRIVE_ON });
+  h.drive.state.faults.push({ kind: 'doc', mode: '503' });
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  const row = thread(h, 't-paid');
+  assert.equal(row.tax_save_state, 'unknown');
+  const docCreates = () => h.drive.state.creates.filter((c) => c.kind === 'doc').length;
+  h.gstate.history = [];
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.equal(docCreates(), 1, 'retry scan only looks it up');
+  assert.equal((await h.as(OWNER).call({ action: 'save_tax_record', id: row.id })).body.ok, false);
+  assert.equal(docCreates(), 1, 'save without confirm stays read-only');
+  assert.equal((await h.as(OWNER).call({ action: 'save_tax_record', id: row.id, confirm_recreate: true })).body.ok, true);
+  assert.equal(docCreates(), 2);
+  await h.as(OWNER).call({ action: 'save_tax_record', id: row.id, confirm_recreate: true });
+  assert.equal(docCreates(), 2, 'confirm on a saved row is not a reset');
+});
+
+test('tax permissions: managers and non-owner admins never see or save owner-mailbox tax rows; non-matching threads are refused', async () => {
+  const h = harness({ gmail: mailOf(PAID, GMAIL_PROMO), connections: DRIVE_ON });
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  const paid = thread(h, 't-paid');
+  const promo = thread(h, 't3');
+  // Main's admin-only server gating: managers are denied (403) on every disclosing action,
+  // not handed a filtered list or a 404. Only the owner (and the non-owner admin for non-owner
+  // mailboxes) can read; the owner mailbox stays owner-only even for other admins.
+  assert.equal((await h.as(MANAGER).call({ action: 'list' })).status, 403);
+  assert.equal((await h.as(MANAGER).call({ action: 'entry', id: paid.id })).status, 403);
+  assert.equal((await h.as(MANAGER).call({ action: 'save_tax_record', id: paid.id })).status, 403);
+  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: paid.id })).status, 404);
+  assert.equal((await h.as(ADMIN).call({ action: 'save_tax_record', id: paid.id })).status, 404);
+  assert.equal((await h.as(OWNER).call({ action: 'save_tax_record', id: promo.id })).status, 409, 'only a Wasatch ACH confirmation can be filed');
+  assert.equal(h.drive.byKind('doc').length, 1);
 });

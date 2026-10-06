@@ -18,6 +18,12 @@
       "title": "Account Hint",
       "description": "Address the mail was originally sent to (X-Forwarded-For / Delivered-To / To), so forwarded gabefronk@gmail.com mail stays distinguishable inside the Gmail mailbox."
     },
+    "owner_only": {
+      "type": "boolean",
+      "title": "Owner Only",
+      "default": false,
+      "description": "True when the row's mailbox is owner-only (EmailMailbox.visibility === 'owner'). Denormalized at write time so RLS can restrict owner-mailbox rows to admins without joining EmailMailbox. The inbox agent sets it; never manager-readable."
+    },
     "subject": {
       "type": "string",
       "title": "Subject"
@@ -233,6 +239,122 @@
       "type": "string",
       "title": "Web Link",
       "description": "Opens the thread in the provider (Gmail #all/<threadId>; Outlook message webLink)"
+    },
+    "tax_record": {
+      "type": "boolean",
+      "title": "Tax Record",
+      "default": false,
+      "description": "True only when the email itself proves money moved (payment receipt, paid-invoice / PAID notice, payment confirmation, order receipt with a total charged). False for marketing, quotes, unpaid or past-due invoices, upcoming-payment notices, shipping notices and statements. Set by triage; never an instruction."
+    },
+    "receipt_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Receipt Date",
+      "description": "YYYY-MM-DD the payment was made, only when the email states it"
+    },
+    "vendor": {
+      "type": "string",
+      "title": "Vendor",
+      "description": "Who was paid, as stated by the email"
+    },
+    "amount_total": {
+      "type": "number",
+      "title": "Amount Total",
+      "description": "Total charged, as stated by the email"
+    },
+    "reference": {
+      "type": "string",
+      "title": "Reference",
+      "description": "Invoice or order number stated by the email"
+    },
+    "drive_file_id": {
+      "type": "string",
+      "title": "Drive File Id",
+      "description": "Google Drive id of the saved receipt doc. Set once the tax-record save succeeds; a thread is never saved twice while this is present."
+    },
+    "drive_url": {
+      "type": "string",
+      "title": "Drive Url",
+      "description": "Drive webViewLink of the saved receipt doc"
+    },
+    "tax_save_error": {
+      "type": "string",
+      "title": "Tax Save Error",
+      "description": "Last tax-record save failure reason (e.g. 'tax save failed: drive not connected'). Cleared on success; retried on the next run while drive_file_id is empty."
+    },
+    "tax_save_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "saved",
+        "partial",
+        "failed",
+        "unknown"
+      ],
+      "title": "Tax Save State",
+      "description": "saved = doc and every receipt attachment in Drive; partial = doc saved, an attachment pending/failed; failed = known failure, retried next run; unknown = a Drive create had an unknown outcome, later runs only look it up (read-only) until found or an admin confirms a re-create."
+    },
+    "tax_key": {
+      "type": "string",
+      "title": "Tax Key",
+      "description": "Deterministic provider + mailbox + thread key written to Drive appProperties, used to find what an earlier or concurrent run already saved."
+    },
+    "tax_attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "att_key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "saved",
+              "failed",
+              "unknown"
+            ]
+          },
+          "drive_file_id": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "title": "Tax Attachments",
+      "default": [],
+      "description": "Per receipt attachment (PDF / receipt image only) save status and Drive id."
+    },
+    "tax_duplicate_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tax Duplicate Ids",
+      "default": [],
+      "description": "Extra Drive files found with this thread's key (e.g. from a concurrent run). Never deleted automatically; listed for the owner to review."
+    },
+    "tax_lock_id": {
+      "type": "string",
+      "title": "Tax Lock Id",
+      "description": "Best-effort lease holder for the tax save (not atomic)."
+    },
+    "tax_lock_until": {
+      "type": "string",
+      "title": "Tax Lock Until",
+      "description": "ISO time the tax save lease expires."
     }
   },
   "required": [
