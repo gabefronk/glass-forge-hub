@@ -1,3 +1,4 @@
+import { withBillingAudit } from "../../shared/billingAudit.js";
 import { computeLaborAmt, computeFeeAmt, denverDate, feeCompanions, eventPostIndex } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { fetchAllPages } from '../../shared/pagination.ts';
@@ -49,10 +50,11 @@ export default async function(req) {
 
     // Build the snapshot from current FeeLines + CalendarEvents
     const allFees = await fetchAllPages(base44.asServiceRole.entities.FeeLines, '-created_date', 5000);
-    const monthRows = allFees.filter((f) => f.invoice_month === month).map(f => ({ ...f, labor_amt: computeLaborAmt(f), fee_amt: computeFeeAmt(f) }));
+    let monthRows = allFees.filter((f) => f.invoice_month === month).map(f => ({ ...f, labor_amt: computeLaborAmt(f), fee_amt: computeFeeAmt(f) }));
 
     // Load CalendarEvents for report_status (same as the Invoicing UI)
     const allCalEvents = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 5000);
+    monthRows = withBillingAudit(monthRows, allCalEvents);
     const reportStatusMap = new Map();
     for (const e of allCalEvents) {
       if (e.google_event_id) {
@@ -65,18 +67,20 @@ export default async function(req) {
     const companionHolds = feeCompanions(allFees, { eventPosts: eventPostIndex(allCalEvents) }).held;
 
     const todayStr = denverDate();
-    const OK_REPORT_STATUSES = ['ok', 'waived', 'pre_compliance', 'no_source_data'];
+    const OK_REPORT_STATUSES = ['ok', 'waived', 'pre_compliance'];
 
     const isFuture = (f) => !!(f.job_date && f.job_date > todayStr);
-    const isMatchBlocked = (f) => (f.needs_review || companionHolds.has(f.id)) && !f.manually_adjusted;
+    const isMatchBlocked = (f) => !!f._billing_review || ((f.needs_review || companionHolds.has(f.id)) && !f.manually_adjusted);
     const isReportBlocked = (f) => {
       if (!f.calendar_event_id) return false;
       const status = reportStatusMap.get(f.calendar_event_id);
-      if (!status) return false;
+      if (status === "rescheduled") return true;
+      if (f.probuild_post_id && (f.probuild_note_text || f.note_text || Number(f.man_hours)>0 || Number(f.trip_charges)>0 || f.photo_urls?.length)) return false;
+      if (!status) return true;
       return !OK_REPORT_STATUSES.includes(status);
     };
     const isReady = (f) =>
-      f.billable &&
+      f.billable && !f._billing_hidden &&
       !f.billed_to_bfs &&
       !isFuture(f) &&
       !isMatchBlocked(f) &&
@@ -85,8 +89,8 @@ export default async function(req) {
       (Number(f.labor_amt) > 0 || f.fee_type === 'profit_split');
 
     const isEarned = (f) =>
-      f.billable && !supersededSet.has(f.id) &&
-      !isFuture(f) &&
+      f.billable && !f._billing_hidden && !supersededSet.has(f.id) &&
+      !isFuture(f) && (f.billed_to_bfs || (!isReportBlocked(f) && !f._billing_review)) &&
       (Number(f.labor_amt) > 0 || f.fee_type === 'profit_split');
 
     // Store EVERY row with its status at close time
@@ -104,7 +108,7 @@ export default async function(req) {
       source: f.source || null,
       superseded_by: f.superseded_by || null,
       superseded: supersededSet.has(f.id),
-      needs_review: !!f.needs_review || companionHolds.has(f.id),
+      needs_review: !!f._billing_review || !!f.needs_review || companionHolds.has(f.id),
       match_confidence: f.match_confidence || null,
       calendar_event_id: f.calendar_event_id || null,
       report_status: f.calendar_event_id ? (reportStatusMap.get(f.calendar_event_id) || null) : null,
@@ -128,8 +132,8 @@ export default async function(req) {
       'A $0 standalone ProBuild line paired with a calendar labor line (same post, audit-matched event, or same job within 3 days) is superseded.',
       'invoiced_subtotal: rows that are billable, not billed_to_bfs, not future, not match-blocked',
       '((needs_review, or a priced ProBuild line beside calendar notes labor for the same visit) && !manually_adjusted), not report-blocked (report_status not in',
-      'ok/waived/pre_compliance/no_source_data), not superseded, labor_amt > 0 or fee_type = profit_split.',
-      'earned_total: billable, non-superseded, non-future, labor_amt > 0 or fee_type = profit_split; includes provisional held amounts.',
+      'ok/waived/pre_compliance or attached completion evidence), not superseded, labor_amt > 0 or fee_type = profit_split.',
+      'earned_total: billable, non-superseded, completed/reported work; excludes billing-audit holds, planned visits, no-charge visits and unverified tracker-only sales.',
       'total_rows: count of all month rows including superseded.',
     ].join(' ');
 

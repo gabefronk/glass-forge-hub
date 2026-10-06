@@ -38,7 +38,7 @@ export default function ClampedText({ text, maxLines = 5, className, style }) {
         ) : part.value)}
       </div>
       {clamped || expanded ? (
-        <button type="button" onClick={() => setExpanded((v) => !v)} className="mt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.13em]" style={{ color: C.accentText }}>
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="mt-1 text-[12.5px] font-semibold hover:underline" style={{ color: "#0b3f3b" }}>
           {expanded ? "Show less" : "Show more"}
         </button>
       ) : null}

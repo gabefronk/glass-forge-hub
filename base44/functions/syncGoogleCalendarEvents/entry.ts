@@ -1,9 +1,13 @@
-import { denverMidnight, denverDate } from "../../shared/billingCore.js";
+import { isIgnoredWorkItem, denverMidnight, denverDate } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { extractPO, extractOE, extractAddress, extractBuilder, extractLaborAmount, htmlToText } from '../../shared/ingestShared.ts';
 import { buildInstallerEvent, upsertInstallerEvent, fetchInstallerEventMap } from '../../shared/installerCalendar.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 import { reportDueAtWithGrace } from '../../shared/reportMatching.ts';
+import { preserveAttachmentMetadata } from '../../shared/eventAttachments.js';
+import { rehostEventAttachments } from '../../shared/rehostEventAttachments.js';
+import { copyEventFilesToJobFolders, needsJobFolderCopy } from '../../shared/jobFolderCopy.js';
+import { resolveJobLink } from '../../shared/jobLinkResolver.js';
 
 // Pull Google Calendar events (iryedra@gmail.com) into CalendarEvents as
 // source='google' (read-only). Skips app-authored events (marked with an
@@ -17,6 +21,19 @@ const GF_JOBS_CAL = '0236b85aa32e6358ebe5a232e970e6c9c2c47142f8c3f22cadd5b5b0eb3
 // Read-only Google Calendar sources. The Israel calendar is also pushed to the
 // installer calendar; the GF Jobs calendar is display-only (never written to).
 const SOURCES = [{ id: FULL_CAL, pushToInstaller: true }, { id: GF_JOBS_CAL, pushToInstaller: false }];
+
+// Google list calls occasionally return 429 or 5xx/524 upstream timeouts; one bad
+// page used to abort the whole run. Retry only those (3 attempts, 1s then 3s).
+const LIST_RETRY_DELAYS_MS = [1000, 3000];
+async function fetchCalendarPage(url, headers) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers });
+    const retryable = res.status === 429 || res.status >= 500;
+    if (res.ok || !retryable || attempt >= LIST_RETRY_DELAYS_MS.length) return res;
+    await res.body?.cancel().catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, LIST_RETRY_DELAYS_MS[attempt]));
+  }
+}
 
 export default async function(req) {
   try {
@@ -38,12 +55,12 @@ export default async function(req) {
 
     const allItems = [];
     for (const cal of SOURCES) {
-      const baseUrl = `${CAL_API}/calendars/${encodeURIComponent(cal.id)}/events?maxResults=100&singleEvents=true&showDeleted=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
+      const baseUrl = `${CAL_API}/calendars/${encodeURIComponent(cal.id)}/events?maxResults=2500&singleEvents=true&showDeleted=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
       let pageToken = null;
       do {
         let url = baseUrl;
         if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
-        const res = await fetch(url, { headers });
+        const res = await fetchCalendarPage(url, headers);
         if (!res.ok) return Response.json({ error: 'calendar_api_error', detail: await res.text() }, { status: 502 });
         const data = await res.json();
         for (const item of (data.items || [])) allItems.push({ ...item, _calendarId: cal.id });
@@ -59,13 +76,15 @@ export default async function(req) {
     const items = allItems.filter((it) => (seenIds.has(it.id) ? false : (seenIds.add(it.id), true)));
 
     const existing = await fetchAllPages(base44.asServiceRole.entities.CalendarEvents, '-created_date', 1000);
+    const jobs = await fetchAllPages(base44.asServiceRole.entities.Jobs, '-created_date', 1000);
     const byGoogleId = new Map();
     for (const e of existing) if (e.google_event_id) byGoogleId.set(e.google_event_id, e);
 
     const toUpdate = [];
     const toCreate = [];
-    let skippedApp = 0;
+    let skippedApp = 0, skippedIgnored = 0;
     for (const ev of items) {
+      if (isIgnoredWorkItem(ev)) { skippedIgnored++; continue; }
       if (ev.extendedProperties?.private?.appSource === 'glassforge') { skippedApp++; continue; }
       if (ev.status === 'cancelled') {
         const ex = byGoogleId.get(ev.id);
@@ -108,8 +127,14 @@ export default async function(req) {
         report_due_at: reportDueAtWithGrace(event_date),
       };
       const ex = byGoogleId.get(ev.id);
+      // New rows may carry an exact identity; never backfill an existing event during sync.
+      if (!ex) {
+        const link = resolveJobLink({ job_name: row.job_name, po_number: row.po_number, oe_number: row.oe_number }, jobs);
+        if (link.job_id) Object.assign(row, { job_id: link.job_id, job_link_source: link.source, job_linked_at: new Date().toISOString() });
+      }
       if (ex) {
         if (ex.source === 'app') continue;
+        row.event_attachments = preserveAttachmentMetadata(row.event_attachments, ex.event_attachments || []);
         const updateRow = { id: ex.id, ...row, installer_event_id: ex.installer_event_id || null };
         // report_required is create-only: manual waivers, audit retirements and
         // supersessions set it false deliberately - never re-derive it on update.
@@ -158,7 +183,7 @@ export default async function(req) {
     const installerFailures = [];
     const installerIdUpdates = [];
     for (const ev of pushCandidates) {
-      if (!ev.event_date || !ev.job_name) { installerSkipped++; continue; }
+      if (isIgnoredWorkItem(ev) || !ev.event_date || !ev.job_name) { installerSkipped++; continue; }
       const eventBody = buildInstallerEvent(ev);
       const existingId = ev.installer_event_id || (ev.google_event_id ? installerMap.get(ev.google_event_id) : null);
       const result = await upsertInstallerEvent(existingId, eventBody, headers);
@@ -240,12 +265,42 @@ export default async function(req) {
 
     for (const batch of chunk(installerIdUpdates, 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
 
+    // New and upcoming events: copy their attachments into the job's Drive
+    // folder (Gmail files need the Gmail connector on Israel's account).
+    let jobFolderCopy = null;
+    try {
+      const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+      const ids = new Set([
+        ...createdRecords.map(e => e.id),
+        ...toUpdate.filter(e => e.source_status !== 'cancelled' && (e.event_date || '') >= since).map(e => e.id),
+      ].filter(Boolean));
+      const candidates = [...createdRecords, ...toUpdate].filter(e => ids.has(e.id) && e.event_attachments?.some(needsJobFolderCopy));
+      const fresh = (await Promise.all([...new Set(candidates.map(e => e.id))].map(id => base44.asServiceRole.entities.CalendarEvents.get(id).catch(() => null))))
+        .filter(e => e && e.source_status !== 'cancelled');
+      if (fresh.length) jobFolderCopy = await copyEventFilesToJobFolders({ client: base44, events: fresh, limit: 25 });
+    } catch (error) {
+      console.error('post-sync job folder copy failed', error);
+    }
+
+    try {
+      const eventIds = createdRecords
+        .filter(event => event.source_status !== 'cancelled' && event.event_attachments?.some(a => !a.hub_file_uri && !a.job_folder_file_id))
+        .map(event => event.id)
+        .filter(Boolean);
+      if (eventIds.length) await rehostEventAttachments({ client: base44, eventIds, limit: 20 });
+    } catch (error) {
+      // Rehosting is best effort: calendar data must remain successfully synced.
+      console.error('post-sync attachment rehost failed', error);
+    }
+
     return Response.json({
       ok: installerFailed === 0,
       fetched: allItems.length,
       created: toCreate.length,
       updated: toUpdate.length,
+      job_folder_copy: jobFolderCopy,
       skipped_app: skippedApp,
+      skipped_ignored: skippedIgnored,
       force_repush: forceRepush,
       push_candidates: pushCandidates.length,
       installer_pushed: installerPushed,

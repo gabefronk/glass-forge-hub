@@ -2,6 +2,7 @@ import { base44 } from "@/api/base44Client";
 import { fetchAllPages } from "@/lib/pagination";
 import { groupForJob } from "@/lib/jobDedupe";
 import { buildReportEvidence } from "@/lib/jobReports";
+import { uniqueLegacyNames } from "@/lib/jobLegacyNames";
 
 // Read-only loaders shared by the job page and the Jobs workspace panel. A job
 // that has duplicate records (see jobDedupe.js) is shown as one: activity from
@@ -30,20 +31,87 @@ export async function loadJobActivity(memberIds) {
   return { rows: rowLists.flat().sort(byDateDesc("job_date")), notes: noteLists.flat().sort(byDateDesc("note_date")) };
 }
 
+export async function loadUniqueLegacyNames(memberIds) {
+  // A bounded partial catalog cannot prove a name unique. Fail closed instead.
+  const jobs = [];
+  for (let page = 0; page < 50; page++) {
+    const batch = await base44.entities.Jobs.list('-created_date', 1000, page * 1000);
+    if (!Array.isArray(batch) || batch.length > 1000) throw new Error('Invalid Jobs catalog page');
+    jobs.push(...batch);
+    if (batch.length < 1000) return uniqueLegacyNames(jobs, memberIds);
+  }
+  throw new Error('Jobs catalog completeness could not be verified');
+}
+
 // Calendar events shown on the job, plus report evidence for its status. The
 // evidence also covers events linked from this job's lines that are filed under
 // another job id, so a linked event's "Report complete" is never missed.
-export function jobEventsAndEvidence(allEvents, memberIds, rows, notes) {
+export function jobEventsAndEvidence(allEvents, memberIds, rows, notes, names = []) {
   const members = new Set(memberIds);
+  const legacyNames = new Set(names.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
   const linkIds = new Set(rows.filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
   const shown = [];
   const relevant = [];
   for (const e of allEvents || []) {
     const linked = Boolean(e.google_event_id) && linkIds.has(e.google_event_id);
-    if (e.job_id ? members.has(e.job_id) : linked) shown.push(e);
-    if (linked || (e.job_id && members.has(e.job_id))) relevant.push(e);
+    const legacyNameMatch = !e.job_id && legacyNames.has(String(e.job_name || "").trim().toLowerCase());
+    if (e.job_id ? members.has(e.job_id) : (linked || legacyNameMatch)) shown.push(e);
+    if (linked || legacyNameMatch || (e.job_id && members.has(e.job_id))) relevant.push(e);
   }
   const canonical = memberIds[0];
   const evidence = buildReportEvidence({ events: relevant, notes, groupOf: (id) => (members.has(id) ? canonical : id) });
   return { events: shown, evidence };
+}
+
+export function reportsForJob(allReports, memberIds, postIds = new Set(), names = []) {
+  const ids = new Set(memberIds);
+  const normalizedNames = new Set(names.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
+  return (allReports || []).filter((r) => r.job_id
+    ? ids.has(r.job_id)
+    : (postIds.has(r.post_id) || normalizedNames.has(String(r.job_name || "").trim().toLowerCase())));
+}
+
+// Calendar events for a job without scanning the whole table: a fresh job-scoped
+// query for events directly linked to a member, plus edge cases (events tied via
+// a FeeLine's calendar_event_id, or by a legacy name) drawn from the hub's
+// preloaded collection. Returns the merged set; jobEventsAndEvidence() splits it
+// into shown events + report evidence. preloadedAllEvents may be null/undefined
+// when no hub collection is available (edge cases are then skipped).
+export async function loadJobEvents(memberIds, rows, preloadedAllEvents, legacyNames) {
+  const members = new Set(memberIds);
+  const direct = (await Promise.all(
+    [...members].map((id) => base44.entities.CalendarEvents.filter({ job_id: id }, "-event_date", 5000).catch(() => []))
+  )).flat();
+  const directIds = new Set(direct.map((e) => e.id));
+  const linkIds = new Set((rows || []).filter((r) => r.calendar_event_id).map((r) => r.calendar_event_id));
+  const legacySet = new Set((legacyNames || []).map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
+  const edge = (preloadedAllEvents || []).filter((e) => {
+    if (directIds.has(e.id)) return false;
+    const linked = Boolean(e.google_event_id) && linkIds.has(e.google_event_id);
+    const legacyNameMatch = !e.job_id && legacySet.has(String(e.job_name || "").trim().toLowerCase());
+    return linked || legacyNameMatch;
+  });
+  return [...direct, ...edge];
+}
+
+// Field reports for a job without scanning the whole table: a fresh job-scoped
+// query for reports directly linked to a member, plus edge cases (reports with no
+// job_id whose Probuild post_id matches one of this job's FeeLines, or whose job
+// name matches a legacy name) from the hub's preloaded collection.
+export async function loadJobFieldReports(memberIds, postIds, preloadedAllReports, legacyNames) {
+  const members = new Set(memberIds);
+  const direct = (await Promise.all(
+    [...members].map((id) => base44.entities.FieldReports.filter({ job_id: id }, "-created_date", 2000).catch(() => []))
+  )).flat();
+  const directIds = new Set(direct.map((r) => r.id));
+  const postSet = new Set(postIds || []);
+  const legacySet = new Set((legacyNames || []).map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
+  const edge = (preloadedAllReports || []).filter((r) => {
+    if (directIds.has(r.id)) return false;
+    if (r.job_id) return false; // reports filed under another job belong to that job, not this one
+    const byPost = r.post_id && postSet.has(r.post_id);
+    const byLegacy = legacySet.has(String(r.job_name || "").trim().toLowerCase());
+    return byPost || byLegacy;
+  });
+  return [...direct, ...edge];
 }

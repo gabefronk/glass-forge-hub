@@ -1,13 +1,20 @@
+import { usePurchasingDates } from "@/lib/usePurchasingDates";
+import { purchasingCalendarEvents } from "@/lib/purchasingDates";
+import { PurchasingCalendarDetails } from "@/components/budgets/PurchasingDates";
 import { refreshMonth } from "@/lib/refreshMonth";
 import { currentMonthStr, shiftMonthStr } from "@/lib/feeMath";
-import { denverDate } from "../../base44/shared/billingCore.js";
+import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
 import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { ChevronLeft, ChevronRight, Plus, RefreshCw, Search } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, LayoutGrid, List, Plus, RefreshCw, Search, X } from "lucide-react";
 import { fetchAllPages } from "@/lib/pagination";
 import { C } from "@/lib/feeUI";
+import { PageShell, PageHero, heroBtn, heroPrimary, heroSecondary } from "@/components/PageShell";
+import { KIND, filterEvents, kindCounts, weekDays, weekLabel, addDays, byTime } from "@/lib/calendarModel";
 import MonthGrid from "@/components/calendar/MonthGrid";
+import WeekView from "@/components/calendar/WeekView";
+import AgendaList from "@/components/calendar/AgendaList";
+import EventCard from "@/components/calendar/EventCard";
 import EventForm from "@/components/calendar/EventForm";
 import EventBubble from "@/components/calendar/EventBubble";
 import OutlookEventDetails from "@/components/calendar/OutlookEventDetails";
@@ -22,16 +29,27 @@ function formatMonth(m) {
   return new Date(y, mm - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-const INSTALL_COLOR = "#0B3F3B";
-const SERVICE_COLOR = "#A43432";
-const OUTLOOK_COLOR = "#7042A1";
 const GF_JOBS_CAL_ID = "0236b85aa32e6358ebe5a232e970e6c9c2c47142f8c3f22cadd5b5b0eb34bf67@group.calendar.google.com";
+
+const VIEWS = [
+  { key: "month", label: "Month", icon: LayoutGrid },
+  { key: "week", label: "Week", icon: CalendarDays },
+  { key: "list", label: "List", icon: List },
+];
+
+// Admin-only tools that replace the calendar body, each with the same back bar.
+function ToolView({ title, onBack, children }) {
+  return (
+    <PageShell className="!mx-0">
+      <PageHero compact eyebrow="Calendar · Admin tool" title={title} actions={<button type="button" onClick={onBack} className={heroBtn} style={heroSecondary}><ArrowLeft className="h-4 w-4" style={{ color: "#e0c994" }} />Calendar</button>} />
+      <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>{children}</div>
+    </PageShell>
+  );
+}
 
 export default function CalendarPage() {
   const [events, setEvents] = useState([]);
-  const [cleanView,setCleanView] = useState(false);
-  const [serviceView,setServiceView]=useState(false);
-  const [knowledgeView,setKnowledgeView]=useState(false);
+  const [tool, setTool] = useState(null); // null | "install" | "ipad" | "knowledge"
   const [outlook, setOutlook] = useState(null);
   const [excludedEvents, setExcludedEvents] = useState([]);
   const [syncMessage, setSyncMessage] = useState("");
@@ -54,16 +72,24 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState(() => denverDate());
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [unreportedOnly, setUnreportedOnly] = useState(false);
+  const [filter, setFilter] = useState("all"); // all | install | service | outlook | needs_report
   const [query, setQuery] = useState("");
   const [user, setUser] = useState(null);
+  const [purchasingRevision, setPurchasingRevision] = useState(0);
+  const purchasing = usePurchasingDates(user, purchasingRevision);
+  const purchasingEvents = useMemo(() => purchasingCalendarEvents(purchasing.data || {}), [purchasing.data]);
+  useEffect(() => { setSelected(current => current?.source === "purchasing" ? purchasingEvents.find(e => e.id === current.id) || null : current); }, [purchasingEvents]);
+  const today = denverDate();
+  const isAdmin = user?.role === "admin";
 
   const load = async () => {
-    setLoading(true); setOwnershipError(""); setSelected(null);
+    setLoading(true); setOwnershipError(""); setSelected(null); setPurchasingRevision(v => v + 1);
+    // The Jobs list only feeds the event form's job picker, so it loads alongside
+    // and never holds up the calendar.
+    fetchAllPages(base44.entities.Jobs, "-created_date", 1000).then(setJobs).catch(() => {});
     try {
-      const [response, jobsArr, me] = await Promise.all([
+      const [response, me] = await Promise.all([
         base44.functions.invoke("ownedCalendar", {}),
-        fetchAllPages(base44.entities.Jobs, "-created_date", 1000),
         base44.auth.me().catch(() => null),
       ]);
       if (response.data?.error) throw new Error(response.data.error);
@@ -72,7 +98,6 @@ export default function CalendarPage() {
       setOwnership(response.data.ownership || null);
       setOutlook(response.data.outlook || null);
       setPartialOutlook(response.data.partial_outlook || null);
-      setJobs(jobsArr);
       setUser(me);
     } catch (e) {
       setEvents([]); setOwnership(null);
@@ -91,21 +116,23 @@ export default function CalendarPage() {
 
   // Every group has verified tracker ownership. Choose one visible source per visit.
   const combined = useMemo(() => ({
-    events: events.map(group => group.find(event => {
+    events: [...events.map(group => group.find(event => {
+      if (isIgnoredWorkItem(event)) return false;
       if (event.source === "outlook") return showOutlook;
       if (event.google_calendar_id === GF_JOBS_CAL_ID) return showGfJobs;
       return showIsrael;
-    })).filter(Boolean),
-  }), [events, showIsrael, showOutlook, showGfJobs]);
+    })).filter(Boolean), ...purchasingEvents],
+  }), [events, showIsrael, showOutlook, showGfJobs, purchasingEvents]);
   const ownershipCounts = ownership?.by_month?.[month];
-  const monthEvents = useMemo(() => {
-    let filtered = combined.events.filter((e) => (e.event_date || "").slice(0, 7) === month);
-    if (unreportedOnly) {
-      filtered = filtered.filter((e) => e.report_required !== false &&
-        ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"].includes(e.report_status));
-    }
-    return filtered;
-  }, [combined, month, unreportedOnly]);
+  const monthAll = useMemo(() => combined.events.filter((e) => (e.event_date || "").slice(0, 7) === month), [combined, month]);
+  const monthEvents = useMemo(() => filterEvents(monthAll, filter, today), [monthAll, filter, today]);
+  // The week can cross into the next or previous month, so it filters every loaded event.
+  const weekAll = useMemo(() => {
+    const days = new Set(weekDays(selectedDay));
+    return combined.events.filter((e) => days.has((e.event_date || "").slice(0, 10)));
+  }, [combined, selectedDay]);
+  const weekEvents = useMemo(() => filterEvents(weekAll, filter, today), [weekAll, filter, today]);
+  const counts = useMemo(() => kindCounts(view === "week" ? weekAll : monthAll, today), [view, weekAll, monthAll, today]);
   // Quick search across every loaded event (all months), like the job tracker.
   const searchMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -117,7 +144,7 @@ export default function CalendarPage() {
       .slice(0, 50);
   }, [combined, query]);
   const selectedDayEvents = useMemo(() => {
-    return monthEvents.filter((e) => (e.event_date || "").slice(0, 10) === selectedDay).sort((a, b) => (a.start_time || "99").localeCompare(b.start_time || "99"));
+    return monthEvents.filter((e) => (e.event_date || "").slice(0, 10) === selectedDay).sort(byTime);
   }, [monthEvents, selectedDay]);
 
   const shiftMonth = (delta) => {
@@ -125,6 +152,9 @@ export default function CalendarPage() {
     setMonth(newMonth);
     setSelectedDay(`${newMonth}-01`);
   };
+  const goToDay = (day) => { setSelectedDay(day); setMonth(day.slice(0, 7)); };
+  const step = (delta) => (view === "week" ? goToDay(addDays(selectedDay, 7 * delta)) : shiftMonth(delta));
+  const goToday = () => goToDay(denverDate());
 
   const handleSave = async (f) => {
     setSaving(true);
@@ -164,6 +194,7 @@ export default function CalendarPage() {
   // Two-way move: drag writes the REAL Google calendar via moveCalendarEvent.
   // Optimistic UI; on any failure the snapshot is restored and the error shown.
   const handleMoveEvent = async (id, newDate, fromDate) => {
+    if (!events.flat().some(event => event.id === id && event.google_event_id)) return;
     const snapshot = events;
     const label = events.flat().find((e) => e.id === id)?.job_name || "Event";
     setEvents(events.map((group) => group.map((e) => (e.id === id ? { ...e, event_date: newDate } : e))));
@@ -186,6 +217,7 @@ export default function CalendarPage() {
   };
 
   const handleSync = async () => {
+    setPurchasingRevision(value => value + 1);
     setSyncing(true);
     try {
       await refreshMonth(month, setSyncMessage);
@@ -199,82 +231,121 @@ export default function CalendarPage() {
     return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   };
 
-  if(user?.role==="admin" && knowledgeView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setKnowledgeView(false)}>Back to calendar</button><JobKnowledge /></div>;
-  if(user?.role==="admin" && serviceView)return <div className="p-5"><button className="underline mb-4" onClick={()=>setServiceView(false)}>Back to calendar</button><ServiceCalendar /></div>;
-  if(user?.role==="admin" && cleanView) return <div className="p-5" style={{backgroundColor:C.pageBg,minHeight:"100vh"}}><button className="mb-4 underline" onClick={()=>setCleanView(false)}>Back to calendar</button><button className="mb-4 ml-4 underline" onClick={()=>setServiceView(true)}>iPad schedules</button><button className="mb-4 ml-4 underline" onClick={()=>setKnowledgeView(true)}>Find job update</button><CleanCalendar /></div>;
+  if (isAdmin && tool === "knowledge") return <ToolView title="Find a job update" onBack={() => setTool(null)}><JobKnowledge /></ToolView>;
+  if (isAdmin && tool === "ipad") return <ToolView title="iPad schedules" onBack={() => setTool(null)}><ServiceCalendar /></ToolView>;
+  if (isAdmin && tool === "install") return <ToolView title="Installation calendar" onBack={() => setTool(null)}><CleanCalendar /></ToolView>;
+
+  const periodLabel = view === "week" ? weekLabel(weekDays(selectedDay)) : formatMonth(month);
+  const periodCount = view === "week" ? weekEvents.length : monthEvents.length;
+  const filterChips = [
+    { key: "all", label: view === "week" ? "All this week" : "All this month", count: counts.all },
+    { key: "install", label: "Installs", count: counts.install, dot: KIND.install.bar },
+    { key: "service", label: "Service", count: counts.service, dot: KIND.service.bar },
+    ...(counts.outlook ? [{ key: "outlook", label: "Outlook", count: counts.outlook, dot: KIND.outlook.bar }] : []),
+    ...(purchasing.data ? [{ key: "purchasing", label: "Purchasing", count: counts.purchasing, dot: KIND.purchasing.bar }] : []),
+    { key: "needs_report", label: "Needs report", count: counts.needs_report, dot: "#C08B2E" },
+  ];
+  const openCreate = (d) => { setSelected(null); setCreating({ event_date: d || selectedDay }); };
+  const ghostBtn = { border: `1px solid ${C.border}`, color: C.textSecondary, backgroundColor: C.card };
+  const heroGhost = { backgroundColor: "rgba(255,255,255,.09)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.12)" };
+
   return (
-    <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-      <div className="hero-glow px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-10">
-        {/* Header */}
-        <div className="mb-6 rounded-[16px] border bg-white px-4 py-4 shadow-sm sm:px-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="min-w-0">
-              <div className="mono-label-sm mb-1">Schedule</div>
-              <h1 className="font-heading text-[22px] font-semibold tracking-[-0.03em]" style={{ color: C.text }}>Calendar</h1>
+    <PageShell width="max-w-none">
+      <div>
+        {/* Header: title, period nav, view switch, primary action */}
+        <div className="mb-4 rounded-[14px] px-6 py-5 max-[699px]:px-4" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <div className="min-w-0 mr-auto">
+              <div className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>SCHEDULE</div>
+              <div className="flex flex-wrap items-baseline gap-x-3">
+                <h1 className="m-0 text-[28px] font-bold leading-[34px] max-[699px]:text-[24px]" style={{ color: "#f2eee8", letterSpacing: "-0.035em" }}>{periodLabel}</h1>
+                <span className="font-mono-num text-[13px]" style={{ color: "#aeb5b7" }}>{periodCount} {periodCount === 1 ? "entry" : "entries"}</span>
+              </div>
             </div>
-            {user?.role==="admin"&&<button className="rounded-full border px-3 py-2 text-sm" onClick={()=>setServiceView(true)}>iPad schedules</button>}{user?.role==="admin"&&<button className="ml-auto rounded-full border px-3 py-2 text-[12px] font-semibold" style={{borderColor:C.border,color:C.textSecondary}} onClick={()=>setCleanView(true)}>Installation calendar</button>}
+            <div className="flex items-center gap-1" aria-label={view === "week" ? "Choose week" : "Choose month"}>
+              <button type="button" onClick={() => step(-1)} className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[9px]" style={heroGhost} aria-label={view === "week" ? "Previous week" : "Previous month"}><ChevronLeft className="h-4 w-4" /></button>
+              <button type="button" onClick={goToday} className="h-[38px] rounded-[9px] px-4 text-[13.5px] font-semibold" style={heroGhost}>Today</button>
+              <button type="button" onClick={() => step(1)} className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-[9px]" style={heroGhost} aria-label={view === "week" ? "Next week" : "Next month"}><ChevronRight className="h-4 w-4" /></button>
+            </div>
+            <div className="flex rounded-[10px] p-1" role="group" aria-label="Calendar view" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)" }}>
+              {VIEWS.map(({ key, label, icon: Icon }) => (
+                <button key={key} type="button" onClick={() => setView(key)} aria-pressed={view === key}
+                  className="inline-flex min-h-[30px] items-center gap-1.5 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors"
+                  style={view === key ? { backgroundColor: "#cfe3da", color: "#082f2c" } : { color: "#c9d0d1" }}>
+                  <Icon className="h-3.5 w-3.5" />{label}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => openCreate()} className={heroBtn} style={heroPrimary}>
+              <Plus className="h-4 w-4" />New event
+            </button>
           </div>
-          <div className="mt-4 flex w-full flex-wrap items-center gap-2">
-            <div className="flex rounded-full p-0.5" style={{ border: `1px solid ${C.border}` }}>
-              <button type="button" onClick={() => setView("month")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "month" ? "" : "")} style={view === "month" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>Month</button>
-              <button type="button" onClick={() => setView("list")} className={cn("px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] transition-colors", view === "list" ? "" : "")} style={view === "list" ? { backgroundColor: C.accent, color: C.accentDark } : { color: C.textSecondary }}>List</button>
+
+          {/* Filters, search, refresh */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[12px] px-3 py-2.5" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter events">
+              {filterChips.map((f) => (
+                <button key={f.key} type="button" onClick={() => setFilter(f.key)} aria-pressed={filter === f.key}
+                  className="inline-flex min-h-8 items-center gap-1.5 px-3 rounded-[7px] text-[12.5px] font-semibold whitespace-nowrap transition-colors"
+                  style={filter === f.key ? { backgroundColor: "#e0c994", color: "#1d160a" } : { border: "1px solid rgba(255,255,255,.12)", color: "#c9d0d1" }}>
+                  {f.dot && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: f.dot }} aria-hidden="true" />}
+                  {f.label}<span className="font-mono-num text-[11px]" style={{ opacity: 0.7 }}>{f.count}</span>
+                </button>
+              ))}
             </div>
-            <button type="button" onClick={() => setUnreportedOnly(!unreportedOnly)} className="px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-[0.01em] whitespace-nowrap transition-colors" style={unreportedOnly ? { backgroundColor: C.amber, color: "#FFFFFF" } : { border: `1px solid ${C.border}`, color: C.textSecondary }}>Unreported only</button>
-            <div className="relative inline-flex items-center">
-              <Search className="absolute left-3 h-3.5 w-3.5 pointer-events-none" style={{ color: C.textSecondary }} />
+            <div className="relative inline-flex items-center ml-auto max-[699px]:ml-0 max-[699px]:w-full">
+              <Search className="absolute left-3 h-3.5 w-3.5 pointer-events-none" style={{ color: "#aeb5b7" }} />
               <input
+                type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search jobs, builders, addresses"
-                className="pl-8 pr-3 py-2 rounded-full text-[12px] w-56 max-w-full focus:outline-none"
-                style={{ border: `1px solid ${C.border}`, color: C.text }}
+                placeholder="Search jobs, builders, addresses, crews"
+                aria-label="Search all events"
+                className="pl-8 pr-8 min-h-8 rounded-[8px] text-[12.5px] w-64 max-[699px]:w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e0c994]"
+                style={{ backgroundColor: "rgba(255,255,255,.08)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.16)" }}
               />
+              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-1 inline-flex h-7 w-7 items-center justify-center rounded-full" style={{ color: "#aeb5b7" }}><X className="h-3.5 w-3.5" /></button>}
             </div>
-            <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
-              <RefreshCw className="h-3.5 w-3.5" />{syncing ? "Syncing…" : "Refresh whole month"}
-            </button>
-            <button onClick={() => { setSelected(null); setCreating({ event_date: selectedDay }); }} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
-              <Plus className="h-3.5 w-3.5" />New event
+            <button type="button" onClick={handleSync} disabled={syncing} title="Pull Google Calendar, ProBuild and billing for this month" className="inline-flex min-h-8 items-center gap-1.5 px-3 rounded-[7px] text-[12.5px] font-semibold whitespace-nowrap disabled:opacity-60" style={heroGhost}>
+              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} style={{ color: "#e0c994" }} />{syncing ? "Refreshing…" : "Refresh month"}
             </button>
           </div>
+
+          {isAdmin && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+              <span style={{ color: "#8f999b" }}>Admin tools:</span>
+              {[["install", "Installation calendar"], ["ipad", "iPad schedules"], ["knowledge", "Find a job update"]].map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setTool(k)} className="inline-flex min-h-8 items-center px-3 rounded-[7px] font-semibold" style={heroGhost}>{label}</button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {syncMessage && <p role="status" className="mb-4 rounded-lg border bg-white p-3 text-sm">{syncMessage}</p>}
+        {syncMessage && (
+          <div role="status" className="mb-4 flex items-start gap-3 rounded-[12px] p-3 text-[13px]" style={{ backgroundColor: C.card, border: `1px solid ${C.border}`, color: C.text }}>
+            <span className="flex-1">{syncMessage}</span>
+            <button type="button" onClick={() => setSyncMessage("")} aria-label="Dismiss message" className="inline-flex h-7 w-7 items-center justify-center rounded-full" style={{ color: C.textMuted }}><X className="h-3.5 w-3.5" /></button>
+          </div>
+        )}
 
         {query.trim().length >= 2 && (
-          <div className="mb-4 rounded-lg border bg-white p-3">
-            <div className="mono-label-sm mb-2">{searchMatches.length} match{searchMatches.length === 1 ? "" : "es"}{searchMatches.length === 50 ? " (first 50 - narrow the search)" : ""}</div>
-            {searchMatches.length === 0 && <p className="text-sm" style={{ color: C.textSecondary }}>No events match "{query.trim()}".</p>}
-            <div className="flex flex-col gap-1">
+          <div className="mb-4 rounded-[14px] p-3 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+            <div className="mono-label-sm mb-2 px-1">{searchMatches.length} match{searchMatches.length === 1 ? "" : "es"}{searchMatches.length === 50 ? " (first 50 - narrow the search)" : ""}</div>
+            {searchMatches.length === 0 && <p className="px-1 text-sm" style={{ color: C.textSecondary }}>No events match &quot;{query.trim()}&quot;.</p>}
+            <div className="flex flex-col">
               {searchMatches.map((m) => {
                 const d = m.event_date || "";
                 return (
-                  <button key={m.id} type="button" onClick={() => { setMonth(d.slice(0, 7)); setSelectedDay(d.slice(0, 10)); setSelected(m); }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-[#F8F9F6]">
-                    <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: C.textSecondary }}>{d.slice(5, 10)} {m.start_time || ""}</span>
-                    <span className="truncate" style={{ color: C.text }}>{m.job_name || "(untitled)"}</span>
+                  <button key={m.id} type="button" onClick={() => { goToDay(d.slice(0, 10)); setSelected(m); }} className="flex items-center gap-3 rounded-md px-2 py-2 text-left text-sm hover:bg-[#F6F3EC]">
+                    <span className="font-mono-num text-[12px] w-[92px] shrink-0 whitespace-nowrap" style={{ color: C.textSecondary }}>{d.slice(5, 10)} {m.start_time || ""}</span>
+                    <span className="truncate font-medium" style={{ color: C.text }}>{m.purchasing_label ? m.purchasing_label + " · " : ""}{m.job_name || "(untitled)"}</span>
+                    {m.address && <span className="truncate text-[12px] max-[699px]:hidden" style={{ color: C.textMuted }}>{m.address}</span>}
                   </button>
                 );
               })}
             </div>
           </div>
         )}
-
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-4">
-          <h1 className="font-heading text-[22px] sm:text-[24px] font-semibold" style={{ color: C.text, letterSpacing: "-0.03em" }}>{formatMonth(month)}</h1>
-          <div className="flex items-center gap-1" aria-label="Choose calendar month">
-            <button type="button" onClick={() => shiftMonth(-1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></button>
-            <button type="button" onClick={() => { const day = denverDate(); setMonth(day.slice(0, 7)); setSelectedDay(day); }} className="min-h-11 rounded-full px-3 text-xs font-medium hover:bg-[#F8F9F6]" style={{ color: C.textSecondary }}>Today</button>
-            <button type="button" onClick={() => shiftMonth(1)} className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-[#F8F9F6]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }} aria-label="Next month"><ChevronRight className="h-4 w-4" /></button>
-          </div>
-          <div className="flex items-center gap-3 text-[11px]">
-            <span className="inline-flex items-center gap-1.5" style={{ color: C.textSecondary }}>
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: INSTALL_COLOR }} />Install
-            </span>
-            <span className="inline-flex items-center gap-1.5" style={{ color: C.textSecondary }}>
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: SERVICE_COLOR }} />Service
-            </span>
-          </div>
-        </div>
 
         <SourceCoverageBar
           outlook={outlook}
@@ -294,23 +365,30 @@ export default function CalendarPage() {
           setShowOutlook={setShowOutlook}
           onReload={load}
         />
+        {purchasing.error && <p role="alert" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{purchasing.error}</p>}
+        {purchasing.data && <p className="mb-3 text-xs text-slate-500">Purchasing dates come from order records. ETAs are estimates; they do not book installation or create Google appointments.</p>}
         {creating && (
           <div className="mb-4">
             <EventForm initial={creating} jobs={jobs} onSave={handleSave} onCancel={() => setCreating(null)} saving={saving} />
           </div>
         )}
         {selected?.source === "outlook" && <OutlookEventDetails event={selected} onClose={() => setSelected(null)} />}
-        {selected && selected.source !== "outlook" && (
+        {selected?.source === "purchasing" && <PurchasingCalendarDetails event={selected} onClose={() => setSelected(null)} />}
+        {selected && selected.source !== "outlook" && selected.source !== "purchasing" && (
           <EventBubble event={selected} jobs={jobs} onEdit={handleSave} onDelete={handleDelete} onClose={() => setSelected(null)} saving={saving} user={user} onChanged={load} />
         )}
 
-        {view === "month" ? (
+        {loading && !events.length ? (
+          <div className="flex items-center justify-center rounded-[14px] py-16 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+            <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: C.border, borderTopColor: C.accent }} aria-label="Loading calendar" />
+          </div>
+        ) : view === "month" ? (
           <>
             <MonthGrid
               month={month}
               events={monthEvents}
               onSelect={setSelected}
-              onCreateForDate={(d) => { setSelected(null); setCreating({ event_date: d }); }}
+              onCreateForDate={openCreate}
               selectedDate={selectedDay}
               onSelectDay={setSelectedDay}
               onMoveEvent={handleMoveEvent}
@@ -318,70 +396,30 @@ export default function CalendarPage() {
             {/* Selected day panel */}
             <div className="mt-4 rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <h3 className="font-heading text-[14px] font-semibold" style={{ color: C.text }}>{dayLabel(selectedDay)}</h3>
-                <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>{selectedDayEvents.length} {selectedDayEvents.length === 1 ? "event" : "events"}</span>
+                <h2 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>{selectedDay === today ? `Today · ${dayLabel(selectedDay)}` : dayLabel(selectedDay)}</h2>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono-num text-[12px]" style={{ color: C.textMuted }}>{selectedDayEvents.length} {selectedDayEvents.length === 1 ? "entry" : "entries"}</span>
+                  <button type="button" onClick={() => { setView("week"); }} className="inline-flex min-h-8 items-center px-3 rounded-full text-[12px] font-medium transition-colors hover:bg-[#F6F3EC]" style={ghostBtn}>See week</button>
+                </div>
               </div>
               {selectedDayEvents.length === 0 ? (
                 <div className="rounded-[12px] py-8 text-center" style={{ border: `1.5px dashed ${C.border}` }}>
-                  <p className="text-[13px] mb-2" style={{ color: C.textMuted }}>Nothing scheduled</p>
-                  <button onClick={() => { setCreating({ event_date: selectedDay }); }} className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>Add event</button>
+                  <p className="text-[13px] mb-3" style={{ color: C.textMuted }}>Nothing scheduled{filter !== "all" ? " in this filter" : ""}.</p>
+                  <button type="button" onClick={() => openCreate(selectedDay)} className="inline-flex min-h-9 items-center gap-1.5 text-[12.5px] font-semibold px-3.5 rounded-full whitespace-nowrap" style={{ backgroundColor: C.accent, color: "#fff" }}><Plus className="h-3.5 w-3.5" />Add event</button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 min-[700px]:grid-cols-2 gap-3">
-                  {selectedDayEvents.map((e) => {
-                    const isInstall = e.source === "app";
-                    const color = e.source === "outlook" ? OUTLOOK_COLOR : isInstall ? INSTALL_COLOR : SERVICE_COLOR;
-                    return (
-                      <button key={e.id} type="button" onClick={() => setSelected(e)} className="flex items-center gap-3 rounded-[12px] p-3 text-left transition-colors hover:bg-white/[0.03]" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt }}>
-                        <div className="w-[2px] self-stretch shrink-0 rounded-full" style={{ backgroundColor: color }} />
-                        <div className="font-mono-num text-[13px] w-[52px] shrink-0" style={{ color: C.textSecondary }}>{e.start_time || "—"}</div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[13px] font-medium truncate" style={{ color: C.text }}>{e.job_name}</div>
-                          {e.address && <div className="text-[11px] truncate" style={{ color: C.textMuted }}>{e.address}</div>}
-                        </div>
-                        <span className="text-[9px] font-semibold tracking-[0.01em] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0" style={{ backgroundColor: isInstall ? "#EAF5EE" : "#FCEDEC", border: isInstall ? "1px solid #C7E4D2" : "1px solid #F0C9C5", color }}>{e.source === "outlook" ? "Outlook" : isInstall ? "Install" : "Service"}</span>
-                      </button>
-                    );
-                  })}
+                <div className="grid grid-cols-1 min-[700px]:grid-cols-2 xl:grid-cols-3 gap-2">
+                  {selectedDayEvents.map((e) => <EventCard key={e.id} event={e} today={today} onSelect={setSelected} showJobLink />)}
                 </div>
               )}
             </div>
           </>
+        ) : view === "week" ? (
+          <WeekView day={selectedDay} events={weekEvents} today={today} onSelect={setSelected} onSelectDay={goToDay} onCreateForDate={openCreate} selectedDay={selectedDay} />
         ) : (
-          <div className="rounded-[14px] overflow-hidden card-shadow" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-            {monthEvents.length === 0 && <div className="px-4 py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No events this month.</div>}
-            {[...monthEvents].sort((a, b) => (a.event_date || "").localeCompare(b.event_date || "")).map((e) => {
-              const isInstall = e.source === "app";
-              const color = e.source === "outlook" ? OUTLOOK_COLOR : isInstall ? INSTALL_COLOR : SERVICE_COLOR;
-              const bg = e.source === "outlook" ? "#F0E9FA" : isInstall ? "#EAF5EE" : "#FCEDEC";
-              return (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => setSelected(e)}
-                  className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-[#F8F9F6]"
-                  style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
-                >
-                  <div className="flex flex-col items-center justify-center min-w-[42px] pr-1" style={{ borderRight: `1px solid ${C.border}` }}>
-                    <span className="text-[10px] tracking-[0.01em] leading-none" style={{ color: C.textMuted }}>
-                      {new Date(e.event_date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" })}
-                    </span>
-                    <span className="font-mono-num-bold text-[18px] leading-tight" style={{ color: C.text }}>
-                      {e.event_date.slice(8)}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0 break-words rounded-[4px] px-2.5 py-1.5" style={{ backgroundColor: bg, borderLeft: `2px solid ${color}` }}>
-                    {e.start_time && (
-                      <span className="font-mono-num text-[12px] font-semibold mr-1.5" style={{ color }}>{e.start_time}</span>
-                    )}
-                    <span className="break-words text-[13px] font-medium" style={{ color: C.text }}>{e.job_name}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <AgendaList events={monthEvents} today={today} onSelect={setSelected} emptyText={filter === "all" ? "No events this month." : "No events in this filter this month."} />
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -5,6 +5,7 @@ import { countAttachments } from '../../shared/reportMatching.ts';
 import { toMs, getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject, filterProjectsByWindow } from '../../shared/probuildApi.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 import { parseServiceBilling } from '../../shared/serviceBilling.ts';
+import { findJobMatches, eligibleJobs } from '../../shared/jobMatchGuard.js';
 
 // Ingest Probuild posts into FeeLines + FieldReports. One row per post.
 // Auth: Firebase refresh-token exchange (rotated token persisted to ProbuildAuth).
@@ -150,7 +151,11 @@ function serviceFill(ex, row, ext, lockedMonths) {
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
+    // Scheduled workflows run with no end user (null); signed-in callers must be admin/manager.
+    const user = await base44.auth.me().catch(() => null);
+    if (user && !['admin', 'manager'].includes(user.role)) return Response.json({ error: 'forbidden' }, { status: 403 });
     const body = await req.json().catch(() => ({}));
+    const dryRun = !!body.dry_run;
     const today = new Date();
     // Window extends through TODAY so D+1 posts are always captured.
     const endStr = body.end_date || denverDate(today);
@@ -234,7 +239,7 @@ export default async function(req) {
         noCreate: !!ex || lockedMonths.has(invoiceMonthFromDate(b.jobDate)),
       };
     }), jobsArr, (item) => ({ canonical_name: item.normName, aliases: [item.normName] }));
-    const newJobs = plan.drafts.length
+    const newJobs = (!dryRun && plan.drafts.length)
       ? await base44.asServiceRole.entities.Jobs.bulkCreate(plan.drafts.map(draftRecord))
       : [];
     const realJobId = pendingIdResolver(plan.drafts, newJobs);
@@ -246,6 +251,25 @@ export default async function(req) {
     const jobReviews = matched.filter((x) => !x.m.job_id && x.m.needs_review)
       .map((x) => ({ post_id: x.b.postId, job_name: x.b.projectName, reason: x.m.reason, candidate_job_ids: x.m.candidate_job_ids || [] }));
 
+    // Duplicate-warning safety net: for each post the planner would auto-create
+    // a job for, run the tiered guard against eligible existing jobs. A STRONG or
+    // MEDIUM match means the planner is about to create a duplicate — flag it so
+    // the run can be reviewed (or dry-run aborted) before writes commit.
+    const eligible = eligibleJobs(jobsArr);
+    const duplicateWarnings = [];
+    for (const { b, normName, m } of matched) {
+      if (!m.pending) continue;
+      const draft = plan.drafts.find((d) => d.canonical_name === normName) || { canonical_name: normName, aliases: [normName] };
+      const hits = findJobMatches(draft, eligible);
+      if (hits.strong.length || hits.medium.length) {
+        duplicateWarnings.push({
+          post_id: b.postId, job_name: b.projectName, draft_name: normName,
+          strong: hits.strong.map((j) => ({ id: j.id, name: j.canonical_name, address: j.address })),
+          medium: hits.medium.map((j) => ({ id: j.id, name: j.canonical_name, address: j.address })),
+        });
+      }
+    }
+
     // 8. Write FieldReports (upsert on post_id)
     const existingReports = await fetchAllPages(base44.asServiceRole.entities.FieldReports, '-created_date', 1000);
     const reportByPostId = new Map();
@@ -254,6 +278,7 @@ export default async function(req) {
     const frToUpdate = [];
     let frSkippedExisting = 0;
     let frPhotosFilled = 0;
+    let frJobsLinked = 0;
     const photoUrlByPost = new Map();
     for (const { b, normName, m } of matched) {
       const post = b.post;
@@ -269,6 +294,7 @@ export default async function(req) {
       }
       photoUrlByPost.set(b.postId, photoUrls);
       const reportRow = {
+        ...(m.job_id ? { job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: new Date().toISOString() } : {}),
         job_date: b.jobDate,
         job_name: b.projectName,
         message: post.message || '',
@@ -282,18 +308,24 @@ export default async function(req) {
       };
       if (exRep) {
         // Append-only (Gabriel 2026-09-15): never overwrite an existing field report.
-        // The only permitted write is additive: fill photo_urls when the report has none.
+        // Permitted additive repairs: fill missing photo_urls, and (owner-approved
+        // 2026-09-26) fill a missing job_id from a high-confidence match.
+        const patch = {};
         if (!(exRep.photo_urls || []).length && photoUrls.length) {
-          frToUpdate.push({ id: exRep.id, photo_urls: photoUrls });
+          patch.photo_urls = photoUrls;
           frPhotosFilled++;
-        } else {
-          frSkippedExisting++;
         }
+        if (!exRep.job_id && m.job_id && m.match_confidence === 'high') {
+          Object.assign(patch, { job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: new Date().toISOString() });
+          frJobsLinked++;
+        }
+        if (Object.keys(patch).length) frToUpdate.push({ id: exRep.id, ...patch });
+        else frSkippedExisting++;
       }
       else frToCreate.push(reportRow);
     }
-    if (frToCreate.length) await base44.asServiceRole.entities.FieldReports.bulkCreate(frToCreate);
-    if (frToUpdate.length) await base44.asServiceRole.entities.FieldReports.bulkUpdate(frToUpdate);
+    if (!dryRun && frToCreate.length) await base44.asServiceRole.entities.FieldReports.bulkCreate(frToCreate);
+    if (!dryRun && frToUpdate.length) await base44.asServiceRole.entities.FieldReports.bulkUpdate(frToUpdate);
 
 
     // 7. Build FeeLines rows + upsert on probuild_post_id
@@ -385,11 +417,12 @@ export default async function(req) {
         phillipGrover.push({ post_id: b.postId, job_date: b.jobDate, created_utc: post.createdAt, job_name: b.projectName });
       }
     }
-    if (toCreate.length) await base44.asServiceRole.entities.FeeLines.bulkCreate(toCreate);
-    if (toUpdate.length) await base44.asServiceRole.entities.FeeLines.bulkUpdate(toUpdate);
+    if (!dryRun && toCreate.length) await base44.asServiceRole.entities.FeeLines.bulkCreate(toCreate);
+    if (!dryRun && toUpdate.length) await base44.asServiceRole.entities.FeeLines.bulkUpdate(toUpdate);
 
     return Response.json({
       source: 'probuild',
+      dry_run: dryRun,
       window: { start_date: startStr, end_date: endStr },
       project_scan: projectStats,
       projects_qualifying: qualifying.length,
@@ -401,12 +434,14 @@ export default async function(req) {
       append_only: true,
       fr_skipped_existing: frSkippedExisting,
       fr_photos_filled: frPhotosFilled,
+      fr_jobs_linked: frJobsLinked,
       fee_photos_filled: feePhotosFilled,
       service_quantity_filled: serviceFilled,
       merged_into_calendar: merged_count,
       skipped_manually_adjusted: skipped,
       auto_created_jobs: newJobs.map((j) => j.canonical_name),
       job_match_reviews: jobReviews,
+      duplicate_warnings: duplicateWarnings,
       flagged_for_review: flagged,
       phillip_grover_rows: phillipGrover,
     });
@@ -414,4 +449,3 @@ export default async function(req) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
-

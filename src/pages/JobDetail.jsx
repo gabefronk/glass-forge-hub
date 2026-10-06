@@ -1,44 +1,96 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Camera, Plus } from "lucide-react";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Camera, FolderOpen, GitMerge, HardHat, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
-import { jobsStatus, sanitizeText } from "@/lib/jobsSanitize";
+import { jobsStatus } from "@/lib/jobsSanitize";
+import { holdForService } from "@/lib/serviceHold";
 import JobFactsRail from "@/components/jobs/JobFactsRail";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
 import { AttachmentViewer } from "@/components/jobs/FeedImage";
 import { fetchAllPages } from "@/lib/pagination";
 import { useJobContacts } from "@/hooks/use-job-contacts";
-import { loadJobGroup, loadJobActivity, jobEventsAndEvidence } from "@/lib/jobGroupData";
+import { loadJobGroup, loadJobActivity, jobEventsAndEvidence, reportsForJob, loadUniqueLegacyNames } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
+import MergedJobBanner from "@/components/jobs/MergedJobBanner";
+import CombinedRecordsPanel from "@/components/jobs/CombinedRecordsPanel";
+import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
+import JobLinkedRecords from "@/components/jobs/JobLinkedRecords";
+import JobMessageThreads from "@/components/jobs/JobMessageThreads";
+import OwnerSection from "@/components/jobs/OwnerSection";
+import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
+import { useAuth } from "@/lib/AuthContext";
+import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
+import { procurementPath } from "@/lib/procurementRoutes";
+import DeleteJobButton from "@/components/jobs/DeleteJobButton";
+import CombineJobsDialog from "@/components/jobs/CombineJobsDialog";
+import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
+import { JobHero, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
+import { jobProgress } from "@/lib/jobStages";
+import { buildReports } from "@/lib/jobHistory";
+import { jobSnapshot } from "@/lib/jobWorkspace";
+import { planMatchesJob, renameJob } from "@/lib/jobRename";
+import { denverDate } from "../../base44/shared/billingCore.js";
+import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
+import { useJobLive } from "@/hooks/use-job-live";
+import { ServiceMarker, useServiceItems } from "@/components/jobs/ServiceItems";
 
 export default function JobDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
   const [calEvents, setCalEvents] = useState([]);
   const jobContacts = useJobContacts(id);
   const [plans, setPlans] = useState([]);
+  const [folderId, setFolderId] = useState("");
+  const [folderError, setFolderError] = useState("");
+  const [linkingFolder, setLinkingFolder] = useState(false);
   const [fieldReports, setFieldReports] = useState([]);
   const [group, setGroup] = useState(null);
   const [evidence, setEvidence] = useState(null);
-  const [currentUser, setCurrentUser] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
+  const [showCombine, setShowCombine] = useState(false);
   const loadVersion = useRef(0);
+  const folder = useJobFolderFiles(job);
+  // Service items on this job and its duplicate records: shown on their field report in History.
+  const service = useServiceItems([id, ...(group?.memberIds || [])]);
+  // Kept in refs so the realtime listener always sees the current job.
+  const liveRef = useRef({ memberIds: [id], shownIds: [] });
+  liveRef.current = {
+    memberIds: [id, ...(group?.memberIds || [])],
+    shownIds: [...notes.map((n) => n.id), ...calEvents.map((e) => e.id), ...fieldReports.map((r) => r.id)].filter(Boolean),
+  };
 
-  const loadAll = async () => {
+  const attachFolder = async () => {
+    setLinkingFolder(true);setFolderError("");
+    try { const r=(await base44.functions.invoke("job-documents",{action:"attach_folder",job_id:id,folder_id:folderId.trim()})).data;if(r?.error)throw Error(r.error);setFolderId("");await loadAll(); }
+    catch(e){setFolderError(e.message||"Drive folder could not be linked.");}
+    finally{setLinkingFolder(false);}
+  };
+  const unlinkFolder = async () => {
+    if (!window.confirm("Unlink this job's Drive folder? Files in Drive will not be deleted.")) return;
+    setLinkingFolder(true); setFolderError("");
+    try { const r = (await base44.functions.invoke("job-documents", { action: "unlink_folder", job_id: id })).data; if (r?.error) throw Error(r.error); setFolderId(""); await loadAll(); }
+    catch (e) { setFolderError(e.message || "Drive folder could not be unlinked."); }
+    finally { setLinkingFolder(false); }
+  };
+  // quiet: a live refresh keeps what is on screen until the new data arrives.
+  const loadAll = async ({ quiet = false } = {}) => {
     const version = ++loadVersion.current;
-    setCalEvents([]);
-    setEvidence(null);
-    const [jb, grp, me] = await Promise.all([
+    if (!quiet) {
+      setCalEvents([]);
+      setEvidence(null);
+    }
+    const [jb, grp] = await Promise.all([
       base44.entities.Jobs.get(id),
       loadJobGroup(id),
-      base44.auth.me().catch(() => null),
     ]);
     if (version !== loadVersion.current) return;
     // Duplicate records of this job (same customer and address) are read together.
@@ -49,30 +101,25 @@ export default function JobDetail() {
     setGroup(grp);
     setRows(fl);
     setNotes(nt);
-    if (me) setCurrentUser(me.email || me.full_name || "");
 
-    const allCal = await fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000);
+    const [allCal, legacyNames] = await Promise.all([
+      fetchAllPages(base44.entities.CalendarEvents, "-event_date", 5000),
+      loadUniqueLegacyNames(memberIds).catch(() => []),
+    ]);
     if (version === loadVersion.current) {
-      const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt);
+      const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt, legacyNames);
       setCalEvents(shown.events);
       setEvidence(shown.evidence);
     }
 
     const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
-    if (postIds.size) {
-      const allReports = await fetchAllPages(base44.entities.FieldReports, "-created_date", 2000);
-      if (version === loadVersion.current) setFieldReports(allReports.filter((r) => r.post_id && postIds.has(r.post_id)));
-    } else if (version === loadVersion.current) {
-      setFieldReports([]);
-    }
+    const allReports = await fetchAllPages(base44.entities.FieldReports, "-created_date", 2000);
+    if (version === loadVersion.current) setFieldReports(reportsForJob(allReports, memberIds, postIds, legacyNames));
 
     base44.entities.PlanIntake.list("-created_date", 200)
       .then((all) => {
         if (version !== loadVersion.current) return;
-        const linked = all.filter((p) =>
-          (jb.source_window_quote_id && p.quote_id === jb.source_window_quote_id) ||
-          (p.job_name && jb.canonical_name && p.job_name.toLowerCase() === jb.canonical_name.toLowerCase())
-        );
+        const linked = all.filter((p) => planMatchesJob(p, jb));
         setPlans(linked);
       })
       .catch(() => {});
@@ -93,7 +140,21 @@ export default function JobDetail() {
     return () => { current = false; loadVersion.current++; };
   }, [id]);
 
-  const status = useMemo(() => jobsStatus(rows, evidence), [rows, evidence]);
+  const live = useJobLive(id, {
+    scope: () => liveRef.current,
+    reloadAll: () => loadAll({ quiet: true }),
+    reloadNotes: async () => {
+      const { rows: fl, notes: nt } = await loadJobActivity(liveRef.current.memberIds);
+      setRows(fl);
+      setNotes(nt);
+    },
+  });
+
+  // Open service item: the job is never "Complete" until it's fixed.
+  const status = useMemo(() => holdForService(jobsStatus(rows, evidence), service.open.length), [rows, evidence, service.open.length]);
+  const today = denverDate();
+  const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
+  const progress = useMemo(() => jobProgress({ events: calEvents, reports: buildReports(rows, fieldReports), status, today }), [calEvents, rows, fieldReports, status, today]);
 
   if (loading) {
     return (
@@ -118,68 +179,111 @@ export default function JobDetail() {
     );
   }
 
+  const owner = isPurchaseOrderOwner(user);
+  const canContacts = jobContacts.phase !== "private";
+
   return (
-    <div style={{ backgroundColor: C.pageBg, minHeight: "100vh" }}>
-      <div className="job-page px-5 max-[699px]:px-4 pt-5 max-[699px]:pt-4 pb-24 lg:pb-10">
-        {/* Compact header */}
-        <div className="max-w-[1240px] mx-auto">
-          <Link to="/jobs" className="inline-flex items-center gap-1 text-[13px] mb-3 transition-colors hover:opacity-80" style={{ color: C.accentText }}>
+    <div style={{ backgroundColor: SHEET_BG, minHeight: "100vh" }}>
+      <div className="job-page px-5 max-[699px]:px-3 pt-5 max-[699px]:pt-4 pb-28 lg:pb-12">
+        <div className="max-w-[1080px] mx-auto flex flex-col gap-[18px]">
+          <Link to="/jobs" className="inline-flex w-fit items-center gap-1 text-[13px] font-semibold -mb-1 hover:opacity-80" style={{ color: "#3d3322" }}>
             <ArrowLeft className="h-3.5 w-3.5" />Back to jobs
           </Link>
-          {loadError && <p role="alert" className="mb-3 rounded-lg border bg-white p-3 text-[13px] break-words" style={{ color: "#A43432" }}>Some job activity could not load and may be incomplete. {loadError}</p>}
-          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-            <div className="min-w-0 flex-1">
-              <div className="mono-label-sm mb-1 break-words">{sanitizeText(job.builder || "—")}</div>
-              <h1 className="break-words font-heading text-[28px] sm:text-[30px] font-semibold leading-tight" style={{ color: C.text, letterSpacing: "-0.03em" }}>{sanitizeText(job.canonical_name)}</h1>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                {job.address && <span className="text-[12px] break-words" style={{ color: C.textMuted }}>{sanitizeText(job.address)}</span>}
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full whitespace-nowrap" style={{ backgroundColor: status.bg, color: status.text }}>
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: status.text }} />
-                  <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em]">{status.label}</span>
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button type="button" onClick={() => setShowReport(true)} className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: C.accent, color: C.accentDark }}>
-                <Camera className="h-3.5 w-3.5" />Add field report
-              </button>
-              <a href="#add-note" className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
-                <Plus className="h-3.5 w-3.5" />Add note
-              </a>
-            </div>
-          </div>
-          <DuplicateJobNotice group={group} currentId={id} className="mb-4" />
-        </div>
+          {loadError && <p role="alert" className="rounded-lg border bg-white p-3 text-[13px] break-words" style={{ color: "#A43432" }}>Some job activity could not load and may be incomplete. {loadError}</p>}
 
-        {/* Body: facts rail + activity feed */}
-        <div className="max-w-[1240px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <aside className="lg:col-span-4 lg:sticky lg:top-6 self-start">
-            <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} />
-          </aside>
-          <div className="lg:col-span-8 min-w-0" id="add-note">
-            <JobActivityFeed
-              jobId={id}
-              events={calEvents}
-              rows={rows}
-              notes={notes}
-              fieldReports={fieldReports}
-              currentUser={currentUser}
-              onChanged={loadAll}
-              onPhotoClick={setLightbox}
-            />
+          <JobHero
+            job={job}
+            status={status}
+            snap={snap}
+            jobContacts={jobContacts}
+            events={calEvents}
+            folder={folder}
+            plans={plans}
+            onFieldReport={() => setShowReport(true)}
+            onRename={async (name) => setJob(await renameJob(job, name))}
+            progress={progress}
+            alert={<ServiceMarker open={service.open} />}
+            extra={
+              <>
+                {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
+                {owner ? <Link to={procurementPath(id)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link> : null}
+                {(owner || isAgentCenterOwner(user)) ? <DeleteJobButton job={job} onDeleted={() => navigate("/jobs")} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
+                {user?.role === "admin" && !job.merged_into ? (
+                  <button type="button" onClick={() => setShowCombine(true)} className={heroLinkClass} style={heroLinkStyle} title="Combine with another job">
+                    <GitMerge className="h-[15px] w-[15px]" />Combine
+                  </button>
+                ) : null}
+              </>
+            }
+          />
+
+          <MergedJobBanner job={job} onReversed={() => loadAll()} />
+          <DuplicateJobNotice group={group} currentId={id} />
+          {user?.role === "admin" ? <CombinedRecordsPanel job={job} onChanged={() => loadAll({ quiet: true })} /> : null}
+
+          <div id="add-note" className="scroll-mt-4">
+            <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
+              <JobActivityFeed
+                ledger
+                jobId={id}
+                events={calEvents}
+                rows={rows}
+                notes={notes}
+                fieldReports={fieldReports}
+                files={folder.files}
+                live={live}
+                currentUser={user?.email || user?.full_name || ""}
+                onChanged={() => loadAll({ quiet: true })}
+                onPhotoClick={setLightbox}
+                title="History"
+                dedupe={snap}
+                progress={progress}
+                serviceItems={service.items}
+                onServiceChanged={service.reload}
+              />
+            </SheetCard>
           </div>
+
+          {/* Office tools: contacts, Drive folder link, money, messages. Each hides itself for crew logins. */}
+          {canContacts ? (
+            <SheetCard icon={Users} tile={TILE.teal} title="Contacts" sub="linked to this job" bodyClassName="">
+              <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} hideDocuments contactsOnly />
+            </SheetCard>
+          ) : null}
+          {canWriteJobDocuments(user) && (
+            <SheetCard icon={FolderOpen} tile={TILE.bronze} title="Drive job folder" sub={job.drive_job_folder_id ? "linked" : "not linked"}>
+              <p className="m-0 text-[13px]" style={{ color: "#566063" }}>Paste the ID of a verified folder inside Glass Forge Jobs. A matching name alone is not enough. {job.drive_job_folder_id ? "Linking a new folder replaces the current link." : ""}</p>
+              <div className="mt-2 flex gap-2">
+                <input className="min-w-0 flex-1 rounded-[9px] border p-2 text-[13px]" style={{ borderColor: "#e2dcd1" }} aria-label="Drive folder ID" value={folderId} onChange={(e) => setFolderId(e.target.value)} />
+                <button type="button" disabled={linkingFolder || !folderId.trim()} className="rounded-[9px] px-3 text-[13px] font-semibold text-white disabled:opacity-50" style={{ backgroundColor: "#0b3f3b" }} onClick={attachFolder}>{job.drive_job_folder_id ? "Replace folder link" : "Link folder"}</button>
+              </div>
+              {job.drive_job_folder_id && <button type="button" disabled={linkingFolder} className="mt-2 text-[13px] underline disabled:opacity-50" onClick={unlinkFolder}>Unlink folder</button>}
+              {folderError && <p role="alert" className="mt-2 text-[13px] text-red-700">{folderError}</p>}
+            </SheetCard>
+          )}
+          {(owner || isAgentCenterOwner(user)) && (
+            <OwnerSection>
+              <JobLinkedRecords jobId={id} memberIds={group?.memberIds} sourceQuoteId={job.source_window_quote_id} />
+              <JobMoneyPanel jobId={id} memberIds={group?.memberIds} />
+              <JobMessageThreads jobId={id} />
+            </OwnerSection>
+          )}
         </div>
       </div>
 
       {/* Mobile sticky Add field report action */}
-      <div className="lg:hidden fixed left-0 right-0 z-30 px-4 pt-2 pb-3" style={{ bottom: "calc(68px + env(safe-area-inset-bottom))", backgroundColor: C.pageBg, borderTop: `1px solid ${C.border}` }}>
+      <div className="lg:hidden fixed left-0 right-0 z-30 px-4 pt-2 pb-3" style={{ bottom: "calc(68px + env(safe-area-inset-bottom))", backgroundColor: SHEET_BG, borderTop: "1px solid #c9b995" }}>
         <button type="button" onClick={() => setShowReport(true)} className="w-full inline-flex items-center justify-center gap-1.5 min-h-[48px] rounded-full text-[13px] font-semibold" style={{ backgroundColor: C.accent, color: C.accentDark }}>
           <Camera className="h-4 w-4" />Add field report
         </button>
       </div>
 
       {showReport && (
-        <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); loadAll(); }} />
+        <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); service.reload(); loadAll(); }} />
+      )}
+
+      {showCombine && (
+        <CombineJobsDialog job={job} onClose={() => setShowCombine(false)} onDone={() => loadAll()} />
       )}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}

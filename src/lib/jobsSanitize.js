@@ -41,7 +41,9 @@ const BILLING_CONCEPT_RE = new RegExp(
     "half\\s+already\\s+paid",
     "grand\\s+total",
     "labor", "fee", "price", "total", "profit", "remainder", "charge", "cost",
-    "paid", "balance", "subtotal", "deposit", "owing", "owed", "net", "gross",
+    // "balance" alone is window hardware (balance springs, shoes); only money phrasing counts.
+    "balance\\s+(?:due|of|owed|owing|remaining|left|paid|at\\s+completion)", "(?:remaining|outstanding|unpaid|open)\\s+balance",
+    "paid", "subtotal", "deposit", "owing", "owed", "net", "gross",
   ].join("|") + ")\\b",
   "i"
 );

@@ -35,7 +35,7 @@
     "category": {
       "type": "string",
       "default": "",
-      "description": "Board lane: quote_request, odd_end, order, follow_up, or empty (uncategorized; shown in its own lane)"
+      "description": "Optional task category; blank tasks remain in the personal inbox."
     },
     "created_by_user_id": {
       "type": "string"
@@ -70,6 +70,23 @@
     },
     "updated_at": {
       "type": "string"
+    },
+    "focus_date": {
+      "type": "string",
+      "default": ""
+    },
+    "follow_up_date": {
+      "type": "string",
+      "default": ""
+    },
+    "job_id": {
+      "type": "string",
+      "default": ""
+    },
+    "waiting_on": {
+      "type": "string",
+      "default": "",
+      "maxLength": 300
     }
   },
   "required": [

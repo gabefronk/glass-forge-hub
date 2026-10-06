@@ -1,4 +1,9 @@
 // Pure billing rules shared by browser and backend. No credentials or I/O.
+// Owner-designated non-work reminder. Read-time exclusion preserves source records.
+export function isIgnoredWorkItem(row) {
+  const title = typeof row === "string" ? row : row?.canonical_name || row?.job_name_raw || row?.job_name || row?.summary || row?.job_name_norm || "";
+  return String(title).normalize("NFKC").trim().toLowerCase().replace(/[.,;:!?]+$/, "").trim() === "renta";
+}
 export const MAN_HOUR_RATE = 100;
 export const TRIP_RATE = 75;
 export const MATERIAL_RATES = { vinyl: 100, composite: 125, aluminum: 150, wood: 150 };
@@ -29,7 +34,13 @@ export function computeFeeAmt(row) {
   return roundMoney(computeLaborAmt(row) * (row.fee_pct == null ? .1 : Number(row.fee_pct)));
 }
 export function extractLaborAmount(description) {
-  const lines = String(description || "").split(/\r?\n/);
+  const active = String(description || "").split(/\n\s*[_=]{8,}[^\n]*(?:\n|$)/)[0];
+  const lines = active.split(/\r?\n/);
+  // Explicit installer payment is separate from whether the customer is charged.
+  const payments = [...active.matchAll(/\b(?:we\s+can\s+pay|we\s+will\s+pay|pay)\s+(?:him|israel|ya(?:\s+windows)?|the\s+installer)\s+\$\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/gi)]
+    .filter(m => !/\b(?:not|don't|do\s+not|cannot|can't)\s*$/i.test(active.slice(Math.max(0,m.index-20),m.index)));
+  const paymentAmounts = [...new Set(payments.map(m=>Number(m[1].replace(/,/g,""))))];
+  const found = new Set(paymentAmounts);
   const label = /\b(?:sub\s*pay|sub\s*labor|labor)\b\s*(?:amount|pay|cost)?\s*[:=]?\s*/i;
   for (let i = 0; i < lines.length; i++) {
     const hit = label.exec(lines[i]);
@@ -45,10 +56,10 @@ export function extractLaborAmount(description) {
     // followed by a digit is a thousands separator, never the end ("$3,168" is not $3).
     const amount = tail.match(/^\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?=\s|$|[-–—;]|,(?!\d)|\.(?!\d)|\/?win\d*\b)/i);
     if (!amount || /\b(?:man\s*)?(?:hours?|hrs?)\b/i.test(tail.slice(amount[0].length, amount[0].length + 20))) continue;
-    if (separator && !/^\s*(?:[-–—/]\s*)?win\d*\b/i.test(tail.slice(amount[0].length))) continue;
-    return Number(amount[1].replace(/,/g, ""));
+    if (separator && !/^\s*(?:[-–—/]\s*)*win\d*\b/i.test(tail.slice(amount[0].length))) continue;
+    found.add(Number(amount[1].replace(/,/g, "")));
   }
-  return null;
+  return found.size === 1 ? [...found][0] : null;
 }
 export function extractExplicitService(note) {
   const text = String(note || "").toLowerCase();

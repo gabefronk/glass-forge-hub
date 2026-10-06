@@ -13,6 +13,22 @@
       "title": "Note Date",
       "description": "When the interaction happened \u2014 not when the note was typed"
     },
+    "interaction_type": {
+      "type": "string",
+      "enum": [
+        "note",
+        "site_visit",
+        "call",
+        "text",
+        "email",
+        "meeting",
+        "delivery",
+        "issue"
+      ],
+      "title": "Interaction type",
+      "default": "note",
+      "description": "What kind of interaction this entry records. Blank/legacy notes read as 'note'."
+    },
     "body": {
       "type": "string",
       "title": "Body",
@@ -22,6 +38,11 @@
       "type": "string",
       "title": "Author",
       "description": "Email/name of the user who wrote the note"
+    },
+    "edited_by": {
+      "type": "string",
+      "title": "Edited by",
+      "description": "Who last changed this entry, when someone other than the author edits it"
     },
     "attachments": {
       "type": "array",
@@ -58,24 +79,80 @@
   ],
   "rls": {
     "read": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
     },
     "create": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
     },
     "update": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
     }
   }
 }

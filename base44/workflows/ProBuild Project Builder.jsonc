@@ -1,0 +1,49 @@
+{
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "probuild_project_builder",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "build_probuild_projects": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "probuildProjects",
+            "args": {
+              "action": "sync",
+              "days": 14,
+              "apply": true
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Pre-build ProBuild projects",
+            "description": "For every job with a visit in the next 14 days and no ProBuild project yet, build one (named with the calendar title) or link the crew's existing one. Only writes when AppSettings.probuild_autobuild is on; otherwise it just logs what it would do."
+          }
+        }
+      }
+    ]
+  },
+  "name": "ProBuild Project Builder",
+  "description": "Every morning at 6:20 MT (after the overnight calendar sync), makes sure every upcoming job has its ProBuild project, so the crew posts into a prebuilt project instead of making their own. Dry run until AppSettings.probuild_autobuild is turned on.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "20 6 * * *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  }
+}

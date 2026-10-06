@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Phone, Mail, HardHat, User, AlertTriangle, Lightbulb } from "lucide-react";
+import { Phone, Mail, HardHat, Home, User, AlertTriangle, Lightbulb } from "lucide-react";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { CONFIDENCE_LABELS, ROLE_LABELS, confirmRoleOf, groupByRole, invokeErrorOf, suggestionTitle } from "@/lib/jobContacts";
@@ -53,11 +53,13 @@ function Missing({ children }) {
 
 // Linked people for the job, by role, with explicit indicators when nobody (or no superintendent) is linked.
 // Builder-level contacts are drawn by the caller next to the builder name.
-export function JobContactRows({ jobId, jobContacts }) {
+// heroShowsPeople: the job page hero already shows the super and homeowner cards, so the
+// Contacts card skips those two rows instead of showing them a second time.
+export function JobContactRows({ jobId, jobContacts, heroShowsPeople = false }) {
   const { phase, view, error, reload } = jobContacts || {};
   if (!jobContacts || phase === "private" || phase === "idle") return null;
   if (phase === "loading") {
-    return <Row icon={HardHat} label="Superintendent"><p className="text-[12px]" style={{ color: C.textMuted }}>Loading contacts…</p></Row>;
+    return <Row icon={HardHat} label={heroShowsPeople ? "Contacts" : "Superintendent"}><p className="text-[12px]" style={{ color: C.textMuted }}>Loading contacts…</p></Row>;
   }
   if (phase === "error") {
     return (
@@ -70,37 +72,58 @@ export function JobContactRows({ jobId, jobContacts }) {
   const linked = view.linked || [];
   const supers = linked.filter((c) => c.role === "superintendent");
   const suggestedSupers = (view.suggestions || []).filter((s) => s.role === "superintendent").length;
-  const others = groupByRole(linked).filter(([role]) => role !== "superintendent" && role !== "builder");
+  const owners = [...linked.filter((c) => c.role === "homeowner"), ...linked.filter((c) => c.role === "customer")];
+  const ownerSuggestions = (view.suggestions || []).filter((s) => s.role === "homeowner" && s.confidence === "high").slice(0, 2);
+  const others = groupByRole(linked).filter(([role]) => !["superintendent", "builder", "homeowner", "customer"].includes(role));
   const contactsHref = `/contacts?job=${encodeURIComponent(jobId)}`;
   return (
     <>
-      <Row icon={HardHat} label="Superintendent">
+      {!heroShowsPeople && <Row icon={HardHat} label="Superintendent">
         {supers.length > 0 ? (
           <div className="space-y-1.5">{supers.map((c) => <ContactRow key={c.key} contact={c} detail={LINK_LABELS[c.link]} />)}</div>
         ) : (
           <Missing>No superintendent linked{suggestedSupers > 0 ? ` · ${suggestedSupers} suggested below` : ""}</Missing>
         )}
-      </Row>
+      </Row>}
+      {!heroShowsPeople && <Row icon={Home} label="Homeowner">
+        {owners.length > 0 ? (
+          <div className="space-y-1.5">{owners.map((c) => <ContactRow key={c.key} contact={c} detail={c.role === "customer" ? "Customer" : LINK_LABELS[c.link]} />)}</div>
+        ) : (
+          <>
+            <p className="text-[12px]" style={{ color: C.textMuted }}>Not on file. Add it under the super at the top of the page.</p>
+            {ownerSuggestions.length > 0 && <div className="mt-2"><ContactSuggestions suggestions={ownerSuggestions} onConfirm={jobContacts.confirmLink} /></div>}
+          </>
+        )}
+      </Row>}
       {others.map(([role, list]) => (
         <Row key={role} icon={role === "project_manager" ? HardHat : User} label={ROLE_LABELS[role]}>
           <div className="space-y-1.5">{list.map((c) => <ContactRow key={c.key} contact={c} detail={LINK_LABELS[c.link]} />)}</div>
         </Row>
       ))}
-      {view.status?.missing_contact && (
+      {view.status?.missing_contact && (heroShowsPeople && (view.builder_contacts || []).length > 0 ? (
+        // The builder's people are already listed above and the super/homeowner slots sit
+        // in the hero, so a warning here would just repeat itself.
+        (view.suggestions?.length > 0 || !view.directory) && (
+          <Row icon={User} label="Other people">
+            {view.suggestions?.length > 0 && <ContactSuggestions suggestions={view.suggestions.slice(0, 3)} onConfirm={jobContacts.confirmLink} />}
+            {!view.directory && <p className="m-0 text-[12px]" style={{ color: C.textMuted }}>The contacts directory has not been imported yet.</p>}
+          </Row>
+        )
+      ) : (
         <Row icon={AlertTriangle} label="Contacts">
           <Missing>No contacts linked to this job yet (0 linked)</Missing>
+          {view.suggestions?.length > 0 && <div className="mt-2"><ContactSuggestions suggestions={view.suggestions.slice(0, 3)} onConfirm={jobContacts.confirmLink} /></div>}
           <p className="mt-1 text-[12px] break-words" style={{ color: C.textMuted }}>
             {view.directory ? "Nothing has been guessed or saved. " : "The contacts directory has not been imported yet. "}
             <Link to={contactsHref} className="underline" style={{ color: C.accentText }}>Find people in Contacts</Link>
           </p>
         </Row>
-      )}
+      ))}
     </>
   );
 }
 
-function SuggestionCard({ suggestion: s, onConfirm }) {
-  const [pending, setPending] = useState("");
+function SuggestionCard({ suggestion: s, onConfirm, onAdd }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const role = confirmRoleOf(s);
@@ -110,13 +133,24 @@ function SuggestionCard({ suggestion: s, onConfirm }) {
     setError("");
     try {
       await onConfirm({ contactKey: key, role });
-      setPending("");
     } catch (e) {
       setError(invokeErrorOf(e).message || "The link could not be saved.");
     } finally {
       setBusy(false);
     }
   };
+  const add = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await onAdd({ role: s.role || "superintendent", contact: s.spr });
+    } catch (e) {
+      setError(invokeErrorOf(e).message || e.message || "The contact could not be added.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const roleName = (ROLE_LABELS[role] || "contact").toLowerCase();
   const missingWho = s.seed ? `${s.seed.name}${s.seed.phone ? ` (${s.seed.phone})` : ""}` : "this number or email";
   return (
     <li className="rounded-lg p-2.5" style={{ border: `1px dashed ${C.borderStrong}`, backgroundColor: C.cardAlt }}>
@@ -135,19 +169,18 @@ function SuggestionCard({ suggestion: s, onConfirm }) {
           {people.map((c) => (
             <div key={c.key} className="rounded-md bg-white p-2" style={{ border: `1px solid ${C.rowBorder}` }}>
               <ContactRow contact={c} detail={c.company} />
-              {pending === c.key ? (
-                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <span className="text-[12px]" style={{ color: C.text }}>Save {sanitizeText(c.name)}{role ? " as superintendent" : ""} for this job?</span>
-                  <button type="button" disabled={busy} onClick={() => confirm(c.key)} className="rounded-full px-3 py-1 text-[12px] font-semibold disabled:opacity-50" style={{ backgroundColor: C.accent, color: C.accentDark }}>{busy ? "Saving…" : "Save link"}</button>
-                  <button type="button" disabled={busy} onClick={() => setPending("")} className="text-[12px] underline" style={{ color: C.textSecondary }}>Cancel</button>
-                </div>
-              ) : (
-                <button type="button" onClick={() => { setPending(c.key); setError(""); }} className="mt-1.5 rounded-full px-3 py-1 text-[12px] font-semibold" style={{ border: `1px solid ${C.border}`, color: C.accentText }}>
-                  {c.already_linked ? "Mark as superintendent" : "Link to this job…"}
-                </button>
-              )}
+              <button type="button" disabled={busy} onClick={() => confirm(c.key)} className="mt-1.5 rounded-full px-3 py-1 text-[12px] font-semibold disabled:opacity-50" style={{ border: `1px solid ${C.border}`, color: C.accentText }}>
+                {busy ? "Linking…" : c.already_linked ? `Mark as ${roleName}` : role ? `Link as ${roleName}` : "Link"}
+              </button>
             </div>
           ))}
+        </div>
+      ) : s.spr && onAdd ? (
+        <div className="mt-2 rounded-md bg-white p-2" style={{ border: `1px solid ${C.rowBorder}` }}>
+          <ContactRow contact={{ name: s.spr.name, phone: s.spr.phone, email: s.spr.email }} detail="From calendar notes · not in contacts yet" />
+          <button type="button" disabled={busy} onClick={add} className="mt-1.5 min-h-9 rounded-full px-3 py-1 text-[12px] font-semibold disabled:opacity-50" style={{ border: `1px solid ${C.border}`, color: C.accentText }}>
+            {busy ? "Adding…" : `Add & link as ${roleName}`}
+          </button>
         </div>
       ) : (
         <p className="mt-1.5 text-[12px] break-words" style={{ color: C.amber }}>
@@ -159,14 +192,14 @@ function SuggestionCard({ suggestion: s, onConfirm }) {
   );
 }
 
-// Proposed job ⇄ contact links. Nothing is saved until the owner clicks "Link…" and then "Save link".
-export function ContactSuggestions({ suggestions, onConfirm }) {
+// Proposed job ⇄ contact links. Nothing is saved until the owner explicitly clicks "Link".
+export function ContactSuggestions({ suggestions, onConfirm, onAdd }) {
   if (!suggestions?.length) return null;
-  return <ul className="space-y-2">{suggestions.map((s) => <SuggestionCard key={s.id} suggestion={s} onConfirm={onConfirm} />)}</ul>;
+  return <ul className="space-y-2">{suggestions.map((s) => <SuggestionCard key={s.id} suggestion={s} onConfirm={onConfirm} onAdd={onAdd} />)}</ul>;
 }
 
 export function JobContactSuggestionsRow({ jobContacts }) {
-  const { phase, view, confirmLink } = jobContacts || {};
+  const { phase, view, confirmLink, addContact } = jobContacts || {};
   if (!view || (phase !== "ready" && phase !== "refreshing")) return null;
   if (view.legacy) {
     return (
@@ -175,11 +208,51 @@ export function JobContactSuggestionsRow({ jobContacts }) {
       </Row>
     );
   }
-  if (!view.suggestions.length && view.messages !== "unavailable") return null;
+  const suggestions = (view.suggestions || []).filter((s) => s.role === "superintendent").slice(0, 3);
+  if (!suggestions.length && view.messages !== "unavailable") return null;
   return (
-    <Row icon={Lightbulb} label={`Suggested contacts · not saved (${view.suggestions.length})`}>
+    <Row icon={Lightbulb} label={`Suggested superintendents · owner confirmation required (${suggestions.length})`}>
       {view.messages === "unavailable" && <p className="mb-1.5 text-[11px]" style={{ color: C.textMuted }}>Message threads could not be checked for this job.</p>}
-      <ContactSuggestions suggestions={view.suggestions} onConfirm={confirmLink} />
+      <ContactSuggestions suggestions={suggestions} onConfirm={confirmLink} onAdd={addContact} />
     </Row>
+  );
+}
+
+// Job page: the builder's roster already feeds the Super dropdown in the hero, so down here
+// it is one line with a link, not a list of names.
+export function BuilderRoster({ builderName, contacts, jobId }) {
+  if (!contacts?.length) return null;
+  const supers = contacts.filter((c) => c.role === "superintendent").length;
+  const pms = contacts.filter((c) => c.role === "project_manager").length;
+  const parts = [supers ? `${supers} super${supers === 1 ? "" : "s"}` : "", pms ? `${pms} PM${pms === 1 ? "" : "s"}` : ""].filter(Boolean);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div className="min-w-0">
+        <div className="text-[13px] font-semibold" style={{ color: C.text }}>{sanitizeText(builderName) || "Builder"} · {contacts.length} on file</div>
+        <div className="text-[11.5px]" style={{ color: C.textMuted }}>{parts.length ? parts.join(", ") + " · " : ""}pick the super at the top of the page</div>
+      </div>
+      <Link to={`/contacts?job=${encodeURIComponent(jobId)}`} className="inline-flex min-h-9 items-center text-[12px] font-semibold underline" style={{ color: C.accentText }}>Open in Contacts</Link>
+    </div>
+  );
+}
+
+// The builder's own people (office, PMs, supers, warranty) next to the builder name on the job.
+export function BuilderContacts({ contacts, jobId }) {
+  const [open, setOpen] = useState(false);
+  if (!contacts?.length) return null;
+  const shown = open ? contacts : contacts.slice(0, 4);
+  return (
+    <div className="mt-2">
+      <div className="mono-label-sm mb-1">Builder contacts · {contacts.length}</div>
+      <div className="space-y-2">
+        {shown.map((c) => <ContactRow key={c.key} contact={c} detail={c.title || ROLE_LABELS[c.role] || c.company} />)}
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-3">
+        {contacts.length > 4 && (
+          <button type="button" onClick={() => setOpen((v) => !v)} className="min-h-9 text-[12px] underline" style={{ color: C.accentText }}>{open ? "Show fewer" : `Show all ${contacts.length}`}</button>
+        )}
+        <Link to={`/contacts?job=${encodeURIComponent(jobId)}`} className="min-h-9 inline-flex items-center text-[12px] underline" style={{ color: C.accentText }}>Open in Contacts</Link>
+      </div>
+    </div>
   );
 }

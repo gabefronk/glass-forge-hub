@@ -10,6 +10,17 @@ module.exports = {
   			sm: '9px'
   		},
   		colors: {
+  			// Glass Forge palette: older screens were written with Tailwind's cool slate/blue
+  			// scales. Point those scales at the warm neutrals and teal from src/index.css
+  			// so every page reads as one system without touching each class.
+  			slate: {
+  				50: '#FAF8F3', 100: '#F4F1EA', 200: '#E0DACF', 300: '#D3CABB', 400: '#8A8F93',
+  				500: '#616A6D', 600: '#566063', 700: '#34403F', 800: '#1C2627', 900: '#101617', 950: '#0C1F21'
+  			},
+  			blue: {
+  				50: '#EEF5F3', 100: '#E2EEEB', 200: '#C7E4D2', 300: '#9CC9B8', 400: '#4F8C83', 500: '#10524C',
+  				600: '#10524C', 700: '#0B3F3B', 800: '#093431', 900: '#082F2C', 950: '#061F1D'
+  			},
   			background: 'var(--background)',
   			foreground: 'var(--foreground)',
   			card: {

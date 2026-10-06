@@ -72,8 +72,21 @@ async function handler(name, client, posts=[]) {
 }
 function client(fees,events=[]) {
   const entities={FeeLines:entity(fees),CalendarEvents:entity(events),Jobs:entity([{id:"job",canonical_name:"test job",aliases:[]}]),MonthCloseSnapshot:entity(),FieldReports:entity(),AppSettings:entity(),ReportAudit:entity()};
-  return {asServiceRole:{entities},entities};
+  // Scheduled workflow calls have no end user; auth.me() resolves null.
+  return {auth:{me:async()=>globalThis.__billingTestUser??null},asServiceRole:{entities},entities};
 }
+test("ingest and audit functions reject signed-in non-admin/manager callers before any write",async()=>{
+  for(const name of ["fetchCalendarEvents","fetchProbuildPosts","auditFieldReports"]){
+    const c=client([], [{id:"cal1",source:"google",google_event_id:"g1",event_date:"2026-09-02",job_name:"test job"}]);
+    const run=await handler(name,c);
+    try{
+      globalThis.__billingTestUser={role:"user",email:"crew@example.com"};
+      const denied=await run(new Request("https://test/",{method:"POST",body:JSON.stringify({start_date:"2026-09-01",end_date:"2026-09-30"})}));
+      assert.equal(denied.status,403,name);
+      assert.equal(c.entities.FeeLines.rows.length,0,name);
+    }finally{globalThis.__billingTestUser=undefined;}
+  }
+});
 test("calendar reverse merge reserves the post, records returned IDs and is idempotent",async()=>{
   const c=client([{id:"postrow",job_id:"job",job_date:"2026-09-02",invoice_month:"2026-09",source:"probuild",probuild_post_id:"post",man_hours:2,service_material:"composite",note_text:"2 composite man hours",billable:true}], [{id:"cal1",source:"google",google_event_id:"g1",event_date:"2026-09-02",job_name:"test job",scope_notes:"Visit"},{id:"cal2",source:"google",google_event_id:"g2",event_date:"2026-09-03",job_name:"test job",scope_notes:"Return visit"}]);
   const run=await handler("fetchCalendarEvents",c);
@@ -86,15 +99,19 @@ test("calendar reverse merge reserves the post, records returned IDs and is idem
   assert.equal(rows.filter(r=>r.source==="both").length,1);
   assert.equal(rows.find(r=>r.source==="both").labor_amt,250);
 });
-test("ProBuild refresh preserves calendar identity, custom fee and report notes",async()=>{
+test("ProBuild refresh preserves calendar identity and custom fee, and only adds photos",async()=>{
   const c=client([{id:"merged",job_id:"job",source:"both",calendar_event_id:"g1",calendar_note_text:"Appointment instructions",job_date:"2026-09-06",invoice_month:"2026-09",job_name_raw:"Calendar title",probuild_post_id:"post",fee_pct:.15,billable:true,man_hours:3}]);
   const run=await handler("fetchProbuildPosts",c,[{projectId:"project",postId:"post",post:{createdAt:"2026-09-07T19:00:00Z",message:"3 composite man hours",attachments:[{downloadURL:"https://example.com/photo.jpg"}]}}]);
   const res=await run(new Request("https://test/",{method:"POST",body:JSON.stringify({start_date:"2026-09-01",end_date:"2026-09-30"})}));
   assert.equal(res.status,200,await res.text());
   const r=c.entities.FeeLines.rows[0];
-  assert.equal(r.job_date,"2026-09-06");assert.equal(r.job_name_raw,"Calendar title");assert.equal(r.source,"both");assert.equal(r.labor_amt,375);assert.equal(r.fee_amt,56.25);
-  assert.match(r.note_text,/Appointment instructions/);assert.match(r.note_text,/3 composite man hours/);
-  assert.equal(c.entities.FieldReports.rows.length,1);assert.equal(r.photo_urls.length,1);
+  // Append-only (2026-09-15): the existing line keeps its identity and amounts;
+  // the only write is the additive photo fill, and no duplicate line is created.
+  assert.equal(c.entities.FeeLines.rows.length,1);
+  assert.equal(r.job_date,"2026-09-06");assert.equal(r.job_name_raw,"Calendar title");assert.equal(r.source,"both");
+  assert.equal(r.calendar_event_id,"g1");assert.equal(r.calendar_note_text,"Appointment instructions");assert.equal(r.fee_pct,.15);assert.equal(r.man_hours,3);
+  assert.equal(r.labor_amt,undefined);assert.equal(r.fee_amt,undefined);
+  assert.equal(c.entities.FieldReports.rows.length,1);assert.match(c.entities.FieldReports.rows[0].message,/3 composite man hours/);assert.equal(r.photo_urls.length,1);
 });
 
 test("month-wide report audit sends one update per event and keeps the fresh status",async()=>{

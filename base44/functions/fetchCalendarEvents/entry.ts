@@ -1,4 +1,5 @@
-import { pricingReview, canonicalPostRows, COMPANION_WINDOW_DAYS } from "../../shared/billingCore.js";
+import { assessBillingLine, isSalesTrackerOnlyEvent } from "../../shared/billingAudit.js";
+import { isIgnoredWorkItem, pricingReview, canonicalPostRows, COMPANION_WINDOW_DAYS } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit, isTripChargeAmount } from '../../shared/ingestShared.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
@@ -78,6 +79,9 @@ function coveringLine(existingFees, row, ev, accept) {
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
+    // Scheduled workflows run with no end user (null); signed-in callers must be admin/manager.
+    const user = await base44.auth.me().catch(() => null);
+    if (user && !['admin', 'manager'].includes(user.role)) return Response.json({ error: 'forbidden' }, { status: 403 });
     const body = await req.json().catch(() => ({}));
 
     const startStr = body.start_date || null;
@@ -118,6 +122,7 @@ export default async function(req) {
     const backfillIds = new Set();
     const lockedLaborGaps = [];
     calEvents = calEvents.filter((e) => {
+      if (isIgnoredWorkItem(e) || isSalesTrackerOnlyEvent(e)) return false;
       const month = invoiceMonthFromDate(e.event_date || '');
       if (!lockedMonths.has(month)) return true;
       if (e.source_status === 'cancelled') return false;
@@ -250,10 +255,10 @@ export default async function(req) {
             row.pricing_review_reason = 'Calendar was rescheduled after a ProBuild charge was recorded; confirm the billing date.';
             row.needs_review = true;
           }
-          if (ex.pricing_review_reason && !row.pricing_review_reason) { row.pricing_review_reason = ex.pricing_review_reason; row.needs_review = true; }
+          if (ex.pricing_review_reason && !ex.pricing_review_reason.startsWith("[Billing audit]") && !row.pricing_review_reason) { row.pricing_review_reason = ex.pricing_review_reason; row.needs_review = true; }
         }
         row.fee_pct = ex.fee_pct ?? row.fee_pct;
-        row.billable = ex.billable ?? row.billable;
+        row.billable = ex.pricing_review_reason?.startsWith("[Billing audit]") ? true : (ex.billable ?? row.billable);
         // Reverse merge: if this existing calendar row has no Probuild data yet,
         // check for a standalone Probuild row (same job, ±3 days) with man_hours
         // or trip_charges that should be folded in. Fixes the timing gap where
@@ -346,6 +351,9 @@ export default async function(req) {
 
     for (const patch of [...toCreate, ...toUpdate]) {
       const event = allCalEvents.find(e => e.google_event_id === patch.calendar_event_id);
+      const assessment = assessBillingLine(patch, event);
+      if (assessment.hidden && !patch.probuild_post_id) { patch.billable = false; patch.pricing_review_reason = "[Billing audit] " + assessment.reason; }
+      if (assessment.kind === "review") { patch.needs_review = true; patch.pricing_review_reason = "[Billing audit] " + assessment.reason; }
       if (event?.source_status === 'cancelled') {
         patch.needs_review = true; patch.pricing_review_reason = 'Source calendar event was cancelled; confirm any completed work.';
         if (!patch.probuild_post_id) patch.billable = false;
@@ -414,6 +422,17 @@ export default async function(req) {
     }
     for (const batch of chunk([...jobPatches.values()], 500)) await base44.asServiceRole.entities.Jobs.bulkUpdate(batch);
 
+    // Owner-approved 2026-09-26: link the calendar event itself to its job so every tab
+    // (Calendar, Today, Jobs) shares one link. Additive only: fills an empty job_id from a
+    // high-confidence match and never overwrites or clears an existing link.
+    const linkedAt = new Date().toISOString();
+    const eventLinks = new Map();
+    for (const { ev, m } of matched) {
+      if (!ev.id || ev.job_id || !m.job_id || m.match_confidence !== 'high' || eventLinks.has(ev.id)) continue;
+      eventLinks.set(ev.id, { id: ev.id, job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: linkedAt });
+    }
+    for (const batch of chunk([...eventLinks.values()], 500)) await base44.asServiceRole.entities.CalendarEvents.bulkUpdate(batch);
+
     return Response.json({
       source: 'calendar_events',
       locked_months: [...lockedMonths],
@@ -421,6 +440,7 @@ export default async function(req) {
       created: toCreate.length,
       updated: toUpdate.length,
       probuild_reverse_merged: probuildRowsToSupersede.length,
+      calendar_events_linked: eventLinks.size,
       skipped_manually_adjusted: skipped,
       // Locked-month events with labor in their notes and no line of their own:
       // filled (held for review), or listed here when closed or already covered.

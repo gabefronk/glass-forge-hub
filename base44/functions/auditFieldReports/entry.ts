@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import {
   toDenverDateString, buildProjectGroups, resolveProject, evaluatePosts,
-  addDays, reportDueAtWithGrace, computeDaysLateWithGrace, isWithinGrace,
+  addDays, reportDueAtWithGrace, computeDaysLateWithGrace, isWithinGrace, hasVerifiedMatchedPosts,
 } from '../../shared/reportMatching.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
@@ -34,6 +34,9 @@ import { fetchAllPages } from '../../shared/pagination.ts';
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
+    // Scheduled workflows run with no end user (null); signed-in callers must be admin/manager.
+    const user = await base44.auth.me().catch(() => null);
+    if (user && !['admin', 'manager'].includes(user.role)) return Response.json({ error: 'forbidden' }, { status: 403 });
     const body = await req.json().catch(() => ({}));
     const force = !!body.force;
 
@@ -102,6 +105,7 @@ export default async function(req) {
     // dates no_source_data and light up the "Probuild sync incomplete" banner.
     const todayDenver = toDenverDateString(new Date());
     const noSourceDates = new Set();
+    const hasVerifiedEvidence = (event) => hasVerifiedMatchedPosts(event, allReports, todayDenver);
     for (const denverDate of datesToAudit) {
       if (denverDate >= todayDenver) continue;
       const nearCount =
@@ -111,7 +115,7 @@ export default async function(req) {
         (reportsByDate.get(addDays(denverDate, 2)) || []).length;
       if (nearCount === 0) {
         noSourceDates.add(denverDate);
-        const events = allEvents.filter((e) => e.event_date === denverDate && e.report_required !== false && e.report_status !== 'waived' && e.report_status !== 'superseded');
+        const events = allEvents.filter((e) => e.event_date === denverDate && e.report_required !== false && e.report_status !== 'waived' && e.report_status !== 'superseded' && !hasVerifiedEvidence(e));
         for (const event of events) {
           toUpdate.push({
             id: event.id,
@@ -141,6 +145,7 @@ export default async function(req) {
       if (e.report_required === false) return false;
       if (e.report_status === 'waived') return false;
       if (e.report_status === 'superseded') return false;
+      if (hasVerifiedEvidence(e)) return false;
       if (!force && e.report_status === 'ok' && ['manual', 'project_date', 'manual-reconcile', 'auto-reconcile'].includes(e.match_method)) return false;
       return true;
     });
@@ -375,7 +380,7 @@ export default async function(req) {
     // Date summaries for audited dates (not no_source_data)
     for (const denverDate of datesToAudit) {
       if (noSourceDates.has(denverDate)) continue;
-      const events = allEvents.filter((e) => e.event_date === denverDate && e.report_required !== false && e.report_status !== 'waived' && e.report_status !== 'superseded');
+      const events = allEvents.filter((e) => e.event_date === denverDate && e.report_required !== false && e.report_status !== 'waived' && e.report_status !== 'superseded' && !hasVerifiedEvidence(e));
       const reports = (reportsByDate.get(denverDate) || []).length;
       dateSummaries.push({ date: denverDate, events: events.length, reports_available: reports, result: 'audited' });
     }

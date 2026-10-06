@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 import {buildDirectory} from '../base44/shared/contactMatching.js';
-import {contactRole,nameMatchesSeed,seedJobMatch,jobFacts,jobContactsView,jobContactCoverage} from '../base44/shared/jobContacts.js';
+import {contactRole,nameMatchesSeed,seedJobMatch,jobFacts,jobContactsView,jobContactCoverage,highConfidenceSingleCandidateLinks} from '../base44/shared/jobContacts.js';
 import {CONTACT_LINK_SEEDS} from '../base44/shared/contactLinkSeeds.js';
 import {createContactsDirectoryHandler} from '../base44/shared/contactsDirectory.js';
 import {groupByRole,viewFromLegacy,confirmRoleOf,statusOf} from '../src/lib/jobContacts.js';
@@ -109,17 +109,46 @@ test('coverage counts missing contacts and superintendents and reports unmatched
  assert.deepEqual(c.unmatched_seeds.map(s=>s.name),['Davis']);
 });
 
+test('homeowner proposals use job surname, exact customer name and job phone signals',()=>{
+ const barker=person('7','Todd Barker','Cash Customer','(714) 598-9887');
+ const jobs=[{id:'barker',canonical_name:'barker - amsco will-call pickup',builder:'',address:'',aliases:[],po_numbers:[],oe_numbers:[]}];
+ const dirData={...data,contacts:[...data.contacts,barker]};const directory=buildDirectory(dirData,jobs);
+ const make=raw=>jobContactsView({directory,job:directory.jobs[0],rawJob:{...jobs[0],...raw},seeds:[]});
+ const surname=byContact(make({}),barker);assert.equal(surname.role,'homeowner');assert.equal(surname.confidence,'medium');assert.match(surname.reasons.join(' '),/Surname "barker"/);
+ const named=byContact(make({customer_name:'Todd Barker'}),barker);assert.equal(named.confidence,'high');assert.ok(named.sources.includes('customer_name'));
+ const phoned=byContact(make({customer_phone:'714-598-9887'}),barker);assert.equal(phoned.confidence,'high');assert.ok(phoned.sources.includes('job'));
+});
+
+test('builder staff surname collisions are not homeowner suggestions on builder jobs',()=>{
+ const staff=person('8','Jo Jones','Holmes Homes - PM');
+ const job={id:'jj',canonical_name:'Holmes Homes - Jones lot 8',builder:'Holmes Homes',address:'',aliases:[],po_numbers:[],oe_numbers:[]};
+ const d={...data,contacts:[...data.contacts,staff]};const directory=buildDirectory(d,[job]);
+ const v=jobContactsView({directory,job:directory.jobs[0],rawJob:job,seeds:[]});
+ assert.equal(byContact(v,staff),undefined);
+});
+
+test('already-linked contacts are not re-suggested by homeowner signals',()=>{
+ const barker=person('7','Todd Barker','Cash Customer','(714) 598-9887');const job={id:'b',canonical_name:'Barker pickup',builder:'',address:'',customer_name:'Todd Barker',aliases:[],po_numbers:[],oe_numbers:[]};
+ const links=[{contact_key:barker.key,job_id:'b',role:'homeowner'}],directory=buildDirectory({...data,contacts:[barker]},[job],links);
+ const v=jobContactsView({directory,job:directory.jobs[0],rawJob:job,links,seeds:[]});assert.equal(byContact(v,barker),undefined);
+});
+
+test('bulk links include only high-confidence single-candidate roles',()=>{
+ const coverage={suggested:[{id:'j1',name:'One',suggestions:[{confidence:'high',role:'homeowner',contact:{key:'a',name:'Alice'},reasons:['exact']}]},{id:'j2',name:'Two',suggestions:[{confidence:'high',role:'homeowner',contact:{key:'b',name:'Bob'},reasons:[]},{confidence:'high',role:'homeowner',contact:{key:'c',name:'Carol'},reasons:[]},{confidence:'medium',role:'superintendent',contact:{key:'d',name:'Dan'},reasons:[]}]}]};
+ assert.deepEqual(highConfidenceSingleCandidateLinks(coverage).map(x=>[x.job_id,x.contact_key,x.role]),[['j1','a','homeowner']]);
+});
+
 test('frontend helpers group roles and adapt the older job response',()=>{
  assert.deepEqual(groupByRole([{role:'builder'},{role:'site'},{role:'superintendent'}]).map(([r])=>r),['superintendent','site','builder']);
  const legacy=viewFromLegacy({contacts:[{...DAVIES,manual_job_ids:['j1']},{...SITE,manual_job_ids:[]}]},'j1');
  assert.deepEqual(legacy.linked.map(c=>[c.role,c.link]),[['superintendent','saved'],['site','workbook']]);
  assert.equal(legacy.status.missing_superintendent,false);assert.equal(legacy.legacy,true);
  assert.deepEqual(statusOf([]),{linked:0,superintendents:0,missing_contact:true,missing_superintendent:true,suggestions:0});
- assert.equal(confirmRoleOf({role:'superintendent'}),'superintendent');assert.equal(confirmRoleOf({role:'site'}),undefined);
+ assert.equal(confirmRoleOf({role:'superintendent'}),'superintendent');assert.equal(confirmRoleOf({role:'site'}),'site');assert.equal(confirmRoleOf({role:'builder'}),'builder');assert.equal(confirmRoleOf({role:'customer'}),'customer');
 });
 
 async function setup({conversationsFail=false}={}){
- const tables={ContactDirectorySnapshot:[],ContactJobLink:[],Jobs:structuredClone(JOBS),MessageConversation:[{id:'m1',conversation_key:'k1',job_id:'j395',title:'Daybreak towns',participants:['8015550199']}]},api={},writes=[];let user={role:'admin',email:'gabefronk@gmail.com'};let storedFile='';
+ const tables={ContactDirectorySnapshot:[],HubContacts:[],ContactJobLink:[],Jobs:structuredClone(JOBS),MessageConversation:[{id:'m1',conversation_key:'k1',job_id:'j395',title:'Daybreak towns',participants:['8015550199']}]},api={},writes=[];let user={role:'admin',email:'gabefronk@gmail.com'};let storedFile='';
  for(const [name,rows]of Object.entries(tables)){api[name]={list:async(sort,limit=500,skip=0)=>[...rows].reverse().slice(skip,skip+limit),filter:async(q,sort,limit=500)=>{if(name==='MessageConversation'&&conversationsFail)throw Error('boom');return rows.filter(r=>Object.entries(q).every(([k,v])=>r[k]===v)).slice(0,limit);},get:async id=>rows.find(r=>r.id===id),create:async r=>{writes.push([name,'create']);const row={...structuredClone(r),id:name+rows.length};rows.push(row);return row},update:async(id,patch)=>{writes.push([name,'update']);Object.assign(rows.find(r=>r.id===id),patch)},delete:async id=>{writes.push([name,'delete']);const i=rows.findIndex(r=>r.id===id);if(i>=0)rows.splice(i,1)}};}
  const integrations={Core:{UploadPrivateFile:async({file})=>{storedFile=await file.text();return {file_uri:'private://directory'}},CreateFileSignedUrl:async()=>({signed_url:'https://example.invalid/private-directory'})}};
  const handler=createContactsDirectoryHandler({getClient:async()=>({auth:{me:async()=>user},asServiceRole:{entities:api,integrations}}),fetchFile:async()=>new Response(storedFile)});
@@ -129,7 +158,7 @@ async function setup({conversationsFail=false}={}){
 
 test('job views are owner-only and read-only',async()=>{
  const s=await setup();await s.importDirectory();
- for(const u of [null,{role:'admin',email:'someone@example.com'},{role:'user',email:'gabefronk@gmail.com'}]){s.setUser(u);assert.equal((await s.call({action:'job_contacts',job_id:'j607'})).status,403);assert.equal((await s.call({action:'job_contact_coverage'})).status,403);}
+ for(const u of [null,{role:'admin',email:'someone@example.com'},{role:'user',email:'gabefronk@gmail.com'}]){s.setUser(u);const expected=u?403:401;assert.equal((await s.call({action:'job_contacts',job_id:'j607'})).status,expected);assert.equal((await s.call({action:'job_contact_coverage'})).status,expected);}
  s.setUser({role:'admin',email:'gabefronk@gmail.com'});
  const r=await s.call({action:'job_contacts',job_id:'j395'});assert.equal(r.status,200);
  const body=await r.json();
@@ -163,4 +192,23 @@ test('confirming a suggestion writes one link with its role; unsupported roles a
  assert.equal(body.linked.find(c=>c.key===MAKAY.key).role,'superintendent');assert.equal(body.status.missing_superintendent,false);
  await s.call({action:'link',contact_key:DAVIES.key,job_id:'j395',role:'superintendent',source:'suggestion'});
  assert.deepEqual(s.tables.ContactJobLink.map(l=>[l.contact_key[0],l.job_id,l.source,l.role]),[['a','j607','manual','superintendent'],['b','j395','suggestion','superintendent']]);
+});
+
+test('saved customer role overrides a generic builder company label',()=>{const links=[{contact_key:MAKAY.key,job_id:'j607',role:'customer'}];const v=view('j607',{links});assert.equal(v.linked.find(c=>c.key===MAKAY.key)?.role,'customer');});
+
+test('any signed-in user can save and read the super for one job, reusing a matching contact',async()=>{
+ const s=await setup();await s.importDirectory();
+ s.setUser({role:'user',email:'crew@example.com'});
+ assert.equal((await s.call({action:'job_contacts',job_id:'j607'})).status,403,'the full view stays owner-only');
+ let r=await s.call({action:'job_super',job_id:'j607'});assert.equal(r.status,200);assert.equal((await r.json()).super,null);
+ assert.equal((await s.call({action:'set_job_super',job_id:'j607',contact:{name:'Nobody'}})).status,400,'needs a phone or email');
+ r=await s.call({action:'set_job_super',job_id:'j607',contact:{name:'Dave D',phone:'801-555-0110'}});assert.equal(r.status,200);
+ assert.equal((await r.json()).super.key,DAVIES.key,'same phone reuses the directory contact');
+ r=await s.call({action:'set_job_super',job_id:'j607',contact:{name:'Mike Shaw',phone:'385-230-1483',email:'mikes@fieldstonehomes.com'}});
+ const saved=(await r.json()).super;assert.equal(saved.name,'Mike Shaw');
+ const sup=s.tables.ContactJobLink.filter(l=>l.job_id==='j607'&&l.role==='superintendent');
+ assert.deepEqual(sup.map(l=>l.contact_key),[saved.key],'one super per job');
+ const read=await(await s.call({action:'job_super',job_id:'j607'})).json();
+ assert.deepEqual(read.super,{key:saved.key,name:'Mike Shaw',phone:'385-230-1483',email:'mikes@fieldstonehomes.com'});
+ s.setUser(null);assert.equal((await s.call({action:'job_super',job_id:'j607'})).status,401);
 });

@@ -2,6 +2,8 @@
 // report belongs to. Shared by ingest (fetchCalendarEvents, fetchProbuildPosts),
 // resolveFieldReport and the Jobs pages (src/lib/jobDedupe.js), so the record the
 // hub shows as a group's head is the record new work attaches to.
+
+import { lotCommunityCheck, lotCommunityScore, extractLots } from "./lotCommunityMatch.js";
 //
 // Identity = normalized customer (builder) + normalized street address, where the
 // unit / lot / building is part of the address. Rules, all deterministic:
@@ -267,8 +269,19 @@ export function resolveJob(input, index) {
       hard = poJobs.filter((j) => oeIds.has(j.id));
       if (!hard.length) return review("po_oe_point_to_different_jobs", [...poJobs, ...oeJobs]);
     }
-    const fitting = hard.filter((j) => !conflictsWithMe(j));
+    let fitting = hard.filter((j) => !conflictsWithMe(j));
     if (!fitting.length) return review("hard_id_conflicts_with_customer_or_address", hard);
+    // Lot + community veto: applied BEFORE trusting the PO/OE hard ID. Daybreak
+    // reuses lot numbers across communities, so a hard-ID match whose title
+    // lots/communities disagree is flagged for review instead of auto-linked.
+    const eventTitle = rawName || normName || "";
+    if (eventTitle) {
+      const lotOk = fitting.filter((j) => !lotCommunityCheck(eventTitle, j).veto);
+      if (lotOk.length < fitting.length) {
+        if (!lotOk.length) return review("lot_community_mismatch", fitting);
+        fitting = lotOk;
+      }
+    }
     if (fitting.length === 1 || compatibleRecords(fitting, index)) return attach(fitting[0], poJobs.length ? "po_number" : "oe_number");
     return review("hard_id_on_several_jobs", fitting);
   }
@@ -293,6 +306,12 @@ export function resolveJob(input, index) {
     if (same.length) {
       const canon = canonicalSet(same, index);
       if (canon.length === 1) return attach(canon[0], "customer_and_address");
+      // Lot + community tiebreaker among same-street / same-builder candidates.
+      const eventTitle = rawName || normName || "";
+      if (eventTitle && canon.length > 1) {
+        const scored = canon.map((j) => ({ j, s: lotCommunityScore(eventTitle, j) })).sort((a, b) => b.s - a.s);
+        if (scored[0].s > 0 && scored[0].s > (scored[1]?.s || 0)) return attach(scored[0].j, "customer_address_lot_community");
+      }
       return review("existing_duplicates_disagree", canon);
     }
     if (exact.length) return review("address_match_customer_unknown", exact);
@@ -304,6 +323,18 @@ export function resolveJob(input, index) {
   }
   if (unclear.length) return review("similar_address", unclear);
   if (partial.length) return review("customer_name_differs", partial);
+
+  // 2b. Empty location: when no house-number address was parsed, fall back to the
+  // title lot + community check instead of the address veto. Daybreak events
+  // that name only a community and lot ("Move Up Lot 177") link by lot+community.
+  if (!me.address) {
+    const eventTitle = rawName || normName || "";
+    if (extractLots(eventTitle).size) {
+      const byLot = index.list.filter((j) => lotCommunityScore(eventTitle, j) > 0 && !lotCommunityCheck(eventTitle, j).veto);
+      if (byLot.length === 1) return attach(byLot[0], "lot_community");
+      if (byLot.length > 1) return review("lot_community_ambiguous", byLot);
+    }
+  }
 
   // 3. Exact normalized name or alias.
   if (!normName) return review("no_job_name");

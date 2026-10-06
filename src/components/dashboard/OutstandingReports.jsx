@@ -1,3 +1,4 @@
+import { reportQueueEvents } from "@/lib/reportQueue";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -40,7 +41,8 @@ export default function OutstandingReports({ events, user, onChanged, compliance
 
   const todayDenver = denverDate();
   const denverHour = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: "America/Denver", hour: "2-digit", hourCycle: "h23" }).format(new Date()), 10);
-  const outstanding = (events || [])
+  const reportEvents = reportQueueEvents(events, todayDenver);
+  const outstanding = reportEvents
     .filter((e) => e.report_required !== false &&
       ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"].includes(e.report_status))
     // Future visits are not outstanding reports: crews cannot have reported
@@ -62,7 +64,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
       return (b.days_late || 0) - (a.days_late || 0);
     });
 
-  const noSourceDates = [...new Set((events || [])
+  const noSourceDates = [...new Set(reportEvents
     .filter((e) => e.report_status === "no_source_data")
     .filter((e) => !complianceStartDate || (e.event_date || "") >= complianceStartDate)
     .map((e) => e.event_date))]

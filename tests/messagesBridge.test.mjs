@@ -7,7 +7,7 @@ const key='test-key-only-'.repeat(5);
 const digest=async s=>Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))).toString('hex');
 async function setup(){
  const tables={},api={};
- for(const name of ['MessageBridgeDevice','MessageConversation','MessageRecord','Jobs']){
+ for(const name of ['MessageBridgeDevice','MessageConversation','MessageRecord','Jobs','ContactJobLink','ContactDirectorySnapshot']){
   const rows=tables[name]=[];
   api[name]={filter:async(q={},sort,limit=100,skip=0)=>rows.filter(r=>Object.entries(q).every(([k,v])=>r[k]===v)).slice(skip,skip+limit),list:async()=>rows,get:async id=>rows.find(r=>r.id===id),create:async row=>{const r={id:name+'-'+rows.length,...structuredClone(row)};rows.push(r);return r},update:async(id,changes)=>{const row=rows.find(r=>r.id===id);Object.assign(row,structuredClone(changes));return row}};
  }
@@ -26,7 +26,7 @@ test('every inbox action rejects anonymous, ordinary users, and other administra
  const s=await setup();
  for(const user of [null,{role:'user',email:'gabefronk@gmail.com'},{role:'admin',email:'iryedra@gmail.com'},{role:'admin',email:'trevor.draney7@gmail.com'}]){
   s.setUser(user);
-  for(const action of ['inbox','conversation','jobs','link_job','mark_read','attachment','set_device','ingest','upload','heartbeat']){
+  for(const action of ['inbox','conversation','job_threads','jobs','link_job','mark_read','attachment','set_device','ingest','upload','heartbeat']){
    const r=await s.call({action,email:'gabefronk@gmail.com',role:'admin'},false);
    assert.equal(r.status,403,action);
    assert.match(r.headers.get('Cache-Control'),/no-store/);
@@ -52,4 +52,21 @@ test('attachments return verified bytes without a transferable storage URL; unse
  assert.equal((await s.call({action:'attachment',message_id:m.id,attachment_guid:'a1'},false)).status,404);
  const convo=await(await s.call({action:'conversation',conversation_key:saved.conversation_key},false)).json();
  assert.equal(convo.messages[0].text,'');assert.deepEqual(convo.messages[0].attachments,[]);
+});
+
+test('job_threads never reads or returns message bodies from an unlinked group',async()=>{
+ const s=await setup();
+ await s.api.Jobs.create({id:'job1',canonical_name:'Test job'});
+ await s.api.ContactDirectorySnapshot.create({directory_data:{contacts:[{key:'c1',phone_key:'8015550101'}]}});
+ await s.api.ContactJobLink.create({contact_key:'c1',job_id:'job1'});
+ await s.api.MessageConversation.create({conversation_key:'group',participants:['8015550101','8015559999'],title:'Unrelated group'});
+ await s.api.MessageConversation.create({conversation_key:'direct',participants:['8015550101'],title:'Direct'});
+ await s.api.MessageRecord.create({conversation_key:'group',text:'private group body',sent_at:'2026-09-25T12:00:00Z'});
+ await s.api.MessageRecord.create({conversation_key:'direct',text:'direct body',sent_at:'2026-09-25T12:00:00Z'});
+ const r=await s.call({action:'job_threads',job_id:'job1'},false),body=await r.json();
+ assert.equal(r.status,200);
+ assert.deepEqual(body.threads.map(t=>t.conversation.conversation_key),['direct']);
+ assert.equal(body.threads[0].messages[0].text,'direct body');
+ assert.equal(JSON.stringify(body).includes('private group body'),false);
+ assert.equal(JSON.stringify(body).includes('Unrelated group'),false);
 });

@@ -1,0 +1,80 @@
+import { referenceConflicts, supplierForPO, validDate, text, poRefs } from './procurementCore.js';
+
+export const isAmsco = vendor => /^(amsco|amsco windows)$/i.test(text(vendor));
+const testRecord = row => row?.is_sample || [row?.canonical_name, row?.job_name, row?.title, row?.po_number].some(value => /^(test(?: only)?|sample)(?:\b|[-_])/i.test(text(value)));
+const normalizedStatus = value => text(value).toLowerCase().replace(/[ -]+/g, '_');
+const finished = row => row && (['cancelled', 'canceled', 'received', 'completed', 'complete', 'delivered', 'installed', 'picked_up', 'closed'].includes(normalizedStatus(row.status || row.stage)) ||
+  row.received_date || row.picked_up_at || row.delivered_at || row.installed_at || row.picked_up === true || row.delivered === true || row.installed === true);
+export function supplierEtaReview(data) {
+  const { purchase_orders = [], vendor_orders = [], jobs = [] } = data;
+  const conflicts = new Set(referenceConflicts(purchase_orders, vendor_orders, jobs).map(c => c.number));
+  const reviewed = purchase_orders.filter(po => isAmsco(po.vendor)).map(po => {
+    const job = jobs.find(j => j.id === po.job_id);
+    const supplier = linkedEtaSupplier(po, vendor_orders, purchase_orders);
+    const related = vendor_orders.filter(o => isAmsco(o.vendor) && (o.purchase_order_id === po.id ||
+      poRefs(o.po_name).includes(text(po.po_number).toUpperCase()) ||
+      (text(po.vendor_quote_ref) && text(o.order_number).toUpperCase() === text(po.vendor_quote_ref).toUpperCase())));
+    let reason = '';
+    if (testRecord(po) || testRecord(job) || testRecord(supplier) || po.merged_into || job?.merged_into || supplier?.merged_into) reason = 'Test, sample or merged record';
+    else if (finished(po) || finished(job) || finished(supplier)) reason = 'Completed, cancelled or received';
+    else if (conflicts.has(text(po.po_number).toUpperCase())) reason = 'Conflicting job / PO references';
+    else if (po.job_id && !job) reason = 'Linked job unavailable';
+    else if (related.some(o => o.id !== supplier?.id)) reason = 'Supplier order link needs review';
+    else if (!['issued', 'emailed', 'ordered', 'confirmed'].includes(normalizedStatus(po.status))) reason = 'Unrecognized order status — review required';
+    return { po, reason };
+  });
+  // Never silently drop a supplier-only record; unresolved source identity needs owner review.
+  const unmatched = vendor_orders.filter(o => isAmsco(o.vendor) && !purchase_orders.some(p => supplierForPO(p, vendor_orders)?.id === o.id));
+  return [...reviewed, ...unmatched.filter(o => !finished(o) && !testRecord(o) && !o.merged_into && !finished(jobs.find(j => j.id === o.job_id))).map(o => ({
+    po: { id: 'supplier:' + o.id, po_number: text(o.po_name) || text(o.order_number) || o.id },
+    reason: 'Supplier order needs an unambiguous Hub PO link before sharing'
+  }))];
+}
+export function supplierEtaCandidates(data) {
+  return supplierEtaReview(data).filter(row => !row.reason).map(row => row.po);
+}
+export function supplierEtaFollowUp(po, data, now = new Date().toISOString()) {
+  const eta = effectiveSupplierEta(po, linkedEtaSupplier(po, data.vendor_orders, data.purchase_orders));
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now));
+  return eta.response === 'pending' ? 'Still pending' : !eta.date ? 'ETA not confirmed' : eta.date < today ? 'Past estimate — confirm current ETA' : '';
+}
+export function linkedEtaSupplier(po, orders = [], pos = []) {
+  const supplier = supplierForPO(po, orders);
+  if (!supplier || pos.filter(p => supplierForPO(p, orders)?.id === supplier.id).length !== 1) return null;
+  return supplier;
+}
+export function effectiveSupplierEta(po, supplier) {
+  const response = po?.supplier_eta || supplier?.supplier_eta;
+  if (supplier?.eta_reviewed_at && Date.parse(supplier.eta_reviewed_at) > (Date.parse(response?.responded_at) || 0)) {
+    return { date: validDate(supplier.eta_date) ? supplier.eta_date : '', response: 'owner', responded_at: supplier.eta_reviewed_at, previous_eta_date: '', source: 'Owner reviewed ETA' };
+  }
+  if (response && ['eta', 'pending'].includes(response.response)) {
+    return { date: response.response === 'eta' && validDate(response.eta_date) ? response.eta_date : '',
+      response: response.response, responded_at: response.responded_at, previous_eta_date: response.previous_eta_date || '',
+      source: 'Supplier link response', supplier_eta: response };
+  }
+  return { date: validDate(supplier?.eta_date) ? supplier.eta_date : '', response: 'none', responded_at: '', previous_eta_date: '', source: supplier?.eta_source || '' };
+}
+// Read-time projection only: supplier ETA responses are authoritative on their PO.
+// Financial/source records are never returned by the public endpoint.
+export function projectSupplierEtas(data) {
+  const pos = data.purchase_orders || [], orders = data.vendor_orders || [];
+  const conflicts = new Set(referenceConflicts(pos, orders, data.jobs || []).map(c => c.number));
+  const eligible = pos.filter(po => isAmsco(po.vendor) && !conflicts.has(text(po.po_number).toUpperCase()));
+  return { ...data, vendor_orders: orders.map(order => {
+    const matches = eligible.filter(po => linkedEtaSupplier(po, orders, pos)?.id === order.id && po.supplier_eta);
+    if (matches.length !== 1) return order;
+    const response = matches[0].supplier_eta;
+    const eta = effectiveSupplierEta(matches[0], order);
+    return { ...order, eta_date: eta.date, eta_source: eta.source, supplier_eta: response };
+  }) };
+}
+export function publicEtaOrder(po, data) {
+  const job = data.jobs.find(j => j.id === po.job_id);
+  const supplier = linkedEtaSupplier(po, data.vendor_orders, data.purchase_orders);
+  const eta = effectiveSupplierEta(po, supplier);
+  return { id: po.id, job_name: text(job?.canonical_name) || text(job?.display_name) || ('AMSCO order ' + (text(po.po_number) || text(supplier?.order_number)) + ' — job not linked'),
+    po_number: text(po.po_number), quote_number: text(po.vendor_quote_ref), supplier_order: text(supplier?.order_number),
+    eta_date: eta.date, response: eta.response, responded_at: eta.responded_at, previous_eta_date: eta.previous_eta_date,
+    version: po.updated_date + '|' + (supplier?.updated_date || ''), supplier: 'AMSCO' };
+}

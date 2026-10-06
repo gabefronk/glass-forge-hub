@@ -1053,3 +1053,134 @@ attributing it to this change.
 - **The Jobs hub and job pages still count raw review flags.** They don't apply the hold, so a job
   whose only issue is a held companion line reads "Complete" there while Invoicing shows it in
   review.
+
+## Jobs and Calendar usability pass (2026-09-25)
+
+Frontend only. No entity, function or data changes; nothing published.
+
+**Jobs hub** (`JobsHub.jsx`, `JobBrowserRow.jsx`, `src/lib/jobsOverview.js`)
+- Each job shows its **next visit** (Today / Tomorrow / date) or, when nothing is scheduled, its **last visit**. Dates come from linked calendar events and billing lines; cancelled calendar placeholders are ignored.
+- New **Visits this week** pill (next visit within 7 days, Denver days).
+- **Sort**: Newest added (default, unchanged), Next visit, Last visit, Name A–Z. **Builder filter** with counts.
+- Search, view, sort and builder are kept in the URL (`?q=&show=&sort=&builder=`), so Back and shared links keep them. **Clear filters** resets them.
+- Rows: status chip with dot, builder · address on one line; tablet shows two columns.
+
+**Calendar** (`CalendarPage.jsx`, new `EventCard.jsx`, `WeekView.jsx`, `AgendaList.jsx`, `src/lib/calendarModel.js`; `MonthGrid.jsx`, `EventBubble.jsx` colours)
+- One header: period title with visit count, prev/Today/next, Month · **Week** · List, New event.
+- **Week view** (Sun–Sat, crosses month boundaries; arrows move by week).
+- **List view** is a day-by-day agenda with Today/Tomorrow headings, scrolled to today.
+- Filter chips with counts replace "Unreported only": All, Installs, Service, Outlook (when present), Needs report.
+- Visit cards show time range, address, crew, a report chip ("Needs photos · 2d late", "Reported", …) and an Open job link when the event is linked.
+- Admin tools (Installation calendar, iPad schedules, Find a job update) sit in one row and open with a consistent back bar.
+- **Behaviour changes to confirm**
+  - Install vs service now uses the Invoicing wording rule (`service|warranty|wty|warr|per report` in the title or scope = service). Before, every Google-synced event counted as service, so installs were red and the Installs count was 0.
+  - Future visits are no longer flagged as missing a report (their `report_status` defaults to `pending`). The needs-report flag is amber, not red, so it stays visible on service events.
+
+**Tests**: new `tests/jobsHubVisits.test.mjs` (5) and `tests/calendarModel.test.mjs` (6) pass. Full root suite: 459 pass, 12 fail — the same 12 failures as before this change (ownedCalendar handler, install budget, jobProfitability, ProBuild refresh). Lint clean on touched files; `npm run build` passes.
+
+### Follow-up (same day): YA naming, duplicates, calendar load
+
+- **Customer-facing name.** The Customer Contract header and signature line and the field-report PDF footer now read "YA Windows and Doors". Internal screens and the Glass Forge → YA consulting-fee invoice are unchanged. No license line was added (the license is not issued yet).
+- **Duplicates** (`src/lib/jobDedupe.js`). New merge rule: same customer + same normalized job name, when exactly one street address appears in the records' address fields and at most one window quote. This covers the name-only records ProBuild/calendar ingest created ("pulte homes - 338 sunset flats", no builder or address) beside the record with the real address. Two name-only records with no address anywhere (the Structura case) and same-name records with different addresses stay flagged. On the live Jobs list (2,494 records, read-only check) this folds ~531 name groups and cuts "Possible duplicates" from ~1,094 to roughly 85. Records are never edited; the oldest record stays canonical. Tests added in `jobsDedupeReports.test.mjs`.
+- **Install vs service spot-check.** September "YA - #1 …" events are warranty/service calls by their notes, so the wording rule classifies them correctly.
+- **Calendar load.** `ownedCalendar` re-downloaded, SHA-checked and parsed the whole Sales Tracker workbook on every request. It now keeps the parsed workbook on a warm instance, keyed by the validated snapshot id + sha256 (`readTrackerView(…, cache)`); append batches are re-read every time. Only `ownedCalendar` passes a cache; `salesTrackerLookup` and the append service are unchanged. The page no longer waits for the full Jobs list (only the event form's job picker needs it). Tests: `tests/trackerViewCache.test.mjs`.
+- **Checks.** Root suite 463 pass / 12 fail (same 12 as before); backend suite 838 pass / 2 fail (same 2 as the pre-change commit ee0fa1b); build passes.
+
+## Hub integration + design sweep (2026-09-26)
+
+**Connections**
+- Calendar/Today "Open job" links: `ownedCalendar` now attaches a display-only `job_id` (flag `job_link_derived`) from the high-confidence FeeLine built from the same event (`FeeLines.calendar_event_id == CalendarEvents.google_event_id`). Nothing is written to CalendarEvents or FieldReports (owner rules unchanged). Test: `tests/calendarDerivedJobLinks.test.mjs`.
+- Job page: new owner-only "Quotes & orders" card (`JobLinkedRecords.jsx`) lists window quotes (job_id or `source_window_quote_id`) and vendor orders; Money panel now includes the job's duplicate records (`memberIds`).
+- Job Budgets: job names on budgets and vendor orders link to `/jobs/:id`.
+
+**Integrations**
+- `job-documents` is a self-contained generated bundle (`scripts/build-job-documents-entry.mjs`, test `tests/jobDocumentsBundle.test.mjs`).
+- `probuild-refresh` records the real `asset_copy_failed` detail in `ProbuildRefreshRun.errors[]`.
+- `syncGoogleCalendarEvents`: `maxResults=2500`, retries 429/5xx/524 (3 attempts).
+- `fetchCalendarEvents`, `fetchProbuildPosts`, `auditFieldReports` reject signed-in non-admin/manager callers (scheduled runs unaffected; verified live via MCP `sync_calendar_events`).
+- Note: `base44/shared/jobFolderCopy.js` imports `jobDocuments.mjs` transitively; Daily Ingest ran fine after that change, so transitive `.mjs` imports do serve.
+
+**Design system**
+- Tailwind `slate`/`blue` scales remapped to the warm neutrals/teal (tailwind.config.js); `--gf-error*` tokens defined; shadcn `--primary` = #0B3F3B; remap layer extended for window-quotes navy/slate hexes.
+- Mobile bottom nav on sidebar tokens with brass active state; Invoicing first in More; owner "Admin" group (desktop + mobile) for Agent Center, System Map, Research Queue, Sales Tracker, Messages, Unlinked, ProBuild Daily, Match Debug.
+- Pages centered (removed `!mx-0`); PageShell double mobile bottom padding removed; Jobs → Field reports no longer double-headed (`ProbuildReports embedded`); Invoicing profitability grid no longer forces sideways scroll on phones; Invoicing title is an h1; JobSetup on canvas with scrollable contract table.
+
+**Checks**: lint clean, build passes, root tests 515/515, backend 811/813 (the 2 pre-existing Node-20 `.ts` import failures).
+
+**Open (owner decisions / device actions)**: additive job_id backfill for CalendarEvents/FieldReports; restart AMSCO runner, Mac message collector, gaming-PC quote relay (hostname in `desktopQuoteRelayCore.js`); re-capture Outlook + Sales Tracker (stale since 9/08); full ProBuild library refresh; research queue paused; Goble PlanIntake stuck in error; 7 duplicate kebab-case entity files left in place (deleting entity files is risky).
+
+## Contacts cleanup, builder linkage and the homeowner slot (2026-09-26)
+
+Nothing was bulk-written to production data; every write below happens only on an owner (or,
+for the super/homeowner slots, a signed-in user's) click.
+
+- **Builder linkage.** `builderCore()` / `builderCatalog()` in `contactMatching.js` normalize
+  builder names from `jobIdentity.normalizeCustomer`, fix known typos (Holme, Homles, Lanscope,
+  Anderson, Valor Holmes), drop trailing generic words (Homes, Construction, Group, of Utah…) and
+  map DAVID WEEKLEY to Weekley. A job builder such as "Holmes 328 Daybreak" belongs to the known
+  builder whose core it starts with. `buildDirectory` now gives every job and contact the same
+  canonical builder, so ~97% of jobs (was ~41%) resolve to a builder that has contacts. Cash / YA
+  "builders" never share contacts. The workbook is not edited.
+- **Job page.** `job_contacts` returns `builder_contacts` (office, PMs, supers, warranty) shown under
+  the builder name. Calendar events now reach a job the same way the job page does (job_id, a
+  billing line's calendar_event_id, or a unique exact name) — before, no SPR event had a job_id.
+  "SPR:" lines become superintendent suggestions: high when the phone is a contact under the
+  job's builder; otherwise an "Add & link as superintendent" card (creates the contact under the
+  job's builder). Phones found in job evidence that belong to another company (BFS ISR, vendor
+  reps, other builders) are no longer proposed as homeowners. Coverage adds "Add all as supers".
+- **Cleanup (owner-only, Contacts page).** `cleanup_plan` proposes merges (same phone / email / full
+  name at the same builder; "Check first" when names or builders differ), missing builders (company
+  email domain used by one builder, or staff job links) and missing roles (calendar SPR phone, or
+  consistent confirmed link roles). `cleanup_apply` re-plans server-side and applies only listed
+  ids. Snapshot contacts get a HubContacts `source:"override"` row with the same key; merges keep
+  all phones / emails / names on the survivor, move ContactJobLink rows (folding duplicates), and
+  mark the other record `status:"merged"` + `merged_into` — never deleted. Old keys resolve to the
+  survivor in `link`, `contact`, `job_super`, `job_homeowner`.
+- **Homeowner slot.** Directly under the Super card in the job hero (job page and Jobs tab), same
+  access rule as the super (any signed-in user): `job_homeowner` / `set_job_homeowner`. Pick a
+  contact (typeahead via `picker`) or enter name + phone/email (reuses a contact with that phone /
+  email, else creates a HubContacts row role `homeowner`), stored as ContactJobLink role
+  `homeowner`, one per job, removable. Prefill from Jobs.customer_name only when it names a person.
+  The rail's Contacts card shows a Homeowner row right after Superintendent; the homeowner never
+  fills the super slot.
+- **Schema (additive):** HubContacts `role`, `status`, `merged_into`, `merged_keys[]`, `aliases[]`,
+  `phones[]`, `emails[]`.
+- **Tests:** `tests/contactCleanup.test.mjs`.
+
+### Inbox agents: mail stays in the mailbox (2026-09-26, later)
+
+Gabe: "I don't want my emails in the Glass Forge Hub." The agent now keeps no message bodies
+and no inbox mirror. `EmailThread` / `EmailMessage` are gone (entity files deleted and the
+platform schemas removed — they never held data); `EmailRelay` is the per-thread ledger
+(what the agent concluded, what it changed: `hub_changes`, `applied`). Text is read from
+Gmail / Graph at run time and dropped; pending re-triage and draft regeneration re-read the
+thread from the provider (`getThreadMessages`). The agent now applies PO/OE numbers and a
+stated homeowner to the job on a high-confidence link (additive, once); schedule changes
+only ever become a to-do. `send_draft` is gone — drafts live in the mailbox and are sent
+from there. The `/email` page, its components and the job-page Email card are replaced by
+Admin → Inbox Agents (`/inbox-agents`, owner only). 587 tests green; `vite build` clean.
+
+### Job page "Cost & sell" card (2026-09-26, later)
+
+Two ways to put money on a job without leaving the job page, for admin + manager (crews never
+see the card): **Quick labor** — install price charged to the builder + what the crew cost,
+saved on the job's `JobCostInputs` row (`installation_revenue` / `actual_labor_cost`, one row
+per job and month, blank fields left untouched) so the Invoicing profitability panel and the
+Job Setup sheet pick it up; and **Quote PDF** — the Job Budgets ingest with `job_id` passed,
+which links the budget to this job instead of guessing. New `jobBudgetIngest` actions
+`job_costs` and `set_labor`; pure helpers in `base44/shared/jobLaborEntry.js` (tested).
+Card lives after "The job" on both the full page and the split view.
+
+### Job handoff — Stage 2 to the PM (2026-09-26, later)
+
+Spec: docs/superpowers/specs/2026-09-26-job-handoff-design.md. `Jobs.stage` (quoted → sold →
+ordered → handed_off → scheduled → installed → closed) + `pm_member_key` + `handoff_id`; new
+`JobHandoffs` entity (checklist, dates, note, what submit created). Pure logic in
+`base44/shared/jobHandoff.js` (checklist evaluation from job facts, readiness, packet text,
+to-do / kickoff-event / note rows) with tests; `jobHandoff` function (get, save_draft, submit,
+update, set_stage; admin + manager). Job page: "Hand off" card (checklist with uploads, ETA,
+start date, PM picker, note, Submit) that becomes the Stage 2 banner; stage chip + picker in
+the hero. Submit: job → handed_off + pm; ONE to-do on the PM's Follow-ups lane (request_key
+handoff:<job_id>) due on the start date carrying the packet; ONE Hub-only kickoff
+CalendarEvents row (google_event_id gfjobs-handoff-<job_id>, never pushed to Google); one job
+note. Update after submit moves the to-do / event / packet with the new dates.

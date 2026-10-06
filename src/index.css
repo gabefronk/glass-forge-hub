@@ -12,7 +12,7 @@
     --card-foreground: #182422;
     --popover: #FFFFFF;
     --popover-foreground: #182422;
-    --primary: #146556;
+    --primary: #0B3F3B;
     --primary-foreground: #FFFFFF;
     --secondary: #F0F1ED;
     --secondary-foreground: #182422;
@@ -55,7 +55,7 @@
     /* Graphite navigation */
     --sidebar-bg: #1B2925;
     --sidebar-foreground: #E8EAE5;
-    --sidebar-primary: #146556;
+    --sidebar-primary: #0B3F3B;
     --sidebar-primary-foreground: #FFFFFF;
     --sidebar-accent: #2A3A35;
     --sidebar-accent-foreground: #E8EAE5;
@@ -64,12 +64,12 @@
 
     /* Glass Forge — Deep Teal & Brass design system */
     --gf-body: #E4DFD4;
-    --gf-canvas: #F4F1EA;
+    --gf-canvas: #D9CBB0;
     --gf-card: #FFFFFF;
     --gf-card-band: #FAF8F3;
     --gf-field: #F4F1EA;
     --gf-hover: #F6F3EC;
-    --gf-border: #E2DCD1;
+    --gf-border: #D3CABB;
     --gf-border-2: #E0DACF;
     --gf-hairline: #EEE9E0;
     --gf-hairline-2: #F3EFE7;
@@ -103,6 +103,9 @@
     --gf-sidebar-text: #AEB5B7;
     --gf-sidebar-text-on: #F2EEE8;
     --gf-sidebar-muted: #8F999B;
+    --gf-error: #A43432;
+    --gf-error-bg: #FCEDEC;
+    --gf-error-border: #F0C9C5;
     --gf-graphite-900: #0C1F21;
     --gf-sync: #3B8A5A;
     --gf-tile-teal: #E2EEEB;
@@ -115,7 +118,7 @@
     --gf-tile-sand-ink: #6F4E10;
     --gf-tile-stone: #F3EFE7;
     --gf-tile-stone-ink: #566063;
-    --shadow-card: 0 1px 2px rgba(21,24,26,.04), 0 16px 40px -28px rgba(21,24,26,.25);
+    --shadow-card: 0 1px 2px rgba(10,29,31,.08), 0 6px 14px -6px rgba(10,29,31,.16), 0 22px 40px -22px rgba(10,29,31,.34);
     --shadow-row: 0 1px 2px rgba(21,24,26,.05), 0 3px 8px -3px rgba(21,24,26,.10);
     --shadow-row-hover: 0 1px 2px rgba(21,24,26,.06), 0 4px 12px -4px rgba(21,24,26,.16);
     --shadow-control: 0 1px 2px rgba(21,24,26,.04);
@@ -125,7 +128,7 @@
     --r-control: 8px;
     --r-button: 9px;
     --r-row: 9px;
-    --r-card: 12px;
+    --r-card: 14px;
   }
 
   .dark {
@@ -135,7 +138,7 @@
     --card-foreground: #182422;
     --popover: #FFFFFF;
     --popover-foreground: #182422;
-    --primary: #146556;
+    --primary: #0B3F3B;
     --primary-foreground: #FFFFFF;
     --secondary: #F0F1ED;
     --secondary-foreground: #182422;
@@ -173,7 +176,7 @@
     --font-mono: 'Geist Mono', ui-monospace, monospace;
     --sidebar-bg: #1B2925;
     --sidebar-foreground: #E8EAE5;
-    --sidebar-primary: #146556;
+    --sidebar-primary: #0B3F3B;
     --sidebar-primary-foreground: #FFFFFF;
     --sidebar-accent: #2A3A35;
     --sidebar-accent-foreground: #E8EAE5;
@@ -268,10 +271,15 @@
     background: radial-gradient(120% 90% at 20% 0%, rgba(20,101,86,.05) 0%, rgba(245,246,243,0) 62%);
   }
   .card-shadow {
-    box-shadow: 0 1px 2px rgba(24,36,34,.04), 0 4px 12px -8px rgba(24,36,34,.10);
+    box-shadow: 0 1px 2px rgba(10,29,31,.08), 0 6px 14px -6px rgba(10,29,31,.16), 0 22px 40px -22px rgba(10,29,31,.34);
   }
   .card-shadow-elevated {
-    box-shadow: 0 1px 2px rgba(24,36,34,.04), 0 8px 20px -12px rgba(24,36,34,.16);
+    box-shadow: 0 1px 2px rgba(10,29,31,.08), 0 10px 20px -8px rgba(10,29,31,.2), 0 28px 48px -22px rgba(10,29,31,.4);
+  }
+  /* Green-haze title band used on every section card (see PageShell). */
+  .sheet-band {
+    background: linear-gradient(90deg, #cfe3da 0%, #e1eee8 45%, #eef5f1 100%);
+    border-bottom: 1px solid #bfd6cb;
   }
   .obsidian-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
   .obsidian-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -324,4 +332,18 @@
   .bg-\[\#F6F8FC\] { background-color: var(--gf-card-band) !important; }
   .text-\[\#535E72\] { color: var(--gf-ink-3) !important; }
   .border-\[\#D8E3F4\] { border-color: var(--gf-border) !important; }
+
+  /* Window Quotes + reports off-brand blues/navies → Deep Teal & Brass */
+  .text-\[\#616D81\], .text-\[\#77839A\], .text-\[\#687385\], .text-\[\#687D8B\], .text-\[\#75838c\] { color: var(--gf-ink-3) !important; }
+  .text-\[\#526B7B\], .text-\[\#305367\], .text-\[\#526d7d\] { color: var(--gf-ink-2) !important; }
+  .text-\[\#20386E\], .text-\[\#203B64\] { color: var(--gf-teal-600) !important; }
+  .bg-\[\#F2F6FC\] { background-color: var(--gf-teal-050) !important; }
+  .hover\:bg-\[\#EDF3FA\]:hover { background-color: var(--gf-hover) !important; }
+  .hover\:bg-\[\#234F8E\]:hover { background-color: var(--gf-teal-700) !important; }
+  .border-\[\#CAD5E3\], .border-\[\#CBD5E2\], .border-\[\#AAB2BE\], .border-\[\#bdcbd4\] { border-color: var(--gf-border) !important; }
+  .bg-\[\#245889\], .bg-\[\#196c86\], .bg-\[\#247d9d\], .\!bg-\[\#247d9d\] { background-color: var(--gf-teal-600) !important; }
+  .\!border-\[\#247d9d\] { border-color: var(--gf-teal-600) !important; }
 }
+/* Owner-only panels nested inside the job page's collapsed Owner section: keep their
+   own borders so each stays readable, drop the stacked drop shadows. */
+.job-owner-panels > section { box-shadow: none; margin-top: 12px; }

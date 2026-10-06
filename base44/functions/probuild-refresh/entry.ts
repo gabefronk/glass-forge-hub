@@ -523,11 +523,12 @@ function createProbuildRefreshHandler({ getClient, getToken, copyFile, fetchImpl
       return json2({ run: publicRun(run) });
     } catch (error) {
       const code = error.safeCode || "refresh_step_failed";
+      const detail = error.safeCode && error.safeDetail ? { detail: String(error.safeDetail).slice(0, 300) } : {};
       if (run && api && input?.action === "next" && !["complete", "failed"].includes(run.status)) {
         const attempts = (run.attempts || 0) + 1, failed = attempts >= 3;
         const at = now().toISOString();
         try {
-          run = await api.ProbuildRefreshRun.update(run.id, { status: failed ? "failed" : "retry_wait", attempts, next_retry_at: failed ? null : new Date(Date.parse(at) + [3e4, 12e4][attempts - 1]).toISOString(), checked_at: at, errors: [...run.errors || [], { code, at, phase: run.phase, cursor: run.cursor, attempt: attempts }] });
+          run = await api.ProbuildRefreshRun.update(run.id, { status: failed ? "failed" : "retry_wait", attempts, next_retry_at: failed ? null : new Date(Date.parse(at) + [3e4, 12e4][attempts - 1]).toISOString(), checked_at: at, errors: [...run.errors || [], { code, ...detail, at, phase: run.phase, cursor: run.cursor, attempt: attempts }] });
         } catch {
           return json2({ error: "run_receipt_write_failed", run_id: run.id }, 503);
         }
@@ -547,8 +548,12 @@ var handler = createProbuildRefreshHandler({ ...dependencies, copyFile: async (r
   const headers = new Headers(req.headers);
   headers.delete("content-length");
   const result = await library(new Request(req.url, { method: "POST", headers, body: JSON.stringify({ action: "copy_file", file_id: fileId }) }));
-  const data = await result.json();
-  if (!result.ok || data.error) throw Error("asset_copy_failed");
+  const data = await result.json().catch(() => null);
+  if (!result.ok || !data || data.error) {
+    // Field-library errors are user-safe messages; still strip any URL (signed links carry tokens).
+    const cause = String(data?.error || "HTTP " + result.status + (data ? "" : " (non-JSON response)")).replace(/https?:\/\/\S+/gi, "[url]").replace(/\s+/g, " ").trim().slice(0, 300);
+    throw Object.assign(Error("asset_copy_failed"), { safeCode: "asset_copy_failed", safeDetail: cause, status: 502 });
+  }
   return data;
 } });
 Deno.serve(handler);

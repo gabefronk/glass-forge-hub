@@ -74,6 +74,9 @@ export function parseAmscoQuoteText(text) {
     openings_qty: openings || null,
     material_true_cost: totals.dealer.sub_total,   // workbook C15
     actual_total_sell: totals.customer.total,      // workbook B28
+    dealer_subtotal: totals.dealer.sub_total,
+    customer_total: totals.customer.total,
+    price_levels: totals.dealer.sub_total && totals.customer.total ? 'dealer_and_customer' : null,
     customer_sub_total: totals.customer.sub_total,
     customer_tax: totals.customer.tax,
     parse_source: 'amsco_text',
@@ -93,7 +96,15 @@ export function normalizeVendorQuote(raw = {}) {
     const n = Number(v);
     return Number.isInteger(n) && n > 0 && n < 10000 ? n : null;
   };
-  return {
+  // Line-item qty: explicit 0 is a known zero, not 1. null/missing/invalid stays
+  // null — the extractor contract (vendorQuoteSchema.js) says "never guess", so we
+  // do not invent 1 for an unprinted quantity.
+  const lineQty = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 0 && n < 10000 ? n : null;
+  };
+  const out = {
     vendor: clean(raw.vendor),
     manufacturer: clean(raw.manufacturer || raw.vendor),
     quote_number: clean(raw.quote_number),
@@ -110,9 +121,55 @@ export function normalizeVendorQuote(raw = {}) {
     actual_total_sell: money(raw.actual_total_sell),
     customer_sub_total: money(raw.customer_sub_total),
     customer_tax: money(raw.customer_tax),
-    lines: Array.isArray(raw.lines) ? raw.lines.slice(0, 500) : [],
+    customer_total: money(raw.customer_total),
+    dealer_subtotal: money(raw.dealer_subtotal),
+    net_total: money(raw.net_total),
+    price_levels: ['dealer_and_customer', 'single'].includes(raw.price_levels) ? raw.price_levels : null,
+    customer_po: clean(raw.customer_po),
+    project_name: clean(raw.project_name),
+    prepared_by: clean(raw.prepared_by),
+    lines: Array.isArray(raw.lines) ? raw.lines.slice(0, 500).filter((l) => l && typeof l === 'object').map((l) => ({
+      qty: lineQty(l.qty),
+      width_in: money(l.width_in),
+      height_in: money(l.height_in),
+      kind: clean(l.kind),
+      description: clean(l.description),
+      mark: clean(l.mark),
+      extended: money(l.extended),
+    })) : [],
     parse_source: clean(raw.parse_source) || 'llm',
   };
+  // openings_qty recompute — source-grounded in the extractor contract
+  // (vendorQuoteSchema.js QUOTE_SCHEMA + QUOTE_PROMPT): lines = "one entry per
+  // quote line item"; qty is "null for anything not printed; never guess";
+  // openings_qty = "Total window/door/glass units across all lines"; kind 'part'
+  // = screens/mull/hardware/freight/fees. So the unit count is the sum of
+  // reliably-quantified non-part line quantities. null/missing qty is never
+  // invented as 1; explicit 0 is 0. When any non-part line has an unknown qty, or
+  // the same description mixes a group summary (qty > 1) with detail lines
+  // (qty 1) — a possible summary/detail overlap that would double-count — we keep
+  // the raw printed count and flag openings_qty_review.
+  let lineUnits = 0;
+  let ambiguous = false;
+  for (const l of out.lines) {
+    if (l.kind === 'part') continue;
+    if (l.qty === null) ambiguous = true;
+    else lineUnits += l.qty;
+  }
+  if (!ambiguous) {
+    const byDesc = new Map();
+    for (const l of out.lines) {
+      if (l.kind === 'part' || !l.description || l.qty === null) continue;
+      if (!byDesc.has(l.description)) byDesc.set(l.description, []);
+      byDesc.get(l.description).push(l.qty);
+    }
+    for (const qtys of byDesc.values()) {
+      if (qtys.some(q => q > 1) && qtys.some(q => q === 1)) { ambiguous = true; break; }
+    }
+  }
+  if (!ambiguous && lineUnits > 0) out.openings_qty = lineUnits;
+  out.openings_qty_review = ambiguous;
+  return out;
 }
 
 // Job-match tokens: what we use to find the Hub job / Drive folder.

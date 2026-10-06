@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 globalThis.crypto ??= webcrypto;
 
-test('online fallback runtime dispatches once and ignores retired continuation environment settings', async () => {
+// Cutover 2026-09-17: the online Superagent fallback is retired. Whatever the
+// environment says, nothing is dispatched online; the request stops with a clear reason.
+test('retired online fallback never dispatches, whatever the environment settings', async () => {
   const oldDeno = globalThis.Deno, oldFetch = globalThis.fetch;
   let scenario = 0;
   try {
@@ -34,13 +36,11 @@ test('online fallback runtime dispatches once and ignores retired continuation e
         }
       }]));
       const current = await execution.afterInput({ db, q: quote });
-      assert.equal(execution.configured, true);
-      assert.equal(current.execution_provider, 'superagent');
-      assert.equal(current.worker_status, 'running');
-      assert.equal(current.agent_run.phase, 'sent');
-      assert.equal(current.agent_run.continuation_enabled, undefined);
-      assert.equal(requests.length, 1);
-      assert.equal(slot.busy_token, current.agent_run.operation_id);
+      assert.equal(execution.configured, false);
+      assert.equal(requests.length, 0);
+      assert.equal(current.worker_status, 'failed');
+      assert.ok(current.missing_details.length > 0);
+      assert.equal(slot.busy_token, '');
     }
   } finally {
     globalThis.fetch = oldFetch;

@@ -9,6 +9,10 @@ export function invoicingStats(rows, reportStatusMap, supersededSet = buildSuper
   const match = held.filter(isMatchBlocked);
   const report = held.filter(r => !isMatchBlocked(r) && isReportBlocked(r, reportStatusMap));
   const scheduled = active.filter(isFutureRow);
+  // The month total is what is done AND reported: a visit the crew has not reported yet stays
+  // out until the report lands; scheduled (future) work never counts. Pricing-review lines are
+  // done and reported, so they count at their provisional amount.
+  const counted = past.filter(r => r.billed_to_bfs || (!isReportBlocked(r, reportStatusMap) && !r._billing_review));
   const sum = arr => Math.round(arr.reduce((n, r) => n + computeFeeAmt(r), 0) * 100) / 100;
   return {
     readyTotal: sum(ready), readyCount: ready.length,
@@ -17,8 +21,8 @@ export function invoicingStats(rows, reportStatusMap, supersededSet = buildSuper
     reportBlockedTotal: sum(report), reportBlockedCount: report.length,
     heldTotal: sum(held),
     scheduledTotal: sum(scheduled), scheduledCount: scheduled.length,
-    monthEarnedTotal: sum(past), monthEarnedCount: past.filter(r => computeFeeAmt(r) !== 0).length,
-    recordedLaborTotal: Math.round(past.reduce((n,r) => n + computeLaborAmt(r), 0) * 100) / 100,
+    monthEarnedTotal: sum(counted), monthEarnedCount: counted.filter(r => computeFeeAmt(r) !== 0).length,
+    recordedLaborTotal: Math.round(counted.reduce((n,r) => n + computeLaborAmt(r), 0) * 100) / 100,
     noSourceDataCount: past.filter(r => reportStatusMap?.get(r.calendar_event_id) === "no_source_data").length,
     customFeeCount: active.filter(isCustomFee).length,
     splitReviewCount: active.filter(r => r.split_candidate_amt != null && r.pricing_review_reason).length

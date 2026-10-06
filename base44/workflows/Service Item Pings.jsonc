@@ -1,0 +1,47 @@
+{
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "service_item_pings",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "ping_service_items": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "serviceItems",
+            "args": {
+              "action": "ping"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Ping open service items",
+            "description": "Email + text the owner for every open service item with no activity since yesterday or a passed ETA; copy the escalation address after two quiet days."
+          }
+        }
+      }
+    ]
+  },
+  "name": "Service Item Pings",
+  "description": "Every morning at 07:00 MT, nudges Milan on any service item that hasn't moved since yesterday, and copies Gabe after two quiet days.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 7 * * *",
+      "one_time_date": null,
+      "timezone": "America/Denver",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  }
+}

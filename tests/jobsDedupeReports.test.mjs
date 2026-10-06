@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const { groupJobs, parseStreetAddress, jobCustomer } = await import('../src/lib/jobDedupe.js');
 const { buildReportEvidence, visitsMissingReport, eventReportCleared } = await import('../src/lib/jobReports.js');
 const { jobStatus } = await import('../src/lib/feeUI.js');
-const { buildJobsOverview } = await import('../src/lib/jobsOverview.js');
+const { buildJobsOverview, flattenForSelect } = await import('../src/lib/jobsOverview.js');
 
 const TODAY = '2026-09-18';
 
@@ -158,7 +158,11 @@ test('which event states clear a visit', () => {
   assert.equal(eventReportCleared({ report_status: 'waived' }), true);
   assert.equal(eventReportCleared({ report_status: 'rescheduled' }), true);
   assert.equal(eventReportCleared({ report_required: false, report_status: 'pending' }), true);
-  for (const s of ['pending', 'missing_photos', 'missing_notes', 'missing_all', 'no_source_data', 'pre_compliance', undefined]) {
+  // Photos alone are a report (Gabe, 2026-10-03): photos-in-no-notes clears, and so does a
+  // pre-compliance visit whose report the matcher found.
+  assert.equal(eventReportCleared({ report_status: 'missing_notes' }), true);
+  assert.equal(eventReportCleared({ report_status: 'pre_compliance', report_status_raw: 'ok' }), true);
+  for (const s of ['pending', 'missing_photos', 'missing_all', 'no_source_data', 'pre_compliance', undefined]) {
     assert.equal(eventReportCleared({ report_status: s }), false, String(s));
   }
 });
@@ -180,6 +184,37 @@ test('a ProBuild line that supersedes the visit clears it even on the next day',
   const evidence = buildReportEvidence({ events: [{ job_id: 'job-a', google_event_id: 'g-3', event_date: '2026-08-27', report_status: 'pending' }] });
   assert.equal(jobStatus([row, post], evidence, TODAY).key, 'complete');
   assert.equal(jobStatus([row, { ...post, superseded_by: 'other' }], evidence, TODAY).key, 'needs_report');
+});
+
+test('pre-compliance and no-source-data visits do not count as missing, modern pending still does', () => {
+  // A genuinely missing modern visit (pending, past) still flags the job.
+  const modern = { id: 'r-mod', job_id: 'job-a', source: 'calendar', job_date: '2026-09-10', labor_amt: 300, calendar_event_id: 'g-mod' };
+  const modernEv = { job_id: 'job-a', google_event_id: 'g-mod', event_date: '2026-09-10', report_required: true, report_status: 'pending', days_late: 5 };
+  const evMod = buildReportEvidence({ events: [modernEv] });
+  assert.deepEqual(visitsMissingReport([modern], evMod, TODAY).map((r) => r.id), ['r-mod'], 'modern pending is missing');
+  assert.equal(jobStatus([modern], evMod, TODAY).key, 'needs_report');
+
+  // A pre-compliance visit (before the compliance start date) is not owed a report,
+  // so it must not flag the job even though its matcher found nothing.
+  const pre = { id: 'r-pre', job_id: 'job-a', source: 'calendar', job_date: '2026-08-21', labor_amt: 0, calendar_event_id: 'g-pre' };
+  const preEv = { job_id: 'job-a', google_event_id: 'g-pre', event_date: '2026-08-21', report_required: true, report_status: 'pre_compliance', report_status_raw: 'missing_all', days_late: 0 };
+  const evPre = buildReportEvidence({ events: [preEv] });
+  assert.deepEqual(visitsMissingReport([pre], evPre, TODAY), [], 'pre_compliance is not missing');
+  assert.notEqual(jobStatus([pre], evPre, TODAY).key, 'needs_report', 'pre_compliance does not flag the job');
+
+  // no_source_data (sync incomplete) is also not owed — flags are suppressed.
+  const nsd = { id: 'r-nsd', job_id: 'job-a', source: 'calendar', job_date: '2026-09-05', labor_amt: 300, calendar_event_id: 'g-nsd' };
+  const nsdEv = { job_id: 'job-a', google_event_id: 'g-nsd', event_date: '2026-09-05', report_required: true, report_status: 'no_source_data', days_late: 0 };
+  const evNsd = buildReportEvidence({ events: [nsdEv] });
+  assert.deepEqual(visitsMissingReport([nsd], evNsd, TODAY), [], 'no_source_data is not missing');
+
+  // A reported modern visit alongside a pre-compliance visit: job is NOT "Needs report"
+  // (the reported visit is cleared, the pre-compliance visit is not owed).
+  const reported = { id: 'r-ok', job_id: 'job-a', source: 'calendar', job_date: '2026-09-22', labor_amt: 300, calendar_event_id: 'g-ok' };
+  const reportedEv = { job_id: 'job-a', google_event_id: 'g-ok', event_date: '2026-09-22', report_required: true, report_status: 'ok' };
+  const evMix = buildReportEvidence({ events: [reportedEv, preEv] });
+  assert.deepEqual(visitsMissingReport([reported, pre], evMix, TODAY), [], 'reported + pre_compliance: none missing');
+  assert.notEqual(jobStatus([reported, pre], evMix, TODAY).key, 'needs_report');
 });
 
 test('a visit rescheduled to a later date is not due yet', () => {
@@ -232,4 +267,48 @@ test('Jobs hub counts: duplicates shown once, completed reports leave the Needs 
   assert.equal(degraded.evidenceAvailable, false);
   assert.equal(degraded.stats['job-a'].status.key, 'complete');
   assert.equal(degraded.counts.needs_report, 2);
+});
+
+test('a name-only record merges into the same-name record that has the real address', () => {
+  const nameOnly = { id: 'n1', canonical_name: 'pulte homes - 338 sunset flats', created_date: '2026-06-01' };
+  const full = { id: 'n2', canonical_name: 'Pulte Home - 338 Sunset Flats', builder: 'Pulte Home', address: '4929 N Granite Ln Eagle Mountain, UT 84005', created_date: '2026-06-03' };
+  const otherLot = { id: 'n3', canonical_name: 'Pulte Home - 339 Sunset Flats', builder: 'Pulte Home', address: '4931 N Granite Ln Eagle Mountain, UT 84005', created_date: '2026-06-04' };
+  const { groups, groupByJobId } = groupJobs([nameOnly, full, otherLot]);
+  assert.equal(groups.length, 2);
+  const g = groupByJobId.get('n2');
+  assert.equal(g, groupByJobId.get('n1'));
+  assert.deepEqual(g.memberIds, ['n1', 'n2'], 'oldest record stays canonical');
+  assert.equal(g.merged, true);
+  assert.deepEqual(g.review, []);
+  assert.notEqual(groupByJobId.get('n3'), g, 'another lot stays its own job');
+});
+
+test('combine-select mode: grouped siblings are independently selectable, IDs preserved, no sibling auto-select', () => {
+  // 4 raw jobs: 2 collapse into one presentation group (siblings), 2 stay separate.
+  const groups = [
+    { id: 'g1', members: [{ id: 'a' }, { id: 'b' }] },
+    { id: 'g2', members: [{ id: 'c' }] },
+    { id: 'g3', members: [{ id: 'd' }] },
+  ];
+  const flat = flattenForSelect(groups);
+  assert.equal(flat.length, 4, 'every raw job appears in select mode');
+  assert.deepEqual(flat.map((j) => j.id).sort(), ['a', 'b', 'c', 'd'], 'each member independently present');
+
+  // Simulate independent toggling: selecting 'a' does NOT auto-select sibling 'b'.
+  const selected = new Set();
+  const toggle = (id) => { if (selected.has(id)) selected.delete(id); else selected.add(id); };
+  toggle('a');
+  assert.deepEqual([...selected], ['a'], 'no sibling auto-select');
+  toggle('b');
+  assert.deepEqual([...selected].sort(), ['a', 'b'], 'siblings independently selectable');
+  toggle('a');
+  assert.deepEqual([...selected], ['b'], 'deselect one sibling leaves the other');
+});
+
+test('same name but two different real addresses stays flagged, not merged', () => {
+  const a = { id: 'd1', canonical_name: 'DAI - 26 Calypso Wild Flower', builder: 'DAI', address: '1839 N Barbara Belle Lane Saratoga Springs, UT 84043', created_date: '2026-01-01' };
+  const b = { id: 'd2', canonical_name: 'DAI - 26 Calypso Wild Flower', builder: 'DAI', address: '1868 N Dancing Lady Lane, Saratoga Springs UT 84043', created_date: '2026-01-02' };
+  const { groups, groupByJobId } = groupJobs([a, b]);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groupByJobId.get('d1').review.map((r) => r.reason), ['Same customer and job name']);
 });

@@ -2172,6 +2172,15 @@ var FIREBASE_API_KEY = "AIzaSyD-bRl-_9tZLccN3HQ9IMy27pY37VKY1xc";
 var FIREBASE_TOKEN_URL = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
 var DB_BASE = "https://probuild-prod.firebaseio.com";
 var TEAM_ID = "-O7aXXhvthc41u60Koc6";
+function toMs(v) {
+  if (v == null) return null;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+  return null;
+}
 async function getProbuildIdToken(base44) {
   const authRecords = await base44.asServiceRole.entities.ProbuildAuth.list("-updated_date", 1);
   let refreshToken = authRecords.length > 0 ? authRecords[0].refresh_token : secrets.get("PROBUILD_REFRESH_TOKEN");
@@ -2227,20 +2236,42 @@ async function fetchProbuildProjects(idToken) {
   }
   return entries;
 }
-async function fetchProbuildPostsForProject(idToken, projectId) {
+async function fetchProbuildPostsForProject(idToken, projectId, opts = {}) {
+  const CHUNK = 200;
+  const MAX_CHUNKS = 60;
+  const marginMs = 2 * 864e5;
+  const startMs = opts.startStr ? Date.parse(opts.startStr + "T00:00:00Z") - marginMs : null;
+  const endMs = opts.endStr ? Date.parse(opts.endStr + "T23:59:59Z") + marginMs : null;
+  const out = [];
+  let lastKey = null;
   try {
-    const r = await fetch(`${DB_BASE}/teams/${TEAM_ID}/posts/${projectId}.json?auth=${idToken}`);
-    if (!r.ok) throw new Error("posts_fetch_failed: project " + projectId + ", HTTP " + r.status);
-    const j = await r.json();
-    if (!j) return [];
-    const out = [];
-    for (const [postId, post] of Object.entries(j)) {
-      if (!post) continue;
-      out.push({ projectId, postId, post });
+    for (let n = 0; n < MAX_CHUNKS; n++) {
+      let url = `${DB_BASE}/teams/${TEAM_ID}/posts/${projectId}.json?auth=${idToken}&orderBy="$key"&limitToFirst=${lastKey ? CHUNK + 1 : CHUNK}`;
+      if (lastKey) url += `&startAt=${encodeURIComponent(JSON.stringify(lastKey))}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("posts_fetch_failed: project " + projectId + ", HTTP " + r.status);
+      const j = await r.json();
+      if (!j) break;
+      let keys3 = Object.keys(j).sort();
+      if (lastKey && keys3[0] === lastKey) keys3 = keys3.slice(1);
+      if (!keys3.length) break;
+      let oldestMs = null;
+      for (const postId of keys3) {
+        const post = j[postId];
+        if (!post) continue;
+        const ms = toMs(post.createdAt);
+        if (oldestMs == null && ms != null) oldestMs = ms;
+        if (ms != null && startMs != null && ms < startMs) continue;
+        if (ms != null && endMs != null && ms > endMs) continue;
+        out.push({ projectId, postId, post });
+      }
+      lastKey = keys3[keys3.length - 1];
+      if (keys3.length < CHUNK) break;
+      if (endMs != null && oldestMs != null && oldestMs > endMs) break;
     }
     return out;
   } catch (error) {
-    throw new Error("ProBuild posts unavailable for project " + projectId + ": " + error.message.replace(/auth=[^&\\s]+/g, "auth=[redacted]"));
+    throw new Error("ProBuild posts unavailable for project " + projectId + ": " + error.message.replace(/auth=[^&\s]+/g, "auth=[redacted]"));
   }
 }
 

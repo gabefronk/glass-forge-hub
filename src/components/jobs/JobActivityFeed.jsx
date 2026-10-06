@@ -1,125 +1,140 @@
-import { useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { C, formatShort, formatDateGroup, crewName } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import ClampedText from "./ClampedText";
-import FeedImage from "./FeedImage";
-import { RefreshCw, Plus, Camera, StickyNote, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { RefreshCw, Plus, Camera, StickyNote, Phone, MessageSquare, Mail, Users, Truck, TriangleAlert, HardHat, FileText, ExternalLink } from "lucide-react";
+import { scopeText, parseScopeNotes, scopeIsEmpty } from "@/lib/jobWorkspace";
+import ScopeNotes from "./ScopeNotes";
+import { eventKind } from "@/lib/calendarModel";
+import { denverDate } from "../../../base44/shared/billingCore.js";
+import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote, fileLabel, ticketsByEvent, visitTickets } from "@/lib/jobHistory";
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
+import { DayCard, MonthRule, UpNextCard, VisitEntry, StageOnlyEntry } from "./VisitDayCard";
+import { ServiceItemPanel, ServiceItemPointer, isServiceOpen, FOCUS_EVENT } from "./ServiceItems";
 
-// Reports are normalized by source record id (probuild_post_id) so each Probuild
-// post renders exactly once. A post whose date matches an appointment is folded
-// into that visit; otherwise it stands alone. This suppresses the duplicate copy
-// that used to appear when the same field-report text was both embedded in an
-// appointment and rendered as a separate report row.
-function buildReports(rows, fieldReports) {
-  const byPost = new Map();
-  for (const fr of fieldReports || []) {
-    if (!fr.post_id) continue;
-    byPost.set(fr.post_id, {
-      post_id: fr.post_id,
-      date: fr.job_date,
-      message: fr.message || "",
-      photos: fr.photo_urls || [],
-      created_at: fr.created_at || "",
-      author: "",
-    });
-  }
-  for (const r of rows || []) {
-    if ((r.source === "probuild" || r.source === "both") && r.probuild_post_id && !byPost.has(r.probuild_post_id)) {
-      byPost.set(r.probuild_post_id, {
-        post_id: r.probuild_post_id,
-        date: r.job_date,
-        message: [r.note_text, r.probuild_note_text].filter(Boolean).join("\n\n"),
-        photos: r.photo_urls || [],
-        created_at: r.probuild_job_date || r.job_date || "",
-        author: r.calendar_creator || "",
-      });
-    }
-  }
-  return [...byPost.values()];
-}
-
-function visitBadge(ev) {
-  if (!ev.report_required || ev.report_required === false) return { label: "N/A", color: C.textMuted, bg: "#F0F1ED" };
-  if (ev.report_status === "ok") return { label: "Report complete", color: C.accentText, bg: "#E2EEEB" };
-  if (ev.report_status === "waived") return { label: "Waived", color: C.textMuted, bg: "#F0F1ED" };
+// Status pill for a visit, in plain words. Photos alone are a report: a visit with photos on
+// it (Probuild post, or a Hub field report that day) reads "Report in" whatever the notes say.
+// Visits before the compliance start date (pre_compliance) are never shown as owing one.
+function visitBadge(ev, today = denverDate(), { reports = [], photoNote = false } = {}) {
+  if (ev.event_date && ev.event_date > today) return { label: "Scheduled", color: "#34506a", bg: "#E7EDF2" };
+  if (!ev.report_required || ev.report_required === false) return null;
+  const hasEvidence = photoNote || reports.some((r) => (r.photos?.length || 0) > 0 || String(r.message || "").trim());
+  if (ev.report_status === "ok" || ev.report_status_raw === "ok" || hasEvidence) return { label: "Report in", color: "#0b3f3b", bg: "#E2EEEB" };
+  if (ev.report_status === "pre_compliance" || ev.report_status === "no_source_data") return null;
+  if (ev.report_status === "waived") return { label: "No report needed", color: C.textMuted, bg: "#F0F1ED" };
   if (ev.report_status === "rescheduled") return { label: "Rescheduled", color: C.textMuted, bg: "#F0F1ED" };
-  if (ev.days_late > 0) return { label: `${ev.days_late}d late`, color: "#A43432", bg: "#FCEDEC" };
-  return { label: "Awaiting report", color: "#89511A", bg: "#FFF3DF" };
+  if (ev.days_late > 0) return { label: `Report ${ev.days_late}d late`, color: "#A43432", bg: "#FCEDEC" };
+  return { label: "Report due", color: "#8a5a12", bg: "#FAF0DA" };
 }
 
-function PhotoGrid({ urls, onPhotoClick }) {
-  if (!urls || !urls.length) return null;
-  return (
-    <div className="grid grid-cols-2 gap-2 mt-2.5 sm:grid-cols-3">
-      {urls.map((url, i) => (
-        <button key={i} type="button" onClick={() => onPhotoClick(url)} className="aspect-[4/3] rounded-[10px] overflow-hidden shrink-0" style={{ border: `1px solid ${C.border}` }}>
-          <FeedImage src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />
-        </button>
-      ))}
-    </div>
-  );
-}
+import PhotoStrip from "./PhotoStrip";
 
-function TypeLabel({ icon: Icon, children, color }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color }}>
-      <Icon className="h-3 w-3" />{children}
-    </span>
-  );
-}
+// One entry in the job history: icon, what happened, when/who, status, then details.
+// Ledger: flat entries on a timeline (the job sheet), instead of bordered cards.
+const LedgerContext = createContext(false);
 
-function ReportBlock({ report, onPhotoClick }) {
+function Entry({ icon: Icon, tone = "neutral", title, meta, badge, actions, children }) {
+  const ledger = useContext(LedgerContext);
+  const tones = { teal: ["#e2eeeb", "#0b3f3b"], neutral: ["#f1eee7", "#34403f"], red: ["#fcedec", "#a43432"], blue: ["#e7edf2", "#34506a"] };
+  const [bg, ink] = tones[tone] || tones.neutral;
+  if (ledger) {
+    return (
+      <article className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Icon className="h-4 w-4 shrink-0" style={{ color: ink }} />
+          <h4 className="m-0 text-[15px] font-bold" style={{ color: C.text }}>{title}</h4>
+          {meta ? <span className="text-[13px]" style={{ color: "#616a6d" }}>{meta}</span> : null}
+          {badge ? <span className="rounded-[7px] px-2 py-0.5 text-[12px] font-semibold whitespace-nowrap" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span> : null}
+          {actions ? <span className="ml-auto flex items-center gap-1">{actions}</span> : null}
+        </div>
+        <div className="mt-1 border-l-2 pl-3.5" style={{ borderColor: "#eee9e0" }}>{children}</div>
+      </article>
+    );
+  }
   return (
-    <div className="mt-1">
-      {report.author ? (
-        <div className="text-[11px]" style={{ color: C.textMuted }}>{crewName(report.author)} · {report.created_at ? formatShort(String(report.created_at).slice(0, 10)) : ""}</div>
-      ) : null}
-      {report.message ? (
-        <ClampedText text={report.message} maxLines={5} className="text-[13.5px] whitespace-pre-wrap break-words mt-1" style={{ color: C.text }} />
-      ) : null}
-      <PhotoGrid urls={report.photos} onPhotoClick={onPhotoClick} />
-    </div>
-  );
-}
-
-function VisitCard({ ev, reports, onPhotoClick }) {
-  const badge = visitBadge(ev);
-  const crew = crewName(ev.created_by);
-  return (
-    <div className="rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <div className="flex flex-wrap items-center gap-2">
-        <TypeLabel icon={Clock} color={C.textSecondary}>Appointment</TypeLabel>
-        <span className="font-mono-num text-[12px] whitespace-nowrap" style={{ color: C.textSecondary }}>
-          {ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ""}` : "All day"}
-        </span>
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span>
+    <article className="flex gap-3 rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: bg, color: ink }}><Icon className="h-4 w-4" /></span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <h4 className="m-0 text-[14.5px] font-bold" style={{ color: C.text }}>{title}</h4>
+          {meta ? <span className="text-[13px]" style={{ color: C.textMuted }}>{meta}</span> : null}
+          {badge ? <span className="rounded-full px-2 py-0.5 text-[11.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: badge.bg, color: badge.color }}>{badge.label}</span> : null}
+          {actions ? <span className="ml-auto flex items-center gap-1">{actions}</span> : null}
+        </div>
+        {children}
       </div>
-      <div className="text-[14px] font-semibold break-words mt-1.5" style={{ color: C.text }}>{sanitizeText(ev.job_name)}</div>
+    </article>
+  );
+}
+
+const joinMeta = (...parts) => parts.filter(Boolean).join(" · ");
+const photoCount = (n) => (n ? `${n} ${n === 1 ? "photo" : "photos"}` : "");
+
+function ReportBody({ report, onPhotoClick }) {
+  return (
+    <>
+      {report.message ? (
+        <ClampedText text={report.message} maxLines={4} className="mt-1.5 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words" style={{ color: C.text }} />
+      ) : <p className="m-0 mt-1.5 text-[13.5px]" style={{ color: C.textMuted }}>No notes, photos only.</p>}
+      <PhotoStrip urls={report.photos} onPhotoClick={onPhotoClick} />
+    </>
+  );
+}
+
+// Visit PO/OE only when it differs from the job's own (a reorder or follow-up ticket);
+// the job's PO/OE are shown once in "The job".
+function VisitRefs({ ev, dedupe }) {
+  const refs = [
+    ev.po_number && ev.po_number !== dedupe?.primaryPo ? `PO ${ev.po_number}` : "",
+    ev.oe_number && ev.oe_number !== dedupe?.primaryOe ? `OE ${ev.oe_number}` : "",
+  ].filter(Boolean);
+  if (!refs.length) return null;
+  return <div className="mt-2 flex flex-wrap gap-x-4 font-mono text-[12.5px]" style={{ color: C.textMuted }}>{refs.map((r) => <span key={r}>{r}</span>)}</div>;
+}
+
+function VisitCard({ ev, reports, onPhotoClick, dedupe }) {
+  const [showNotes, setShowNotes] = useState(false);
+  // On the job page the Scope card already shows this visit's notes; don't repeat them.
+  const scopeShownAbove = !!dedupe && !!ev.id && ev.id === dedupe.workEventId;
+  const kind = eventKind(ev) === "service" ? "Service visit" : eventKind(ev) === "outlook" ? "Visit" : "Install visit";
+  const crew = crewName(ev.created_by);
+  const time = ev.start_time ? `${ev.start_time}${ev.end_time ? `–${ev.end_time}` : ""}` : "All day";
+  const photos = reports.reduce((n, r) => n + (r.photos?.length || 0), 0);
+  const notes = scopeText(ev.scope_notes).replace(/\n{3,}/g, "\n\n").trim();
+  const parsed = useMemo(() => parseScopeNotes(ev.scope_notes, { keepMoney: true, keepContacts: true, refs: !dedupe }), [ev.scope_notes, dedupe]);
+  return (
+    <Entry icon={HardHat} tone="teal" title={kind} meta={joinMeta(time, crew, photoCount(photos))} badge={visitBadge(ev, undefined, { reports })}>
+      {scopeShownAbove && reports.length === 0 ? (
+        <p className="m-0 mt-1 text-[13px]" style={{ color: C.textMuted }}>Scope and notes are in the Scope card above.</p>
+      ) : null}
       {reports.length > 0 ? (
-        reports.map((r, i) => (
-          <div key={r.post_id || i} className="mt-2 pt-2" style={{ borderTop: i > 0 ? `1px solid ${C.rowBorder}` : "none" }}>
-            <TypeLabel icon={Camera} color={C.accentText}>Field report</TypeLabel>
-            <ReportBlock report={r} onPhotoClick={onPhotoClick} />
-          </div>
-        ))
-      ) : (
-        ev.scope_notes ? (
-          <ClampedText text={ev.scope_notes} maxLines={5} className="text-[13.5px] whitespace-pre-wrap break-words mt-1.5" style={{ color: C.textSecondary }} />
-        ) : null
-      )}
-      {crew ? <div className="text-[11px] mt-1.5" style={{ color: C.textMuted }}>Crew: {crew}</div> : null}
-    </div>
+        <>
+          {reports.map((r, i) => (
+            <div key={r.post_id || i} className={i ? "mt-3 border-t pt-3" : ""} style={{ borderColor: C.rowBorder }}>
+              <ReportBody report={r} onPhotoClick={onPhotoClick} />
+            </div>
+          ))}
+          {notes && !scopeShownAbove ? (
+            <div className="mt-2">
+              <button type="button" onClick={() => setShowNotes((v) => !v)} className="text-[12.5px] font-semibold hover:underline" style={{ color: "#0b3f3b" }}>{showNotes ? "Hide calendar notes" : "Calendar notes"}</button>
+              {showNotes ? <div className="mt-2"><ScopeNotes parsed={parsed} size="sm" /></div> : null}
+            </div>
+          ) : null}
+        </>
+      ) : notes && !scopeShownAbove && !scopeIsEmpty(parsed) ? (
+        <div className="mt-2"><ScopeNotes parsed={parsed} size="sm" limit={2} /></div>
+      ) : null}
+      {dedupe ? <VisitRefs ev={ev} dedupe={dedupe} /> : null}
+    </Entry>
   );
 }
 
 function ReportCard({ report, onPhotoClick }) {
   return (
-    <div className="rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <TypeLabel icon={Camera} color={C.accentText}>Field report</TypeLabel>
-      <ReportBlock report={report} onPhotoClick={onPhotoClick} />
-    </div>
+    <Entry icon={Camera} tone="teal" title="Field report" meta={joinMeta(crewName(report.author), photoCount(report.photos?.length))}>
+      <ReportBody report={report} onPhotoClick={onPhotoClick} />
+    </Entry>
   );
 }
 
@@ -128,85 +143,198 @@ function ChangeCard({ ev }) {
     <div className="flex items-center gap-2 rounded-[10px] px-3 py-2" style={{ border: `1px solid ${C.rowBorder}`, backgroundColor: "transparent" }}>
       <RefreshCw className="h-3 w-3 shrink-0" style={{ color: C.textMuted }} />
       <span className="text-[11.5px] break-words" style={{ color: C.textMuted }}>
-        Install moved: <span className="font-medium">{formatShort(ev.original_scheduled_date)}</span> → <span className="font-medium">{formatShort(ev.event_date)}</span>
+        Visit moved: <span className="font-medium">{formatShort(ev.original_scheduled_date)}</span> → <span className="font-medium">{formatShort(ev.event_date)}</span>
       </span>
     </div>
   );
 }
 
-function NoteCard({ note, currentUser, onChanged, onPhotoClick }) {
-  const isFieldReport = (note.attachments && note.attachments.length > 0) || !!note.completion;
-  const badges = [];
-  if (isFieldReport) {
-    badges.push(<TypeLabel key="t" icon={Camera} color={C.accentText}>Field report</TypeLabel>);
-  } else {
-    badges.push(<TypeLabel key="t" icon={StickyNote} color={C.textSecondary}>Note</TypeLabel>);
-  }
-  if (note.completion === "complete") {
-    badges.push(<TypeLabel key="c" icon={CheckCircle2} color="#166447">Complete</TypeLabel>);
-  } else if (note.completion === "incomplete") {
-    badges.push(<TypeLabel key="i" icon={AlertCircle} color="#A43432">Incomplete</TypeLabel>);
-  }
+const NOTE_ICONS = { note: StickyNote, site_visit: HardHat, call: Phone, text: MessageSquare, email: Mail, meeting: Users, delivery: Truck, issue: TriangleAlert };
+
+// All files saved to the job folder on one day, as one entry.
+function FileGroupCard({ files }) {
   return (
-    <div className="rounded-[14px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
-      <div className="flex items-center gap-2 flex-wrap">{badges}</div>
-      <JobNoteEntry note={note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} embedded />
+    <div className="rounded-[10px] px-3 py-2" style={{ border: `1px solid ${C.rowBorder}` }}>
+      <div className="flex items-center gap-2 text-[12px]" style={{ color: C.textMuted }}>
+        <FileText className="h-3.5 w-3.5 shrink-0" />
+        {files.length === 1 ? "Saved to job folder" : `${files.length} files saved to job folder`}
+      </div>
+      <div className="mt-1 flex flex-col gap-0.5 pl-5">
+        {files.map((f) => (
+          <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12.5px] break-words hover:underline" style={{ color: C.accentText }}>
+            {fileLabel(sanitizeText(f.name), f.name)}<ExternalLink className="h-3 w-3 shrink-0" />
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
 
-export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, currentUser, onChanged, onPhotoClick }) {
+function FileCard({ file }) {
+  return (
+    <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-[10px] px-3 py-2 hover:underline" style={{ border: `1px solid ${C.rowBorder}`, color: C.accentText }}>
+      <FileText className="h-3.5 w-3.5 shrink-0" style={{ color: C.textMuted }} />
+      <span className="text-[12px] break-words min-w-0 flex-1"><span style={{ color: C.textMuted }}>Saved to job folder: </span>{fileLabel(sanitizeText(file.name), file.name)}</span>
+      <ExternalLink className="h-3 w-3 shrink-0" />
+    </a>
+  );
+}
+
+// Collapse a day's "saved to job folder" entries into one.
+function groupFiles(items) {
+  const files = items.filter((it) => it.kind === "file").map((it) => it.file);
+  if (files.length < 2) return items;
+  const out = [];
+  let placed = false;
+  for (const it of items) {
+    if (it.kind !== "file") out.push(it);
+    else if (!placed) { out.push({ kind: "files", files }); placed = true; }
+  }
+  return out;
+}
+
+// services: service items raised by this report — shown right under it (one record of the issue).
+// pointers: items first reported here that are now tracked on their service visit.
+function NoteCard({ note, currentUser, onChanged, onPhotoClick, services = [], pointers = [], onServiceChanged }) {
+  const isFieldReport = isFieldReportNote(note);
+  const kind = note.interaction_type || "note";
+  const badge = [...services, ...pointers.map((p) => p.item)].some(isServiceOpen) ? { label: "Service item", color: "#fff", bg: "#A43432" }
+    : note.completion === "complete" ? { label: "Work complete", color: "#0b3f3b", bg: "#E2EEEB" }
+    : note.completion === "incomplete" ? { label: "Not finished", color: "#A43432", bg: "#FCEDEC" } : null;
+  return (
+    <Entry
+      icon={isFieldReport ? Camera : NOTE_ICONS[kind] || StickyNote}
+      tone={isFieldReport ? "teal" : kind === "issue" ? "red" : kind === "call" || kind === "text" || kind === "email" ? "blue" : "neutral"}
+      title={isFieldReport ? "Field report" : interactionLabel(kind)}
+      meta={joinMeta(crewName(note.author) || note.author, photoCount(note.attachments?.length))}
+      badge={badge}
+    >
+      <JobNoteEntry note={note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} embedded />
+      {services.map((s) => <ServiceItemPanel key={s.id} item={s} onChanged={onServiceChanged} />)}
+      {pointers.map((p) => <div key={p.item.id}><ServiceItemPointer item={p.item} visitDate={p.date} /></div>)}
+    </Entry>
+  );
+}
+
+// A service item logged without a field report (from the office): its own entry on the day it was logged.
+function ServiceEntry({ item, onServiceChanged }) {
+  return (
+    <Entry icon={TriangleAlert} tone="red" title="Service item" meta={crewName(item.created_by_email) || item.created_by_email}>
+      <ServiceItemPanel item={item} withReport={false} onChanged={onServiceChanged} />
+    </Entry>
+  );
+}
+
+// ledger: used inside the job sheet's "Visits" card, which carries the title
+// and the Live marker itself; each date is its own card (VisitDayCard) and visits are
+// laid out as Work / Details / Report rows. PO/OE are not repeated there (Job info has them).
+// dedupe (job page): kept for callers; the non-ledger feed still uses it.
+// progress (job page): jobProgress() from jobStages — tags stage days, adds the
+// Milestones filter and the "Up next" card. Optional; without it the feed is unchanged.
+// serviceItems (job page): the job's service items. Each shows under the field report that
+// raised it; one logged without a report gets its own entry on the day it was logged.
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged }) {
   const [showForm, setShowForm] = useState(false);
+  const [filter, setFilter] = useState("all");
+  // A "Log interaction" button elsewhere on the page opens the form here.
+  useEffect(() => { if (openFormKey) setShowForm(true); }, [openFormKey]);
 
+  const entries = useMemo(() => buildJobHistory({ events, rows, notes, fieldReports, files }), [events, rows, notes, fieldReports, files]);
+  const tickets = useMemo(() => ticketsByEvent(rows), [rows]);
+  const counts = useMemo(() => historyCounts(entries), [entries]);
+  const stageDays = ledger && progress?.byDate ? progress.byDate : null;
+  const milestoneCount = stageDays ? Object.keys(stageDays).length : 0;
+  const today = denverDate();
+  // Each service item is shown in full in exactly one place: on its service visit once one is
+  // on the schedule (it moves with the visit), otherwise under the report that raised it, or
+  // as its own entry if it was logged by hand. Where it was reported keeps a one-line pointer.
+  const { servicesByNote, pointersByNote, servicesByVisit, looseServices } = useMemo(() => {
+    const noteIds = new Set((notes || []).map((n) => n.id));
+    const visitDate = new Map((events || []).map((e) => [e.id, e.event_date]));
+    const byNote = {}, pointers = {}, byVisit = {};
+    const loose = [];
+    const push = (map, k, v) => { (map[k] = map[k] || []).push(v); };
+    for (const s of serviceItems || []) {
+      if (s.service_event_id && visitDate.has(s.service_event_id)) {
+        push(byVisit, s.service_event_id, s);
+        if (s.source_note_id && noteIds.has(s.source_note_id)) push(pointers, s.source_note_id, { item: s, date: visitDate.get(s.service_event_id) });
+      } else if (s.source_note_id && noteIds.has(s.source_note_id)) push(byNote, s.source_note_id, s);
+      else loose.push(s);
+    }
+    return { servicesByNote: byNote, pointersByNote: pointers, servicesByVisit: byVisit, looseServices: loose };
+  }, [serviceItems, notes, events]);
+  const noteServices = (note) => servicesByNote[note.id] || [];
+  const notePointers = (note) => pointersByNote[note.id] || [];
+  const visitServices = (ev) => (ev?.id && servicesByVisit[ev.id]) || [];
   const days = useMemo(() => {
-    const reports = buildReports(rows, fieldReports);
-    const reportsByDate = new Map();
-    for (const r of reports) {
-      const list = reportsByDate.get(r.date) || [];
-      list.push(r);
-      reportsByDate.set(r.date, list);
-    }
-
-    const items = [];
-    const attached = new Set();
-
-    for (const ev of events || []) {
-      if (!ev.event_date) continue;
-      const dayReports = (reportsByDate.get(ev.event_date) || []).filter((r) => !attached.has(r.post_id));
-      dayReports.forEach((r) => attached.add(r.post_id));
-      items.push({ kind: "visit", date: ev.event_date, when: `${ev.event_date}T${ev.start_time || "00:00"}`, ev, reports: dayReports });
-      if (ev.reschedule_count > 0 && ev.original_scheduled_date && ev.original_scheduled_date !== ev.event_date) {
-        items.push({ kind: "change", date: ev.event_date, when: `${ev.event_date}T23:59`, ev });
+    let base = groupHistoryByDay(entries, filter === "milestones" ? "all" : filter);
+    if (filter === "all" && looseServices.length) {
+      const byDate = new Map(base.map((d) => [d.date, { ...d, items: [...d.items] }]));
+      for (const s of looseServices) {
+        const date = denverDate(s.created_date || Date.now());
+        if (!byDate.has(date)) byDate.set(date, { date, items: [] });
+        byDate.get(date).items.push({ kind: "service", date, item: s });
       }
+      base = [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
     }
-    for (const r of reports) {
-      if (!attached.has(r.post_id)) {
-        items.push({ kind: "report", date: r.date, when: r.created_at || `${r.date}T12:00`, report: r });
-      }
-    }
-    for (const n of notes || []) {
-      items.push({ kind: "note", date: n.note_date, when: `${n.note_date}T23:58`, note: n });
-    }
-
-    const byDate = new Map();
-    for (const it of items) {
-      if (!it.date) continue;
-      const list = byDate.get(it.date) || [];
-      list.push(it);
-      byDate.set(it.date, list);
-    }
-    return [...byDate.entries()]
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([date, list]) => ({ date, items: list.sort((a, b) => a.when.localeCompare(b.when)) }));
-  }, [events, rows, notes, fieldReports]);
+    if (!stageDays || (filter !== "all" && filter !== "milestones")) return base;
+    // A stage can fall on a day with nothing logged (product arrived at BFS): give it a card.
+    const have = new Set(base.map((d) => d.date));
+    const extra = Object.keys(stageDays).filter((d) => !have.has(d)).map((date) => ({ date, items: [{ kind: "stage", date, stages: stageDays[date] }] }));
+    const all = [...base, ...extra].sort((a, b) => b.date.localeCompare(a.date));
+    return filter === "milestones" ? all.filter((d) => stageDays[d.date]) : all;
+  }, [entries, filter, stageDays, looseServices]);
+  const filters = ledger && milestoneCount ? [HISTORY_FILTERS[0], { key: "milestones", label: "Milestones" }, ...HISTORY_FILTERS.slice(1)] : HISTORY_FILTERS;
+  const filterCount = (key) => (key === "milestones" ? milestoneCount : counts[key]);
+  // The title-bar service marker jumps here: make sure the item is on screen (All filter).
+  useEffect(() => {
+    const onFocus = (e) => {
+      if (filter === "all") return;
+      setFilter("all");
+      setTimeout(() => window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: e.detail })), 60);
+    };
+    window.addEventListener(FOCUS_EVENT, onFocus);
+    return () => window.removeEventListener(FOCUS_EVENT, onFocus);
+  }, [filter]);
+  // If a live reload leaves no stage days, drop back to All instead of a hidden filter.
+  useEffect(() => { if (filter === "milestones" && !milestoneCount) setFilter("all"); }, [filter, milestoneCount]);
 
   return (
+    <LedgerContext.Provider value={ledger}>
     <div>
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <h2 className="font-heading text-[20px] font-bold" style={{ color: C.text }}>Activity</h2>
-        <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.13em] px-2.5 py-1.5 rounded-full whitespace-nowrap min-h-[32px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
-          <Plus className="h-3 w-3" />Add note
+      <div className={ledger ? "hidden" : "flex items-center justify-between gap-2 mb-2"}>
+        <div className="flex items-center gap-2 min-w-0">
+          <h2 className="font-heading text-[20px] font-bold" style={{ color: C.text }}>{title}</h2>
+          {live ? (
+            <span className="inline-flex items-center gap-1 text-[11px] whitespace-nowrap" style={{ color: C.textMuted }} title="New notes, reports and visits show up here on their own">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#2F8F6B" }} />Live
+            </span>
+          ) : null}
+        </div>
+        <button type="button" onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]" style={{ backgroundColor: "#f4f1ea", color: C.text }}>
+          <Plus className="h-3.5 w-3.5" style={{ color: "#0b3f3b" }} />Log interaction
         </button>
+      </div>
+
+      <div className={ledger ? "mb-4 flex items-center gap-2" : ""}>
+      {/* Nothing to filter until something is logged: no row of zeros on a fresh job. */}
+      <div role="tablist" aria-label="Filter job history" className={counts.all === 0 ? (ledger ? "flex min-w-0 flex-1" : "hidden") : ledger ? "flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1" : "flex gap-1.5 overflow-x-auto pb-1 mb-3"}>
+        {counts.all === 0 ? null : filters.map((f) => {
+          const on = filter === f.key;
+          return (
+            <button key={f.key} type="button" role="tab" aria-selected={on} onClick={() => setFilter(f.key)}
+              className="min-h-[32px] rounded-full px-3 text-[12px] font-medium whitespace-nowrap"
+              style={on ? { backgroundColor: C.text, color: "#FFFFFF", border: `1px solid ${C.text}` } : { backgroundColor: C.card, color: C.textSecondary, border: `1px solid ${C.border}` }}>
+              {f.label} <span style={{ opacity: 0.7 }}>{filterCount(f.key)}</span>
+            </button>
+          );
+        })}
+      </div>
+      {ledger ? (
+        <button type="button" onClick={() => setShowForm((v) => !v)} className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]" style={{ backgroundColor: "#f4f1ea", color: C.text, border: "1px solid #e2dcd1" }}>
+          <Plus className="h-3.5 w-3.5" style={{ color: "#0b3f3b" }} />Log interaction
+        </button>
+      ) : null}
       </div>
 
       {showForm ? (
@@ -215,26 +343,60 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         </div>
       ) : null}
 
+      {ledger ? (
+        <div>
+          {(filter === "all" || filter === "milestones") ? <UpNextCard next={progress?.next} /> : null}
+          {days.length === 0 && !showForm ? (
+            <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter === "all" ? "No activity recorded yet." : "Nothing of this type yet."}</div>
+          ) : null}
+          {days.map(({ date, items }, di) => (
+            <div key={date}>
+              {di === 0 || days[di - 1].date.slice(0, 7) !== date.slice(0, 7) ? <MonthRule date={date} today={today} /> : null}
+              <DayCard date={date} today={today} stages={stageDays?.[date]}>
+                {groupFiles(items).map((it, i, dayItems) => {
+                  if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
+                  if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
+                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today, { reports: it.reports, photoNote: dayItems.some((x) => x.kind === "note" && x.note?.job_id && (x.note.attachments?.length || 0) > 0) })} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} tickets={visitTickets(tickets, it.ev)} />;
+                  if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
+                  if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
+                  if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
+                  if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
+                  return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
+                })}
+              </DayCard>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="space-y-5">
         {days.length === 0 && !showForm ? (
-          <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>No activity recorded yet.</div>
+          <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter === "all" ? "No activity recorded yet." : "Nothing of this type yet."}</div>
         ) : null}
-        {days.map(({ date, items }) => (
-          <div key={date}>
-            <div className="sticky top-0 z-10 py-1 mb-2" style={{ backgroundColor: C.pageBg }}>
-              <span className="font-mono-num text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: C.textMuted }}>{formatDateGroup(date)}</span>
+        {days.map(({ date, items }, di) => (
+          <div key={date} className={ledger ? `relative ${di ? "mt-5 border-t pt-5" : ""}` : ""} style={ledger ? { borderColor: "#eee9e0" } : undefined}>
+            {ledger ? <span aria-hidden="true" className={`absolute -left-6 h-[13px] w-[13px] rounded-full ${di ? "top-[29px]" : "top-[8px]"}`} style={{ backgroundColor: "#b8955a", border: "2px solid #fff", boxShadow: "0 0 0 1px #b8955a" }} /> : null}
+            <div className={ledger ? "mb-2" : "mb-2 flex items-center gap-3"}>
+              {ledger
+                ? <span className="inline-flex items-center rounded-[8px] px-2.5 py-1 text-[15px] font-extrabold tracking-[-0.01em] whitespace-nowrap" style={{ backgroundColor: "#f6efe0", color: "#5c3f0e", border: "1px solid #e8d9b5" }}>{formatDateGroup(date)}</span>
+                : <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: C.text }}>{formatDateGroup(date)}</span>}
+              {ledger ? null : <span className="h-px flex-1" style={{ backgroundColor: C.rowBorder }} />}
             </div>
-            <div className="space-y-2">
-              {items.map((it, i) => {
-                if (it.kind === "visit") return <VisitCard key={`v-${i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} />;
+            <div className={ledger ? "space-y-4" : "space-y-2"}>
+              {groupFiles(items).map((it, i) => {
+                if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
+                if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} dedupe={dedupe} />;
                 if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
-                if (it.kind === "change") return <ChangeCard key={`c-${i}`} ev={it.ev} />;
-                return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} />;
+                if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
+                if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
+                if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
+                return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
               })}
             </div>
           </div>
         ))}
       </div>
+      )}
     </div>
+    </LedgerContext.Provider>
   );
 }

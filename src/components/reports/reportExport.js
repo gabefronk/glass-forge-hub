@@ -70,7 +70,7 @@ export async function buildReportPdf(report,call,onProgress=()=>{}) {
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor('#475569');
   const caption=doc.splitTextToSize(`${i+1}. ${source.caption}`,width);doc.text(caption,margin,top+maxHeight+16);doc.setTextColor('#172438');
  }
- const count=doc.getNumberOfPages();for(let p=1;p<=count;p++){doc.setPage(p);doc.setFontSize(8);doc.setTextColor('#64748B');doc.text(`Glass Forge · ${report.report_date}`,margin,774);doc.text(`${p} / ${count}`,570,774,{align:'right'});}
+ const count=doc.getNumberOfPages();for(let p=1;p<=count;p++){doc.setPage(p);doc.setFontSize(8);doc.setTextColor('#64748B');doc.text(`YA Windows and Doors · ${report.report_date}`,margin,774);doc.text(`${p} / ${count}`,570,774,{align:'right'});}
  return new File([doc.output('blob')],reportFileName(report),{type:'application/pdf'});
 }
 export function downloadFile(file) {
