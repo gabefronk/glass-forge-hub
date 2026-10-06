@@ -198,16 +198,18 @@ export function sanitizeForRead(text) {
   const plain = htmlToText(text);
   const lines = plain.split(/\r?\n/);
   const kept = [];
+  let droppedPricing = false;
   for (const raw of lines) {
     const line = raw.trim();
     if (line === '') { kept.push(raw); continue; }
-    if (line.includes('$')) continue;
-    if (pricingWordAdjacentToNumber(line)) continue;
+    if (line.includes('$')) { droppedPricing = true; continue; }
+    if (pricingWordAdjacentToNumber(line)) { droppedPricing = true; continue; }
     kept.push(raw);
   }
   let out = kept.join('\n').trim();
   let flagged = false;
   if (out.includes('$')) { out = ''; flagged = true; }
+  if (droppedPricing) flagged = true; // pricing was stripped — flag so the UI shows "Notes trimmed"
   return { text: out, flagged };
 }
 // For create review: keep the dropped lines so the user sees what's removed (no silent delete).
