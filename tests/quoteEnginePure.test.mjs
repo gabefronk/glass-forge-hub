@@ -152,18 +152,27 @@ test('authorizeQuoteRequest denies unauthenticated callers (AMSCO or empty)', ()
   assert.equal(authorizeQuoteRequest(null, []).allowed, false);
 });
 
-test('authorizeQuoteRequest denies user role for every vendor (AMSCO, Pella, mixed, empty) before catalog reads', () => {
+test('authorizeQuoteRequest allows any authenticated user (incl. role user) for AMSCO-only requests', () => {
   const amsco = [{ vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio' }];
+  assert.equal(authorizeQuoteRequest({ role: 'user' }, amsco).allowed, true);
+  assert.equal(authorizeQuoteRequest({ role: 'manager' }, amsco).allowed, true);
+  assert.equal(authorizeQuoteRequest({ role: 'admin' }, amsco).allowed, true);
+  // empty request is allowed for any authenticated user (no Pella present)
+  assert.equal(authorizeQuoteRequest({ role: 'user' }, []).allowed, true);
+});
+
+test('authorizeQuoteRequest denies user role for Pella and mixed requests (before catalog reads)', () => {
   const pella = [{ vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250' }];
   const mixed = [
     { vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio' },
     { vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250' },
   ];
-  for (const [label, lines] of Object.entries({ amsco, pella, mixed, empty: [] })) {
-    const r = authorizeQuoteRequest({ role: 'user' }, lines);
-    assert.equal(r.allowed, false, `user must be denied for ${label}`);
-    assert.match(r.reason, /may not view pricing/);
-  }
+  const p = authorizeQuoteRequest({ role: 'user' }, pella);
+  assert.equal(p.allowed, false);
+  assert.match(p.reason, /Pella/);
+  const m = authorizeQuoteRequest({ role: 'user' }, mixed);
+  assert.equal(m.allowed, false);
+  assert.match(m.reason, /Pella/, 'mixed request denied because of the Pella line');
 });
 
 test('authorizeQuoteRequest preserves admin/manager access to both vendors', () => {
