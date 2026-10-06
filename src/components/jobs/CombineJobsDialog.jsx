@@ -225,7 +225,7 @@ export default function CombineJobsDialog({ job, onClose, onDone }) {
             <h3 className="m-0 text-[17px] font-bold" style={{ color: INK, letterSpacing: "-0.02em" }}>Combine jobs</h3>
             <p className="m-0 mt-0.5 text-[12.5px]" style={{ color: MUTED }}>
               {step === "search" && "Pick the other job this one is a duplicate of."}
-              {step === "compare" && "Choose which record stays. The other keeps its data but is hidden."}
+              {step === "compare" && "One job, shared visit history. Duplicate job rows are tucked away, not the visits."}
               {step === "confirm" && "Last check before combining."}
               {step === "working" && "Combining…"}
               {step === "done" && "Done. The jobs are one record now."}

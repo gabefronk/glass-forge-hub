@@ -318,7 +318,7 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
           <div className="min-w-0 flex-1">
             <h3 className="m-0 text-[17px] font-bold" style={{ color: INK, letterSpacing: "-0.02em" }}>Combine {jobs.length || jobIds.length} jobs</h3>
             <p className="m-0 mt-0.5 text-[12.5px]" style={{ color: MUTED }}>
-              {step === "review" && "Choose which one record stays. The rest keep their data but are hidden."}
+              {step === "review" && "One job, shared visit history. Duplicate job rows are tucked away, not the visits."}
               {step === "confirm" && "Last check before combining."}
               {step === "working" && "Combining…"}
               {step === "done" && "Done."}
