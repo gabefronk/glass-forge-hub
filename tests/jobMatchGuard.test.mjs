@@ -5,7 +5,10 @@ import { normAddress, normName, scoreJobMatch, findJobMatches, eligibleJobs } fr
 const job = (canonical_name, address, po_numbers = []) => ({ id: canonical_name, canonical_name, address, po_numbers });
 
 test('normAddress strips suffix words, comma, punctuation; <=5 chars is empty', () => {
-  assert.equal(normAddress('7178 Smart Way Lane, Eagle Mountain, UT'), '7178 smart');
+  // "Way" is part of the street name (Smart Way), so it is preserved in both
+  // forms; only "Lane" (a true suffix) is stripped. The comma form drops the
+  // city, leaving the street portion including "way".
+  assert.equal(normAddress('7178 Smart Way Lane, Eagle Mountain, UT'), '7178 smart way');
   assert.equal(normAddress('7178 Smart Way Lane Eagle Mountain'), '7178 smart way eagle mountain');
   assert.equal(normAddress('123 Main Street.'), '123 main');
   assert.equal(normAddress('Apt 5'), '');

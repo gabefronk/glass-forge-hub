@@ -16,9 +16,12 @@
 //   WEAK: same normName and at least one address blank.
 //   If both addresses are present and different, never match.
 
+// "way" is NOT stripped: it is frequently part of a meaningful street name
+// (e.g. "Smart Way"), and stripping it conflates distinct streets. The other
+// suffixes are safe to remove because they rarely appear inside a street name.
 const STREET_SUFFIX_WORDS = new Set([
   "lane", "ln", "drive", "dr", "street", "st", "road", "rd", "court", "ct",
-  "way", "avenue", "ave", "circle", "cir", "loop", "blvd", "pkwy", "parkway",
+  "avenue", "ave", "circle", "cir", "loop", "blvd", "pkwy", "parkway",
   "trail", "trl", "place", "pl",
 ]);
 
