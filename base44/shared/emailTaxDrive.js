@@ -1,17 +1,23 @@
 // Inbox agent: save receipt / paid-invoice emails to Drive/Taxes/<year>.
 //
-// Idempotency without a real unique constraint (Drive has none):
+// Save receipt / paid-invoice emails to Drive/Taxes/<year>. Called ONLY by the admin
+// save_tax_record action — the inbox sync does NOT auto-save, because Drive has no atomic or
+// idempotent create (generateIds returns random IDs, not deterministic; there is no unique
+// constraint on appProperties), so two concurrent automatic runs could create duplicate docs.
+//
+// Idempotency for the manual path (best-effort, NOT atomic):
 //   - Every created folder / doc / attachment carries Drive appProperties with a deterministic
 //     key (provider + mailbox + thread, and per attachment its message + name/mime/size). Before
 //     any create the saver looks the key up and adopts what exists; after a create it looks again
 //     and converges on the earliest-created file, recording any extra as a duplicate (never
-//     deleted, never overwritten).
-//   - A best-effort lease on the EmailRelay row (write, then re-read) keeps two runs from working
-//     the same thread at once. It is not atomic; the lookup-after-create convergence is the
-//     backstop and duplicates are surfaced, not hidden.
+//     deleted, never overwritten). Two concurrent admin saves can still produce a duplicate; it
+//     is surfaced in tax_duplicate_ids for the owner to review.
+//   - A best-effort lease on the EmailRelay row (write, then re-read) narrows the race window
+//     but is not atomic.
 //   - A create whose outcome is unknown (network error, 5xx, no id in the reply) is never retried
-//     automatically: the row goes to tax_save_state 'unknown' and later runs only look the key up
-//     (read-only). If it is still not found, an admin re-save with confirm_recreate is required.
+//     automatically: the row goes to tax_save_state 'unknown' and a later save only looks the key
+//     up (read-only). Re-creating requires an admin save with confirm_recreate, and only when the
+//     state is 'unknown' — confirm is never a blanket reset of a saved or partial row.
 // Nothing here stores an email body in the Hub; only Drive ids, names and statuses.
 
 import * as Tax from './emailTaxRecord.js';

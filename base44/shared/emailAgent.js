@@ -128,6 +128,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     if (!row) fail(404, 'Entry not found.');
     const mailbox = await mailboxByKey(ctx.api, row.mailbox_key);
     if (!mailbox || !canSeeMailbox(mailbox, ctx.user)) fail(404, 'Entry not found.');
+    if ((row.tax_record || row.owner_only) && ctx.user.role === 'manager') fail(404, 'Entry not found.');
     return { row, mailbox };
   }
 
@@ -325,6 +326,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       const latest = fresh_[fresh_.length - 1];
       const hasNewIncoming = fresh_.some((m) => m.direction === 'incoming');
       let patch = { ...agg };
+      patch.owner_only = mailbox.visibility === 'owner';
       if (!prev) {
         patch = { ...patch, status: 'new', priority: 'normal', reply_needed: false, action_items: [], job_candidates: [], todo_ids: [], hub_changes: [], applied: {}, draft_status: 'none', archived: false, triage_pending: true };
       } else {
@@ -431,32 +433,16 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       try { Object.assign(patch, await labelThread(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; } catch (e) { warn(`label failed: ${errText(e)}`); }
       try { if (T.shouldArchive(cur, mailbox)) { Object.assign(patch, await archiveInProvider(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; counts.archived++; } } catch (e) { warn(`archive failed: ${errText(e)}`); }
       try { if (T.shouldDraft(cur, mailbox)) { Object.assign(patch, await generateDraft(ctx, mailbox, provider, cur, t.messages || [], jobFacts)); counts.drafted++; } } catch (e) { warn(`draft failed: ${errText(e)}`); }
-      try {
-        if (cur.tax_record && cur.tax_save_state !== 'saved') {
-          const r = await saveTax(ctx, mailbox, provider, cur, t.messages || []);
-          if (r) { Object.assign(patch, r); cur = { ...cur, ...r }; if (r.tax_save_error) warn(r.tax_save_error); }
-        }
-      } catch (e) { warn(`tax save failed: ${errText(e)}`); patch.tax_save_error = `tax save failed: ${errText(e)}`; }
+      // Automatic Drive save is disabled: Drive has no atomic / idempotent create (generateIds
+      // returns random IDs, not deterministic; no unique constraint on appProperties), so two
+      // concurrent runs could create duplicate docs. An admin saves a receipt by hand via
+      // save_tax_record. Triage still sets tax_record + fields; tax_save_state stays pending.
+      if (cur.tax_record && !cur.tax_save_state) patch.tax_save_state = 'pending';
       if (changes.length) patch.hub_changes = withChanges(row, changes);
       if (Object.keys(patch).length) { try { await api.EmailRelay.update(row.id, patch); } catch (e) { warn(`ledger update failed: ${errText(e)}`); } }
     }
 
-    // Tax-record retry: rows triage already flagged as tax records (new mail only, never an old
-    // mail backfill) whose doc or receipt attachments are not all saved get another attempt.
-    // Rows in the 'unknown' state are only looked up in Drive, never created again.
-    try {
-      const inRun = new Set(threads.map((t) => t.row.thread_id));
-      const candidates = await api.EmailRelay.filter({ mailbox_key: mailbox.key, tax_record: true, tax_save_state: { $ne: 'saved' } }, '-last_message_at', 50);
-      for (const prev of candidates) {
-        if (inRun.has(prev.thread_id)) continue;
-        if (overBudget()) break;
-        let msgs = null;
-        try { msgs = await fetchThreadMessages(provider, mailbox, prev.thread_id); } catch (e) { warn(`tax reread failed: ${errText(e)}`); }
-        const r = await saveTax(ctx, mailbox, provider, prev, msgs || []);
-        if (r?.tax_save_error) warn(r.tax_save_error);
-        if (r && Object.keys(r).length) { try { await api.EmailRelay.update(prev.id, r); } catch (e) { warn(`tax ledger update failed: ${errText(e)}`); } }
-      }
-    } catch (e) { warn(`tax retry scan failed: ${errText(e)}`); }
+    // Automatic tax-record retry is disabled (see the relay loop above); an admin saves by hand.
 
     // Warnings stay in the run record; last_error is only for a failed run.
     return finish('ok', '');
@@ -498,6 +484,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     const limit = Math.max(1, Math.min(200, Number(body.limit) || 50));
     if (!keys.length) return { ok: true, entries: [], mailboxes: [], count: 0 };
     const query = { mailbox_key: keys.length === 1 ? keys[0] : { $in: keys } };
+    if (ctx.user.role === 'manager') { query.tax_record = { $ne: true }; query.owner_only = { $ne: true }; }
     if (body.status) { if (!T.STATUSES.includes(body.status)) fail(400, 'Invalid status.'); query.status = body.status; }
     if (body.category) { if (!T.CATEGORIES.includes(body.category)) fail(400, 'Invalid category.'); query.category = body.category; }
     if (body.job_id) query.job_id = String(body.job_id);
