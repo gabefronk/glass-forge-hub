@@ -16,6 +16,7 @@ import JobDetail from '@/pages/JobDetail';
 import WindowQuotes from '@/pages/WindowQuotes';
 import Dashboard from '@/pages/Dashboard';
 import MatchDebug from '@/pages/MatchDebug';
+import QuoteBuilder from '@/pages/QuoteBuilder';
 import { Navigate } from 'react-router-dom';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
@@ -98,6 +99,7 @@ const AuthenticatedApp = () => {
           <Route path="/system-map" element={<QuotesOnlyRedirect><SystemMap /></QuotesOnlyRedirect>} />
           <Route path="/admin/probuild-daily" element={<QuotesOnlyRedirect><ProbuildDailyPreview /></QuotesOnlyRedirect>} />
           <Route path="/messages" element={<QuotesOnlyRedirect><MessagesInbox /></QuotesOnlyRedirect>} />
+          <Route path="/QuoteBuilder" element={<QuoteBuilder />} />
           <Route path="/contacts" element={<QuotesOnlyRedirect><ContactsDirectory /></QuotesOnlyRedirect>} />
           <Route path="/reports" element={<QuotesOnlyRedirect><ReportsRedirect /></QuotesOnlyRedirect>} />
           <Route path="/report-library" element={<QuotesOnlyRedirect><ReportLibraryRedirect /></QuotesOnlyRedirect>} />
