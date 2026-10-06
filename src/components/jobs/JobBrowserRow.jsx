@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Check } from "lucide-react";
 import { titleCase } from "@/lib/displayName";
 import { C, formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
@@ -86,7 +87,7 @@ export function rowFlag(stats, group) {
 
 // Job card for the Jobs list: bold name, builder · address, kind, and the
 // next (or last) visit on the right. The selected job turns dark.
-export default function JobBrowserRow({ job, group = null, stats, selected, onSelect, href, serviceCount = 0 }) {
+export default function JobBrowserRow({ job, group = null, stats, selected, onSelect, href, serviceCount = 0, selectMode = false, combineSelected = false, onToggleCombine }) {
   const today = denverDate();
   const when = stats?.nextVisit ? friendlyDay(stats.nextVisit, today) : stats?.lastVisit ? friendlyDay(stats.lastVisit, today) : "";
   const upcoming = Boolean(stats?.nextVisit);
@@ -94,13 +95,31 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
   const [fbg, fink] = flag ? FLAG_TONES[flag.tone] : [];
   const sub = [job.builder && sanitizeText(job.builder), job.address && sanitizeText(job.address)].filter(Boolean).join(" · ") || "No builder or address";
   const kindLine = [stats?.kind, group?.merged ? `${group.members.length} records` : ""].filter(Boolean).join(" · ");
+  // Already-merged jobs can't be combined: disable the checkbox in select mode.
+  const merged = Boolean(job.merged_into);
+  const disabledInSelect = selectMode && merged;
   const body = (
     <>
-      <span className="mt-[7px] h-[9px] w-[9px] shrink-0 rounded-full" style={{ backgroundColor: selected ? "#e0c994" : stats?.thisWeek ? "#0b3f3b" : "#c9c2b5" }} aria-hidden="true" />
+      {selectMode ? (
+        <span
+          className="mt-[5px] flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] border-2"
+          aria-hidden="true"
+          style={{
+            backgroundColor: combineSelected ? "#0b3f3b" : disabledInSelect ? "#eee9e0" : "#ffffff",
+            borderColor: combineSelected ? "#0b3f3b" : disabledInSelect ? "#d3cabb" : "#b8b0a4",
+            color: "#ffffff",
+          }}
+        >
+          {combineSelected ? <Check className="h-3.5 w-3.5" /> : null}
+        </span>
+      ) : (
+        <span className="mt-[7px] h-[9px] w-[9px] shrink-0 rounded-full" style={{ backgroundColor: selected ? "#e0c994" : stats?.thisWeek ? "#0b3f3b" : "#c9c2b5" }} aria-hidden="true" />
+      )}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15.5px] font-bold" style={{ letterSpacing: "-0.02em" }}>{titleCase(sanitizeText(job.canonical_name))}</span>
         <span className="mt-0.5 block truncate text-[13px]" style={{ color: selected ? "#c9d0d1" : "#566063" }}>{sub}</span>
         {kindLine ? <span className="mt-0.5 block truncate text-[12.5px]" style={{ color: selected ? "#aeb5b7" : "#6b7477" }}>{kindLine}</span> : null}
+        {merged ? <span className="mt-0.5 block truncate text-[11.5px] font-semibold" style={{ color: "#8a6420" }}>Merged away</span> : null}
       </span>
       <span className="flex shrink-0 flex-col items-end gap-1">
         {when ? (
@@ -112,6 +131,27 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
     </>
   );
   const cls = "flex w-full items-start gap-3 rounded-[14px] px-3.5 py-[13px] text-left transition-shadow";
+  // In select mode the whole row toggles combine selection and never navigates.
+  if (selectMode) {
+    const selStyle = disabledInSelect
+      ? { backgroundColor: "#f7f5f0", color: "#8a8f93", border: "1px solid #e2dcd1", opacity: 0.7 }
+      : combineSelected
+        ? { backgroundColor: "#eaf5ee", color: "#101617", border: "1px solid #c7e4d2", boxShadow: "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -8px rgba(10,29,31,.18)" }
+        : { backgroundColor: "#ffffff", color: "#101617", border: "1px solid #d3cabb", boxShadow: "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -8px rgba(10,29,31,.18)" };
+    return (
+      <button
+        type="button"
+        onClick={disabledInSelect ? undefined : () => onToggleCombine?.(job.id)}
+        disabled={disabledInSelect}
+        aria-pressed={combineSelected}
+        aria-label={combineSelected ? `Unselect ${sanitizeText(job.canonical_name)}` : `Select ${sanitizeText(job.canonical_name)}`}
+        className={`${cls} ${disabledInSelect ? "" : "hover:shadow-md"}`}
+        style={selStyle}
+      >
+        {body}
+      </button>
+    );
+  }
   const style = selected
     ? { backgroundColor: "#0e2426", color: "#ffffff", border: `1px solid ${serviceCount ? "#a43432" : "#0e2426"}`, boxShadow: "0 8px 20px -12px rgba(14,36,38,.6)" }
     : { backgroundColor: "#ffffff", color: "#101617", border: `1px solid ${serviceCount ? "#a43432" : "#d3cabb"}`, borderLeftWidth: serviceCount ? 4 : 1, boxShadow: "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -8px rgba(10,29,31,.18)" };
