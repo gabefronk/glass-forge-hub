@@ -363,24 +363,60 @@
   ],
   "rls": {
     "read": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "id": "6a7f0d834a5f825c724273ea"
+          }
+        },
+        {
+          "user_condition": {
+            "id": "6a8229a9801b2aef9278ff47"
+          }
+        }
+      ]
     },
     "create": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "id": "6a7f0d834a5f825c724273ea"
+          }
+        },
+        {
+          "user_condition": {
+            "id": "6a8229a9801b2aef9278ff47"
+          }
+        }
+      ]
     },
     "update": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "id": "6a7f0d834a5f825c724273ea"
+          }
+        },
+        {
+          "user_condition": {
+            "id": "6a8229a9801b2aef9278ff47"
+          }
+        }
+      ]
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "id": "6a7f0d834a5f825c724273ea"
+          }
+        },
+        {
+          "user_condition": {
+            "id": "6a8229a9801b2aef9278ff47"
+          }
+        }
+      ]
     }
   }
 }

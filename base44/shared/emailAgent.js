@@ -19,13 +19,14 @@ import { findWasatchAchPaid, WASATCH_FILING_CONFIRMED } from './wasatchAch.js';
 import { createProviderClient, buildRawReply, ProviderError } from './emailProviders.js';
 import { phoneKey } from './contactMatching.js';
 
-export const OWNER_EMAILS = new Set(['gabefronk@gmail.com', 'gabriel.fronk.wd@gmail.com']);
-export const isOwner = (user) => !!user && user.role === 'admin' && OWNER_EMAILS.has(lowerEmail(user.email));
+export const OWNER_IDS = new Set(['6a7f0d834a5f825c724273ea', '6a8229a9801b2aef9278ff47']);
+export const isOwner = (user) => !!user && OWNER_IDS.has(user.id);
 export const isStaff = (user) => !!user && (user.role === 'admin' || user.role === 'manager');
-// Owner's ruling (2026-10-06): only an admin may read any mailbox — no manager sees any
-// email body, metadata, attachment, draft or tax row. Every disclosing action gates on
-// isAdmin before any service-role or provider read. isStaff is kept only for non-email
-// comparisons; it is no longer the gate on any email-disclosing path.
+// Owner's ruling (2026-10-06, tightened): multiple users are admin, so admin-only email is
+// NOT owner-only. Only Gabriel's auth ids may read or mutate any mailbox content (body,
+// metadata, attachment, draft, tax row). Every disclosing action gates on isOwner (id-based)
+// before any service-role or provider read. isStaff/isAdmin are kept for non-email
+// comparisons only; neither is the gate on any email-disclosing path.
 export const isAdmin = (user) => !!user && user.role === 'admin';
 export const DEFAULT_SIGNATURE = 'Gabe Fronk\nGlass Forge / YA Windows and Doors';
 export const OWNER_MEMBER_KEY = 'gabriel';
@@ -91,13 +92,16 @@ export function publicMailbox(m) {
   return { id: m.id, key: m.key, address: m.address, display_name: m.display_name, provider: m.provider, visibility: m.visibility || 'managers', enabled: m.enabled !== false, archive_enabled: m.archive_enabled === true, draft_replies: m.draft_replies !== false, auto_archive_categories: m.auto_archive_categories || [], last_synced_at: m.last_synced_at || null, last_error: m.last_error || '', last_run: m.last_run || null };
 }
 
-// canSeeMailbox: owner-only mailboxes stay restricted to the owner emails; every other
-// mailbox (incl. the former 'managers'-visibility YA Outlook) now requires an admin.
-const canSeeMailbox = (mailbox, user) => (mailbox?.visibility === 'owner' ? isOwner(user) : isAdmin(user));
 const withChanges = (row, more) => [...(row.hub_changes || []), ...more].slice(-HUB_CHANGES_CAP);
 
-export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), nowMs = () => Date.now(), budgetMs = 50_000, sleep, taxFilingEnabled = WASATCH_FILING_CONFIRMED } = {}) {
+export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), nowMs = () => Date.now(), budgetMs = 50_000, sleep, taxFilingEnabled = WASATCH_FILING_CONFIRMED, ownerIds = OWNER_IDS } = {}) {
   if (typeof getClient !== 'function') throw new Error('emailAgent: getClient is required');
+  // id-based owner gate: only the configured auth ids may read or mutate mailbox content.
+  // Default OWNER_IDS (Gabriel); tests inject their own set. Admin-only is NOT owner-only.
+  const ownerSet = ownerIds instanceof Set ? ownerIds : new Set(ownerIds);
+  const isOwner = (user) => !!user && ownerSet.has(user.id);
+  // Every mailbox (owner-visibility and former managers-visibility) is owner-only now.
+  const canSeeMailbox = (mailbox, user) => isOwner(user);
 
   // ---- shared helpers ------------------------------------------------------------------------
 
@@ -136,7 +140,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     if (!row) fail(404, 'Entry not found.');
     const mailbox = await mailboxByKey(ctx.api, row.mailbox_key);
     if (!mailbox || !canSeeMailbox(mailbox, ctx.user)) fail(404, 'Entry not found.');
-    if ((row.tax_record || row.owner_only) && ctx.user.role === 'manager') fail(404, 'Entry not found.');
+    if ((row.tax_record || row.owner_only) && !isOwner(ctx.user)) fail(404, 'Entry not found.');
     return { row, mailbox };
   }
 
@@ -514,7 +518,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   }
 
   async function actionSync(ctx) {
-    if (ctx.user && ctx.user.role !== 'admin') fail(403, 'Owner access required.');
+    if (ctx.user && !isOwner(ctx.user)) fail(403, 'Owner access required.');
     const body = ctx.body;
     const max = Math.max(1, Math.min(500, Number(body.max) || DEFAULT_MAX));
     let mailboxes = (await loadMailboxes(ctx.api)).filter((m) => m.enabled !== false);
@@ -535,7 +539,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionList(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const body = ctx.body;
     const all = await loadMailboxes(ctx.api);
     const visible = all.filter((m) => canSeeMailbox(m, ctx.user));
@@ -564,14 +568,14 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionEntry(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     return { ok: true, entry: row, mailbox: publicMailbox(mailbox) };
   }
 
   async function actionMailboxes(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (ctx.user.role !== 'admin') fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const rows = await loadMailboxes(ctx.api);
     const out = [];
     for (const m of rows) {
@@ -585,7 +589,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionSeedMailboxes(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (ctx.user.role !== 'admin') fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const existing = await loadMailboxes(ctx.api);
     const out = [];
     for (const seed of SEED_MAILBOXES) {
@@ -607,7 +611,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionSetStatus(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const status = String(ctx.body.status || '');
     if (!T.STATUSES.includes(status)) fail(400, 'Invalid status.');
     const { row } = await entryForUser(ctx, ctx.body.id);
@@ -622,7 +626,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   // to-do ids stay on the row so nothing is created twice.
   async function actionRerun(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const { row } = await entryForUser(ctx, ctx.body.id);
     const patch = { triage_pending: true };
     await ctx.api.EmailRelay.update(row.id, patch);
@@ -631,7 +635,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionSetCategory(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const category = String(ctx.body.category || '');
     if (!T.CATEGORIES.includes(category)) fail(400, 'Invalid category.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
@@ -651,7 +655,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   // note is relayed right away.
   async function actionLinkJob(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const jobId = idText(ctx.body.job_id);
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     let job;
@@ -672,7 +676,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionUnlinkJob(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const { row } = await entryForUser(ctx, ctx.body.id);
     // What was already put on the job (note, PO/OE, homeowner) stays there — fix it on the job
     // page if it was wrong. Clearing note_id lets a fresh link relay again.
@@ -683,7 +687,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionRegenerateDraft(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     const provider = await connect(ctx, mailbox);
     const messages = await fetchThreadMessages(provider, mailbox, row.thread_id);
@@ -697,7 +701,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionDiscardDraft(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     if (row.draft_status !== 'drafted') fail(409, 'No open draft on this thread.');
     let warning = '';
@@ -709,7 +713,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionArchive(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     const provider = await connect(ctx, mailbox);
     const messages = mailbox.provider === 'gmail' ? [] : await fetchThreadMessages(provider, mailbox, row.thread_id);
@@ -723,7 +727,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   // admin checked Drive; it never resets a saved or partial doc.
   async function actionSaveTaxRecord(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (ctx.user.role !== 'admin') fail(403, 'Owner access required.');
+    if (!isOwner(ctx.user)) fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     if (!taxFilingEnabled) fail(409, 'Tax filing is disabled for this run.');
     const provider = await connect(ctx, mailbox);
