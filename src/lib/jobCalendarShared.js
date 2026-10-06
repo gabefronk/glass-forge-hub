@@ -32,6 +32,37 @@ export function formatUpcomingPurpose(ev) {
   return p || 'No notes.';
 }
 
+// Word-boundary truncation for the upcoming purpose preview. Never cuts mid-word
+// and never leaves a trailing hyphen before the ellipsis (the server used to hard
+// cut at 280, producing '- Fr…'). Returns the full text unchanged when it fits.
+export function truncatePurpose(text, max = 120) {
+  const full = String(text || '').trim();
+  if (full.length <= max) return full;
+  const slice = full.slice(0, max);
+  const boundary = slice.lastIndexOf(' ');
+  const cut = boundary > Math.floor(max * 0.4) ? slice.slice(0, boundary) : slice;
+  return cut.replace(/[\s,;:.\-]+$/, '').trim() + '…';
+}
+
+// Hero "next visit" projection from the first confirmed upcoming event. Pure: no
+// fetch, no records. purposePreview is word-boundary truncated; purposeFull is the
+// complete sanitized punch list for expansion. Returns null when there are no events.
+export function nextVisitProjection(events) {
+  if (!Array.isArray(events) || events.length === 0) return null;
+  const ev = events[0];
+  if (!ev) return null;
+  const full = String(ev.purpose || '').trim();
+  const preview = truncatePurpose(full, 120);
+  return {
+    line: formatUpcomingLine(ev),
+    purposePreview: preview || 'No notes.',
+    purposeFull: full || 'No notes.',
+    link: safeLink(ev.link),
+    flagged: !!ev.flagged,
+    expandable: preview !== full && full.length > 0,
+  };
+}
+
 // ---- safe error mapping (no raw provider/exception strings in the UI) ----
 export const SAFE_ERRORS = {
   sign_in_required: 'Sign in required.',
@@ -66,7 +97,7 @@ export const PROVEN_NONCREATION = new Set([
 ]);
 export function isProvenNoncreation(code) { return PROVEN_NONCREATION.has(code); }
 
-const safeLink = (l) => (typeof l === 'string' && l.startsWith('https://') ? l : '');
+export const safeLink = (l) => (typeof l === 'string' && l.startsWith('https://') ? l : '');
 
 // ---- pure create-outcome decision ----
 // d = server response body (null = network failure). priorUnknown = an earlier

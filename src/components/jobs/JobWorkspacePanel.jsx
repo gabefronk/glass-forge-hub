@@ -28,6 +28,7 @@ import { denverDate } from "../../../base44/shared/billingCore.js";
 import JobUpcomingCard from "@/components/jobs/JobUpcomingCard";
 import JobCreateEventModal from "@/components/jobs/JobCreateEventModal";
 import { isJobCalendarOwner } from "@/lib/jobCalendarShared";
+import { useJobUpcoming } from "@/hooks/use-job-upcoming";
 
 const MUTED = "#566063", TEAL = "#0b3f3b";
 
@@ -60,6 +61,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [upcomingKey, setUpcomingKey] = useState(0);
   const [me, setMe] = useState(null);
+  const upcoming = useJobUpcoming(jobId, upcomingKey, { enabled: isJobCalendarOwner(me) });
   const v = useRef(0);
   const folder = useJobFolderFiles(job);
 
@@ -188,6 +190,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           headingLevel="h2"
           progress={progress}
           alert={<ServiceMarker open={service.open} />}
+          upcoming={upcoming}
           extra={
             <>
               {isJobCalendarOwner(me) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
@@ -200,7 +203,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
         <MergedJobBanner job={job} />
         <DuplicateJobNotice group={group} currentId={jobId} />
 
-        {isJobCalendarOwner(me) ? <JobUpcomingCard jobId={jobId} refreshKey={upcomingKey} /> : null}
+        {isJobCalendarOwner(me) ? <JobUpcomingCard upcoming={upcoming} /> : null}
         <div className="scroll-mt-4">
           <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
             {reportsError ? <p role="alert" className="mb-3 rounded-[9px] px-3 py-2 text-[12.5px]" style={{ color: "#a43432", backgroundColor: "#fcedec", border: "1px solid #f0c9c5" }}>Some field reports could not load. {reportsError}</p> : null}

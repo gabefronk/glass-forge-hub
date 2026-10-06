@@ -210,7 +210,7 @@ export function shapeUpcomingEvent(ev, job) {
     all_day: allDay,
     start_time: allDay ? null : denverHHMM(ev?.start?.dateTime),
     end_time: allDay ? null : denverHHMM(ev?.end?.dateTime),
-    purpose: purpose.slice(0, 280).trim(),
+    purpose,
     flagged,
     location: String(ev?.location || job?.address || '').slice(0, 200),
     link: ev?.htmlLink || '',

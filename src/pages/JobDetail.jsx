@@ -38,6 +38,7 @@ import { ServiceMarker, useServiceItems } from "@/components/jobs/ServiceItems";
 import JobUpcomingCard from "@/components/jobs/JobUpcomingCard";
 import JobCreateEventModal from "@/components/jobs/JobCreateEventModal";
 import { isJobCalendarOwner } from "@/lib/jobCalendarShared";
+import { useJobUpcoming } from "@/hooks/use-job-upcoming";
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -62,6 +63,7 @@ export default function JobDetail() {
   const [showCombine, setShowCombine] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [upcomingKey, setUpcomingKey] = useState(0);
+  const upcoming = useJobUpcoming(id, upcomingKey, { enabled: isJobCalendarOwner(user) });
   const loadVersion = useRef(0);
   const folder = useJobFolderFiles(job);
   // Service items on this job and its duplicate records: shown on their field report in History.
@@ -208,6 +210,7 @@ export default function JobDetail() {
             onRename={async (name) => setJob(await renameJob(job, name))}
             progress={progress}
             alert={<ServiceMarker open={service.open} />}
+            upcoming={upcoming}
             extra={
               <>
                 {isJobCalendarOwner(user) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
@@ -227,7 +230,7 @@ export default function JobDetail() {
           <DuplicateJobNotice group={group} currentId={id} />
           {user?.role === "admin" ? <CombinedRecordsPanel job={job} onChanged={() => loadAll({ quiet: true })} /> : null}
 
-          {isJobCalendarOwner(user) ? <JobUpcomingCard jobId={id} refreshKey={upcomingKey} /> : null}
+          {isJobCalendarOwner(user) ? <JobUpcomingCard upcoming={upcoming} /> : null}
           <div id="add-note" className="scroll-mt-4">
             <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
               <JobActivityFeed
