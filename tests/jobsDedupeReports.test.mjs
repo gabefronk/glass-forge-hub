@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const { groupJobs, parseStreetAddress, jobCustomer } = await import('../src/lib/jobDedupe.js');
 const { buildReportEvidence, visitsMissingReport, eventReportCleared } = await import('../src/lib/jobReports.js');
 const { jobStatus } = await import('../src/lib/feeUI.js');
-const { buildJobsOverview } = await import('../src/lib/jobsOverview.js');
+const { buildJobsOverview, flattenForSelect } = await import('../src/lib/jobsOverview.js');
 
 const TODAY = '2026-09-18';
 
@@ -281,6 +281,28 @@ test('a name-only record merges into the same-name record that has the real addr
   assert.equal(g.merged, true);
   assert.deepEqual(g.review, []);
   assert.notEqual(groupByJobId.get('n3'), g, 'another lot stays its own job');
+});
+
+test('combine-select mode: grouped siblings are independently selectable, IDs preserved, no sibling auto-select', () => {
+  // 4 raw jobs: 2 collapse into one presentation group (siblings), 2 stay separate.
+  const groups = [
+    { id: 'g1', members: [{ id: 'a' }, { id: 'b' }] },
+    { id: 'g2', members: [{ id: 'c' }] },
+    { id: 'g3', members: [{ id: 'd' }] },
+  ];
+  const flat = flattenForSelect(groups);
+  assert.equal(flat.length, 4, 'every raw job appears in select mode');
+  assert.deepEqual(flat.map((j) => j.id).sort(), ['a', 'b', 'c', 'd'], 'each member independently present');
+
+  // Simulate independent toggling: selecting 'a' does NOT auto-select sibling 'b'.
+  const selected = new Set();
+  const toggle = (id) => { if (selected.has(id)) selected.delete(id); else selected.add(id); };
+  toggle('a');
+  assert.deepEqual([...selected], ['a'], 'no sibling auto-select');
+  toggle('b');
+  assert.deepEqual([...selected].sort(), ['a', 'b'], 'siblings independently selectable');
+  toggle('a');
+  assert.deepEqual([...selected], ['b'], 'deselect one sibling leaves the other');
 });
 
 test('same name but two different real addresses stays flagged, not merged', () => {

@@ -10,7 +10,7 @@ import JobWorkspacePanel from "@/components/jobs/JobWorkspacePanel";
 import CombineJobsReview from "@/components/jobs/CombineJobsReview";
 import ProbuildReports from "@/pages/ProbuildReports";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { buildJobsOverview, sortJobGroups, builderOptions, needsYou, JOB_SORTS } from "@/lib/jobsOverview";
+import { buildJobsOverview, sortJobGroups, builderOptions, needsYou, JOB_SORTS, flattenForSelect } from "@/lib/jobsOverview";
 import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
 import AddJobDialog from "@/components/jobs/AddJobDialog";
 import QuickFilterMenu from "@/components/jobs/QuickFilterMenu";
@@ -139,6 +139,11 @@ export default function JobsHub() {
     if (builder) base = base.filter(g => sanitizeText(String(g.job?.builder || "").trim()) === builder);
     return sortJobGroups(base, jobStats, sort);
   }, [groups, search, segment, jobStats, sort, builder, serviceByJob]);
+  // In combine-select mode, show every active raw Jobs record independently
+  // (including non-canonical duplicate siblings hidden inside a group) so each
+  // can be checked on its own. Normal mode keeps presentation groups (one row
+  // per duplicate set). No siblings are auto-selected — each toggle is its own.
+  const selectModeJobs = useMemo(() => flattenForSelect(filtered), [filtered]);
   const serviceCount = useMemo(() => groups.filter((g) => g.members.some((m) => serviceByJob[m.id])).length, [groups, serviceByJob]);
 
   const builders = useMemo(() => builderOptions(groups, sanitizeText), [groups]);
@@ -208,13 +213,14 @@ export default function JobsHub() {
     );
   }
 
-  const visibleJobs = filtered.slice(0, visibleCount);
+  const visibleJobs = selectMode ? selectModeJobs.slice(0, visibleCount) : filtered.slice(0, visibleCount);
   const emptyMessage = loadError ? "Jobs could not load."
     : search.trim() ? `No jobs match "${search.trim()}".`
     : segment !== "all" || builder ? "No jobs match these filters."
     : "No jobs yet.";
   const todayLabel = new Date(`${denverDate()}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  const summary = `${filtered.length.toLocaleString()} ${filtered.length === 1 ? "job" : "jobs"}${builder ? ` · ${builder}` : ""}`;
+  const listTotal = selectMode ? selectModeJobs.length : filtered.length;
+  const summary = `${listTotal.toLocaleString()} ${selectMode ? (listTotal === 1 ? "record" : "records") : (filtered.length === 1 ? "job" : "jobs")}${builder ? ` · ${builder}` : ""}`;
   const fieldStyle = { backgroundColor: "rgba(255,255,255,.08)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.16)" };
   const HERO_INK = "#f2eee8", HERO_MUTED = "#aeb5b7";
 
@@ -306,9 +312,9 @@ export default function JobsHub() {
     </div>
   );
 
-  const loadMore = (step) => filtered.length > visibleCount && (
+  const loadMore = (step) => (selectMode ? selectModeJobs.length : filtered.length) > visibleCount && (
     <div className="flex items-center justify-between px-1 py-3">
-      <span className="text-[12px]" style={{ color: "#6b7477" }}>{visibleCount} of {filtered.length.toLocaleString()}</span>
+      <span className="text-[12px]" style={{ color: "#6b7477" }}>{visibleCount} of {(selectMode ? selectModeJobs.length : filtered.length).toLocaleString()}</span>
       <button type="button" onClick={() => setVisibleCount((c) => c + step)} className="min-h-10 rounded-full bg-white px-4 text-[13px] font-semibold shadow-[0_1px_2px_rgba(16,22,23,.08)]" style={{ color: "#0b3f3b" }}>Load more</button>
     </div>
   );
@@ -322,8 +328,10 @@ export default function JobsHub() {
           {notices}
           <div className="mt-3 flex-1 min-h-0 overflow-y-auto obsidian-scroll -mx-1 px-1 pb-6">
             <div className="flex flex-col gap-2">
-              {visibleJobs.map((g) => (
-                <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} serviceCount={g.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} selected={g.id === selectedJobId} onSelect={() => setSelectedJobId(g.id)} selectMode={selectMode} combineSelected={selectedIds.has(g.job.id)} onToggleCombine={toggleSelect} />
+              {visibleJobs.map((item) => selectMode ? (
+                <JobBrowserRow key={item.id} job={item} group={groupByJobId.get(item.id)} stats={jobStats[groupByJobId.get(item.id)?.id]} serviceCount={serviceByJob[item.id] || 0} selectMode combineSelected={selectedIds.has(item.id)} onToggleCombine={toggleSelect} />
+              ) : (
+                <JobBrowserRow key={item.id} job={item.job} group={item} stats={jobStats[item.id]} serviceCount={item.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} selected={item.id === selectedJobId} onSelect={() => setSelectedJobId(item.id)} />
               ))}
             </div>
             {!visibleJobs.length && emptyState}
@@ -342,8 +350,10 @@ export default function JobsHub() {
         {listHeader}
         {notices}
         <div className="mt-3.5 grid grid-cols-1 gap-2 lg:grid-cols-2">
-          {visibleJobs.map((g) => (
-            <JobBrowserRow key={g.id} job={g.job} group={g} stats={jobStats[g.id]} serviceCount={g.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} href={selectMode ? undefined : `/jobs/${g.job.id}`} selectMode={selectMode} combineSelected={selectedIds.has(g.job.id)} onToggleCombine={toggleSelect} />
+          {visibleJobs.map((item) => selectMode ? (
+            <JobBrowserRow key={item.id} job={item} group={groupByJobId.get(item.id)} stats={jobStats[groupByJobId.get(item.id)?.id]} serviceCount={serviceByJob[item.id] || 0} selectMode combineSelected={selectedIds.has(item.id)} onToggleCombine={toggleSelect} />
+          ) : (
+            <JobBrowserRow key={item.id} job={item.job} group={item} stats={jobStats[item.id]} serviceCount={item.members.reduce((n, m) => n + (serviceByJob[m.id] || 0), 0)} href={`/jobs/${item.job.id}`} />
           ))}
         </div>
         {!visibleJobs.length && emptyState}

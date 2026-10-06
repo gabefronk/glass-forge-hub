@@ -228,6 +228,8 @@ export default async function(req) {
       ok: !anyFailed,
       survivor_job_id,
       survivor_name: survivor.canonical_name,
+      requested_count: job_ids.length,
+      unique_source_count: sourceIds.length,
       merged_count: results.filter((r) => r.ok).length,
       failed_count: results.filter((r) => !r.ok).length,
       results,

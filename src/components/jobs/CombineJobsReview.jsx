@@ -377,9 +377,10 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
               {step === "confirm" && survivor && (
                 <div className="rounded-[10px] px-3 py-3 text-[13.5px] leading-[20px]" style={{ backgroundColor: FIELD, border: `1px solid ${BORDER}`, color: INK }}>
                   <p className="m-0"><b>{sanitizeText(survivor.canonical_name)}</b> stays as the one job record. The visits, field reports, photos, notes and ticket refs from the other {mergedAway.length} {mergedAway.length === 1 ? "record" : "records"} re-link to it so its History shows them all:</p>
+                  <p className="m-0 mt-1.5 font-mono text-[11.5px]" style={{ color: MUTED }}>{jobs.length} total · {mergedAway.length} {mergedAway.length === 1 ? "source" : "sources"} · survivor ID {survivor.id}</p>
                   <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-[12.5px]" style={{ color: MUTED }}>
                     {mergedAway.map((j) => (
-                      <li key={j.id}><b style={{ color: INK }}>{sanitizeText(j.canonical_name)}</b> is tucked away (hidden from lists, not deleted).</li>
+                      <li key={j.id}><b style={{ color: INK }}>{sanitizeText(j.canonical_name)}</b> <span className="font-mono text-[11px]" style={{ color: "#8a8f93" }}>ID {j.id}</span> is tucked away (hidden from lists, not deleted).</li>
                     ))}
                   </ul>
                   <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-[12.5px]" style={{ color: MUTED }}>

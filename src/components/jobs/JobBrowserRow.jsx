@@ -118,6 +118,7 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15.5px] font-bold" style={{ letterSpacing: "-0.02em" }}>{titleCase(sanitizeText(job.canonical_name))}</span>
         <span className="mt-0.5 block truncate text-[13px]" style={{ color: selected ? "#c9d0d1" : "#566063" }}>{sub}</span>
+        {selectMode && <span className="mt-0.5 block font-mono text-[10.5px]" style={{ color: "#8a8f93" }}>ID {job.id}</span>}
         {kindLine ? <span className="mt-0.5 block truncate text-[12.5px]" style={{ color: selected ? "#aeb5b7" : "#6b7477" }}>{kindLine}</span> : null}
         {merged ? <span className="mt-0.5 block truncate text-[11.5px] font-semibold" style={{ color: "#8a6420" }}>Merged away</span> : null}
       </span>
