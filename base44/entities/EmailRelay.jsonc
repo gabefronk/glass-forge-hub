@@ -275,6 +275,80 @@
       "type": "string",
       "title": "Tax Save Error",
       "description": "Last tax-record save failure reason (e.g. 'tax save failed: drive not connected'). Cleared on success; retried on the next run while drive_file_id is empty."
+    },
+    "tax_save_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "saved",
+        "partial",
+        "failed",
+        "unknown"
+      ],
+      "title": "Tax Save State",
+      "description": "saved = doc and every receipt attachment in Drive; partial = doc saved, an attachment pending/failed; failed = known failure, retried next run; unknown = a Drive create had an unknown outcome, later runs only look it up (read-only) until found or an admin confirms a re-create."
+    },
+    "tax_key": {
+      "type": "string",
+      "title": "Tax Key",
+      "description": "Deterministic provider + mailbox + thread key written to Drive appProperties, used to find what an earlier or concurrent run already saved."
+    },
+    "tax_attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "att_key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "saved",
+              "failed",
+              "unknown"
+            ]
+          },
+          "drive_file_id": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "title": "Tax Attachments",
+      "default": [],
+      "description": "Per receipt attachment (PDF / receipt image only) save status and Drive id."
+    },
+    "tax_duplicate_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tax Duplicate Ids",
+      "default": [],
+      "description": "Extra Drive files found with this thread's key (e.g. from a concurrent run). Never deleted automatically; listed for the owner to review."
+    },
+    "tax_lock_id": {
+      "type": "string",
+      "title": "Tax Lock Id",
+      "description": "Best-effort lease holder for the tax save (not atomic)."
+    },
+    "tax_lock_until": {
+      "type": "string",
+      "title": "Tax Lock Until",
+      "description": "ISO time the tax save lease expires."
     }
   },
   "required": [

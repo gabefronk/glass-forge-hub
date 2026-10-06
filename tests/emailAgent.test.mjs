@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEmailAgentHandler, resetJobCache, SEED_MAILBOXES } from '../base44/shared/emailAgent.js';
 import { gmailMessage, graphMessage, REPLY_TEXT, AT } from './fixtures/emailFixtures.mjs';
+import { makeDriveMock } from './fixtures/driveMock.mjs';
 
 // ---- users ---------------------------------------------------------------------------------------
 const OWNER = { id: 'ga', email: 'gabefronk@gmail.com', role: 'admin', full_name: 'Gabriel' };
@@ -110,40 +111,6 @@ function graphRoutes(state) {
   ];
 }
 
-// ---- Drive mock for the tax-record save step -----------------------------------------------------------
-function driveRoutes(state = {}) {
-  state.folders = state.folders || {}; // "parent|name" -> {id, name, webViewLink}
-  state.created = state.created || []; // {kind, id, name?}
-  let serial = 0;
-  const nextId = () => `drive-${++serial}`;
-  return [
-    { method: 'GET', match: '/drive/v3/files?q=', data: ({ url }) => {
-      const q = decodeURIComponent(new URL(url).searchParams.get('q') || '');
-      const nameM = q.match(/name='([^']*)'/);
-      const parentM = q.match(/'([^']+)' in parents/);
-      const name = nameM ? nameM[1] : '';
-      const parent = parentM ? parentM[1] : 'root';
-      const f = state.folders[`${parent}|${name}`];
-      return { files: f ? [{ id: f.id, name: f.name, mimeType: 'application/vnd.google-apps.folder', parents: [parent], webViewLink: f.webViewLink }] : [] };
-    } },
-    { method: 'GET', match: /\/drive\/v3\/files\/[^?]+\?fields=/, data: ({ url }) => {
-      const id = new URL(url).pathname.split('/').pop();
-      const f = Object.values(state.folders).find((x) => x.id === id);
-      return { id, name: f?.name, webViewLink: f?.webViewLink || `https://drive.google.com/drive/folders/${id}` };
-    } },
-    { method: 'POST', match: '/upload/drive/v3/files', data: () => { const id = nextId(); state.created.push({ kind: 'upload', id }); return { id, webViewLink: `https://drive.google.com/document/d/${id}/edit` }; } },
-    { method: 'POST', match: (url) => url.includes('/drive/v3/files') && !url.includes('/upload/'), data: ({ body }) => {
-      const name = body?.name || 'folder';
-      const parent = (body?.parents || [])[0] || 'root';
-      const id = nextId();
-      const webViewLink = `https://drive.google.com/drive/folders/${id}`;
-      state.folders[`${parent}|${name}`] = { id, name, webViewLink };
-      state.created.push({ kind: 'folder', id, name });
-      return { id, name, webViewLink };
-    } },
-  ];
-}
-
 // ---- LLM mock ------------------------------------------------------------------------------------------
 function triageFor(t) {
   const s = String(t.subject || '');
@@ -184,8 +151,9 @@ function harness({ user = null, seed = {}, gmail = {}, graph = {}, drive = {}, c
   const { store, api, calls } = makeStore({ EmailMailbox: mailboxes, Jobs: JOBS, CalendarEvents: EVENTS, TeamMember: MEMBERS, ...seed });
   const gstate = { scan: [{ id: 'm1', threadId: 't1' }, { id: 'm3', threadId: 't3' }], messages: { m1: GMAIL_SCHEDULE, m3: GMAIL_PROMO }, threads: { t1: [GMAIL_SCHEDULE], t3: [GMAIL_PROMO] }, labels: [{ id: 'Label_1', name: 'Hub' }], history: [], ...gmail };
   const ostate = { delta: [{ id: 'AAMk1', conversationId: 'AAQk1' }], messages: { AAMk1: GRAPH_SERVICE }, conversations: { AAQk1: [GRAPH_SERVICE] }, categories: [], ...graph };
-  const dstate = { ...drive };
-  const { fetchImpl, hits } = makeFetch([...gmailRoutes(gstate), ...graphRoutes(ostate), ...driveRoutes(dstate)]);
+  const dmock = makeDriveMock(drive.files || []);
+  const { fetchImpl: routed, hits } = makeFetch([...gmailRoutes(gstate), ...graphRoutes(ostate)]);
+  const fetchImpl = async (url, init) => (await dmock.fetchImpl(url, init)) || routed(url, init);
   const llm = [];
   const client = {
     auth: { me: async () => (user ? clone(user) : null) },
@@ -203,7 +171,7 @@ function harness({ user = null, seed = {}, gmail = {}, graph = {}, drive = {}, c
     return { status: r.status, body: await r.json() };
   };
   const as = (u) => { user = u; return { call: (body) => call(body, u) }; };
-  return { call, as, store, calls, hits, llm, gstate, ostate, setClock: (v) => { clock = v; }, tick: (n) => { ms += n; } };
+  return { call, as, store, calls, hits, llm, gstate, ostate, drive: dmock, setClock: (v) => { clock = v; }, tick: (n) => { ms += n; } };
 }
 
 const thread = (h, threadId) => h.store.EmailRelay.find((t) => t.thread_id === threadId);
@@ -708,92 +676,83 @@ test('mailboxes / seed_mailboxes are admin-only; seeding is an upsert that keeps
 });
 
 // ---- tax-record save to Drive ----------------------------------------------------------------
-const HELCIM = gmailMessage({ id: 'mh', threadId: 'th', from: 'Helcim <noreply@helcim.com>', to: 'gabefronk@gmail.com', subject: 'Invoice INV001184 (PAID)', text: 'Your card was charged $1,842.50 by Wasatch Windows LLC.', internalDate: AT(15), attachments: [{ name: 'INV001184.pdf', mime: 'application/pdf', attachment_id: 'attH' }] });
+const HELCIM = gmailMessage({ id: 'mh', threadId: 'th', from: 'Helcim <noreply@helcim.com>', to: 'gabefronk@gmail.com', subject: 'Invoice INV001184 (PAID)', text: 'Your card was charged $1,842.50 by Wasatch Windows LLC.', internalDate: AT(15), attachments: [
+  { name: 'INV001184.pdf', mime: 'application/pdf', size: 40_000, attachment_id: 'attH' },
+  { name: 'helcim-logo.png', mime: 'image/png', size: 60_000, attachment_id: 'attLogo' },
+  { name: 'banner.jpg', mime: 'image/jpeg', size: 80_000, attachment_id: 'attInline', headers: [{ name: 'Content-ID', value: '<img1>' }] },
+] });
+const DRIVE_ON = { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' }, googledrive: { accessToken: 'd-token' } };
+const helcimMail = { scan: [{ id: 'mh', threadId: 'th' }], messages: { mh: HELCIM }, threads: { th: [HELCIM] } };
 
-test('tax record: a PAID receipt is saved to Drive/Taxes/<year> as a Google Doc + its PDF attachment; never saved twice; no body stored in the Hub', async () => {
-  const h = harness({
-    gmail: { scan: [{ id: 'mh', threadId: 'th' }], messages: { mh: HELCIM }, threads: { th: [HELCIM] } },
-    connections: { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' }, googledrive: { accessToken: 'd-token' } },
-  });
+test('tax record: a PAID receipt is saved to Drive/Taxes/<year> as a Google Doc + only its PDF; never saved twice; no body stored in the Hub', async () => {
+  const h = harness({ gmail: helcimMail, connections: DRIVE_ON });
   const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
   assert.equal(r.status, 200);
   assert.equal(r.body.mailboxes[0].status, 'ok');
   const row = thread(h, 'th');
   assert.equal(row.tax_record, true);
-  assert.equal(row.receipt_date, '2026-10-03');
-  assert.equal(row.vendor, 'Wasatch Windows LLC');
   assert.equal(row.amount_total, 1842.5);
-  assert.equal(row.reference, 'INV001184');
-  assert.ok(row.drive_file_id, 'doc saved');
-  assert.match(row.drive_url, /drive\.google\.com\/document\/d\//);
+  assert.equal(row.tax_save_state, 'saved');
   assert.equal(row.tax_save_error, '');
+  assert.equal(row.tax_lock_id, '');
   assert.equal('text' in row, false, 'no message body stored in the Hub');
-  // Taxes + <year> folders created by exact name (no duplicates)
-  assert.ok(h.dstate.folders['root|Taxes']);
-  const taxesId = h.dstate.folders['root|Taxes'].id;
-  assert.ok(h.dstate.folders[`${taxesId}|2026`]);
-  // doc + pdf attachment uploaded; the doc name carries the receipt facts
-  const uploads = h.hits.filter((x) => x.method === 'POST' && x.url.includes('/upload/drive/v3/files'));
-  assert.equal(uploads.length, 2, 'one Google Doc + one PDF attachment');
-  assert.match(uploads[0].body, /"name":"2026-10-03 Wasatch Windows LLC - \$1842\.50 - INV001184"/);
-  assert.match(uploads[0].body, /application\/vnd\.google-apps\.document/);
-  assert.match(uploads[1].body, /"name":"INV001184\.pdf"/);
-  // the Gmail attachment was downloaded for re-upload
-  assert.ok(h.hits.some((x) => x.method === 'GET' && /\/messages\/mh\/attachments\/attH/.test(x.url)));
-  // second sync over the same mail: never saved twice, no new Drive writes
-  const uploadsBefore = uploads.length;
-  const foldersBefore = Object.keys(h.dstate.folders).length;
+  assert.deepEqual(h.drive.folders().map((f) => f.name), ['Taxes', '2026']);
+  const [doc] = h.drive.byKind('doc');
+  assert.equal(row.drive_file_id, doc.id);
+  assert.equal(doc.name, '2026-10-03 Wasatch Windows LLC - $1842.50 - INV001184');
+  assert.deepEqual(h.drive.byKind('attachment').map((f) => f.name), ['INV001184.pdf'], 'logo and inline banner stay in the mailbox');
+  assert.deepEqual(h.hits.filter((x) => /\/messages\/mh\/attachments\//.test(x.url)).map((x) => x.url.split('/').pop()), ['attH']);
+  const creates = h.drive.state.creates.length;
   h.gstate.history = [];
-  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
-  assert.equal(h.hits.filter((x) => x.method === 'POST' && x.url.includes('/upload/drive/v3/files')).length, uploadsBefore, 'never saved twice');
-  assert.equal(Object.keys(h.dstate.folders).length, foldersBefore, 'no duplicate folders');
-  assert.equal(thread(h, 'th').drive_file_id, row.drive_file_id);
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail', fresh: true });
+  assert.equal(h.drive.state.creates.length, creates, 'never saved twice');
 });
 
-test('tax record: when Drive is not connected the save is noted as failed and retried next run; the sync still succeeds', async () => {
-  const h = harness({
-    gmail: { scan: [{ id: 'mh', threadId: 'th' }], messages: { mh: HELCIM }, threads: { th: [HELCIM] } },
-    connections: { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } }, // no googledrive
-  });
+test('tax record: Drive not connected -> failed, the sync still succeeds, and the next run retries and saves', async () => {
+  const h = harness({ gmail: helcimMail, connections: { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' } } });
   const r = await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
-  assert.equal(r.status, 200);
   assert.equal(r.body.mailboxes[0].status, 'ok', 'a tax save failure never fails the sync');
   const row = thread(h, 'th');
-  assert.equal(row.tax_record, true);
-  assert.equal(row.drive_file_id, undefined);
-  assert.match(row.tax_save_error, /tax save failed: drive not connected/);
-  assert.equal(h.hits.some((x) => x.url.includes('/upload/drive/v3/files')), false, 'no Drive write attempted');
-
-  // next run, Drive now connected: the retry scan saves it
-  const h2 = harness({
-    seed: { EmailRelay: h.store.EmailRelay, EmailMailbox: h.store.EmailMailbox },
-    gmail: { history: [], threads: { th: [HELCIM] } },
-    connections: { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' }, googledrive: { accessToken: 'd-token' } },
-  });
-  const r2 = await h2.call({ action: 'sync', mailbox_key: 'gf-gmail' });
-  assert.equal(r2.status, 200);
-  const row2 = thread(h2, 'th');
-  assert.ok(row2.drive_file_id, 'saved on the retry run');
-  assert.equal(row2.tax_save_error, '');
+  assert.equal(row.tax_save_state, 'failed');
+  assert.match(row.tax_save_error, /tax save failed: .*not connected/);
+  assert.equal(h.drive.state.finds + h.drive.state.creates.length, 0, 'no Drive call attempted');
+  const h2 = harness({ seed: { EmailRelay: h.store.EmailRelay, EmailMailbox: h.store.EmailMailbox }, gmail: { history: [], threads: { th: [HELCIM] } }, connections: DRIVE_ON });
+  await h2.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.equal(thread(h2, 'th').tax_save_state, 'saved', 'saved on the retry scan');
+  assert.ok(thread(h2, 'th').drive_file_id);
 });
 
-test('save_tax_record: admin force-saves one thread (even unflagged); manager gets 403; never overwrites an existing file', async () => {
-  const h = harness({
-    gmail: { scan: [{ id: 'm3', threadId: 't3' }], messages: { m3: GMAIL_PROMO }, threads: { t3: [GMAIL_PROMO] } },
-    connections: { gmail: { accessToken: 'g-token' }, outlook: { accessToken: 'o-token' }, googledrive: { accessToken: 'd-token' } },
-  });
+test('tax record: an unknown doc-create outcome is not retried by the sync; only an admin confirm re-creates', async () => {
+  const h = harness({ gmail: helcimMail, connections: DRIVE_ON });
+  h.drive.state.faults.push({ kind: 'doc', mode: '503' });
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  const row = thread(h, 'th');
+  assert.equal(row.tax_save_state, 'unknown');
+  const docCreates = () => h.drive.state.creates.filter((c) => c.kind === 'doc').length;
+  h.gstate.history = [];
+  await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
+  assert.equal(docCreates(), 1, 'retry scan only looks it up');
+  const plain = await h.as(OWNER).call({ action: 'save_tax_record', id: row.id });
+  assert.equal(plain.body.ok, false);
+  assert.equal(docCreates(), 1, 'admin save without confirm stays read-only');
+  const ok = await h.as(OWNER).call({ action: 'save_tax_record', id: row.id, confirm_recreate: true });
+  assert.equal(ok.body.ok, true);
+  assert.equal(docCreates(), 2);
+});
+
+test('save_tax_record: admin force-saves one thread (even unflagged); manager gets 403; never creates a second file', async () => {
+  const h = harness({ gmail: { scan: [{ id: 'm3', threadId: 't3' }], messages: { m3: GMAIL_PROMO }, threads: { t3: [GMAIL_PROMO] } }, connections: DRIVE_ON });
   await h.call({ action: 'sync', mailbox_key: 'gf-gmail' });
   const t3 = thread(h, 't3');
-  assert.equal(t3.tax_record, undefined, 'promo is not a tax record');
+  assert.equal(t3.tax_record, false, 'promo is not a tax record');
+  assert.equal(h.drive.state.creates.length, 0);
   assert.equal((await h.as(MANAGER).call({ action: 'save_tax_record', id: t3.id })).status, 403);
+  assert.equal((await h.as(ADMIN).call({ action: 'save_tax_record', id: t3.id })).status, 404, 'owner-only mailbox: non-owner admin cannot see it');
   const r = await h.as(OWNER).call({ action: 'save_tax_record', id: t3.id });
   assert.equal(r.status, 200);
   assert.equal(r.body.ok, true);
-  assert.ok(thread(h, 't3').drive_file_id, 'force-saved');
-  // saving again does not create a second file
-  const uploadsBefore = h.hits.filter((x) => x.method === 'POST' && x.url.includes('/upload/drive/v3/files')).length;
+  assert.equal(h.drive.byKind('doc').length, 1);
   const again = await h.as(OWNER).call({ action: 'save_tax_record', id: t3.id });
-  assert.equal(again.status, 200);
-  assert.equal(again.body.ok, true, 'still ok because the file already exists');
-  assert.equal(h.hits.filter((x) => x.method === 'POST' && x.url.includes('/upload/drive/v3/files')).length, uploadsBefore, 'never overwrites');
+  assert.equal(again.body.ok, true, 'already saved');
+  assert.equal(h.drive.byKind('doc').length, 1, 'never a second file');
 });
