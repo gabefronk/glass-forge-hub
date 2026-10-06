@@ -182,7 +182,7 @@ export function makePacedReader(base44, {
 } = {}) {
   let chain = Promise.resolve();
   let lastStart = null;
-  let firstStart = 0;
+  let firstStart = null;
   let exhausted = false;
   const isRateLimit = (e) => {
     const s = String(e?.status ?? e?.statusCode ?? "");
@@ -198,12 +198,8 @@ export function makePacedReader(base44, {
     if (exhausted) throw new Error("read budget exhausted");
     let attempt = 0;
     for (;;) {
-      const t = clock();
-      if (!firstStart) firstStart = t;
-      if (t - firstStart > deadlineMs) {
-        exhausted = true;
-        throw new Error(`read budget exhausted after ${Math.round((t - firstStart) / 1000)}s of reads/backoff`);
-      }
+      let t = clock();
+      if (firstStart === null) firstStart = t;
       // Real spacing between read STARTS (not just serialization): wait so the
       // gap from the previous start is at least minIntervalMs. Serialization alone
       // does not prevent a burst when reads are fast.
@@ -211,7 +207,15 @@ export function makePacedReader(base44, {
         const since = t - lastStart;
         if (since < minIntervalMs) await sleep(minIntervalMs - since);
       }
-      lastStart = clock();
+      // Re-check the budget AFTER spacing and BEFORE the read: spacing must not
+      // start a read past the deadline. firstStart uses a null sentinel (not 0)
+      // so an injected clock that starts at 0 pins the deadline correctly.
+      t = clock();
+      if (t - firstStart > deadlineMs) {
+        exhausted = true;
+        throw new Error(`read budget exhausted after ${Math.round((t - firstStart) / 1000)}s of reads/backoff`);
+      }
+      lastStart = t;
       try {
         return await base44.asServiceRole.entities[entity].filter(query, opts);
       } catch (e) {

@@ -155,6 +155,20 @@ test("exhausted read budget fails closed: source stays visible, nothing moved, t
   assert.match(r.error, /Could not list this record's links/);
 });
 
+test("clock-starts-zero: deadline is measured from the first read (firstStart pinned at 0, not reset)", async () => {
+  const db = makeDb({ Jobs: jobs(), JobKnowledge: knowledgeRows("S") }, {
+    filter(name) { if (name === "JobKnowledge") { const e = new Error("Too many requests"); e.status = 429; throw e; } },
+  });
+  let now = 0;
+  const read = makePacedReader(db.base44, { sleep: (ms) => { now += ms; }, clock: () => now, maxRetries: 100, baseBackoffMs: 30, capMs: 30, minIntervalMs: 0, deadlineMs: 90 });
+  const r = await merge(db, { read });
+  assert.equal(r.ok, false);
+  assert.equal(r.hidden, false);
+  assert.equal(db.tables.Jobs.get("S").merged_into, undefined);
+  assert.ok(now < 200, `clock bounded near deadline (${now}ms) — firstStart was not reset each call`);
+  assert.match(r.error, /read budget exhausted/);
+});
+
 test("pagination >500 without a cursor fails closed instead of looping forever", async () => {
   const big = Array.from({ length: 501 }, (_, i) => ({ id: `k${i}`, job_id: "S", run_id: `r${i}`, context: {} }));
   const db = makeDb({ Jobs: jobs(), JobKnowledge: big });
