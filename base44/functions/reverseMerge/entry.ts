@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { reverseMergeLog } from '../../shared/jobMerge.js';
+import { reverseMergeLog, makePacedReader } from '../../shared/jobMerge.js';
 
 // Undo one audited merge (complete OR partial). Admin-only. Moves back exactly
 // the record ids the log recorded (guarded by their current job_id, so the
@@ -29,7 +29,7 @@ export default async function(req) {
       log = (logs.items || [])[0];
     }
 
-    const r = await reverseMergeLog(base44, log, { actor: user.email || user.id });
+    const r = await reverseMergeLog(base44, log, { actor: user.email || user.id, read: makePacedReader(base44) });
     const { status = 200, ...rest } = r;
     return Response.json(rest, { status });
   } catch (error) {

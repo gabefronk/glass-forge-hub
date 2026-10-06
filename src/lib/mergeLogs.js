@@ -1,6 +1,6 @@
 // Pure helpers for showing JobMergeLog rows (combine audit) on a job page.
 
-const KEYS = ["calendar_events", "field_reports", "job_notes", "fee_lines", "contact_job_links", "job_budgets", "probuild_project_links"];
+const KEYS = ["calendar_events", "field_reports", "job_notes", "fee_lines", "contact_job_links", "job_budgets", "probuild_project_links", "job_knowledge", "field_library_projects"];
 
 export function isAuditedLog(log) {
   return typeof log?.audit_version === "number" && log.audit_version >= 1;
@@ -18,6 +18,7 @@ export function movedSummary(log) {
   const parts = [
     [c.calendar_events, "visit"], [c.field_reports, "report"], [c.job_notes, "note"], [c.fee_lines, "invoice line"],
     [c.contact_job_links, "contact link"], [c.job_budgets, "budget"], [c.probuild_project_links, "Probuild link"],
+    [c.job_knowledge, "knowledge brief"], [c.field_library_projects, "field-library project"],
   ].filter(([n]) => n > 0).map(([n, w]) => `${n} ${w}${n === 1 ? "" : "s"}`);
   return parts.length ? parts.join(", ") : "no linked records";
 }

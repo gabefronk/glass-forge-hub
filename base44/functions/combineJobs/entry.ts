@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { mergeSourceIntoTarget } from '../../shared/jobMerge.js';
+import { mergeSourceIntoTarget, makePacedReader } from '../../shared/jobMerge.js';
 
 // Combine N jobs (N >= 2) into one surviving record. Admin-only. Every other
 // selected job is merged into the survivor one at a time through the shared
@@ -32,16 +32,20 @@ export default async function(req) {
     if (survivor.is_sample) return Response.json({ error: 'Cannot combine sample jobs' }, { status: 400 });
 
     const actor = user.email || user.id;
+    // One paced reader shared across every source so read scans serialize over the
+    // whole request (not reset per source) and transient 429s back off without
+    // parallel bursts.
+    const read = makePacedReader(base44);
     const results = [];
     for (const sourceId of sourceIds) {
       try {
-        results.push(await mergeSourceIntoTarget(base44, { sourceId, targetId: survivor_job_id, actor }));
+        results.push(await mergeSourceIntoTarget(base44, { sourceId, targetId: survivor_job_id, actor, read }));
       } catch (e) {
         results.push({ source_job_id: sourceId, ok: false, error: 'Unexpected error: ' + (e?.message || e) });
       }
     }
 
-    const totals = { fee_lines: 0, field_reports: 0, calendar_events: 0, job_notes: 0, contact_job_links: 0, job_budgets: 0, probuild_project_links: 0 };
+    const totals = { fee_lines: 0, field_reports: 0, calendar_events: 0, job_notes: 0, contact_job_links: 0, job_budgets: 0, probuild_project_links: 0, job_knowledge: 0, field_library_projects: 0 };
     for (const r of results) {
       if (!r.ok) continue;
       for (const k of Object.keys(totals)) totals[k] += r.relocated_link_counts?.[k] || 0;

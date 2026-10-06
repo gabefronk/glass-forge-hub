@@ -4,11 +4,19 @@
 // Supported links (LINK_ENTITIES) are moved by exact record id, guarded by the
 // record's current job_id, and every moved id is verified and written to the
 // JobMergeLog so an undo can move back exactly those ids — never a blind
-// relocate of everything on the survivor.
+// relocate of everything on the survivor. JobKnowledge and FieldLibraryProject
+// are movable: only job_id is re-pointed; job_name, briefing/context,
+// source_snapshot and external project ids are preserved as historical provenance.
 //
 // Job-linked entities the merge cannot move (UNSUPPORTED_LINK_ENTITIES) block a
 // source: if the source still has any of them, nothing is moved and the source
 // stays visible, so no history is hidden where the survivor cannot reach it.
+//
+// Every link filter scan (plan, verify, unsupported, undo checks) goes through a
+// shared serial paced reader (makePacedReader) so a burst of sources in one
+// combine cannot hammer the entity read endpoint in parallel. Only explicit
+// 429 / rate-limit errors are retried with bounded backoff; writes are never
+// retried. After retries are exhausted the error re-throws (fail-closed).
 //
 // All entity writes use the service role. Callers do the auth checks.
 
@@ -97,7 +105,12 @@ export function mergeJobFields(source, target) {
   return { patch, relocated, conflict_note };
 }
 
-// Linked records the merge moves by exact id (and undo moves back).
+// Linked records the merge moves by exact id (and undo moves back). JobKnowledge
+// and FieldLibraryProject are moved by exact id; only job_id is re-pointed so
+// job_name, briefing/context, source_snapshot and external project ids survive
+// as historical provenance. FieldLibraryReport/File are NOT job-linked directly
+// (they reach the job through FieldLibraryProject.source_project_id), so moving
+// the project row keeps its child reports/files reachable unchanged.
 export const LINK_ENTITIES = [
   { key: "fee_lines", entity: "FeeLines" },
   { key: "field_reports", entity: "FieldReports" },
@@ -106,14 +119,16 @@ export const LINK_ENTITIES = [
   { key: "contact_job_links", entity: "ContactJobLink" },
   { key: "job_budgets", entity: "JobBudgets" },
   { key: "probuild_project_links", entity: "ProbuildProjectLink" },
+  { key: "job_knowledge", entity: "JobKnowledge" },
+  { key: "field_library_projects", entity: "FieldLibraryProject" },
 ];
 
 // Job-linked records the merge does NOT move. Their history is only reachable
 // from the record they point at, so a source holding any of them is never hidden.
 export const UNSUPPORTED_LINK_ENTITIES = [
-  "ServiceItems", "JobSetupSheets", "JobKnowledge", "JobHandoffs", "JobCostInputs",
+  "ServiceItems", "JobSetupSheets", "JobHandoffs", "JobCostInputs",
   "PurchaseOrders", "VendorOrders", "TodoTask", "MessageConversation", "EmailRelay",
-  "ProbuildReportDraft", "QuoteRequests", "WindowQuoteOnlineRequests", "FieldLibraryProject",
+  "ProbuildReportDraft", "QuoteRequests", "WindowQuoteOnlineRequests",
 ];
 
 export function emptyIds() {
@@ -144,21 +159,74 @@ export function countIds(s) {
 
 const totalIds = (s) => Object.values(countIds(s)).reduce((a, b) => a + b, 0);
 
+// A serial, rate-limit-aware READ wrapper for link scans. Every filter call goes
+// through one shared queue (one at a time), so a burst of sources in one combine
+// cannot hammer the entity read endpoint in parallel. Only explicit 429 /
+// rate-limit errors are retried, with bounded exponential backoff (Retry-After
+// honored when accessible, capped at capMs). Writes are NEVER retried here.
+// After retries are exhausted the error re-throws (fail-closed: the caller treats
+// a failed scan as a block/halt, never as "no records"). sleep is injectable so
+// tests run instantly. Create ONE reader per combine request and pass it to
+// every source so pacing spans the whole request, not per source.
+export function makePacedReader(base44, {
+  sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+  maxRetries = 3,
+  baseBackoffMs = 400,
+  capMs = 4000,
+} = {}) {
+  let chain = Promise.resolve();
+  const isRateLimit = (e) => {
+    const s = String(e?.status ?? e?.statusCode ?? "");
+    const m = String(e?.message ?? e ?? "").toLowerCase();
+    return s === "429" || m.includes("rate limit") || m.includes("too many request") || m.includes("429");
+  };
+  const retryAfterMs = (e) => {
+    const ra = e?.headers?.get?.("retry-after") || e?.headers?.["retry-after"] || e?.retryAfter;
+    const n = Number(ra);
+    return Number.isFinite(n) && n > 0 ? Math.min(n * 1000, capMs) : null;
+  };
+  const runOnce = async (entity, query, opts) => {
+    let attempt = 0;
+    for (;;) {
+      try {
+        return await base44.asServiceRole.entities[entity].filter(query, opts);
+      } catch (e) {
+        if (!isRateLimit(e) || attempt >= maxRetries) throw e;
+        const wait = retryAfterMs(e) ?? Math.min(baseBackoffMs * 2 ** attempt, capMs);
+        await sleep(wait);
+        attempt++;
+      }
+    }
+  };
+  // Serialize: each call waits for the previous to settle before running. The
+  // returned promise resolves to this call's own result; the chain is healed so a
+  // failure never poisons the next call.
+  return (entity, query, opts) => {
+    const p = chain.then(() => runOnce(entity, query, opts), () => runOnce(entity, query, opts));
+    chain = p.then(() => {}, () => {});
+    return p;
+  };
+}
+
+// Default read shim used when no paced reader is injected (single-pair mergeJobs,
+// reverseMerge, or existing tests): a direct, unpaced filter call.
+const defaultRead = (base44) => (entity, q, o) => base44.asServiceRole.entities[entity].filter(q, o);
+
 // List the exact ids of every supported record currently linked to jobId,
-// without mutating anything. Returns { plan, errors }.
-export async function planRelocateLinks(base44, fromJobId) {
+// without mutating anything. Returns { plan, errors }. Fails closed on a
+// truncated page (has_more without a cursor) so records are never silently missed.
+export async function planRelocateLinks(base44, fromJobId, read) {
+  const doRead = read || defaultRead(base44);
   const plan = emptyIds();
   const errors = [];
   for (const { key, entity } of LINK_ENTITIES) {
     try {
       let cursor;
       for (;;) {
-        const page = await base44.asServiceRole.entities[entity].filter(
-          { job_id: fromJobId },
-          { fields: ["id"], limit: 500, cursor }
-        );
+        const page = await doRead(entity, { job_id: fromJobId }, { fields: ["id"], limit: 500, cursor });
         plan[key].push(...(page.items || []).map((r) => r.id));
         if (!page.has_more) break;
+        if (!page.next_cursor) { errors.push(`${entity}: pagination truncated (more records exist but no cursor was returned)`); break; }
         cursor = page.next_cursor;
       }
     } catch (e) {
@@ -169,11 +237,13 @@ export async function planRelocateLinks(base44, fromJobId) {
 }
 
 // Move exactly the given ids from fromJobId to toJobId, guarded by each record's
-// current job_id, then VERIFY which ids are now on toJobId. moved holds only
-// verified ids (if verification itself fails, the batch is recorded as moved so
-// an undo still covers it — its job_id guard makes that safe — and an error is
-// reported so the caller never treats the step as clean).
-export async function executeRelocateLinks(base44, plan, fromJobId, toJobId) {
+// current job_id, then VERIFY which ids are now on toJobId. The move (updateMany)
+// is a write and is NEVER retried; only the verify read goes through the paced
+// reader. moved holds only verified ids (if verification itself fails, the batch
+// is recorded as moved so an undo still covers it — its job_id guard makes that
+// safe — and an error is reported so the caller never treats the step as clean).
+export async function executeRelocateLinks(base44, plan, fromJobId, toJobId, read) {
+  const doRead = read || defaultRead(base44);
   const moved = emptyIds();
   const errors = [];
   for (const { key, entity } of LINK_ENTITIES) {
@@ -190,10 +260,7 @@ export async function executeRelocateLinks(base44, plan, fromJobId, toJobId) {
       }
       // Verify even after a failure: a thrown call may still have applied writes.
       try {
-        const page = await base44.asServiceRole.entities[entity].filter(
-          { id: { $in: batch }, job_id: toJobId },
-          { fields: ["id"], limit: 500 }
-        );
+        const page = await doRead(entity, { id: { $in: batch }, job_id: toJobId }, { fields: ["id"], limit: 500 });
         moved[key].push(...(page.items || []).map((r) => r.id));
       } catch (e) {
         moved[key].push(...batch);
@@ -205,17 +272,15 @@ export async function executeRelocateLinks(base44, plan, fromJobId, toJobId) {
 }
 
 // Which of the given ids are still linked to jobId. Returns { ids, errors }.
-export async function idsStillOn(base44, idsByEntity, jobId) {
+export async function idsStillOn(base44, idsByEntity, jobId, read) {
+  const doRead = read || defaultRead(base44);
   const ids = emptyIds();
   const errors = [];
   for (const { key, entity } of LINK_ENTITIES) {
     const list = idsByEntity?.[key] || [];
     for (let i = 0; i < list.length; i += 500) {
       try {
-        const page = await base44.asServiceRole.entities[entity].filter(
-          { id: { $in: list.slice(i, i + 500) }, job_id: jobId },
-          { fields: ["id"], limit: 500 }
-        );
+        const page = await doRead(entity, { id: { $in: list.slice(i, i + 500) }, job_id: jobId }, { fields: ["id"], limit: 500 });
         ids[key].push(...(page.items || []).map((r) => r.id));
       } catch (e) {
         errors.push(`${entity}: could not check (${msg(e)})`);
@@ -226,13 +291,15 @@ export async function idsStillOn(base44, idsByEntity, jobId) {
 }
 
 // Unsupported job-linked records on jobId. blocked is true when any exist OR a
-// check failed (unknown is treated as unsafe).
-export async function findUnsupportedLinks(base44, jobId) {
+// check failed (unknown is treated as unsafe — a rate limit that exhausted retries
+// surfaces here as an error and blocks, so the source is never hidden blindly).
+export async function findUnsupportedLinks(base44, jobId, read) {
+  const doRead = read || defaultRead(base44);
   const found = {};
   const errors = [];
   for (const entity of UNSUPPORTED_LINK_ENTITIES) {
     try {
-      const page = await base44.asServiceRole.entities[entity].filter({ job_id: jobId }, { fields: ["id"], limit: 50 });
+      const page = await doRead(entity, { job_id: jobId }, { fields: ["id"], limit: 50 });
       const ids = (page.items || []).map((r) => r.id);
       if (ids.length) found[entity] = { ids, more: !!page.has_more };
     } catch (e) {
@@ -259,8 +326,12 @@ export function describeUnsupported(u) {
 //   6. merge identity fields + conflict note
 //   7. final check right before hiding: no supported or unsupported links left
 //   8. hide the source (merged_into) → 9. final audit update
-export async function mergeSourceIntoTarget(base44, { sourceId, targetId, actor, now = new Date().toISOString(), today }) {
+// `read` is an optional paced reader (makePacedReader); when omitted a direct
+// unpaced filter call is used. combineJobs creates one reader and passes it to
+// every source so pacing spans the whole request.
+export async function mergeSourceIntoTarget(base44, { sourceId, targetId, actor, now = new Date().toISOString(), today, read } = {}) {
   const db = base44.asServiceRole.entities;
+  const doRead = read || defaultRead(base44);
   const base = { source_job_id: sourceId, ok: false, partial: false, hidden: false };
   if (!sourceId || !targetId) return { ...base, error: "source and survivor ids are required" };
   if (String(sourceId) === String(targetId)) return { ...base, error: "Cannot merge a job into itself" };
@@ -277,13 +348,13 @@ export async function mergeSourceIntoTarget(base44, { sourceId, targetId, actor,
   base.source_job_name = source.canonical_name;
 
   // 0. Unsupported links: block before anything moves.
-  const pre = await findUnsupportedLinks(base44, sourceId);
+  const pre = await findUnsupportedLinks(base44, sourceId, doRead);
   if (pre.blocked) {
     return { ...base, blocked: true, unsupported_links: pre.found, error: `${describeUnsupported(pre)} Nothing was moved and this record stays visible.` };
   }
 
   // 1. Plan.
-  const first = await planRelocateLinks(base44, sourceId);
+  const first = await planRelocateLinks(base44, sourceId, doRead);
   if (first.errors.length) {
     return { ...base, error: `Could not list this record's links; nothing was moved. ${first.errors.join("; ")}` };
   }
@@ -339,7 +410,7 @@ export async function mergeSourceIntoTarget(base44, { sourceId, targetId, actor,
 
   // 3-4. Move + verify, then record verified ids. If recording fails, stop.
   const moveAndRecord = async (ids) => {
-    const exec = await executeRelocateLinks(base44, ids, sourceId, targetId);
+    const exec = await executeRelocateLinks(base44, ids, sourceId, targetId, doRead);
     moved = unionIds(moved, exec.moved);
     errors.push(...exec.errors);
     // Ensure a failed/unknown relocation can never disappear from the recorded
@@ -370,7 +441,7 @@ export async function mergeSourceIntoTarget(base44, { sourceId, targetId, actor,
   // 5. Reconcile: records linked to the source after the plan (ingest, a new
   //    note). Write them into the log first, then move them by exact id.
   for (let round = 0; round < 2; round++) {
-    const again = await planRelocateLinks(base44, sourceId);
+    const again = await planRelocateLinks(base44, sourceId, doRead);
     if (again.errors.length) { errors.push(...again.errors); return halt("Could not re-check this record's links; it was left visible."); }
     if (!hasAnyIds(again.plan)) break;
     reconciled = unionIds(reconciled, again.plan);
@@ -410,8 +481,8 @@ export async function mergeSourceIntoTarget(base44, { sourceId, targetId, actor,
   }
 
   // 7. Final check immediately before hiding.
-  const last = await planRelocateLinks(base44, sourceId);
-  const lastUnsupported = await findUnsupportedLinks(base44, sourceId);
+  const last = await planRelocateLinks(base44, sourceId, doRead);
+  const lastUnsupported = await findUnsupportedLinks(base44, sourceId, doRead);
   if (last.errors.length || hasAnyIds(last.plan) || lastUnsupported.blocked) {
     errors.push(...last.errors);
     const why = hasAnyIds(last.plan)
@@ -446,8 +517,9 @@ export async function mergeSourceIntoTarget(base44, { sourceId, targetId, actor,
 // survivor (the survivor's own records are never in the log), un-hides the
 // source FIRST, and only marks the log reversed when nothing is left behind.
 // Safe to run again after a failure: already-returned ids are no-ops.
-export async function reverseMergeLog(base44, log, { actor, now = new Date().toISOString() } = {}) {
+export async function reverseMergeLog(base44, log, { actor, now = new Date().toISOString(), read } = {}) {
   const db = base44.asServiceRole.entities;
+  const doRead = read || defaultRead(base44);
   if (!log) return { ok: false, status: 404, error: "Merge log not found" };
   if (log.reversed) return { ok: false, status: 400, error: "This merge was already reversed" };
   const audited = typeof log.audit_version === "number" && log.audit_version >= 1;
@@ -475,8 +547,8 @@ export async function reverseMergeLog(base44, log, { actor, now = new Date().toI
 
   // 2. Move back exactly the logged ids still on the survivor, then verify.
   const ids = unionIds(log.relocated_link_ids, log.planned_link_ids, log.reconciled_link_ids);
-  const back = await executeRelocateLinks(base44, ids, targetId, sourceId);
-  const still = await idsStillOn(base44, ids, targetId);
+  const back = await executeRelocateLinks(base44, ids, targetId, sourceId, doRead);
+  const still = await idsStillOn(base44, ids, targetId, doRead);
   const errors = [...back.errors, ...still.errors];
   const left = totalIds(still.ids);
   if (errors.length || left > 0) {

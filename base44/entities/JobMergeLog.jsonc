@@ -64,7 +64,7 @@
     "relocated_link_counts": {
       "type": "object",
       "title": "Relocated Link Counts",
-      "description": "How many linked records (FeeLines, FieldReports, CalendarEvents, JobNotes, ContactJobLinks) were re-pointed from source to target.",
+      "description": "How many linked records (FeeLines, FieldReports, CalendarEvents, JobNotes, ContactJobLinks, JobBudgets, ProbuildProjectLinks, JobKnowledge, FieldLibraryProject) were re-pointed from source to target.",
       "properties": {
         "fee_lines": {
           "type": "integer",
@@ -83,6 +83,22 @@
           "default": 0
         },
         "contact_job_links": {
+          "type": "integer",
+          "default": 0
+        },
+        "job_budgets": {
+          "type": "integer",
+          "default": 0
+        },
+        "probuild_project_links": {
+          "type": "integer",
+          "default": 0
+        },
+        "job_knowledge": {
+          "type": "integer",
+          "default": 0
+        },
+        "field_library_projects": {
           "type": "integer",
           "default": 0
         }
@@ -157,6 +173,20 @@
             "type": "string"
           },
           "default": []
+        },
+        "job_knowledge": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "field_library_projects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       },
       "default": {}
@@ -214,6 +244,20 @@
             "type": "string"
           },
           "default": []
+        },
+        "job_knowledge": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "field_library_projects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       },
       "default": {}
@@ -265,13 +309,77 @@
       "type": "object",
       "title": "Reconciled Link Ids",
       "description": "Record ids that were linked to the source AFTER the first plan (e.g. a sync or a new note during the combine). Written to the log before they were moved; also included in planned_link_ids.",
-      "additionalProperties": true,
+      "properties": {
+        "fee_lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "field_reports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "calendar_events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "contact_job_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_budgets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "probuild_project_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "job_knowledge": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "field_library_projects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
       "default": {}
     },
     "unsupported_links": {
       "type": "object",
       "title": "Unsupported Links",
-      "description": "Job-linked records the combine cannot move (service items, setup sheets, job knowledge, orders...) found on the source right before hiding. When present the source was left visible.",
+      "description": "Job-linked records the combine cannot move (service items, setup sheets, handoffs, orders...) found on the source right before hiding. When present the source was left visible.",
       "additionalProperties": true,
       "default": {}
     },

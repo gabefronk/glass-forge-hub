@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { mergeSourceIntoTarget } from '../../shared/jobMerge.js';
+import { mergeSourceIntoTarget, makePacedReader } from '../../shared/jobMerge.js';
 
 // Merge one duplicate job (source) into the surviving job (target). Admin-only.
 // Uses the shared audited pipeline (plan → log → move+verify → reconcile →
@@ -20,6 +20,7 @@ export default async function(req) {
       sourceId: source_job_id,
       targetId: target_job_id,
       actor: user.email || user.id,
+      read: makePacedReader(base44),
     });
     return Response.json({ ...r, target_job_id });
   } catch (error) {
