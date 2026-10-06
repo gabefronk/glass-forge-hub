@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { CalendarClock, ExternalLink, MapPin } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { SheetCard, TILE } from "@/components/jobs/JobSheet";
-import { formatUpcomingLine, formatUpcomingPurpose } from "@/lib/jobCalendarShared";
+import { formatUpcomingLine, formatUpcomingPurpose, safeError } from "@/lib/jobCalendarShared";
 
 // Owner-gated upcoming-visits card for one job. Calls the scoped jobCalendar
 // read_upcoming action (no global calendar dump). Shows date/time/purpose even for
 // a completed job — it never mutates completion status to fabricate scheduling.
-export default function JobUpcomingCard({ jobId }) {
+// refreshKey lets the parent force a reload after a create succeeds.
+export default function JobUpcomingCard({ jobId, refreshKey = 0 }) {
   const [state, setState] = useState({ loading: true, error: "", events: [] });
   useEffect(() => {
     let live = true;
@@ -17,15 +18,15 @@ export default function JobUpcomingCard({ jobId }) {
         const res = await base44.functions.invoke("jobCalendar", { action: "read_upcoming", job_id: jobId });
         if (!live) return;
         const d = res?.data || {};
-        if (d.error) setState({ loading: false, error: d.error, events: [] });
+        if (d.error) setState({ loading: false, error: safeError(d.error), events: [] });
         else setState({ loading: false, error: "", events: d.events || [] });
-      } catch (e) {
+      } catch {
         if (!live) return;
-        setState({ loading: false, error: String(e?.message || e || "Could not load upcoming visits.").slice(0, 200), events: [] });
+        setState({ loading: false, error: safeError("job_calendar_failed"), events: [] });
       }
     })();
     return () => { live = false; };
-  }, [jobId]);
+  }, [jobId, refreshKey]);
 
   return (
     <SheetCard icon={CalendarClock} tile={TILE.green} title="Upcoming" sub="next visits on the crew calendar">

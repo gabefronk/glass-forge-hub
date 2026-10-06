@@ -61,6 +61,7 @@ export default function JobDetail() {
   const [showReport, setShowReport] = useState(false);
   const [showCombine, setShowCombine] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [upcomingKey, setUpcomingKey] = useState(0);
   const loadVersion = useRef(0);
   const folder = useJobFolderFiles(job);
   // Service items on this job and its duplicate records: shown on their field report in History.
@@ -226,7 +227,7 @@ export default function JobDetail() {
           <DuplicateJobNotice group={group} currentId={id} />
           {user?.role === "admin" ? <CombinedRecordsPanel job={job} onChanged={() => loadAll({ quiet: true })} /> : null}
 
-          {isJobCalendarOwner(user) ? <JobUpcomingCard jobId={id} /> : null}
+          {isJobCalendarOwner(user) ? <JobUpcomingCard jobId={id} refreshKey={upcomingKey} /> : null}
           <div id="add-note" className="scroll-mt-4">
             <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
               <JobActivityFeed
@@ -293,7 +294,7 @@ export default function JobDetail() {
       )}
 
       {showCreateEvent && isJobCalendarOwner(user) ? (
-        <JobCreateEventModal job={job} user={user} open={showCreateEvent} onOpenChange={setShowCreateEvent} />
+        <JobCreateEventModal job={job} user={user} open={showCreateEvent} onOpenChange={setShowCreateEvent} onCreated={() => setUpcomingKey((k) => k + 1)} />
       ) : null}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}

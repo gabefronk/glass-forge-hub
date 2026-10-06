@@ -1,13 +1,15 @@
 // Scoped job-calendar function: owner-gated read of upcoming crew-calendar events
 // for ONE job (price-free, minimal), and a staged create that is DISABLED in the
-// deployed entry (no Google writes). The real create logic lives in the pure
-// injectable core (base44/shared/jobCalendarCore.js) and is covered by tests.
+// deployed entry (no Google writes). The real create orchestration lives in the
+// pure injectable core (base44/shared/jobCalendarCore.js createEvent) and is
+// covered by tests; the entry never calls it yet.
 //
 // Auth: only the two owner auth ids may call either action. Read does not widen
 // existing CalendarEvents access — it scopes to the job and returns a sanitized,
 // minimal projection. No Hub writes on read. Create makes no Google calls and no
-// FeeLines/labor; it only computes the deterministic id + fingerprint locally so
-// the UI can lock the review.
+// FeeLines/labor; it validates the payload, re-reads the job for title/address,
+// rejects a merged job and an empty jobsite (unless the user confirmed none), and
+// returns only safe error codes (no raw provider/exception strings).
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import * as core from '../../shared/jobCalendarCore.js';
@@ -52,8 +54,9 @@ export default async function (req: Request) {
     if (action === 'read_upcoming') return await handleRead(base44, body);
     if (action === 'create') return await handleCreate(base44, body, user);
     return json({ error: 'unknown_action', actions: ['read_upcoming', 'create'] }, 400);
-  } catch (e: any) {
-    return json({ error: 'job_calendar_failed', detail: String(e?.message || e || 'error').slice(0, 200) }, 500);
+  } catch {
+    // No raw exception strings reach the UI.
+    return json({ error: 'job_calendar_failed' }, 500);
   }
 }
 
@@ -61,8 +64,9 @@ async function handleRead(base44: any, body: any) {
   const jobId = String(body.job_id || '');
   if (!/^[a-f0-9]{24}$/.test(jobId)) return json({ error: 'invalid_job_id' }, 400);
   const api = base44.asServiceRole.entities;
-  const getJob = (id: string) => api.Jobs.get(id).catch(() => null);
-  const surv = core.resolveSurvivor(jobId, getJob);
+  // resolveSurvivor is async; await the real async Jobs.get adapter.
+  const getJob = async (id: string) => { try { return await api.Jobs.get(id); } catch { return null; } };
+  const surv = await core.resolveSurvivor(jobId, getJob);
   if (surv.cycled) return json({ error: 'merged_cycle' }, 409);
   if (surv.missing || !surv.job) return json({ error: 'job_not_found' }, 404);
 
@@ -86,7 +90,7 @@ async function handleRead(base44: any, body: any) {
     return { ok: res.ok, status: res.status, json: () => res.json() };
   };
   const { items: liveAll, error: pageErr } = await core.paginateGoogleEvents(fetchPage);
-  if (pageErr) return json({ error: 'calendar_read_failed', detail: `page ${pageErr.page ?? '?'} ${pageErr.kind}` }, 502);
+  if (pageErr) return json({ error: 'calendar_read_failed' }, 502);
 
   const mirrorRows = await api.CalendarEvents.filter({ job_id: surv.id }, '-event_date', 500).catch(() => []);
   const { events } = core.buildUpcomingRead({ liveAll, mirrorRows, job: surv.job, nameIndex, now, todayDenver });
@@ -94,21 +98,29 @@ async function handleRead(base44: any, body: any) {
 }
 
 async function handleCreate(base44: any, body: any, user: any) {
-  // STAGED: no Google writes. Compute the deterministic id + fingerprint locally so
-  // the UI can lock the review. The real create/reconcile logic is in the pure core.
+  // STAGED: no Google writes. Validate, re-read the job, compute the deterministic
+  // id + fingerprint + effective dates locally so the UI can lock the review. The
+  // real create/reconcile orchestration is in the pure core (createEvent).
   const p = body.payload || {};
+  if (!p || typeof p !== 'object') return json({ error: 'invalid_payload', fields: ['missing_payload'] }, 400);
   if (!p.job_id) return json({ error: 'missing_field', field: 'job_id' }, 400);
   if (!p.request_id) return json({ error: 'missing_field', field: 'request_id' }, 400);
-  if (!p.start_date) return json({ error: 'missing_field', field: 'start_date' }, 400);
-  if (p.all_day === false && !p.start_time) return json({ error: 'missing_field', field: 'start_time' }, 400);
+  const v = core.validateCreatePayload({ ...p, owner_id: user.id });
+  if (!v.ok) return json({ error: 'invalid_payload', fields: v.errors }, 400);
+
   const api = base44.asServiceRole.entities;
   // Server re-reads Jobs for title/address — reject stale reviewed facts, never silent.
   const job = await api.Jobs.get(String(p.job_id)).catch(() => null);
   if (!job) return json({ error: 'job_not_found' }, 404);
-  if (job.merged_into) return json({ error: 'job_merged', merged_into: job.merged_into }, 409);
-  const payload = { ...p, owner_id: user.id, title: job.canonical_name };
+  if (job.merged_into) return json({ error: 'job_merged' }, 409);
+  // Reject an empty jobsite unless the user explicitly reviewed the absence.
+  const jobsite = job.address || '';
+  if (!jobsite && !p.confirm_no_jobsite) return json({ error: 'jobsite_required' }, 400);
+
+  const payload = { ...p, owner_id: user.id, title: job.canonical_name, address: jobsite };
   const eventId = await core.deterministicId(user.id, String(p.request_id), { sha256: sha256Hex });
   const fingerprint = await core.fingerprintHash(payload, { sha256: sha256Hex });
+  const eff = core.effectiveDateTime(payload);
   return json({
     ok: false,
     disabled: true,
@@ -117,14 +129,17 @@ async function handleCreate(base44: any, body: any, user: any) {
     fingerprint,
     reviewed: {
       title: job.canonical_name,
-      address: job.address || '',
+      address: jobsite,
       job_id: job.id,
       all_day: !!payload.all_day,
       start_date: payload.start_date,
-      end_date: payload.end_date || null,
-      start_time: payload.start_time || null,
-      end_time: payload.end_time || null,
+      end_date: eff.all_day ? eff.end.date : eff.end_date, // effective provider end date
+      last_day: eff.all_day ? eff.last_day : undefined, // all-day: last day inclusive
+      start_time: payload.all_day ? null : (payload.start_time || null),
+      end_time: payload.all_day ? null : (payload.end_time || null),
       time_zone: payload.time_zone || 'America/Denver',
+      overnight: eff.overnight || false,
+      multiday: eff.multiday || false,
       notes: payload.notes || '',
     },
   });

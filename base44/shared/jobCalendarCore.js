@@ -1,19 +1,30 @@
-// Pure, injectable core for the scoped job-calendar read + staged create.
+// Pure, injectable core for the scoped job-calendar read + create orchestration.
 // No Base44 SDK, no fetch, no crypto — all I/O injected. Tested directly.
 //
 // Read: returns only the upcoming events that belong to ONE job, price-free,
 // minimal (date/time/purpose/location/link). No global calendar dump.
 // Match keys (exact only): explicit Google private property hubJobId, an
 // allowlisted https Hub job URL in the description, OR a unique normalized exact
-// canonical/alias name across the complete Jobs catalog. Foreign explicit links,
-// substring names, wrong hosts and ambiguous names never match.
+// canonical/alias name across the complete Jobs catalog. ALL explicit identities
+// are collected; a conflict (two different job ids) or a malformed identity
+// rejects the match instead of selecting the first or falling back to title.
+// Foreign explicit links, substring names, wrong hosts and ambiguous names never
+// match.
 //
-// Create (staged off in the deployed entry): deterministic base32hex Google event
-// id from owner+request_id (NOT content), an immutable fingerprint private property
-// so a changed same request conflicts, and GET-exact reconciliation on 409/unknown.
-// No labor, no FeeLines, no attendees/notifications, no installer copy.
+// Create (orchestrated here, staged OFF in the deployed entry): deterministic
+// base32hex Google event id from owner+request_id (NOT content), an immutable
+// fingerprint private property so a changed same request conflicts, and
+// GET-exact reconciliation before any insert (and before any retry after an
+// unknown outcome). A cancellation tombstone is never recreated. 409/timeout/
+// malformed-success/provider failures freeze (unknown) or reconcile; a fresh id
+// is NEVER generated to escape. No labor, no FeeLines, no attendees/notifications,
+// no installer copy, no Hub writes.
 
-import { denverDate } from './billingCore.js';
+// Inlined Denver date helper (removes the cross-file billingCore.js dependency so
+// the core is self-contained and its tests import one file).
+export function denverDate(value = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
+}
 
 export const OWNER_IDS = new Set(['6a7f0d834a5f825c724273ea', '6a8229a9801b2aef9278ff47']);
 export const isOwner = (user) => !!user && OWNER_IDS.has(user.id);
@@ -21,6 +32,9 @@ export const isOwner = (user) => !!user && OWNER_IDS.has(user.id);
 export const CREW_CALENDAR = 'iryedra@gmail.com';
 export const ALLOWED_HOSTS = ['gfglassforge.com', 'glass-forge-hub.base44.app'];
 const HEX24 = /^[a-f0-9]{24}$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}$/;
+const IANA_TZ = /^(America|Europe|Asia|Pacific|Africa|Atlantic|Indian)\/[A-Za-z_]+(\/[A-Za-z_]+)?$/;
 const B32H = '0123456789abcdefghijklmnopqrstuv';
 
 // ---- name normalization ----
@@ -28,12 +42,15 @@ export function normalizeName(v) {
   return String(v ?? '').normalize('NFKC').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-// ---- merged-into survivor resolution (bounded, cycle reject) ----
-export function resolveSurvivor(jobId, getJob, maxHops = 25) {
+// ---- merged-into survivor resolution (async, bounded, cycle reject) ----
+// getJob is async (returns a Promise). The entry passes the real async Jobs.get;
+// tests pass an async adapter so the await path is exercised, not just a sync map.
+export async function resolveSurvivor(jobId, getJob, maxHops = 25) {
   let id = String(jobId || '');
   const seen = new Set([id]);
+  let job;
   for (let i = 0; i < maxHops; i++) {
-    const job = getJob(id);
+    job = await getJob(id);
     if (!job) return { id, job: null, cycled: false, missing: true };
     if (!job.merged_into) return { id, job, cycled: false };
     const next = String(job.merged_into);
@@ -41,19 +58,61 @@ export function resolveSurvivor(jobId, getJob, maxHops = 25) {
     seen.add(next);
     id = next;
   }
-  return { id, job: getJob(id), cycled: true };
+  job = await getJob(id);
+  return { id, job, cycled: true };
+}
+
+// ---- strict URL identity parsing ----
+// A token is a non-whitespace run starting with https://. Trailing terminal
+// punctuation is trimmed so "https://h/jobs/<id>)." still parses. Each token is
+// parsed with the URL constructor: only its pathname is considered, so an
+// embedded redirect URL inside a query value (e.g. ?next=https://h/jobs/<other>)
+// is never independently matched — it is part of the outer token's query string.
+function trimTrailingPunct(t) {
+  return t.replace(/[.,;:!?)\]'"]+$/, '');
+}
+function parseUrlToken(token) {
+  let u;
+  try { u = new URL(token); } catch { return { kind: 'skip' }; }
+  if (u.protocol !== 'https:') return { kind: 'skip' };
+  if (!ALLOWED_HOSTS.includes(u.host)) return { kind: 'skip' }; // wrong host: ignore, not malformed
+  const path = u.pathname;
+  const m = path.match(/^\/jobs\/([a-f0-9]{24})$/);
+  if (m) return { kind: 'id', id: m[1], host: u.host };
+  // allowlisted host, /jobs/ path, but not exactly a 24-hex id (suffix, short, …)
+  if (path === '/jobs/' || path.startsWith('/jobs/')) return { kind: 'malformed', host: u.host, path };
+  return { kind: 'skip' }; // allowlisted host, unrelated path — not an identity
 }
 
 // ---- explicit job identity from a Google event ----
+// Collects ALL identities (private hubJobId + every allowlisted /jobs/<24hex>
+// URL). Returns conflict if two different job ids appear, malformed if any
+// identity is malformed, the single id if exactly one, or null if none.
 export function extractExplicitJobId(ev) {
+  const ids = new Map(); // id -> { source, host }
+  let malformed = null;
   const priv = ev?.extendedProperties?.private || {};
-  const propId = priv.hubJobId;
-  if (typeof propId === 'string' && HEX24.test(propId)) return { jobId: propId, source: 'property', host: null };
+  if ('hubJobId' in priv) {
+    const v = priv.hubJobId;
+    if (typeof v === 'string' && HEX24.test(v)) ids.set(v, { source: 'property', host: null });
+    else malformed = malformed || { reason: 'property_malformed' };
+  }
   const desc = String(ev?.description || '');
-  const re = new RegExp('https://(' + ALLOWED_HOSTS.map((h) => h.replace(/\./g, '\\.')).join('|') + ')/jobs/([a-f0-9]{24})\\b', 'gi');
-  const m = [...desc.matchAll(re)][0];
-  if (m) return { jobId: m[2], source: 'url', host: m[1] };
-  return null;
+  const re = /https:\/\/[^\s"'<>]+/g;
+  let m;
+  while ((m = re.exec(desc)) !== null) {
+    const token = trimTrailingPunct(m[0]);
+    const r = parseUrlToken(token);
+    if (r.kind === 'id') ids.set(r.id, { source: 'url', host: r.host });
+    else if (r.kind === 'malformed') malformed = malformed || { reason: 'url_malformed', host: r.host, path: r.path };
+  }
+  if (malformed) return { jobId: null, conflict: false, malformed: true, reason: malformed.reason };
+  if (ids.size === 0) return null;
+  if (ids.size === 1) {
+    const [jobId, meta] = [...ids.entries()][0];
+    return { jobId, source: meta.source, host: meta.host, conflict: false, malformed: false };
+  }
+  return { jobId: null, conflict: true, malformed: false, ids: [...ids.keys()] };
 }
 
 // ---- name uniqueness across the complete Jobs catalog ----
@@ -70,10 +129,14 @@ export function nameUniquenessIndex(jobs) {
 }
 
 // ---- does this event belong to this job? strict exact-match rules ----
+// An explicit identity that is malformed or conflicts NEVER falls back to a
+// title match: it rejects. Name match only runs when there is no explicit identity.
 export function matchEventToJob(ev, job, nameIndex) {
   if (!ev || !job) return { match: false, reason: 'invalid' };
   const explicit = extractExplicitJobId(ev);
   if (explicit) {
+    if (explicit.malformed) return { match: false, reason: 'identity_malformed' };
+    if (explicit.conflict) return { match: false, reason: 'identity_conflict' };
     if (explicit.jobId === job.id) return { match: true, reason: explicit.source };
     return { match: false, reason: 'foreign_explicit', foreignId: explicit.jobId };
   }
@@ -179,10 +242,6 @@ export function shapeUpcomingEvent(ev, job) {
 }
 
 // ---- merge live + mirror into the scoped upcoming list ----
-// Live is authoritative for existence/cancel state and times. A mirror row linked
-// to the job is only shown when live confirms the event exists and is not cancelled,
-// and only when the live event did not already match via the exact rules — this
-// respects owner-confirmed links without letting stale/finished duplicates mask.
 export function buildUpcomingRead({ liveAll, mirrorRows, job, nameIndex, now, todayDenver }) {
   const liveById = new Map();
   const liveCancelledIds = new Set();
@@ -263,6 +322,9 @@ export async function deterministicId(ownerId, requestId, { len = 40, sha256 } =
 }
 
 // ---- immutable fingerprint of the reviewed create payload ----
+// Covers exactly the fields that define the eventual provider event: title,
+// jobsite (address), the effective date/time fields, timezone, and notes. Address
+// is included so a changed jobsite is a changed request.
 export function fingerprintPayload(payload) {
   return JSON.stringify({
     job_id: payload.job_id,
@@ -275,6 +337,7 @@ export function fingerprintPayload(payload) {
     end_time: payload.end_time || null,
     time_zone: payload.time_zone || 'America/Denver',
     title: payload.title || '',
+    address: payload.address || '',
     notes: payload.notes || '',
   });
 }
@@ -294,23 +357,67 @@ function addHour(hhmm) {
   const h2 = (h + 1) % 24;
   return String(h2).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 }
+function isValidDate(s) {
+  if (!DATE_RE.test(String(s || ''))) return false;
+  const [y, m, d] = String(s).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+// ---- effective provider date/time for a reviewed payload ----
+// All-day: start=date, end=exclusive date (user end_date is the LAST day
+// inclusive, so the provider end is end_date + 1 day). Timed: start/end dateTime
+// in the timezone; if end_time <= start_time the event is overnight and the end
+// rolls to the next day. Returns the effective end_date (provider end day) too.
+export function effectiveDateTime(payload) {
+  const tz = payload.time_zone || 'America/Denver';
+  if (payload.all_day) {
+    const start = payload.start_date;
+    const lastDay = (payload.end_date && payload.end_date >= start) ? payload.end_date : start;
+    const exclusiveEnd = addDay(lastDay);
+    return { start: { date: start }, end: { date: exclusiveEnd }, all_day: true, time_zone: tz, overnight: false, multiday: lastDay > start, end_date: exclusiveEnd, last_day: lastDay };
+  }
+  const st = payload.start_time;
+  const et = payload.end_time || addHour(st);
+  const overnight = et <= st;
+  const endDay = overnight ? addDay(payload.start_date) : payload.start_date;
+  return {
+    start: { dateTime: `${payload.start_date}T${st}:00`, timeZone: tz },
+    end: { dateTime: `${endDay}T${et}:00`, timeZone: tz },
+    all_day: false,
+    time_zone: tz,
+    overnight,
+    multiday: false,
+    end_date: endDay,
+  };
+}
+
+// ---- validate a create payload: real dates, ordering, timezone, no pricing ----
+export function validateCreatePayload(payload) {
+  const errors = [];
+  if (!payload || typeof payload !== 'object') return { ok: false, errors: ['missing_payload'] };
+  if (!payload.job_id || !HEX24.test(payload.job_id)) errors.push('invalid_job_id');
+  if (!payload.request_id) errors.push('missing_request_id');
+  if (!payload.start_date || !isValidDate(payload.start_date)) errors.push('invalid_start_date');
+  const tz = payload.time_zone || 'America/Denver';
+  if (!IANA_TZ.test(tz)) errors.push('invalid_time_zone');
+  if (payload.all_day) {
+    if (payload.end_date != null && payload.end_date !== '') {
+      if (!isValidDate(payload.end_date)) errors.push('invalid_end_date');
+      else if (payload.end_date < payload.start_date) errors.push('end_before_start');
+    }
+  } else {
+    if (!payload.start_time || !TIME_RE.test(payload.start_time)) errors.push('invalid_start_time');
+    if (payload.end_time != null && payload.end_time !== '' && !TIME_RE.test(payload.end_time)) errors.push('invalid_end_time');
+  }
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, effective: effectiveDateTime(payload) };
+}
 
 // ---- build the Google event body for create (price-free, no labor, no FeeLines) ----
 export function buildCreateEventBody({ job, payload, fingerprint, eventId, hubBaseUrl }) {
   const title = job?.canonical_name || payload.title || '';
-  const allDay = !!payload.all_day;
-  let start, end;
-  if (allDay) {
-    start = { date: payload.start_date };
-    end = { date: payload.end_date || addDay(payload.start_date) }; // Google all-day end is exclusive
-  } else {
-    const tz = payload.time_zone || 'America/Denver';
-    const st = payload.start_time;
-    const et = payload.end_time || addHour(st);
-    const endDay = et <= st ? addDay(payload.start_date) : payload.start_date;
-    start = { dateTime: `${payload.start_date}T${st}:00`, timeZone: tz };
-    end = { dateTime: `${endDay}T${et}:00`, timeZone: tz };
-  }
+  const dt = effectiveDateTime(payload);
   const hubUrl = `${hubBaseUrl}/jobs/${job.id}`;
   const desc = [payload.notes || '', `Hub job: ${hubUrl}`].filter(Boolean).join('\n');
   return {
@@ -318,8 +425,8 @@ export function buildCreateEventBody({ job, payload, fingerprint, eventId, hubBa
     summary: title,
     location: job?.address || '',
     description: desc,
-    start,
-    end,
+    start: dt.start,
+    end: dt.end,
     attendees: [],
     extendedProperties: { private: {
       appSource: 'glassforge_jobcalendar',
@@ -341,4 +448,45 @@ export function reconcileExisting({ existingEvent, fingerprint, jobId, ownerId, 
   if (idsMatch && fpMatch) return { kind: 'existing_match', event: existingEvent };
   if (idsMatch && !fpMatch) return { kind: 'conflict_changed', event: existingEvent };
   return { kind: 'foreign', event: existingEvent };
+}
+
+// ---- create orchestration (injectable transport; staged OFF in the entry) ----
+// transport: { getEvent(id) -> { event } | null (404), insertEvent(body) -> { ok, status, event } }
+// Always GETs the deterministic id first. If an event exists it is reconciled and
+// NEVER recreated (a cancellation tombstone stays deleted). Only if no event is
+// found does it insert. 409 re-reconciles. Timeout / malformed success / provider
+// failure return 'unknown' (freeze) so a retry re-GETs with the SAME id — never a
+// fresh id. No Hub writes, no FeeLines, no attendees/copies.
+export async function createEvent({ transport, job, payload, sha256, hubBaseUrl }) {
+  const ownerId = payload.owner_id;
+  const requestId = payload.request_id;
+  const eventId = await deterministicId(ownerId, requestId, { sha256 });
+  const fingerprint = await fingerprintHash(payload, { sha256 });
+
+  let got;
+  try { got = await transport.getEvent(eventId); }
+  catch { return { kind: 'unknown', stage: 'get_failed', event_id: eventId, fingerprint }; }
+  const existing = got?.event ?? got;
+  const rec = reconcileExisting({ existingEvent: existing, fingerprint, jobId: job.id, ownerId, requestId });
+  if (rec.kind !== 'unverifiable') {
+    return { kind: rec.kind, event_id: eventId, fingerprint, event: rec.event };
+  }
+
+  const body = buildCreateEventBody({ job, payload, fingerprint, eventId, hubBaseUrl });
+  let ins;
+  try { ins = await transport.insertEvent(body); }
+  catch { return { kind: 'unknown', stage: 'insert_failed', event_id: eventId, fingerprint }; }
+  if (ins && ins.ok && ins.event) {
+    return { kind: 'created', event_id: eventId, fingerprint, event: ins.event };
+  }
+  if (ins && ins.status === 409) {
+    let got2;
+    try { got2 = await transport.getEvent(eventId); }
+    catch { return { kind: 'unknown', stage: 'reget_failed', event_id: eventId, fingerprint }; }
+    const ex2 = got2?.event ?? got2;
+    const rec2 = reconcileExisting({ existingEvent: ex2, fingerprint, jobId: job.id, ownerId, requestId });
+    if (rec2.kind === 'unverifiable') return { kind: 'unknown', stage: 'post409_no_event', event_id: eventId, fingerprint };
+    return { kind: rec2.kind, event_id: eventId, fingerprint, event: rec2.event };
+  }
+  return { kind: 'unknown', stage: 'insert_unknown', event_id: eventId, fingerprint };
 }
