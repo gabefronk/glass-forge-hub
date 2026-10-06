@@ -18,10 +18,18 @@ export default function CombinedRecordsPanel({ job, onChanged }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [version, setVersion] = useState(0);
+  const [prevJobId, setPrevJobId] = useState(job.id);
 
-  // Reset to closed when the job id changes so a stale expanded panel never
-  // carries over to the next job.
-  useEffect(() => { setOpen(false); }, [job.id]);
+  // Reset on job-id change DURING RENDER: clears stale logs/others/error and
+  // closes the panel before the fetch effect runs, so no stale open panel
+  // flashes and no wasteful fetch fires for the new id while still "open".
+  if (job.id !== prevJobId) {
+    setPrevJobId(job.id);
+    setOpen(false);
+    setLogs([]);
+    setOthers({});
+    setError("");
+  }
 
   // Lazy: only fetch when expanded. The cleanup keeps a stale fetch off the
   // state of the next expand.

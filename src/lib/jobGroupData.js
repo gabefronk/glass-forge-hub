@@ -102,6 +102,8 @@ export async function loadJobEvents(memberIds, rows, preloadedAllEvents, legacyN
 // Read errors and a max-page cap throw (never a silent partial []); the
 // workspace surfaces them. Matching mirrors reportsForJob() — no rule changes.
 export async function loadJobFieldReports(memberIds, postIds, preloadedAllReports, legacyNames) {
-  const reader = (query, opts) => base44.entities.FieldReports.filter(query, opts);
+  // Positional array adapter: forwards (query, sort, limit, skip) to the
+  // documented SDK form filter(filter, sort?, limit?, skip?, fields?) -> array.
+  const reader = (query, opts) => base44.entities.FieldReports.filter(query, opts.sort, opts.limit, opts.skip);
   return loadFieldReportsCore(reader, { memberIds, postIds, preloadedAllReports, legacyNames });
 }
