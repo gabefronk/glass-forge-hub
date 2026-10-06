@@ -63,3 +63,62 @@ test("openings_qty falls back to the raw value when there are no lines", () => {
   const q = normalizeVendorQuote({ vendor: "Amsco", openings_qty: 7 });
   assert.equal(q.openings_qty, 7);
 });
+
+test("openings_qty is corrected down when the extractor overcounts", () => {
+  const q = normalizeVendorQuote({
+    vendor: "Amsco", openings_qty: 99,
+    lines: [{ qty: 2, kind: "door" }, { qty: 3, kind: "glass" }],
+  });
+  assert.equal(q.openings_qty, 5); // lines win over the extractor's guess
+});
+
+test("openings_qty stays when lines already sum to the reported count", () => {
+  const q = normalizeVendorQuote({
+    vendor: "Amsco", openings_qty: 19,
+    lines: [
+      { qty: 1, kind: "door" }, { qty: 4, kind: "glass" }, { qty: 1, kind: "door" },
+      { qty: 4, kind: "glass" }, { qty: 1, kind: "door" }, { qty: 4, kind: "glass" },
+      { qty: 2, kind: "door" }, { qty: 2, kind: "door" }, { qty: 3, kind: "part" },
+    ],
+  });
+  assert.equal(q.openings_qty, 19);
+});
+
+test("all-parts lines keep the raw openings_qty (lineUnits is zero)", () => {
+  const q = normalizeVendorQuote({
+    vendor: "Amsco", openings_qty: 6,
+    lines: [{ qty: 2, kind: "part" }, { qty: 4, kind: "part" }],
+  });
+  assert.equal(q.openings_qty, 6);
+});
+
+test("duplicate/grouped line descriptions are summed per-quantity, not double-counted", () => {
+  // Three identical "Multi Slider" lines (qty 1 each) + one "Glass D8" line
+  // (qty 4) must count 3 + 4 = 7, not 4 (line count) or 3+1+4 (line+qty).
+  const q = normalizeVendorQuote({
+    vendor: "Nu Vista", openings_qty: 0,
+    lines: [
+      { qty: 1, kind: "door", description: "Multi Slider" },
+      { qty: 1, kind: "door", description: "Multi Slider" },
+      { qty: 1, kind: "door", description: "Multi Slider" },
+      { qty: 4, kind: "glass", description: "Glass D8" },
+    ],
+  });
+  assert.equal(q.openings_qty, 7);
+  assert.equal(q.lines.length, 4);
+});
+
+test("cost, sell and tax are independent of the openings_qty recompute", () => {
+  const q = normalizeVendorQuote({
+    vendor: "Amsco", quote_number: "Q1",
+    material_true_cost: "$1,256.98",
+    actual_total_sell: "2411.81",
+    customer_tax: "167.22",
+    openings_qty: 14,
+    lines: [{ qty: 4, kind: "door" }, { qty: 4, kind: "glass" }],
+  });
+  assert.equal(q.openings_qty, 8);       // recomputed from lines
+  assert.equal(q.material_true_cost, 1256.98); // untouched
+  assert.equal(q.actual_total_sell, 2411.81);  // untouched
+  assert.equal(q.customer_tax, 167.22);        // untouched
+});

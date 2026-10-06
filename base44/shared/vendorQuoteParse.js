@@ -96,7 +96,7 @@ export function normalizeVendorQuote(raw = {}) {
     const n = Number(v);
     return Number.isInteger(n) && n > 0 && n < 10000 ? n : null;
   };
-  return {
+  const out = {
     vendor: clean(raw.vendor),
     manufacturer: clean(raw.manufacturer || raw.vendor),
     quote_number: clean(raw.quote_number),
