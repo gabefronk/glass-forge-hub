@@ -4,16 +4,19 @@
 // Pure pricing/validation logic lives in ../../shared/quoteEnginePure.js and is unit-tested.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 import {
-  priceAmsco, pricePella, checkQuoteAccess, validateQuoteLines, summarizeValidationRules
+  priceAmsco, pricePella, checkQuoteAccess, validateQuoteLines, summarizeValidationRules,
+  projectQuoteResult
 } from '../../shared/quoteEnginePure.js';
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    // Authorize: pricing/cost data is admin + manager only. Crew may not call this.
+    // Authorize: pricing access is admin + manager only. Crew may not call this.
+    // Managers receive sale-only fields; internal cost/catalog basis is redacted. Admins retain full costs.
     const user = await base44.auth.me().catch(() => null);
     const access = checkQuoteAccess(user);
     if (!access.allowed) return Response.json({ ok: false, error: 'forbidden', reason: access.reason }, { status: 403 });
+    const isAdmin = !!user && String(user.role || '').toLowerCase() === 'admin';
 
     const body = await req.json();
     const lines = body?.lines || [];
@@ -38,11 +41,12 @@ Deno.serve(async (req) => {
     const pellaChunks = await Promise.all(pellaSeries.map(s =>
       base44.asServiceRole.entities.PellaEmpiricalPrice.filter({ series: s }, '-created_date', 2000)));
     const pellaAnchors = pellaChunks.flat();
-    const results = lines.map(line =>
-      line.vendor === 'AMSCO'
-        ? { ...line, pricing: priceAmsco(line, gridRows, adders, tiers, seriesRows) }
-        : { ...line, pricing: pricePella(line, pellaAnchors) }
-    );
+    const results = lines.map(line => {
+      const pricing = line.vendor === 'AMSCO'
+        ? priceAmsco(line, gridRows, adders, tiers, seriesRows)
+        : pricePella(line, pellaAnchors);
+      return projectQuoteResult(line, pricing, { isAdmin });
+    });
     return Response.json({ ok: true, results, validation: summarizeValidationRules(validationRules) });
   } catch (error) {
     return Response.json({ ok: false, error: error.message }, { status: 500 });

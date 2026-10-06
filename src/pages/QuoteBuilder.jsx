@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Calculator, Save, Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,15 @@ export default function QuoteBuilder() {
   const [saveMsg, setSaveMsg] = useState("");
   const [error, setError] = useState("");
   const saveMsgTimer = useRef(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    base44.auth.me()
+      .then((me) => mounted && setIsAdmin(String(me?.role || "").toLowerCase() === "admin"))
+      .catch(() => mounted && setIsAdmin(false));
+    return () => { mounted = false; };
+  }, []);
 
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -316,7 +325,7 @@ export default function QuoteBuilder() {
                   <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">Dims</th>
                   <th className="text-right font-semibold px-3 py-2 whitespace-nowrap">Qty</th>
                   <th className="text-right font-semibold px-3 py-2 whitespace-nowrap">Unit list</th>
-                  <th className="text-right font-semibold px-3 py-2 whitespace-nowrap">Unit dealer</th>
+                  {isAdmin && (<th className="text-right font-semibold px-3 py-2 whitespace-nowrap">Unit dealer</th>)}
                   <th className="text-right font-semibold px-3 py-2 whitespace-nowrap">Line list</th>
                   <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">Confidence</th>
                   <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">Evidence</th>
@@ -333,7 +342,7 @@ export default function QuoteBuilder() {
                       <td className="px-3 py-2 align-top whitespace-nowrap font-mono-num">{r.width}×{r.height}</td>
                       <td className="px-3 py-2 align-top text-right whitespace-nowrap">{r.qty}</td>
                       <td className="px-3 py-2 align-top text-right whitespace-nowrap font-mono-num">{money(unitList)}{p.estimated ? "*" : ""}</td>
-                      <td className="px-3 py-2 align-top text-right whitespace-nowrap font-mono-num">{p.unit_dealer != null ? money(p.unit_dealer) : "—"}</td>
+                      {isAdmin && (<td className="px-3 py-2 align-top text-right whitespace-nowrap font-mono-num">{p.unit_dealer != null ? money(p.unit_dealer) : "—"}</td>)}
                       <td className="px-3 py-2 align-top text-right whitespace-nowrap font-mono-num-bold">{money(lineList)}</td>
                       <td className="px-3 py-2 align-top">{p.error ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold break-words whitespace-normal max-w-[240px]" style={{ backgroundColor: "var(--error-bg)", color: "var(--error)" }}>{p.error}</span>
@@ -345,7 +354,7 @@ export default function QuoteBuilder() {
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: "2px solid var(--border)", backgroundColor: "var(--muted)" }}>
-                  <td colSpan={5} className="px-3 py-2 text-right font-semibold" style={{ color: "var(--foreground)" }}>Total line list</td>
+                  <td colSpan={isAdmin ? 5 : 4} className="px-3 py-2 text-right font-semibold" style={{ color: "var(--foreground)" }}>Total line list</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap font-mono-num-bold" style={{ color: "var(--foreground)" }}>{money(totalList)}</td>
                   <td colSpan={2} />
                 </tr>

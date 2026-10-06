@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   rnd01, frameArea, ceilCell, priceAmsco, pricePella, strSim,
-  checkQuoteAccess, validateQuoteLines, summarizeValidationRules
+  checkQuoteAccess, validateQuoteLines, summarizeValidationRules,
+  projectPricing, projectQuoteResult
 } from '../base44/shared/quoteEnginePure.js';
 
 // ---- fixtures ----
@@ -188,4 +189,83 @@ test('summarizeValidationRules flags the table as loaded-but-not-enforced', () =
   const empty = summarizeValidationRules([]);
   assert.equal(empty.rules_loaded, 0);
   assert.match(empty.note, /no ValidationRule rows present/);
+});
+
+// ---- response projection (cost redaction) ----
+const fullAmsco = priceAmsco(
+  { product: 'Studio', width: 24, height: 48, qty: 2, ext_color: 'Bronze', tempered: true, debris: 'Both', grille_igai: 2 },
+  grid, adders, tiers, series
+);
+
+test('projectPricing admin retains all internal cost fields', () => {
+  const p = projectPricing(fullAmsco, { isAdmin: true });
+  for (const k of ['base', 'unit_dealer', 'line_dealer', 'adders', 'color_factor', 'grid_code', 'cell', 'frame_area_sf', 'unit_list', 'line_list', 'confidence', 'evidence', 'vendor', 'qty']) {
+    assert.ok(k in p, `admin should retain ${k}`);
+  }
+});
+
+test('projectPricing manager strips every cost/internal field', () => {
+  const p = projectPricing(fullAmsco, { isAdmin: false });
+  const forbidden = ['base', 'unit_dealer', 'line_dealer', 'adders', 'color_factor', 'grid_code', 'cell', 'frame_area_sf', 'dealer_factor'];
+  for (const k of forbidden) assert.ok(!(k in p), `manager must not see ${k} (got ${JSON.stringify(p[k])})`);
+  assert.deepEqual(Object.keys(p).sort(), ['confidence', 'evidence', 'line_list', 'qty', 'unit_list', 'vendor'].sort());
+});
+
+test('projectPricing manager keeps sale output fields', () => {
+  const p = projectPricing(fullAmsco, { isAdmin: false });
+  assert.equal(p.unit_list, fullAmsco.unit_list);
+  assert.equal(p.line_list, fullAmsco.line_list);
+  assert.equal(p.qty, fullAmsco.qty);
+  assert.equal(p.confidence, 'high');
+  assert.equal(p.evidence, 'grid_formula');
+  assert.equal(p.vendor, 'AMSCO');
+});
+
+test('projectPricing manager strips pella anchor provenance and size_deviation', () => {
+  const est = pricePella({ series: '250', width: 24, height: 48, qty: 1, description: '250 SH white' }, pellaAnchors);
+  const p = projectPricing(est, { isAdmin: false });
+  for (const k of ['anchor', 'anchor_dims', 'source', 'size_deviation']) assert.ok(!(k in p), `manager must not see ${k}`);
+  assert.ok('unit_list_estimated' in p && 'line_list_estimated' in p && 'estimated' in p && 'confidence' in p && 'evidence' in p);
+});
+
+test('projectPricing admin retains pella anchor provenance', () => {
+  const est = pricePella({ series: '250', width: 24, height: 48, qty: 1, description: '250 SH white' }, pellaAnchors);
+  const p = projectPricing(est, { isAdmin: true });
+  assert.ok('anchor' in p && 'source' in p && 'anchor_dims' in p && 'size_deviation' in p);
+});
+
+test('projectPricing keeps anchor_conflict (sale-price uncertainty) for manager and admin', () => {
+  const conflict = pricePella({ series: '250', width: 36, height: 60, qty: 1, description: '250 SH white' }, pellaAnchors);
+  assert.ok(conflict.anchor_conflict, 'fixture should have a conflict');
+  const m = projectPricing(conflict, { isAdmin: false });
+  const a = projectPricing(conflict, { isAdmin: true });
+  assert.ok('anchor_conflict' in m, 'manager keeps the sale-price conflict warning');
+  assert.ok('anchor_conflict' in a);
+});
+
+test('projectPricing manager error case exposes only error + vendor', () => {
+  const err = { error: 'over-grid', grid_code: 'STU', cell: [null, null], vendor: 'AMSCO', product: 'Studio' };
+  const p = projectPricing(err, { isAdmin: false });
+  assert.deepEqual(Object.keys(p).sort(), ['error', 'vendor'].sort());
+  const a = projectPricing(err, { isAdmin: true });
+  assert.ok('grid_code' in a && 'cell' in a && 'product' in a, 'admin retains error internals');
+});
+
+test('projectQuoteResult never spreads unchecked input line (malicious echo)', () => {
+  const malicious = { vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio', __evil: 'x', admin_override: true, is_admin: 1, pricing: { unit_dealer: 0 } };
+  const r = projectQuoteResult(malicious, fullAmsco, { isAdmin: false });
+  // top-level is a fixed allowlist — injected keys are not echoed
+  assert.deepEqual(Object.keys(r).sort(), ['height', 'pricing', 'qty', 'vendor', 'width'].sort());
+  assert.ok(!('__evil' in r) && !('admin_override' in r) && !('is_admin' in r) && !('product' in r));
+  // r.pricing is the computed projection, not the injected pricing object, and has no cost fields
+  assert.ok(r.pricing !== malicious.pricing);
+  assert.ok(!('unit_dealer' in r.pricing));
+});
+
+test('projectQuoteResult admin also gets allowlisted top-level (no unchecked spread) but full pricing', () => {
+  const malicious = { vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio', __evil: 'x' };
+  const r = projectQuoteResult(malicious, fullAmsco, { isAdmin: true });
+  assert.deepEqual(Object.keys(r).sort(), ['height', 'pricing', 'qty', 'vendor', 'width'].sort());
+  assert.ok(!('__evil' in r) && !('product' in r));
+  assert.ok('unit_dealer' in r.pricing && 'base' in r.pricing, 'admin retains internal costs in pricing');
 });

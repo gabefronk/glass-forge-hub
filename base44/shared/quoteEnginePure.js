@@ -141,3 +141,33 @@ export function summarizeValidationRules(rules) {
       : 'no ValidationRule rows present'
   };
 }
+
+// ---- Response projection (cost redaction for non-admin callers) ----
+// Sale-quote fields safe to return to any permitted caller (manager or admin).
+// Cost/catalog internals are excluded for non-admins so a manager generating a sale
+// quote never sees dealer net cost, grid base, adder amounts, color factors, or anchor
+// provenance. Admins retain the full pricing object. The sale price is the LIST price
+// (unit_list / line_list) — what is quoted to the customer; dealer cost is internal.
+const SALE_PRICING_FIELDS = [
+  'vendor', 'qty', 'unit_list', 'unit_list_estimated', 'line_list', 'line_list_estimated',
+  'estimated', 'confidence', 'evidence', 'error', 'anchor_conflict'
+];
+// Top-level line fields safe to echo back (the line spec the caller supplied). The input
+// line is NEVER spread unchecked into the response, so a caller cannot inject arbitrary
+// keys (e.g. admin_override, is_admin) and have them echoed back to any caller.
+const SALE_LINE_FIELDS = ['vendor', 'width', 'height', 'qty'];
+
+export function projectPricing(pricing, { isAdmin }) {
+  if (!pricing || typeof pricing !== 'object') return pricing;
+  if (isAdmin) return { ...pricing };
+  const out = {};
+  for (const k of SALE_PRICING_FIELDS) if (k in pricing) out[k] = pricing[k];
+  return out;
+}
+
+export function projectQuoteResult(line, pricing, { isAdmin }) {
+  const out = {};
+  for (const k of SALE_LINE_FIELDS) if (line && k in line) out[k] = line[k];
+  out.pricing = projectPricing(pricing, { isAdmin });
+  return out;
+}
