@@ -137,6 +137,7 @@ export default function NewJobBuilder() {
   const [matchWarning, setMatchWarning] = useState(null);
   const [forceCreate, setForceCreate] = useState(false);
   const [leadsTouched, setLeadsTouched] = useState(false);
+  const [jobCodeTouched, setJobCodeTouched] = useState(false);
   const set = (patch) => setS(prev => ({ ...prev, ...patch }));
 
   // Load existing eligible jobs once for the duplicate guard.
@@ -170,16 +171,10 @@ export default function NewJobBuilder() {
   const customerTotal = sale + tax;
   const atReview = step === STEPS.length;
 
-  // Auto-suggest a job code from the job name when the user hasn't manually edited it.
+  // Auto-suggest a job code from the job name until the user manually edits it.
   useEffect(() => {
-    if (!s.jobName) return;
-    setS(prev => {
-      // Only re-suggest if the current code is empty or matches the last suggestion.
-      const suggested = suggestJobCode(prev.jobName, builderName);
-      const lastSuggested = suggestJobCode(prev._lastJobName || "", suggestJobCode.builderName || "");
-      if (prev.jobCode && prev.jobCode !== lastSuggested && prev.jobCode !== suggested) return prev; // user edited it
-      return { ...prev, jobCode: suggested, _lastJobName: prev.jobName };
-    });
+    if (jobCodeTouched) return;
+    set({ jobCode: suggestJobCode(s.jobName, builderName) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.jobName, builderName]);
 
@@ -290,7 +285,7 @@ export default function NewJobBuilder() {
               <label key={f.key} className="block min-w-0">
                 <span className="block text-[9.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>{f.label.toUpperCase()}</span>
                 <div className="mt-0.5">
-                  <InlineEdit value={f.value} mono={f.mono} placeholder={f.placeholder} onCommit={v => set({ [f.key]: v })} />
+                  <InlineEdit value={f.value} mono={f.mono} placeholder={f.placeholder} onCommit={v => { if (f.key === "jobCode") setJobCodeTouched(true); set({ [f.key]: v }); }} />
                 </div>
               </label>
             ))}
@@ -438,7 +433,7 @@ export default function NewJobBuilder() {
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: "Job name", value: s.jobName, onCommit: v => set({ jobName: v }) },
-              { label: "Job code", value: s.jobCode, mono: true, onCommit: v => set({ jobCode: v }) },
+              { label: "Job code", value: s.jobCode, mono: true, onCommit: v => { setJobCodeTouched(true); set({ jobCode: v }); } },
               { label: "Window PO", value: s.windowPO, mono: true, onCommit: v => set({ windowPO: v }) },
               { label: "Mfg order #", value: s.mfgOrder, mono: true, placeholder: "Not ordered", onCommit: v => set({ mfgOrder: v }) },
             ].map(f => (
