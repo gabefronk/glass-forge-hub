@@ -25,8 +25,9 @@
 // rejected (duplicate/concurrent/changed payload for the same client_id; no resend, 409) |
 // disabled (502). The mock adapter's tempGuid is EXACTLY the client_id (the persisted GUID).
 
-const OWNER_EMAILS = new Set(['gabefronk@gmail.com', 'gabriel.fronk.wd@gmail.com']);
-export const isSendOwner = (user) => !!user && user.role === 'admin' && OWNER_EMAILS.has(String(user.email || '').trim().toLowerCase());
+// SEND guard: exact user ids only. Email and role are never consulted.
+export const SEND_OWNER_IDS = Object.freeze(['6a7f0d834a5f825c724273ea', '6a8229a9801b2aef9278ff47']);
+export const isSendOwner = (user) => !!user && typeof user.id === 'string' && SEND_OWNER_IDS.includes(user.id);
 
 export const TEXT_MAX = 4000;
 export const ATTACHMENT_MAX = 25 * 1024 * 1024;
@@ -98,21 +99,23 @@ export async function computeFingerprint(crypto, payload) {
 
 // ---- Strict signed-URL validation + capped stream ---------------------------
 
+// Only these fixed messages ever reach the client; raw errors/URLs never do.
+const safeFail = (message, status) => Object.assign(new Error(message), { status, safe: true });
+const UNAVAILABLE = 'Attachment is not available.';
+
 function assertSafeSignedUrl(url) {
   let u;
-  try { u = new URL(url); } catch { throw Object.assign(new Error('Attachment is not available.'), { status: 502 }); }
-  if (u.protocol !== 'https:') throw Object.assign(new Error('Attachment is not available.'), { status: 502 });
-  if (!ALLOWED_HOSTS.has(u.hostname)) throw Object.assign(new Error('Attachment is not available.'), { status: 502 });
-  if (u.username || u.password) throw Object.assign(new Error('Attachment is not available.'), { status: 502 });
-  if (u.port && u.port !== '443') throw Object.assign(new Error('Attachment is not available.'), { status: 502 });
-  if (!u.pathname || u.pathname === '/') throw Object.assign(new Error('Attachment is not available.'), { status: 502 });
+  try { u = new URL(url); } catch { throw safeFail(UNAVAILABLE, 502); }
+  if (u.protocol !== 'https:') throw safeFail(UNAVAILABLE, 502);
+  if (!ALLOWED_HOSTS.has(u.hostname)) throw safeFail(UNAVAILABLE, 502);
+  if (u.username || u.password) throw safeFail(UNAVAILABLE, 502);
+  if (u.port) throw safeFail(UNAVAILABLE, 502);
+  if (!u.pathname || u.pathname === '/') throw safeFail(UNAVAILABLE, 502);
   return u;
 }
 
 async function readCapped(response) {
-  if (!response.body || typeof response.body.getReader !== 'function') {
-    throw Object.assign(new Error('Attachment is not available.'), { status: 502 });
-  }
+  if (!response.body || typeof response.body.getReader !== 'function') throw safeFail(UNAVAILABLE, 502);
   const reader = response.body.getReader();
   const parts = [];
   let size = 0;
@@ -121,10 +124,10 @@ async function readCapped(response) {
     if (done) break;
     if (!(value instanceof Uint8Array) || !value.length) continue;
     size += value.length;
-    if (size > ATTACHMENT_MAX) { await reader.cancel(); throw Object.assign(new Error('Attachment exceeds the size limit.'), { status: 400 }); }
+    if (size > ATTACHMENT_MAX) { await reader.cancel().catch(() => {}); throw safeFail('Attachment exceeds the size limit.', 400); }
     parts.push(value);
   }
-  if (!size) throw Object.assign(new Error('Attachment is empty.'), { status: 400 });
+  if (!size) throw safeFail('Attachment is empty.', 400);
   const bytes = new Uint8Array(size);
   let off = 0;
   for (const p of parts) { bytes.set(p, off); off += p.length; }
@@ -132,14 +135,21 @@ async function readCapped(response) {
 }
 
 export async function fetchAttachmentBytes({ core, fetchImpl, file_uri }) {
-  const { signed_url } = await core.CreateFileSignedUrl({ file_uri, expires_in: 60 });
-  if (typeof signed_url !== 'string' || !signed_url) throw Object.assign(new Error('Attachment is not available.'), { status: 502 });
+  let signed_url;
+  try { ({ signed_url } = await core.CreateFileSignedUrl({ file_uri, expires_in: 60 })); }
+  catch { throw safeFail(UNAVAILABLE, 502); }
+  if (typeof signed_url !== 'string' || !signed_url) throw safeFail(UNAVAILABLE, 502);
   assertSafeSignedUrl(signed_url);
-  const r = await fetchImpl(signed_url, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(60000), cache: 'no-store' });
-  // Reject redirects: never follow, never read the body.
-  if (r.status >= 300 && r.status < 400) throw Object.assign(new Error('Attachment is not available.'), { status: 502 });
-  if (!r.ok) throw Object.assign(new Error('Attachment is not available.'), { status: 502 });
-  return await readCapped(r);
+  let r;
+  try { r = await fetchImpl(signed_url, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(60000), cache: 'no-store' }); }
+  catch { throw safeFail(UNAVAILABLE, 502); }
+  // Reject redirects (incl. opaque manual redirects): never follow, never read the body.
+  if (r.type === 'opaqueredirect' || r.redirected || (r.status >= 300 && r.status < 400)) throw safeFail(UNAVAILABLE, 502);
+  if (!r.ok) throw safeFail(UNAVAILABLE, 502);
+  const declared = Number(r.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > ATTACHMENT_MAX) throw safeFail('Attachment exceeds the size limit.', 400);
+  try { return await readCapped(r); }
+  catch (e) { if (e && e.safe) throw e; throw safeFail(UNAVAILABLE, 502); }
 }
 
 // ---- Adapters ----------------------------------------------------------------
@@ -148,30 +158,27 @@ export const DisabledDispatchAdapter = {
   async dispatch() { return { status: 'disabled', error: 'Messages sending is not enabled.' }; },
 };
 
-// Build the transport payload the provider would send. tempGuid is EXACTLY the client_id.
-function buildTransportPayload(input, tempGuid) {
+// Build the BlueBubbles transport request. tempGuid is EXACTLY the persisted client_id.
+// Text: JSON { chatGuid, tempGuid, message, method: 'apple-script' }.
+// Attachment: real FormData with a Blob part; the filename is passed as a FormData argument
+// (the platform encodes it), never interpolated into raw multipart headers.
+export function buildTransportPayload(input, tempGuid) {
   if (input.kind === 'send_text') {
     return {
       method: 'POST', url: '/api/v1/message/text',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: input.text, chatGuid: input.chatGuid, tempGuid }),
+      body: JSON.stringify({ chatGuid: input.chatGuid, tempGuid, message: input.text, method: 'apple-script' }),
       tempGuid,
     };
   }
-  const boundary = `----bb-${tempGuid}`;
-  const enc = new TextEncoder();
-  const header =
-    `--${boundary}\r\nContent-Disposition: form-data; name="chatGuid"\r\n\r\n${input.chatGuid}\r\n` +
-    `--${boundary}\r\nContent-Disposition: form-data; name="tempGuid"\r\n\r\n${tempGuid}\r\n` +
-    `--${boundary}\r\nContent-Disposition: form-data; name="attachment"; filename="${input.name}"\r\nContent-Type: ${input.mime}\r\n\r\n`;
-  const footer = `\r\n--${boundary}--\r\n`;
-  const bytes = input.bytes || new Uint8Array();
-  const body = new Uint8Array([...enc.encode(header), ...bytes, ...enc.encode(footer)]);
-  return {
-    method: 'POST', url: '/api/v1/message/attachment',
-    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
-    body, tempGuid, bytes,
-  };
+  const form = new FormData();
+  form.append('chatGuid', input.chatGuid);
+  form.append('tempGuid', tempGuid);
+  form.append('name', input.name);
+  form.append('method', 'apple-script');
+  form.append('attachment', new Blob([input.bytes || new Uint8Array()], { type: input.mime || 'application/octet-stream' }), input.name);
+  // No Content-Type header: fetch derives the multipart boundary from the FormData body.
+  return { method: 'POST', url: '/api/v1/message/attachment', headers: {}, body: form, tempGuid };
 }
 
 // TEST-ONLY mock. Simulates the dispatch contract in memory with a genuine transport call.
@@ -218,15 +225,22 @@ export function MockDispatchAdapter({ transport } = {}) {
 
 // ---- Handler -----------------------------------------------------------------
 
-// registrationStore (required when enabled): {
+// registrationStore (required for attachments): {
 //   async get(ownerId, conversationKey, clientId) -> registration | null,
 //   async create(ownerId, conversationKey, clientId, { file_uri, name, mime, size, sha256 }) -> reg,
 // }
+// verifyOwnerUpload (required for attachments): server-side provenance proof that the registered
+// file_uri was uploaded by this owner for this conversation/client_id. A registration is NOT
+// ownership proof. Must resolve to exactly `true`; anything else (or no adapter) fails closed
+// BEFORE any signing or fetch.
+//   async verifyOwnerUpload({ owner_id, conversation_key, client_id, file_uri, sha256, size, mime }) -> true
+// resolveMapping must return { chatGuid, device_id, configuredDeviceId, device_enabled }.
 export function createMessagesSendHandler({
   getClient,
   adapter = DisabledDispatchAdapter,
   enabled = false,
   registrationStore,
+  verifyOwnerUpload,
   resolveMapping,
   fetchImpl = globalThis.fetch,
   crypto = globalThis.crypto,
@@ -236,6 +250,7 @@ export function createMessagesSendHandler({
     let client, user = null;
     try { client = await getClient(req); user = await client.auth.me().catch(() => null); }
     catch { return reply({ error: 'Sign in required.', code: 'auth' }, 401); }
+    if (!user) return reply({ error: 'Sign in required.', code: 'auth' }, 401);
     if (!isSendOwner(user)) return reply({ error: 'Owner access required.', code: 'auth' }, 403);
     if (!enabled) return reply({ error: 'Messages sending is not enabled.', code: 'disabled' }, 502);
     let input;
@@ -251,6 +266,12 @@ export function createMessagesSendHandler({
     const owner_id = user.id;
     const conversation_key = input.conversation_key;
     const client_id = input.client_id;
+
+    const attachmentsReady = !!registrationStore && typeof registrationStore.get === 'function'
+      && typeof registrationStore.create === 'function' && typeof verifyOwnerUpload === 'function';
+    if ((action === 'register_upload' || action === 'send_attachment') && !attachmentsReady) {
+      return reply({ error: 'Attachments cannot be verified here.', code: 'not_verified' }, 403);
+    }
 
     if (action === 'register_upload') {
       const vName = validateName(input.name);
@@ -271,7 +292,7 @@ export function createMessagesSendHandler({
     try { mapped = await resolveMapping(client, conversation_key); }
     catch { mapped = null; }
     if (!mapped || !mapped.chatGuid) return reply({ error: "This conversation can't be sent to from here.", code: 'not_sendable' }, 404);
-    if (!mapped.configuredDeviceId || !mapped.device_id || mapped.device_id !== mapped.configuredDeviceId) {
+    if (!mapped.configuredDeviceId || !mapped.device_id || mapped.device_id !== mapped.configuredDeviceId || mapped.device_enabled !== true) {
       return reply({ error: "This conversation can't be sent to from here.", code: 'not_sendable' }, 404);
     }
     const chatGuid = mapped.chatGuid;
@@ -291,9 +312,18 @@ export function createMessagesSendHandler({
     try { reg = await registrationStore.get(owner_id, conversation_key, client_id); }
     catch { reg = null; }
     if (!reg) return reply({ error: 'Attachment was not registered for this send.', code: 'not_registered' }, 404);
+    // Provenance proof BEFORE signing: never sign a URI merely because the client registered it.
+    let proven = false;
+    try {
+      proven = (await verifyOwnerUpload({ owner_id, conversation_key, client_id, file_uri: reg.file_uri, sha256: reg.sha256, size: reg.size, mime: reg.mime })) === true;
+    } catch { proven = false; }
+    if (!proven) return reply({ error: 'Attachment could not be verified.', code: 'not_verified' }, 403);
     let bytes;
     try { bytes = await fetchAttachmentBytes({ core: client.asServiceRole.integrations.Core, fetchImpl, file_uri: reg.file_uri }); }
-    catch (e) { return reply({ error: e.message || 'Attachment is not available.', code: 'attachment' }, Number.isInteger(e.status) ? e.status : 502); }
+    catch (e) {
+      const safe = e && e.safe;
+      return reply({ error: safe ? e.message : UNAVAILABLE, code: 'attachment' }, safe && Number.isInteger(e.status) ? e.status : 502);
+    }
     const bytesHash = await sha256Bytes(crypto, bytes);
     if (reg.sha256 && reg.sha256 !== bytesHash) return reply({ error: 'Attachment could not be verified.', code: 'attachment' }, 400);
     const fp = await computeFingerprint(crypto, { kind: 'send_attachment', chatGuid, mime: reg.mime, bytesHash });
@@ -304,10 +334,12 @@ export function createMessagesSendHandler({
   };
 }
 
+// Fixed client-facing messages per outcome; adapter/provider error text is never forwarded.
 function mapResult(result) {
-  if (result.status === 'sent') return reply({ ok: true, temp_guid: result.temp_guid, conversation_key: result.conversation_key }, 200);
-  if (result.status === 'rejected') return reply({ error: result.error, code: 'rejected' }, 409);
-  if (result.status === 'unknown') return reply({ error: result.error, code: 'unknown' }, 502);
-  if (result.status === 'failed_pre_dispatch') return reply({ error: result.error, code: 'failed_pre_dispatch' }, 502);
-  return reply({ error: result.error || 'Messages sending is not enabled.', code: 'disabled' }, 502);
+  const status = result && result.status;
+  if (status === 'sent') return reply({ ok: true, temp_guid: result.temp_guid, conversation_key: result.conversation_key }, 200);
+  if (status === 'rejected') return reply({ error: 'This send was already attempted. Reconcile on the Mac.', code: 'rejected' }, 409);
+  if (status === 'failed_pre_dispatch') return reply({ error: 'Send failed before it was dispatched. It can be retried.', code: 'failed_pre_dispatch' }, 502);
+  if (status === 'disabled') return reply({ error: 'Messages sending is not enabled.', code: 'disabled' }, 502);
+  return reply({ error: 'Send outcome is unknown. Reconcile on the Mac.', code: 'unknown' }, 502);
 }
