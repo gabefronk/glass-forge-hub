@@ -16,6 +16,7 @@ import JobDetail from '@/pages/JobDetail';
 import WindowQuotes from '@/pages/WindowQuotes';
 import Dashboard from '@/pages/Dashboard';
 import MatchDebug from '@/pages/MatchDebug';
+import QuoteBuilder from '@/pages/QuoteBuilder';
 import { Navigate } from 'react-router-dom';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
@@ -43,7 +44,6 @@ import TeamStructure from '@/pages/TeamStructure';
 import UnlinkedJobRecords from '@/pages/UnlinkedJobRecords';
 import JobSetup from '@/pages/JobSetup';
 import InboxAgents from '@/pages/InboxAgents';
-import QuoteBuilder from '@/pages/QuoteBuilder';
 import { isWindowQuotesOnly } from '@/lib/agentCenterAccess';
 // Add page imports here
 
@@ -99,6 +99,7 @@ const AuthenticatedApp = () => {
           <Route path="/system-map" element={<QuotesOnlyRedirect><SystemMap /></QuotesOnlyRedirect>} />
           <Route path="/admin/probuild-daily" element={<QuotesOnlyRedirect><ProbuildDailyPreview /></QuotesOnlyRedirect>} />
           <Route path="/messages" element={<QuotesOnlyRedirect><MessagesInbox /></QuotesOnlyRedirect>} />
+          <Route path="/QuoteBuilder" element={<QuoteBuilder />} />
           <Route path="/contacts" element={<QuotesOnlyRedirect><ContactsDirectory /></QuotesOnlyRedirect>} />
           <Route path="/reports" element={<QuotesOnlyRedirect><ReportsRedirect /></QuotesOnlyRedirect>} />
           <Route path="/report-library" element={<QuotesOnlyRedirect><ReportLibraryRedirect /></QuotesOnlyRedirect>} />
@@ -118,7 +119,6 @@ const AuthenticatedApp = () => {
           <Route path="/admin/unlinked" element={<QuotesOnlyRedirect><UnlinkedJobRecords /></QuotesOnlyRedirect>} />
           <Route path="/summit" element={<Summit />} />
           <Route path="/team-structure" element={<QuotesOnlyRedirect><TeamStructure /></QuotesOnlyRedirect>} />
-          <Route path="/QuoteBuilder" element={<QuoteBuilder />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
