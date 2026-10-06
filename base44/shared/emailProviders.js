@@ -224,7 +224,7 @@ export function createOutlookClient({ accessToken, fetchImpl = globalThis.fetch,
   }
 
   async function getMessage(id) {
-    const q = `$select=${GRAPH_MESSAGE_SELECT}&$expand=attachments($select=id,name,contentType,size)`;
+    const q = `$select=${GRAPH_MESSAGE_SELECT}&$expand=attachments($select=id,name,contentType,size,isInline)`;
     return get(`/messages/${encodeURIComponent(id)}?${q}`, { headers: { Prefer: 'outlook.body-content-type="text"' } });
   }
 
@@ -237,7 +237,7 @@ export function createOutlookClient({ accessToken, fetchImpl = globalThis.fetch,
   // Every message of one conversation (any folder), oldest first, full bodies as text.
   async function getThreadMessages(conversationId) {
     const filter = `conversationId eq '${String(conversationId).replace(/'/g, "''")}'`;
-    const data = await get(`/messages?$filter=${encodeURIComponent(filter)}&$select=${GRAPH_MESSAGE_SELECT}&$top=50`, { headers: { Prefer: 'outlook.body-content-type="text"' } });
+    const data = await get(`/messages?$filter=${encodeURIComponent(filter)}&$select=${GRAPH_MESSAGE_SELECT}&$expand=attachments($select=id,name,contentType,size,isInline)&$top=50`, { headers: { Prefer: 'outlook.body-content-type="text"' } });
     return (data.value || []).filter((m) => m && m.id && m.isDraft !== true).sort((a, b) => String(a.receivedDateTime || '').localeCompare(String(b.receivedDateTime || '')));
   }
 

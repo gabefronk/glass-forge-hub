@@ -83,10 +83,11 @@ const stateOf = (docId, atts) => (!docId ? 'pending' : atts.every((a) => a.statu
 // Returns the EmailRelay patch, or null when there is nothing to do / another run holds the lease.
 export async function saveTaxRecord({ api, connectors, fetchImpl, now }, mailbox, provider, row, messages, { force = false, confirmRecreate = false } = {}) {
   if (!force && !row.tax_record) return null;
+  row = { ...row, ...(await api.EmailRelay.get(row.id)) }; // the caller's copy may be stale
   const prevAtts = Array.isArray(row.tax_attachments) ? row.tax_attachments : [];
   if (row.tax_save_state === 'saved' && row.drive_file_id && prevAtts.every((a) => a.status === 'saved')) return null;
   const at = now();
-  if (row.tax_lock_id && String(row.tax_lock_until || '') > at) return null;
+  if (row.tax_lock_id && String(row.tax_lock_until || '') > at) return null; // another run holds it
 
   const key = row.tax_key || await Tax.taxKey(mailbox.provider, mailbox.key, row.thread_id);
   const lockId = crypto.randomUUID();
@@ -145,8 +146,9 @@ export async function saveTaxRecord({ api, connectors, fetchImpl, now }, mailbox
           let found = await drive.find(attQuery);
           if (!found.length) {
             if (rec.status === 'unknown' && !confirmRecreate) { rec.error = 'upload outcome unknown; not found yet'; continue; }
-            const parentId = (docs.find((d) => d.id === docId)?.parents || [])[0] || await ensureFolder(drive, await ensureFolder(drive, null, 'Taxes', 'taxes', true), Tax.taxYear(row.receipt_date, String(row.last_message_at || '').slice(0, 10)), `year:${Tax.taxYear(row.receipt_date, String(row.last_message_at || '').slice(0, 10))}`, true);
-            if (!parentId) throw new Error('year folder not found');
+            // Next to the doc (wherever the owner keeps it); never creates a folder for this.
+            const parentId = (canon?.parents || [])[0];
+            if (!parentId) throw new Error('saved doc folder not found');
             const { bytes, mime } = await provider.getAttachmentBytes(incoming.message_id, a.attachment_id);
             await drive.uploadFile(rec.name, parentId, bytes, mime || a.mime, { gf_tax_key: key, gf_kind: 'attachment', gf_att: attKey });
             found = await drive.find(attQuery);

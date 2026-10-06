@@ -14,7 +14,7 @@
 import { findJobs, denverDate } from './jobFinder.js';
 import { normalizeGmailMessage, normalizeGraphMessage, aggregateThread, lowerEmail } from './emailParse.js';
 import * as T from './emailTriage.js';
-import * as Tax from './emailTaxRecord.js';
+import { saveTaxRecord } from './emailTaxDrive.js';
 import { createProviderClient, buildRawReply, ProviderError } from './emailProviders.js';
 import { phoneKey } from './contactMatching.js';
 
@@ -239,114 +239,10 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   }
 
   // ---- tax-record save to Drive -------------------------------------------------------------
-  // Standing rule: every receipt / paid-invoice email is saved to Drive/Taxes/<year> as a
-  // Google Doc (plus any PDF/image attachment that is the receipt itself), so the books have
-  // the proof at tax time. Never deletes or overwrites a Drive file; a thread is saved once
-  // (drive_file_id guards the second save). A failure is noted on the row and retried next
-  // run; it never fails the sync. No message body is stored in the Hub — only the Drive id.
-
-  const DRIVE_API = 'https://www.googleapis.com/drive/v3';
-  const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
-
-  function bytesToB64(bytes) {
-    let bin = '';
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-    return btoa(bin);
-  }
-
-  function makeDriveClient(token) {
-    const authHeaders = (extra) => ({ Authorization: `Bearer ${token}`, ...extra });
-    const json = async (path, init = {}) => {
-      const r = await fetchImpl(`${DRIVE_API}${path}`, { ...init, headers: authHeaders(init.body ? { 'Content-Type': 'application/json' } : {}) });
-      const text = await r.text().catch(() => '');
-      if (!r.ok) throw new Error(`Drive ${init.method || 'GET'} ${path.split('?')[0]} -> ${r.status}: ${text.slice(0, 160)}`);
-      return text ? JSON.parse(text) : {};
-    };
-    const children = async (parentId, name) => {
-      const parent = (parentId || 'root').replace(/'/g, "\\'");
-      const q = `'${parent}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false and name='${name.replace(/'/g, "\\'")}'`;
-      const res = await json(`/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,parents,webViewLink)&pageSize=10`);
-      return res.files || [];
-    };
-    const createFolder = async (parentId, name) => {
-      const body = { name, mimeType: 'application/vnd.google-apps.folder' };
-      if (parentId) body.parents = [parentId];
-      return json('/files?fields=id,name,webViewLink', { method: 'POST', body: JSON.stringify(body) });
-    };
-    // Find-or-create by exact name (Tax.findFolder) so a second run never makes a duplicate.
-    const ensureFolder = async (parentId, name) => {
-      const dec = Tax.findFolder(await children(parentId, name), name);
-      if (dec.found) {
-        const f = await json(`/files/${encodeURIComponent(dec.found)}?fields=id,webViewLink`);
-        return { id: dec.found, url: f.webViewLink || '' };
-      }
-      const f = await createFolder(parentId, name);
-      return { id: f.id, url: f.webViewLink || '' };
-    };
-    const multipart = (meta, contentType, body) => {
-      const boundary = `tax-${Math.random().toString(36).slice(2)}`;
-      return { 'Content-Type': `multipart/related; boundary=${boundary}`, body: `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n${body}\r\n--${boundary}--\r\n` };
-    };
-    // Save the email as a Google Doc (import HTML -> application/vnd.google-apps.document).
-    const createDoc = async (name, parentId, html) => {
-      const res = await fetchImpl(`${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,name,webViewLink`, { method: 'POST', headers: authHeaders(multipart({ name, mimeType: 'application/vnd.google-apps.document', parents: [parentId] }, 'text/html', html)) });
-      const text = await res.text().catch(() => '');
-      if (!res.ok) throw new Error(`Drive create doc -> ${res.status}: ${text.slice(0, 160)}`);
-      const doc = JSON.parse(text || '{}');
-      return { id: doc.id, url: doc.webViewLink || '' };
-    };
-    // Upload a receipt attachment (PDF/image) next to the doc.
-    const uploadFile = async (name, parentId, bytes, mime) => {
-      const res = await fetchImpl(`${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,webViewLink`, { method: 'POST', headers: authHeaders(multipart({ name, parents: [parentId] }, mime || 'application/octet-stream', bytesToB64(bytes))) });
-      const text = await res.text().catch(() => '');
-      if (!res.ok) throw new Error(`Drive upload ${name} -> ${res.status}: ${text.slice(0, 160)}`);
-      return JSON.parse(text || '{}');
-    };
-    return { ensureFolder, createDoc, uploadFile };
-  }
-
-  // Returns the EmailRelay patch to apply: {drive_file_id, drive_url, tax_save_error:''} on
-  // success, or {tax_save_error} on failure. null when there is nothing to do. `force` lets
-  // the admin action save a thread the triage did not flag.
-  async function saveTaxRecord(ctx, mailbox, provider, row, messages, { force = false } = {}) {
-    if (row.drive_file_id) return { tax_save_error: '' }; // never overwrite / re-save
-    if (!force && !row.tax_record) return null;
-    let drive;
-    try {
-      const conn = await ctx.connectors.getConnection('googledrive');
-      if (!conn || !conn.accessToken) throw new Error('drive not connected');
-      drive = makeDriveClient(conn.accessToken);
-    } catch (e) {
-      return { tax_save_error: `tax save failed: ${errText(e)}` };
-    }
-    try {
-      const incoming = [...(messages || [])].reverse().find((m) => m.direction === 'incoming') || (messages || [])[0] || null;
-      const fallbackDate = String(row.last_message_at || '').slice(0, 10);
-      const year = Tax.taxYear(row.receipt_date, fallbackDate);
-      const taxes = await drive.ensureFolder(null, 'Taxes');
-      const yearFolder = await drive.ensureFolder(taxes.id, year);
-      const name = Tax.taxDocName(row, fallbackDate);
-      const html = Tax.taxDocHtml({
-        from: [row.from_name, row.from_email ? `<${row.from_email}>` : ''].filter(Boolean).join(' '),
-        date: row.last_message_at || '',
-        subject: row.subject || '',
-        mailbox: mailbox.display_name || mailbox.key || '',
-        bodyText: incoming?.text || '',
-      });
-      const doc = await drive.createDoc(name, yearFolder.id, html);
-      // Attachments that are the receipt itself (PDF/image) go next to the doc. Best effort.
-      for (const att of Tax.receiptAttachments(incoming?.attachments || [])) {
-        if (!att.attachment_id) continue;
-        try {
-          const { bytes, mime } = await provider.getAttachmentBytes(incoming.message_id, att.attachment_id);
-          await drive.uploadFile(att.name || 'attachment', yearFolder.id, bytes, mime || att.mime);
-        } catch (e) { /* a missing attachment never fails the doc save */ }
-      }
-      return { drive_file_id: doc.id, drive_url: doc.url, tax_save_error: '' };
-    } catch (e) {
-      return { tax_save_error: `tax save failed: ${errText(e)}` };
-    }
-  }
+  // Receipt / paid-invoice emails go to Drive/Taxes/<year> (see emailTaxDrive.js for the
+  // identity, lease and unknown-outcome rules). A failure never fails the sync.
+  const saveTax = (ctx, mailbox, provider, row, messages, opts) =>
+    saveTaxRecord({ api: ctx.api, connectors: ctx.connectors, fetchImpl, now }, mailbox, provider, row, messages, opts);
 
   // ---- sync -----------------------------------------------------------------------------------
 
@@ -536,26 +432,28 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       try { if (T.shouldArchive(cur, mailbox)) { Object.assign(patch, await archiveInProvider(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; counts.archived++; } } catch (e) { warn(`archive failed: ${errText(e)}`); }
       try { if (T.shouldDraft(cur, mailbox)) { Object.assign(patch, await generateDraft(ctx, mailbox, provider, cur, t.messages || [], jobFacts)); counts.drafted++; } } catch (e) { warn(`draft failed: ${errText(e)}`); }
       try {
-        if (cur.tax_record && !cur.drive_file_id) {
-          const r = await saveTaxRecord(ctx, mailbox, provider, cur, t.messages || []);
-          if (r) { Object.assign(patch, r); cur = { ...cur, ...r }; }
+        if (cur.tax_record && cur.tax_save_state !== 'saved') {
+          const r = await saveTax(ctx, mailbox, provider, cur, t.messages || []);
+          if (r) { Object.assign(patch, r); cur = { ...cur, ...r }; if (r.tax_save_error) warn(r.tax_save_error); }
         }
       } catch (e) { warn(`tax save failed: ${errText(e)}`); patch.tax_save_error = `tax save failed: ${errText(e)}`; }
       if (changes.length) patch.hub_changes = withChanges(row, changes);
       if (Object.keys(patch).length) { try { await api.EmailRelay.update(row.id, patch); } catch (e) { warn(`ledger update failed: ${errText(e)}`); } }
     }
 
-    // Tax-record retry: threads marked tax_record with no drive_file_id that were not handled
-    // this run (a previous save failed, or Drive was offline) get another attempt.
+    // Tax-record retry: rows triage already flagged as tax records (new mail only, never an old
+    // mail backfill) whose doc or receipt attachments are not all saved get another attempt.
+    // Rows in the 'unknown' state are only looked up in Drive, never created again.
     try {
       const inRun = new Set(threads.map((t) => t.row.thread_id));
-      const candidates = await api.EmailRelay.filter({ mailbox_key: mailbox.key, tax_record: true }, '-last_message_at', 50);
+      const candidates = await api.EmailRelay.filter({ mailbox_key: mailbox.key, tax_record: true, tax_save_state: { $ne: 'saved' } }, '-last_message_at', 50);
       for (const prev of candidates) {
-        if (prev.drive_file_id || inRun.has(prev.thread_id)) continue;
+        if (inRun.has(prev.thread_id)) continue;
         if (overBudget()) break;
         let msgs = null;
         try { msgs = await fetchThreadMessages(provider, mailbox, prev.thread_id); } catch (e) { warn(`tax reread failed: ${errText(e)}`); }
-        const r = await saveTaxRecord(ctx, mailbox, provider, prev, msgs || []);
+        const r = await saveTax(ctx, mailbox, provider, prev, msgs || []);
+        if (r?.tax_save_error) warn(r.tax_save_error);
         if (r && Object.keys(r).length) { try { await api.EmailRelay.update(prev.id, r); } catch (e) { warn(`tax ledger update failed: ${errText(e)}`); } }
       }
     } catch (e) { warn(`tax retry scan failed: ${errText(e)}`); }
@@ -769,8 +667,9 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   }
 
   // Save one thread's receipt email to Drive by hand (e.g. the two Helcim PAID receipts).
-  // Admin only. Force-saves even when triage did not set tax_record, but never overwrites an
-  // existing drive_file_id.
+  // Admin only. Force-saves even when triage did not set tax_record; never overwrites or deletes
+  // a Drive file. A row whose earlier create had an unknown outcome is only re-created when the
+  // admin passes confirm_recreate: true after checking Drive.
   async function actionSaveTaxRecord(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
     if (ctx.user.role !== 'admin') fail(403, 'Owner access required.');
@@ -778,11 +677,15 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     const provider = await connect(ctx, mailbox);
     let messages = null;
     try { messages = await fetchThreadMessages(provider, mailbox, row.thread_id); } catch (e) { /* proceed without */ }
-    const r = await saveTaxRecord(ctx, mailbox, provider, row, messages || [], { force: true });
-    const patch = r || {};
-    await ctx.api.EmailRelay.update(row.id, patch);
-    const updated = { ...row, ...patch };
-    return { ok: !!updated.drive_file_id, entry: updated, error: patch.tax_save_error || undefined };
+    const r = await saveTax(ctx, mailbox, provider, row, messages || [], { force: true, confirmRecreate: ctx.body.confirm_recreate === true });
+    if (!r) {
+      const cur = await ctx.api.EmailRelay.get(row.id);
+      if (cur.tax_save_state === 'saved') return { ok: true, entry: cur };
+      fail(409, 'A tax save for this thread is already in progress.');
+    }
+    await ctx.api.EmailRelay.update(row.id, r);
+    const updated = { ...row, ...r };
+    return { ok: updated.tax_save_state === 'saved', entry: updated, error: r.tax_save_error || undefined };
   }
 
   const ACTIONS = {
