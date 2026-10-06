@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, Mail, Calculator } from "lucide-react";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
+import { isEmailOwner } from "@/lib/ownerAccess";
 import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
@@ -30,7 +31,7 @@ const ADMIN_NAV = [
   { label: "Research Queue", to: "/research-queue", icon: Search },
   { label: "Sales Tracker", to: "/sales-tracker", icon: TrendingUp },
   { label: "Messages", to: "/messages", icon: MessageSquare },
-  { label: "Inbox Agents", to: "/inbox-agents", icon: Mail },
+  { label: "Inbox Agents", to: "/inbox-agents", icon: Mail, emailOwnerOnly: true },
   { label: "Unlinked Records", to: "/admin/unlinked", icon: Unlink },
   { label: "ProBuild Daily", to: "/admin/probuild-daily", icon: FileText },
   { label: "Match Debug", to: "/match-debug", icon: Bug },
@@ -71,9 +72,10 @@ export default function MobileBottomNav({ user }) {
   const isSecondaryActive = (to) => pathname === to;
   const quotesOnly = isWindowQuotesOnly(user);
   const owner = isAgentCenterOwner(user);
+  const emailOwner = isEmailOwner(user);
   const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV;
   const visibleSecondary = quotesOnly ? SECONDARY_NAV.filter((s) => s.to === "/brands-specs" || s.to === "/summit") : SECONDARY_NAV.filter((s) => !s.ownerOnly || owner);
-  const visibleAdmin = owner && !quotesOnly ? ADMIN_NAV : [];
+  const visibleAdmin = owner && !quotesOnly ? ADMIN_NAV.filter((item) => !item.emailOwnerOnly || emailOwner) : [];
   const moreActive = [...visibleSecondary, ...visibleAdmin].some((s) => isSecondaryActive(s.to));
   const showMore = visibleSecondary.length + visibleAdmin.length > 0;
 
