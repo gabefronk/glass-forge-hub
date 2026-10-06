@@ -15,8 +15,14 @@ export default function JobUpcomingCard({ jobId, refreshKey = 0 }) {
     setState({ loading: true, error: "", events: [] });
     (async () => {
       try {
-        const res = await base44.functions.invoke("jobCalendar", { action: "read_upcoming", job_id: jobId });
+        // Bound the wait so the card never spins forever. The scoped read normally
+        // returns in a few seconds; if the call stalls (cold start, network drop),
+        // the timeout surfaces a visible error instead of an endless spinner.
+        const invoke = base44.functions.invoke("jobCalendar", { action: "read_upcoming", job_id: jobId });
+        const timeout = new Promise((resolve) => setTimeout(() => resolve({ __timeout: true }), 20000));
+        const res = await Promise.race([invoke, timeout]);
         if (!live) return;
+        if (res && res.__timeout) { setState({ loading: false, error: safeError("job_calendar_failed") + " The crew calendar took too long to respond. Retry by reopening this job.", events: [] }); return; }
         const d = res?.data || {};
         if (d.error) setState({ loading: false, error: safeError(d.error), events: [] });
         else setState({ loading: false, error: "", events: d.events || [] });
