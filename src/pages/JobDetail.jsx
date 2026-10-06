@@ -14,6 +14,7 @@ import { useJobContacts } from "@/hooks/use-job-contacts";
 import { loadJobGroup, loadJobActivity, jobEventsAndEvidence, reportsForJob, loadUniqueLegacyNames } from "@/lib/jobGroupData";
 import DuplicateJobNotice from "@/components/jobs/DuplicateJobNotice";
 import MergedJobBanner from "@/components/jobs/MergedJobBanner";
+import CombinedRecordsPanel from "@/components/jobs/CombinedRecordsPanel";
 import JobMoneyPanel from "@/components/jobs/JobMoneyPanel";
 import JobLinkedRecords from "@/components/jobs/JobLinkedRecords";
 import JobMessageThreads from "@/components/jobs/JobMessageThreads";
@@ -218,6 +219,7 @@ export default function JobDetail() {
 
           <MergedJobBanner job={job} onReversed={() => loadAll()} />
           <DuplicateJobNotice group={group} currentId={id} />
+          {user?.role === "admin" ? <CombinedRecordsPanel job={job} onChanged={() => loadAll({ quiet: true })} /> : null}
 
           <div id="add-note" className="scroll-mt-4">
             <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>

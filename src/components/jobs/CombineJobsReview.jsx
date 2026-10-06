@@ -386,8 +386,9 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
                   <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-[12.5px]" style={{ color: MUTED }}>
                     <li>Each calendar visit re-links to the surviving job and stays its own dated visit — visits are not merged into one. Field reports and their photos, notes and their attachments, invoice lines, contact links, job budgets and Probuild project links re-link to it too.</li>
                     <li>Visit PO/OE ticket refs move with each visit.</li>
-                    <li>Install budgets, setup sheets, service items and job knowledge do NOT re-link — they stay on the tucked-away record and resolve through it.</li>
-                    <li>The tucked-away record's Drive job-folder link is not adopted (the survivor keeps its own; a different folder is recorded in a note).</li>
+                    <li>A record that still has service items, setup sheets, job knowledge, orders, handoffs, to-dos or message threads is NOT combined — nothing moves and it stays visible, so that history is never hidden.</li>
+                    <li>Drive folder files are not moved. The survivor keeps its own folder; a different folder stays linked in a note and under Combined records.</li>
+                    <li>Anything linked to a record during the combine is moved too; if it can't be, that record stays visible.</li>
                     <li>PO numbers and aliases are added to the survivor.</li>
                     <li>Where they disagree, the survivor's value wins; the other value is saved in a note.</li>
                     <li>Invoice marks, fees and statuses are never changed.</li>
@@ -441,7 +442,7 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
               )}
               <ul className="m-0 space-y-1.5">
                 {result.results?.map((r) => {
-                  const isPartial = !r.ok && r.partial;
+                  const isPartial = !r.ok && (r.partial || r.blocked);
                   const bg = r.ok ? "#f4f8f5" : isPartial ? "#fff3df" : "#fcedec";
                   const bd = r.ok ? "#d6e8de" : isPartial ? "#f0dba8" : "#f0c9c5";
                   const ic = r.ok ? "#166447" : isPartial ? "#89511a" : "#a43432";
@@ -452,6 +453,8 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
                         <b style={{ color: INK }}>{sanitizeText(r.source_job_name || r.source_job_id)}</b>
                         {r.ok ? (
                           <span style={{ color: MUTED }}> — moved {r.relocated_link_counts?.fee_lines || 0} lines, {r.relocated_link_counts?.calendar_events || 0} visits, {r.relocated_link_counts?.field_reports || 0} reports{r.conflict_note_recorded ? " · a conflict note was added" : r.conflict_note_error ? ` · ${r.conflict_note_error}` : ""}.</span>
+                        ) : r.blocked ? (
+                          <span style={{ color: "#89511a" }}> — not combined, left visible. {r.error}</span>
                         ) : isPartial ? (
                           <span style={{ color: "#89511a" }}> — partially moved {r.relocated_link_counts?.fee_lines || 0} lines but was NOT hidden (some records failed to move). {[(r.relocate_errors || []).join("; "), r.fields_error, r.mark_error].filter(Boolean).join(" · ") || "See the undo log on this job."} Reverse its log to put the moved records back.</span>
                         ) : (

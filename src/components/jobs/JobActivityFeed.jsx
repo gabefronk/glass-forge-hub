@@ -7,7 +7,7 @@ import { scopeText, parseScopeNotes, scopeIsEmpty } from "@/lib/jobWorkspace";
 import ScopeNotes from "./ScopeNotes";
 import { eventKind } from "@/lib/calendarModel";
 import { denverDate } from "../../../base44/shared/billingCore.js";
-import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote, fileLabel } from "@/lib/jobHistory";
+import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote, fileLabel, ticketsByEvent, visitTickets } from "@/lib/jobHistory";
 import JobNoteEntry from "./JobNoteEntry";
 import JobNoteForm from "./JobNoteForm";
 import { DayCard, MonthRule, UpNextCard, VisitEntry, StageOnlyEntry } from "./VisitDayCard";
@@ -240,6 +240,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   useEffect(() => { if (openFormKey) setShowForm(true); }, [openFormKey]);
 
   const entries = useMemo(() => buildJobHistory({ events, rows, notes, fieldReports, files }), [events, rows, notes, fieldReports, files]);
+  const tickets = useMemo(() => ticketsByEvent(rows), [rows]);
   const counts = useMemo(() => historyCounts(entries), [entries]);
   const stageDays = ledger && progress?.byDate ? progress.byDate : null;
   const milestoneCount = stageDays ? Object.keys(stageDays).length : 0;
@@ -355,7 +356,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                 {groupFiles(items).map((it, i, dayItems) => {
                   if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
                   if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
-                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today, { reports: it.reports, photoNote: dayItems.some((x) => x.kind === "note" && x.note?.job_id && (x.note.attachments?.length || 0) > 0) })} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} />;
+                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today, { reports: it.reports, photoNote: dayItems.some((x) => x.kind === "note" && x.note?.job_id && (x.note.attachments?.length || 0) > 0) })} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} tickets={visitTickets(tickets, it.ev)} />;
                   if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
                   if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                   if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;

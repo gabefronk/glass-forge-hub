@@ -181,7 +181,9 @@ export default function CombineJobsDialog({ job, onClose, onDone }) {
         target_job_id: survivor.id,
       });
       const r = res?.data;
-      if (r?.error) throw new Error(r.error);
+      // A merge result (ok true/false) is shown honestly on the done step; only a
+      // request-level error (no result) goes back to confirm.
+      if (!r || typeof r.ok !== "boolean") throw new Error(r?.error || "Combine failed.");
       setResult(r);
       setStep("done");
     } catch (e) {
@@ -319,8 +321,9 @@ export default function CombineJobsDialog({ job, onClose, onDone }) {
                 <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-[12.5px]" style={{ color: MUTED }}>
                   <li>Each calendar visit re-links to the surviving job and stays its own dated visit — visits are not merged into one. Field reports and their photos, notes and their attachments, invoice lines, contact links, job budgets and Probuild project links re-link to it too.</li>
                   <li>Visit PO/OE ticket refs move with each visit.</li>
-                  <li>Install budgets, setup sheets, service items and job knowledge do NOT re-link — they stay on the tucked-away record and resolve through it.</li>
-                  <li>The tucked-away record's Drive job-folder link is not adopted (the survivor keeps its own; a different folder is recorded in a note).</li>
+                  <li>If the record still has service items, setup sheets, job knowledge, orders, handoffs, to-dos or message threads, it is NOT combined — nothing moves and it stays visible, so that history is never hidden.</li>
+                  <li>Drive folder files are not moved. The survivor keeps its own folder; a different folder stays linked in a note and under Combined records.</li>
+                  <li>Anything linked to the record during the combine is moved too; if it can't be, the record stays visible.</li>
                   <li>PO numbers and aliases are added to the survivor.</li>
                   <li>Where the two disagree, the survivor's value wins; the other value is saved in a note.</li>
                   <li>Invoice marks, fees and statuses are never changed.</li>
@@ -343,7 +346,22 @@ export default function CombineJobsDialog({ job, onClose, onDone }) {
             </div>
           )}
 
-          {step === "done" && result && (
+          {step === "done" && result && !result.ok && (
+            <div className="space-y-3">
+              <div className="rounded-[10px] px-3 py-3 text-[13.5px]" style={{ backgroundColor: "#fff3df", border: "1px solid #f0dba8", color: "#89511a" }}>
+                <p className="m-0 font-semibold">{result.hidden ? "Combined, with a warning." : `${sanitizeText(mergedAway.canonical_name)} was not fully combined and is still visible.`}</p>
+                <p className="m-0 mt-1 text-[12.5px]">{result.error || "See Combined records on the job page."}</p>
+                {result.merge_log_id ? <p className="m-0 mt-1 font-mono text-[11px]">log {result.merge_log_id} · undo it from Combined records on either job</p> : null}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={finish} className="inline-flex h-[40px] items-center gap-1.5 rounded-[10px] px-4 text-[13.5px] font-semibold text-white" style={{ backgroundColor: TEAL }}>
+                  <Check className="h-4 w-4" />Open the survivor
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === "done" && result?.ok && (
             <div className="space-y-3">
               <div className="rounded-[10px] px-3 py-3 text-[13.5px]" style={{ backgroundColor: "#eaf5ee", border: "1px solid #c7e4d2", color: "#166447" }}>
                 <p className="m-0 font-semibold">{sanitizeText(survivor.canonical_name)} now holds everything from {sanitizeText(mergedAway.canonical_name)}.</p>
