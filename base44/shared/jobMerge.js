@@ -170,11 +170,20 @@ const totalIds = (s) => Object.values(countIds(s)).reduce((a, b) => a + b, 0);
 // every source so pacing spans the whole request, not per source.
 export function makePacedReader(base44, {
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+  clock = () => Date.now(),
   maxRetries = 3,
   baseBackoffMs = 400,
   capMs = 4000,
+  minIntervalMs = 200,
+  // Base44 backend functions cap at 5min execution (verified: docs.base44.com).
+  // 180s leaves room for the writes/field-merge after the read scans while still
+  // bounding total read+backoff well under the hard limit.
+  deadlineMs = 180_000,
 } = {}) {
   let chain = Promise.resolve();
+  let lastStart = null;
+  let firstStart = 0;
+  let exhausted = false;
   const isRateLimit = (e) => {
     const s = String(e?.status ?? e?.statusCode ?? "");
     const m = String(e?.message ?? e ?? "").toLowerCase();
@@ -186,8 +195,23 @@ export function makePacedReader(base44, {
     return Number.isFinite(n) && n > 0 ? Math.min(n * 1000, capMs) : null;
   };
   const runOnce = async (entity, query, opts) => {
+    if (exhausted) throw new Error("read budget exhausted");
     let attempt = 0;
     for (;;) {
+      const t = clock();
+      if (!firstStart) firstStart = t;
+      if (t - firstStart > deadlineMs) {
+        exhausted = true;
+        throw new Error(`read budget exhausted after ${Math.round((t - firstStart) / 1000)}s of reads/backoff`);
+      }
+      // Real spacing between read STARTS (not just serialization): wait so the
+      // gap from the previous start is at least minIntervalMs. Serialization alone
+      // does not prevent a burst when reads are fast.
+      if (lastStart !== null) {
+        const since = t - lastStart;
+        if (since < minIntervalMs) await sleep(minIntervalMs - since);
+      }
+      lastStart = clock();
       try {
         return await base44.asServiceRole.entities[entity].filter(query, opts);
       } catch (e) {
@@ -198,9 +222,11 @@ export function makePacedReader(base44, {
       }
     }
   };
-  // Serialize: each call waits for the previous to settle before running. The
-  // returned promise resolves to this call's own result; the chain is healed so a
-  // failure never poisons the next call.
+  // Serialize + space: each call waits for the previous to settle, then enforces
+  // minIntervalMs before its own start. The returned promise resolves to this
+  // call's own result; the chain is healed so a failure never poisons the next.
+  // Once the deadline is crossed, every subsequent scan throws immediately so the
+  // caller fails closed (source stays visible) instead of spending past 5min.
   return (entity, query, opts) => {
     const p = chain.then(() => runOnce(entity, query, opts), () => runOnce(entity, query, opts));
     chain = p.then(() => {}, () => {});
@@ -222,11 +248,14 @@ export async function planRelocateLinks(base44, fromJobId, read) {
   for (const { key, entity } of LINK_ENTITIES) {
     try {
       let cursor;
+      const seenCursors = new Set();
       for (;;) {
         const page = await doRead(entity, { job_id: fromJobId }, { fields: ["id"], limit: 500, cursor });
         plan[key].push(...(page.items || []).map((r) => r.id));
         if (!page.has_more) break;
         if (!page.next_cursor) { errors.push(`${entity}: pagination truncated (more records exist but no cursor was returned)`); break; }
+        if (seenCursors.has(page.next_cursor)) { errors.push(`${entity}: pagination stalled (cursor repeated)`); break; }
+        seenCursors.add(page.next_cursor);
         cursor = page.next_cursor;
       }
     } catch (e) {

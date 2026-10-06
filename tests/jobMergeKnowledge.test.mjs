@@ -128,30 +128,30 @@ test("undo moves the 26 knowledge + 1 library project back to the source; surviv
 });
 
 test("transient rate limit recovers: paced reader retries a 429 then succeeds; combine completes", async () => {
-  const sleeps = [];
-  let throws = 0;
+  let threw = 0;
   const db = makeDb({ Jobs: jobs(), JobKnowledge: knowledgeRows("S") }, {
-    filter(name) { if (name === "JobKnowledge" && throws++ < 1) { const e = new Error("Too many requests"); e.status = 429; throw e; } },
+    filter(name) { if (name === "JobKnowledge" && threw < 1) { threw++; const e = new Error("Too many requests"); e.status = 429; throw e; } },
   });
-  const read = makePacedReader(db.base44, { sleep: () => { sleeps.push(1); }, baseBackoffMs: 1, capMs: 2 });
+  let now = 0;
+  const read = makePacedReader(db.base44, { sleep: (ms) => { now += ms; }, clock: () => now, baseBackoffMs: 1, capMs: 2, minIntervalMs: 0 });
   const r = await merge(db, { read });
   assert.equal(r.ok, true);
   assert.equal(r.relocated_link_counts.job_knowledge, 26);
-  assert.equal(sleeps.length, 1, "backed off once then succeeded");
+  assert.equal(threw, 1, "exactly one 429, which the reader retried past");
 });
 
-test("exhausted rate limit prevents hiding: source stays visible, nothing moved", async () => {
-  const sleeps = [];
+test("exhausted read budget fails closed: source stays visible, nothing moved, time bounded", async () => {
   const db = makeDb({ Jobs: jobs(), JobKnowledge: knowledgeRows("S") }, {
     filter(name) { if (name === "JobKnowledge") { const e = new Error("Too many requests"); e.status = 429; throw e; } },
   });
-  const read = makePacedReader(db.base44, { sleep: () => { sleeps.push(1); }, maxRetries: 2, baseBackoffMs: 1, capMs: 2 });
+  let now = 0;
+  const read = makePacedReader(db.base44, { sleep: (ms) => { now += ms; }, clock: () => now, maxRetries: 10, baseBackoffMs: 40, capMs: 40, minIntervalMs: 0, deadlineMs: 100 });
   const r = await merge(db, { read });
   assert.equal(r.ok, false);
   assert.equal(r.hidden, false);
   assert.equal(db.tables.Jobs.get("S").merged_into, undefined);
   assert.deepEqual(db.onJob("JobKnowledge", "S").sort(), knowledgeRows("S").map((k) => k.id).sort(), "nothing moved");
-  assert.equal(sleeps.length, 2, "retried up to maxRetries then failed closed");
+  assert.ok(now < 500, `bounded clock ${now}ms < 500ms`);
   assert.match(r.error, /Could not list this record's links/);
 });
 
@@ -165,20 +165,40 @@ test("pagination >500 without a cursor fails closed instead of looping forever",
   assert.match(r.error, /pagination truncated/);
 });
 
-test("multi-source pacing: one shared reader serializes all read scans across sources", async () => {
-  let inFlight = 0, maxInFlight = 0;
-  const db = makeDb({ Jobs: jobs(), JobKnowledge: knowledgeRows("S") }, {
-    filter() { inFlight++; maxInFlight = Math.max(maxInFlight, inFlight); },
-  });
-  // also wrap filter to decrement after settle
-  const origFilter = db.base44.asServiceRole.entities.JobKnowledge.filter;
-  db.base44.asServiceRole.entities.JobKnowledge.filter = async function (...a) {
-    try { return await origFilter.apply(this, a); } finally { inFlight--; }
+test("a repeated cursor fails closed instead of looping forever", async () => {
+  const db = makeDb({ Jobs: jobs(), JobKnowledge: Array.from({ length: 600 }, (_, i) => ({ id: `k${i}`, job_id: "S" })) });
+  const orig = db.base44.asServiceRole.entities.JobKnowledge.filter;
+  let calls = 0;
+  db.base44.asServiceRole.entities.JobKnowledge.filter = async function (q, o) {
+    calls++;
+    const page = await orig.call(this, q, o);
+    if (calls === 1) return { items: page.items, has_more: true, next_cursor: "CUR" };
+    return { items: [], has_more: true, next_cursor: "CUR" };
   };
-  const read = makePacedReader(db.base44, { sleep: () => {} });
-  // fire many reads concurrently; the reader must serialize them
-  await Promise.all(Array.from({ length: 20 }, () => read("JobKnowledge", { job_id: "S" }, { fields: ["id"], limit: 500 })));
+  const r = await merge(db);
+  assert.equal(r.ok, false);
+  assert.equal(r.hidden, false);
+  assert.equal(db.tables.Jobs.get("S").merged_into, undefined);
+  assert.match(r.error, /pagination stalled/);
+});
+
+test("multi-source pacing: one shared reader serializes AND spaces read starts across sources", async () => {
+  let now = 0;
+  const clock = () => now;
+  const sleep = (ms) => { now += ms; };
+  let inFlight = 0, maxInFlight = 0;
+  const starts = [];
+  const db = makeDb({ Jobs: jobs(), JobKnowledge: knowledgeRows("S") });
+  const orig = db.base44.asServiceRole.entities.JobKnowledge.filter;
+  db.base44.asServiceRole.entities.JobKnowledge.filter = async function (...a) {
+    inFlight++; maxInFlight = Math.max(maxInFlight, inFlight); starts.push(now);
+    try { return await orig.apply(this, a); } finally { inFlight--; }
+  };
+  const read = makePacedReader(db.base44, { sleep, clock, minIntervalMs: 200 });
+  await Promise.all(Array.from({ length: 5 }, () => read("JobKnowledge", { job_id: "S" }, { fields: ["id"], limit: 500 })));
   assert.equal(maxInFlight, 1, "reads are serial, never overlapping");
+  const gaps = starts.slice(1).map((s, i) => s - starts[i]);
+  assert.ok(gaps.every((g) => g >= 200), `read starts spaced >= 200ms: ${gaps}`);
 });
 
 test("old logs without the new keys stay compatible in movedCounts / movedSummary", () => {
