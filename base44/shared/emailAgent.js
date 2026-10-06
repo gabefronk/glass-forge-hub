@@ -477,11 +477,11 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       try { if (T.shouldArchive(cur, mailbox)) { Object.assign(patch, await archiveInProvider(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; counts.archived++; } } catch (e) { warn(`archive failed: ${errText(e)}`); }
       try { if (T.shouldDraft(cur, mailbox)) { Object.assign(patch, await generateDraft(ctx, mailbox, provider, cur, t.messages || [], jobFacts)); counts.drafted++; } } catch (e) { warn(`draft failed: ${errText(e)}`); }
       // Tax filing: only a Wasatch Windows ACH paid confirmation in the owner mailbox (see
-      // wasatchAch.js). Filed to Drive automatically; a failure never fails the sync. While the
-      // temporary HOLD is on, a match is reported in the run warnings and nothing is written.
+      // wasatchAch.js). Filed to Drive automatically; a failure never fails the sync. An explicit
+      // taxFilingEnabled=false override reports the match in run warnings and writes nothing.
       try {
         const hit = findWasatchAchPaid(mailbox, t.messages);
-        if (hit && !taxFilingEnabled) warn(`tax filing on hold (vendor mapping unconfirmed): ${hit.fields.reference} not filed`);
+        if (hit && !taxFilingEnabled) warn(`tax filing disabled for this run: ${hit.fields.reference} not filed`);
         else if (hit && cur.tax_save_state !== 'saved') {
           Object.assign(patch, hit.fields); cur = { ...cur, ...hit.fields };
           await api.EmailRelay.update(row.id, hit.fields);
@@ -725,7 +725,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     if (!ctx.user) fail(401, 'Sign in required.');
     if (ctx.user.role !== 'admin') fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
-    if (!taxFilingEnabled) fail(409, 'Tax filing is on hold until the Wasatch vendor mapping is confirmed.');
+    if (!taxFilingEnabled) fail(409, 'Tax filing is disabled for this run.');
     const provider = await connect(ctx, mailbox);
     const hit = findWasatchAchPaid(mailbox, await fetchThreadMessages(provider, mailbox, row.thread_id));
     if (!hit) fail(409, 'Not a Wasatch Windows ACH payment confirmation.');

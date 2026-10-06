@@ -22,10 +22,11 @@ const AMOUNT_RE = /\b(?:amount\s+paid|total\s+paid|payment\s+amount|amount|total
 // still due means it is not a full payment confirmation.
 const AMOUNT_DUE_RE = /\bamount\s+due\s*:?\s*\$\s*([\d,]+(?:\.\d+)?)/i;
 
-// HOLD: the Helcim merchant "Wasatch windows llc" is a candidate alias for the vendor; the
-// mapping is not confirmed yet. Until it is, nothing is filed automatically or by the admin
-// action (the matcher still runs in tests via the handler's taxFilingEnabled option).
-export const WASATCH_FILING_CONFIRMED = false;
+// Filing confirmed (2026-10-06): the Helcim merchant "Wasatch windows llc" is an accepted alias
+// for Wasatch Windows LLC. Wasatch ACH paid confirmations in the owner mailbox are filed to
+// Drive automatically. An explicit taxFilingEnabled=false override (used in tests) holds filing
+// and only reports the match in run warnings; it never writes or deletes anything.
+export const WASATCH_FILING_CONFIRMED = true;
 
 const denverYmd = (iso) => {
   const t = Date.parse(iso || '');
