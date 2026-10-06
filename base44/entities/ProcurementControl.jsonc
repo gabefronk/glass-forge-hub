@@ -1,0 +1,44 @@
+{
+  "name": "ProcurementControl",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "default": 0
+    },
+    "lock_token": {
+      "type": "string",
+      "default": ""
+    },
+    "request_key": {
+      "type": "string",
+      "default": ""
+    },
+    "locked_at": {
+      "type": "string",
+      "default": ""
+    },
+    "last_number": {
+      "type": "integer",
+      "default": 0
+    },
+    "note": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "revision",
+    "lock_token",
+    "last_number"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

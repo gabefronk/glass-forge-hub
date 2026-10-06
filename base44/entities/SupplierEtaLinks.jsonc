@@ -1,0 +1,57 @@
+{
+  "name": "SupplierEtaLinks",
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string"
+    },
+    "vendor": {
+      "type": "string"
+    },
+    "token_hash": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "created_by_email": {
+      "type": "string"
+    },
+    "issued_at": {
+      "type": "string"
+    },
+    "revoked_at": {
+      "type": "string"
+    },
+    "orders": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "lock_token": {
+      "type": "string"
+    },
+    "lock_until": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "token_hash",
+    "enabled",
+    "expires_at",
+    "orders"
+  ],
+  "rls": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false
+  }
+}
