@@ -67,6 +67,51 @@ function JobCounts({ counts }) {
   );
 }
 
+// Real history = visits + reports + notes + invoice lines (the already-loaded
+// counts). This is the primary survivor signal — NOT PO count.
+function realHistoryCount(c) {
+  return ((c?.events || 0) + (c?.reports || 0) + (c?.notes || 0) + (c?.fees || 0));
+}
+
+// Existing data richness from the loaded job record (identity + folder + stage).
+// A tiebreaker only, never the primary signal.
+function dataRichness(job) {
+  return (job?.po_numbers?.length || 0)
+    + (job?.oe_numbers?.length || 0)
+    + (job?.aliases?.length || 0)
+    + (job?.address ? 1 : 0)
+    + (job?.builder ? 1 : 0)
+    + (job?.drive_job_folder_id ? 1 : 0)
+    + (job?.stage ? 1 : 0)
+    + (job?.customer_name ? 1 : 0)
+    + (job?.source_window_quote_id ? 1 : 0);
+}
+
+// Rank jobs to pick the survivor. Tier 1 real history (desc) → tier 2 attached
+// history photo count, only when photos were actually fetched (desc) → tier 3
+// data richness (desc) → tier 4 stable id (asc). Returns { ranked, top, tied }
+// where tied is true when the top two share the same real-history count.
+function rankSurvivor(jobs, counts, photos, photosAvailable) {
+  const scored = jobs.map((j) => {
+    const c = counts[j.id] || {};
+    return {
+      job: j,
+      rh: realHistoryCount(c),
+      ph: photosAvailable ? (photos[j.id] || 0) : 0,
+      dr: dataRichness(j),
+      id: j.id,
+    };
+  });
+  scored.sort((a, b) =>
+    b.rh - a.rh ||
+    b.ph - a.ph ||
+    b.dr - a.dr ||
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  );
+  const tied = scored.length >= 2 && scored[0].rh === scored[1].rh;
+  return { ranked: scored, top: scored[0] || null, tied };
+}
+
 function JobRow({ job, counts, isSurvivor, anySurvivor, onPick, disabled }) {
   const total = COUNT_ENTITIES.reduce((s, { key }) => s + ((counts && counts[key]) || 0), 0);
   return (
@@ -114,6 +159,13 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const loadVersion = useRef(0);
+  const userPicked = useRef(false);
+  const [winnerInfo, setWinnerInfo] = useState(null);
+
+  const pickSurvivor = (id) => {
+    userPicked.current = true;
+    setSurvivorId(id);
+  };
 
   // Load all selected jobs (fresh, by id) + per-job counts.
   useEffect(() => {
@@ -121,6 +173,9 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
     let active = true;
     setLoading(true);
     setError("");
+    userPicked.current = false;
+    setSurvivorId(null);
+    setWinnerInfo(null);
     (async () => {
       try {
         const fetched = await Promise.all(
@@ -156,6 +211,34 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
         for (const id of ids) merged[id] = {};
         for (const [key, m] of entries) for (const id of ids) merged[id][key] = m[id] || 0;
         setCounts(merged);
+
+        // Attempt a scoped photo count (FieldReports.photo_urls — the main
+        // jobsite photo source in History). Bounded by the reports already
+        // counted, fields-only, single page. If it fails, photos are not
+        // counted and the ranking skips the photo tier honestly.
+        let photos = {};
+        let photosAvailable = false;
+        try {
+          const fr = await base44.entities.FieldReports.filter(
+            { job_id: { $in: ids } },
+            { fields: ["job_id", "photo_urls"], limit: 500 }
+          );
+          const frItems = fr.items || fr;
+          for (const r of frItems) {
+            const n = Array.isArray(r.photo_urls) ? r.photo_urls.length : 0;
+            if (r.job_id && n) photos[r.job_id] = (photos[r.job_id] || 0) + n;
+          }
+          photosAvailable = true;
+        } catch (e) {
+          photosAvailable = false;
+        }
+        if (!active || version !== loadVersion.current) return;
+
+        // Auto-pick the survivor with the most real history. The user can
+        // still tap another job to override; userPicked guards that.
+        const { top, tied } = rankSurvivor(eligible, merged, photos, photosAvailable);
+        if (!userPicked.current && top) setSurvivorId(top.job.id);
+        setWinnerInfo({ top, tied, photosAvailable, photos });
       } catch (e) {
         if (active) setError(e?.message || "Could not load the selected jobs.");
       } finally {
@@ -168,6 +251,18 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
   const warnings = useMemo(() => (jobs.length >= 2 ? daybreakWarnings(jobs) : []), [jobs]);
   const survivor = jobs.find((j) => j.id === survivorId) || null;
   const mergedAway = survivor ? jobs.filter((j) => j.id !== survivorId) : [];
+
+  const winnerBanner = useMemo(() => {
+    if (!winnerInfo?.top) return null;
+    const w = winnerInfo.top;
+    const wc = counts[w.job.id] || {};
+    const tieNote = winnerInfo.tied
+      ? winnerInfo.photosAvailable
+        ? `History is tied at ${w.rh}. ${sanitizeText(w.job.canonical_name)} wins on photos (${winnerInfo.photos[w.job.id] || 0}).`
+        : `History is tied at ${w.rh}. ${sanitizeText(w.job.canonical_name)} wins on data richness.`
+      : `${sanitizeText(w.job.canonical_name)} has the most history, so it stays.`;
+    return { tieNote, wc, w };
+  }, [winnerInfo, counts]);
 
   const combine = async () => {
     if (!survivor || mergedAway.length === 0) return;
@@ -257,6 +352,12 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
                   <p className="m-0 text-[13px]" style={{ color: MUTED }}>
                     These are duplicate job rows for the same house, not duplicate visits. Tap the one record that stays. Each calendar visit, field report, photo, note and visit PO/OE keeps its own date and re-links to the surviving job so its History shows them all together. The other job rows are tucked away (hidden from lists, not deleted).
                   </p>
+                  {winnerBanner && (
+                    <div className="rounded-[10px] px-3 py-2.5 text-[12.5px] leading-[18px]" style={{ backgroundColor: "#eaf5ee", border: "1px solid #c7e4d2", color: "#166447" }}>
+                      <span className="font-semibold">{winnerBanner.tieNote}</span>
+                      <span style={{ color: "#3b5a3a" }}> {winnerBanner.w.rh} history: {winnerBanner.wc.events || 0} visits, {winnerBanner.wc.reports || 0} reports, {winnerBanner.wc.notes || 0} notes, {winnerBanner.wc.fees || 0} lines. Tap another record to override.</span>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     {jobs.map((j) => (
                       <JobRow
@@ -265,7 +366,7 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
                         counts={counts[j.id]}
                         isSurvivor={survivorId === j.id}
                         anySurvivor={!!survivorId}
-                        onPick={() => setSurvivorId(j.id)}
+                        onPick={() => pickSurvivor(j.id)}
                         disabled={step === "confirm"}
                       />
                     ))}
