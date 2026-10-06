@@ -16,6 +16,8 @@ import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import JobMatchWarningDialog from "@/components/jobs/JobMatchWarningDialog";
 import { createWizardBudgetSaver, wizardRequestKey } from "@/lib/newJobBudgetDraft";
 import NewJobOwnerGate from "@/components/new-job/NewJobOwnerGate";
+import { createJobGuard } from "@/lib/newJobCreateGuard";
+import UncertainJobCreate from "@/components/new-job/UncertainJobCreate";
 
 const SALES_TAX_RATE = 0.0745;
 const newWizardId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -147,6 +149,9 @@ export default function NewJobBuilder() {
   const [budgetError, setBudgetError] = useState("");
   const [wizardId, setWizardId] = useState(newWizardId);
   const creatingRef = useRef(false);
+  const [jobUncertain, setJobUncertain] = useState(null);
+  const jobGuardRef = useRef(null);
+  if (!jobGuardRef.current) jobGuardRef.current = createJobGuard({ api: base44.entities.Jobs });
   const saverRef = useRef(null);
   if (!saverRef.current) saverRef.current = createWizardBudgetSaver({ api: base44.entities.JobBudgets, getUser: () => base44.auth.me(), isOwner: isAgentCenterOwner });
   const set = (patch) => setS(prev => ({ ...prev, ...patch }));
@@ -230,6 +235,7 @@ export default function NewJobBuilder() {
     const err = validateRequired();
     if (err) { setFormError(err); return; }
     if (created?.jobId) { setFormError("This job was already created. Open it instead of submitting twice."); return; }
+    if (jobUncertain) return;
     if (creatingRef.current) return;
     creatingRef.current = true;
     setCreating(true); setFormError(""); setBudgetState("pending"); setBudgetError("");
@@ -241,13 +247,14 @@ export default function NewJobBuilder() {
         stage: "sold",
         ...(s.windowPO.trim() ? { po_numbers: [s.windowPO.trim()] } : {}),
       };
-      const job = await base44.entities.Jobs.create(jobPayload);
-      setCreated({ jobId: job.id });
+      const r = await jobGuardRef.current(jobPayload);
+      if (r.state === "rejected") { setFormError(r.error); return; }
+      if (r.state === "uncertain") { setJobUncertain({ error: r.error, matches: r.matches }); return; }
+      if (r.state !== "created") return;
+      setCreated({ jobId: r.job.id });
       // Cost / sale go to a JobBudgets draft (admin-only RLS), keyed to this
       // wizard session so a retry reconciles instead of duplicating.
-      if (cost > 0 || sale > 0) await saveBudget(job.id);
-    } catch (e) {
-      setFormError(e?.response?.data?.error || e?.message || "The job could not be created. Please try again.");
+      if (cost > 0 || sale > 0) await saveBudget(r.job.id);
     } finally { creatingRef.current = false; setCreating(false); }
   }
 
@@ -530,10 +537,11 @@ export default function NewJobBuilder() {
           </div>
 
           {formError && <p role="alert" className="mt-3 rounded-[10px] border border-red-200 bg-red-50 p-3 text-[13px] text-red-800">{formError}</p>}
+          {jobUncertain && <UncertainJobCreate error={jobUncertain.error} matches={jobUncertain.matches} />}
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5">
             <button className={buttonClass} style={secondaryStyle} onClick={() => setStep(STEPS.length - 1)}><ArrowLeft size={14} />Back to money</button>
-            <button className={buttonClass} style={primaryStyle} disabled={creating || !!created?.jobId} onClick={handleCreate}>
+            <button className={buttonClass} style={primaryStyle} disabled={creating || !!created?.jobId || !!jobUncertain} onClick={handleCreate}>
               {creating ? <><Loader2 size={14} className="animate-spin" />Creating…</> : <><Check size={14} />Create job</>}
             </button>
           </div>
@@ -560,7 +568,7 @@ export default function NewJobBuilder() {
           {(cost > 0 || sale > 0) && ["failed", "uncertain", "conflict"].includes(budgetState) && (
             <div className="mt-2 rounded-[10px] px-3 py-2 text-[12px]" style={{ backgroundColor: "#fcedec", color: "#a43432", border: "1px solid #f0c9c5" }}>
               {budgetState === "failed" && <div>The job was created, but the draft budget was not saved: {budgetError || "unknown error"}</div>}
-              {budgetState === "uncertain" && <div>The job was created, but we could not confirm whether the draft budget saved{budgetError ? ` (${budgetError})` : ""}. Checking again reads current records first and only creates the budget if none exists.</div>}
+              {budgetState === "uncertain" && <div>The job was created, but we could not confirm whether the draft budget saved{budgetError ? ` (${budgetError})` : ""}. Check again only looks for it; it never creates a second budget. If it still isn't found, open the job's budgets and add it by hand.</div>}
               {budgetState === "conflict" && <div>The job was created. {budgetError} Review them on the budget page; nothing new was created.</div>}
               <div className="mt-1">Do not create the job again.</div>
               {budgetState !== "conflict" && (
