@@ -150,7 +150,9 @@ function walkParts(part, acc) {
   const filename = part.filename || '';
   const body = part.body || {};
   if (filename && (body.attachmentId || body.size)) {
-    acc.attachments.push({ name: filename, mime: mime || 'application/octet-stream', size: Number(body.size || 0), attachment_id: body.attachmentId || '' });
+    const disposition = header(part.headers, 'Content-Disposition').toLowerCase();
+    const inline = disposition.startsWith('inline') || (!disposition.startsWith('attachment') && !!header(part.headers, 'Content-ID'));
+    acc.attachments.push({ name: filename, mime: mime || 'application/octet-stream', size: Number(body.size || 0), attachment_id: body.attachmentId || '', inline });
   } else if (mime === 'text/plain' && body.data && !acc.plain) {
     acc.plain = decodeBase64Url(body.data);
   } else if (mime === 'text/html' && body.data && !acc.html) {
@@ -215,7 +217,7 @@ export function normalizeGraphMessage(raw, { mailboxAddress = '' } = {}) {
   const cc = (raw?.ccRecipients || []).map(graphAddr).filter((a) => a.email);
   const me = lowerEmail(mailboxAddress);
   const direction = me && from.email === me ? 'outgoing' : 'incoming';
-  const attachments = (raw?.attachments || []).map((a) => ({ name: String(a.name || ''), mime: String(a.contentType || 'application/octet-stream'), size: Number(a.size || 0), attachment_id: String(a.id || '') }));
+  const attachments = (raw?.attachments || []).map((a) => ({ name: String(a.name || ''), mime: String(a.contentType || 'application/octet-stream'), size: Number(a.size || 0), attachment_id: String(a.id || ''), inline: a.isInline === true }));
   const sentAt = raw?.receivedDateTime || raw?.sentDateTime || '';
   return {
     message_id: String(raw?.id || ''),

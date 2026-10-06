@@ -21,7 +21,7 @@ test('gmail: multipart text/plain wins, headers extracted, forwarded account_hin
   assert.equal(m.direction, 'incoming');
   assert.equal(m.sent_at, '2026-09-26T14:00:00.000Z');
   assert.equal(m.has_attachments, true);
-  assert.deepEqual(m.attachments, [{ name: 'lot412-plans.pdf', mime: 'application/pdf', size: 20000, attachment_id: 'att0' }]);
+  assert.deepEqual(m.attachments, [{ name: 'lot412-plans.pdf', mime: 'application/pdf', size: 20000, attachment_id: 'att0', inline: false }]);
   assert.equal(m.web_link, 'https://mail.google.com/mail/u/0/#all/t1');
   assert.match(m.text, /confirm the install for lot 412/);
   assert.doesNotMatch(m.text, /wrote:/, 'quoted reply stripped');

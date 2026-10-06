@@ -14,12 +14,19 @@
 import { findJobs, denverDate } from './jobFinder.js';
 import { normalizeGmailMessage, normalizeGraphMessage, aggregateThread, lowerEmail } from './emailParse.js';
 import * as T from './emailTriage.js';
+import { saveTaxRecord } from './emailTaxDrive.js';
+import { findWasatchAchPaid, WASATCH_FILING_CONFIRMED } from './wasatchAch.js';
 import { createProviderClient, buildRawReply, ProviderError } from './emailProviders.js';
 import { phoneKey } from './contactMatching.js';
 
 export const OWNER_EMAILS = new Set(['gabefronk@gmail.com', 'gabriel.fronk.wd@gmail.com']);
 export const isOwner = (user) => !!user && user.role === 'admin' && OWNER_EMAILS.has(lowerEmail(user.email));
 export const isStaff = (user) => !!user && (user.role === 'admin' || user.role === 'manager');
+// Owner's ruling (2026-10-06): only an admin may read any mailbox — no manager sees any
+// email body, metadata, attachment, draft or tax row. Every disclosing action gates on
+// isAdmin before any service-role or provider read. isStaff is kept only for non-email
+// comparisons; it is no longer the gate on any email-disclosing path.
+export const isAdmin = (user) => !!user && user.role === 'admin';
 export const DEFAULT_SIGNATURE = 'Gabe Fronk\nGlass Forge / YA Windows and Doors';
 export const OWNER_MEMBER_KEY = 'gabriel';
 export const INITIAL_DAYS = 3;
@@ -84,10 +91,12 @@ export function publicMailbox(m) {
   return { id: m.id, key: m.key, address: m.address, display_name: m.display_name, provider: m.provider, visibility: m.visibility || 'managers', enabled: m.enabled !== false, archive_enabled: m.archive_enabled === true, draft_replies: m.draft_replies !== false, auto_archive_categories: m.auto_archive_categories || [], last_synced_at: m.last_synced_at || null, last_error: m.last_error || '', last_run: m.last_run || null };
 }
 
-const canSeeMailbox = (mailbox, user) => (mailbox?.visibility === 'owner' ? isOwner(user) : isStaff(user));
+// canSeeMailbox: owner-only mailboxes stay restricted to the owner emails; every other
+// mailbox (incl. the former 'managers'-visibility YA Outlook) now requires an admin.
+const canSeeMailbox = (mailbox, user) => (mailbox?.visibility === 'owner' ? isOwner(user) : isAdmin(user));
 const withChanges = (row, more) => [...(row.hub_changes || []), ...more].slice(-HUB_CHANGES_CAP);
 
-export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), nowMs = () => Date.now(), budgetMs = 50_000, sleep } = {}) {
+export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetch, now = () => new Date().toISOString(), nowMs = () => Date.now(), budgetMs = 50_000, sleep, taxFilingEnabled = WASATCH_FILING_CONFIRMED } = {}) {
   if (typeof getClient !== 'function') throw new Error('emailAgent: getClient is required');
 
   // ---- shared helpers ------------------------------------------------------------------------
@@ -127,6 +136,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     if (!row) fail(404, 'Entry not found.');
     const mailbox = await mailboxByKey(ctx.api, row.mailbox_key);
     if (!mailbox || !canSeeMailbox(mailbox, ctx.user)) fail(404, 'Entry not found.');
+    if ((row.tax_record || row.owner_only) && ctx.user.role === 'manager') fail(404, 'Entry not found.');
     return { row, mailbox };
   }
 
@@ -270,6 +280,12 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     try { await provider.deleteDraft(row.draft_id); } catch (e) { if (!(e instanceof ProviderError && e.status === 404)) throw e; }
   }
 
+  // ---- tax-record save to Drive -------------------------------------------------------------
+  // Receipt / paid-invoice emails go to Drive/Taxes/<year> (see emailTaxDrive.js for the
+  // identity, lease and unknown-outcome rules). A failure never fails the sync.
+  const saveTax = (ctx, mailbox, provider, row, messages, opts) =>
+    saveTaxRecord({ api: ctx.api, connectors: ctx.connectors, fetchImpl, now }, mailbox, provider, row, messages, opts);
+
   // ---- sync -----------------------------------------------------------------------------------
 
   async function syncMailbox(ctx, mailbox, { fresh = false, max = DEFAULT_MAX } = {}) {
@@ -351,6 +367,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       const latest = fresh_[fresh_.length - 1];
       const hasNewIncoming = fresh_.some((m) => m.direction === 'incoming');
       let patch = { ...agg };
+      patch.owner_only = mailbox.visibility === 'owner';
       if (!prev) {
         patch = { ...patch, status: 'new', priority: 'normal', reply_needed: false, action_items: [], job_candidates: [], todo_ids: [], hub_changes: [], applied: {}, draft_status: 'none', archived: false, triage_pending: true };
       } else {
@@ -459,9 +476,38 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
       try { Object.assign(patch, await labelThread(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; } catch (e) { warn(`label failed: ${errText(e)}`); }
       try { if (T.shouldArchive(cur, mailbox)) { Object.assign(patch, await archiveInProvider(provider, mailbox, cur, t.messages || [])); cur = { ...cur, ...patch }; counts.archived++; } } catch (e) { warn(`archive failed: ${errText(e)}`); }
       try { if (T.shouldDraft(cur, mailbox)) { Object.assign(patch, await generateDraft(ctx, mailbox, provider, cur, t.messages || [], jobFacts)); counts.drafted++; } } catch (e) { warn(`draft failed: ${errText(e)}`); }
+      // Tax filing: only a Wasatch Windows ACH paid confirmation in the owner mailbox (see
+      // wasatchAch.js). Filed to Drive automatically; a failure never fails the sync. An explicit
+      // taxFilingEnabled=false override reports the match in run warnings and writes nothing.
+      try {
+        const hit = findWasatchAchPaid(mailbox, t.messages);
+        if (hit && !taxFilingEnabled) warn(`tax filing disabled for this run: ${hit.fields.reference} not filed`);
+        else if (hit && cur.tax_save_state !== 'saved') {
+          Object.assign(patch, hit.fields); cur = { ...cur, ...hit.fields };
+          await api.EmailRelay.update(row.id, hit.fields);
+          const r = await saveTax(ctx, mailbox, provider, cur, [hit.message]);
+          if (r) { Object.assign(patch, r); cur = { ...cur, ...r }; if (r.tax_save_error) warn(r.tax_save_error); }
+        }
+      } catch (e) { warn(`tax save failed: ${errText(e)}`); patch.tax_save_error = `tax save failed: ${errText(e)}`; }
       if (changes.length) patch.hub_changes = withChanges(row, changes);
       if (Object.keys(patch).length) { try { await api.EmailRelay.update(row.id, patch); } catch (e) { warn(`ledger update failed: ${errText(e)}`); } }
     }
+
+    // Tax retry: matched rows whose doc or attachments are not all saved. The thread is re-read
+    // and must still match; 'unknown' rows are only looked up in Drive, never created again.
+    try {
+      const inRun = new Set(threads.map((t) => t.row.thread_id));
+      const candidates = taxFilingEnabled ? await api.EmailRelay.filter({ mailbox_key: mailbox.key, tax_record: true, tax_save_state: { $ne: 'saved' } }, '-last_message_at', 50) : [];
+      for (const prev of candidates) {
+        if (inRun.has(prev.thread_id) || overBudget()) continue;
+        let hit = null;
+        try { hit = findWasatchAchPaid(mailbox, await fetchThreadMessages(provider, mailbox, prev.thread_id)); } catch (e) { warn(`tax reread failed: ${errText(e)}`); continue; }
+        if (!hit) { warn(`tax retry skipped: ${prev.thread_id} no longer matches`); continue; }
+        const r = await saveTax(ctx, mailbox, provider, prev, [hit.message]);
+        if (r?.tax_save_error) warn(r.tax_save_error);
+        if (r) { try { await api.EmailRelay.update(prev.id, r); } catch (e) { warn(`tax ledger update failed: ${errText(e)}`); } }
+      }
+    } catch (e) { warn(`tax retry scan failed: ${errText(e)}`); }
 
     // Warnings stay in the run record; last_error is only for a failed run.
     return finish('ok', '');
@@ -489,7 +535,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionList(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const body = ctx.body;
     const all = await loadMailboxes(ctx.api);
     const visible = all.filter((m) => canSeeMailbox(m, ctx.user));
@@ -503,6 +549,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     const limit = Math.max(1, Math.min(200, Number(body.limit) || 50));
     if (!keys.length) return { ok: true, entries: [], mailboxes: [], count: 0 };
     const query = { mailbox_key: keys.length === 1 ? keys[0] : { $in: keys } };
+    if (ctx.user.role === 'manager') { query.tax_record = { $ne: true }; query.owner_only = { $ne: true }; }
     if (body.status) { if (!T.STATUSES.includes(body.status)) fail(400, 'Invalid status.'); query.status = body.status; }
     if (body.category) { if (!T.CATEGORIES.includes(body.category)) fail(400, 'Invalid category.'); query.category = body.category; }
     if (body.job_id) query.job_id = String(body.job_id);
@@ -517,7 +564,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionEntry(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     return { ok: true, entry: row, mailbox: publicMailbox(mailbox) };
   }
@@ -560,7 +607,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionSetStatus(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const status = String(ctx.body.status || '');
     if (!T.STATUSES.includes(status)) fail(400, 'Invalid status.');
     const { row } = await entryForUser(ctx, ctx.body.id);
@@ -575,7 +622,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   // to-do ids stay on the row so nothing is created twice.
   async function actionRerun(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const { row } = await entryForUser(ctx, ctx.body.id);
     const patch = { triage_pending: true };
     await ctx.api.EmailRelay.update(row.id, patch);
@@ -584,7 +631,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionSetCategory(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const category = String(ctx.body.category || '');
     if (!T.CATEGORIES.includes(category)) fail(400, 'Invalid category.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
@@ -604,7 +651,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
   // note is relayed right away.
   async function actionLinkJob(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const jobId = idText(ctx.body.job_id);
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     let job;
@@ -625,7 +672,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionUnlinkJob(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const { row } = await entryForUser(ctx, ctx.body.id);
     // What was already put on the job (note, PO/OE, homeowner) stays there — fix it on the job
     // page if it was wrong. Clearing note_id lets a fresh link relay again.
@@ -636,7 +683,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionRegenerateDraft(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     const provider = await connect(ctx, mailbox);
     const messages = await fetchThreadMessages(provider, mailbox, row.thread_id);
@@ -650,7 +697,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionDiscardDraft(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     if (row.draft_status !== 'drafted') fail(409, 'No open draft on this thread.');
     let warning = '';
@@ -662,13 +709,37 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function actionArchive(ctx) {
     if (!ctx.user) fail(401, 'Sign in required.');
-    if (!isStaff(ctx.user)) fail(403, 'Admin or manager access required.');
+    if (!isAdmin(ctx.user)) fail(403, 'Owner access required.');
     const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
     const provider = await connect(ctx, mailbox);
     const messages = mailbox.provider === 'gmail' ? [] : await fetchThreadMessages(provider, mailbox, row.thread_id);
     const patch = await archiveInProvider(provider, mailbox, row, messages);
     await ctx.api.EmailRelay.update(row.id, patch);
     return { ok: true, entry: { ...row, ...patch } };
+  }
+
+  // Re-run the tax save for one matched thread (admin). Only a Wasatch ACH paid confirmation
+  // qualifies. confirm_recreate only lifts the read-only hold on an 'unknown' create after the
+  // admin checked Drive; it never resets a saved or partial doc.
+  async function actionSaveTaxRecord(ctx) {
+    if (!ctx.user) fail(401, 'Sign in required.');
+    if (ctx.user.role !== 'admin') fail(403, 'Owner access required.');
+    const { row, mailbox } = await entryForUser(ctx, ctx.body.id);
+    if (!taxFilingEnabled) fail(409, 'Tax filing is disabled for this run.');
+    const provider = await connect(ctx, mailbox);
+    const hit = findWasatchAchPaid(mailbox, await fetchThreadMessages(provider, mailbox, row.thread_id));
+    if (!hit) fail(409, 'Not a Wasatch Windows ACH payment confirmation.');
+    const cur = { ...row, ...hit.fields };
+    await ctx.api.EmailRelay.update(row.id, hit.fields);
+    const r = await saveTax(ctx, mailbox, provider, cur, [hit.message], { confirmRecreate: ctx.body.confirm_recreate === true });
+    if (!r) {
+      const cur = await ctx.api.EmailRelay.get(row.id);
+      if (cur.tax_save_state === 'saved') return { ok: true, entry: cur };
+      fail(409, 'A tax save for this thread is already in progress.');
+    }
+    await ctx.api.EmailRelay.update(row.id, r);
+    const updated = { ...row, ...r };
+    return { ok: updated.tax_save_state === 'saved', entry: updated, error: r.tax_save_error || undefined };
   }
 
   const ACTIONS = {
@@ -683,6 +754,7 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
     regenerate_draft: actionRegenerateDraft,
     discard_draft: actionDiscardDraft,
     archive: actionArchive,
+    save_tax_record: actionSaveTaxRecord,
     mailboxes: actionMailboxes,
     seed_mailboxes: actionSeedMailboxes,
   };
