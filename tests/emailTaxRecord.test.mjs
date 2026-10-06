@@ -9,6 +9,11 @@ test('normalizeMoney: decimal-text half-up rounding, no binary float drift', () 
   assert.equal(normalizeMoney('$12.345'), 12.35);
   assert.equal(normalizeMoney('-$2.675'), -2.68, 'half away from zero');
   assert.equal(normalizeMoney('12.344'), 12.34);
+  // Exact Helcim layout: a space between the $ and the digits ("$ 7,787.92"). The currency
+  // strip leaves a leading space; the decimal regex must not return null on it.
+  assert.equal(normalizeMoney('$ 7,787.92'), 7787.92, 'spaced currency (Amount Paid)');
+  assert.equal(normalizeMoney('$ 0.00'), 0, 'spaced currency (Amount Due)');
+  assert.equal(normalizeMoney('-$ 2.675'), -2.68, 'spaced negative currency');
   assert.equal(normalizeMoney(1e21), null, 'beyond safe cents');
   for (const bad of [null, undefined, true, '', 'abc', '1.2.3', NaN, Infinity]) assert.equal(normalizeMoney(bad), null);
   assert.equal(centsOf(normalizeMoney('0.29')), 29);

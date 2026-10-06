@@ -17,7 +17,7 @@ export function normalizeMoney(v) {
     if (!Number.isFinite(v)) return null;
     s = /e/i.test(String(v)) ? v.toFixed(20) : String(v); // String() is the shortest exact repr
   } else {
-    s = String(v).trim().replace(/^(-?)\s*\$/, '$1').replace(/,/g, '');
+    s = String(v).trim().replace(/^(-?)\s*\$\s*/, '$1').replace(/,/g, '').trim();
   }
   const m = s.match(/^(-?)(\d*)(?:\.(\d*))?$/);
   if (!m || (!m[2] && !m[3])) return null;
