@@ -186,6 +186,37 @@ test('a ProBuild line that supersedes the visit clears it even on the next day',
   assert.equal(jobStatus([row, { ...post, superseded_by: 'other' }], evidence, TODAY).key, 'needs_report');
 });
 
+test('pre-compliance and no-source-data visits do not count as missing, modern pending still does', () => {
+  // A genuinely missing modern visit (pending, past) still flags the job.
+  const modern = { id: 'r-mod', job_id: 'job-a', source: 'calendar', job_date: '2026-09-10', labor_amt: 300, calendar_event_id: 'g-mod' };
+  const modernEv = { job_id: 'job-a', google_event_id: 'g-mod', event_date: '2026-09-10', report_required: true, report_status: 'pending', days_late: 5 };
+  const evMod = buildReportEvidence({ events: [modernEv] });
+  assert.deepEqual(visitsMissingReport([modern], evMod, TODAY).map((r) => r.id), ['r-mod'], 'modern pending is missing');
+  assert.equal(jobStatus([modern], evMod, TODAY).key, 'needs_report');
+
+  // A pre-compliance visit (before the compliance start date) is not owed a report,
+  // so it must not flag the job even though its matcher found nothing.
+  const pre = { id: 'r-pre', job_id: 'job-a', source: 'calendar', job_date: '2026-08-21', labor_amt: 0, calendar_event_id: 'g-pre' };
+  const preEv = { job_id: 'job-a', google_event_id: 'g-pre', event_date: '2026-08-21', report_required: true, report_status: 'pre_compliance', report_status_raw: 'missing_all', days_late: 0 };
+  const evPre = buildReportEvidence({ events: [preEv] });
+  assert.deepEqual(visitsMissingReport([pre], evPre, TODAY), [], 'pre_compliance is not missing');
+  assert.notEqual(jobStatus([pre], evPre, TODAY).key, 'needs_report', 'pre_compliance does not flag the job');
+
+  // no_source_data (sync incomplete) is also not owed — flags are suppressed.
+  const nsd = { id: 'r-nsd', job_id: 'job-a', source: 'calendar', job_date: '2026-09-05', labor_amt: 300, calendar_event_id: 'g-nsd' };
+  const nsdEv = { job_id: 'job-a', google_event_id: 'g-nsd', event_date: '2026-09-05', report_required: true, report_status: 'no_source_data', days_late: 0 };
+  const evNsd = buildReportEvidence({ events: [nsdEv] });
+  assert.deepEqual(visitsMissingReport([nsd], evNsd, TODAY), [], 'no_source_data is not missing');
+
+  // A reported modern visit alongside a pre-compliance visit: job is NOT "Needs report"
+  // (the reported visit is cleared, the pre-compliance visit is not owed).
+  const reported = { id: 'r-ok', job_id: 'job-a', source: 'calendar', job_date: '2026-09-22', labor_amt: 300, calendar_event_id: 'g-ok' };
+  const reportedEv = { job_id: 'job-a', google_event_id: 'g-ok', event_date: '2026-09-22', report_required: true, report_status: 'ok' };
+  const evMix = buildReportEvidence({ events: [reportedEv, preEv] });
+  assert.deepEqual(visitsMissingReport([reported, pre], evMix, TODAY), [], 'reported + pre_compliance: none missing');
+  assert.notEqual(jobStatus([reported, pre], evMix, TODAY).key, 'needs_report');
+});
+
 test('a visit rescheduled to a later date is not due yet', () => {
   const row = { id: 'r4', job_id: 'job-a', source: 'calendar', job_date: '2026-09-10', labor_amt: 300, calendar_event_id: 'g-4' };
   const evidence = buildReportEvidence({ events: [{ job_id: 'job-a', google_event_id: 'g-4', event_date: '2026-09-25', report_status: 'pending' }] });

@@ -59,30 +59,30 @@ export default function JobsHub() {
     if (p.toString() !== searchParams.toString()) setSearchParams(p, { replace: true });
   }, [search, segment, sort, builder]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        // Calendar events and notes are report evidence for "Needs report"; if they
-        // can't load, statuses fall back to fee lines alone and a notice says so.
-        const [jb, fl, ev, nt] = await Promise.all([
-          fetchAllPages(base44.entities.Jobs, '-created_date', 1000),
-          fetchAllPages(base44.entities.FeeLines, '-created_date', 1000),
-          fetchAllPages(base44.entities.CalendarEvents, '-event_date', 1000).catch(() => null),
-          fetchAllPages(base44.entities.JobNotes, '-note_date', 1000).catch(() => null),
-        ]);
-        setJobs(jb);
-        setFeeLines(fl);
-        setCalEvents(ev);
-        setJobNotes(nt);
-        loadService();
-      } catch (e) {
-        setLoadError("Jobs could not load. Reload to try again. " + (e?.message || ""));
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
+  // Fetch jobs, fee lines, calendar events and notes. Called on mount and again
+  // after a combine so merged-away rows drop out of the list without a full reload.
+  const reloadJobs = async () => {
+    try {
+      // Calendar events and notes are report evidence for "Needs report"; if they
+      // can't load, statuses fall back to fee lines alone and a notice says so.
+      const [jb, fl, ev, nt] = await Promise.all([
+        fetchAllPages(base44.entities.Jobs, '-created_date', 1000),
+        fetchAllPages(base44.entities.FeeLines, '-created_date', 1000),
+        fetchAllPages(base44.entities.CalendarEvents, '-event_date', 1000).catch(() => null),
+        fetchAllPages(base44.entities.JobNotes, '-note_date', 1000).catch(() => null),
+      ]);
+      setJobs(jb);
+      setFeeLines(fl);
+      setCalEvents(ev);
+      setJobNotes(nt);
+      loadService();
+    } catch (e) {
+      setLoadError("Jobs could not load. Reload to try again. " + (e?.message || ""));
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { reloadJobs(); }, []);
 
   useEffect(() => {
     base44.auth.me().then((u) => { setOwner(isAgentCenterOwner(u)); setIsAdmin(u?.role === "admin"); }).catch(() => { setOwner(false); setIsAdmin(false); });
@@ -354,7 +354,7 @@ export default function JobsHub() {
         <CombineJobsReview
           jobIds={[...selectedIds]}
           onClose={() => setShowReview(false)}
-          onDone={() => exitSelectMode()}
+          onDone={() => { exitSelectMode(); reloadJobs(); }}
         />
       )}
     </div>
