@@ -41,6 +41,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const [evidence, setEvidence] = useState(null);
   const [fieldReports, setFieldReports] = useState([]);
   const [plans, setPlans] = useState([]);
+  const [reportsError, setReportsError] = useState("");
   const memberKey = [jobId, ...(group?.memberIds || []).filter((m) => m !== jobId)].join(",");
   const memberIds = memberKey.split(",");
   // Service items on this job and its duplicate records: shown on their field report in History.
@@ -72,6 +73,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
       setCalEvents([]);
       setEvidence(null);
       setPlans([]);
+      setReportsError("");
     }
     try {
       // Live refreshes (reloadAll) fire on FieldReports/CalendarEvents changes —
@@ -111,15 +113,19 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
         : await loadUniqueLegacyNames(memberIds).catch(() => []);
       if (ver !== v.current) return;
       const postIds = new Set(fl.map((r) => r.probuild_post_id).filter(Boolean));
-      const [allCal, allReports] = await Promise.all([
+      const safeReports = loadJobFieldReports(memberIds, postIds, preloaded?.fieldReports, names)
+        .then((r) => ({ reports: r, error: "" }))
+        .catch((e) => ({ reports: [], error: e?.message || "Field reports could not load." }));
+      const [allCal, reportsResult] = await Promise.all([
         loadJobEvents(memberIds, fl, preloaded?.calEvents, names),
-        loadJobFieldReports(memberIds, postIds, preloaded?.fieldReports, names),
+        safeReports,
       ]);
       if (ver !== v.current) return;
       const shown = jobEventsAndEvidence(allCal, memberIds, fl, nt, names);
       setCalEvents(shown.events);
       setEvidence(shown.evidence);
-      setFieldReports(allReports);
+      setFieldReports(reportsResult.reports);
+      setReportsError(reportsResult.error);
     } finally {
       if (ver === v.current) setLoading(false);
     }
@@ -189,6 +195,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
 
         <div className="scroll-mt-4">
           <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
+            {reportsError ? <p role="alert" className="mb-3 rounded-[9px] px-3 py-2 text-[12.5px]" style={{ color: "#a43432", backgroundColor: "#fcedec", border: "1px solid #f0c9c5" }}>Some field reports could not load. {reportsError}</p> : null}
             <JobActivityFeed
               ledger
               jobId={jobId}

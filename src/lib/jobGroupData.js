@@ -3,6 +3,7 @@ import { fetchAllPages } from "@/lib/pagination";
 import { groupForJob } from "@/lib/jobDedupe";
 import { buildReportEvidence } from "@/lib/jobReports";
 import { uniqueLegacyNames } from "@/lib/jobLegacyNames";
+import { loadFieldReportsCore } from "@/lib/jobFieldReportsLoader";
 
 // Read-only loaders shared by the job page and the Jobs workspace panel. A job
 // that has duplicate records (see jobDedupe.js) is shown as one: activity from
@@ -95,23 +96,14 @@ export async function loadJobEvents(memberIds, rows, preloadedAllEvents, legacyN
 }
 
 // Field reports for a job without scanning the whole table: a fresh job-scoped
-// query for reports directly linked to a member, plus edge cases (reports with no
-// job_id whose Probuild post_id matches one of this job's FeeLines, or whose job
-// name matches a legacy name) from the hub's preloaded collection.
+// query for reports directly linked to a member, plus a fresh post_id scoped
+// query for unlinked reports whose Probuild post_id matches one of this job's
+// FeeLines, plus legacy-name edge cases from the hub's preloaded collection.
+// Read errors and a max-page cap throw (never a silent partial []); the
+// workspace surfaces them. Matching mirrors reportsForJob() — no rule changes.
 export async function loadJobFieldReports(memberIds, postIds, preloadedAllReports, legacyNames) {
-  const members = new Set(memberIds);
-  const direct = (await Promise.all(
-    [...members].map((id) => base44.entities.FieldReports.filter({ job_id: id }, "-created_date", 2000).catch(() => []))
-  )).flat();
-  const directIds = new Set(direct.map((r) => r.id));
-  const postSet = new Set(postIds || []);
-  const legacySet = new Set((legacyNames || []).map((n) => String(n || "").trim().toLowerCase()).filter(Boolean));
-  const edge = (preloadedAllReports || []).filter((r) => {
-    if (directIds.has(r.id)) return false;
-    if (r.job_id) return false; // reports filed under another job belong to that job, not this one
-    const byPost = r.post_id && postSet.has(r.post_id);
-    const byLegacy = legacySet.has(String(r.job_name || "").trim().toLowerCase());
-    return byPost || byLegacy;
-  });
-  return [...direct, ...edge];
+  // Positional array adapter: forwards (query, sort, limit, skip) to the
+  // documented SDK form filter(filter, sort?, limit?, skip?, fields?) -> array.
+  const reader = (query, opts) => base44.entities.FieldReports.filter(query, opts.sort, opts.limit, opts.skip);
+  return loadFieldReportsCore(reader, { memberIds, postIds, preloadedAllReports, legacyNames });
 }
