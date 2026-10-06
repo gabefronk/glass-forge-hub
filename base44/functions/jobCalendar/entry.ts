@@ -7,9 +7,9 @@
 // Auth: only the two owner auth ids may call either action. Read does not widen
 // existing CalendarEvents access — it scopes to the job and returns a sanitized,
 // minimal projection. No Hub writes on read. Create makes no Google calls and no
-// FeeLines/labor; it validates the payload, re-reads the job for title/address,
-// rejects a merged job and an empty jobsite (unless the user confirmed none), and
-// returns only safe error codes (no raw provider/exception strings).
+// FeeLines/labor; it validates the payload, re-reads the job and rejects a stale
+// reviewed title/address (stale_review), a merged job and an empty jobsite (unless
+// the user confirmed none), and returns only safe error codes.
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import * as core from '../../shared/jobCalendarCore.js';
@@ -98,49 +98,31 @@ async function handleRead(base44: any, body: any) {
 }
 
 async function handleCreate(base44: any, body: any, user: any) {
-  // STAGED: no Google writes. Validate, re-read the job, compute the deterministic
-  // id + fingerprint + effective dates locally so the UI can lock the review. The
-  // real create/reconcile orchestration is in the pure core (createEvent).
-  const p = body.payload || {};
-  if (!p || typeof p !== 'object') return json({ error: 'invalid_payload', fields: ['missing_payload'] }, 400);
-  if (!p.job_id) return json({ error: 'missing_field', field: 'job_id' }, 400);
-  if (!p.request_id) return json({ error: 'missing_field', field: 'request_id' }, 400);
-  const v = core.validateCreatePayload({ ...p, owner_id: user.id });
-  if (!v.ok) return json({ error: 'invalid_payload', fields: v.errors }, 400);
-
+  // STAGED: hard off — no Google calls. Validate the complete reviewed payload with
+  // the shared pure validator, re-read the job and REJECT a stale title/address or
+  // merged job (never substitute), then compute the deterministic id + fingerprint
+  // over exactly the reviewed provider fields.
+  const p = body.payload;
+  const v = core.validateCreatePayload(p, { ownerId: user.id });
+  if (!v.ok) {
+    const code = v.errors.includes('notes_contain_pricing') ? 'notes_contain_pricing'
+      : v.errors.includes('owner_mismatch') ? 'owner_mismatch' : 'invalid_payload';
+    return json({ error: code, fields: v.errors }, 400);
+  }
   const api = base44.asServiceRole.entities;
-  // Server re-reads Jobs for title/address — reject stale reviewed facts, never silent.
-  const job = await api.Jobs.get(String(p.job_id)).catch(() => null);
-  if (!job) return json({ error: 'job_not_found' }, 404);
-  if (job.merged_into) return json({ error: 'job_merged' }, 409);
-  // Reject an empty jobsite unless the user explicitly reviewed the absence.
-  const jobsite = job.address || '';
-  if (!jobsite && !p.confirm_no_jobsite) return json({ error: 'jobsite_required' }, 400);
+  const job = await api.Jobs.get(p.job_id).catch(() => null);
+  const rv = core.verifyReviewedJob({ payload: p, job });
+  if (!rv.ok) return json({ error: rv.error }, rv.error === 'job_not_found' ? 404 : rv.error === 'job_merged' || rv.error === 'stale_review' ? 409 : 400);
 
-  const payload = { ...p, owner_id: user.id, title: job.canonical_name, address: jobsite };
-  const eventId = await core.deterministicId(user.id, String(p.request_id), { sha256: sha256Hex });
-  const fingerprint = await core.fingerprintHash(payload, { sha256: sha256Hex });
-  const eff = core.effectiveDateTime(payload);
+  const eventId = await core.deterministicId(p.owner_id, p.request_id, { sha256: sha256Hex });
+  const fingerprint = await core.fingerprintHash(p, { sha256: sha256Hex });
+  const eff = v.effective;
   return json({
     ok: false,
     disabled: true,
     stage: 'create_disabled_in_stage',
     event_id: eventId,
     fingerprint,
-    reviewed: {
-      title: job.canonical_name,
-      address: jobsite,
-      job_id: job.id,
-      all_day: !!payload.all_day,
-      start_date: payload.start_date,
-      end_date: eff.all_day ? eff.end.date : eff.end_date, // effective provider end date
-      last_day: eff.all_day ? eff.last_day : undefined, // all-day: last day inclusive
-      start_time: payload.all_day ? null : (payload.start_time || null),
-      end_time: payload.all_day ? null : (payload.end_time || null),
-      time_zone: payload.time_zone || 'America/Denver',
-      overnight: eff.overnight || false,
-      multiday: eff.multiday || false,
-      notes: payload.notes || '',
-    },
+    reviewed: { ...p, provider_start: eff.start, provider_end: eff.end, last_day: eff.last_day, overnight: eff.overnight, multiday: eff.multiday },
   });
 }

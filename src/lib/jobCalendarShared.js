@@ -1,8 +1,8 @@
 // Frontend twin for the scoped job-calendar UI. Pure JS, no base44/shared imports
 // (platform blocks those from the client bundle). Server twin:
-// base44/shared/jobCalendarCore.js — kept in sync manually (same owner ids, same
-// Hub base host). Display shaping, the frozen create-request lock, the pure
-// create-outcome decision, safe error mapping, and preview fixtures.
+// base44/shared/jobCalendarCore.js. Display shaping, safe error mapping, the pure
+// create-outcome decision, the validated frozen-request storage, preview fixtures.
+import { validateReviewed } from './jobCalendarValidate.js';
 
 export const JOB_CALENDAR_OWNER_IDS = new Set([
   '6a7f0d834a5f825c724273ea',
@@ -36,102 +36,85 @@ export function formatUpcomingPurpose(ev) {
 export const SAFE_ERRORS = {
   sign_in_required: 'Sign in required.',
   owner_access_required: 'Owner access required.',
+  owner_mismatch: 'This request belongs to a different sign-in.',
   invalid_job_id: 'This job could not be found.',
   job_not_found: 'This job could not be found.',
   job_merged: 'This job was combined into another record.',
+  stale_review: 'This job changed since you reviewed it. Review again.',
   jobsite_required: 'Add a jobsite address to this job, or confirm there is none.',
-  missing_field: 'A required field is missing.',
-  invalid_payload: 'Some details are not valid. Edit and retry.',
+  notes_contain_pricing: 'Notes contain pricing. Remove it and review again.',
+  invalid_payload: 'Some details are not valid. Edit and review again.',
   merged_cycle: 'This job has a combine cycle. Contact support.',
   jobs_catalog_unavailable: 'Jobs catalog could not load.',
   calendar_not_connected: 'The crew calendar is not connected.',
   calendar_read_failed: 'The crew calendar could not be read right now.',
   job_calendar_failed: 'Create could not be confirmed. Retry sends the same request.',
+  prior_unknown: 'An earlier attempt for this request is still unconfirmed. Retry sends the same request.',
+  conflict: 'The crew calendar holds a different event for this request. Nothing was changed.',
+  lock_failed: 'This device could not save a lock for the request, so nothing was sent.',
+  damaged: 'The saved request on this device is damaged, so nothing was sent. Check the crew calendar before adding another visit.',
 };
 export function safeError(code) {
   if (code && SAFE_ERRORS[code]) return SAFE_ERRORS[code];
   return 'Something went wrong. Retry sends the same request.';
 }
-// Proven noncreation: the server rejected before any write, so the frozen request
-// is released. job_calendar_failed is NOT here — that is an unknown outcome.
+// Proven noncreation: the server rejected this call before any write.
 export const PROVEN_NONCREATION = new Set([
-  'sign_in_required', 'owner_access_required', 'invalid_job_id', 'job_not_found',
-  'job_merged', 'jobsite_required', 'missing_field', 'invalid_payload', 'merged_cycle',
-  'unknown_action', 'invalid_body', 'method_not_allowed',
+  'sign_in_required', 'owner_access_required', 'owner_mismatch', 'invalid_job_id', 'job_not_found',
+  'job_merged', 'stale_review', 'jobsite_required', 'notes_contain_pricing', 'missing_field',
+  'invalid_payload', 'merged_cycle', 'unknown_action', 'invalid_body', 'method_not_allowed',
 ]);
 export function isProvenNoncreation(code) { return PROVEN_NONCREATION.has(code); }
 
-// ---- pure create-outcome decision (tested; the modal wires it) ----
-// d = the server response body, or null for a network failure. Returns the next
-// modal step, whether to release the frozen request, the result kind, and a safe
-// error. 'unknown' / network / job_calendar_failed keep the request locked.
-export function decideCreateOutcome(d) {
-  if (d && d.disabled) return { step: 'done', kind: 'staged', release: true, error: '' };
-  if (d && d.ok && (d.kind === 'created' || d.kind === 'existing_match')) {
-    return { step: 'done', kind: d.kind === 'existing_match' ? 'existing' : 'created', release: true, error: '', link: d.event?.htmlLink || d.link || '' };
+const safeLink = (l) => (typeof l === 'string' && l.startsWith('https://') ? l : '');
+
+// ---- pure create-outcome decision ----
+// d = server response body (null = network failure). priorUnknown = an earlier
+// attempt of this frozen request had an unknown outcome: a rejection of THIS call
+// does not prove the earlier one created nothing, so the lock is kept.
+export function decideCreateOutcome(d, { priorUnknown = false } = {}) {
+  const locked = (code) => ({ step: 'locked', kind: '', release: false, error: safeError(code) });
+  if (d && d.disabled === true) {
+    return priorUnknown ? locked('prior_unknown') : { step: 'done', kind: 'staged', release: true, error: '', link: '' };
   }
-  if (d && d.error && isProvenNoncreation(d.error)) return { step: 'form', kind: '', release: true, error: safeError(d.error) };
-  // unknown / network / job_calendar_failed → keep locked, same request id
-  return { step: 'locked', kind: '', release: false, error: safeError(d && d.error) };
-}
-
-// ---- light form validation before Review (server validates authoritatively) ----
-function isValidDate(s) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))) return false;
-  const [y, m, dd] = String(s).split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, dd));
-  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === dd;
-}
-export function reviewFormError(form) {
-  if (!form) return 'Add a date.';
-  if (!form.start_date || !isValidDate(form.start_date)) return 'Add a valid date.';
-  if (form.all_day) {
-    if (form.end_date && (!isValidDate(form.end_date) || form.end_date < form.start_date)) return 'End date must be the same as or after the date.';
-  } else {
-    if (!form.start_time) return 'Add a start time.';
+  if (d && d.ok === true && (d.kind === 'created' || d.kind === 'existing_match')) {
+    return { step: 'done', kind: d.kind === 'created' ? 'created' : 'existing', release: true, error: '', link: safeLink(d.event?.htmlLink) };
   }
-  return '';
+  if (d && d.ok === true && d.kind === 'deleted') return { step: 'done', kind: 'deleted', release: true, error: '', link: '' };
+  if (d && d.ok === true && (d.kind === 'conflict_changed' || d.kind === 'foreign')) return locked('conflict');
+  if (d && typeof d.error === 'string' && isProvenNoncreation(d.error)) {
+    return priorUnknown ? locked('prior_unknown') : { step: 'form', kind: '', release: true, error: safeError(d.error) };
+  }
+  return locked(d && d.error);
 }
 
-// ---- frozen create request (tab session, scoped user+job) ----
-// Lock before navigation/remount so an unknown outcome can only be retried with the
-// same request_id + payload, never a new id. Persist across close, job switch,
-// reopen and reload. Only release on proven noncreation or a reconciled outcome.
-const keyFor = (user, job) => `jobCalendar:create:${user?.id || ''}:${typeof job === 'string' ? job : job?.id || ''}`;
+// ---- frozen create request (tab session, scoped to user+job) ----
+// Record: { v: 1, status: 'creating', priorUnknown: boolean, payload }. The payload
+// is the complete reviewed payload; it is validated on every read, and retries send
+// exactly the stored bytes.
+export const frozenKey = (userId, jobId) => `jobCalendar:create:v1:${userId}:${jobId}`;
 
-export function freezeRequest(store, user, job, state) {
-  try { store.setItem(keyFor(user, job), JSON.stringify(state)); return true; } catch { return false; }
+export function readFrozen(store, userId, jobId) {
+  let raw;
+  try { raw = store.getItem(frozenKey(userId, jobId)); } catch { return { state: 'damaged' }; }
+  if (raw == null) return { state: 'none' };
+  let rec;
+  try { rec = JSON.parse(raw); } catch { return { state: 'damaged' }; }
+  const p = rec && rec.payload;
+  const valid = rec && typeof rec === 'object' && rec.v === 1 && rec.status === 'creating'
+    && typeof rec.priorUnknown === 'boolean' && validateReviewed(p).ok
+    && p.job_id === jobId && p.owner_id === userId;
+  return valid ? { state: 'locked', record: rec, raw } : { state: 'damaged' };
 }
-export function loadFrozenRequest(store, user, job) {
+export function writeFrozen(store, userId, jobId, record) {
+  const s = JSON.stringify(record);
   try {
-    const raw = store.getItem(keyFor(user, job));
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    store.setItem(frozenKey(userId, jobId), s);
+    return store.getItem(frozenKey(userId, jobId)) === s;
+  } catch { return false; }
 }
-export function clearFrozenRequest(store, user, job) {
-  try { store.removeItem(keyFor(user, job)); } catch {}
-}
-
-// Build the create payload from the form + frozen request_id. Title is locked to
-// the job canonical name (server re-reads it); address is the job address (server
-// re-reads it); no pricing fields. confirm_no_jobsite is carried for the empty-
-// jobsite gate.
-export function buildCreatePayload({ user, job, form, requestId }) {
-  return {
-    job_id: job.id,
-    owner_id: user.id,
-    request_id: requestId,
-    all_day: !!form.all_day,
-    start_date: form.start_date || null,
-    end_date: form.all_day ? (form.end_date || null) : null,
-    start_time: form.all_day ? null : (form.start_time || null),
-    end_time: form.all_day ? null : (form.end_time || null),
-    time_zone: 'America/Denver',
-    title: job.canonical_name,
-    address: job.address || '',
-    notes: form.notes || '',
-    confirm_no_jobsite: !!form.confirm_no_jobsite,
-  };
+export function clearFrozen(store, userId, jobId) {
+  try { store.removeItem(frozenKey(userId, jobId)); } catch {}
 }
 
 // ---- fixtures for tests / read-only preview (desktop + mobile pixel verification) ----
@@ -148,28 +131,30 @@ export const UPCOMING_SATURDAY_FIXTURE = {
   calendar: 'iryedra@gmail.com',
 };
 
+export const BEAVER_JOB_FIXTURE = { id: '6a817395914bfa31ecd0f1f6', canonical_name: 'Beaver - 412', address: '1497 E 200 N St, Beaver, UT 84713' };
+export const OWNER_FIXTURE = { id: '6a7f0d834a5f825c724273ea' };
+
 export const CREATE_REVIEW_FIXTURE = {
   job_id: '6a817395914bfa31ecd0f1f6',
   owner_id: '6a7f0d834a5f825c724273ea',
   request_id: '00000000-0000-4000-8000-000000000001',
   all_day: true,
   start_date: '2026-10-10',
-  end_date: null,
+  end_date: '2026-10-10',
   start_time: null,
   end_time: null,
   time_zone: 'America/Denver',
   title: 'Beaver - 412',
   address: '1497 E 200 N St, Beaver, UT 84713',
   notes: 'Finish up install trim items.',
+  confirm_no_jobsite: false,
 };
+export const CREATE_REVIEW_TIMED_FIXTURE = { ...CREATE_REVIEW_FIXTURE, request_id: '00000000-0000-4000-8000-000000000002', all_day: false, start_time: '09:00', end_time: '11:30' };
 
-// Result fixtures for the modal done step (staged vs created vs existing) so a
-// read-only preview can render every outcome without a real call.
-export const CREATE_RESULT_STAGED = { disabled: true, stage: 'create_disabled_in_stage', reviewed: { ...CREATE_REVIEW_FIXTURE, last_day: '2026-10-10', overnight: false, multiday: false } };
-export const CREATE_RESULT_CREATED = { ok: true, kind: 'created', event_id: 'evtcreated', event: { htmlLink: 'https://calendar.google.com/calendar/event?eid=created' }, reviewed: { ...CREATE_REVIEW_FIXTURE } };
-export const CREATE_RESULT_EXISTING = { ok: true, kind: 'existing_match', event_id: 'evtexisting', event: { htmlLink: 'https://calendar.google.com/calendar/event?eid=existing' }, reviewed: { ...CREATE_REVIEW_FIXTURE } };
+export const CREATE_RESULT_STAGED = { ok: false, disabled: true, stage: 'create_disabled_in_stage', reviewed: { ...CREATE_REVIEW_FIXTURE } };
+export const CREATE_RESULT_CREATED = { ok: true, kind: 'created', event_id: 'evtcreated', event: { id: 'evtcreated', htmlLink: 'https://calendar.google.com/calendar/event?eid=created' } };
+export const CREATE_RESULT_EXISTING = { ok: true, kind: 'existing_match', event_id: 'evtexisting', event: { id: 'evtexisting', htmlLink: 'https://calendar.google.com/calendar/event?eid=existing' } };
 
-// Upcoming card state fixtures (loading / empty / error / list) for pixel preview.
 export const UPCOMING_STATES = {
   loading: { loading: true, error: '', events: [] },
   empty: { loading: false, error: '', events: [] },
