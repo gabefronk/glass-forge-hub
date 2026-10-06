@@ -165,7 +165,7 @@ function harness({ user = null, seed = {}, gmail = {}, graph = {}, drive = {}, c
   };
   let clock = '2026-09-26T17:00:00.000Z';
   let ms = 0;
-  const h = createEmailAgentHandler({ getClient: async () => client, fetchImpl, now: () => clock, nowMs: () => ms, budgetMs, sleep: async () => {}, taxFilingEnabled });
+  const h = createEmailAgentHandler({ getClient: async () => client, fetchImpl, now: () => clock, nowMs: () => ms, budgetMs, sleep: async () => {}, taxFilingEnabled, ownerIds: new Set(['ga', 'gw']) });
   const call = async (body, u = user) => {
     const r = await h(new Request('https://test.local/emailAgent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
     return { status: r.status, body: await r.json() };
@@ -544,7 +544,7 @@ test('rerun: flags an entry pending; the next sync re-reads it and relays withou
   assert.equal(h2.store.JobNotes.length, 1); assert.equal(h2.store.TodoTask.length, 1);
 });
 
-test('list / entry: admin-only — managers and crew get 403; owner-only mailbox still restricted to the owner emails; owner sees both; filters and q work; entries carry no mail text', async () => {
+test('list / entry: owner-only (id-based) — managers, crew and non-owner admins get 403; owner (both ids) sees both mailboxes; filters and q work; entries carry no mail text', async () => {
   const h = harness();
   await h.call({ action: 'sync' });
   // Owner's ruling: no manager reads any mailbox (incl. the former 'managers'-visibility YA Outlook).
@@ -555,10 +555,9 @@ test('list / entry: admin-only — managers and crew get 403; owner-only mailbox
   assert.equal((await h.as(MANAGER).call({ action: 'list', mailbox_key: 'nope' })).status, 403, 'gate fires before the mailbox lookup');
   // owner-only mailbox stays restricted to the owner emails even among admins
   assert.equal((await h.as(ADMIN).call({ action: 'list', mailbox_key: 'gf-gmail' })).status, 403, 'non-owner admin is not the owner');
-  // a non-owner admin can still list the admin-visible YA mailbox
+  // a non-owner admin is denied (email is owner-only, not admin-only)
   const adm = await h.as(ADMIN).call({ action: 'list' });
-  assert.equal(adm.status, 200);
-  assert.deepEqual([...new Set(adm.body.entries.map((t) => t.mailbox_key))], ['ya-outlook']);
+  assert.equal(adm.status, 403);
   const own = await h.as(OWNER).call({ action: 'list' });
   assert.equal(own.body.entries.length, 3);
   assert.equal(own.body.entries[0].thread_id, 'AAQk1', 'sorted by -last_message_at');
@@ -584,13 +583,13 @@ test('list / entry: admin-only — managers and crew get 403; owner-only mailbox
   assert.equal((await h.as(MANAGER).call({ action: 'entry', id: t1.id })).status, 403, 'managers cannot read any entry');
   assert.equal((await h.as(CREW).call({ action: 'entry', id: t1.id })).status, 403);
   assert.equal((await h.as(null).call({ action: 'entry', id: t1.id })).status, 401);
-  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: t1.id })).status, 404, 'owner-only entry is invisible to a non-owner admin (404, not 403, so existence does not leak)');
+  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: t1.id })).status, 403, 'non-owner admin is denied at the owner-id gate before the mailbox lookup');
   const ya = thread(h, 'AAQk1');
-  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: ya.id })).status, 200, 'non-owner admin can read the admin-visible mailbox');
+  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: ya.id })).status, 403, 'non-owner admin cannot read the YA mailbox (owner-only)');
   assert.equal((await h.as(MANAGER).call({ action: 'entry', id: ya.id })).status, 403, 'managers cannot read the YA mailbox either');
 });
 
-test('auth regression: every disclosing action denies manager, crew and unauthenticated; admin is allowed; sync stays admin/scheduled-only', async () => {
+test('auth regression: every disclosing action denies manager, crew, non-owner admin and unauthenticated; sync stays owner/scheduled-only', async () => {
   const h = harness();
   await h.call({ action: 'sync' });
   const ya = thread(h, 'AAQk1');
@@ -614,12 +613,59 @@ test('auth regression: every disclosing action denies manager, crew and unauthen
   // sync is admin-only (or scheduled null); manager and crew are denied
   assert.equal((await h.as(MANAGER).call({ action: 'sync' })).status, 403);
   assert.equal((await h.as(CREW).call({ action: 'sync' })).status, 403);
-  // admin can run the disclosing actions on the admin-visible mailbox
+  // non-owner admin is denied on every disclosing action (owner-only, not admin-only)
   const adm = await h.as(ADMIN).call({ action: 'set_status', id: ya.id, status: 'done' });
-  assert.equal(adm.status, 200);
-  // mailboxes / seed_mailboxes stay admin-only
+  assert.equal(adm.status, 403);
+  // mailboxes / seed_mailboxes stay owner-only
   assert.equal((await h.as(MANAGER).call({ action: 'mailboxes' })).status, 403);
   assert.equal((await h.as(MANAGER).call({ action: 'seed_mailboxes' })).status, 403);
+  // non-owner admin is also denied mailboxes/seed
+  assert.equal((await h.as(ADMIN).call({ action: 'mailboxes' })).status, 403);
+  assert.equal((await h.as(ADMIN).call({ action: 'seed_mailboxes' })).status, 403);
+});
+
+test('owner ids: both Gabriel auth ids are allowed on every disclosing route; scheduled sync (null user) preserved', async () => {
+  const h = harness();
+  await h.call({ action: 'sync' });
+  const ya = thread(h, 'AAQk1');
+  const t1 = thread(h, 't1');
+  // both owner ids can list, entry, and run every disclosing action
+  for (const owner of [OWNER, OWNER_WD]) {
+    const list = await h.as(owner).call({ action: 'list' });
+    assert.equal(list.status, 200, `${owner.email} can list`);
+    const entry = await h.as(owner).call({ action: 'entry', id: ya.id });
+    assert.equal(entry.status, 200, `${owner.email} can read an entry`);
+    const mb = await h.as(owner).call({ action: 'mailboxes' });
+    assert.equal(mb.status, 200, `${owner.email} can read mailboxes`);
+    const st = await h.as(owner).call({ action: 'set_status', id: ya.id, status: 'done' });
+    assert.equal(st.status, 200, `${owner.email} can set_status`);
+  }
+  // scheduled sync (null user) is preserved — non-disclosing, runs without a user
+  const sched = await h.call({ action: 'sync' });
+  assert.equal(sched.status, 200);
+  assert.equal(sched.body.ok, true);
+  // a non-owner admin (Trevor) is denied on every disclosing route
+  const disclosing = [
+    { action: 'list' },
+    { action: 'entry', id: ya.id },
+    { action: 'set_status', id: ya.id, status: 'done' },
+    { action: 'rerun', id: ya.id },
+    { action: 'set_category', id: ya.id, category: 'schedule' },
+    { action: 'link_job', id: ya.id, job_id: 'job2' },
+    { action: 'unlink_job', id: ya.id },
+    { action: 'discard_draft', id: ya.id },
+    { action: 'regenerate_draft', id: ya.id },
+    { action: 'archive', id: ya.id },
+    { action: 'mailboxes' },
+    { action: 'seed_mailboxes' },
+  ];
+  for (const payload of disclosing) {
+    assert.equal((await h.as(ADMIN).call(payload)).status, 403, `non-owner admin denied ${payload.action}`);
+  }
+  // Israel (admin, not an email owner id) is denied too
+  const israelAdmin = { id: '6a9f1c6b0c0b0a503245bcd6', email: 'iryedra@gmail.com', role: 'admin', full_name: 'Israel' };
+  assert.equal((await h.as(israelAdmin).call({ action: 'list' })).status, 403, 'Israel admin denied email list');
+  assert.equal((await h.as(israelAdmin).call({ action: 'entry', id: t1.id })).status, 403, 'Israel admin denied email entry');
 });
 
 test('mutations: set_status / set_category / link_job (applies facts + relays) / unlink_job / discard / regenerate (re-reads the mailbox) / archive — admin only', async () => {
@@ -831,8 +877,8 @@ test('tax permissions: managers and non-owner admins never see or save owner-mai
   assert.equal((await h.as(MANAGER).call({ action: 'list' })).status, 403);
   assert.equal((await h.as(MANAGER).call({ action: 'entry', id: paid.id })).status, 403);
   assert.equal((await h.as(MANAGER).call({ action: 'save_tax_record', id: paid.id })).status, 403);
-  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: paid.id })).status, 404);
-  assert.equal((await h.as(ADMIN).call({ action: 'save_tax_record', id: paid.id })).status, 404);
+  assert.equal((await h.as(ADMIN).call({ action: 'entry', id: paid.id })).status, 403);
+  assert.equal((await h.as(ADMIN).call({ action: 'save_tax_record', id: paid.id })).status, 403);
   assert.equal((await h.as(OWNER).call({ action: 'save_tax_record', id: promo.id })).status, 409, 'only a Wasatch ACH confirmation can be filed');
   assert.equal(h.drive.byKind('doc').length, 1);
 });

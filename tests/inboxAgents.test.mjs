@@ -86,8 +86,13 @@ test('category labels fall back sensibly and tones map to the fee palettes', () 
   assert.equal(categoryTone('builder_admin'), 'neutral');
 });
 
-test('the ledger page is admin-only', () => {
-  assert.equal(canViewInboxAgents({ role: 'admin' }), true);
+test('the ledger page is owner-only (id-based, not admin)', () => {
+  // only Gabriel's auth ids may view the inbox agents ledger
+  assert.equal(canViewInboxAgents({ id: '6a7f0d834a5f825c724273ea', role: 'admin' }), true);
+  assert.equal(canViewInboxAgents({ id: '6a8229a9801b2aef9278ff47', role: 'admin' }), true);
+  // any other admin, manager, or null is denied (admin-only is NOT owner-only)
+  assert.equal(canViewInboxAgents({ id: 'other-admin', role: 'admin' }), false);
+  assert.equal(canViewInboxAgents({ role: 'admin' }), false);
   assert.equal(canViewInboxAgents({ role: 'manager' }), false);
   assert.equal(canViewInboxAgents(null), false);
 });

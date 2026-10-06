@@ -5,6 +5,7 @@ import {
   authorizeQuoteRequest, validateQuoteLines, summarizeValidationRules,
   projectPricing, projectQuoteResult
 } from '../base44/shared/quoteEnginePure.js';
+import { canQuoteFull, QUOTE_FULL_ACCESS_IDS } from '../base44/shared/quoteAccess.js';
 
 // ---- fixtures ----
 const grid = [
@@ -312,4 +313,62 @@ test('projectQuoteResult admin also gets allowlisted top-level (no unchecked spr
   assert.deepEqual(Object.keys(r).sort(), ['height', 'pricing', 'qty', 'vendor', 'width'].sort());
   assert.ok(!('__evil' in r) && !('product' in r));
   assert.ok('unit_dealer' in r.pricing && 'base' in r.pricing, 'admin retains internal costs in pricing');
+});
+
+// ---- account-specific quote allowlist (Jeremy Burr + Israel Yedra) ----
+// These ids get full quoting (Pella + dealer cost) without an admin/manager role.
+// The gate is auth.me().id — never request payload or names.
+
+test('canQuoteFull: exactly two allowlisted ids; everyone else (incl. manager) is false', () => {
+  assert.equal(QUOTE_FULL_ACCESS_IDS.size, 2);
+  assert.equal(canQuoteFull({ id: '6aa38008aeff51ae779a0b3c' }), true); // Jeremy Burr
+  assert.equal(canQuoteFull({ id: '6a9f1c6b0c0b0a503245bcd6' }), true); // Israel Yedra
+  assert.equal(canQuoteFull({ id: 'some-other-id', role: 'manager' }), false);
+  assert.equal(canQuoteFull({ role: 'manager' }), false); // no id
+  assert.equal(canQuoteFull(null), false);
+  assert.equal(canQuoteFull(undefined), false);
+});
+
+test('authorizeQuoteRequest: Jeremy (allowlisted user) Pella and mixed requests succeed', () => {
+  const pella = [{ vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250' }];
+  const mixed = [
+    { vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio' },
+    { vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250' },
+  ];
+  const jeremy = { id: '6aa38008aeff51ae779a0b3c', role: 'user' };
+  assert.equal(authorizeQuoteRequest(jeremy, pella).allowed, true);
+  assert.equal(authorizeQuoteRequest(jeremy, mixed).allowed, true);
+  assert.equal(authorizeQuoteRequest(jeremy, []).allowed, true);
+});
+
+test('authorizeQuoteRequest: Israel (allowlisted admin) Pella succeeds', () => {
+  const pella = [{ vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250' }];
+  const israel = { id: '6a9f1c6b0c0b0a503245bcd6', role: 'admin' };
+  assert.equal(authorizeQuoteRequest(israel, pella).allowed, true);
+});
+
+test('authorizeQuoteRequest: non-allowlisted user Pella denied; spoofed payload id ignored; unauth denied', () => {
+  const pella = [{ vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250' }];
+  const other = { id: 'not-allowlisted', role: 'user' };
+  const denied = authorizeQuoteRequest(other, pella);
+  assert.equal(denied.allowed, false);
+  assert.match(denied.reason, /Pella/);
+  // a spoofed id planted in the lines payload is never consulted — only user.id gates
+  const spoofed = [{ vendor: 'Pella', width: 36, height: 60, qty: 1, series: '250', user_id: '6aa38008aeff51ae779a0b3c', id: '6aa38008aeff51ae779a0b3c' }];
+  assert.equal(authorizeQuoteRequest(other, spoofed).allowed, false);
+  // unauthenticated denied even for AMSCO
+  assert.equal(authorizeQuoteRequest(null, [{ vendor: 'AMSCO', width: 24, height: 48, qty: 1, product: 'Studio' }]).allowed, false);
+});
+
+test('projection: allowlisted user canSeeCost=true retains dealer cost; manager canSeeCost=false redacts', () => {
+  // canSeeCost = isAdmin(role) OR canQuoteFull(id). A manager (not admin, not allowlisted) → false.
+  const managerCanSeeCost = String('manager').toLowerCase() === 'admin' || canQuoteFull({ id: 'mgr-id', role: 'manager' });
+  assert.equal(managerCanSeeCost, false, 'manager does not see cost');
+  const mgrPricing = projectPricing(fullAmsco, { isAdmin: managerCanSeeCost });
+  assert.ok(!('unit_dealer' in mgrPricing) && !('base' in mgrPricing), 'manager cost redacted');
+  // an allowlisted user (Jeremy) → canSeeCost true → full cost
+  const jeremyCanSeeCost = canQuoteFull({ id: '6aa38008aeff51ae779a0b3c', role: 'user' });
+  assert.equal(jeremyCanSeeCost, true);
+  const jeremyPricing = projectPricing(fullAmsco, { isAdmin: jeremyCanSeeCost });
+  assert.ok('unit_dealer' in jeremyPricing && 'base' in jeremyPricing, 'allowlisted user sees dealer cost');
 });
