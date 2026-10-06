@@ -14,10 +14,11 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me().catch(() => null);
     const body = await req.json();
     const lines = body?.lines || [];
-    // Authorize per vendor (owner directive Oct 6): AMSCO is open to any authenticated Hub
-    // user; Pella stays admin/manager only. A user-role request carrying any Pella line is
-    // denied here, before any catalog read. Managers receive sale-only fields; internal
-    // cost/catalog basis is redacted. Admins retain full costs.
+    // Authorize per vendor (Oct 6): AMSCO + Pella quoting are admin/manager only. The
+    // owner's "everybody" ruling for AMSCO is ON HOLD pending a check on Jeremy Burr's
+    // account (standing rule: no-pricing). Role 'user' is denied for every vendor here,
+    // before any catalog read. Managers receive sale-only fields; internal cost is
+    // redacted. Admins retain full costs.
     const access = authorizeQuoteRequest(user, lines);
     if (!access.allowed) return Response.json({ ok: false, error: 'forbidden', reason: access.reason }, { status: 403 });
     const isAdmin = !!user && String(user.role || '').toLowerCase() === 'admin';

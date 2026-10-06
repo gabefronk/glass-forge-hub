@@ -99,17 +99,17 @@ export function pricePella(line, anchors) {
   };
 }
 
-// Authorize a quote request per vendor (owner directive Oct 6: AMSCO quoting is open
-// to any authenticated Hub user; Pella remains admin/manager only). A user-role request
-// that carries any Pella line is denied here, before any catalog read. Admins and
-// managers retain their existing access to both vendors. Returns { allowed, reason }.
+// Authorize a quote request per vendor. As of Oct 6 the owner's "everybody" ruling
+// (open AMSCO to all authenticated Hub users) is ON HOLD pending a check on Jeremy Burr's
+// account, whose standing rule is no-pricing. Until the owner gives final word, AMSCO
+// AND Pella quoting are admin/manager only; role 'user' is denied for every vendor.
+// `lines` is retained for signature stability but no longer affects the decision.
+// Admins retain full cost; managers receive sale-only fields. Returns { allowed, reason }.
 export function authorizeQuoteRequest(user, lines) {
   if (!user) return { allowed: false, reason: 'unauthenticated' };
   const role = String(user.role || '').toLowerCase();
   if (role === 'admin' || role === 'manager') return { allowed: true };
-  const hasPella = Array.isArray(lines) && lines.some(l => l && l.vendor === 'Pella');
-  if (hasPella) return { allowed: false, reason: "role 'user' may not view Pella pricing" };
-  return { allowed: true };
+  return { allowed: false, reason: `role '${user.role || 'none'}' may not view pricing` };
 }
 
 // Validate the inbound lines payload before any pricing work. Returns an array
