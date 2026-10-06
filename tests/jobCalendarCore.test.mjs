@@ -185,10 +185,13 @@ test("fingerprint covers exactly provider fields: title, address, notes, start, 
   const h = (p) => core.fingerprintHash(p, { sha256 });
   const base = await h(pl());
   assert.equal(base, await h(pl()));
-  for (const over of [{ title: "X" }, { address: "B" }, { notes: "other" }, { end_date: "2026-10-11" }, { time_zone: "America/Chicago" }]) {
+  for (const over of [{ title: "X" }, { address: "B" }, { notes: "other" }, { end_date: "2026-10-11" }]) {
     assert.notEqual(base, await h(pl(over)), JSON.stringify(over));
   }
   assert.equal(base, await h(pl({ confirm_no_jobsite: true }))); // not a provider field
+  // timed: the zone is carried on start/end, so it changes the fingerprint; all-day dates carry no zone
+  assert.notEqual(await h(timed()), await h(timed({ time_zone: "America/Chicago" })));
+  assert.notEqual(await h(timed()), await h(timed({ end_time: "11:30" })));
 });
 
 // ---- strict validation (A) ----
