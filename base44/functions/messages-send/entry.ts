@@ -17,8 +17,13 @@ async function resolveMapping(client, conversation_key) {
   if (!row || !row.source_chat_guid) return null;
   let configuredDeviceId = '';
   try { configuredDeviceId = (Deno.env.get('BLUEBUBBLES_DEVICE_ID') || '').trim(); } catch { configuredDeviceId = ''; }
-  return {chatGuid: row.source_chat_guid, device_id: row.device_id || '', configuredDeviceId};
+  if (!configuredDeviceId) return null;
+  // The configured device must exist and be enabled; exact id match is enforced by the handler.
+  const device = (await client.asServiceRole.entities.MessageBridgeDevice.filter({device_id: configuredDeviceId}, '-created_date', 1))[0];
+  return {chatGuid: row.source_chat_guid, device_id: row.device_id || '', configuredDeviceId, device_enabled: device?.enabled === true && device?.device_id === configuredDeviceId};
 }
+
+// No registrationStore and no verifyOwnerUpload are wired: attachment actions fail closed.
 
 Deno.serve(createMessagesSendHandler({
   getClient: createClientFromRequest,

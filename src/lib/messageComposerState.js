@@ -20,8 +20,14 @@ export function stageFile(file, idGen = newClientId) {
   if (size > MAX_FILE_SIZE) return { error: `${name} is over 25 MB.` };
   const mime = typeof file.type === 'string' && file.type ? file.type : 'application/octet-stream';
   const isImage = /^image\//.test(mime);
-  const previewUrl = isImage && typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(file) : null;
-  return { ok: true, item: { id: idGen(), file, name, size, mime, isImage, previewUrl, status: 'staged' } };
+  return { ok: true, item: { id: idGen(), file, name, size, mime, isImage, previewUrl: makePreview(file, isImage), status: 'staged' } };
+}
+
+// Only real Blobs/Files get an objectURL; anything else (or an unavailable API) -> null.
+function makePreview(file, isImage) {
+  if (!isImage || typeof Blob === 'undefined' || !(file instanceof Blob)) return null;
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
+  try { return URL.createObjectURL(file); } catch { return null; }
 }
 
 export function isImageMime(mime) {
@@ -66,6 +72,15 @@ export function planSteps(batch, idGen = newClientId) {
   return steps;
 }
 
+// Persistent, frozen send plan. Created ONCE per deliberate Send; every retry runs this same
+// plan (same steps, payloads and client_ids; sent steps are skipped). The text step's
+// client_id is assigned here, once, so a retry never mints a fresh id or reads current text.
+export function createSendPlan({ ownerId, conversationKey, text, files }, idGen = newClientId) {
+  const batch = freezeBatch({ conversationKey, text, files });
+  const steps = planSteps(batch, idGen).map((s) => Object.freeze({ ...s, payload: Object.freeze({ ...s.payload }), result: null, uploaded: null }));
+  return Object.freeze({ ownerId, conversationKey, steps: Object.freeze(steps) });
+}
+
 // Only a definite pre-dispatch failure may be retried. Unknown/rejected/disabled are terminal.
 export function isRetryable(status) { return status === 'failed_pre_dispatch'; }
 export function isUncertain(status) { return status === 'unknown' || status === 'rejected' || status === 'disabled'; }
@@ -73,6 +88,8 @@ export function isUncertain(status) { return status === 'unknown' || status === 
 // Revoke objectURLs for a list of staged files (cleanup on unmount / clear).
 export function revokePreviews(files) {
   for (const f of files || []) {
-    if (f.previewUrl && typeof URL !== 'undefined' && URL.revokeObjectURL) URL.revokeObjectURL(f.previewUrl);
+    if (f.previewUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+      try { URL.revokeObjectURL(f.previewUrl); } catch { /* already revoked */ }
+    }
   }
 }
