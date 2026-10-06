@@ -8,6 +8,8 @@ import { PageShell } from "@/components/PageShell";
 import { SheetCard, TILE } from "@/components/jobs/JobSheet";
 import { C } from "@/lib/feeUI";
 import { money, percent, buttonClass, primaryStyle, secondaryStyle, Field } from "@/components/budgets/ProcurementForms";
+import SaleWonBanner from "@/components/new-job/SaleWonBanner";
+import MonthAchievement from "@/components/new-job/MonthAchievement";
 
 // DEMO ONLY — sample data, no entity writes. The final "Create job" button is
 // permanently disabled and labelled "Demo only - not saved". Every field is
@@ -260,7 +262,8 @@ export default function NewJobBuilder() {
 
             {step === 5 && (
               <div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <SaleWonBanner cost={cost} sale={sale} profit={profit} profitPct={profitPct} />
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="block text-[12px] font-semibold" style={{ color: "#566063" }}>What it costs me</span>
                     <input type="number" min="0" step="any" value={s.money.cost} onChange={e => set({ money: { ...s.money, cost: e.target.value } })} className="mt-1 w-full rounded-[10px] px-3 py-3 text-[20px] font-bold tabular-nums" style={{ border: "1px solid #d3cabb", color: "#101617" }} />
@@ -282,6 +285,7 @@ export default function NewJobBuilder() {
                   <div className="mt-2 flex items-center justify-between text-[14px]"><span style={{ color: "#566063" }}>Profit</span><strong style={{ color: profit >= 0 ? "#166447" : "#a43432" }}>{money(profit)} ({percent(profitPct)} margin)</strong></div>
                 </div>
                 <p className="mt-3 text-[12px]" style={{ color: "#616a6d" }}>No automatic margin is applied. You set the sale price; the tax line is the only thing added for you.</p>
+                <MonthAchievement thisJob={sale} />
               </div>
             )}
 
@@ -296,7 +300,8 @@ export default function NewJobBuilder() {
       {/* Review — every value taps to edit in place */}
       {atReview && (
         <SheetCard icon={CheckCircle2} tile={TILE.teal} title="Review your new job" sub="Tap any value to edit it. Everything below is sample data — nothing is saved.">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <SaleWonBanner cost={cost} sale={sale} profit={profit} profitPct={profitPct} />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: "Job name", value: s.jobName, onCommit: v => set({ jobName: v }) },
               { label: "Job code", value: s.jobCode, mono: true, onCommit: v => set({ jobCode: v }) },
@@ -346,6 +351,8 @@ export default function NewJobBuilder() {
             </div>
             <MoneyStat label="Profit" value={`${money(profit)} (${percent(profitPct)})`} tone="profit" />
           </div>
+
+          <MonthAchievement thisJob={sale} />
 
           <div className="mt-4 rounded-[12px] p-3 text-[13px]" style={{ backgroundColor: "#faf0da", color: "#6f4e10", border: "1px solid #efdfb7" }}>
             Sales tax (automatic, 7.45%): <strong>{money(tax)}</strong> · Customer total with tax: <strong>{money(customerTotal)}</strong>
