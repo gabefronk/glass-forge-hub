@@ -292,10 +292,9 @@ test("lost response: updateMany throws but the id stays in planned and undo reco
 test("verification failure: verify filter throws over-records the batch so undo covers it", async () => {
   // Verify fails only during the merge (job_id "T" right after the S→T move). A flag
   // turns the hook off once the merge's move ran, so undo's own verifies are clean.
-  let mergeMoved = false;
+  let verifyCalls = 0;
   const db = makeDb({ Jobs: jobs(), FeeLines: [{ id: "f1", job_id: "S" }] }, {
-    filter(name, q) { if (name === "FeeLines" && q.job_id === "T" && q.id && !mergeMoved) throw new Error("verify down"); },
-    afterUpdateMany(name, q) { if (name === "FeeLines" && q.job_id === "S") mergeMoved = true; },
+    filter(name, q) { if (name === "FeeLines" && q.job_id === "T" && q.id && verifyCalls++ === 0) throw new Error("verify down"); },
   });
   const r = await merge(db);
   assert.equal(r.ok, false);
