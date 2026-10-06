@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { GitMerge, Search, X, AlertTriangle, ArrowRight, Check } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { sanitizeText } from "@/lib/jobsSanitize";
+import { movedSummary } from "@/lib/mergeLogs";
 
 // Combine two jobs into one using the existing soft-merge model (mergeJobs +
 // JobMergeLog + reverseMerge). Admin-only. Nothing is deleted: the merged-away
@@ -366,7 +367,7 @@ export default function CombineJobsDialog({ job, onClose, onDone }) {
               <div className="rounded-[10px] px-3 py-3 text-[13.5px]" style={{ backgroundColor: "#eaf5ee", border: "1px solid #c7e4d2", color: "#166447" }}>
                 <p className="m-0 font-semibold">{sanitizeText(survivor.canonical_name)} now holds everything from {sanitizeText(mergedAway.canonical_name)}.</p>
                 <p className="m-0 mt-1 text-[12.5px]" style={{ color: "#3b5a3a" }}>
-                  Moved: {result.relocated_link_counts?.fee_lines || 0} invoice lines, {result.relocated_link_counts?.calendar_events || 0} visits, {result.relocated_link_counts?.field_reports || 0} reports, {result.relocated_link_counts?.job_notes || 0} notes, {result.relocated_link_counts?.job_budgets || 0} budgets.
+                  Moved: {movedSummary(result)}.
                   {result.conflict_note_recorded ? " A note was added for any field that disagreed." : ""}
                 </p>
               </div>

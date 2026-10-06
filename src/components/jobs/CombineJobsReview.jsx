@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { GitMerge, X, AlertTriangle, Check, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { sanitizeText } from "@/lib/jobsSanitize";
+import { movedSummary } from "@/lib/mergeLogs";
 
 // N-job combine review + confirm. Reuses the existing soft-merge model via the
 // combineJobs backend function (one JobMergeLog row per merged-away record, so
@@ -431,7 +432,7 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
                 <div className="rounded-[10px] px-3 py-3 text-[13.5px]" style={{ backgroundColor: "#eaf5ee", border: "1px solid #c7e4d2", color: "#166447" }}>
                   <p className="m-0 font-semibold">{sanitizeText(result.survivor_name)} now shows the combined history from {result.merged_count} {result.merged_count === 1 ? "record" : "records"}.</p>
                   <p className="m-0 mt-1 text-[12.5px]" style={{ color: "#3b5a3a" }}>
-                    Moved: {result.totals?.fee_lines || 0} invoice lines, {result.totals?.calendar_events || 0} visits, {result.totals?.field_reports || 0} reports, {result.totals?.job_notes || 0} notes, {result.totals?.job_budgets || 0} budgets.
+                    Moved: {movedSummary({ relocated_link_counts: result.totals })}.
                   </p>
                 </div>
               ) : (
@@ -452,7 +453,7 @@ export default function CombineJobsReview({ jobIds, onClose, onDone }) {
                       <span className="min-w-0 flex-1">
                         <b style={{ color: INK }}>{sanitizeText(r.source_job_name || r.source_job_id)}</b>
                         {r.ok ? (
-                          <span style={{ color: MUTED }}> — moved {r.relocated_link_counts?.fee_lines || 0} lines, {r.relocated_link_counts?.calendar_events || 0} visits, {r.relocated_link_counts?.field_reports || 0} reports{r.conflict_note_recorded ? " · a conflict note was added" : r.conflict_note_error ? ` · ${r.conflict_note_error}` : ""}.</span>
+                          <span style={{ color: MUTED }}> — moved {movedSummary(r)}{r.conflict_note_recorded ? " · a conflict note was added" : r.conflict_note_error ? ` · ${r.conflict_note_error}` : ""}.</span>
                         ) : r.blocked ? (
                           <span style={{ color: "#89511a" }}> — not combined, left visible. {r.error}</span>
                         ) : isPartial ? (
