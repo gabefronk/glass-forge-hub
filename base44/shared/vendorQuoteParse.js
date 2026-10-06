@@ -96,6 +96,14 @@ export function normalizeVendorQuote(raw = {}) {
     const n = Number(v);
     return Number.isInteger(n) && n > 0 && n < 10000 ? n : null;
   };
+  // Line-item qty: explicit 0 is a known zero, not 1. null/missing/invalid stays
+  // null — the extractor contract (vendorQuoteSchema.js) says "never guess", so we
+  // do not invent 1 for an unprinted quantity.
+  const lineQty = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 0 && n < 10000 ? n : null;
+  };
   const out = {
     vendor: clean(raw.vendor),
     manufacturer: clean(raw.manufacturer || raw.vendor),
@@ -121,7 +129,7 @@ export function normalizeVendorQuote(raw = {}) {
     project_name: clean(raw.project_name),
     prepared_by: clean(raw.prepared_by),
     lines: Array.isArray(raw.lines) ? raw.lines.slice(0, 500).filter((l) => l && typeof l === 'object').map((l) => ({
-      qty: qty(l.qty) ?? 1,
+      qty: lineQty(l.qty),
       width_in: money(l.width_in),
       height_in: money(l.height_in),
       kind: clean(l.kind),
@@ -131,13 +139,36 @@ export function normalizeVendorQuote(raw = {}) {
     })) : [],
     parse_source: clean(raw.parse_source) || 'llm',
   };
-  // The top-level openings_qty is whatever the extractor reported (the LLM often
-  // undercounts: it returns a number that is neither the line-item count nor the
-  // sum of quantities). When line items are present, the real unit count is the
-  // sum of their quantities (excluding parts — screens, mull kits, freight),
-  // so recompute it from the lines and trust that over the extractor's guess.
-  const lineUnits = out.lines.reduce((sum, l) => sum + (l.kind === 'part' ? 0 : (l.qty || 0)), 0);
-  if (lineUnits > 0) out.openings_qty = lineUnits;
+  // openings_qty recompute — source-grounded in the extractor contract
+  // (vendorQuoteSchema.js QUOTE_SCHEMA + QUOTE_PROMPT): lines = "one entry per
+  // quote line item"; qty is "null for anything not printed; never guess";
+  // openings_qty = "Total window/door/glass units across all lines"; kind 'part'
+  // = screens/mull/hardware/freight/fees. So the unit count is the sum of
+  // reliably-quantified non-part line quantities. null/missing qty is never
+  // invented as 1; explicit 0 is 0. When any non-part line has an unknown qty, or
+  // the same description mixes a group summary (qty > 1) with detail lines
+  // (qty 1) — a possible summary/detail overlap that would double-count — we keep
+  // the raw printed count and flag openings_qty_review.
+  let lineUnits = 0;
+  let ambiguous = false;
+  for (const l of out.lines) {
+    if (l.kind === 'part') continue;
+    if (l.qty === null) ambiguous = true;
+    else lineUnits += l.qty;
+  }
+  if (!ambiguous) {
+    const byDesc = new Map();
+    for (const l of out.lines) {
+      if (l.kind === 'part' || !l.description || l.qty === null) continue;
+      if (!byDesc.has(l.description)) byDesc.set(l.description, []);
+      byDesc.get(l.description).push(l.qty);
+    }
+    for (const qtys of byDesc.values()) {
+      if (qtys.some(q => q > 1) && qtys.some(q => q === 1)) { ambiguous = true; break; }
+    }
+  }
+  if (!ambiguous && lineUnits > 0) out.openings_qty = lineUnits;
+  out.openings_qty_review = ambiguous;
   return out;
 }
 

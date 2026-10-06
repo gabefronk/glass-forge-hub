@@ -122,3 +122,69 @@ test("cost, sell and tax are independent of the openings_qty recompute", () => {
   assert.equal(q.actual_total_sell, 2411.81);  // untouched
   assert.equal(q.customer_tax, 167.22);        // untouched
 });
+
+test("extractor contract: per-line-item qty, null = not printed, parts excluded (source-grounded)", () => {
+  // Contract from vendorQuoteSchema.js QUOTE_SCHEMA + QUOTE_PROMPT:
+  // lines = "One entry per quote line item"; qty = integer|null with
+  // "Use null for anything not printed; never guess"; openings_qty =
+  // "Total window/door/glass units across all lines"; kind 'part' =
+  // screens/mull/hardware/freight/fees. The recompute sums reliably-quantified
+  // non-part line quantities; null qty is never invented as 1.
+  const q = normalizeVendorQuote({
+    vendor: "Amsco", openings_qty: 10,
+    lines: [
+      { qty: 3, kind: "window", description: "Single Hung" },
+      { qty: 2, kind: "glass", description: "Glass Only" },
+      { qty: 1, kind: "part", description: "Screen" },
+    ],
+  });
+  assert.equal(q.openings_qty, 5);
+  assert.equal(q.openings_qty_review, false);
+});
+
+test("explicit qty 0 is zero, not defaulted to 1", () => {
+  const q = normalizeVendorQuote({
+    vendor: "Amsco", openings_qty: 5,
+    lines: [{ qty: 0, kind: "door", description: "Info only" }, { qty: 3, kind: "glass" }],
+  });
+  assert.equal(q.lines[0].qty, 0);
+  assert.equal(q.openings_qty, 3);        // 0 + 3, not 1 + 3
+  assert.equal(q.openings_qty_review, false);
+});
+
+test("unknown/missing qty does not invent 1 — raw count kept, review flagged", () => {
+  const q = normalizeVendorQuote({
+    vendor: "Amsco", openings_qty: 6,
+    lines: [{ qty: null, kind: "door", description: "Single Hung" }, { qty: 2, kind: "glass" }],
+  });
+  assert.equal(q.lines[0].qty, null);
+  assert.equal(q.openings_qty, 6);
+  assert.equal(q.openings_qty_review, true);
+});
+
+test("group-summary plus detail lines does not double-count — raw kept, review flagged", () => {
+  const q = normalizeVendorQuote({
+    vendor: "Amsco", openings_qty: 4,
+    lines: [
+      { qty: 4, kind: "door", description: "Single Hung" },
+      { qty: 1, kind: "door", description: "Single Hung" },
+      { qty: 1, kind: "door", description: "Single Hung" },
+      { qty: 1, kind: "door", description: "Single Hung" },
+      { qty: 1, kind: "door", description: "Single Hung" },
+    ],
+  });
+  assert.equal(q.openings_qty, 4);       // not 8 (4+1+1+1+1)
+  assert.equal(q.openings_qty_review, true);
+});
+
+test("distinct rows with same description and same qty are summed, not deduped", () => {
+  const q = normalizeVendorQuote({
+    vendor: "Amsco", openings_qty: 0,
+    lines: [
+      { qty: 2, kind: "door", description: "Slider" },
+      { qty: 2, kind: "door", description: "Slider" },
+    ],
+  });
+  assert.equal(q.openings_qty, 4);
+  assert.equal(q.openings_qty_review, false);
+});
