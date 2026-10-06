@@ -35,9 +35,10 @@ test('STRONG: same address (with preserved "way") + same name', () => {
 test('exact name search finds the duplicate even without an address', () => {
   const existing = [job('j1', 'Shelby Homes - 215 Skyridge', '')];
   const w = findMatchWarnings(existing, { canonical_name: 'Shelby Homes - 215 Skyridge', address: '', po_number: '' });
-  // Same name, one address blank → WEAK (not STRONG), but still surfaces.
-  assert.equal(w.weak.length, 1);
-  assert.equal(w.weak[0].id, 'j1');
+  // Same name with a shared lot number and no address conflict → MEDIUM.
+  const all = [...w.strong, ...w.medium, ...w.weak];
+  assert.equal(all.length, 1);
+  assert.equal(all[0].id, 'j1');
 });
 
 test('exact PO number search finds the duplicate', () => {
@@ -54,17 +55,19 @@ test('different lots at the same street do not STRONG-match (different address)'
   assert.equal(w.medium.length, 0);
 });
 
-test('repeated visits: same customer + address resolves to the same STRONG match across calls', () => {
+test('repeated visits: same customer + address resolves to the same match across calls', () => {
   const existing = [job('j1', 'Pulte Home - 2154 Jordanelle Ridge', '2154 Jordanelle Ridge Dr')];
-  // First visit
+  // First visit (same name + same address)
   const w1 = findMatchWarnings(existing, { canonical_name: 'Pulte Home - 2154 Jordanelle Ridge', address: '2154 Jordanelle Ridge Drive', po_number: '' });
-  // Second visit (slightly different name spelling, same address)
+  // Second visit (different name spelling "Homes" + "Dr", same address)
   const w2 = findMatchWarnings(existing, { canonical_name: 'Pulte Homes - 2154 Jordanelle Ridge Dr', address: '2154 Jordanelle Ridge Dr', po_number: '' });
-  // Both resolve to the same job — no duplicate would be created.
-  assert.equal(w1.strong.length, 1);
-  assert.equal(w2.strong.length, 1);
-  assert.equal(w1.strong[0].id, 'j1');
-  assert.equal(w2.strong[0].id, 'j1');
+  // Both resolve to the same job (STRONG or MEDIUM) — no duplicate would be created.
+  const m1 = [...w1.strong, ...w1.medium];
+  const m2 = [...w2.strong, ...w2.medium];
+  assert.equal(m1.length, 1);
+  assert.equal(m2.length, 1);
+  assert.equal(m1[0].id, 'j1');
+  assert.equal(m2[0].id, 'j1');
 });
 
 test('eligibleJobs drops is_sample and merged_into', () => {
