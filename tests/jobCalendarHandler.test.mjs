@@ -236,3 +236,80 @@ test("handler + real google transport: unauthenticated -> zero token/fetch", asy
   assert.equal(tokenCalls, 0);
   assert.equal(fetchCalls, 0);
 });
+
+// ---- one-payload exact gate (injectable exactTestPayload; production null) ----
+// Gate enables ONLY when every CREATE_FIELDS value strictly equals the injected
+// test payload AND the server-computed fingerprint matches AND the caller is the
+// payload's owner. Every changed field / other user / other request -> disabled
+// (or owner_mismatch 400), zero transport/token/write. Production passes no
+// exactTestPayload, so the gate never enables in production.
+async function gatePayload() {
+  const p = pl();
+  const fp = await core.fingerprintHash(p, { sha256 });
+  return { ...p, fingerprint: fp };
+}
+test("gate: exact payload + injected gate -> enabled, create runs (mock) -> existing_match", async () => {
+  const gate = await gatePayload();
+  const p = pl();
+  const ex = await existingEvent(p, gate.fingerprint);
+  const t = mockTransport({ get: () => ({ kind: "found", event: ex }) });
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: t, createEnabled: false, sha256, exactTestPayload: gate });
+  const r = await handler.handleCreate({ payload: p }, { id: OWNER });
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.kind, "existing_match");
+  assert.equal(t.calls.get, 1);
+  assert.equal(t.calls.insert, 0);
+});
+test("gate: no gate (null) + createEnabled=false -> disabled, zero transport", async () => {
+  const t = mockTransport({ get: () => { throw new Error("no"); }, insert: () => { throw new Error("no"); } });
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: t, createEnabled: false, sha256 });
+  const r = await handler.handleCreate({ payload: pl() }, { id: OWNER });
+  assert.equal(r.body.disabled, true);
+  assert.equal(t.calls.get + t.calls.insert, 0);
+});
+test("gate: every changed field -> disabled, zero transport", async () => {
+  const gate = await gatePayload();
+  const t = mockTransport({ get: () => { throw new Error("no"); }, insert: () => { throw new Error("no"); } });
+  const changes = [
+    { request_id: "req-00000002" },
+    { start_date: "2026-10-11", end_date: "2026-10-11" },
+    { all_day: false, start_time: "09:00", end_time: "10:00" },
+    { time_zone: "America/Chicago" },
+    { notes: "Different notes" },
+    { confirm_no_jobsite: true },
+  ];
+  for (const over of changes) {
+    const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: t, createEnabled: false, sha256, exactTestPayload: gate });
+    const r = await handler.handleCreate({ payload: pl(over) }, { id: OWNER });
+    assert.equal(r.body.disabled, true, `changed ${JSON.stringify(over)}`);
+    assert.equal(r.body.stage, "create_disabled_in_stage", `changed ${JSON.stringify(over)}`);
+  }
+  assert.equal(t.calls.get + t.calls.insert, 0);
+});
+test("gate: other user (owner_mismatch) -> 400, zero transport", async () => {
+  const gate = await gatePayload();
+  const t = mockTransport({ get: () => { throw new Error("no"); }, insert: () => { throw new Error("no"); } });
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: t, createEnabled: false, sha256, exactTestPayload: gate });
+  const r = await handler.handleCreate({ payload: pl() }, { id: "6a8229a9801b2aef9278ff47" });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.error, "owner_mismatch");
+  assert.equal(t.calls.get + t.calls.insert, 0);
+});
+test("gate: fingerprint mismatch (gate.fingerprint tampered) -> disabled, zero transport", async () => {
+  const gate = await gatePayload();
+  gate.fingerprint = "deadbeef";
+  const t = mockTransport({ get: () => { throw new Error("no"); }, insert: () => { throw new Error("no"); } });
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: t, createEnabled: false, sha256, exactTestPayload: gate });
+  const r = await handler.handleCreate({ payload: pl() }, { id: OWNER });
+  assert.equal(r.body.disabled, true);
+  assert.equal(t.calls.get + t.calls.insert, 0);
+});
+test("gate: createEnabled=true still works without gate (broader switch independent)", async () => {
+  const p = pl();
+  const ex = await existingEvent(p, await core.fingerprintHash(p, { sha256 }));
+  const t = mockTransport({ get: () => ({ kind: "found", event: ex }) });
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: t, createEnabled: true, sha256 });
+  const r = await handler.handleCreate({ payload: p }, { id: OWNER });
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.kind, "existing_match");
+});
