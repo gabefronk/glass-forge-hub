@@ -7,7 +7,7 @@ import { sectionForNextKey } from '@/lib/purchasingViewModel';
 import { money } from '@/components/budgets/ProcurementForms';
 
 function RefDot({ status }) {
-  const color = status === 'green' ? '#166447' : status === 'amber' ? '#C08B2E' : '#B8B0A4';
+  const color = status === 'green' ? '#166447' : status === 'amber' ? '#8C9EAF' : '#B8B0A4';
   return <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ backgroundColor: color }} />;
 }
 
@@ -49,7 +49,7 @@ export default function PurchasingCard({ card, onEdit, data, onSaved }) {
             </p>
           )}
         </div>
-        <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: statusTone === 'amber' ? '#FFF3DF' : '#EAF5EE', color: statusTone === 'amber' ? '#89511A' : '#166447', border: `1px solid ${statusTone === 'amber' ? '#F0DBA8' : '#C7E4D2'}` }}>{statusLabel}</span>
+        <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: statusTone === 'amber' ? '#F4F1EA' : '#EAF5EE', color: statusTone === 'amber' ? '#566063' : '#166447', border: `1px solid ${statusTone === 'amber' ? '#D3CABB' : '#C7E4D2'}` }}>{statusLabel}</span>
       </div>
 
       <div className="mt-2.5"><MoneyTiles windows={windows.display} rough={rough.display} sale={sale.display} profit={profitDisplay} /></div>
@@ -63,7 +63,7 @@ export default function PurchasingCard({ card, onEdit, data, onSaved }) {
       </div>
 
       {windows.display?.review && (chosenBudget || windows.display?.alternatives?.length) ? (
-        <div className="mt-1.5 text-[10.5px] leading-snug" style={{ color: '#89511A' }}>
+        <div className="mt-1.5 text-[10.5px] leading-snug" style={{ color: '#566063' }}>
           {chosenBudget ? <span>Estimate from {chosenBudget.title}</span> : null}
           {windows.display?.alternatives?.length ? <span>{chosenBudget ? ' · ' : ''}Alternatives: {windows.display.alternatives.map((a) => `${a.label || 'estimate'} ${money(a.value)}`).join('; ')}</span> : null}
         </div>

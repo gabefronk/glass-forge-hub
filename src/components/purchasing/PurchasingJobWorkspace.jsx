@@ -40,7 +40,7 @@ const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v
 const fileHref = (id) => (id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : '');
 const folderHref = (id) => (id ? `https://drive.google.com/drive/folders/${encodeURIComponent(id)}` : '');
 
-const chip = { ok: { t: 'Included scope', c: '#166447', bg: '#EAF5EE', b: '#C7E4D2' }, warn: { t: 'Needs review', c: '#89511A', bg: '#FFF3DF', b: '#F0DBA8' }, draft: { t: 'Draft', c: '#89511A', bg: '#FFF3DF', b: '#F0DBA8' }, ref: { t: 'Reference / replaced', c: '#89511A', bg: '#FFF3DF', b: '#F0DBA8' }, unlinked: { t: 'Needs a job', c: '#89511A', bg: '#FFF3DF', b: '#F0DBA8' } };
+const chip = { ok: { t: 'Included scope', c: '#166447', bg: '#EAF5EE', b: '#C7E4D2' }, warn: { t: 'Needs review', c: '#566063', bg: '#F4F1EA', b: '#D3CABB' }, draft: { t: 'Draft', c: '#566063', bg: '#F4F1EA', b: '#D3CABB' }, ref: { t: 'Reference / replaced', c: '#566063', bg: '#F4F1EA', b: '#D3CABB' }, unlinked: { t: 'Needs a job', c: '#566063', bg: '#F4F1EA', b: '#D3CABB' } };
 function budgetChip(b, active) {
   if (b.status === 'needs_review') return chip.warn;
   if (!b.job_id) return chip.unlinked;
@@ -50,7 +50,7 @@ function budgetChip(b, active) {
 }
 
 function Badge({ tone, children }) {
-  const s = tone === 'ok' ? { c: '#166447', bg: '#EAF5EE', b: '#C7E4D2' } : tone === 'warn' ? { c: '#89511A', bg: '#FFF3DF', b: '#F0DBA8' } : { c: '#566063', bg: '#F4F1EA', b: '#D3CABB' };
+  const s = tone === 'ok' ? { c: '#166447', bg: '#EAF5EE', b: '#C7E4D2' } : tone === 'warn' ? { c: '#566063', bg: '#F4F1EA', b: '#D3CABB' } : { c: '#566063', bg: '#F4F1EA', b: '#D3CABB' };
   return <span className="inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap" style={{ color: s.c, backgroundColor: s.bg, border: `1px solid ${s.b}` }}>{children}</span>;
 }
 
@@ -139,7 +139,7 @@ function BudgetRow({ budget, job, allBudgets, pos, onEdit, onPreparePO, onShowPO
         <Badge tone={c === chip.ok ? 'ok' : 'warn'}>{c.t}</Badge>
       </div>
       <p className="mt-1.5 text-[12px]" style={{ color: C.text }}>Material before tax: <strong>{money(budget.inputs?.material_true_cost)}</strong>{budget.openings_qty > 0 ? <span style={{ color: C.textSecondary }}> · {budget.openings_qty} units</span> : null}</p>
-      <p className={`mt-1 text-[11px] ${figures.warnings.length ? 'font-semibold' : ''}`} style={{ color: figures.warnings.length ? '#89511A' : C.textSecondary }}>{statusLine}</p>
+      <p className={`mt-1 text-[11px] ${figures.warnings.length ? 'font-semibold' : ''}`} style={{ color: figures.warnings.length ? '#566063' : C.textSecondary }}>{statusLine}</p>
       <BudgetBreakdown budget={budget} />
       <QuoteLines budget={budget} />
       <div className="mt-1.5 text-[12px]" style={{ color: C.text }}>Cost basis <strong>{money(figures.cost)}</strong></div>
@@ -285,7 +285,7 @@ export default function PurchasingJobWorkspace({ job, data, section, onSection, 
           <div className="space-y-2">
             {rec.budgets.length === 0 ? <p className="text-[12px]" style={{ color: C.textSecondary }}>No quote budgets for this job yet. Add a quote PDF below.</p> : null}
             {rec.budgets.map((b) => <BudgetRow key={b.id} budget={b} job={job} allBudgets={rec.budgets} pos={rec.pos} onEdit={editWithSaved} onPreparePO={preparePO} onShowPO={showPO} />)}
-            {rec.conflicts.length > 0 && <p className="text-[11.5px] font-semibold" style={{ color: '#89511A' }}>{rec.conflicts.length} PO reference conflict(s) — review before linking.</p>}
+            {rec.conflicts.length > 0 && <p className="text-[11.5px] font-semibold" style={{ color: '#566063' }}>{rec.conflicts.length} PO reference conflict(s) — review before linking.</p>}
             <div className="rounded-[10px] p-2" style={{ border: '1px dashed #D3CABB', backgroundColor: '#FAF8F3' }}>
               <QuoteDropzone jobId={job.id} onDone={onSaved} />
             </div>
