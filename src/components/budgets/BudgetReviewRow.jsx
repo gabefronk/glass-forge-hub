@@ -72,7 +72,7 @@ function fromBudget(b) {
   return out;
 }
 
-export function NumbersEditor({ budget, onDone, onCancel, onRefilled }) {
+export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill = false }) {
   const [form, setForm] = useState(() => fromBudget(budget));
   const [version, setVersion] = useState(() => budgetVersion(budget));
   const [reviewed, setReviewed] = useState(false);
@@ -124,7 +124,7 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled }) {
     <div className="flex flex-col gap-3 rounded-[12px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="m-0 text-[12.5px] flex-1 min-w-[240px]" style={{ color: C.textMuted }}>The yellow cells of the Window Budget Sheet{fill ? ", filled from the quote and your install price sheet — fix anything that's off" : ""}. Saving keeps the previous inputs in history and updates the working budget and Drive sheets. Invoice amounts, actual costs and issued POs are not changed.</p>
-        {budget.source_pdf_url ? (
+        {budget.source_pdf_url && !hideRefill ? (
           <button type="button" disabled={busy || refilling} onClick={refill} className={smallBtn} style={btnGhost} title="Read the quote PDF again and fill every box it can">
             <RefreshCw className={`h-3.5 w-3.5${refilling ? " animate-spin" : ""}`} />{refilling ? "Reading quote…" : fill ? "Re-read quote" : "Fill from quote"}
           </button>

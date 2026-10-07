@@ -79,7 +79,7 @@ test('windowsDisplayCandidate: conflict with no cost figure → dash + po_confli
 
 test('windowsDisplayCandidate: PO amount_dealer is a candidate (labelled, no tax) when no budget cost figure', () => {
   const b = { id: 'b1', job_id: 'j1', budget_usage: 'included', numbers_reviewed_at: '2026-10-01', inputs: {}, quote: null };
-  const d = windowsDisplayCandidate([b], [{ job_id: 'j1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 }], []);
+  const d = windowsDisplayCandidate([b], [{ id: 'po1', job_id: 'j1', budget_id: 'b1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 }], []);
   assert.equal(d.value, 933.96);
   assert.equal(d.source, 'po_dealer');
   assert.equal(d.review, true);
@@ -142,7 +142,7 @@ test('saleDisplayCandidate: absent owner → budget target sell estimate, labell
 
 test('profitDisplayCalc: flag propagates when any input is a candidate', () => {
   const p = profitDisplayCalc({ value: CMT, review: true }, { value: 3000, review: false }, { value: 18000, review: false });
-  assert.equal(p.value, 18000 - CMT - 3000);
+  assert.equal(p.value, 4114.46);
   assert.equal(p.review, true);
 });
 
@@ -169,7 +169,7 @@ test('buildPurchasingCards: verified canonical preserved separate; display candi
   // Display candidate present
   assert.equal(card.windows.display.value, CMT);
   assert.equal(card.windows.display.review, true);
-  assert.equal(card.profitDisplay.value, 18000 - CMT - 3000);
+  assert.equal(card.profitDisplay.value, 4114.46);
   assert.equal(card.profitDisplay.review, true);
   // No mutation of inputs
   assert.deepEqual({ jobs, budgets, moneyInputs }, before);
@@ -201,4 +201,46 @@ test('pickDisplayBudget: deterministic — verified source quote beats cost-only
   const verified = reviewedBudget();
   const costOnly = { ...reviewedBudget({}, { quote: null }), id: 'b2' };
   assert.equal(pickDisplayBudget([costOnly, verified]).id, 'b1');
+});
+
+test('windowsDisplayCandidate: PO-only job (no budget) falls back to PO dealer amount, no tax verified', () => {
+  const d = windowsDisplayCandidate([], [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 }], []);
+  assert.equal(d.value, 933.96);
+  assert.equal(d.source, 'po_dealer');
+  assert.equal(d.review, true);
+  assert.match(d.label, /no tax/);
+  assert.equal(d.budgetId, null);
+});
+
+test('windowsDisplayCandidate: PO-only job with multiple POs → deterministic pick + alternatives, never sum', () => {
+  const d = windowsDisplayCandidate([], [
+    { id: 'po2', job_id: 'j1', po_number: 'YA-2', status: 'ordered', amount_dealer: 500 },
+    { id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 },
+  ], []);
+  assert.equal(d.value, 933.96); // po1 picked on id tiebreak
+  assert.equal(d.alternatives.length, 1);
+  assert.equal(d.alternatives[0].value, 500);
+});
+
+test('buildPurchasingCards: PO-only job (no budget) does not crash; shows PO amount candidate; chosenBudget null', () => {
+  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [], purchase_orders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 }], moneyInputs: [], today: TODAY });
+  assert.equal(card.windows.display.value, 933.96);
+  assert.equal(card.rough.display.value, null);
+  assert.equal(card.sale.display.value, null);
+  assert.equal(card.chosenBudget, null);
+});
+
+test('roughDisplayCandidate: partial estimate when one component missing (labor only)', () => {
+  const d = roughDisplayCandidate({ inputs: { labor_cost_sub_pay: 2000 } }, null, false);
+  assert.equal(d.value, 2000);
+  assert.equal(d.review, true);
+  assert.match(d.label, /partial/);
+  assert.match(d.label, /labor/);
+});
+
+test('saleDisplayCandidate: explicit 0 target sell stays 0 (not invented, not dropped)', () => {
+  const d = saleDisplayCandidate({ inputs: { actual_total_sell: 0 } }, null, false);
+  assert.equal(d.value, 0);
+  assert.equal(d.review, true);
+  assert.equal(d.source, 'budget_estimate');
 });

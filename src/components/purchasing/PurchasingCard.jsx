@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import MoneyTiles from './MoneyTiles';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import { sectionForNextKey } from '@/lib/purchasingViewModel';
+import { money } from '@/components/budgets/ProcurementForms';
 
 function RefDot({ status }) {
   const color = status === 'green' ? '#166447' : status === 'amber' ? '#C08B2E' : '#B8B0A4';
@@ -14,7 +15,7 @@ function RefDot({ status }) {
 // workspace region. The next-action opens the correct inline section (not a
 // route) for budgets/orders/tracking; 'job' stays an external Open-job Link.
 export default function PurchasingCard({ card, onEdit, data, onSaved }) {
-  const { job, windows, rough, sale, profitDisplay, refs, next, supplier, units, conflict } = card;
+  const { job, windows, rough, sale, profitDisplay, refs, next, supplier, units, conflict, chosenBudget } = card;
   const [expanded, setExpanded] = useState(false);
   const [section, setSection] = useState('budgets');
   const moneyDup = rough.duplicate || sale.duplicate;
@@ -60,6 +61,13 @@ export default function PurchasingCard({ card, onEdit, data, onSaved }) {
         <span><RefDot status={refs.etaStatus} />ETA {refs.etaLabel || '—'}</span>
         <span><RefDot status={refs.payment} />Payment {refs.paymentLabel || '—'}</span>
       </div>
+
+      {windows.display?.review && (chosenBudget || windows.display?.alternatives?.length) ? (
+        <div className="mt-1.5 text-[10.5px] leading-snug" style={{ color: '#89511A' }}>
+          {chosenBudget ? <span>Estimate from {chosenBudget.title}</span> : null}
+          {windows.display?.alternatives?.length ? <span>{chosenBudget ? ' · ' : ''}Alternatives: {windows.display.alternatives.map((a) => `${a.label || 'estimate'} ${money(a.value)}`).join('; ')}</span> : null}
+        </div>
+      ) : null}
 
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <button type="button" onClick={onEdit} className="text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>Edit money</button>
