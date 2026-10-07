@@ -380,10 +380,12 @@ export default async function(req) {
         update: (id, patch) => base44.asServiceRole.entities.FieldReports.update(id, patch),
         // Fresh duplicate-mapping check just before write: lookup by post_id must return
         // exactly one record matching the expected id + project. A duplicate that
-        // appeared since plan (or the record going missing) fails closed.
+        // appeared since plan (or the record going missing) fails closed. Return the
+        // RAW cursor page (not .items) so executeMessageFills can detect a truncated
+        // page (has_more / next_cursor) and fail closed — stripping .items here would
+        // hide truncation and let a one-item truncated page pass as length-1.
         lookup: async (postId, projectId) => {
-          const page = await base44.asServiceRole.entities.FieldReports.filter({ post_id: postId }, { limit: 50 });
-          return (page && page.items) || [];
+          return await base44.asServiceRole.entities.FieldReports.filter({ post_id: postId }, { limit: 50 });
         },
         nowIso,
       });

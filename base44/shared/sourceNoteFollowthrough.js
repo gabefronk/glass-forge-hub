@@ -220,9 +220,12 @@ export function planReportWrites(items, nowIso) {
 // the identity/snapshot guards. fresh.id must equal the queued id.
 //
 // messageFills: [{ id, expectedPostId, expectedProjectId, snapshot, sourceMessage, plannedAction, patch }]
-// lookup(postId, projectId): optional injected fresh-duplicate check; returns an array
-//   (or a page {items}) of records with that post_id. When provided, must be exactly one
-//   record matching id + post_id + project_id, else fail closed.
+// lookup(postId, projectId): mandatory injected fresh-duplicate check; returns an array
+//   (positional filter call) or a RAW cursor page {items, next_cursor, has_more} (options
+//   filter call) of records with that post_id. A truncated page (has_more / next_cursor /
+//   truncated) is rejected before items validation. Must return exactly one record
+//   matching id + post_id + project_id, else fail closed. Returning .items (stripping the
+//   page metadata) hides truncation and must NOT be done.
 // Returns { filled, skipped }.
 export async function executeMessageFills({ messageFills, get, update, lookup, nowIso }) {
   let filled = 0;
@@ -239,13 +242,27 @@ export async function executeMessageFills({ messageFills, get, update, lookup, n
     if (!recheck.safe) { skipped++; continue; }
     // Fresh duplicate-mapping check: an injected lookup by post_id must return exactly
     // one record matching the expected id + project. Accepts an array (positional
-    // filter call) or a cursor page {items} (options filter call); any other shape
-    // (unknown / truncated / missing items) normalizes to [] and fails closed. A valid
-    // non-empty array is never collapsed to [] (Array.isArray returns it as-is).
+    // filter call) or a cursor page {items, next_cursor, has_more} (options filter
+    // call). A TRUNCATED page (has_more true, nonempty next_cursor, or truncated true)
+    // is rejected BEFORE items validation: a duplicate could sit on a later page we
+    // never fetched, so a one-item truncated page must NOT pass as length-1. Unknown
+    // shape (string/number/boolean/null, or an object whose items is not an array)
+    // fails closed. A valid non-empty array is never collapsed to [] (Array.isArray
+    // returns it as-is). The entry lookup MUST return the RAW cursor page (not .items)
+    // so truncation is detectable here.
     let byPost;
     try { byPost = await lookup(mf.expectedPostId, mf.expectedProjectId); }
     catch (e) { skipped++; continue; }
-    const arr = Array.isArray(byPost) ? byPost : ((byPost && byPost.items) || []);
+    let arr;
+    if (Array.isArray(byPost)) {
+      arr = byPost;
+    } else if (byPost && typeof byPost === 'object') {
+      if (byPost.has_more === true || (typeof byPost.next_cursor === 'string' && byPost.next_cursor !== '') || byPost.truncated === true) { skipped++; continue; }
+      if (!Array.isArray(byPost.items)) { skipped++; continue; }
+      arr = byPost.items;
+    } else {
+      skipped++; continue;
+    }
     if (arr.length !== 1) { skipped++; continue; }
     const m = arr[0];
     if (!m || m.id !== mf.id || m.post_id !== mf.expectedPostId || m.project_id !== mf.expectedProjectId) { skipped++; continue; }

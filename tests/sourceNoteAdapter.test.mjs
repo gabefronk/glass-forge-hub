@@ -17,6 +17,9 @@ import assert from "node:assert/strict";
 import {
   planReportWrite, buildNewReportRow, executeMessageFills, captureSnapshot, planReportWrites,
 } from "../base44/shared/sourceNoteFollowthrough.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const NOW = "2026-10-07T10:00:00.000Z";
 
@@ -381,4 +384,64 @@ test("adapter: lookup throws fails closed", async () => {
   const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup: async () => { throw new Error("boom"); }, nowIso: NOW });
   assert.equal(r.filled, 0);
   assert.equal(r.skipped, 1);
+});
+
+// ACTUAL TRUNCATED-PAGE GAP: a one-item page that is truncated (has_more true OR
+// next_cursor nonempty) must fail closed — a duplicate could sit on a later page we
+// never fetched. The entry must return the RAW page (not .items) so this is detectable.
+test("adapter: one item + has_more true fails closed (truncated page)", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup: async () => ({ items: [store.snapshot()[0]], next_cursor: null, has_more: true }), nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+  assert.equal(store.snapshot()[0].message, "old");
+});
+
+test("adapter: one item + next_cursor nonempty fails closed (truncated page)", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup: async () => ({ items: [store.snapshot()[0]], next_cursor: "abc", has_more: false }), nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+  assert.equal(store.snapshot()[0].message, "old");
+});
+
+test("adapter: page complete (has_more false, next_cursor null) passes", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup: async () => ({ items: [store.snapshot()[0]], next_cursor: null, has_more: false }), nowIso: NOW });
+  assert.equal(r.filled, 1);
+  assert.equal(store.snapshot()[0].message, "new");
+});
+
+test("adapter: one item + truncated true fails closed", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup: async () => ({ items: [store.snapshot()[0]], truncated: true }), nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+});
+
+test("adapter: page items non-array fails closed (unknown shape)", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup: async () => ({ items: "not-an-array" }), nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+});
+
+// SOURCE WIRING: the entry lookup must return the RAW cursor page (not .items), so
+// executeMessageFills can detect truncation. Static source assertion (no invoke/auth).
+test("source wiring: entry lookup returns RAW page (not .items) for truncation detection", () => {
+  const entryPath = path.resolve(fileURLToPath(import.meta.url), "../../base44/functions/fetchProbuildPosts/entry.ts");
+  const entry = fs.readFileSync(entryPath, "utf8");
+  assert.ok(/lookup:\s*async\s*\(postId,\s*projectId\)\s*=>/.test(entry), "entry has a lookup(postId, projectId)");
+  assert.ok(entry.includes("return await base44.asServiceRole.entities.FieldReports.filter({ post_id: postId }, { limit: 50 })"), "lookup returns the RAW filter() page");
+  assert.ok(!entry.includes("(page && page.items) || []"), "lookup must NOT strip .items (raw page required for truncation detection)");
 });
