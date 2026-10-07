@@ -3,6 +3,14 @@
 // the same source post once it has text. Runs the ACTUAL fetchProbuildPosts
 // handler with the ProBuild client + Base44 SDK stubbed (same harness as
 // financeGapIngest). No live sync, no record writes, no provider calls.
+//
+// Concurrency: the SDK update/bulkUpdate are unconditional (no CAS/revision),
+// so a message fill is isolated from the photo/job-link bulk patch and guarded
+// by a freshest exact FieldReports.get right before its single-field update.
+// The tests below inject a concurrent owner edit (via onGet) AFTER the list
+// snapshot and prove the owner note is preserved, and that a failed/changed
+// fresh read skips the write. A residual read-then-write race remains (no
+// atomic CAS exists); the LIMITATION test documents it against the real SDK.
 import assert from 'node:assert/strict';
 // Dual-mode test runner: vitest when executed under vitest (this sandbox blocks
 // `node --test`), node:test otherwise (the project's convention for every other
@@ -39,11 +47,17 @@ async function loadHandler(path) {
 }
 const probuildHandler = await loadHandler('../base44/functions/fetchProbuildPosts/entry.ts');
 
-// memoryDb with a spy on FieldReports.bulkUpdate to capture exact patches.
-function memoryDb(seed = {}) {
+// memoryDb with spies on FieldReports.bulkUpdate (photo/job-link patch) and
+// FieldReports.update (isolated message write), and an optional onGet hook that
+// mutates the live record (or throws) when FieldReports.get is called — used to
+// simulate a concurrent owner edit landing between the list snapshot and the
+// fresh read-before-write.
+function memoryDb(seed = {}, opts = {}) {
   const tables = new Map();
   let seq = 0;
   const frBulkUpdateCalls = [];
+  const frUpdateCalls = [];
+  const frGetCalls = [];
   const table = (name) => {
     if (!tables.has(name)) tables.set(name, (seed[name] || []).map((r) => structuredClone(r)));
     return tables.get(name);
@@ -51,6 +65,13 @@ function memoryDb(seed = {}) {
   const entity = (name) => ({
     list: async (_sort, limit = 1000, skip = 0) => table(name).slice(skip, skip + limit).map((r) => structuredClone(r)),
     filter: async (q = {}) => table(name).filter((r) => Object.entries(q).every(([k, v]) => r[k] === v)).map((r) => structuredClone(r)),
+    get: async (id) => {
+      if (name === 'FieldReports') frGetCalls.push(id);
+      const rec = table(name).find((x) => x.id === id);
+      if (!rec) return undefined;
+      if (opts.onGet) opts.onGet(name, id, rec); // may mutate rec or throw
+      return structuredClone(rec);
+    },
     bulkCreate: async (rows) => rows.map((r) => {
       const row = { ...structuredClone(r), id: r.id || `${name.toLowerCase()}-new-${++seq}` };
       table(name).push(row);
@@ -61,10 +82,16 @@ function memoryDb(seed = {}) {
       for (const p of rows) Object.assign(table(name).find((x) => x.id === p.id), structuredClone(p));
       return rows;
     },
+    update: async (id, data) => {
+      if (name === 'FieldReports') frUpdateCalls.push({ id, data: structuredClone(data) });
+      if (opts.onUpdate) opts.onUpdate(name, id, data); // may throw before mutate
+      Object.assign(table(name).find((x) => x.id === id), structuredClone(data));
+      return structuredClone(data);
+    },
   });
   const entities = new Proxy({}, { get: (_, name) => entity(String(name)) });
   const client = { entities, auth: { me: async () => ({ id: 'owner', role: 'admin' }) }, asServiceRole: { entities, integrations: { Core: { UploadFile: async () => ({ file_url: 'https://files.test/x' }) } } } };
-  return { table, client, frBulkUpdateCalls };
+  return { table, client, frBulkUpdateCalls, frUpdateCalls, frGetCalls };
 }
 async function run(handler, db, body) {
   globalThis.__testBase44 = db.client;
@@ -102,7 +129,7 @@ test('photos-only create -> late text fills message verbatim once; rerun is a no
   res = await run(probuildHandler, db, { ...RANGE, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', LATE_TEXT, att(PHOTO))]) });
   assert.equal(res.fr_messages_filled, 0, 'no fill on rerun');
   assert.deepEqual(db.table('FieldReports'), before, 'FR unchanged on rerun');
-  assert.equal(db.frBulkUpdateCalls.filter((c) => c.some((p) => 'message' in p)).length, 1, 'message patch written exactly once');
+  assert.equal(db.frUpdateCalls.filter((c) => 'message' in c.data).length, 1, 'message written exactly once via isolated update');
 });
 
 test('nonempty existing message (incl. owner/manual text) is preserved; no fill', async () => {
@@ -110,7 +137,9 @@ test('nonempty existing message (incl. owner/manual text) is preserved; no fill'
   const res = await run(probuildHandler, db, { ...RANGE, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', 'Crew note differs.')]) });
   assert.equal(res.fr_messages_filled, 0);
   assert.equal(db.table('FieldReports')[0].message, 'Owner typed this.');
-  assert.equal(db.frBulkUpdateCalls.length, 0, 'no FR update at all');
+  assert.equal(db.frBulkUpdateCalls.length, 0, 'no FR bulkUpdate at all');
+  assert.equal(db.frUpdateCalls.length, 0, 'no isolated update');
+  assert.equal(db.frGetCalls.length, 0, 'no fresh get (not eligible)');
 });
 
 test('whitespace-only / undefined / null existing message -> filled from source', async () => {
@@ -159,7 +188,7 @@ test('exact post_id identity isolation: each post fills only its own FR', async 
   assert.equal(byId['fr-b'].message, 'B text');
 });
 
-test('message-only fill leaves original_text/edit metadata/photos/job/fee unchanged; patch is {id,message} only', async () => {
+test('message-only fill is an isolated single-field update; original_text/edit metadata/photos/job/fee unchanged', async () => {
   const fee = { id: 'fl-1', source: 'probuild', written_by: 'probuild', probuild_post_id: 'post-1', probuild_project_id: 'proj-toll', job_id: 'job-toll', job_date: '2026-09-15', invoice_month: '2026-09', job_name_raw: 'Toll Brothers - 72 Jordanelle Ridge', note_text: '', probuild_note_text: '', labor_amt: 0, fee_amt: 0, fee_pct: 0.1, billable: true, needs_review: true, match_confidence: 'high', photo_urls: [PHOTO] };
   const db = memoryDb(baseSeed({ FieldReports: [mkFr('fr-1', 'post-1', '', { original_text: null, edited_at: null, edited_by: null })], FeeLines: [fee] }));
   const res = await run(probuildHandler, db, { ...RANGE, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', LATE_TEXT, att(PHOTO))]) });
@@ -174,10 +203,9 @@ test('message-only fill leaves original_text/edit metadata/photos/job/fee unchan
   const feeAfter = db.table('FeeLines')[0];
   assert.equal(feeAfter.note_text, '', 'fee note_text not changed by message fill');
   assert.equal(feeAfter.labor_amt, 0, 'fee labor not changed');
-  assert.equal(db.frBulkUpdateCalls.length, 1, 'one FR bulkUpdate call');
-  const patch = db.frBulkUpdateCalls[0][0];
-  assert.deepEqual(Object.keys(patch).sort(), ['id', 'message'], 'only id + message in the patch');
-  assert.equal(patch.message, LATE_TEXT);
+  assert.equal(db.frBulkUpdateCalls.length, 0, 'message not bundled into a bulkUpdate');
+  assert.equal(db.frUpdateCalls.length, 1, 'one isolated update call');
+  assert.deepEqual(db.frUpdateCalls[0].data, { message: LATE_TEXT }, 'update data is exactly {message}');
 });
 
 test('duplicate existing reports for same post_id -> ambiguous skip, no arbitrary overwrite', async () => {
@@ -193,22 +221,106 @@ test('duplicate existing reports for same post_id -> ambiguous skip, no arbitrar
 test('dry_run: counters computed, no FieldReports writes', async () => {
   const db = memoryDb(baseSeed({ FieldReports: [mkFr('fr-1', 'post-1', '')] }));
   const res = await run(probuildHandler, db, { ...RANGE, dry_run: true, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', LATE_TEXT, att(PHOTO))]) });
-  assert.equal(res.fr_messages_filled, 1, 'counter computed in dry-run');
+  assert.equal(res.fr_messages_filled, 1, 'planned-fill counter in dry-run');
   assert.equal(db.table('FieldReports')[0].message, '', 'no write in dry-run');
   assert.equal(db.frBulkUpdateCalls.length, 0, 'no bulkUpdate in dry-run');
+  assert.equal(db.frUpdateCalls.length, 0, 'no isolated update in dry-run');
+  assert.equal(db.frGetCalls.length, 0, 'no fresh get in dry-run');
 });
 
-test('LIMITATION: no conditional revision (CAS) available; fill-back is last-write-wins like the existing photo/job fills', async () => {
-  // The Base44 entity bulkUpdate used here is unconditional: it accepts no
-  // revision/conditional guard, so a concurrent owner edit to message between
-  // the existingReports read and the bulkUpdate write would be overwritten. This
-  // matches the existing photo/job-link fill-back behavior (also last-write-wins).
-  // The implementation does NOT pretend to do CAS; the empty-message guard is
-  // evaluated at READ time only. This test documents that limitation by asserting
-  // the patch carries no revision/conditional token.
+// ---- concurrency: fresh read-before-write preserves a concurrent owner edit ----
+
+test('concurrent owner edit after list snapshot is preserved (fresh get sees edit, skips write)', async () => {
+  // The list snapshot at the start of the run sees an empty message. Between that
+  // snapshot and the fresh FieldReports.get, an owner edits the report (sets a
+  // note + edited_at/edited_by/original_text). The fresh get must see it and skip.
+  const db = memoryDb(baseSeed({ FieldReports: [mkFr('fr-1', 'post-1', '', { original_text: null, edited_at: null, edited_by: null })] }), {
+    onGet: (name, id, rec) => {
+      if (name === 'FieldReports' && id === 'fr-1') {
+        rec.message = 'Owner note typed mid-run';
+        rec.edited_at = '2026-09-16T01:00:00Z';
+        rec.edited_by = 'owner@test';
+        rec.original_text = '';
+      }
+    },
+  });
+  const res = await run(probuildHandler, db, { ...RANGE, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', LATE_TEXT, att(PHOTO))]) });
+  assert.equal(res.fr_messages_filled, 0, 'no write: owner edit detected');
+  assert.equal(res.fr_messages_skipped_fresh, 1, 'counted as a fresh-check skip');
+  assert.equal(res.fr_messages_skipped_duplicate, 0);
+  const fr = db.table('FieldReports')[0];
+  assert.equal(fr.message, 'Owner note typed mid-run', 'owner note preserved verbatim');
+  assert.equal(fr.edited_by, 'owner@test', 'owner edit metadata preserved');
+  assert.equal(db.frUpdateCalls.length, 0, 'no isolated update issued');
+  assert.equal(db.frGetCalls.length, 1, 'one fresh get for the planned fill');
+});
+
+test('fresh get shows non-empty message (concurrent fill, no edit metadata) -> skip', async () => {
+  // A concurrent process (or owner) set a real message but no edit metadata. The
+  // fresh read sees non-empty text and skips; the existing text is preserved.
+  const db = memoryDb(baseSeed({ FieldReports: [mkFr('fr-1', 'post-1', '')] }), {
+    onGet: (name, id, rec) => {
+      if (name === 'FieldReports' && id === 'fr-1') rec.message = 'Filled by another run';
+    },
+  });
+  const res = await run(probuildHandler, db, { ...RANGE, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', LATE_TEXT, att(PHOTO))]) });
+  assert.equal(res.fr_messages_filled, 0);
+  assert.equal(res.fr_messages_skipped_fresh, 1);
+  assert.equal(db.table('FieldReports')[0].message, 'Filled by another run');
+  assert.equal(db.frUpdateCalls.length, 0);
+});
+
+test('fresh get post_id mismatch -> skip (identity not confirmed)', async () => {
+  const db = memoryDb(baseSeed({ FieldReports: [mkFr('fr-1', 'post-1', '')] }), {
+    onGet: (name, id, rec) => {
+      if (name === 'FieldReports' && id === 'fr-1') rec.post_id = 'post-other';
+    },
+  });
+  const res = await run(probuildHandler, db, { ...RANGE, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', LATE_TEXT, att(PHOTO))]) });
+  assert.equal(res.fr_messages_filled, 0);
+  assert.equal(res.fr_messages_skipped_fresh, 1);
+  assert.equal(db.table('FieldReports')[0].message, '', 'not filled: identity mismatch');
+  assert.equal(db.frUpdateCalls.length, 0);
+});
+
+test('failed fresh get -> skip, no throw out of the handler', async () => {
+  const db = memoryDb(baseSeed({ FieldReports: [mkFr('fr-1', 'post-1', '')] }), {
+    onGet: (_name, id) => {
+      if (id === 'fr-1') throw new Error('transient read failure');
+    },
+  });
+  const res = await run(probuildHandler, db, { ...RANGE, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', LATE_TEXT, att(PHOTO))]) });
+  assert.equal(res.fr_messages_filled, 0, 'no write on fresh-read failure');
+  assert.equal(res.fr_messages_skipped_fresh, 1);
+  assert.equal(db.table('FieldReports')[0].message, '', 'record unchanged');
+  assert.equal(db.frUpdateCalls.length, 0);
+});
+
+test('failed isolated update -> counted as skip, handler still succeeds', async () => {
+  const db = memoryDb(baseSeed({ FieldReports: [mkFr('fr-1', 'post-1', '')] }), {
+    onUpdate: (name, id) => { if (name === 'FieldReports' && id === 'fr-1') throw new Error('write rejected'); },
+  });
+  const res = await run(probuildHandler, db, { ...RANGE, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', LATE_TEXT, att(PHOTO))]) });
+  assert.equal(res.fr_messages_filled, 0, 'failed write not counted as filled');
+  assert.equal(res.fr_messages_skipped_fresh, 1, 'counted as a skip');
+  assert.equal(db.table('FieldReports')[0].message, '', 'record unchanged after failed write');
+});
+
+test('LIMITATION: no atomic CAS in the SDK; message write is an isolated update with a residual read-then-write race', async () => {
+  // The Base44 entity update is an unconditional PUT (verified against
+  // @base44/sdk/dist/modules/entities.js); bulkUpdate is an unconditional PUT
+  // /bulk; updateMany is a query-conditional PATCH with a MongoDB operator and no
+  // schema validation. None is an atomic compare-and-set on a record revision, so
+  // the fresh get + isolated update cannot fully close the race: a concurrent owner
+  // edit landing BETWEEN the fresh FieldReports.get and the FieldReports.update
+  // would still be overwritten. This test documents that the write path carries no
+  // revision/conditional token and that the isolated update data is exactly
+  // {message} (the fresh get is the only guard, not a server-side CAS).
   const db = memoryDb(baseSeed({ FieldReports: [mkFr('fr-1', 'post-1', '')] }));
   await run(probuildHandler, db, { ...RANGE, __probuild: probuild([mkPost('post-1', '2026-09-15T20:00:00Z', LATE_TEXT, att(PHOTO))]) });
-  const patch = db.frBulkUpdateCalls[0][0];
-  assert.ok(!('revision' in patch) && !('if_not_exists' in patch) && !('condition' in patch), 'no CAS/conditional token in the patch');
-  assert.deepEqual(Object.keys(patch).sort(), ['id', 'message']);
+  assert.equal(db.frUpdateCalls.length, 1, 'message written via isolated update');
+  const data = db.frUpdateCalls[0].data;
+  assert.ok(!('revision' in data) && !('if_not_exists' in data) && !('condition' in data) && !('if_match' in data), 'no CAS/conditional token in the update');
+  assert.deepEqual(data, { message: LATE_TEXT }, 'update is a single-field {message} write');
+  assert.equal(db.frBulkUpdateCalls.length, 0, 'message not bundled into the photo/job bulk patch');
 });

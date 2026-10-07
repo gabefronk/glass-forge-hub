@@ -281,11 +281,23 @@ export default async function(req) {
     }
     const frToCreate = [];
     const frToUpdate = [];
+    // Message fills are ISOLATED from the photo/job-link bulk patch: the SDK
+    // update/bulkUpdate are unconditional writes with no compare-and-set/revision
+    // token (verified against @base44/sdk/dist/modules/entities.js: update ->
+    // PUT /<id>, bulkUpdate -> PUT /bulk, updateMany -> PATCH /update-many with a
+    // MongoDB operator and no schema validation). So a message fill is not queued
+    // into the same bulk patch as photo/job links; it is planned here and executed
+    // below as a single-field update only after a freshest exact FieldReports.get
+    // re-confirms the record is still safe to fill. A residual read-then-write race
+    // remains (a concurrent owner edit between that fresh get and the update would
+    // still be overwritten); the platform exposes no atomic CAS to close it.
+    const messageFills = []; // { id, srcMsg, postId } planned, pending a fresh read-before-write
     let frSkippedExisting = 0;
     let frPhotosFilled = 0;
     let frJobsLinked = 0;
     let frMessagesFilled = 0;
     let frMessagesSkippedDuplicate = 0;
+    let frMessagesSkippedFresh = 0;
     const photoUrlByPost = new Map();
     for (const { b, normName, m } of matched) {
       const post = b.post;
@@ -335,17 +347,42 @@ export default async function(req) {
         const exMsgEmpty = exMsg == null || (typeof exMsg === 'string' && exMsg.trim() === '');
         const srcMsg = post.message;
         const srcMsgNonempty = typeof srcMsg === 'string' && srcMsg.trim() !== '';
-        if (exMsgEmpty && srcMsgNonempty) {
-          if (duplicatePostIds.has(b.postId)) frMessagesSkippedDuplicate++;
-          else { patch.message = srcMsg; frMessagesFilled++; }
-        }
+        const msgEligible = exMsgEmpty && srcMsgNonempty;
+        if (msgEligible && duplicatePostIds.has(b.postId)) frMessagesSkippedDuplicate++;
+        else if (msgEligible) messageFills.push({ id: exRep.id, srcMsg, postId: b.postId });
+        // Photo/job-link fills stay in the bulk patch (last-write-wins, but they
+        // only fill empty fields). Message fills are NOT bundled here.
+        const hasMsgFill = msgEligible && !duplicatePostIds.has(b.postId);
         if (Object.keys(patch).length) frToUpdate.push({ id: exRep.id, ...patch });
-        else frSkippedExisting++;
+        else if (!hasMsgFill) frSkippedExisting++;
       }
       else frToCreate.push(reportRow);
     }
     if (!dryRun && frToCreate.length) await base44.asServiceRole.entities.FieldReports.bulkCreate(frToCreate);
     if (!dryRun && frToUpdate.length) await base44.asServiceRole.entities.FieldReports.bulkUpdate(frToUpdate);
+
+    // Isolated message fills: a freshest exact FieldReports.get right before each
+    // single-field update re-confirms the record is still safe to fill, so a
+    // concurrent owner note that landed after the earlier existingReports snapshot
+    // is not overwritten. Skip (counted, no write) on: fresh-read failure, post_id
+    // mismatch, any owner-edit marker (edited_at/edited_by/original_text), or a
+    // message that is no longer empty. Source bytes are written verbatim. The
+    // counter reflects actual writes in live mode and planned writes in dry-run.
+    if (dryRun) {
+      frMessagesFilled = messageFills.length;
+    } else {
+      for (const mf of messageFills) {
+        let fresh;
+        try { fresh = await base44.asServiceRole.entities.FieldReports.get(mf.id); }
+        catch (e) { frMessagesSkippedFresh++; continue; }
+        if (!fresh || fresh.post_id !== mf.postId) { frMessagesSkippedFresh++; continue; }
+        if (fresh.edited_at || fresh.edited_by || fresh.original_text) { frMessagesSkippedFresh++; continue; }
+        const freshEmpty = fresh.message == null || (typeof fresh.message === 'string' && fresh.message.trim() === '');
+        if (!freshEmpty) { frMessagesSkippedFresh++; continue; }
+        try { await base44.asServiceRole.entities.FieldReports.update(mf.id, { message: mf.srcMsg }); frMessagesFilled++; }
+        catch (e) { frMessagesSkippedFresh++; }
+      }
+    }
 
 
     // 7. Build FeeLines rows + upsert on probuild_post_id
@@ -457,6 +494,7 @@ export default async function(req) {
       fr_jobs_linked: frJobsLinked,
       fr_messages_filled: frMessagesFilled,
       fr_messages_skipped_duplicate: frMessagesSkippedDuplicate,
+      fr_messages_skipped_fresh: frMessagesSkippedFresh,
       fee_photos_filled: feePhotosFilled,
       service_quantity_filled: serviceFilled,
       merged_into_calendar: merged_count,
