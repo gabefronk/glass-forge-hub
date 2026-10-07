@@ -1,0 +1,80 @@
+{
+  "name": "JobMoneyInputs",
+  "type": "object",
+  "description": "Owner-private editable rough labor/material and sale price per job. Profit is computed read-only from these plus the reviewed budget's windows-incl-tax; it is never stored. Bound to owner auth user ids only (not role, not email). Server twin: base44/shared/purchasingMoneyPure.js OWNER_IDS.",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "description": "Canonical Jobs record id. Exact id, never inferred from a name."
+    },
+    "rough_labor_material": {
+      "type": "number",
+      "description": "Owner-entered rough labor + install material estimate for the job. Null until set; null is valid and withholds the tile and profit."
+    },
+    "sale_price": {
+      "type": "number",
+      "description": "Owner-entered actual sale price. Null until set. Not interchangeable with the budget estimate sell (actual_total_sell)."
+    }
+  },
+  "required": [
+    "job_id"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "id": "6a7f0d834a5f825c724273ea"
+          }
+        },
+        {
+          "user_condition": {
+            "id": "6a8229a9801b2aef9278ff47"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "id": "6a7f0d834a5f825c724273ea"
+          }
+        },
+        {
+          "user_condition": {
+            "id": "6a8229a9801b2aef9278ff47"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "id": "6a7f0d834a5f825c724273ea"
+          }
+        },
+        {
+          "user_condition": {
+            "id": "6a8229a9801b2aef9278ff47"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "id": "6a7f0d834a5f825c724273ea"
+          }
+        },
+        {
+          "user_condition": {
+            "id": "6a8229a9801b2aef9278ff47"
+          }
+        }
+      ]
+    }
+  }
+}

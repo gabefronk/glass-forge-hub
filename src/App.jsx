@@ -36,6 +36,7 @@ import CompanyOverview from '@/pages/CompanyOverview';
 import JobBudgets from '@/pages/JobBudgets';
 import PurchaseOrders from '@/pages/PurchaseOrders';
 import Procurement from '@/pages/Procurement';
+import Purchasing from '@/pages/Purchasing';
 import NewJobBuilder from '@/pages/NewJobBuilder';
 import SupplierEtaLinks from '@/pages/SupplierEtaLinks';
 import Summit from '@/pages/Summit';
@@ -109,7 +110,7 @@ const AuthenticatedApp = () => {
           <Route path="/products" element={<Navigate to="/brands-specs" replace />} />
           <Route path="/research-queue" element={<QuotesOnlyRedirect><ResearchQueue /></QuotesOnlyRedirect>} />
           <Route path="/purchasing/supplier-eta" element={<QuotesOnlyRedirect><SupplierEtaLinks /></QuotesOnlyRedirect>} />
-          <Route path="/purchasing" element={<QuotesOnlyRedirect><Procurement /></QuotesOnlyRedirect>} />
+          <Route path="/purchasing" element={<QuotesOnlyRedirect><Purchasing /></QuotesOnlyRedirect>} />
       <Route path="/purchasing/new-job" element={<QuotesOnlyRedirect><NewJobBuilder /></QuotesOnlyRedirect>} />
           <Route path="/jobs/:id/budget-orders" element={<QuotesOnlyRedirect><Procurement /></QuotesOnlyRedirect>} />
           <Route path="/job-budgets" element={<QuotesOnlyRedirect><JobBudgets /></QuotesOnlyRedirect>} />
