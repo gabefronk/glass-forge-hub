@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, RefreshCw } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { isPurchasingMoneyOwner } from '@/lib/purchasingMoneyAccess';
 import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
 import { buildPurchasingCards, cardMatchesSearch, unlinkedEntities } from '@/lib/purchasingViewModel';
-import { PageShell, PageHero } from '@/components/PageShell';
+import { PageShell } from '@/components/PageShell';
+import PurchasingHeader from '@/components/purchasing/PurchasingHeader';
 import PageNotFound from '@/lib/PageNotFound';
 import PurchasingCard from '@/components/purchasing/PurchasingCard';
 import MoneyEditDialog from '@/components/purchasing/MoneyEditDialog';
@@ -109,22 +110,14 @@ function PurchasingWorkspace() {
 
   return (
     <PageShell width="max-w-[1280px]">
-      <PageHero eyebrow="Glass Forge / purchasing" title="Purchasing" sub="One card per job — windows incl tax, rough labor & material, sale price and profit, windows from the supplier's printed tax-inclusive quote total, the rest from your entries.">
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px]" style={{ color: '#c9d0d1' }}>
-          <span><strong className="text-white">{counts.jobs}</strong> jobs</span>
-          <span><strong className="text-white">{counts.budgets}</strong> quotes</span>
-          <span><strong className="text-white">{counts.orders}</strong> POs</span>
-          <span><strong className="text-white">{counts.tracking}</strong> supplier confirmations</span>
-        </div>
-      </PageHero>
+      <PurchasingHeader counts={counts} loading={loading} onReload={load} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="relative flex min-w-[200px] flex-1 items-center">
+      <div className="flex items-center gap-2">
+        <label className="relative flex min-w-0 flex-1 items-center">
           <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: C.textFaint }} />
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search job, quote, PO, supplier" aria-label="Search purchasing" className="min-h-11 w-full rounded-[9px] bg-white pl-[38px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)]" style={{ border: `1px solid ${C.border}`, color: C.text }} />
         </label>
-        <Link to="/purchasing/new-job" className="inline-flex min-h-11 items-center gap-2 rounded-[9px] px-4 text-[13.5px] font-semibold" style={{ backgroundColor: '#0B3F3B', color: '#FFFFFF' }}><Plus size={15} />Add quote</Link>
-        <button type="button" disabled={loading} onClick={load} aria-label="Reload" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[9px] border px-3" style={{ borderColor: C.border, color: C.textSecondary, backgroundColor: '#FFFFFF' }}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
+        <Link to="/purchasing/new-job" className="inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-[9px] px-4 text-[13.5px] font-semibold" style={{ backgroundColor: '#0B3F3B', color: '#FFFFFF' }}><Plus size={15} />Add quote</Link>
       </div>
 
       {error && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: 'var(--gf-error-bg)', color: 'var(--gf-error)', border: '1px solid var(--gf-error-border)' }}>{error}</p>}

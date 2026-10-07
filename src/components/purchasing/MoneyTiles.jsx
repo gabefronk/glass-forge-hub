@@ -7,11 +7,11 @@ const money = (v) => (v == null
 function Tile({ label, value, tone = null, emptyText = null }) {
   const color = tone === 'positive' ? '#166447' : tone === 'negative' ? '#A43432' : tone === 'zero' ? '#53615B' : '#101617';
   return (
-    <div className="flex-1 min-w-[130px] rounded-[9px] px-2.5 py-2" style={{ backgroundColor: '#FAF8F3', borderTop: '2px solid #0B3F3B' }}>
+    <div className="min-w-0 rounded-[9px] px-2.5 py-2 sm:min-w-[130px] sm:flex-1" style={{ backgroundColor: '#FAF8F3', borderTop: '2px solid #0B3F3B' }}>
       <div className="text-[9.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#53615B' }}>{label}</div>
       {value == null && emptyText
         ? <div className="mt-1 text-[12.5px] font-semibold" style={{ color: '#89511A' }}>{emptyText}</div>
-        : <div className="mt-0.5 text-[16px] font-bold tabular-nums" style={{ color, letterSpacing: '-0.02em' }}>{money(value)}</div>}
+        : <div className="mt-0.5 text-[16px] font-bold tabular-nums [overflow-wrap:anywhere]" style={{ color, letterSpacing: '-0.02em' }}>{money(value)}</div>}
     </div>
   );
 }
@@ -19,7 +19,7 @@ function Tile({ label, value, tone = null, emptyText = null }) {
 export default function MoneyTiles({ windows, windowsStatus, rough, sale, profit }) {
   const windowsEmpty = windowsStatus === 'review' ? 'Needs review' : windowsStatus === 'withheld' ? 'Withheld' : null;
   return (
-    <div className="flex flex-wrap items-stretch gap-1">
+    <div className="grid grid-cols-2 gap-1 sm:flex sm:items-stretch">
       <Tile label="Windows incl tax" value={windows} emptyText={windowsEmpty} />
       <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 self-center sm:block" style={{ color: '#B8B0A4' }} strokeWidth={2.2} strokeLinecap="round" />
       <Tile label="Labor & material" value={rough} />
