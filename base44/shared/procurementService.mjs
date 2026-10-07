@@ -4,6 +4,7 @@ import { text, amount, budgetVersion, budgetRollup, activeBudgets, referenceConf
 import { unusedQuoteDeletionPatch } from './unusedQuoteDeletion.mjs';
 import { procurementError as fail, requestKey, withProcurementLock } from './procurementLock.mjs';
 import { assertOwner, getPurchasingJob, issuePurchaseOrder } from './purchaseOrderService.mjs';
+import { isPurchasingMoneyOwner } from './purchasingMoneyPure.js';
 
 const PO_STATES = ['issued', 'emailed', 'ordered', 'confirmed', 'received', 'cancelled'];
 const PAYMENT_STATES = ['ordered', 'eta_set', 'ach_link_received', 'paid', 'reconciled'];
@@ -173,7 +174,11 @@ export function createProcurementHandler(getClient, defaultAction = 'overview') 
   return async req => {
     try {
       const client = getClient(req);
-      const user = await client.auth.me();
+      const user = await client.auth.me().catch(() => null);
+      // Owner auth-id guard before any entity read (role/email alone is not enough).
+      if (!isPurchasingMoneyOwner(user)) {
+        return Response.json({ error: 'Purchasing is owner-only.' }, { status: user ? 403 : 401, headers: { 'Cache-Control': 'no-store' } });
+      }
       assertOwner(user);
       const body = await req.json().catch(() => ({}));
       const result = await procurementAction(client.asServiceRole.entities, { ...body, action: body.action || defaultAction }, user);

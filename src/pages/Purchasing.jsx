@@ -109,7 +109,7 @@ function PurchasingWorkspace() {
 
   return (
     <PageShell width="max-w-[1280px]">
-      <PageHero eyebrow="Glass Forge / purchasing" title="Purchasing" sub="One card per job — windows incl tax, rough labor & material, sale price and profit, sourced from confirmed orders, reviewed budgets and your entries.">
+      <PageHero eyebrow="Glass Forge / purchasing" title="Purchasing" sub="One card per job — windows incl tax, rough labor & material, sale price and profit, windows from the supplier's printed tax-inclusive quote total, the rest from your entries.">
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px]" style={{ color: '#c9d0d1' }}>
           <span><strong className="text-white">{counts.jobs}</strong> jobs</span>
           <span><strong className="text-white">{counts.budgets}</strong> quotes</span>
@@ -138,7 +138,7 @@ function PurchasingWorkspace() {
         ))}</div>
       )}
 
-      <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} onUploaded={load} />
+      <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} />
 
       {editing && (
         <MoneyEditDialog

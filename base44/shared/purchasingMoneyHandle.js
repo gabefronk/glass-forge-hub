@@ -1,106 +1,153 @@
 // Injectable request handler for the purchasingMoney endpoint. No SDK, no
-// I/O beyond the injected adapter — so tests can mock every entity read/write
-// and prove auth-before-read, fail-closed reads, duplicate withholding, exact
-// writes and readback. entry.ts builds the real adapter and wraps the result
-// into a Response.
+// I/O beyond the injected adapter — so tests can mock every entity read/write.
+// entry.ts builds the real adapter and wraps the result into a Response.
+//
+// SDK contract (installed @base44/sdk 0.8.53, entities.types.d.ts):
+// list(options)/filter(query, options) with an options object resolve to an
+// EntityPage { items, next_cursor: string|null, has_more: boolean }. A plain
+// array means the cursor contract was not honoured; a full array cannot prove
+// completeness, so arrays are rejected (fail closed).
 //
 // Fail-closed rules:
-//  - list: explicit cursor pagination until has_more is false. Unknown
-//    response shape, a truncated page (has_more with no next_cursor), or an
-//    unbounded loop throw. Duplicate job_id rows are withheld (values nulled)
-//    and flagged for review — never last-row-wins.
-//  - save: fresh recheck of existing rows before any write. Duplicate existing
-//    rows withhold the write. A money key omitted from the payload is preserved
-//    (never wiped). The returned input is a readback, never fabricated.
+//  - Pages: items must be an array no longer than the requested limit,
+//    has_more a boolean; has_more=true needs a fresh non-empty cursor;
+//    has_more=false needs next_cursor === null; truncated=true is rejected.
+//    Repeated cursors and more than MAX_PAGES pages are rejected.
+//  - Stored rows must carry exact ids; a malformed amount withholds that job.
+//  - save: exact-id job read, exact-match money recheck, a second fresh job
+//    read right before the write (rejects a merge since the first read), then
+//    an exact readback that must equal the id, job and every patched value.
+//  - Errors return fixed safe codes only; raw SDK error text is never returned.
 import {
-  isPurchasingMoneyOwner, validateSavePayload, validateListBody, sanitizeInput,
+  isPurchasingMoneyOwner, validateSavePayload, validateListBody, parseStoredRow, sanitizeInput, isEntityId,
 } from './purchasingMoneyPure.js';
 
-async function listMoney(adapter) {
-  const all = [];
-  let cursor;
-  for (;;) {
-    const page = await adapter.moneyList({ sort: '-updated_date', limit: 500, cursor });
-    let items, next, hasMore;
-    if (Array.isArray(page)) { items = page; next = undefined; hasMore = false; }
-    else if (page && Array.isArray(page.items)) { items = page.items; next = page.next_cursor; hasMore = !!page.has_more; }
-    else throw new Error('invalid_list_response');
-    if (!Array.isArray(items)) throw new Error('invalid_list_response');
-    all.push(...items);
-    if (!hasMore) break;
-    if (!next) throw new Error('cursor_truncated');
-    cursor = next;
-    if (all.length > 100000) throw new Error('list_overflow');
+export const LIST_LIMIT = 500;
+export const MAX_PAGES = 200;
+
+class SafeError extends Error {
+  constructor(code) { super(code); this.code = code; }
+}
+const fail = (code) => { throw new SafeError(code); };
+
+export function readPage(page, limit) {
+  if (!page || typeof page !== 'object' || Array.isArray(page)) fail('invalid_page');
+  if (!Array.isArray(page.items) || typeof page.has_more !== 'boolean') fail('invalid_page');
+  if (page.truncated === true) fail('page_truncated');
+  if (page.items.length > limit) fail('invalid_page');
+  if (page.has_more) {
+    if (typeof page.next_cursor !== 'string' || !page.next_cursor) fail('cursor_truncated');
+  } else if (page.next_cursor !== null) {
+    fail('cursor_inconsistent');
   }
-  const seen = new Map();
+  return { items: page.items, next: page.has_more ? page.next_cursor : null };
+}
+
+async function listMoney(adapter) {
+  const rows = [];
+  const seenCursors = new Set();
+  let cursor = null;
+  for (let i = 0; ; i++) {
+    if (i >= MAX_PAGES) fail('list_unbounded');
+    const opts = cursor ? { limit: LIST_LIMIT, cursor } : { sort: '-updated_date', limit: LIST_LIMIT };
+    const { items, next } = readPage(await adapter.moneyList(opts), LIST_LIMIT);
+    rows.push(...items);
+    if (!next) break;
+    if (seenCursors.has(next)) fail('cursor_repeated');
+    seenCursors.add(next);
+    cursor = next;
+  }
+  const byJob = new Map();
   const duplicates = new Set();
-  for (const row of all) {
-    const s = sanitizeInput(row);
-    if (!s || !s.job_id) continue;
-    if (seen.has(s.job_id)) duplicates.add(s.job_id);
-    else seen.set(s.job_id, s);
+  const invalid = new Set();
+  for (const raw of rows) {
+    const parsed = parseStoredRow(raw);
+    if (!parsed.ok && parsed.reason === 'invalid_identity') fail('invalid_row');
+    const jobId = parsed.ok ? parsed.row.job_id : parsed.job_id;
+    if (!parsed.ok) invalid.add(jobId);
+    if (byJob.has(jobId)) duplicates.add(jobId);
+    else byJob.set(jobId, parsed.ok ? parsed.row : { id: raw.id, job_id: jobId, rough_labor_material: null, sale_price: null });
   }
   const inputs = [];
-  for (const [jobId, row] of seen) {
+  for (const [jobId, row] of byJob) {
     if (duplicates.has(jobId)) inputs.push({ ...row, duplicate: true, rough_labor_material: null, sale_price: null });
+    else if (invalid.has(jobId)) inputs.push({ ...row, invalid: true, rough_labor_material: null, sale_price: null });
     else inputs.push(row);
   }
-  return { inputs, duplicates: [...duplicates] };
+  return { inputs, duplicates: [...duplicates], invalid: [...invalid] };
+}
+
+async function freshJob(adapter, jobId, changedCode) {
+  const job = await adapter.jobsGet(jobId).catch(() => null);
+  if (!job) return changedCode || 'job_not_found';
+  if (job.id !== jobId) return 'job_mismatch';
+  if (job.merged_into) return changedCode || 'job_merged';
+  if (job.is_sample) return changedCode || 'sample_job';
+  return null;
 }
 
 async function saveMoney(adapter, parsed) {
-  const job = await adapter.jobsGet(parsed.job_id).catch(() => null);
-  if (!job) return { error: 'job_not_found' };
-  if (job.merged_into) return { error: 'job_merged' };
-  if (job.is_sample) return { error: 'sample_job' };
+  const jobId = parsed.job_id;
+  const jobErr = await freshJob(adapter, jobId);
+  if (jobErr) return { error: jobErr };
 
-  // Fresh recheck of existing money rows for this exact job. Fail closed on
-  // an unknown shape; withhold the write on duplicates or a truncated page.
-  const page = await adapter.moneyFilter({ job_id: parsed.job_id }, { sort: '-updated_date', limit: 50 }).catch(() => null);
-  let rows;
-  if (Array.isArray(page)) rows = page;
-  else if (page && Array.isArray(page.items)) { rows = page.items; if (page.has_more) return { error: 'duplicate_money' }; }
-  else return { error: 'money_lookup_failed' };
-  if (rows.length > 1) return { error: 'duplicate_money' };
+  // Exact-match recheck of existing money rows for this job.
+  const page = await adapter.moneyFilter({ job_id: jobId }, { sort: '-updated_date', limit: 2 }).catch(() => null);
+  if (!page) return { error: 'money_lookup_failed' };
+  const { items, next } = readPage(page, 2);
+  if (next) return { error: 'duplicate_money' };
+  for (const row of items) {
+    if (!row || !isEntityId(row.id) || row.job_id !== jobId) return { error: 'money_lookup_mismatch' };
+  }
+  if (items.length > 1) return { error: 'duplicate_money' };
 
-  // Partial patch: only keys present in the payload are written. Omitted
-  // keys preserve the existing row — never wipe.
+  // Second fresh job read right before the write: reject a merge/sample/delete since the first read.
+  const changed = await freshJob(adapter, jobId, 'job_changed');
+  if (changed) return { error: changed };
+
+  // Partial patch: only keys present in the payload are written.
   const patch = {};
   if (parsed.hasRough) patch.rough_labor_material = parsed.rough_labor_material;
   if (parsed.hasSale) patch.sale_price = parsed.sale_price;
 
   let savedId;
-  if (rows.length === 1) {
-    savedId = rows[0].id;
+  if (items.length === 1) {
+    savedId = items[0].id;
     await adapter.moneyUpdate(savedId, patch);
   } else {
-    const created = await adapter.moneyCreate({ job_id: parsed.job_id, ...patch });
-    if (!created?.id) return { error: 'create_failed' };
+    const created = await adapter.moneyCreate({ job_id: jobId, ...patch });
+    if (!created || !isEntityId(created.id) || created.job_id !== jobId) return { error: 'create_unverified' };
     savedId = created.id;
   }
-  // Read back the stored row and return the sanitized readback — never fabricated.
+
+  // Exact readback: same id, same job, every patched value stored as sent.
   const readback = await adapter.moneyGet(savedId).catch(() => null);
   if (!readback) return { error: 'readback_failed' };
-  return { input: sanitizeInput(readback) };
+  const stored = parseStoredRow(readback);
+  if (!stored.ok || stored.row.id !== savedId || stored.row.job_id !== jobId) return { error: 'readback_mismatch' };
+  for (const [key, value] of Object.entries(patch)) {
+    if (stored.row[key] !== value) return { error: 'readback_mismatch' };
+  }
+  return { input: sanitizeInput(stored.row) };
 }
 
+const safeCode = (e, fallback) => (e instanceof SafeError ? e.code : fallback);
+
 export async function handle(req, adapter) {
-  // 1. Auth by id BEFORE any entity read. Null (scheduled) and non-owners
-  //    are rejected with 403 before a single row is read or written.
+  // 1. Auth by id BEFORE any entity read.
   const user = await adapter.authMe().catch(() => null);
   if (!isPurchasingMoneyOwner(user)) return { status: 403, body: { error: 'forbidden' } };
 
-  const body = await req.json().catch(() => ({}));
+  const body = await req.json().catch(() => null);
   const action = body?.action;
 
   if (action === 'list') {
     const v = validateListBody(body);
     if (!v.ok) return { status: 400, body: { error: v.error } };
     try {
-      const { inputs, duplicates } = await listMoney(adapter);
-      return { status: 200, body: { inputs, duplicates } };
+      return { status: 200, body: await listMoney(adapter) };
     } catch (e) {
-      return { status: 500, body: { error: e?.message || 'list_failed' } };
+      return { status: 500, body: { error: safeCode(e, 'list_failed') } };
     }
   }
 
@@ -109,10 +156,10 @@ export async function handle(req, adapter) {
     if (!parsed.ok) return { status: 400, body: { error: parsed.error } };
     try {
       const result = await saveMoney(adapter, parsed);
-      if (result.error) return { status: 400, body: { error: result.error } };
+      if (result.error) return { status: 409, body: { error: result.error } };
       return { status: 200, body: { input: result.input } };
     } catch (e) {
-      return { status: 500, body: { error: e?.message || 'save_failed' } };
+      return { status: 500, body: { error: safeCode(e, 'save_failed') } };
     }
   }
 

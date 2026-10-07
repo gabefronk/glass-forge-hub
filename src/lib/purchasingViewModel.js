@@ -4,11 +4,11 @@
 // next action, and a search string. Profit is computed read-only.
 //
 // Grounding rules:
-//  - Windows incl tax is a grounded, tax-inclusive field with provenance.
-//    Preferred source: a scoped confirmed PO's budget_snapshot.cost_material_tax
-//    (the actual ordered scope, captured at issuance). Fallback: the single
-//    active reviewed budget's calculated cost_material_tax. Unknown/conflicting
-//    → withhold. Never substitute gross dealer_amount/customer amount.
+//  - Windows incl tax is window-only and tax-inclusive with provenance: the
+//    supplier's printed single-price quote total whose subtotal + explicit
+//    printed tax reconciles (see sourceQuoteInclTax). Never the budget's
+//    cost_material_tax (contains the labor overhead adder), never PO/vendor
+//    amounts (no tax field). Unknown → withhold as "Needs review".
 //  - Multiple legitimate scopes cannot double-count a single tile → withhold.
 //    A replacement chain resolves to its survivor (activeBudgets).
 //  - A job in a PO conflict withholds windows AND profit.
@@ -40,39 +40,46 @@ const isVendorOrderCancelled = (o, pos) => Boolean(o.purchase_order_id && pos.so
 const activeVendorOrders = (orders, pos) => orders.filter((o) => o.job_id && !isVendorOrderCancelled(o, pos));
 const isOrderPaid = (o) => PAID_VO_STATUS.includes(o.status) || Boolean(o.paid_at);
 
-// Tile 1 — Windows incl tax. Grounded, provenance-tracked, never gross.
-export function windowsInclTax(jobBudgets = [], purchaseOrders = []) {
+// Window-only, tax-inclusive source value. The budget's cost_material_tax is
+// NOT used: it includes the labor-driven overhead adder before tax, so
+// labelling it "windows incl tax" and then subtracting rough labor/material
+// would double-count labor. PO amount_dealer and VendorOrder amount carry no
+// tax field, so they cannot prove tax-inclusive either. The only source that
+// proves it is the supplier's own printed single-price quote: subtotal +
+// explicit printed tax (zero is valid) must reconcile to the printed total.
+// Absent tax, own (Glass Forge) quote, dealer+customer quote, or totals that
+// do not reconcile → null with a reason (shown as "Needs review").
+const OWN_QUOTE = /gabriel|\bgabe\b|fronk|glass\s*forge/i;
+const printed = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+export function sourceQuoteInclTax(budget) {
+  const q = budget?.quote;
+  if (!q || q.price_levels !== 'single') return { value: null, reason: 'no_single_supplier_total' };
+  if (OWN_QUOTE.test(`${q.quoted_by || ''} ${q.prepared_by || ''}`)) return { value: null, reason: 'own_quote' };
+  if (!printed(q.customer_tax)) return { value: null, reason: 'tax_absent' };
+  if (!printed(q.customer_total)) return { value: null, reason: 'total_absent' };
+  const sub = printed(q.net_total) ? q.net_total : printed(q.customer_sub_total) ? q.customer_sub_total : null;
+  if (sub == null) return { value: null, reason: 'subtotal_absent' };
+  if (Math.abs(sub + q.customer_tax - q.customer_total) > 0.01) return { value: null, reason: 'totals_do_not_reconcile' };
+  return { value: roundMoney(q.customer_total), reason: null };
+}
+
+// Tile 1 — Windows incl tax. Single active reviewed scope with a verified
+// source value; anything else withholds with a status.
+export function windowsInclTax(jobBudgets = []) {
   const live = jobBudgets.filter(isLiveBudget);
   const active = activeBudgets(live);
-  if (active.length === 0) return { value: null, status: 'empty', budgetId: null, provenance: null };
-
-  // A scoped confirmed PO carries the budget as reviewed at issuance. Its
-  // snapshot cost_material_tax is the grounded actual order incl tax.
-  const snapshotTax = (po) => {
-    const s = po?.budget_snapshot;
-    const v = s?.calculated?.cost_material_tax ?? s?.cost_material_tax;
-    return typeof v === 'number' && Number.isFinite(v) ? roundMoney(v) : null;
-  };
-  const confirmed = purchaseOrders.filter((po) =>
-    po && po.budget_id && active.some((b) => b.id === po.budget_id) &&
-    CONFIRMED_PO_STATUS.includes(po.status) && snapshotTax(po) != null);
-
-  if (confirmed.length === 1) {
-    return { value: snapshotTax(confirmed[0]), status: 'ready', budgetId: confirmed[0].budget_id, provenance: 'order', poId: confirmed[0].id };
+  if (active.length === 0) {
+    // Draft-only quotes exist → the job has a quote that needs review, not "no quote".
+    const drafts = live.filter((b) => b.budget_usage !== 'reference');
+    return drafts.length
+      ? { value: null, status: 'review', budgetId: drafts.length === 1 ? drafts[0].id : null, provenance: null, reason: 'draft' }
+      : { value: null, status: 'empty', budgetId: null, provenance: null };
   }
-  if (confirmed.length > 1) {
-    const vals = [...new Set(confirmed.map(snapshotTax))];
-    if (vals.length === 1) return { value: vals[0], status: 'ready', budgetId: confirmed[0].budget_id, provenance: 'order' };
-    // Multiple legitimate scopes with different tax-inclusive costs → cannot double-count.
-    return { value: null, status: 'withheld', budgetId: null, provenance: null };
-  }
-
-  // No confirmed order → fall back to the single active reviewed budget.
-  if (active.length > 1) return { value: null, status: 'withheld', budgetId: null, provenance: null };
-  const figures = budgetFigures(active[0]);
-  if (!figures.ready) return { value: null, status: 'review', budgetId: active[0].id, provenance: null };
-  const v = figures.calculated?.cost_material_tax;
-  return { value: typeof v === 'number' && Number.isFinite(v) ? roundMoney(v) : null, status: 'ready', budgetId: active[0].id, provenance: 'budget' };
+  if (active.length > 1) return { value: null, status: 'withheld', budgetId: null, provenance: null, reason: 'multiple_scopes' };
+  if (!budgetFigures(active[0]).ready) return { value: null, status: 'review', budgetId: active[0].id, provenance: null, reason: 'numbers_not_reviewed' };
+  const src = sourceQuoteInclTax(active[0]);
+  if (src.value == null) return { value: null, status: 'review', budgetId: active[0].id, provenance: null, reason: src.reason };
+  return { value: src.value, status: 'ready', budgetId: active[0].id, provenance: 'source_quote', reason: null };
 }
 
 // Tile 4 — Profit. Dash until all three inputs resolve.
@@ -204,7 +211,7 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     const jobBudgets = budgets.filter((b) => b.job_id === job.id);
     const jobPOs = purchase_orders.filter((p) => p.job_id === job.id);
     const isConflict = conflictJobIds.has(job.id);
-    const win = isConflict ? { value: null, status: 'withheld', budgetId: null, provenance: null } : windowsInclTax(jobBudgets, jobPOs);
+    const win = isConflict ? { value: null, status: 'withheld', budgetId: null, provenance: null, reason: 'po_conflict' } : windowsInclTax(jobBudgets);
 
     const money = moneyByJob.get(job.id);
     const moneyDup = !!money?.duplicate;

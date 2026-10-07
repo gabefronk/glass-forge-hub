@@ -1,28 +1,27 @@
 // Owner-private read/write endpoint for the per-job rough labor/material and
 // sale price (JobMoneyInputs). Authenticates the caller's auth user id BEFORE
 // any entity read or write — admin role or email is not enough. Returns only
-// the safe fields. Rejects malformed/missing/merged/sample jobs and any extra
-// payload field. Profit is never stored; it is computed read-only in the UI.
+// the safe fields. Profit is never stored; it is computed read-only in the UI.
 //
-// This function does NOT expose existing procurement pricing (budgets, POs,
-// vendor orders). Those remain on the existing `procurement` function, whose
-// access rules are unchanged. The handler logic lives in the injectable,
-// SDK-free base44/shared/purchasingMoneyHandle.js so it can be tested with a
-// mocked adapter.
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+// SDK pinned to 0.8.53, the version whose entities contract (options-object
+// list/filter → EntityPage { items, next_cursor, has_more }) the handler
+// validates. The handler logic lives in the injectable, SDK-free
+// base44/shared/purchasingMoneyHandle.js so it can be tested with a mock.
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
 import { handle } from '../../shared/purchasingMoneyHandle.js';
 
 export default async function (req) {
   const base44 = createClientFromRequest(req);
+  const db = base44.asServiceRole.entities;
   const adapter = {
     authMe: () => base44.auth.me(),
-    jobsGet: (id) => base44.asServiceRole.entities.Jobs.get(id),
-    moneyList: (opts) => base44.asServiceRole.entities.JobMoneyInputs.list({ sort: opts.sort, limit: opts.limit, cursor: opts.cursor }),
-    moneyFilter: (q, opts) => base44.asServiceRole.entities.JobMoneyInputs.filter(q, { sort: opts.sort, limit: opts.limit }),
-    moneyGet: (id) => base44.asServiceRole.entities.JobMoneyInputs.get(id),
-    moneyUpdate: (id, patch) => base44.asServiceRole.entities.JobMoneyInputs.update(id, patch),
-    moneyCreate: (data) => base44.asServiceRole.entities.JobMoneyInputs.create(data),
+    jobsGet: (id) => db.Jobs.get(id),
+    moneyList: (opts) => db.JobMoneyInputs.list(opts),
+    moneyFilter: (q, opts) => db.JobMoneyInputs.filter(q, opts),
+    moneyGet: (id) => db.JobMoneyInputs.get(id),
+    moneyUpdate: (id, patch) => db.JobMoneyInputs.update(id, patch),
+    moneyCreate: (data) => db.JobMoneyInputs.create(data),
   };
   const { status, body } = await handle(req, adapter);
-  return Response.json(body, { status });
+  return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 }

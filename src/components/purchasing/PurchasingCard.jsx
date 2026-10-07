@@ -16,7 +16,7 @@ export default function PurchasingCard({ card, onEdit }) {
   const moneyDup = rough.duplicate || sale.duplicate;
   const statusTone = conflict || moneyDup || [refs.quoteStatus, refs.mfrStatus, refs.etaStatus, refs.payment].includes('amber') ? 'amber' : 'green';
   const statusLabel = conflict ? 'Conflict' : moneyDup ? 'Duplicate money' : statusTone === 'amber' ? 'Action needed' : 'On track';
-  const winNote = windows.provenance === 'order' ? 'from confirmed order' : windows.provenance === 'budget' ? 'from reviewed budget' : '';
+  const winNote = windows.provenance === 'source_quote' ? 'from supplier quote total incl tax' : '';
 
   return (
     <article className="rounded-[12px] p-3.5" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D3CABB', borderTop: '2px solid #0B3F3B', boxShadow: '0 1px 2px rgba(10,29,31,.05), 0 4px 10px -4px rgba(10,29,31,.10)' }}>
@@ -32,7 +32,7 @@ export default function PurchasingCard({ card, onEdit }) {
         <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: statusTone === 'amber' ? '#FFF3DF' : '#EAF5EE', color: statusTone === 'amber' ? '#89511A' : '#166447', border: `1px solid ${statusTone === 'amber' ? '#F0DBA8' : '#C7E4D2'}` }}>{statusLabel}</span>
       </div>
 
-      <div className="mt-2.5"><MoneyTiles windows={windows.value} rough={rough.value} sale={sale.value} profit={profit} /></div>
+      <div className="mt-2.5"><MoneyTiles windows={windows.value} windowsStatus={windows.status} rough={rough.value} sale={sale.value} profit={profit} /></div>
       {winNote && <p className="mt-1 text-[10.5px]" style={{ color: '#8A8F93' }}>Windows incl tax {winNote}</p>}
 
       <div className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1 text-[11px]" style={{ color: '#566063' }}>

@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom';
 import { Package, FileText } from 'lucide-react';
-import QuoteDropzone from './QuoteDropzone';
 import { C } from '@/lib/feeUI';
 
 // Quiet review section for no-job entities (shop POs, unlinked quotes) so they
 // are never silently lost behind the one-card-per-job loop. Collapsed by
-// default; also hosts the quote-PDF dropzone so upload is accessible here.
-export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [], onUploaded }) {
+// default. No upload here: the quote ingest only accepts a public PDF URL, and
+// quote prices must not be stored at a permanent public link.
+export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [] }) {
   const hasAny = unlinkedQuotes.length > 0 || shopPOs.length > 0;
   return (
     <details className="rounded-[12px] p-3.5" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D3CABB' }}>
@@ -14,7 +14,6 @@ export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [], onUp
         More · unlinked quotes & shop purchases {hasAny ? `(${unlinkedQuotes.length + shopPOs.length})` : ''}
       </summary>
       <div className="mt-3 space-y-3">
-        <QuoteDropzone onDone={onUploaded} />
         {unlinkedQuotes.length > 0 && (
           <div>
             <p className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide" style={{ color: C.textSecondary }}><FileText className="mr-1 inline h-3.5 w-3.5" />Unlinked quote budgets ({unlinkedQuotes.length})</p>
@@ -35,7 +34,7 @@ export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [], onUp
             </ul>
           </div>
         )}
-        {!hasAny && <p className="text-[12px]" style={{ color: C.textSecondary }}>No unlinked quotes or shop purchases. New dropped quotes appear here until linked to a job.</p>}
+        {!hasAny && <p className="text-[12px]" style={{ color: C.textSecondary }}>No unlinked quotes or shop purchases.</p>}
       </div>
     </details>
   );

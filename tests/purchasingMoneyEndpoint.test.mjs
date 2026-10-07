@@ -1,234 +1,210 @@
 // Mocked endpoint behavior tests for the purchasingMoney handler. No SDK, no
-// live money writes — the injectable adapter records every call so we prove:
-//  - auth by id BEFORE any entity read (non-owner/crew/null → 403, no reads)
-//  - fail-closed reads (unknown shape, cursor truncated, duplicates withhold)
-//  - merged/sample/missing job rejected before any money write
-//  - exact writes: only present keys are written; omitted keys preserve
-//  - readback: the returned input is the stored row, never fabricated
+// live money writes. The mock returns the EntityPage shape documented by the
+// installed SDK (items, next_cursor: string|null, has_more: boolean). These
+// prove the handler's contract checks; they do not prove the live SDK paginates.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handle } from '../base44/shared/purchasingMoneyHandle.js';
+import { handle, MAX_PAGES } from '../base44/shared/purchasingMoneyHandle.js';
 
-const OWNER = { id: '6a7f0d834a5f825c724273ea', role: 'admin' };
-const OTHER_ADMIN = { id: 'other-admin', role: 'admin' };
-const CREW = { id: 'crew', role: 'user' };
-
+const OWNER = { id: '6a7f0d834a5f825c724273ea', role: 'admin', email: 'gabefronk@gmail.com' };
+const JOB = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+const JOB2 = 'dddddddddddddddddddddddd';
+const M1 = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+const M2 = 'eeeeeeeeeeeeeeeeeeeeeeee';
+const NEW = 'cccccccccccccccccccccccc';
 const req = (body) => ({ json: async () => body });
+const page = (items, next = null) => ({ items, next_cursor: next, has_more: next !== null });
 
-// Build a mock adapter that records calls. Each method is a stub returning a
-// preset value or throwing; tests inspect `calls` to prove ordering/no-read.
-const mockAdapter = (stubs = {}) => {
-  const calls = { authMe: [], jobsGet: [], moneyList: [], moneyFilter: [], moneyGet: [], moneyUpdate: [], moneyCreate: [] };
+function mock(stubs = {}) {
+  const calls = { jobsGet: [], moneyList: [], moneyFilter: [], moneyGet: [], moneyUpdate: [], moneyCreate: [] };
+  const rec = (k, fn) => (...a) => { calls[k].push(a); return fn(...a); };
   return {
     calls,
-    authMe: (...a) => { calls.authMe.push(a); return stubs.authMe ? stubs.authMe(...a) : Promise.resolve(OWNER); },
-    jobsGet: (id) => { calls.jobsGet.push([id]); return stubs.jobsGet ? stubs.jobsGet(id) : Promise.resolve({ id, canonical_name: 'J' }); },
-    moneyList: (opts) => { calls.moneyList.push([opts]); return stubs.moneyList ? stubs.moneyList(opts) : Promise.resolve({ items: [], has_more: false }); },
-    moneyFilter: (q, opts) => { calls.moneyFilter.push([q, opts]); return stubs.moneyFilter ? stubs.moneyFilter(q, opts) : Promise.resolve({ items: [], has_more: false }); },
-    moneyGet: (id) => { calls.moneyGet.push([id]); return stubs.moneyGet ? stubs.moneyGet(id) : Promise.resolve({ id, job_id: 'j1', rough_labor_material: 5, sale_price: 10 }); },
-    moneyUpdate: (id, patch) => { calls.moneyUpdate.push([id, patch]); return stubs.moneyUpdate ? stubs.moneyUpdate(id, patch) : Promise.resolve({ id }); },
-    moneyCreate: (data) => { calls.moneyCreate.push([data]); return stubs.moneyCreate ? stubs.moneyCreate(data) : Promise.resolve({ id: 'm-new' }); },
+    authMe: () => (stubs.authMe ? stubs.authMe() : Promise.resolve(OWNER)),
+    jobsGet: rec('jobsGet', stubs.jobsGet || ((id) => Promise.resolve({ id }))),
+    moneyList: rec('moneyList', stubs.moneyList || (() => Promise.resolve(page([])))),
+    moneyFilter: rec('moneyFilter', stubs.moneyFilter || (() => Promise.resolve(page([])))),
+    moneyGet: rec('moneyGet', stubs.moneyGet || ((id) => Promise.resolve({ id, job_id: JOB, rough_labor_material: 5, sale_price: 10 }))),
+    moneyUpdate: rec('moneyUpdate', stubs.moneyUpdate || ((id) => Promise.resolve({ id }))),
+    moneyCreate: rec('moneyCreate', stubs.moneyCreate || ((d) => Promise.resolve({ id: NEW, ...d }))),
   };
-};
+}
+const noReads = (a) => Object.values(a.calls).every((c) => c.length === 0);
 
-test('list: auth before any read — owner gets 200', async () => {
-  const a = mockAdapter();
-  const { status, body } = await handle(req({ action: 'list' }), a);
-  assert.equal(status, 200);
-  assert.deepEqual(a.calls.authMe.length, 1);
-  assert.deepEqual(a.calls.moneyList.length, 1);
-  assert.ok(Array.isArray(body.inputs));
-});
-
-test('list: other admin (wrong id) → 403, no entity reads', async () => {
-  const a = mockAdapter({ authMe: () => Promise.resolve(OTHER_ADMIN) });
-  const { status, body } = await handle(req({ action: 'list' }), a);
-  assert.equal(status, 403);
-  assert.equal(body.error, 'forbidden');
-  assert.equal(a.calls.moneyList.length, 0);
-});
-
-test('list: crew → 403, no entity reads', async () => {
-  const a = mockAdapter({ authMe: () => Promise.resolve(CREW) });
-  const { status } = await handle(req({ action: 'list' }), a);
-  assert.equal(status, 403);
-  assert.equal(a.calls.moneyList.length, 0);
-});
-
-test('list: null user → 403, no entity reads', async () => {
-  const a = mockAdapter({ authMe: () => Promise.resolve(null) });
-  const { status } = await handle(req({ action: 'list' }), a);
-  assert.equal(status, 403);
-  assert.equal(a.calls.moneyList.length, 0);
-});
-
-test('list: authMe throws → 403, no entity reads', async () => {
-  const a = mockAdapter({ authMe: () => Promise.reject(new Error('boom')) });
-  const { status } = await handle(req({ action: 'list' }), a);
-  assert.equal(status, 403);
-  assert.equal(a.calls.moneyList.length, 0);
-});
-
-test('list: paginates until has_more false, collects all rows', async () => {
-  let page = 0;
-  const a = mockAdapter({ moneyList: () => {
-    page++;
-    if (page === 1) return Promise.resolve({ items: [{ id: 'm1', job_id: 'j1', rough_labor_material: 1 }], next_cursor: 'c1', has_more: true });
-    if (page === 2) return Promise.resolve({ items: [{ id: 'm2', job_id: 'j2', rough_labor_material: 2 }], next_cursor: 'c2', has_more: true });
-    return Promise.resolve({ items: [{ id: 'm3', job_id: 'j3', rough_labor_material: 3 }], has_more: false });
-  } });
-  const { status, body } = await handle(req({ action: 'list' }), a);
-  assert.equal(status, 200);
-  assert.equal(body.inputs.length, 3);
-  assert.equal(a.calls.moneyList.length, 3);
-});
-
-test('list: cursor truncated (has_more, no next_cursor) → 500 fail closed', async () => {
-  const a = mockAdapter({ moneyList: () => Promise.resolve({ items: [{ id: 'm1', job_id: 'j1' }], has_more: true }) });
-  const { status, body } = await handle(req({ action: 'list' }), a);
-  assert.equal(status, 500);
-  assert.equal(body.error, 'cursor_truncated');
-});
-
-test('list: unknown response shape → 500 fail closed', async () => {
-  const a = mockAdapter({ moneyList: () => Promise.resolve({ weird: true }) });
-  const { status, body } = await handle(req({ action: 'list' }), a);
-  assert.equal(status, 500);
-  assert.equal(body.error, 'invalid_list_response');
-});
-
-test('list: duplicate job_id rows withheld (nulled) and flagged', async () => {
-  const a = mockAdapter({ moneyList: () => Promise.resolve({ items: [
-    { id: 'm1', job_id: 'j1', rough_labor_material: 5, sale_price: 10 },
-    { id: 'm2', job_id: 'j1', rough_labor_material: 9, sale_price: 20 },
-  ], has_more: false }) });
-  const { status, body } = await handle(req({ action: 'list' }), a);
-  assert.equal(status, 200);
-  assert.equal(body.inputs.length, 1);
-  assert.equal(body.inputs[0].job_id, 'j1');
-  assert.equal(body.inputs[0].duplicate, true);
-  assert.equal(body.inputs[0].rough_labor_material, null);
-  assert.equal(body.inputs[0].sale_price, null);
-  assert.deepEqual(body.duplicates, ['j1']);
-});
-
-test('list: extra key in body → 400 (strict list keys)', async () => {
-  const a = mockAdapter();
-  const { status, body } = await handle(req({ action: 'list', extra: 1 }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'unexpected_field');
-  assert.equal(a.calls.moneyList.length, 0);
-});
-
-test('save: valid create — exact patch written, readback returned (not fabricated)', async () => {
-  const a = mockAdapter({
-    moneyFilter: () => Promise.resolve({ items: [], has_more: false }),
-    moneyCreate: (data) => Promise.resolve({ id: 'm-new' }),
-    moneyGet: (id) => Promise.resolve({ id, job_id: 'j1', rough_labor_material: 5, sale_price: 10 }),
+for (const [name, user] of [['other admin (owner email, wrong id)', { id: 'ffffffffffffffffffffffff', role: 'admin', email: 'gabefronk@gmail.com' }], ['crew', { id: 'ffffffffffffffffffffffff', role: 'user' }], ['null user', null]]) {
+  test(`auth: ${name} → 403 before any read (list and save)`, async () => {
+    for (const body of [{ action: 'list' }, { action: 'save', job_id: JOB, sale_price: 1 }]) {
+      const a = mock({ authMe: () => Promise.resolve(user) });
+      const r = await handle(req(body), a);
+      assert.equal(r.status, 403);
+      assert.ok(noReads(a));
+    }
   });
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 5, sale_price: 10 }), a);
-  assert.equal(status, 200);
-  assert.deepEqual(body.input, { id: 'm-new', job_id: 'j1', rough_labor_material: 5, sale_price: 10 });
-  assert.equal(a.calls.moneyCreate.length, 1);
-  assert.equal(a.calls.moneyGet.length, 1); // readback happened
-  assert.equal(a.calls.moneyGet[0][0], 'm-new');
+}
+
+test('auth: authMe throws → 403, no reads', async () => {
+  const a = mock({ authMe: () => Promise.reject(new Error('boom')) });
+  assert.equal((await handle(req({ action: 'list' }), a)).status, 403);
+  assert.ok(noReads(a));
 });
 
-test('save: update — only present keys written, omitted key preserved', async () => {
-  const a = mockAdapter({
-    moneyFilter: () => Promise.resolve({ items: [{ id: 'm1', job_id: 'j1', rough_labor_material: 5, sale_price: 10 }], has_more: false }),
-    moneyUpdate: (id, patch) => Promise.resolve({ id }),
-    moneyGet: (id) => Promise.resolve({ id, job_id: 'j1', rough_labor_material: 7, sale_price: 10 }),
+test('list: owner 200, first page requests sort+limit', async () => {
+  const a = mock({ moneyList: () => Promise.resolve(page([{ id: M1, job_id: JOB, rough_labor_material: 5, sale_price: 10 }])) });
+  const r = await handle(req({ action: 'list' }), a);
+  assert.equal(r.status, 200);
+  assert.deepEqual(a.calls.moneyList[0][0], { sort: '-updated_date', limit: 500 });
+  assert.deepEqual(r.body.inputs, [{ id: M1, job_id: JOB, rough_labor_material: 5, sale_price: 10 }]);
+});
+
+test('list: follows cursor; later pages pass only cursor+limit', async () => {
+  let n = 0;
+  const a = mock({ moneyList: () => Promise.resolve(n++ === 0 ? page([{ id: M1, job_id: JOB }], 'c1') : page([{ id: M2, job_id: JOB2 }])) });
+  const r = await handle(req({ action: 'list' }), a);
+  assert.equal(r.status, 200);
+  assert.deepEqual(a.calls.moneyList[1][0], { limit: 500, cursor: 'c1' });
+  assert.equal(r.body.inputs.length, 2);
+});
+
+const listFails = [
+  ['plain array (unverifiable completeness)', () => Promise.resolve([]), 'invalid_page'],
+  ['unknown shape', () => Promise.resolve({ rows: [] }), 'invalid_page'],
+  ['has_more without boolean', () => Promise.resolve({ items: [], next_cursor: null }), 'invalid_page'],
+  ['has_more true, no cursor', () => Promise.resolve({ items: [], next_cursor: null, has_more: true }), 'cursor_truncated'],
+  ['has_more false, cursor present', () => Promise.resolve({ items: [], next_cursor: 'x', has_more: false }), 'cursor_inconsistent'],
+  ['truncated flag', () => Promise.resolve({ ...page([]), truncated: true }), 'page_truncated'],
+  ['more items than limit', () => Promise.resolve(page(Array.from({ length: 501 }, () => ({ id: M1, job_id: JOB })))), 'invalid_page'],
+  ['repeated cursor', () => Promise.resolve(page([], 'same')), 'cursor_repeated'],
+  ['invalid row identity', () => Promise.resolve(page([{ id: 'm1', job_id: 'j1' }])), 'invalid_row'],
+  ['raw SDK error text is not returned', () => Promise.reject(new Error('internal sdk detail')), 'list_failed'],
+];
+for (const [name, stub, code] of listFails) {
+  test(`list fails closed: ${name}`, async () => {
+    const r = await handle(req({ action: 'list' }), mock({ moneyList: stub }));
+    assert.equal(r.status, 500);
+    assert.equal(r.body.error, code);
   });
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 7 }), a);
-  assert.equal(status, 200);
-  assert.equal(a.calls.moneyUpdate.length, 1);
-  assert.deepEqual(a.calls.moneyUpdate[0][1], { rough_labor_material: 7 }); // sale_price NOT in patch
-  assert.equal(body.input.rough_labor_material, 7); // readback, not fabricated
+}
+
+test('list: unbounded pagination stops at MAX_PAGES', async () => {
+  let n = 0;
+  const a = mock({ moneyList: () => Promise.resolve(page([], `c${n++}`)) });
+  const r = await handle(req({ action: 'list' }), a);
+  assert.equal(r.body.error, 'list_unbounded');
+  assert.equal(a.calls.moneyList.length, MAX_PAGES);
 });
 
-test('save: duplicate existing rows → withhold write (no first/last pick)', async () => {
-  const a = mockAdapter({
-    moneyFilter: () => Promise.resolve({ items: [{ id: 'm1', job_id: 'j1' }, { id: 'm2', job_id: 'j1' }], has_more: false }),
+test('list: duplicate job rows withheld and flagged', async () => {
+  const a = mock({ moneyList: () => Promise.resolve(page([{ id: M1, job_id: JOB, sale_price: 1 }, { id: M2, job_id: JOB, sale_price: 2 }])) });
+  const r = await handle(req({ action: 'list' }), a);
+  assert.deepEqual(r.body.duplicates, [JOB]);
+  assert.equal(r.body.inputs[0].sale_price, null);
+  assert.equal(r.body.inputs[0].duplicate, true);
+});
+
+test('list: malformed stored amount (string / overflow) withholds that job', async () => {
+  const a = mock({ moneyList: () => Promise.resolve(page([{ id: M1, job_id: JOB, sale_price: '5' }, { id: M2, job_id: JOB2, rough_labor_material: 1e15 }])) });
+  const r = await handle(req({ action: 'list' }), a);
+  assert.deepEqual(r.body.invalid.sort(), [JOB, JOB2].sort());
+  assert.ok(r.body.inputs.every((i) => i.invalid && i.sale_price === null && i.rough_labor_material === null));
+});
+
+test('save: create — exact patch, verified create, exact readback', async () => {
+  const a = mock({ moneyGet: (id) => Promise.resolve({ id, job_id: JOB, rough_labor_material: 5, sale_price: 10 }) });
+  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5, sale_price: 10 }), a);
+  assert.equal(r.status, 200);
+  assert.deepEqual(a.calls.moneyCreate[0][0], { job_id: JOB, rough_labor_material: 5, sale_price: 10 });
+  assert.deepEqual(r.body.input, { id: NEW, job_id: JOB, rough_labor_material: 5, sale_price: 10 });
+  assert.equal(a.calls.jobsGet.length, 2);
+});
+
+test('save: update writes only present keys', async () => {
+  const a = mock({
+    moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB, rough_labor_material: 5, sale_price: 10 }])),
+    moneyGet: (id) => Promise.resolve({ id, job_id: JOB, rough_labor_material: 7, sale_price: 10 }),
   });
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 5 }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'duplicate_money');
-  assert.equal(a.calls.moneyUpdate.length, 0);
-  assert.equal(a.calls.moneyCreate.length, 0);
+  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 7 }), a);
+  assert.equal(r.status, 200);
+  assert.deepEqual(a.calls.moneyUpdate[0], [M1, { rough_labor_material: 7 }]);
 });
 
-test('save: truncated filter page (has_more) → withhold write', async () => {
-  const a = mockAdapter({ moneyFilter: () => Promise.resolve({ items: [{ id: 'm1', job_id: 'j1' }], has_more: true }) });
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 5 }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'duplicate_money');
-  assert.equal(a.calls.moneyUpdate.length, 0);
+test('save: null amount written and read back as null', async () => {
+  const a = mock({ moneyGet: (id) => Promise.resolve({ id, job_id: JOB, sale_price: null }) });
+  const r = await handle(req({ action: 'save', job_id: JOB, sale_price: null }), a);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.input.sale_price, null);
 });
 
-test('save: filter throws → fail closed, no write', async () => {
-  const a = mockAdapter({ moneyFilter: () => Promise.reject(new Error('boom')) });
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 5 }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'money_lookup_failed');
-  assert.equal(a.calls.moneyUpdate.length, 0);
-});
-
-test('save: merged job → rejected before any money write', async () => {
-  const a = mockAdapter({ jobsGet: () => Promise.resolve({ id: 'j1', merged_into: 'j2' }) });
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 5 }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'job_merged');
-  assert.equal(a.calls.moneyFilter.length, 0);
-});
-
-test('save: sample job → rejected before any money write', async () => {
-  const a = mockAdapter({ jobsGet: () => Promise.resolve({ id: 'j1', is_sample: true }) });
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 5 }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'sample_job');
-  assert.equal(a.calls.moneyFilter.length, 0);
-});
-
-test('save: missing job → rejected before any money write', async () => {
-  const a = mockAdapter({ jobsGet: () => Promise.resolve(null) });
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 5 }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'job_not_found');
-  assert.equal(a.calls.moneyFilter.length, 0);
-});
-
-test('save: readback missing → readback_failed, no fabricated input', async () => {
-  const a = mockAdapter({
-    moneyFilter: () => Promise.resolve({ items: [], has_more: false }),
-    moneyCreate: () => Promise.resolve({ id: 'm-new' }),
-    moneyGet: () => Promise.resolve(null),
+const noWrite = (a) => a.calls.moneyCreate.length === 0 && a.calls.moneyUpdate.length === 0;
+const saveFails = [
+  ['missing job', { jobsGet: () => Promise.resolve(null) }, 'job_not_found'],
+  ['merged job', { jobsGet: (id) => Promise.resolve({ id, merged_into: JOB2 }) }, 'job_merged'],
+  ['sample job', { jobsGet: (id) => Promise.resolve({ id, is_sample: true }) }, 'sample_job'],
+  ['job GET returns another id', { jobsGet: () => Promise.resolve({ id: JOB2 }) }, 'job_mismatch'],
+  ['duplicate money rows', { moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB }, { id: M2, job_id: JOB }])) }, 'duplicate_money'],
+  ['filter has more', { moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB }], 'c')) }, 'duplicate_money'],
+  ['filter row for another job', { moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB2 }])) }, 'money_lookup_mismatch'],
+  ['filter row with malformed id', { moneyFilter: () => Promise.resolve(page([{ id: 'm1', job_id: JOB }])) }, 'money_lookup_mismatch'],
+  ['filter throws', { moneyFilter: () => Promise.reject(new Error('x')) }, 'money_lookup_failed'],
+];
+for (const [name, stubs, code] of saveFails) {
+  test(`save fails closed with no write: ${name}`, async () => {
+    const a = mock(stubs);
+    const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a);
+    assert.equal(r.body.error, code);
+    assert.ok(noWrite(a));
   });
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 5 }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'readback_failed');
-  assert.equal(body.input, undefined);
+}
+
+test('save: filter returns a plain array → invalid_page, no write', async () => {
+  const a = mock({ moneyFilter: () => Promise.resolve([]) });
+  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a);
+  assert.equal(r.status, 500);
+  assert.equal(r.body.error, 'invalid_page');
+  assert.ok(noWrite(a));
 });
 
-test('save: non-owner → 403 before any read (jobsGet/moneyFilter never called)', async () => {
-  const a = mockAdapter({ authMe: () => Promise.resolve(OTHER_ADMIN) });
-  const { status } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: 5 }), a);
-  assert.equal(status, 403);
-  assert.equal(a.calls.jobsGet.length, 0);
-  assert.equal(a.calls.moneyFilter.length, 0);
+test('save: job merged between first read and write → job_changed, no write', async () => {
+  let n = 0;
+  const a = mock({ jobsGet: (id) => Promise.resolve(n++ === 0 ? { id } : { id, merged_into: JOB2 }) });
+  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a);
+  assert.equal(r.body.error, 'job_changed');
+  assert.ok(noWrite(a));
 });
 
-test('unknown action → 400', async () => {
-  const a = mockAdapter();
-  const { status, body } = await handle(req({ action: 'delete' }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'unknown_action');
+test('save: create without matching job_id → create_unverified', async () => {
+  const a = mock({ moneyCreate: () => Promise.resolve({ id: NEW }) });
+  assert.equal((await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a)).body.error, 'create_unverified');
 });
 
-test('save: invalid amount → 400 before any read', async () => {
-  const a = mockAdapter();
-  const { status, body } = await handle(req({ action: 'save', job_id: 'j1', rough_labor_material: -5 }), a);
-  assert.equal(status, 400);
-  assert.equal(body.error, 'invalid_rough_labor_material');
-  assert.equal(a.calls.jobsGet.length, 0);
+for (const [name, row] of [['value differs', { id: NEW, job_id: JOB, rough_labor_material: 6 }], ['other job', { id: NEW, job_id: JOB2, rough_labor_material: 5 }], ['other id', { id: M1, job_id: JOB, rough_labor_material: 5 }], ['string value', { id: NEW, job_id: JOB, rough_labor_material: '5' }]]) {
+  test(`save: readback ${name} → readback_mismatch`, async () => {
+    const a = mock({ moneyGet: () => Promise.resolve(row) });
+    assert.equal((await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a)).body.error, 'readback_mismatch');
+  });
+}
+
+test('save: readback missing → readback_failed', async () => {
+  const a = mock({ moneyGet: () => Promise.resolve(null) });
+  assert.equal((await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a)).body.error, 'readback_failed');
+});
+
+test('save: update throws raw SDK text → generic save_failed', async () => {
+  const a = mock({ moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB }])), moneyUpdate: () => Promise.reject(new Error('internal sdk detail')) });
+  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a);
+  assert.equal(r.status, 500);
+  assert.equal(r.body.error, 'save_failed');
+});
+
+test('save: invalid amount / malformed job id → 400 before any read', async () => {
+  for (const body of [{ action: 'save', job_id: JOB, rough_labor_material: -5 }, { action: 'save', job_id: 'j1', rough_labor_material: 5 }]) {
+    const a = mock();
+    assert.equal((await handle(req(body), a)).status, 400);
+    assert.ok(noReads(a));
+  }
+});
+
+test('unknown action → 400, no reads', async () => {
+  const a = mock();
+  assert.equal((await handle(req({ action: 'nope' }), a)).status, 400);
+  assert.ok(noReads(a));
 });
