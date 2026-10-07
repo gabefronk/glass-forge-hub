@@ -11,6 +11,7 @@ import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs
 import { useJobSuper } from "@/hooks/use-job-super";
 import { useJobHomeowner, searchContacts } from "@/hooks/use-job-homeowner";
 import { pickHomeowner } from "../../../base44/shared/jobHomeowner.js";
+import { homeownerEditLabel, showHomeownerEdit } from "@/lib/homeownerAction";
 
 // "Sand & brass" job sheet: a dark hero (name, address, super, next step,
 // actions, files) and white section cards with green-haze title bands.
@@ -370,8 +371,8 @@ function HomeownerBox({ job, jobContacts }) {
           <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>HOMEOWNER{tag ? <span style={{ color: "#8f999b" }}>{tag}</span> : null}</div>
           <div className="break-words text-[17px] font-bold leading-[1.25]" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}{person.note ? <span className="text-[12.5px] font-medium" style={{ color: HERO_MUTED }}> ({sanitizeText(person.note)})</span> : null}</div>
         </div>
-        {person.phone || person.email ? (
-          <button type="button" onClick={() => setEditing(true)} className={`${small} h-11 shrink-0 px-1`} style={{ color: person.source === "job" ? BRASS_LT : "#9fc3b6" }}>{person.source === "linked" ? "Change" : person.source === "job" ? "Add phone" : "Edit"}</button>
+        {showHomeownerEdit(person) ? (
+          <button type="button" onClick={() => setEditing(true)} className={`${small} h-11 shrink-0 px-1`} style={{ color: person.source === "job" ? BRASS_LT : "#9fc3b6" }}>{homeownerEditLabel(person)}</button>
         ) : null}
       </div>
       {person.phone || person.email ? (
