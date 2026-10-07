@@ -25,6 +25,10 @@ import { buildReports } from "@/lib/jobHistory";
 import DeleteJobButton from "@/components/jobs/DeleteJobButton";
 import { AttachmentViewer } from "@/components/jobs/FeedImage";
 import { denverDate } from "../../../base44/shared/billingCore.js";
+import JobUpcomingCard from "@/components/jobs/JobUpcomingCard";
+import JobCreateEventModal from "@/components/jobs/JobCreateEventModal";
+import { isJobCalendarOwner, JOB_CREATE_ENABLED } from "@/lib/jobCalendarShared";
+import { useJobUpcoming } from "@/hooks/use-job-upcoming";
 
 const MUTED = "#566063", TEAL = "#0b3f3b";
 
@@ -54,11 +58,15 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
+  const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [upcomingKey, setUpcomingKey] = useState(0);
+  const [me, setMe] = useState(null);
+  const upcoming = useJobUpcoming(jobId, upcomingKey, { enabled: isJobCalendarOwner(me) });
   const v = useRef(0);
   const folder = useJobFolderFiles(job);
 
   useEffect(() => {
-    base44.auth.me().then((m) => { setCurrentUser(m?.email || m?.full_name || ""); setCanDelete(isAgentCenterOwner(m) || isPurchaseOrderOwner(m)); setCanPurchase(isPurchaseOrderOwner(m)); }).catch(() => {});
+    base44.auth.me().then((m) => { setMe(m); setCurrentUser(m?.email || m?.full_name || ""); setCanDelete(isAgentCenterOwner(m) || isPurchaseOrderOwner(m)); setCanPurchase(isPurchaseOrderOwner(m)); }).catch(() => {});
   }, []);
 
   const load = async ({ quiet = false, skipActivity = false } = {}) => {
@@ -182,8 +190,10 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           headingLevel="h2"
           progress={progress}
           alert={<ServiceMarker open={service.open} />}
+          upcoming={upcoming}
           extra={
             <>
+              {JOB_CREATE_ENABLED && isJobCalendarOwner(me) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
               {canPurchase && <Link to={procurementPath(jobId)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link>}
               {canDelete ? <DeleteJobButton job={job} onDeleted={() => onJobDeleted?.(job.id)} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
             </>
@@ -193,6 +203,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
         <MergedJobBanner job={job} />
         <DuplicateJobNotice group={group} currentId={jobId} />
 
+        {isJobCalendarOwner(me) ? <JobUpcomingCard upcoming={upcoming} /> : null}
         <div className="scroll-mt-4">
           <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
             {reportsError ? <p role="alert" className="mb-3 rounded-[9px] px-3 py-2 text-[12.5px]" style={{ color: "#a43432", backgroundColor: "#fcedec", border: "1px solid #f0c9c5" }}>Some field reports could not load. {reportsError}</p> : null}
@@ -225,6 +236,10 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
       {showReport && (
         <JobFieldReportModal jobId={jobId} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); load({ quiet: true }); reloadService(); }} />
       )}
+
+      {showCreateEvent && isJobCalendarOwner(me) ? (
+        <JobCreateEventModal job={job} user={me} open={showCreateEvent} onOpenChange={setShowCreateEvent} onCreated={() => setUpcomingKey((k) => k + 1)} />
+      ) : null}
 
       {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
     </div>

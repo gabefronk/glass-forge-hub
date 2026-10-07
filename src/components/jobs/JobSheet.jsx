@@ -11,6 +11,7 @@ import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs
 import { useJobSuper } from "@/hooks/use-job-super";
 import { useJobHomeowner, searchContacts } from "@/hooks/use-job-homeowner";
 import { pickHomeowner } from "../../../base44/shared/jobHomeowner.js";
+import { nextVisitProjection } from "@/lib/jobCalendarShared";
 import { homeownerEditLabel, showHomeownerEdit } from "@/lib/homeownerAction";
 
 // "Sand & brass" job sheet: a dark hero (name, address, super, next step,
@@ -588,7 +589,7 @@ function JobInfo({ snap, folder }) {
 
 // progress (optional): jobProgress() from jobStages — shows a small "Stage n of 7" chip.
 // alert (optional): a node shown first in the chip row by the job name — the red service-item marker.
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, extra, headingLevel = "h1", progress = null, alert = null }) {
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, extra, headingLevel = "h1", progress = null, alert = null, upcoming = null }) {
   const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
   // The builder already leads most job names ("Bangerter Homes - Gomez Res"); only add it
   // to the eyebrow when the title doesn't carry it.
@@ -598,6 +599,12 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
   const eyebrow = [snap.kind, builderInTitle ? "" : builderText].filter(Boolean).join(" · ").toUpperCase();
   const [chipBg, chipInk] = STEP_CHIP[snap.step.tone] || STEP_CHIP.neutral;
   const [lead, ...rest] = String(snap.step.text || "").split(/(?<=\.)\s+/);
+  // When the scoped crew-calendar read found a confirmed upcoming visit, the hero
+  // leads with it instead of the saved-completion step (which may lag the live
+  // calendar). Saved job completion status (status.label, snap) is untouched.
+  const proj = useMemo(() => (upcoming && upcoming.events && upcoming.events.length) ? nextVisitProjection(upcoming.events) : null, [upcoming]);
+  const [heroExpanded, setHeroExpanded] = useState(false);
+  useEffect(() => { setHeroExpanded(false); }, [proj]);
 
   return (
     <section className="relative z-[3] rounded-[14px]" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
@@ -631,11 +638,24 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
         </div>
 
         <div className="mt-3 flex flex-col gap-2.5 rounded-[12px] py-2.5 pl-4 pr-2.5 max-[699px]:pl-3" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
-          <div className="flex w-full min-w-0 flex-none items-center gap-2.5">
-            <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: chipBg, color: chipInk }}>{snap.step.tag}</span>
-            <p className="m-0 min-w-0 flex-1 text-[15px] font-semibold leading-[21px]" style={{ color: HERO_INK }}>
-              {lead}{rest.length ? <span className="font-medium" style={{ color: HERO_MUTED }}> {rest.join(" ")}</span> : null}
-            </p>
+          <div className="flex w-full min-w-0 flex-none flex-wrap items-center gap-2.5">
+            {proj ? (
+              <>
+                <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.2)", color: BRASS_LT }}>Next visit</span>
+                <span className="shrink-0 font-mono-num text-[14px] font-semibold whitespace-nowrap" style={{ color: HERO_INK }}>{proj.line}</span>
+                <p className="m-0 min-w-0 flex-1 text-[14.5px] font-semibold leading-[20px] max-[699px]:w-full max-[699px]:flex-none" style={{ color: HERO_INK }}>
+                  {proj.expandable && heroExpanded ? proj.purposeFull : proj.purposePreview}
+                  {proj.expandable ? <button type="button" onClick={() => setHeroExpanded((v) => !v)} className="ml-1.5 text-[12px] font-semibold hover:underline" style={{ color: BRASS_LT }}>{heroExpanded ? "Show less" : "Show more"}</button> : null}
+                </p>
+              </>
+            ) : (
+              <>
+                <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: chipBg, color: chipInk }}>{snap.step.tag}</span>
+                <p className="m-0 min-w-0 flex-1 text-[15px] font-semibold leading-[21px]" style={{ color: HERO_INK }}>
+                  {lead}{rest.length ? <span className="font-medium" style={{ color: HERO_MUTED }}> {rest.join(" ")}</span> : null}
+                </p>
+              </>
+            )}
           </div>
           <div className="hero-actions flex w-full min-w-0 flex-wrap items-center gap-2">
             <button type="button" onClick={onFieldReport} className={HERO_BTN} style={{ backgroundColor: BRASS, color: "#1d160a" }}><Camera className="h-[15px] w-[15px]" />Field report</button>
