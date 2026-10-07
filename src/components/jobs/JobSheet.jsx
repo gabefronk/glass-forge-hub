@@ -233,7 +233,7 @@ function SuperBox({ jobId, jobContacts, events }) {
           <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>
             {label}{person.source === "notes" ? <span style={{ color: "#8f999b" }}> · FROM {person.day ? day(person.day).toUpperCase() : "CALENDAR"} NOTES</span> : person.source === "suggestion" ? <span style={{ color: "#8f999b" }}> · SUGGESTED</span> : person.source === "builder" ? <span style={{ color: "#8f999b" }}> · {sanitizeText(view?.job?.builder || "BUILDER").toUpperCase()}&apos;S SUPER</span> : null}
           </div>
-          <div className="truncate text-[17px] font-bold" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}</div>
+          <div className="break-words text-[17px] font-bold leading-[1.25]" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}</div>
         </div>
         <button type="button" onClick={() => setEditing(true)} className={`${small} h-11 shrink-0 px-1`} style={{ color: "#9fc3b6" }}>{person.source === "linked" ? "Change" : "Edit"}</button>
       </div>
@@ -368,7 +368,7 @@ function HomeownerBox({ job, jobContacts }) {
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-extrabold" style={{ backgroundColor: "#e0c994", color: "#1d160a" }}>{initials(person.name)}</span>
         <div className="min-w-0 flex-1">
           <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>HOMEOWNER{tag ? <span style={{ color: "#8f999b" }}>{tag}</span> : null}</div>
-          <div className="truncate text-[17px] font-bold" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}{person.note ? <span className="text-[12.5px] font-medium" style={{ color: HERO_MUTED }}> ({sanitizeText(person.note)})</span> : null}</div>
+          <div className="break-words text-[17px] font-bold leading-[1.25]" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}{person.note ? <span className="text-[12.5px] font-medium" style={{ color: HERO_MUTED }}> ({sanitizeText(person.note)})</span> : null}</div>
         </div>
         {person.phone || person.email ? (
           <button type="button" onClick={() => setEditing(true)} className={`${small} h-11 shrink-0 px-1`} style={{ color: person.source === "job" ? BRASS_LT : "#9fc3b6" }}>{person.source === "linked" ? "Change" : person.source === "job" ? "Add phone" : "Edit"}</button>
@@ -636,7 +636,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
               {lead}{rest.length ? <span className="font-medium" style={{ color: HERO_MUTED }}> {rest.join(" ")}</span> : null}
             </p>
           </div>
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+          <div className="hero-actions flex w-full min-w-0 flex-wrap items-center gap-2">
             <button type="button" onClick={onFieldReport} className={HERO_BTN} style={{ backgroundColor: BRASS, color: "#1d160a" }}><Camera className="h-[15px] w-[15px]" />Field report</button>
             <FilesMenu folder={folder} plans={plans} events={events} />
             {extra}

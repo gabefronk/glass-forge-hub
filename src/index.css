@@ -347,3 +347,12 @@
 /* Owner-only panels nested inside the job page's collapsed Owner section: keep their
    own borders so each stays readable, drop the stacked drop shadows. */
 .job-owner-panels > section { box-shadow: none; margin-top: 12px; }
+
+/* Hero action group: 44px mobile touch targets for the action children only
+   (Field report, Files trigger, Setup/Budget/Delete/Combine). Scoped so the
+   Files dropdown rows and every other shared button keep their own heights. */
+@media (max-width: 699px) {
+  .hero-actions > button,
+  .hero-actions > a,
+  .hero-actions > div > button:first-child { min-height: 44px; }
+}
