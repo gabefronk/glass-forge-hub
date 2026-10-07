@@ -138,7 +138,7 @@ function PurchasingWorkspace() {
         ))}</div>
       )}
 
-      <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} />
+      <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} onUploaded={load} />
 
       {editing && (
         <MoneyEditDialog

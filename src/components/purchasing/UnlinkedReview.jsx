@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 import { Package, FileText } from 'lucide-react';
 import { C } from '@/lib/feeUI';
+import QuoteDropzone from './QuoteDropzone';
 
 // Quiet review section for no-job entities (shop POs, unlinked quotes) so they
 // are never silently lost behind the one-card-per-job loop. Collapsed by
-// default. No upload here: the quote ingest only accepts a public PDF URL, and
-// quote prices must not be stored at a permanent public link.
-export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [] }) {
+// default. The dropzone uploads via private storage (no public URL); the server
+// signs a short-lived fetch link only to read the PDF, and persists the private ref.
+export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [], onUploaded }) {
   const hasAny = unlinkedQuotes.length > 0 || shopPOs.length > 0;
   return (
     <details className="rounded-[12px] p-3.5" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D3CABB' }}>
@@ -35,6 +36,7 @@ export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [] }) {
           </div>
         )}
         {!hasAny && <p className="text-[12px]" style={{ color: C.textSecondary }}>No unlinked quotes or shop purchases.</p>}
+        <QuoteDropzone onDone={onUploaded} />
       </div>
     </details>
   );
