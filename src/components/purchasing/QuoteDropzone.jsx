@@ -17,7 +17,7 @@ const toBase64 = (file) => new Promise((resolve, reject) => {
   r.readAsDataURL(file);
 });
 
-export default function QuoteDropzone({ onDone }) {
+export default function QuoteDropzone({ jobId, onDone }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
@@ -29,7 +29,7 @@ export default function QuoteDropzone({ onDone }) {
     try {
       const file_base64 = await toBase64(job.file);
       const res = await base44.functions.invoke('purchasingQuoteIngest', {
-        action: 'ingest', file_name: job.file.name, file_type: job.file.type || '', file_base64, request_key: job.key,
+        action: 'ingest', file_name: job.file.name, file_type: job.file.type || '', file_base64, request_key: job.key, ...(jobId ? { job_id: jobId } : {}),
       });
       const data = res?.data || res;
       if (data?.error) throw new Error(data.error);

@@ -218,6 +218,17 @@ export function profitDisplayCalc(windowsDisp, roughDisp, saleDisp) {
   return { value: p, tone: p > 0 ? 'positive' : p < 0 ? 'negative' : 'zero', review };
 }
 
+// Payment tri-state for a single vendor order, same semantics as refsForJob:
+// Paid (paid/reconciled status or paid_at), Unpaid (recorded but not paid),
+// Unknown (nothing recorded). Never blindly labels an unknown status Unpaid.
+export function paymentState(o) {
+  const paid = ['paid', 'reconciled'].includes(o?.status) || Boolean(o?.paid_at);
+  if (paid) return { label: 'Paid', tone: 'ok' };
+  const hasAmount = o?.amount != null && o.amount !== '' && Number(o.amount) !== 0;
+  if (!o?.status && !o?.paid_at && !hasAmount) return { label: 'Unknown', tone: 'warn' };
+  return { label: 'Unpaid', tone: 'warn' };
+}
+
 // Reference quiet line — Quote# / Mfr order# / YA PO / ETA / Payment.
 // green = confirmed/complete, amber = needs action, none = not present.
 // Aggregates ALL active records; "Multiple" when distinct values conflict.
