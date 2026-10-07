@@ -7,16 +7,34 @@
 //  - Owner gate: only HISTORY_EDIT_OWNER_IDS (Gabriel's immutable auth ids).
 //    Admin role alone is NOT enough (multiple admins). Twin of
 //    src/lib/ownerAccess.js HISTORY_EDIT_OWNER_IDS (kept in sync manually).
-//  - Strict whitelist: only type/record_id/job_id/expected_text/new_text are
-//    read from the request; only the text field + EXISTING provenance markers
-//    are written. No arbitrary entity payload is forwarded to the SDK update.
-//  - Concurrency: the current text must byte-equal expected_text, else 409
-//    (no write, no auto-retry). original_text is a provenance marker (set once
-//    on the first edit, never overwritten), NOT the concurrency token.
+//  - Strict whitelist: the entry destructures EXACTLY type/record_id/job_id/
+//    expected_text/new_text from the request — nothing else is forwarded. Here
+//    only those five are read; only the text field + EXISTING provenance markers
+//    are written. No arbitrary entity payload reaches the SDK update. A client
+//    cannot override now/edited_at/edited_by/original_text: now is server-time,
+//    edited_at/edited_by are server-stamped from the auth user, and
+//    original_text is set-once from the pre-edit text.
+//  - Concurrency: a fresh reread immediately before the update compares the
+//    original text + job_id; a mismatch means the record changed since the edit
+//    started -> 409, no write. original_text is a provenance marker (set once,
+//    never overwritten), NOT the concurrency token. The SDK update is a plain
+//    PUT with no predicate/revision — there is NO atomic compare-and-set, so a
+//    GET-to-update race remains (a change landing between the reread and the
+//    PUT would still be overwritten). The platform exposes no CAS to close it;
+//    we do not pretend otherwise. The stored readback below catches the
+//    uncertain outcome and surfaces save_unknown instead of a false ok.
+//  - Stored readback: after the update we re-get and verify exact id + job_id
+//    + text + marker patch. If the get fails, or the text/markers/id/job don't
+//    match what we just wrote, we return save_unknown (the update may have
+//    committed but we cannot confirm it). The UI locks Save and asks for a
+//    Reload; it never auto-retries (a retry could double-write or clobber a
+//    concurrent edit). An update() that throws is also save_unknown — a throw
+//    does NOT mean the write didn't happen.
 //  - Markers stamp the EXISTING fields sourceNoteFollowthrough already checks
 //    (edited_at/edited_by/original_text on reports; edited/edited_by on notes)
 //    so a later ProBuild/source-note refresh cannot overwrite the correction.
 //    No new marker is invented.
+//  - Text-only: this path never deletes or restores a record.
 
 export const HISTORY_EDIT_OWNER_IDS = new Set([
   '6a7f0d834a5f825c724273ea', // Gabriel (gabefronk@gmail.com)
@@ -48,28 +66,71 @@ export async function applyHistoryTextEdit({
   if (!trimmed) return { status: 400, body: { error: 'empty_text' } };
 
   const isReport = type === 'report';
+  const textField = isReport ? 'message' : 'body';
+
+  // Fresh reread immediately before the update. Compare original text + job_id;
+  // a mismatch means the record changed since the edit started -> reject, no
+  // write. (No atomic CAS: the SDK PUT carries no predicate/revision, so a
+  // change landing between this reread and the update would still be
+  // overwritten. The readback below surfaces that as save_unknown.)
   const rec = await get(type, record_id).catch(() => null);
   if (!rec) return { status: 404, body: { error: 'not_found' } };
   if (rec.job_id !== job_id) return { status: 409, body: { error: 'job_mismatch' } };
-  const current = isReport ? String(rec.message ?? '') : String(rec.body ?? '');
+  const current = String(rec[textField] ?? '');
   if (current !== expected_text) return { status: 409, body: { error: 'conflict', current } };
 
   // Strict patch: text + EXISTING provenance markers only. original_text is set
   // once (provenance), never overwritten. Photos, attachments, dates, authors,
   // quantities/pricing, job links and provider raw text are never touched here.
+  const setOriginal = isReport && !rec.original_text;
   const patch = isReport
-    ? { message: trimmed, edited_at: now, edited_by: user.email, ...(rec.original_text ? {} : { original_text: current }) }
+    ? { message: trimmed, edited_at: now, edited_by: user.email, ...(setOriginal ? { original_text: current } : {}) }
     : { body: trimmed, edited: true, edited_by: user.email };
-  await update(type, record_id, patch);
 
+  // update may throw (network, RLS, transient). A throw does NOT mean the write
+  // didn't happen — the platform PUT may have committed before the response was
+  // lost. Treat any update failure as save_unknown (may have written); never
+  // claim a clean failure. The UI locks Save and asks for a Reload.
+  let updateThrew = false;
+  try {
+    await update(type, record_id, patch);
+  } catch (_) {
+    updateThrew = true;
+  }
+
+  // Every save_unknown path is reached AFTER the update was attempted (sent or
+  // threw), so the write may have committed — may_have_written is always true.
+  // The UI locks Save and asks for a Reload; it never auto-retries.
+  const unknown = () => ({
+    status: 200,
+    body: { ok: false, save_unknown: true, may_have_written: true, type, record_id },
+    write: patch,
+  });
+  if (updateThrew) return unknown();
+
+  // Stored readback: re-get and verify exact id + job_id + text + marker patch.
   const readback = await get(type, record_id).catch(() => null);
+  if (!readback) return unknown(); // readback get failed -> can't confirm (write may have committed)
+  if (readback.id !== record_id) return unknown();
+  if (readback.job_id !== job_id) return unknown();
+  if (String(readback[textField] ?? '') !== trimmed) return unknown(); // text didn't stick (silent drop / concurrent overwrite)
+  if (isReport) {
+    if (readback.edited_at !== now) return unknown();
+    if (readback.edited_by !== user.email) return unknown();
+    const expectedOriginal = setOriginal ? current : rec.original_text;
+    if (String(readback.original_text ?? '') !== String(expectedOriginal ?? '')) return unknown();
+  } else {
+    if (readback.edited !== true) return unknown();
+    if (readback.edited_by !== user.email) return unknown();
+  }
+
   return {
     status: 200,
     body: {
       ok: true, type, record_id,
       readback: isReport
-        ? { message: readback?.message ?? null, original_text: readback?.original_text ?? null, edited_at: readback?.edited_at ?? null, edited_by: readback?.edited_by ?? null }
-        : { body: readback?.body ?? null, edited: readback?.edited ?? null, edited_by: readback?.edited_by ?? null },
+        ? { id: readback.id, job_id: readback.job_id, message: readback.message, original_text: readback.original_text, edited_at: readback.edited_at, edited_by: readback.edited_by }
+        : { id: readback.id, job_id: readback.job_id, body: readback.body, edited: readback.edited, edited_by: readback.edited_by },
     },
     write: patch,
   };
