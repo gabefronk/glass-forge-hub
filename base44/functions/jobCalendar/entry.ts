@@ -53,7 +53,25 @@ function realTransport(base44: any) {
 
 export default async function (req: Request) {
   const base44 = createClientFromRequest(req);
-  const handler = createJobCalendarHandler({ base44, transport: realTransport(base44), createEnabled: false, sha256: sha256Hex });
+  // TEMPORARY one-payload test gate (remove after the single live test). createEnabled
+  // stays false; this enables ONLY the exact frozen payload below for the owner.
+  const exactTestPayload = {
+    job_id: '6abcb461cfe73db4bc147b24',
+    owner_id: '6a7f0d834a5f825c724273ea',
+    request_id: '9b4a7f63-56d2-4f43-8d8a-276dfd94514a',
+    all_day: false,
+    start_date: '2026-10-07',
+    end_date: '2026-10-07',
+    start_time: '18:00',
+    end_time: '18:05',
+    time_zone: 'America/Denver',
+    title: 'concord homes - 5-8 sunset village',
+    address: '931-937 N 240 W Spanish Fork, UT 84660',
+    notes: 'TEMPORARY TEST ONLY',
+    confirm_no_jobsite: false,
+    fingerprint: 'd629918057c10dd1099debc6b2c53ee4af5eef201ca3c5dc8ca97af0f7fcc5dc',
+  };
+  const handler = createJobCalendarHandler({ base44, transport: realTransport(base44), createEnabled: false, sha256: sha256Hex, exactTestPayload });
   const r = await handler.handle(req);
   return json(r.body, r.status);
 }
