@@ -110,7 +110,10 @@ function PurchasingWorkspace() {
 
   return (
     <PageShell width="max-w-[1280px]">
-      <PurchasingHeader counts={counts} loading={loading} onReload={load} />
+      <PurchasingHeader counts={counts} />
+      <div className="flex justify-end max-[699px]:hidden">
+        <button type="button" disabled={loading} onClick={load} className="text-[11.5px] font-medium underline disabled:opacity-60" style={{ color: C.textSecondary, minHeight: 0 }}>{loading ? 'Reloading…' : 'Reload'}</button>
+      </div>
 
       <div className="flex items-center gap-2">
         <label className="relative flex min-w-0 flex-1 items-center">
@@ -131,7 +134,7 @@ function PurchasingWorkspace() {
         ))}</div>
       )}
 
-      <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} onUploaded={load} focusSignal={addQuoteSignal} />
+      <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} onUploaded={load} focusSignal={addQuoteSignal} onReload={load} loading={loading} />
 
       {editing && (
         <MoneyEditDialog
