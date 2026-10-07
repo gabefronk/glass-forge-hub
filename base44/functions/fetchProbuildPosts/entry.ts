@@ -281,16 +281,19 @@ export default async function(req) {
     }
     const frToCreate = [];
     const frToUpdate = [];
-    // Message fills are ISOLATED from the photo/job-link bulk patch: the SDK
-    // update/bulkUpdate are unconditional writes with no compare-and-set/revision
+    // Message fills are ISOLATED from the photo/job-link bulk patch. The standard
+    // SDK update is an unconditional PUT /<id> with no predicate and no revision
     // token (verified against @base44/sdk/dist/modules/entities.js: update ->
-    // PUT /<id>, bulkUpdate -> PUT /bulk, updateMany -> PATCH /update-many with a
-    // MongoDB operator and no schema validation). So a message fill is not queued
-    // into the same bulk patch as photo/job links; it is planned here and executed
-    // below as a single-field update only after a freshest exact FieldReports.get
-    // re-confirms the record is still safe to fill. A residual read-then-write race
-    // remains (a concurrent owner edit between that fresh get and the update would
-    // still be overwritten); the platform exposes no atomic CAS to close it.
+    // axios.put(baseURL/id, data); bulkUpdate -> axios.put(baseURL/bulk, data)).
+    // So a message fill is not queued into the same bulk patch as photo/job links;
+    // it is planned here and executed below as a single-field {message} update
+    // only after a freshest exact FieldReports.get re-confirms the record is still
+    // safe to fill. That fresh read preserves a concurrent owner edit that landed
+    // AFTER the earlier existingReports snapshot but BEFORE the fresh read. It is
+    // NOT atomic CAS: a GET-to-update race remains — an owner edit landing BETWEEN
+    // the fresh FieldReports.get and the FieldReports.update would still be
+    // overwritten, because the update carries no predicate/revision the server
+    // re-checks. The platform exposes no atomic compare-and-set to close it.
     const messageFills = []; // { id, srcMsg, postId } planned, pending a fresh read-before-write
     let frSkippedExisting = 0;
     let frPhotosFilled = 0;
@@ -362,12 +365,17 @@ export default async function(req) {
     if (!dryRun && frToUpdate.length) await base44.asServiceRole.entities.FieldReports.bulkUpdate(frToUpdate);
 
     // Isolated message fills: a freshest exact FieldReports.get right before each
-    // single-field update re-confirms the record is still safe to fill, so a
-    // concurrent owner note that landed after the earlier existingReports snapshot
-    // is not overwritten. Skip (counted, no write) on: fresh-read failure, post_id
-    // mismatch, any owner-edit marker (edited_at/edited_by/original_text), or a
-    // message that is no longer empty. Source bytes are written verbatim. The
-    // counter reflects actual writes in live mode and planned writes in dry-run.
+    // single-field {message} update re-confirms the record is still safe to fill,
+    // so a concurrent owner note that landed AFTER the earlier existingReports
+    // snapshot but BEFORE this fresh read is preserved (not overwritten). This is
+    // not a categorical guarantee: a GET-to-update race remains — an owner edit
+    // landing BETWEEN this fresh FieldReports.get and the FieldReports.update would
+    // still be overwritten, because the standard SDK update is unconditional (no
+    // server-side predicate/revision re-check). This is not atomic CAS. Skip
+    // (counted, no write) on: fresh-read failure, post_id mismatch, any owner-edit
+    // marker (edited_at/edited_by/original_text), or a message that is no longer
+    // empty. Source bytes are written verbatim. The counter reflects actual writes
+    // in live mode and planned writes in dry-run.
     if (dryRun) {
       frMessagesFilled = messageFills.length;
     } else {
