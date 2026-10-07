@@ -238,7 +238,7 @@ function SuperBox({ jobId, jobContacts, events }) {
       </div>
       <div className="mt-2.5 flex flex-wrap gap-2">
         {person.phone ? (
-          <a href={`tel:${digits(person.phone)}`} className="inline-flex h-[34px] min-h-11 max-[699px]:h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap max-[699px]:min-h-11" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${sanitizeText(person.name)}`}>
+          <a href={`tel:${digits(person.phone)}`} className="inline-flex h-[34px] min-h-11 max-[699px]:h-11 min-w-[110px] flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap max-[699px]:min-h-11" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${sanitizeText(person.name)}`}>
             <Phone className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{person.phone}</span>
           </a>
         ) : null}
@@ -374,7 +374,7 @@ function HomeownerBox({ job, jobContacts }) {
       {person.phone || person.email ? (
         <div className="mt-2.5 flex flex-wrap gap-2">
           {person.phone ? (
-            <a href={`tel:${digits(person.phone)}`} className="inline-flex min-h-[34px] max-[699px]:h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap max-[699px]:min-h-11" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${sanitizeText(person.name)}`}>
+            <a href={`tel:${digits(person.phone)}`} className="inline-flex min-h-[34px] max-[699px]:h-11 min-w-[110px] flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap max-[699px]:min-h-11" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${sanitizeText(person.name)}`}>
               <Phone className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{person.phone}</span>
             </a>
           ) : null}
@@ -628,13 +628,13 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-[12px] py-2.5 pl-4 pr-2.5" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 max-[899px]:w-full">
             <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: chipBg, color: chipInk }}>{snap.step.tag}</span>
             <p className="m-0 min-w-0 flex-1 text-[15px] font-semibold leading-[21px]" style={{ color: HERO_INK }}>
               {lead}{rest.length ? <span className="font-medium" style={{ color: HERO_MUTED }}> {rest.join(" ")}</span> : null}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex shrink-0 max-[899px]:w-full max-[899px]:min-w-0 max-[899px]:shrink flex-wrap items-center gap-2">
             <button type="button" onClick={onFieldReport} className={HERO_BTN} style={{ backgroundColor: BRASS, color: "#1d160a" }}><Camera className="h-[15px] w-[15px]" />Field report</button>
             <FilesMenu folder={folder} plans={plans} events={events} />
             {extra}
