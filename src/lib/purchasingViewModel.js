@@ -113,6 +113,111 @@ export function computeProfit(windowsValue, roughValue, saleValue) {
   return { value: p, tone: p > 0 ? 'positive' : p < 0 ? 'negative' : 'zero' };
 }
 
+// --- Display candidates (DISPLAY ONLY — no datastore writes) ---
+// The verified canonical value (windowsInclTax / owner money input) is kept
+// separate on the card (card.windows.value / card.rough.value / card.sale.value
+// and the verified card.profit). These helpers build the BEST-KNOWN number shown
+// in the tile when the verified value is null: a real figure from the budget /
+// PO / order fields with an honest label and an amber review flag. Truly absent
+// → null (dash). A real 0 stays 0. Never invents a number, never mislabels a
+// budget estimate as owner-entered actual, never uses customer sale / dealer
+// dual-price customer_total as supplier cost. For multiple scopes / PO
+// conflict: one deterministic candidate + alternatives in the expansion,
+// labelled estimate/review — never first/last guess or a sum that double-counts.
+
+// Deterministic budget pick for display candidates: prefer a budget with a
+// verified source quote, then one with real cost inputs, then by id (stable).
+function sortedDisplayPool(jobBudgets = []) {
+  const live = jobBudgets.filter(isLiveBudget);
+  const active = activeBudgets(live);
+  const pool = active.length ? active : live.filter((b) => b.budget_usage !== 'reference');
+  const score = (b) => {
+    const src = sourceQuoteInclTax(b);
+    const hasCost = ['material_true_cost', 'labor_cost_sub_pay', 'additional_install_material', 'additional_equipment']
+      .some((k) => (amount(b.inputs?.[k]) ?? 0) > 0);
+    return (src.value != null && budgetFigures(b).ready ? 4 : 0) + (hasCost ? 2 : 0);
+  };
+  return [...pool].sort((a, b) => (score(b) - score(a)) || String(a.id).localeCompare(String(b.id)));
+}
+export function pickDisplayBudget(jobBudgets = []) { return sortedDisplayPool(jobBudgets)[0] || null; }
+
+// Best-known windows-cost candidate from ONE budget. Priority: verified
+// source quote → cost_material_tax (incl. overhead — honest label, NOT labor)
+// → PO dealer amount (no tax) → vendor order amount (no tax) → dealer price
+// (dual-price quote, labelled dealer not supplier). Never customer_total /
+// actual_total_sell (sale-side, not supplier cost).
+function bestWindowsFromBudget(budget, jobPOs, jobOrders) {
+  if (!budget) return { value: null, label: null, source: 'none', budgetId: null };
+  const src = sourceQuoteInclTax(budget);
+  if (src.value != null && budgetFigures(budget).ready) return { value: src.value, label: 'Supplier quote total incl tax', source: 'source_quote', budgetId: budget.id };
+  const fig = budgetFigures(budget);
+  const hasCost = ['material_true_cost', 'labor_cost_sub_pay', 'additional_install_material', 'additional_equipment']
+    .some((k) => (amount(budget.inputs?.[k]) ?? 0) > 0);
+  if (hasCost && fig.calculated && fig.calculated.cost_material_tax > 0) return { value: fig.calculated.cost_material_tax, label: 'Material incl tax (budget, incl. overhead)', source: 'cost_material_tax', budgetId: budget.id };
+  const po = jobPOs.find((p) => { const a = amount(p.amount_dealer); return a != null && a > 0; });
+  if (po) return { value: Number(amount(po.amount_dealer)), label: 'PO dealer amount (no tax verified)', source: 'po_dealer', budgetId: budget.id };
+  const vo = jobOrders.find((o) => { const a = amount(o.amount); return a != null && a > 0; });
+  if (vo) return { value: Number(amount(vo.amount)), label: 'Vendor order amount (no tax verified)', source: 'vendor_order', budgetId: budget.id };
+  const q = budget.quote || {};
+  const dealer = amount(q.dealer_subtotal) ?? amount(q.dealer_total);
+  if (dealer != null && dealer > 0) return { value: Number(dealer), label: 'Dealer price (review)', source: 'dealer_price', budgetId: budget.id };
+  return { value: null, label: 'No cost figure', source: 'none', budgetId: budget.id };
+}
+
+// Windows display tile. Verified canonical stays separate (card.windows.value);
+// this is the best-known candidate shown in the tile. Multiple scopes / PO
+// conflict → one deterministic candidate + alternatives, labelled review.
+export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders = [], { conflict = false } = {}) {
+  const sorted = sortedDisplayPool(jobBudgets);
+  if (!sorted.length) return { value: null, label: conflict ? 'PO conflict — no cost figure' : null, review: conflict, source: conflict ? 'po_conflict' : 'empty', budgetId: null, alternatives: [] };
+  if (sorted.length === 1) {
+    const c = bestWindowsFromBudget(sorted[0], jobPOs, jobOrders);
+    const reviewed = budgetFigures(sorted[0]).ready;
+    const review = conflict || !(c.source === 'source_quote' && reviewed);
+    return { value: c.value, label: conflict ? `PO conflict — ${c.label || 'review'}` : c.label, review, source: conflict ? 'po_conflict' : c.source, budgetId: c.budgetId, alternatives: [] };
+  }
+  const pick = bestWindowsFromBudget(sorted[0], jobPOs, jobOrders);
+  const alternatives = sorted.slice(1).map((b) => bestWindowsFromBudget(b, jobPOs, jobOrders)).filter((a) => a.value != null);
+  const baseLabel = `${pick.label || 'Estimate'} · 1 of ${sorted.length} scopes`;
+  return { value: pick.value, label: conflict ? `PO conflict — ${baseLabel}` : baseLabel, review: true, source: conflict ? 'po_conflict' : 'multiple_scopes', budgetId: pick.budgetId, alternatives };
+}
+
+// Rough labor/material display: owner-entered (verified) when present; else
+// budget labor_cost_sub_pay + additional_install_material as an estimate
+// (labelled estimate, never mislabeled owner-entered actual). Duplicate owner
+// entries → owner ambiguous, fall to budget estimate with a duplicate flag.
+export function roughDisplayCandidate(budget, ownerValue, duplicate) {
+  if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Owner-entered', review: false, source: 'owner' };
+  const labor = amount(budget?.inputs?.labor_cost_sub_pay);
+  const mat = amount(budget?.inputs?.additional_install_material);
+  const est = ((labor ?? 0) > 0 || (mat ?? 0) > 0) ? roundMoney((labor ?? 0) + (mat ?? 0)) : null;
+  if (est == null) return { value: null, label: null, review: false, source: 'none' };
+  return { value: est, label: duplicate ? 'Budget labor + material (estimate) — duplicate owner entries' : 'Budget labor + material (estimate)', review: true, source: 'budget_estimate' };
+}
+
+// Sale price display: owner-entered (verified) when present; else budget
+// actual_total_sell (target) or suggested_total_sell as an estimate, labelled
+// estimate — never mislabeled owner-entered actual.
+export function saleDisplayCandidate(budget, ownerValue, duplicate) {
+  if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Owner-entered', review: false, source: 'owner' };
+  const sell = amount(budget?.inputs?.actual_total_sell);
+  if (sell != null && sell > 0) return { value: Number(sell), label: duplicate ? 'Budget target sell (estimate) — duplicate owner entries' : 'Budget target sell (estimate)', review: true, source: 'budget_estimate' };
+  const suggested = budgetFigures(budget).calculated?.suggested_total_sell;
+  if (suggested != null && suggested > 0) return { value: suggested, label: 'Budget suggested sell (estimate)', review: true, source: 'budget_suggested' };
+  return { value: null, label: null, review: false, source: 'none' };
+}
+
+// Display profit from the three display inputs (candidate or verified). Shown
+// only when all three resolve; flagged when any input is a candidate. The
+// verified profit (card.profit, from verified inputs only) stays separate and
+// is never persisted.
+export function profitDisplayCalc(windowsDisp, roughDisp, saleDisp) {
+  if (windowsDisp?.value == null || roughDisp?.value == null || saleDisp?.value == null) return { value: null, tone: 'unknown', review: false };
+  const p = roundMoney(saleDisp.value - windowsDisp.value - roughDisp.value);
+  const review = Boolean(windowsDisp.review || roughDisp.review || saleDisp.review);
+  return { value: p, tone: p > 0 ? 'positive' : p < 0 ? 'negative' : 'zero', review };
+}
+
 // Reference quiet line — Quote# / Mfr order# / YA PO / ETA / Payment.
 // green = confirmed/complete, amber = needs action, none = not present.
 // Aggregates ALL active records; "Multiple" when distinct values conflict.
@@ -249,6 +354,20 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     const sale = money && !moneyDup && amount(money.sale_price) != null ? Number(amount(money.sale_price)) : null;
     const profit = isConflict ? { value: null, tone: 'unknown' } : computeProfit(win.value, rough, sale);
 
+    // Display candidates (DISPLAY ONLY — no datastore writes). The verified
+    // canonical value (win.value / rough / sale) stays separate on the card;
+    // these build the best-known number shown in the tile when verified is
+    // null, with an honest label and amber review flag. Truly absent → null
+    // (dash). A real 0 stays 0. Multiple scopes / conflict → one deterministic
+    // candidate + alternatives, labelled estimate/review.
+    const jobActivePOs = jobPOs.filter((p) => p.status !== 'cancelled');
+    const jobActiveOrders = activeVendorOrders(vendor_orders.filter((o) => o.job_id === job.id), purchase_orders);
+    const pickBudget = pickDisplayBudget(jobBudgets);
+    const winDisplay = windowsDisplayCandidate(jobBudgets, jobActivePOs, jobActiveOrders, { conflict: isConflict });
+    const roughDisplay = roughDisplayCandidate(pickBudget, rough, moneyDup);
+    const saleDisplay = saleDisplayCandidate(pickBudget, sale, moneyDup);
+    const profitDisp = profitDisplayCalc(winDisplay, roughDisplay, saleDisplay);
+
     const refs = refsForJob(job.id, { budgets, purchaseOrders: purchase_orders, vendorOrders: vendor_orders, today });
     const next = nextActionForJob(job.id, { budgets, purchaseOrders: purchase_orders, vendorOrders: vendor_orders, conflicts, today });
 
@@ -276,10 +395,12 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
 
     cards.push({
       job: { id: job.id, canonical_name: job.canonical_name, address: job.address, builder: job.builder },
-      windows: win,
-      rough: { value: rough, moneyId: money?.id || null, duplicate: moneyDup },
-      sale: { value: sale, moneyId: money?.id || null, duplicate: moneyDup },
-      profit, refs, next, files, supplier, units, conflict: isConflict, search,
+      windows: { ...win, display: winDisplay },
+      rough: { value: rough, moneyId: money?.id || null, duplicate: moneyDup, display: roughDisplay },
+      sale: { value: sale, moneyId: money?.id || null, duplicate: moneyDup, display: saleDisplay },
+      profit,
+      profitDisplay: profitDisp,
+      refs, next, files, supplier, units, conflict: isConflict, search,
     });
   }
   cards.sort((a, b) => String(a.job.canonical_name || '').localeCompare(String(b.job.canonical_name || '')));

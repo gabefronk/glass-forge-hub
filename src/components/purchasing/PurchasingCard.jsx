@@ -14,14 +14,13 @@ function RefDot({ status }) {
 // workspace region. The next-action opens the correct inline section (not a
 // route) for budgets/orders/tracking; 'job' stays an external Open-job Link.
 export default function PurchasingCard({ card, onEdit, data, onSaved }) {
-  const { job, windows, rough, sale, profit, refs, next, supplier, units, conflict } = card;
+  const { job, windows, rough, sale, profitDisplay, refs, next, supplier, units, conflict } = card;
   const [expanded, setExpanded] = useState(false);
   const [section, setSection] = useState('budgets');
   const moneyDup = rough.duplicate || sale.duplicate;
   const needsAction = conflict || moneyDup || windows.status === 'review' || windows.status === 'withheld' || next.key !== 'job';
   const statusTone = needsAction ? 'amber' : 'green';
   const statusLabel = conflict ? 'Conflict' : moneyDup ? 'Duplicate money' : needsAction ? 'Action needed' : 'On track';
-  const winNote = windows.provenance === 'source_quote' ? 'from supplier quote total incl tax' : '';
   const panelId = `purchasing-workspace-${job.id}`;
   const fullJob = data?.jobs?.find((j) => j.id === job.id) || job;
 
@@ -52,8 +51,7 @@ export default function PurchasingCard({ card, onEdit, data, onSaved }) {
         <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: statusTone === 'amber' ? '#FFF3DF' : '#EAF5EE', color: statusTone === 'amber' ? '#89511A' : '#166447', border: `1px solid ${statusTone === 'amber' ? '#F0DBA8' : '#C7E4D2'}` }}>{statusLabel}</span>
       </div>
 
-      <div className="mt-2.5"><MoneyTiles windows={windows.value} windowsStatus={windows.status} rough={rough.value} sale={sale.value} profit={profit} /></div>
-      {winNote && <p className="mt-1 text-[10.5px]" style={{ color: '#8A8F93' }}>Windows incl tax {winNote}</p>}
+      <div className="mt-2.5"><MoneyTiles windows={windows.display} rough={rough.display} sale={sale.display} profit={profitDisplay} /></div>
 
       <div className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1 text-[11px]" style={{ color: '#566063' }}>
         <span><RefDot status={refs.quoteStatus} />Quote {refs.quoteNumber || '—'}</span>
