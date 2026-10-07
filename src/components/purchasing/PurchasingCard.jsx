@@ -15,8 +15,9 @@ const linkBtn = 'inline-flex min-h-8 items-center gap-1.5 rounded-[7px] border p
 export default function PurchasingCard({ card, onEdit }) {
   const { job, windows, rough, sale, profit, refs, next, files, supplier, units, conflict } = card;
   const moneyDup = rough.duplicate || sale.duplicate;
-  const statusTone = conflict || moneyDup || [refs.quoteStatus, refs.mfrStatus, refs.etaStatus, refs.payment].includes('amber') ? 'amber' : 'green';
-  const statusLabel = conflict ? 'Conflict' : moneyDup ? 'Duplicate money' : statusTone === 'amber' ? 'Action needed' : 'On track';
+  const needsAction = conflict || moneyDup || windows.status === 'review' || windows.status === 'withheld' || next.key !== 'job';
+  const statusTone = needsAction ? 'amber' : 'green';
+  const statusLabel = conflict ? 'Conflict' : moneyDup ? 'Duplicate money' : needsAction ? 'Action needed' : 'On track';
   const winNote = windows.provenance === 'source_quote' ? 'from supplier quote total incl tax' : '';
 
   return (

@@ -164,6 +164,9 @@ async function ingest(adapter, p, user) {
     if (receipt.budget_id) {
       const b = await adapter.budgetGet(receipt.budget_id).catch(() => null);
       if (!b || b.id !== receipt.budget_id) fail('receipt_budget_missing');
+      if (b.deleted_at) fail('receipt_budget_missing');
+      if (b.source_sha256 !== receipt.sha256) fail('source_binding_mismatch');
+      if (jobKey(b.job_id) !== jobKey(receipt.job_id)) fail('source_job_mismatch');
       return { ...summary(b), duplicate: true };
     }
     const prior = await budgetByKey(adapter, p, sha);
@@ -171,9 +174,12 @@ async function ingest(adapter, p, user) {
   } else {
     const same = (await rows(adapter.receiptFilter, { sha256: sha }, 50)).filter((r) => jobKey(r.job_id) === jobKey(p.job_id) && r.budget_id);
     if (same.length) {
+      if (!validReceipt(same[0])) fail('source_binding_invalid');
       const b = await adapter.budgetGet(same[0].budget_id).catch(() => null);
       if (!b || b.id !== same[0].budget_id) fail('receipt_budget_missing');
       if (b.deleted_at) fail('duplicate_deleted');
+      if (b.source_sha256 !== sha) fail('source_binding_mismatch');
+      if (jobKey(b.job_id) !== jobKey(p.job_id)) fail('source_job_mismatch');
       return { ...summary(b), duplicate: true };
     }
     const up = await adapter.uploadPrivate(p.bytes, p.file_name).catch(() => null);
@@ -183,7 +189,15 @@ async function ingest(adapter, p, user) {
         file_uri: up.file_uri, owner_user_id: user.id, sha256: sha, size: p.bytes.length, file_name: p.file_name,
         request_key: p.request_key, job_id: p.job_id || '', budget_id: '', uploaded_at: new Date().toISOString(),
       });
-    } catch { fail('receipt_outcome_unknown'); }
+    } catch {
+      // Unknown outcome: one lookup by key before reporting. If the create
+      // landed, use it (no re-upload); otherwise report unknown so the client
+      // retries. A retry re-uploads and can orphan the first upload — a
+      // documented race; no duplicate budget is ever created from it.
+      const landed = await rows(adapter.receiptFilter, { request_key: p.request_key }, 2).catch(() => null);
+      if (!landed || landed.length !== 1) fail('receipt_outcome_unknown');
+      receipt = landed[0];
+    }
     if (!validReceipt(receipt) || receipt.file_uri !== up.file_uri || receipt.sha256 !== sha || receipt.owner_user_id !== user.id) fail('receipt_unverified');
   }
 

@@ -23,7 +23,7 @@ export default function MoneyEditDialog({ jobName, initialRough, initialSale, on
           <h3 className="text-[15px] font-bold" style={{ color: C.text }}>Edit money · {jobName}</h3>
           <button type="button" onClick={onCancel} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-full" style={{ color: C.textMuted }}><X className="h-4 w-4" /></button>
         </div>
-        <p className="mt-1 text-[12px]" style={{ color: C.textSecondary }}>Owner-only. Profit is computed from these entries and the reviewed budget. Leave a field blank to withhold it.</p>
+        <p className="mt-1 text-[12px]" style={{ color: C.textSecondary }}>Owner-only. Profit = sale price − windows incl tax (verified supplier quote) − labor & material. Leave a field blank to withhold it.</p>
         <form onSubmit={submit} className="mt-3 space-y-3">
           <label className="block text-[12px] font-semibold" style={{ color: C.textSecondary }}>Rough labor & material
             <input type="number" step="any" min="0" inputMode="decimal" value={rough} onChange={(e) => setRough(e.target.value)} className="mt-1 w-full rounded-[9px] px-3 py-2 text-sm" style={{ border: `1px solid ${C.border}`, color: C.text }} />

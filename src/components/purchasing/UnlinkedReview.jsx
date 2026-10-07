@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, FileText } from 'lucide-react';
 import { C } from '@/lib/feeUI';
@@ -7,10 +8,23 @@ import QuoteDropzone from './QuoteDropzone';
 // are never silently lost behind the one-card-per-job loop. Collapsed by
 // default. The dropzone uploads via private storage (no public URL); the server
 // signs a short-lived fetch link only to read the PDF, and persists the private ref.
-export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [], onUploaded }) {
+// focusSignal (incremented by the Purchasing "Add quote" button) opens this
+// section and focuses the private dropzone — never a legacy public upload page.
+export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [], onUploaded, focusSignal = 0 }) {
   const hasAny = unlinkedQuotes.length > 0 || shopPOs.length > 0;
+  const detailsRef = useRef(null);
+  useEffect(() => {
+    if (!focusSignal) return;
+    if (detailsRef.current) detailsRef.current.open = true;
+    const dz = document.getElementById('purchasing-quote-dropzone');
+    if (dz) {
+      dz.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const btn = dz.querySelector('button');
+      if (btn) btn.focus();
+    }
+  }, [focusSignal]);
   return (
-    <details className="rounded-[12px] p-3.5" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D3CABB' }}>
+    <details ref={detailsRef} className="rounded-[12px] p-3.5" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D3CABB' }}>
       <summary className="min-h-9 cursor-pointer text-[13px] font-semibold" style={{ color: C.text }}>
         More · unlinked quotes & shop purchases {hasAny ? `(${unlinkedQuotes.length + shopPOs.length})` : ''}
       </summary>

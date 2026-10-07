@@ -55,7 +55,7 @@ export default function QuoteDropzone({ onDone }) {
   }
 
   return (
-    <div className="rounded-[12px] p-4" style={{ backgroundColor: '#FFFFFF', border: `1.5px dashed ${dragOver ? '#0B3F3B' : C.border}` }}
+    <div id="purchasing-quote-dropzone" className="rounded-[12px] p-4" style={{ backgroundColor: '#FFFFFF', border: `1.5px dashed ${dragOver ? '#0B3F3B' : C.border}` }}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); choose(e.dataTransfer.files?.[0]); }}>
       <div className="flex items-center gap-3">

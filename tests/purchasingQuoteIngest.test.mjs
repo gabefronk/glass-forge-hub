@@ -82,7 +82,7 @@ test('idempotency: same key + same bytes + same job replays without upload', asy
   const sha = await sha256Hex(PDF);
   const { adapter, calls } = mock({
     receiptFilter: async () => page([{ id: RECEIPT, owner_user_id: OWNER.id, sha256: sha, file_uri: URI, job_id: JOB, budget_id: BUDGET }]),
-    budgetGet: async () => ({ id: BUDGET, title: 'T', status: 'filed' }),
+    budgetGet: async () => ({ id: BUDGET, title: 'T', status: 'filed', source_sha256: sha, job_id: JOB }),
   });
   const r = await handle(req(ingestBody()), adapter);
   assert.equal(r.body.duplicate, true);
