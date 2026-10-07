@@ -1,9 +1,10 @@
-import { ChevronDown, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import MoneyTiles from './MoneyTiles';
-import PrivateSourceButton from './PrivateSourceButton';
+import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import { C } from '@/lib/feeUI';
-import { procurementPath } from '@/lib/procurementRoutes';
+import { sectionForNextKey } from '@/lib/purchasingViewModel';
 
 function RefDot({ status }) {
   const color = status === 'green' ? '#166447' : status === 'amber' ? '#C08B2E' : '#B8B0A4';
@@ -12,13 +13,33 @@ function RefDot({ status }) {
 
 const linkBtn = 'inline-flex min-h-8 items-center gap-1.5 rounded-[7px] border px-2.5 py-1 text-[11.5px] font-semibold';
 
-export default function PurchasingCard({ card, onEdit }) {
+// Single controlled expansion per job. aria-expanded/controls wired to the
+// workspace region. The next-action opens the correct inline section (not a
+// route) for budgets/orders/tracking; 'job' stays an external Open-job Link.
+export default function PurchasingCard({ card, onEdit, data, onSaved }) {
   const { job, windows, rough, sale, profit, refs, next, files, supplier, units, conflict } = card;
+  const [expanded, setExpanded] = useState(false);
+  const [section, setSection] = useState('budgets');
   const moneyDup = rough.duplicate || sale.duplicate;
   const needsAction = conflict || moneyDup || windows.status === 'review' || windows.status === 'withheld' || next.key !== 'job';
   const statusTone = needsAction ? 'amber' : 'green';
   const statusLabel = conflict ? 'Conflict' : moneyDup ? 'Duplicate money' : needsAction ? 'Action needed' : 'On track';
   const winNote = windows.provenance === 'source_quote' ? 'from supplier quote total incl tax' : '';
+  const panelId = `purchasing-workspace-${job.id}`;
+  const fullJob = data?.jobs?.find((j) => j.id === job.id) || job;
+
+  const openSection = (key) => {
+    const s = sectionForNextKey(key);
+    if (!s) return; // 'job' stays a Link, never opens inline
+    setSection(s);
+    setExpanded(true);
+  };
+  const toggleMore = () => {
+    setExpanded((e) => {
+      if (!e) setSection('budgets');
+      return !e;
+    });
+  };
 
   return (
     <article className="rounded-[12px] p-3.5" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D3CABB', borderTop: '2px solid #0B3F3B', boxShadow: '0 1px 2px rgba(10,29,31,.05), 0 4px 10px -4px rgba(10,29,31,.10)' }}>
@@ -47,22 +68,21 @@ export default function PurchasingCard({ card, onEdit }) {
 
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <button type="button" onClick={onEdit} className="text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>Edit money</button>
-        <Link to={next.href} className="text-[12.5px] font-semibold underline" style={{ color: '#0B3F3B' }}>{next.label} →</Link>
+        {next.key === 'job'
+          ? <Link to={next.href} className="text-[12.5px] font-semibold underline" style={{ color: '#0B3F3B' }}>{next.label} →</Link>
+          : <button type="button" onClick={() => openSection(next.key)} className="text-[12.5px] font-semibold underline" style={{ color: '#0B3F3B' }}>{next.label} →</button>}
       </div>
 
-      <details className="mt-1.5">
-        <summary className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-medium" style={{ color: '#8A8F93' }}><ChevronDown className="h-3.5 w-3.5" />More details</summary>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <Link to={procurementPath(job.id, 'budgets')} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}>Quotes & budget</Link>
-          <Link to={procurementPath(job.id, 'orders')} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}>Purchase orders</Link>
-          <Link to={procurementPath(job.id, 'tracking')} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}>Supplier tracking</Link>
-          <Link to={`/jobs/${job.id}`} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}>Open job</Link>
-          {!files.sourceQuote && files.privateSourceBudgetId && <PrivateSourceButton budgetId={files.privateSourceBudgetId} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }} />}
-          {files.sourceQuote && <a href={files.sourceQuote} target="_blank" rel="noreferrer" className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}><ExternalLink className="h-3.5 w-3.5" />Source quote</a>}
-          {files.budgetSheet && <a href={files.budgetSheet} target="_blank" rel="noreferrer" className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}><ExternalLink className="h-3.5 w-3.5" />Budget sheet</a>}
-          {files.driveFolder && <a href={files.driveFolder} target="_blank" rel="noreferrer" className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}><ExternalLink className="h-3.5 w-3.5" />Drive folder</a>}
+      <button type="button" onClick={toggleMore} aria-expanded={expanded} aria-controls={panelId}
+        className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: '#8A8F93' }}>
+        <ChevronDown className="h-3.5 w-3.5" style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />{expanded ? 'Hide details' : 'More details'}
+      </button>
+
+      {expanded && fullJob && data && (
+        <div id={panelId} role="region" aria-label={`Purchasing workspace for ${job.canonical_name}`}>
+          <PurchasingJobWorkspace job={fullJob} data={data} section={section} onSection={setSection} onSaved={onSaved} />
         </div>
-      </details>
+      )}
     </article>
   );
 }

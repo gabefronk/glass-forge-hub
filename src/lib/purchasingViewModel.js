@@ -299,3 +299,25 @@ export function cardMatchesSearch(card, query) {
   if (!q) return true;
   return q.split(/\s+/).filter(Boolean).every((term) => card.search.includes(term));
 }
+
+// Inline per-job workspace helpers.
+// sectionForNextKey maps a card's next-action key to the inline section it
+// should open. 'job' (and any unknown key) returns null — that is the external
+// Open-job link, which stays a Link and never opens an inline section.
+export function sectionForNextKey(key) {
+  return key === 'budgets' || key === 'orders' || key === 'tracking' ? key : null;
+}
+
+// jobProcurementRecords filters the procurement overview to ONE job by EXACT
+// immutable job_id — never a name join. Cancelled POs and the vendor orders
+// whose linked PO is cancelled are excluded everywhere (matches the card refs).
+export function jobProcurementRecords(data = {}, jobId = '') {
+  if (!jobId) return { budgets: [], pos: [], orders: [], conflicts: [] };
+  const cancelledPOIds = new Set((data.purchase_orders || []).filter((p) => p.status === 'cancelled').map((p) => p.id));
+  return {
+    budgets: (data.budgets || []).filter((b) => b.job_id === jobId && isLiveBudget(b)),
+    pos: (data.purchase_orders || []).filter((p) => p.job_id === jobId && p.status !== 'cancelled'),
+    orders: (data.vendor_orders || []).filter((o) => o.job_id === jobId && !(o.purchase_order_id && cancelledPOIds.has(o.purchase_order_id))),
+    conflicts: (data.conflicts || []).filter((c) => (c.job_ids || []).includes(jobId)),
+  };
+}

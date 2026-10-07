@@ -130,7 +130,7 @@ function PurchasingWorkspace() {
         <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query ? 'No jobs match your search.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
       ) : (
         <div className="grid gap-2.5">{filtered.map((card) => (
-          <PurchasingCard key={card.job.id} card={card} onEdit={() => setEditing({ jobId: card.job.id, jobName: card.job.canonical_name, rough: card.rough.value, sale: card.sale.value })} />
+          <PurchasingCard key={card.job.id} card={card} data={data} onSaved={load} onEdit={() => setEditing({ jobId: card.job.id, jobName: card.job.canonical_name, rough: card.rough.value, sale: card.sale.value })} />
         ))}</div>
       )}
 
