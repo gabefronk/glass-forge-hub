@@ -10,7 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  planReportWrite, buildNewReportRow, executeMessageFills, captureSnapshot,
+  planReportWrite, buildNewReportRow, executeMessageFills, captureSnapshot, planReportWrites,
 } from "../base44/shared/sourceNoteFollowthrough.js";
 
 const NOW = "2026-10-07T10:00:00.000Z";
@@ -211,4 +211,103 @@ test("adapter: patch is source/baseline-only — never photo_urls or job_id", as
   assert.deepEqual(Object.keys(row).sort(), ["id", "job_id", "message", "photo_urls", "post_id", "project_id", "source_baseline_at", "source_message_baseline"].sort());
   assert.deepEqual(row.photo_urls, ["x.jpg"]);
   assert.equal(row.job_id, "j1");
+});
+
+// FINAL ADAPTER GAP: mandatory nonempty id/expectedPostId/expectedProjectId/snapshot.
+test("adapter: missing id fails closed", async () => {
+  const store = makeStore([{ id: "r1", post_id: "p1", project_id: "pr1", message: "" }]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [{ ...mf, id: "" }], get: store.get, update: store.update, nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+});
+
+test("adapter: missing expectedPostId fails closed", async () => {
+  const store = makeStore([{ id: "r1", post_id: "p1", project_id: "pr1", message: "" }]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [{ ...mf, expectedPostId: "" }], get: store.get, update: store.update, nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+});
+
+test("adapter: missing expectedProjectId fails closed", async () => {
+  const store = makeStore([{ id: "r1", post_id: "p1", project_id: "pr1", message: "" }]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [{ ...mf, expectedProjectId: "" }], get: store.get, update: store.update, nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+});
+
+test("adapter: missing snapshot fails closed", async () => {
+  const store = makeStore([{ id: "r1", post_id: "p1", project_id: "pr1", message: "" }]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [{ ...mf, snapshot: null }], get: store.get, update: store.update, nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+});
+
+// fresh.id !== queued id fails closed.
+test("adapter: fresh.id !== queued id fails closed", async () => {
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "" }, "new", "p1", "pr1");
+  const r = await executeMessageFills({ messageFills: [mf], get: async () => ({ id: "OTHER", post_id: "p1", project_id: "pr1", message: "" }), update: async () => {}, nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+});
+
+// planReportWrites output fed directly to the actual adapter (no reshaping).
+test("adapter: planReportWrites output fed to executeMessageFills works", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing]);
+  const planned = planReportWrites([{ existing, sourceMessage: "new", postId: "p1", projectId: "pr1", duplicatePostId: false }], NOW);
+  assert.equal(planned.writes.length, 1);
+  const lookup = async (postId) => store.snapshot().filter((m) => m.post_id === postId);
+  const r = await executeMessageFills({ messageFills: planned.writes, get: store.get, update: store.update, lookup, nowIso: NOW });
+  assert.equal(r.filled, 1);
+  assert.equal(store.snapshot()[0].message, "new");
+  assert.equal(store.snapshot()[0].source_message_baseline, "new");
+});
+
+// Fresh duplicate appeared (lookup returns 2) -> fail closed, no overwrite.
+test("adapter: duplicate appeared (lookup returns 2) fails closed", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing, { id: "r2", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, "new", "p1", "pr1");
+  const lookup = async (postId) => store.snapshot().filter((m) => m.post_id === postId);
+  const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup, nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+  assert.equal(store.snapshot()[0].message, "old");
+});
+
+// Lookup returns 0 (record missing) -> fail closed.
+test("adapter: lookup returns 0 (missing) fails closed", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, "new", "p1", "pr1");
+  const lookup = async () => [];
+  const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup, nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+});
+
+// Lookup returns 1 but wrong id -> fail closed.
+test("adapter: lookup returns 1 but wrong id fails closed", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, "new", "p1", "pr1");
+  const lookup = async () => [{ id: "OTHER", post_id: "p1", project_id: "pr1" }];
+  const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup, nowIso: NOW });
+  assert.equal(r.filled, 0);
+  assert.equal(r.skipped, 1);
+});
+
+// Lookup returns a page object ({items}) form — adapter unwraps it.
+test("adapter: lookup page-object form ({items}) unwrapped, exactly one -> write", async () => {
+  const existing = { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" };
+  const store = makeStore([existing]);
+  const mf = plan({ id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, "new", "p1", "pr1");
+  const lookup = async () => ({ items: [store.snapshot()[0]] });
+  const r = await executeMessageFills({ messageFills: [mf], get: store.get, update: store.update, lookup, nowIso: NOW });
+  assert.equal(r.filled, 1);
+  assert.equal(store.snapshot()[0].message, "new");
 });

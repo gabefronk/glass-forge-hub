@@ -378,6 +378,13 @@ export default async function(req) {
         messageFills,
         get: (id) => base44.asServiceRole.entities.FieldReports.get(id),
         update: (id, patch) => base44.asServiceRole.entities.FieldReports.update(id, patch),
+        // Fresh duplicate-mapping check just before write: lookup by post_id must return
+        // exactly one record matching the expected id + project. A duplicate that
+        // appeared since plan (or the record going missing) fails closed.
+        lookup: async (postId, projectId) => {
+          const page = await base44.asServiceRole.entities.FieldReports.filter({ post_id: postId }, { limit: 50 });
+          return (page && page.items) || [];
+        },
         nowIso,
       });
       frMessagesFilled = r.filled;

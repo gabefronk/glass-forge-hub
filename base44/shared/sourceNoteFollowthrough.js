@@ -2,11 +2,11 @@
 // All decisions derive from the inputs. The ingest (fetchProbuildPosts) imports
 // buildNewReportRow + planReportWrite + executeMessageFills.
 //
-// Policy (approved, defect-corrected):
+// Policy (approved, defect-corrected, final-adapter-gap closed):
 // - source_message_baseline is the exact raw source string captured at the last sync
 //   that wrote the Hub message; source_baseline_at is when it was set.
 // - New ingest rows seed message + baseline = source verbatim ('' when source empty).
-// - Empty fill: Hub message empty (null/undefined/'' ) + source nonempty -> write
+// - Empty fill: Hub message empty (null/undefined/'') + source nonempty -> write
 //   message + seed baseline.
 // - Legacy verified Hub==source (baseline null/absent, no manual markers) -> seed
 //   baseline only. ONLY null/absent (true legacy) may seed; a present-but-malformed
@@ -28,9 +28,19 @@
 //   equality: even if the re-run predicate would still produce the same action, a
 //   changed Hub or baseline means a newer sync advanced the state and a stale earlier
 //   source must not overwrite it.
+// - The adapter (executeMessageFills) MANDATES nonempty id + expectedPostId +
+//   expectedProjectId + snapshot per queued fill (omitting any skips the guard, so a
+//   planner that forgets them can never silently bypass identity/snapshot checks).
+//   fresh.id must equal the queued id. An injected lookup by post_id is run just
+//   before write and must return exactly one record matching the expected id +
+//   project; a duplicate that appeared since plan (or the record going missing) fails
+//   closed. planReportWrites emits the exact queue shape (expectedPostId /
+//   expectedProjectId / id / snapshot / sourceMessage) so its output feeds the adapter
+//   directly.
 // - The GET-to-update cycle is NOT atomic CAS; the platform exposes no compare-and-set.
-//   The snapshot + predicate re-run narrows the race window but an edit landing between
-//   the fresh get and the update can still be overwritten. Documented, not pretended away.
+//   The snapshot + predicate re-run + duplicate lookup narrow the race window but an
+//   edit landing between the fresh get and the update can still be overwritten.
+//   Documented, not pretended away.
 
 const isString = (v) => typeof v === 'string';
 
@@ -39,7 +49,8 @@ function hasManualMarkers(existing) {
 }
 
 // Capture the relevant state of an existing record at plan time, so the fresh GET can
-// be compared to it byte-for-byte before any write (narrow race safeguard).
+// be compared to it byte-for-byte before any write (narrow race safeguard). Includes
+// the exact post_id + project_id so a re-keyed record is detected.
 export function captureSnapshot(existing) {
   return {
     post_id: existing ? existing.post_id : undefined,
@@ -124,13 +135,17 @@ export function planReportWrite({ existing, sourceMessage, nowIso, expectedPostI
 }
 
 // Re-run the full predicate against a fresh GET, but ONLY after the fresh record matches
-// the plan-time snapshot byte-for-byte (message, baseline, markers, project_id, post_id).
-// This is a narrower race safeguard than action equality: even if the re-run predicate
-// would still produce the same action, a changed Hub or baseline means a newer sync
-// advanced the state and a stale earlier source must not overwrite it.
+// the plan-time snapshot byte-for-byte (message, baseline, markers, post_id, project_id)
+// and the queued id (fresh.id === expectedId). This is a narrower race safeguard than
+// action equality: even if the re-run predicate would still produce the same action, a
+// changed Hub or baseline means a newer sync advanced the state and a stale earlier
+// source must not overwrite it.
+// expectedId / expectedPostId / expectedProjectId are optional here (checked when provided);
+// the adapter mandates them nonempty before calling.
 // Returns { safe: true, patch } | { safe: false, reason }.
-export function freshRecheck({ fresh, expectedPostId, expectedProjectId, snapshot, sourceMessage, nowIso, expectedAction }) {
+export function freshRecheck({ fresh, expectedId, expectedPostId, expectedProjectId, snapshot, sourceMessage, nowIso, expectedAction }) {
   if (!fresh) return { safe: false, reason: 'fresh_missing' };
+  if (expectedId != null && fresh.id !== expectedId) return { safe: false, reason: 'id_mismatch' };
   if (expectedPostId != null && fresh.post_id !== expectedPostId) return { safe: false, reason: 'post_id_mismatch' };
   if (expectedProjectId != null && fresh.project_id !== expectedProjectId) return { safe: false, reason: 'project_id_mismatch' };
   if (snapshot) {
@@ -140,6 +155,7 @@ export function freshRecheck({ fresh, expectedPostId, expectedProjectId, snapsho
     if ((fresh.edited_by || null) !== (snapshot.edited_by || null)) return { safe: false, reason: 'state_changed_since_plan:edited_by' };
     if ((fresh.original_text || null) !== (snapshot.original_text || null)) return { safe: false, reason: 'state_changed_since_plan:original_text' };
     if ((fresh.project_id || null) !== (snapshot.project_id || null)) return { safe: false, reason: 'state_changed_since_plan:project_id' };
+    if ((fresh.post_id || null) !== (snapshot.post_id || null)) return { safe: false, reason: 'state_changed_since_plan:post_id' };
   }
   const recheck = planReportWrite({ existing: fresh, sourceMessage, nowIso, expectedPostId, expectedProjectId });
   if (recheck.action !== 'write') return { safe: false, reason: 'predicate_failed:' + recheck.reason };
@@ -172,35 +188,65 @@ export function buildNewReportRow({
 }
 
 // Batch planner. Never passes authorizedCorrection (no such lever). Verifies exact
-// project+post identity per item.
+// project+post identity per item. Output shape is the EXACT queue shape the adapter
+// (executeMessageFills) consumes: { id, expectedPostId, expectedProjectId, sourceMessage,
+// plannedAction, patch, snapshot }. So planReportWrites(...).writes feeds the adapter
+// directly with no reshaping.
 // items: [{ existing, sourceMessage, postId, projectId, duplicatePostId }]
-// Returns { writes: [{ id, postId, plannedAction, patch, snapshot }], skipped: [{ postId, reason }] }
+// Returns { writes: [...], skipped: [{ postId, reason }] }
 export function planReportWrites(items, nowIso) {
   const writes = [];
   const skipped = [];
   for (const it of items) {
     if (it.duplicatePostId) { skipped.push({ postId: it.postId, reason: 'duplicate_post_id' }); continue; }
     const res = planReportWrite({ existing: it.existing, sourceMessage: it.sourceMessage, nowIso, expectedPostId: it.postId, expectedProjectId: it.projectId });
-    if (res.action === 'write') writes.push({ id: it.existing.id, postId: it.postId, plannedAction: res.plannedAction, patch: res.patch, snapshot: res.snapshot });
-    else skipped.push({ postId: it.postId, reason: res.reason });
+    if (res.action === 'write') {
+      writes.push({ id: it.existing.id, expectedPostId: it.postId, expectedProjectId: it.projectId, sourceMessage: it.sourceMessage, plannedAction: res.plannedAction, patch: res.patch, snapshot: res.snapshot });
+    } else {
+      skipped.push({ postId: it.postId, reason: res.reason });
+    }
   }
   return { writes, skipped };
 }
 
-// The write adapter used by the ingest's message/baseline phase. Injected get/update so
-// it is testable without the SDK. Re-runs the snapshot equality + full predicate
-// (freshRecheck) just before each write. Source/baseline-only patch. NOT atomic CAS.
+// The write adapter used by the ingest's message/baseline phase. Injected get/update/
+// lookup so it is testable without the SDK. Re-runs the snapshot equality + full
+// predicate (freshRecheck) just before each write, then a fresh duplicate-mapping
+// lookup by post_id that must return exactly one record matching the expected id +
+// project. Source/baseline-only patch. NOT atomic CAS.
+//
+// MANDATES nonempty id + expectedPostId + expectedProjectId + snapshot per queued fill:
+// omitting any fails closed, so a planner that forgets them can never silently bypass
+// the identity/snapshot guards. fresh.id must equal the queued id.
+//
 // messageFills: [{ id, expectedPostId, expectedProjectId, snapshot, sourceMessage, plannedAction, patch }]
+// lookup(postId, projectId): optional injected fresh-duplicate check; returns an array
+//   (or a page {items}) of records with that post_id. When provided, must be exactly one
+//   record matching id + post_id + project_id, else fail closed.
 // Returns { filled, skipped }.
-export async function executeMessageFills({ messageFills, get, update, nowIso }) {
+export async function executeMessageFills({ messageFills, get, update, lookup, nowIso }) {
   let filled = 0;
   let skipped = 0;
   for (const mf of messageFills) {
+    // Mandatory nonempty id + expected ids + snapshot. Fail closed if any missing/empty.
+    if (!mf || !mf.id || !mf.expectedPostId || !mf.expectedProjectId || !mf.snapshot) { skipped++; continue; }
     let fresh;
     try { fresh = await get(mf.id); }
     catch (e) { skipped++; continue; }
-    const recheck = freshRecheck({ fresh, expectedPostId: mf.expectedPostId, expectedProjectId: mf.expectedProjectId, snapshot: mf.snapshot, sourceMessage: mf.sourceMessage, nowIso, expectedAction: mf.plannedAction });
+    const recheck = freshRecheck({ fresh, expectedId: mf.id, expectedPostId: mf.expectedPostId, expectedProjectId: mf.expectedProjectId, snapshot: mf.snapshot, sourceMessage: mf.sourceMessage, nowIso, expectedAction: mf.plannedAction });
     if (!recheck.safe) { skipped++; continue; }
+    // Fresh duplicate-mapping check: an injected lookup by post_id must return exactly
+    // one record matching the expected id + project. A duplicate that appeared since
+    // plan (or the record going missing, or a re-key) fails closed.
+    if (lookup) {
+      let byPost;
+      try { byPost = await lookup(mf.expectedPostId, mf.expectedProjectId); }
+      catch (e) { skipped++; continue; }
+      const arr = Array.isArray(byPost) ? byPost : ((byPost && byPost.items) || []);
+      if (arr.length !== 1) { skipped++; continue; }
+      const m = arr[0];
+      if (!m || m.id !== mf.id || m.post_id !== mf.expectedPostId || m.project_id !== mf.expectedProjectId) { skipped++; continue; }
+    }
     try { await update(mf.id, recheck.patch); filled++; }
     catch (e) { skipped++; }
   }

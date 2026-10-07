@@ -270,3 +270,42 @@ test("planReportWrites: wrong project id fails closed", () => {
   assert.equal(r.writes.length, 0);
   assert.equal(r.skipped[0].reason, "identity_mismatch:project_id");
 });
+
+// FINAL ADAPTER GAP: fresh.id must equal the queued id.
+test("freshRecheck: fresh.id !== expectedId fails closed", () => {
+  const snap = captureSnapshot({ post_id: "p1", project_id: "pr1", message: "", source_message_baseline: "" });
+  const r = freshRecheck({ fresh: { id: "OTHER", post_id: "p1", project_id: "pr1", message: "", source_message_baseline: "" }, expectedId: "r1", expectedPostId: "p1", expectedProjectId: "pr1", snapshot: snap, sourceMessage: "new", nowIso: NOW, expectedAction: "empty_fill" });
+  assert.equal(r.safe, false);
+  assert.equal(r.reason, "id_mismatch");
+});
+
+test("freshRecheck: snapshot post_id changed fails closed", () => {
+  const snap = captureSnapshot({ post_id: "p1", project_id: "pr1", message: "", source_message_baseline: "" });
+  const r = freshRecheck({ fresh: { id: "r1", post_id: "OTHER", project_id: "pr1", message: "", source_message_baseline: "" }, expectedId: "r1", expectedPostId: "p1", expectedProjectId: "pr1", snapshot: snap, sourceMessage: "new", nowIso: NOW, expectedAction: "empty_fill" });
+  assert.equal(r.safe, false);
+  assert.equal(r.reason, "post_id_mismatch");
+});
+
+test("freshRecheck: snapshot post_id drift (ids match expected but differ from snapshot)", () => {
+  const snap = captureSnapshot({ post_id: "p1", project_id: "pr1", message: "", source_message_baseline: "" });
+  const r = freshRecheck({ fresh: { id: "r1", post_id: "p1", project_id: "pr1", message: "", source_message_baseline: "" }, expectedId: "r1", expectedPostId: "p1", expectedProjectId: "pr1", snapshot: { ...snap, post_id: "OLD" }, sourceMessage: "new", nowIso: NOW, expectedAction: "empty_fill" });
+  assert.equal(r.safe, false);
+  assert.match(r.reason, /state_changed_since_plan:post_id/);
+});
+
+// planReportWrites output is the EXACT queue shape executeMessageFills consumes.
+test("planReportWrites: emits expectedPostId/expectedProjectId/id/snapshot/sourceMessage for adapter", () => {
+  const r = planReportWrites([
+    { existing: { id: "r1", post_id: "p1", project_id: "pr1", message: "old", source_message_baseline: "old" }, sourceMessage: "new", postId: "p1", projectId: "pr1", duplicatePostId: false },
+  ], NOW);
+  assert.equal(r.writes.length, 1);
+  const w = r.writes[0];
+  assert.equal(w.id, "r1");
+  assert.equal(w.expectedPostId, "p1");
+  assert.equal(w.expectedProjectId, "pr1");
+  assert.equal(w.sourceMessage, "new");
+  assert.ok(w.snapshot, "planner emits snapshot");
+  assert.ok(w.plannedAction);
+  assert.ok(w.patch);
+  assert.ok(!("postId" in w), "planner output must not emit legacy postId key");
+});
