@@ -259,6 +259,8 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     const units = activeBs.reduce((s, b) => s + (Number(b.openings_qty) || 0), 0);
     const files = {
       sourceQuote: safeHref(fileBudget?.source_pdf_url) || fileHref(fileBudget?.drive_quote_file_id),
+      // Budget id only (never the private ref); the server resolves its receipt on click.
+      privateSourceBudgetId: fileBudget && /^[a-f0-9]{64}$/.test(fileBudget.source_sha256 || '') ? fileBudget.id : null,
       budgetSheet: fileHref(fileBudget?.drive_budget_xlsx_file_id),
       driveFolder: safeHref(job.drive_job_folder_url) ||
         (job.drive_job_folder_id ? `https://drive.google.com/drive/folders/${encodeURIComponent(job.drive_job_folder_id)}` : '') ||

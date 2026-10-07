@@ -14,31 +14,58 @@ import {
 
 const TODAY = '2026-10-07';
 // Supplier's printed single-price quote: 1000.00 subtotal + 74.50 tax = 1074.50 total.
-const supplierQuote = { price_levels: 'single', quoted_by: 'Nu Vista Sales', net_total: 1000, customer_tax: 74.5, customer_total: 1074.5 };
+// Issuer AMSCO (matches budget vendor), billed TO YA Windows, one window line = subtotal.
+const supplierQuote = {
+  price_levels: 'single', vendor: 'AMSCO', quoted_by: 'Nu Vista Sales', bill_to: 'YA Windows and Doors',
+  lines: [{ kind: 'window', qty: 12, extended: 1000 }], net_total: 1000, customer_tax: 74.5, customer_total: 1074.5,
+};
 const WIN = 1074.5;
-const reviewedBudget = (over = {}, quote = supplierQuote) => ({
+const AMSCO = { vendor: 'AMSCO' };
+// opts.quote: pass null explicitly for "no source quote" (undefined would hit a default).
+const reviewedBudget = (over = {}, opts = {}) => ({
   id: 'b1', job_id: 'j1', budget_usage: 'included', numbers_reviewed_at: '2026-10-01',
-  vendor: 'AMSCO', quote_number: 'Q1', openings_qty: 12, quote,
+  vendor: 'AMSCO', quote_number: 'Q1', openings_qty: 12,
+  quote: Object.prototype.hasOwnProperty.call(opts, 'quote') ? opts.quote : supplierQuote,
   inputs: { material_true_cost: 10000, labor_cost_sub_pay: 2000, actual_total_sell: 18000, ...over },
 });
 
 test('sourceQuoteInclTax: printed subtotal + tax reconcile → printed total', () => {
-  assert.deepEqual(sourceQuoteInclTax({ quote: supplierQuote }), { value: 1074.5, reason: null });
+  assert.deepEqual(sourceQuoteInclTax({ ...AMSCO, quote: supplierQuote }), { value: 1074.5, reason: null });
 });
 
 test('sourceQuoteInclTax: explicit zero tax is valid (500 + 0 = 500)', () => {
-  assert.equal(sourceQuoteInclTax({ quote: { price_levels: 'single', net_total: 500, customer_tax: 0, customer_total: 500 } }).value, 500);
+  const q = { ...supplierQuote, lines: [{ kind: 'window', extended: 500 }], net_total: 500, customer_tax: 0, customer_total: 500 };
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: q }).value, 500);
 });
 
-test('sourceQuoteInclTax: Taira-shaped single quote (126085.15 + 5989.04 = 132074.19)', () => {
-  const q = { price_levels: 'single', quoted_by: 'Admin Admin', net_total: 126085.15, customer_tax: 5989.04, customer_total: 132074.19 };
-  assert.equal(sourceQuoteInclTax({ quote: q }).value, 132074.19);
+test('sourceQuoteInclTax: Taira-shaped single quote (126085.15 + 5989.04 = 132074.19) with proven issuer/recipient/scope', () => {
+  const q = { price_levels: 'single', vendor: 'Nu Vista', bill_to: 'Glass Forge', lines: [{ kind: 'window', extended: 126085.15 }], net_total: 126085.15, customer_tax: 5989.04, customer_total: 132074.19 };
+  assert.equal(sourceQuoteInclTax({ vendor: 'Nu Vista', quote: q }).value, 132074.19);
+});
+
+test('sourceQuoteInclTax: cost role must be proven, not inferred from a missing name', () => {
+  const r = (quote, budget = AMSCO) => sourceQuoteInclTax({ ...budget, quote }).reason;
+  assert.equal(r({ ...supplierQuote, vendor: '' }), 'issuer_absent');
+  assert.equal(r({ ...supplierQuote, vendor: 'Glass Forge' }), 'own_quote');
+  assert.equal(r(supplierQuote, {}), 'budget_vendor_absent');
+  assert.equal(r({ ...supplierQuote, vendor: 'Pella' }), 'issuer_vendor_mismatch');
+  assert.equal(r({ ...supplierQuote, bill_to: 'Smith Homeowner' }), 'recipient_unproven');
+  assert.equal(r({ ...supplierQuote, bill_to: undefined }), 'recipient_unproven');
+});
+
+test('sourceQuoteInclTax: window-only scope must be proven (no freight/parts, lines = subtotal)', () => {
+  const r = (lines) => sourceQuoteInclTax({ ...AMSCO, quote: { ...supplierQuote, lines } }).reason;
+  assert.equal(r([]), 'scope_unproven');
+  assert.equal(r([{ kind: 'window', extended: 900 }, { kind: 'part', description: 'Freight', extended: 100 }]), 'mixed_scope');
+  assert.equal(r([{ kind: null, extended: 1000 }]), 'scope_unproven');
+  assert.equal(r([{ kind: 'window' }]), 'scope_unproven');
+  assert.equal(r([{ kind: 'window', extended: 900 }]), 'scope_unproven'); // 900 ≠ 1000 subtotal → unlisted charges
 });
 
 test('sourceQuoteInclTax: absent / null / string tax → withhold (no guessed tax rate)', () => {
-  assert.equal(sourceQuoteInclTax({ quote: { ...supplierQuote, customer_tax: undefined } }).reason, 'tax_absent');
-  assert.equal(sourceQuoteInclTax({ quote: { ...supplierQuote, customer_tax: null } }).reason, 'tax_absent');
-  assert.equal(sourceQuoteInclTax({ quote: { ...supplierQuote, customer_tax: '74.5' } }).reason, 'tax_absent');
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: { ...supplierQuote, customer_tax: undefined } }).reason, 'tax_absent');
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: { ...supplierQuote, customer_tax: null } }).reason, 'tax_absent');
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: { ...supplierQuote, customer_tax: '74.5' } }).reason, 'tax_absent');
 });
 
 test('sourceQuoteInclTax: AV24-shaped dealer+customer quote → withhold (customer total is not proven supplier cost)', () => {
@@ -47,15 +74,51 @@ test('sourceQuoteInclTax: AV24-shaped dealer+customer quote → withhold (custom
 });
 
 test('sourceQuoteInclTax: own Glass Forge quote → withhold', () => {
-  assert.equal(sourceQuoteInclTax({ quote: { ...supplierQuote, quoted_by: 'Gabriel Fronk' } }).reason, 'own_quote');
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: { ...supplierQuote, quoted_by: 'Gabriel Fronk' } }).reason, 'own_quote');
 });
 
 test('sourceQuoteInclTax: totals that do not reconcile → withhold (1000 + 74.50 ≠ 1100)', () => {
-  assert.equal(sourceQuoteInclTax({ quote: { ...supplierQuote, customer_total: 1100 } }).reason, 'totals_do_not_reconcile');
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: { ...supplierQuote, customer_total: 1100 } }).reason, 'totals_do_not_reconcile');
 });
 
 test('sourceQuoteInclTax: missing subtotal → withhold', () => {
-  assert.equal(sourceQuoteInclTax({ quote: { price_levels: 'single', customer_tax: 74.5, customer_total: 1074.5 } }).reason, 'subtotal_absent');
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: { ...supplierQuote, net_total: undefined } }).reason, 'subtotal_absent');
+});
+
+test('refsForJob: ETA Delivered only when every order received; 1 of 2 → Partial amber', () => {
+  const a = { job_id: 'j1', order_number: '1', eta_date: '2026-10-10', received_date: '2026-10-05' };
+  const b = { job_id: 'j1', order_number: '2', eta_date: '2026-10-20' };
+  const partial = refsForJob('j1', { vendorOrders: [a, b], today: TODAY });
+  assert.equal(partial.etaLabel, 'Partial');
+  assert.equal(partial.etaStatus, 'amber');
+  assert.equal(refsForJob('j1', { vendorOrders: [a, { ...b, received_date: '2026-10-06' }], today: TODAY }).etaLabel, 'Delivered');
+});
+
+test('refsForJob: one order missing ETA among several cannot show a green single ETA', () => {
+  const r = refsForJob('j1', { vendorOrders: [{ job_id: 'j1', order_number: '1', eta_date: '2026-10-20' }, { job_id: 'j1', order_number: '2' }], today: TODAY });
+  assert.equal(r.etaLabel, '2026-10-20');
+  assert.equal(r.etaStatus, 'amber');
+});
+
+test('refsForJob: draft-only quote shows its number as an amber reference; money stays withheld', () => {
+  const draft = { ...reviewedBudget(), budget_usage: 'draft', numbers_reviewed_at: null, quote_number: 'D-77' };
+  const r = refsForJob('j1', { budgets: [draft] });
+  assert.equal(r.quoteNumber, 'D-77');
+  assert.equal(r.quoteStatus, 'amber');
+  assert.equal(r.quoteDraft, true);
+  assert.equal(windowsInclTax([draft]).value, null);
+});
+
+test('cardMatchesSearch: specific raw refs still match when the display shows "Multiple"', () => {
+  const [card] = buildPurchasingCards({
+    jobs: [{ id: 'j1', canonical_name: 'A' }],
+    budgets: [reviewedBudget(), { ...reviewedBudget(), id: 'b2', quote_number: 'Q2' }],
+    purchase_orders: [{ id: 'p1', job_id: 'j1', po_number: 'YA-0011', status: 'ordered' }, { id: 'p2', job_id: 'j1', po_number: 'YA-0012', status: 'ordered' }],
+    vendor_orders: [{ id: 'v1', job_id: 'j1', order_number: '09-1' }, { id: 'v2', job_id: 'j1', order_number: '09-2' }],
+    today: TODAY,
+  });
+  assert.equal(card.refs.yaPo, 'Multiple');
+  for (const term of ['Q1', 'Q2', 'YA-0011', 'YA-0012', '09-1', '09-2']) assert.ok(cardMatchesSearch(card, term), term);
 });
 
 test('windowsInclTax: empty when no budgets', () => {
@@ -70,7 +133,7 @@ test('windowsInclTax: reviewed included budget with verified supplier quote → 
 });
 
 test('windowsInclTax: legacy budget with labor but no source quote → Needs review, NOT cost_material_tax', () => {
-  const w = windowsInclTax([reviewedBudget({}, undefined)]);
+  const w = windowsInclTax([reviewedBudget({}, { quote: null })]);
   assert.equal(w.status, 'review');
   assert.equal(w.value, null);
   assert.equal(w.reason, 'no_single_supplier_total');
@@ -235,7 +298,7 @@ test('buildPurchasingCards: windows from source quote; profit = 18000 − 1074.5
 
 test('buildPurchasingCards: PO amount_dealer never fills windows; legacy budget → Needs review, profit withheld', () => {
   const [card] = buildPurchasingCards({
-    jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget({}, undefined)],
+    jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget({}, { quote: null })],
     purchase_orders: [{ ...linkedPO, amount_dealer: 933.96, budget_id: 'b1' }],
     moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }], today: TODAY,
   });

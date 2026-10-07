@@ -1,6 +1,7 @@
 import { ChevronDown, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import MoneyTiles from './MoneyTiles';
+import PrivateSourceButton from './PrivateSourceButton';
 import { C } from '@/lib/feeUI';
 import { procurementPath } from '@/lib/procurementRoutes';
 
@@ -55,6 +56,7 @@ export default function PurchasingCard({ card, onEdit }) {
           <Link to={procurementPath(job.id, 'orders')} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}>Purchase orders</Link>
           <Link to={procurementPath(job.id, 'tracking')} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}>Supplier tracking</Link>
           <Link to={`/jobs/${job.id}`} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}>Open job</Link>
+          {!files.sourceQuote && files.privateSourceBudgetId && <PrivateSourceButton budgetId={files.privateSourceBudgetId} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }} />}
           {files.sourceQuote && <a href={files.sourceQuote} target="_blank" rel="noreferrer" className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}><ExternalLink className="h-3.5 w-3.5" />Source quote</a>}
           {files.budgetSheet && <a href={files.budgetSheet} target="_blank" rel="noreferrer" className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}><ExternalLink className="h-3.5 w-3.5" />Budget sheet</a>}
           {files.driveFolder && <a href={files.driveFolder} target="_blank" rel="noreferrer" className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAF8F3' }}><ExternalLink className="h-3.5 w-3.5" />Drive folder</a>}

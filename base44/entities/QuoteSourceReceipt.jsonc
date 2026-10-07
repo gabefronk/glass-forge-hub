@@ -1,0 +1,53 @@
+{
+  "name": "QuoteSourceReceipt",
+  "type": "object",
+  "description": "Server-only, immutable binding between a private quote PDF uploaded BY the purchasingQuoteIngest function (after owner-id auth) and the budget it produced. The SDK's UploadPrivateFile result carries no uploader/ownership metadata and CreateFileSignedUrl signs any app private file, so a caller-supplied file_uri can never prove ownership. Only refs recorded here are ever signed. No client read or write.",
+  "properties": {
+    "file_uri": {
+      "type": "string",
+      "description": "Private storage ref returned to the server's own UploadPrivateFile call. Never sent to clients."
+    },
+    "owner_user_id": {
+      "type": "string",
+      "description": "Auth user id of the owner whose authenticated request uploaded the file."
+    },
+    "sha256": {
+      "type": "string",
+      "description": "Server-computed SHA-256 hex of the uploaded bytes."
+    },
+    "size": {
+      "type": "integer"
+    },
+    "file_name": {
+      "type": "string"
+    },
+    "request_key": {
+      "type": "string",
+      "description": "Client-stable idempotency key; one receipt per key."
+    },
+    "job_id": {
+      "type": "string",
+      "description": "Exact Jobs id the upload was made for; empty when unlinked."
+    },
+    "budget_id": {
+      "type": "string",
+      "description": "JobBudgets id produced from this file. Set once by the server."
+    },
+    "uploaded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "file_uri",
+    "owner_user_id",
+    "sha256",
+    "request_key"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
