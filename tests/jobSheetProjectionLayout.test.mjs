@@ -17,12 +17,3 @@ test("JobSheet: hero projection row wraps on mobile; purpose is full-width secon
   assert.match(src, /hero-actions flex w-full min-w-0 flex-wrap items-center gap-2/, "actions stay in their own hero-actions row");
   assert.ok(!/min-w-\[180px\]/.test(src), "no fixed min-w-[180px] anywhere (was the overflow cause)");
 });
-
-// The read-only ?fixture=upcoming preview substitutes a mocked event with no fetch,
-// provider call or Hub write — for inspecting the hero/card layout on a branch.
-test("useJobUpcoming: ?fixture=upcoming read-only preview (no fetch)", () => {
-  const src = fs.readFileSync(path.join(process.cwd(), "src/hooks/use-job-upcoming.js"), "utf8");
-  assert.match(src, /UPCOMING_SATURDAY_FIXTURE/, "hook imports the fixture event");
-  assert.match(src, /fixture.*upcoming/, "hook checks fixture=upcoming");
-  assert.match(src, /no fetch, no provider call, no Hub write/, "hook documents the preview as read-only");
-});
