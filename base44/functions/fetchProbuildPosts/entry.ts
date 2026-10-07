@@ -350,10 +350,10 @@ export default async function(req) {
         }
         if (Object.keys(patch).length) frToUpdate.push({ id: exRep.id, ...patch });
         const isDup = duplicatePostIds.has(b.postId);
-        const planned = planReportWrite({ existing: exRep, sourceMessage: post.message, nowIso });
+        const planned = planReportWrite({ existing: exRep, sourceMessage: post.message, nowIso, expectedPostId: b.postId, expectedProjectId: b.projectId });
         if (planned.action === 'write') {
           if (isDup) frMessagesSkippedDuplicate++;
-          else messageFills.push({ id: exRep.id, postId: b.postId, sourceMessage: post.message, plannedAction: planned.plannedAction, patch: planned.patch });
+          else messageFills.push({ id: exRep.id, expectedPostId: b.postId, expectedProjectId: b.projectId, snapshot: planned.snapshot, sourceMessage: post.message, plannedAction: planned.plannedAction, patch: planned.patch });
         } else if (!Object.keys(patch).length) {
           frSkippedExisting++;
         }
