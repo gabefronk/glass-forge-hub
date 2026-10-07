@@ -84,14 +84,15 @@ test("matchEventToJob: property / url / foreign / conflict / malformed", () => {
   assert.equal(core.matchEventToJob(ev({ description: "https://gfglassforge.com/jobs/" + JOB.id }), JOB).match, true);
   assert.equal(core.matchEventToJob(ev({ priv: { hubJobId: OTHER.id } }), JOB).reason, "foreign_explicit");
   assert.equal(core.matchEventToJob(ev({ description: `https://gfglassforge.com/jobs/${JOB.id} https://gfglassforge.com/jobs/${OTHER.id}` }), JOB).reason, "identity_conflict");
-  assert.equal(core.matchEventToJob(ev({ summary: "Beaver - 412", description: `https://gfglassforge.com/jobs/${JOB.id}/edit` }), JOB, core.nameUniquenessIndex([JOB])).reason, "identity_malformed");
+  assert.equal(core.matchEventToJob(ev({ summary: "Beaver - 412", description: `https://gfglassforge.com/jobs/${JOB.id}/edit` }), JOB).reason, "identity_malformed");
 });
-test("matchEventToJob: unique / ambiguous / substring / alias names", () => {
-  assert.equal(core.matchEventToJob(ev({ summary: "Beaver - 412" }), JOB, core.nameUniquenessIndex([JOB, { id: "z9", canonical_name: "Other" }])).reason, "name_unique");
-  assert.equal(core.matchEventToJob(ev({ summary: "Beaver - 412" }), JOB, core.nameUniquenessIndex([JOB, OTHER])).reason, "name_ambiguous");
-  assert.equal(core.matchEventToJob(ev({ summary: "beaver" }), JOB, core.nameUniquenessIndex([JOB])).match, false);
+test("matchEventToJob: name-only events never match (explicit identity required, no name fallback)", () => {
+  assert.equal(core.matchEventToJob(ev({ summary: "Beaver - 412" }), JOB).match, false);
+  assert.equal(core.matchEventToJob(ev({ summary: "Beaver - 412" }), JOB).reason, "no_identity");
+  assert.equal(core.matchEventToJob(ev({ summary: "beaver" }), JOB).reason, "no_identity");
   const job = { id: "j1", canonical_name: "Pulte - 12 Elm", aliases: ["Pulte Homes - 12 Elm St"] };
-  assert.equal(core.matchEventToJob(ev({ summary: "Pulte Homes - 12 Elm St" }), job, core.nameUniquenessIndex([job])).match, true);
+  assert.equal(core.matchEventToJob(ev({ summary: "Pulte Homes - 12 Elm St" }), job).match, false);
+  assert.equal(core.matchEventToJob(ev({ summary: "Pulte Homes - 12 Elm St" }), job).reason, "no_identity");
 });
 
 // ---- survivor (async) ----
@@ -115,30 +116,29 @@ test("isUpcoming: all-day today/future in, past out; timed finished out; cancell
   assert.equal(core.isUpcoming(ev({ start: { dateTime: "2026-10-06T22:00:00Z" }, end: { dateTime: "2026-10-06T23:00:00Z" } }), NOW, TODAY), true);
   assert.equal(core.isUpcoming(ev({ status: "cancelled" }), NOW, TODAY), false);
 });
-test("buildUpcomingRead: scoped, stale mirror, cancelled, dedupe, sort", () => {
-  const idx = core.nameUniquenessIndex([JOB, { id: "o", canonical_name: "Other" }]);
+test("buildUpcomingRead: explicit-only scoped, stale mirror, cancelled, dedupe, sort", () => {
   const live = [
-    ev({ id: "late", summary: "Beaver - 412", start: { dateTime: "2026-10-06T15:00:00Z" }, end: { dateTime: "2026-10-06T16:00:00Z" } }),
-    ev({ id: "next", summary: "Beaver - 412", start: { dateTime: "2026-10-06T22:00:00Z" }, end: { dateTime: "2026-10-06T23:00:00Z" } }),
-    ev({ id: "sat", summary: "Beaver - 412" }),
-    ev({ id: "oth", summary: "Other" }),
-    ev({ id: "cx", summary: "Beaver - 412", status: "cancelled" }),
+    ev({ id: "late", priv: { hubJobId: JOB.id }, start: { dateTime: "2026-10-06T15:00:00Z" }, end: { dateTime: "2026-10-06T16:00:00Z" } }),
+    ev({ id: "next", priv: { hubJobId: JOB.id }, start: { dateTime: "2026-10-06T22:00:00Z" }, end: { dateTime: "2026-10-06T23:00:00Z" } }),
+    ev({ id: "sat", description: `https://gfglassforge.com/jobs/${JOB.id}` }),
+    ev({ id: "oth", priv: { hubJobId: OTHER.id } }),
+    ev({ id: "cx", priv: { hubJobId: JOB.id }, status: "cancelled" }),
   ];
   const mirror = [{ google_event_id: "sat", job_id: JOB.id, source_status: "confirmed" }, { google_event_id: "GONE", job_id: JOB.id, source_status: "confirmed" }, { google_event_id: "cx", job_id: JOB.id, source_status: "confirmed" }];
-  const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, nameIndex: idx, now: NOW, todayDenver: TODAY });
+  const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, now: NOW, todayDenver: TODAY });
   assert.deepEqual(events.map((e) => e.id), ["next", "sat"]);
 });
-test("buildUpcomingRead: owner-confirmed mirror shows a live event with no explicit identity", () => {
+test("buildUpcomingRead: mirror never surfaces a live event with no explicit identity (mirror-only fallback off)", () => {
   const live = [ev({ id: "L1", summary: "beaver - finish up install trim items" })];
   const mirror = [{ google_event_id: "L1", job_id: JOB.id, source_status: "confirmed" }];
-  const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, nameIndex: core.nameUniquenessIndex([JOB, OTHER]), now: NOW, todayDenver: TODAY });
-  assert.equal(events.length, 1);
+  const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, now: NOW, todayDenver: TODAY });
+  assert.equal(events.length, 0);
 });
 test("buildUpcomingRead: mirror link never surfaces a FOREIGN explicit identity", () => {
   const live = [ev({ id: "L1", summary: "x", priv: { hubJobId: OTHER.id } })];
   const mirror = [{ google_event_id: "L1", job_id: JOB.id, source_status: "confirmed" }];
   const before = JSON.stringify(mirror);
-  const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, nameIndex: core.nameUniquenessIndex([JOB]), now: NOW, todayDenver: TODAY });
+  const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, now: NOW, todayDenver: TODAY });
   assert.equal(events.length, 0);
   assert.equal(JSON.stringify(mirror), before); // mirror rows not modified
 });
@@ -148,7 +148,7 @@ test("buildUpcomingRead: mirror link never surfaces a CONFLICTING or MALFORMED i
     ev({ id: "M1", summary: "x", description: `https://gfglassforge.com/jobs/${JOB.id}/edit` }),
   ];
   const mirror = [{ google_event_id: "C1", job_id: JOB.id, source_status: "confirmed" }, { google_event_id: "M1", job_id: JOB.id, source_status: "confirmed" }];
-  const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, nameIndex: core.nameUniquenessIndex([JOB]), now: NOW, todayDenver: TODAY });
+  const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, now: NOW, todayDenver: TODAY });
   assert.equal(events.length, 0);
 });
 test("shapeUpcomingEvent: read path strips/flags provider pricing; surviving $ fails closed", () => {

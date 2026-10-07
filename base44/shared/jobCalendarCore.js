@@ -36,11 +36,6 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const REQUEST_ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]{7,99}$/;
 const B32H = '0123456789abcdefghijklmnopqrstuv';
 
-// ---- name normalization ----
-export function normalizeName(v) {
-  return String(v ?? '').normalize('NFKC').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
 // ---- merged-into survivor resolution (async, bounded, cycle reject) ----
 export async function resolveSurvivor(jobId, getJob, maxHops = 25) {
   let id = String(jobId || '');
@@ -109,37 +104,18 @@ export function explicitIdentityBlocks(ev, jobId) {
   return x.malformed || x.conflict || x.jobId !== jobId;
 }
 
-// ---- name uniqueness across the complete Jobs catalog ----
-export function nameUniquenessIndex(jobs) {
-  const idx = new Map();
-  for (const j of jobs || []) {
-    const names = [j.canonical_name, ...(j.aliases || [])].map(normalizeName).filter(Boolean);
-    for (const n of names) {
-      if (!idx.has(n)) idx.set(n, new Set());
-      idx.get(n).add(j.id);
-    }
-  }
-  return idx;
-}
-
-// ---- does this event belong to this job? strict exact-match rules ----
-export function matchEventToJob(ev, job, nameIndex) {
+// ---- does this event belong to this job? EXPLICIT identity only ----
+// No name fallback, no global Jobs catalog. A live event matches only when it
+// carries an explicit identity (private property hubJobId or an allowlisted
+// https Hub /jobs/<id> URL) that equals this job's id.
+export function matchEventToJob(ev, job) {
   if (!ev || !job) return { match: false, reason: 'invalid' };
   const explicit = extractExplicitJobId(ev);
-  if (explicit) {
-    if (explicit.malformed) return { match: false, reason: 'identity_malformed' };
-    if (explicit.conflict) return { match: false, reason: 'identity_conflict' };
-    if (explicit.jobId === job.id) return { match: true, reason: explicit.source };
-    return { match: false, reason: 'foreign_explicit', foreignId: explicit.jobId };
-  }
-  const evName = normalizeName(ev?.summary || ev?.job_name || '');
-  if (!evName) return { match: false, reason: 'no_identity' };
-  const jobNames = new Set([job.canonical_name, ...(job.aliases || [])].map(normalizeName).filter(Boolean));
-  if (!jobNames.has(evName)) return { match: false, reason: 'name_mismatch' };
-  const owners = nameIndex ? nameIndex.get(evName) : undefined;
-  if (owners && owners.size === 1 && owners.has(job.id)) return { match: true, reason: 'name_unique' };
-  if (owners && owners.size === 1) return { match: false, reason: 'name_other_job' };
-  return { match: false, reason: 'name_ambiguous' };
+  if (!explicit) return { match: false, reason: 'no_identity' };
+  if (explicit.malformed) return { match: false, reason: 'identity_malformed' };
+  if (explicit.conflict) return { match: false, reason: 'identity_conflict' };
+  if (explicit.jobId === job.id) return { match: true, reason: explicit.source };
+  return { match: false, reason: 'foreign_explicit', foreignId: explicit.jobId };
 }
 
 // ---- Denver time helpers ----
@@ -218,17 +194,21 @@ export function shapeUpcomingEvent(ev, job) {
   };
 }
 
-// ---- merge live + mirror into the scoped upcoming list ----
-// Mirror rows are read-only here (never modified). A mirror link can only surface
-// a live event whose own explicit identity does not point elsewhere.
-export function buildUpcomingRead({ liveAll, mirrorRows, job, nameIndex, now, todayDenver }) {
+// ---- merge live + mirror into the scoped upcoming list (EXPLICIT identity only) ----
+// Mirror rows are read-only (never modified). A mirror link may only surface a
+// live event whose OWN explicit identity equals this job — no name fallback, no
+// mirror-only fallback. With explicit-only matching the live loop already surfaces
+// every such event, so the mirror loop is a safe no-op for matches; it is kept to
+// preserve the cross-reference plumbing and to reject no-identity / foreign /
+// conflicting / malformed mirror links.
+export function buildUpcomingRead({ liveAll, mirrorRows, job, now, todayDenver }) {
   const liveById = new Map();
   for (const ev of liveAll || []) if (ev?.id) liveById.set(ev.id, ev);
   const matched = new Set();
   const out = [];
   for (const ev of liveAll || []) {
     if (!ev || ev.status === 'cancelled') continue;
-    if (!matchEventToJob(ev, job, nameIndex).match) continue;
+    if (!matchEventToJob(ev, job).match) continue;
     if (!isUpcoming(ev, now, todayDenver)) continue;
     out.push(shapeUpcomingEvent(ev, job));
     matched.add(ev.id);
@@ -239,7 +219,8 @@ export function buildUpcomingRead({ liveAll, mirrorRows, job, nameIndex, now, to
     if (!gid || matched.has(gid)) continue;
     const live = liveById.get(gid);
     if (!live || live.status === 'cancelled') continue; // stale mirror never a phantom
-    if (explicitIdentityBlocks(live, job.id)) continue; // foreign / conflicting / malformed
+    const x = extractExplicitJobId(live);
+    if (!x || x.malformed || x.conflict || x.jobId !== job.id) continue; // explicit identity required, equal to this job
     if (!isUpcoming(live, now, todayDenver)) continue;
     out.push(shapeUpcomingEvent(live, job));
     matched.add(gid);
