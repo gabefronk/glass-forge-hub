@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { safeError } from "@/lib/jobCalendarShared";
+import { safeError, UPCOMING_SATURDAY_FIXTURE } from "@/lib/jobCalendarShared";
 
 // Owner-gated read of upcoming crew-calendar visits for one job. Bounded wait so
 // the UI never spins forever; on error retains a visible error and never invents
 // or clears records. `enabled` gates the call (non-owners never trigger a read).
 // refreshKey lets the parent force a reload after a create succeeds.
 export function useJobUpcoming(jobId, refreshKey = 0, { enabled = true } = {}) {
-  const [state, setState] = useState({ loading: false, error: "", events: [] });
+  // ?fixture=upcoming substitutes a read-only mocked event for visual preview only
+  // — no fetch, no provider call, no Hub write. For inspecting the hero/card layout
+  // on a branch without a live crew-calendar event.
+  const fixtureMode = (() => {
+    try { return new URLSearchParams(window.location.search).get("fixture") === "upcoming"; } catch { return false; }
+  })();
+  const [state, setState] = useState(() => fixtureMode
+    ? { loading: false, error: "", events: [UPCOMING_SATURDAY_FIXTURE] }
+    : { loading: false, error: "", events: [] });
   useEffect(() => {
+    if (fixtureMode) { setState({ loading: false, error: "", events: [UPCOMING_SATURDAY_FIXTURE] }); return; }
     if (!enabled || !jobId) { setState({ loading: false, error: "", events: [] }); return; }
     let live = true;
     setState({ loading: true, error: "", events: [] });
@@ -28,6 +37,6 @@ export function useJobUpcoming(jobId, refreshKey = 0, { enabled = true } = {}) {
       }
     })();
     return () => { live = false; };
-  }, [jobId, refreshKey, enabled]);
+  }, [jobId, refreshKey, enabled, fixtureMode]);
   return state;
 }
