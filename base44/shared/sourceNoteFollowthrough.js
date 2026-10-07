@@ -230,23 +230,25 @@ export async function executeMessageFills({ messageFills, get, update, lookup, n
   for (const mf of messageFills) {
     // Mandatory nonempty id + expected ids + snapshot. Fail closed if any missing/empty.
     if (!mf || !mf.id || !mf.expectedPostId || !mf.expectedProjectId || !mf.snapshot) { skipped++; continue; }
+    // lookup is mandatory: an absent injected lookup fails closed (no duplicate guard).
+    if (!lookup) { skipped++; continue; }
     let fresh;
     try { fresh = await get(mf.id); }
     catch (e) { skipped++; continue; }
     const recheck = freshRecheck({ fresh, expectedId: mf.id, expectedPostId: mf.expectedPostId, expectedProjectId: mf.expectedProjectId, snapshot: mf.snapshot, sourceMessage: mf.sourceMessage, nowIso, expectedAction: mf.plannedAction });
     if (!recheck.safe) { skipped++; continue; }
     // Fresh duplicate-mapping check: an injected lookup by post_id must return exactly
-    // one record matching the expected id + project. A duplicate that appeared since
-    // plan (or the record going missing, or a re-key) fails closed.
-    if (lookup) {
-      let byPost;
-      try { byPost = await lookup(mf.expectedPostId, mf.expectedProjectId); }
-      catch (e) { skipped++; continue; }
-      const arr = Array.isArray(byPost) ? byPost : ((byPost && byPost.items) || []);
-      if (arr.length !== 1) { skipped++; continue; }
-      const m = arr[0];
-      if (!m || m.id !== mf.id || m.post_id !== mf.expectedPostId || m.project_id !== mf.expectedProjectId) { skipped++; continue; }
-    }
+    // one record matching the expected id + project. Accepts an array (positional
+    // filter call) or a cursor page {items} (options filter call); any other shape
+    // (unknown / truncated / missing items) normalizes to [] and fails closed. A valid
+    // non-empty array is never collapsed to [] (Array.isArray returns it as-is).
+    let byPost;
+    try { byPost = await lookup(mf.expectedPostId, mf.expectedProjectId); }
+    catch (e) { skipped++; continue; }
+    const arr = Array.isArray(byPost) ? byPost : ((byPost && byPost.items) || []);
+    if (arr.length !== 1) { skipped++; continue; }
+    const m = arr[0];
+    if (!m || m.id !== mf.id || m.post_id !== mf.expectedPostId || m.project_id !== mf.expectedProjectId) { skipped++; continue; }
     try { await update(mf.id, recheck.patch); filled++; }
     catch (e) { skipped++; }
   }
