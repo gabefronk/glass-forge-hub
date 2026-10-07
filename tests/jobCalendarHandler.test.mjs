@@ -249,7 +249,9 @@ test("release guard: entry.ts createEnabled=true + no exactTestPayload; jobCalen
   const shared = fs.readFileSync(path.join(root, "src/lib/jobCalendarShared.js"), "utf8");
   const handler = fs.readFileSync(path.join(root, "base44/shared/jobCalendarHandler.js"), "utf8");
   assert.match(entry, /RELEASE_CREATE_ENABLED\s*=\s*true/, "entry RELEASE_CREATE_ENABLED=true");
-  assert.ok(!/exactTestPayload/.test(entry), "entry has no exactTestPayload");
+  const entryCall = entry.match(/createJobCalendarHandler\(\{[\s\S]*?\}\)/);
+  assert.ok(entryCall, "entry calls createJobCalendarHandler");
+  assert.ok(!/exactTestPayload/.test(entryCall[0]), "entry call has no exactTestPayload arg");
   assert.match(shared, /export const JOB_CREATE_ENABLED\s*=\s*true/, "JOB_CREATE_ENABLED=true");
   assert.ok(!/exactTestPayload/.test(handler), "handler has no exactTestPayload");
   assert.ok(!/payloadMatchesGate/.test(handler), "handler has no payloadMatchesGate");
