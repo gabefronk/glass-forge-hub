@@ -22,7 +22,7 @@
 //    paid_at). ETA "Delivered" when received_date set (not past amber).
 //  - Units count only current explicit selected scope (active included budgets).
 //  - Job links are by exact job_id, never inferred from a name.
-import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount, roundMoney, isIgnoredWorkItem } from './purchasingCoreTwin.js';
+import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount, roundMoney, isIgnoredWorkItem, sameVendor, pText } from './purchasingCoreTwin.js';
 import { purchasingMatches } from './purchasingMatches.js';
 import { procurementPath } from './procurementRoutes.js';
 import { purchasingText } from './purchasingSearch.js';
@@ -49,17 +49,39 @@ const isOrderPaid = (o) => PAID_VO_STATUS.includes(o.status) || Boolean(o.paid_a
 // explicit printed tax (zero is valid) must reconcile to the printed total.
 // Absent tax, own (Glass Forge) quote, dealer+customer quote, or totals that
 // do not reconcile → null with a reason (shown as "Needs review").
+// Cost role must be PROVEN by positive document evidence, never by the absence
+// of Gabriel's name:
+//  - issuer: the parser's document issuer (quote.vendor, letterhead) is present,
+//    is not us, and matches the budget's explicit vendor/manufacturer;
+//  - recipient: the quote is billed TO us (bill_to names Glass Forge / YA Windows),
+//    so customer_total is what we pay, not what our customer pays;
+//  - scope: every line is a window/door/glass unit with a printed extended price
+//    and the lines sum to the subtotal, so no freight/parts/material is mixed in.
 const OWN_QUOTE = /gabriel|\bgabe\b|fronk|glass\s*forge/i;
+const OUR_ACCOUNT = /glass\s*forge|\bya\s+windows|\by\.\s?a\.\s+windows/i;
+const UNIT_KINDS = ['window', 'door', 'glass'];
 const printed = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+const no = (reason) => ({ value: null, reason });
 export function sourceQuoteInclTax(budget) {
   const q = budget?.quote;
-  if (!q || q.price_levels !== 'single') return { value: null, reason: 'no_single_supplier_total' };
-  if (OWN_QUOTE.test(`${q.quoted_by || ''} ${q.prepared_by || ''}`)) return { value: null, reason: 'own_quote' };
+  if (!q || q.price_levels !== 'single') return no('no_single_supplier_total');
+  const issuer = pText(q.vendor);
+  if (!issuer) return no('issuer_absent');
+  if (OWN_QUOTE.test(`${issuer} ${q.quoted_by || ''} ${q.prepared_by || ''}`) || OUR_ACCOUNT.test(issuer)) return no('own_quote');
+  if (!pText(budget.vendor) && !pText(budget.manufacturer)) return no('budget_vendor_absent');
+  if (!sameVendor({ vendor: issuer, manufacturer: q.manufacturer }, budget)) return no('issuer_vendor_mismatch');
+  if (!OUR_ACCOUNT.test(pText(q.bill_to))) return no('recipient_unproven');
+  const lines = Array.isArray(q.lines) ? q.lines : [];
+  if (!lines.length) return no('scope_unproven');
+  if (lines.some((l) => l?.kind === 'part')) return no('mixed_scope');
+  if (lines.some((l) => !UNIT_KINDS.includes(l?.kind) || !printed(l?.extended))) return no('scope_unproven');
   if (!printed(q.customer_tax)) return { value: null, reason: 'tax_absent' };
   if (!printed(q.customer_total)) return { value: null, reason: 'total_absent' };
   const sub = printed(q.net_total) ? q.net_total : printed(q.customer_sub_total) ? q.customer_sub_total : null;
   if (sub == null) return { value: null, reason: 'subtotal_absent' };
   if (Math.abs(sub + q.customer_tax - q.customer_total) > 0.01) return { value: null, reason: 'totals_do_not_reconcile' };
+  const lineSum = lines.reduce((s, l) => s + l.extended, 0);
+  if (Math.abs(lineSum - sub) > 0.01) return no('scope_unproven');
   return { value: roundMoney(q.customer_total), reason: null };
 }
 
@@ -99,9 +121,13 @@ export function refsForJob(jobId, { budgets = [], purchaseOrders = [], vendorOrd
   const jobBudgets = budgets.filter((b) => b.job_id === jobId && isLiveBudget(b));
   const active = activeBudgets(jobBudgets);
 
-  const quoteNumbers = [...new Set(active.map((b) => b.quote_number).filter(Boolean))];
+  // Draft-only: show the draft quote number as an amber reference (never money).
+  const drafts = active.length ? [] : jobBudgets.filter((b) => b.budget_usage === 'draft');
+  const quoteNumbers = [...new Set((active.length ? active : drafts).map((b) => b.quote_number).filter(Boolean))];
   const quoteNumber = quoteNumbers.length > 1 ? 'Multiple' : (quoteNumbers[0] || null);
-  const quoteStatus = !active.length ? 'none'
+  const quoteDraft = !active.length && drafts.length > 0;
+  const quoteStatus = quoteDraft ? 'amber'
+    : !active.length ? 'none'
     : active.length > 1 ? 'amber'
     : (active[0].budget_usage === 'draft' || !budgetFigures(active[0]).ready) ? 'amber'
     : 'green';
@@ -121,14 +147,18 @@ export function refsForJob(jobId, { budgets = [], purchaseOrders = [], vendorOrd
     : 'amber';
 
   // ETA — Delivered beats overdue; multiple distinct ETAs → Multiple + review.
-  const received = orders.some((o) => o.received_date);
+  // ETA — Delivered only when EVERY order is received; some received → Partial.
+  // A missing ETA on any pending order keeps the single-date label amber.
+  const receivedCount = orders.filter((o) => o.received_date).length;
   const etaDates = [...new Set(orders.map((o) => o.eta_date).filter(Boolean))];
+  const etaMissing = orders.some((o) => !o.eta_date);
   let etaLabel = null, etaStatus = 'none';
-  if (received) { etaLabel = 'Delivered'; etaStatus = 'green'; }
-  else if (!orders.length) { etaLabel = null; etaStatus = 'none'; }
+  if (!orders.length) { etaLabel = null; etaStatus = 'none'; }
+  else if (receivedCount === orders.length) { etaLabel = 'Delivered'; etaStatus = 'green'; }
+  else if (receivedCount > 0) { etaLabel = 'Partial'; etaStatus = 'amber'; }
   else if (etaDates.length === 0) { etaLabel = null; etaStatus = 'amber'; }
   else if (etaDates.length > 1) { etaLabel = 'Multiple'; etaStatus = 'amber'; }
-  else { etaLabel = etaDates[0]; etaStatus = (today && etaDates[0] < today) ? 'amber' : 'green'; }
+  else { etaLabel = etaDates[0]; etaStatus = (etaMissing || (today && etaDates[0] < today)) ? 'amber' : 'green'; }
 
   // Payment — actual schema: paid/reconciled status or paid_at. Mixed → attention.
   const paidOrders = orders.filter(isOrderPaid);
@@ -140,7 +170,7 @@ export function refsForJob(jobId, { budgets = [], purchaseOrders = [], vendorOrd
     : paidOrders.length > 0 ? 'Partial' : 'Unpaid';
 
   return {
-    quoteNumber, quoteStatus, yaPo, poStatus, mfrOrder, mfrStatus,
+    quoteNumber, quoteStatus, quoteDraft, yaPo, poStatus, mfrOrder, mfrStatus,
     etaLabel, etaStatus, payment, paymentLabel,
   };
 }
@@ -234,7 +264,13 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
         (job.drive_job_folder_id ? `https://drive.google.com/drive/folders/${encodeURIComponent(job.drive_job_folder_id)}` : '') ||
         (fileBudget?.drive_job_folder_id ? `https://drive.google.com/drive/folders/${encodeURIComponent(fileBudget.drive_job_folder_id)}` : ''),
     };
-    const search = (purchasingText(job) + ' ' + [refs.quoteNumber, refs.mfrOrder, refs.yaPo, supplier].filter(Boolean).join(' ')).toLowerCase();
+    // Search on ALL raw refs (not the "Multiple" display label) so a specific number still finds the card.
+    const rawRefs = [
+      ...jobBudgets.filter(isLiveBudget).map((b) => b.quote_number),
+      ...jobPOs.filter((p) => p.status !== 'cancelled').map((p) => p.po_number),
+      ...activeVendorOrders(vendor_orders.filter((o) => o.job_id === job.id), purchase_orders).map((o) => o.order_number),
+    ];
+    const search = (purchasingText(job) + ' ' + [...rawRefs, supplier].filter(Boolean).join(' ')).toLowerCase();
 
     cards.push({
       job: { id: job.id, canonical_name: job.canonical_name, address: job.address, builder: job.builder },

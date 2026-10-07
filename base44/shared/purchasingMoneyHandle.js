@@ -25,7 +25,7 @@ import {
 export const LIST_LIMIT = 500;
 export const MAX_PAGES = 200;
 
-class SafeError extends Error {
+export class SafeError extends Error {
   constructor(code) { super(code); this.code = code; }
 }
 const fail = (code) => { throw new SafeError(code); };
