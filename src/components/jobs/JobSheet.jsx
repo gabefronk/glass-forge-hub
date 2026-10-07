@@ -11,6 +11,7 @@ import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs
 import { useJobSuper } from "@/hooks/use-job-super";
 import { useJobHomeowner, searchContacts } from "@/hooks/use-job-homeowner";
 import { pickHomeowner } from "../../../base44/shared/jobHomeowner.js";
+import { homeownerEditLabel, showHomeownerEdit } from "@/lib/homeownerAction";
 
 // "Sand & brass" job sheet: a dark hero (name, address, super, next step,
 // actions, files) and white section cards with green-haze title bands.
@@ -49,7 +50,7 @@ export function LiveMark({ live }) {
 
 // ---------- Super card (lives in the hero) ----------
 
-const BOX_SHELL = "w-full rounded-[12px] p-3.5 pb-3";
+const BOX_SHELL = "w-full rounded-[12px] p-3 pb-2.5";
 const BOX_STYLE = { background: "linear-gradient(150deg,rgba(207,227,218,.16),rgba(207,227,218,.06))", border: "1px solid rgba(207,227,218,.22)" };
 
 const FIELD = "h-[34px] w-full min-w-0 rounded-[8px] px-2.5 text-[13.5px] outline-none focus:ring-2";
@@ -233,31 +234,33 @@ function SuperBox({ jobId, jobContacts, events }) {
           <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>
             {label}{person.source === "notes" ? <span style={{ color: "#8f999b" }}> · FROM {person.day ? day(person.day).toUpperCase() : "CALENDAR"} NOTES</span> : person.source === "suggestion" ? <span style={{ color: "#8f999b" }}> · SUGGESTED</span> : person.source === "builder" ? <span style={{ color: "#8f999b" }}> · {sanitizeText(view?.job?.builder || "BUILDER").toUpperCase()}&apos;S SUPER</span> : null}
           </div>
-          <div className="truncate text-[17px] font-bold" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}</div>
+          <div className="break-words text-[17px] font-bold leading-[1.25]" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}</div>
         </div>
+        <button type="button" onClick={() => setEditing(true)} className={`${small} h-11 shrink-0 px-1`} style={{ color: "#9fc3b6" }}>{person.source === "linked" ? "Change" : "Edit"}</button>
       </div>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-2 flex flex-wrap gap-2">
         {person.phone ? (
-          <a href={`tel:${digits(person.phone)}`} className="inline-flex h-[34px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${sanitizeText(person.name)}`}>
-            <Phone className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{person.phone}</span>
+          <a href={`tel:${digits(person.phone)}`} className="inline-flex min-h-11 flex-1 shrink-0 basis-auto items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${sanitizeText(person.name)}`}>
+            <Phone className="h-3.5 w-3.5 shrink-0" /><span>{person.phone}</span>
           </a>
         ) : null}
         {person.phone ? (
-          <a href={`sms:${digits(person.phone)}`} className="inline-flex h-[34px] items-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>
+          <a href={`sms:${digits(person.phone)}`} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>
             <MessageSquare className="h-3.5 w-3.5" style={{ color: BRASS_LT }} />Text
           </a>
         ) : null}
         {!person.phone && person.email ? (
-          <a href={`mailto:${person.email}`} className="inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>Email</a>
+          <a href={`mailto:${person.email}`} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>Email</a>
         ) : null}
       </div>
-      <div className="mt-2 flex items-center gap-3">
-        {person.email ? <a href={`mailto:${person.email}`} className="min-w-0 flex-1 truncate text-[12px] hover:underline" style={{ color: "#9aa6a8" }}>{person.email}</a> : <span className="flex-1" />}
-        {person.source !== "linked"
-          ? <button type="button" disabled={saving} onClick={confirm} className={small} style={{ color: BRASS_LT }}><UserPlus className="h-3.5 w-3.5" />{saving ? "Saving…" : "Save as super"}</button>
-          : null}
-        <button type="button" onClick={() => setEditing(true)} className={small} style={{ color: "#9fc3b6" }}>{person.source === "linked" ? "Change" : "Edit"}</button>
-      </div>
+      {person.email || (person.source !== "linked") ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-3">
+          {person.email ? <a href={`mailto:${person.email}`} className="min-w-0 flex-1 truncate text-[12px] hover:underline" style={{ color: "#9aa6a8" }}>{person.email}</a> : <span className="flex-1" />}
+          {person.source !== "linked"
+            ? <button type="button" disabled={saving} onClick={confirm} className={`${small} max-[699px]:min-h-11`} style={{ color: BRASS_LT }}><UserPlus className="h-3.5 w-3.5" />{saving ? "Saving…" : "Save as super"}</button>
+            : null}
+        </div>
+      ) : null}
       {error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
     </div>
   );
@@ -347,8 +350,8 @@ function HomeownerBox({ job, jobContacts }) {
             <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>HOMEOWNER</div>
             <div className="text-[14.5px] font-semibold" style={{ color: HERO_MUTED }}>{homeowner.loading ? "Looking…" : "Not on file yet"}</div>
           </div>
-          <button type="button" onClick={() => setEditing(true)} className="inline-flex min-h-[34px] shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold max-[699px]:min-h-11" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>
-            <UserPlus className="h-3.5 w-3.5" style={{ color: BRASS_LT }} />Add
+          <button type="button" onClick={() => setEditing(true)} className={`${small} max-[699px]:min-h-11`} style={{ color: BRASS_LT }}>
+            <UserPlus className="h-3.5 w-3.5" />Add
           </button>
         </div>
         {homeowner.error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{homeowner.error}</p> : null}
@@ -366,33 +369,37 @@ function HomeownerBox({ job, jobContacts }) {
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-extrabold" style={{ backgroundColor: "#e0c994", color: "#1d160a" }}>{initials(person.name)}</span>
         <div className="min-w-0 flex-1">
           <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>HOMEOWNER{tag ? <span style={{ color: "#8f999b" }}>{tag}</span> : null}</div>
-          <div className="truncate text-[17px] font-bold" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}{person.note ? <span className="text-[12.5px] font-medium" style={{ color: HERO_MUTED }}> ({sanitizeText(person.note)})</span> : null}</div>
+          <div className="break-words text-[17px] font-bold leading-[1.25]" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}{person.note ? <span className="text-[12.5px] font-medium" style={{ color: HERO_MUTED }}> ({sanitizeText(person.note)})</span> : null}</div>
         </div>
+        {showHomeownerEdit(person) ? (
+          <button type="button" onClick={() => setEditing(true)} className={`${small} h-11 shrink-0 px-1`} style={{ color: person.source === "job" ? BRASS_LT : "#9fc3b6" }}>{homeownerEditLabel(person)}</button>
+        ) : null}
       </div>
       {person.phone || person.email ? (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           {person.phone ? (
-            <a href={`tel:${digits(person.phone)}`} className="inline-flex min-h-[34px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap max-[699px]:min-h-11" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${sanitizeText(person.name)}`}>
-              <Phone className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{person.phone}</span>
+            <a href={`tel:${digits(person.phone)}`} className="inline-flex min-h-11 flex-1 shrink-0 basis-auto items-center justify-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${sanitizeText(person.name)}`}>
+              <Phone className="h-3.5 w-3.5 shrink-0" /><span>{person.phone}</span>
             </a>
           ) : null}
           {person.phone ? (
-            <a href={`sms:${digits(person.phone)}`} className="inline-flex min-h-[34px] items-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap max-[699px]:min-h-11" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>
+            <a href={`sms:${digits(person.phone)}`} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13.5px] font-semibold whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>
               <MessageSquare className="h-3.5 w-3.5" style={{ color: BRASS_LT }} />Text
             </a>
           ) : null}
           {!person.phone && person.email ? (
-            <a href={`mailto:${person.email}`} className="inline-flex min-h-[34px] flex-1 items-center justify-center rounded-[9px] px-3 text-[13.5px] font-semibold max-[699px]:min-h-11" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>Email</a>
+            <a href={`mailto:${person.email}`} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>Email</a>
           ) : null}
         </div>
       ) : null}
-      <div className="mt-2 flex items-center gap-3">
-        {person.email ? <a href={`mailto:${person.email}`} className="min-w-0 flex-1 truncate text-[12px] hover:underline" style={{ color: "#9aa6a8" }}>{person.email}</a> : <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: "#8f999b" }}>{person.source === "job" ? "No phone on file" : ""}</span>}
-        {person.source === "suggestion"
-          ? <button type="button" disabled={saving} onClick={confirm} className={small} style={{ color: BRASS_LT }}><UserPlus className="h-3.5 w-3.5" />{saving ? "Saving…" : "Save as homeowner"}</button>
-          : null}
-        <button type="button" onClick={() => setEditing(true)} className={small} style={{ color: person.source === "job" ? BRASS_LT : "#9fc3b6" }}>{person.source === "linked" ? "Change" : person.source === "job" ? "Add phone" : "Edit"}</button>
-      </div>
+      {person.email || person.source === "suggestion" || person.source === "job" ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-3">
+          {person.email ? <a href={`mailto:${person.email}`} className="min-w-0 flex-1 truncate text-[12px] hover:underline" style={{ color: "#9aa6a8" }}>{person.email}</a> : <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: "#8f999b" }}>{person.source === "job" ? "No phone on file" : ""}</span>}
+          {person.source === "suggestion"
+            ? <button type="button" disabled={saving} onClick={confirm} className={`${small} max-[699px]:min-h-11`} style={{ color: BRASS_LT }}><UserPlus className="h-3.5 w-3.5" />{saving ? "Saving…" : "Save as homeowner"}</button>
+            : null}
+        </div>
+      ) : null}
       {error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
     </div>
   );
@@ -617,18 +624,20 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
             ) : null}
             <JobInfo snap={snap} folder={folder} />
           </div>
-          <div className="flex w-[300px] max-w-full shrink-0 flex-col gap-2.5 max-[899px]:w-full">
+          <div className="flex w-[300px] max-w-full shrink-0 flex-col gap-2 max-[899px]:w-full">
             <SuperBox jobId={job.id} jobContacts={jobContacts} events={events} />
             <HomeownerBox job={job} jobContacts={jobContacts} />
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center gap-2.5 rounded-[12px] py-2.5 pl-4 pr-2.5" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
-          <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: chipBg, color: chipInk }}>{snap.step.tag}</span>
-          <p className="m-0 min-w-[180px] flex-1 text-[15px] font-semibold leading-[21px]" style={{ color: HERO_INK }}>
-            {lead}{rest.length ? <span className="font-medium" style={{ color: HERO_MUTED }}> {rest.join(" ")}</span> : null}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-col gap-2.5 rounded-[12px] py-2.5 pl-4 pr-2.5 max-[699px]:pl-3" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
+          <div className="flex w-full min-w-0 flex-none items-center gap-2.5">
+            <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: chipBg, color: chipInk }}>{snap.step.tag}</span>
+            <p className="m-0 min-w-0 flex-1 text-[15px] font-semibold leading-[21px]" style={{ color: HERO_INK }}>
+              {lead}{rest.length ? <span className="font-medium" style={{ color: HERO_MUTED }}> {rest.join(" ")}</span> : null}
+            </p>
+          </div>
+          <div className="hero-actions flex w-full min-w-0 flex-wrap items-center gap-2">
             <button type="button" onClick={onFieldReport} className={HERO_BTN} style={{ backgroundColor: BRASS, color: "#1d160a" }}><Camera className="h-[15px] w-[15px]" />Field report</button>
             <FilesMenu folder={folder} plans={plans} events={events} />
             {extra}
