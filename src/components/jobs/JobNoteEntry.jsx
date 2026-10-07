@@ -1,27 +1,16 @@
-import { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { Pencil, Trash2 } from "lucide-react";
-import JobNoteForm from "./JobNoteForm";
+import { Trash2 } from "lucide-react";
+import HistoryTextEdit from "./HistoryTextEdit";
+import { canEditHistoryText } from "@/lib/ownerAccess";
 import { C } from "@/lib/feeUI";
 import ClampedText from "./ClampedText";
 import PhotoStrip from "./PhotoStrip";
 
 export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClick, embedded }) {
-  const [editing, setEditing] = useState(false);
-  // For now every signed-in user can fix or remove any history entry.
-  const canEdit = !!currentUser;
-
-  if (editing) {
-    return (
-      <JobNoteForm
-        jobId={note.job_id}
-        author={currentUser}
-        editing={note}
-        onSaved={() => { setEditing(false); onChanged(); }}
-        onCancel={() => setEditing(false)}
-      />
-    );
-  }
+  // Inline text correction is owner-only (Gabriel). Delete stays available to
+  // any signed-in user (unchanged) — only the edit path is gated here.
+  const canEditText = canEditHistoryText(currentUser);
+  const canDelete = !!currentUser;
 
   const handleDelete = async () => {
     if (!confirm(note.author && note.author !== currentUser ? `Delete this entry by ${note.author}?` : "Delete this note?")) return;
@@ -29,14 +18,14 @@ export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClic
     onChanged();
   };
 
-  const controls = canEdit ? (
+  const controls = (canEditText || canDelete) ? (
     <div className="flex items-center gap-3 shrink-0">
-      <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 text-[12px] font-medium hover:underline" style={{ color: C.textMuted }}>
-        <Pencil className="h-3 w-3" />Edit
-      </button>
-      <button type="button" onClick={handleDelete} className="inline-flex items-center gap-1 text-[12px] font-medium hover:underline" style={{ color: C.textMuted }}>
-        <Trash2 className="h-3 w-3" />Delete
-      </button>
+      {canEditText ? <HistoryTextEdit type="note" recordId={note.id} jobId={note.job_id} text={note.body} canEdit={canEditText} onSaved={onChanged} /> : null}
+      {canDelete ? (
+        <button type="button" onClick={handleDelete} className="inline-flex items-center gap-1 text-[12px] font-medium hover:underline" style={{ color: C.textMuted }}>
+          <Trash2 className="h-3 w-3" />Delete
+        </button>
+      ) : null}
     </div>
   ) : null;
 

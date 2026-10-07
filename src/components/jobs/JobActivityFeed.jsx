@@ -9,6 +9,8 @@ import { eventKind } from "@/lib/calendarModel";
 import { denverDate } from "../../../base44/shared/billingCore.js";
 import { buildJobHistory, historyCounts, groupHistoryByDay, HISTORY_FILTERS, interactionLabel, isFieldReportNote, fileLabel, ticketsByEvent, visitTickets } from "@/lib/jobHistory";
 import JobNoteEntry from "./JobNoteEntry";
+import HistoryTextEdit from "./HistoryTextEdit";
+import { canEditHistoryText } from "@/lib/ownerAccess";
 import JobNoteForm from "./JobNoteForm";
 import { DayCard, MonthRule, UpNextCard, VisitEntry, StageOnlyEntry } from "./VisitDayCard";
 import { ServiceItemPanel, ServiceItemPointer, isServiceOpen, FOCUS_EVENT } from "./ServiceItems";
@@ -71,13 +73,15 @@ function Entry({ icon: Icon, tone = "neutral", title, meta, badge, actions, chil
 const joinMeta = (...parts) => parts.filter(Boolean).join(" · ");
 const photoCount = (n) => (n ? `${n} ${n === 1 ? "photo" : "photos"}` : "");
 
-function ReportBody({ report, onPhotoClick }) {
+function ReportBody({ report, onPhotoClick, canEditText, onChanged }) {
   return (
     <>
       {report.message ? (
         <ClampedText text={report.message} maxLines={4} className="mt-1.5 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words" style={{ color: C.text }} />
       ) : <p className="m-0 mt-1.5 text-[13.5px]" style={{ color: C.textMuted }}>No notes, photos only.</p>}
+      {report.edited_at ? <span className="text-[11.5px] italic" style={{ color: C.textMuted }}>{report.edited_by ? `edited by ${report.edited_by}` : "edited"}</span> : null}
       <PhotoStrip urls={report.photos} onPhotoClick={onPhotoClick} />
+      <HistoryTextEdit type="report" recordId={report.id} jobId={report.job_id} text={report.message} canEdit={canEditText} onSaved={onChanged} />
     </>
   );
 }
@@ -93,7 +97,7 @@ function VisitRefs({ ev, dedupe }) {
   return <div className="mt-2 flex flex-wrap gap-x-4 font-mono text-[12.5px]" style={{ color: C.textMuted }}>{refs.map((r) => <span key={r}>{r}</span>)}</div>;
 }
 
-function VisitCard({ ev, reports, onPhotoClick, dedupe }) {
+function VisitCard({ ev, reports, onPhotoClick, dedupe, canEditText, onChanged }) {
   const [showNotes, setShowNotes] = useState(false);
   // On the job page the Scope card already shows this visit's notes; don't repeat them.
   const scopeShownAbove = !!dedupe && !!ev.id && ev.id === dedupe.workEventId;
@@ -112,7 +116,7 @@ function VisitCard({ ev, reports, onPhotoClick, dedupe }) {
         <>
           {reports.map((r, i) => (
             <div key={r.post_id || i} className={i ? "mt-3 border-t pt-3" : ""} style={{ borderColor: C.rowBorder }}>
-              <ReportBody report={r} onPhotoClick={onPhotoClick} />
+              <ReportBody report={r} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} />
             </div>
           ))}
           {notes && !scopeShownAbove ? (
@@ -130,10 +134,10 @@ function VisitCard({ ev, reports, onPhotoClick, dedupe }) {
   );
 }
 
-function ReportCard({ report, onPhotoClick }) {
+function ReportCard({ report, onPhotoClick, canEditText, onChanged }) {
   return (
     <Entry icon={Camera} tone="teal" title="Field report" meta={joinMeta(crewName(report.author), photoCount(report.photos?.length))}>
-      <ReportBody report={report} onPhotoClick={onPhotoClick} />
+      <ReportBody report={report} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} />
     </Entry>
   );
 }
@@ -236,6 +240,7 @@ function ServiceEntry({ item, onServiceChanged }) {
 export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged }) {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
+  const canEditText = canEditHistoryText(currentUser);
   // A "Log interaction" button elsewhere on the page opens the form here.
   useEffect(() => { if (openFormKey) setShowForm(true); }, [openFormKey]);
 
@@ -356,8 +361,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                 {groupFiles(items).map((it, i, dayItems) => {
                   if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
                   if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
-                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today, { reports: it.reports, photoNote: dayItems.some((x) => x.kind === "note" && x.note?.job_id && (x.note.attachments?.length || 0) > 0) })} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} tickets={visitTickets(tickets, it.ev)} />;
-                  if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
+                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today, { reports: it.reports, photoNote: dayItems.some((x) => x.kind === "note" && x.note?.job_id && (x.note.attachments?.length || 0) > 0) })} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} tickets={visitTickets(tickets, it.ev)} canEditText={canEditText} onChanged={onChanged} />;
+                  if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} />;
                   if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                   if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
                   if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
@@ -384,8 +389,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
             <div className={ledger ? "space-y-4" : "space-y-2"}>
               {groupFiles(items).map((it, i) => {
                 if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
-                if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} dedupe={dedupe} />;
-                if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} />;
+                if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} dedupe={dedupe} canEditText={canEditText} onChanged={onChanged} />;
+                if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} />;
                 if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                 if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
                 if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;

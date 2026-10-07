@@ -38,22 +38,30 @@ export function buildReports(rows, fieldReports) {
     if (!fr.post_id) continue;
     byPost.set(fr.post_id, {
       post_id: fr.post_id,
+      id: fr.id,
+      job_id: fr.job_id,
       date: fr.job_date,
       message: fr.message || "",
       photos: fr.photo_urls || [],
       created_at: fr.created_at || "",
       author: "",
+      edited_at: fr.edited_at || null,
+      edited_by: fr.edited_by || null,
     });
   }
   for (const r of rows || []) {
     if ((r.source === "probuild" || r.source === "both") && r.probuild_post_id && !byPost.has(r.probuild_post_id)) {
       byPost.set(r.probuild_post_id, {
         post_id: r.probuild_post_id,
+        id: null,
+        job_id: null,
         date: r.job_date,
         message: mergeNoteTexts(r.note_text, r.probuild_note_text),
         photos: r.photo_urls || [],
         created_at: r.probuild_job_date || r.job_date || "",
         author: r.calendar_creator || "",
+        edited_at: null,
+        edited_by: null,
       });
     }
   }

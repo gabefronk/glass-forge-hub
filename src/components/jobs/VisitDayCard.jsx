@@ -7,6 +7,7 @@ import { attachmentProvenance, fileBadge, ticketLabel } from "@/lib/jobHistory";
 import ClampedText from "./ClampedText";
 import PhotoStrip from "./PhotoStrip";
 import { ServiceItemPanel } from "./ServiceItems";
+import HistoryTextEdit from "./HistoryTextEdit";
 
 // The job page's Visits, one card per date: a quiet date stamp, the stage(s) that happened
 // that day, then that day's entries. Upcoming dates are gold and dashed; the latest stage
@@ -164,7 +165,7 @@ const joinMeta = (...parts) => parts.filter(Boolean).join(" · ");
 // One calendar visit, laid out as rows. badge: the visit's report pill from the feed.
 // services: the service items this visit is the fix for (their service_event_id). The item is
 // tracked here — one place — and the report it came from just points to it.
-export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [], onServiceChanged, tickets = [] }) {
+export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [], onServiceChanged, tickets = [], canEditText, onChanged }) {
   const f = useMemo(() => visitFields(ev), [ev]);
   const [showOther, setShowOther] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -232,7 +233,9 @@ export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [
               <div key={r.post_id || i} className={i ? "mt-3" : ""}>
                 {r.message ? <div className="border-l-[3px] pl-3" style={{ borderColor: MINT }}><ClampedText text={r.message} maxLines={4} className="text-[14.5px] leading-[21px] whitespace-pre-wrap break-words" style={{ color: INK }} /></div>
                   : <span className="text-[13.5px]" style={{ color: MUTED }}>Photos only, no notes.</span>}
+                {r.edited_at ? <span className="text-[11.5px] italic" style={{ color: MUTED }}>{r.edited_by ? `edited by ${r.edited_by}` : "edited"}</span> : null}
                 <PhotoStrip urls={r.photos} onPhotoClick={onPhotoClick} className="mt-2" />
+                <HistoryTextEdit type="report" recordId={r.id} jobId={r.job_id} text={r.message} canEdit={canEditText} onSaved={onChanged} />
               </div>
             ))}
           </Row>
