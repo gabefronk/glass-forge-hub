@@ -319,9 +319,14 @@ function transport({ get = null, insert = null, store = new Map() } = {}) {
 const run = (t, payload = pl(), job = JOB) => core.createEvent({ transport: t, job, payload, sha256 });
 const fpOf = (p = pl()) => core.fingerprintHash(p, { sha256 });
 const idOf = (p = pl()) => core.deterministicId(p.owner_id, p.request_id, { sha256 });
-async function existing(over = {}, privOver = {}) {
-  const p = pl();
-  return { id: await idOf(p), status: "confirmed", htmlLink: "https://calendar.google.com/event?eid=e", extendedProperties: { private: { hubJobId: p.job_id, hubOwnerId: p.owner_id, hubRequestId: p.request_id, hubFingerprint: await fpOf(p), ...privOver } }, ...over };
+// Full real provider body (summary/location/description/start/end/attendees +
+// private identity + fingerprint) built from the reviewed payload, so content
+// reconciliation compares against a complete event, not an identity-only stub.
+async function existing(over = {}, privOver = {}, payload = pl()) {
+  const eid = await idOf(payload);
+  const fp = await fpOf(payload);
+  const body = core.buildCreateEventBody({ payload, fingerprint: fp, eventId: eid });
+  return { ...body, status: "confirmed", htmlLink: "https://calendar.google.com/event?eid=e", extendedProperties: { private: { ...body.extendedProperties.private, ...privOver } }, ...over };
 }
 
 test("createEvent: explicit not_found -> exactly one POST -> created with provider link", async () => {
@@ -417,4 +422,80 @@ test("createEvent: POST body has no attendees, copies, labor or FeeLines", async
   await run(t);
   assert.deepEqual(saved.attendees, []);
   assert.ok(!/fee_line|labor|installer/i.test(JSON.stringify(saved)));
+});
+
+// ---- reconcileExisting: manual Google edits leave extendedProperties, so the
+// fingerprint alone cannot prove unchanged. Content (summary/location/description/
+// start/end/attendees) is compared to the reviewed provider fields. ----
+const recIds = (p = pl()) => ({ fingerprint: fpOf(p), jobId: p.job_id, ownerId: p.owner_id, requestId: p.request_id, payload: p });
+test("reconcileExisting: all-day unchanged -> existing_match", async () => {
+  const ex = await existing();
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds()) })).kind, "existing_match");
+});
+test("reconcileExisting: manual title edit, unchanged fingerprint -> conflict_changed", async () => {
+  const ex = await existing({ summary: "Edited Title" });
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds()) })).kind, "conflict_changed");
+});
+test("reconcileExisting: manual address edit -> conflict_changed", async () => {
+  const ex = await existing({ location: "New Addr" });
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds()) })).kind, "conflict_changed");
+});
+test("reconcileExisting: manual notes edit (description) -> conflict_changed", async () => {
+  const ex = await existing({ description: "Edited notes\nHub job: https://gfglassforge.com/jobs/" + JOB.id });
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds()) })).kind, "conflict_changed");
+});
+test("reconcileExisting: changed all-day start -> conflict_changed", async () => {
+  const ex = await existing({ start: { date: "2026-10-11" }, end: { date: "2026-10-12" } });
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds()) })).kind, "conflict_changed");
+});
+test("reconcileExisting: added attendee -> conflict_changed", async () => {
+  const ex = await existing({ attendees: [{ email: "x@x.com" }] });
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds()) })).kind, "conflict_changed");
+});
+test("reconcileExisting: missing fields (identity-only stub) -> conflict_changed, never unchanged", async () => {
+  const stub = { id: "eid", status: "confirmed", extendedProperties: { private: { hubJobId: JOB.id, hubOwnerId: OWNER, hubRequestId: "req-00000001", hubFingerprint: await fpOf() } } };
+  assert.equal((await core.reconcileExisting({ existingEvent: stub, ...(await recIds()) })).kind, "conflict_changed");
+});
+test("reconcileExisting: timed unchanged with RFC3339 normalization (offset->Z, seconds) -> existing_match", async () => {
+  const p = timed(); // 2026-10-10 09:00-11:00 America/Denver (MDT, 15:00-17:00 UTC)
+  const ex = await existing({ start: { dateTime: "2026-10-10T15:00:00.000Z", timeZone: "America/Denver" }, end: { dateTime: "2026-10-10T17:00:00.000Z", timeZone: "America/Denver" } }, {}, p);
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds(p)) })).kind, "existing_match");
+});
+test("reconcileExisting: changed timed start instant -> conflict_changed", async () => {
+  const p = timed();
+  const ex = await existing({ start: { dateTime: "2026-10-10T16:00:00.000Z", timeZone: "America/Denver" }, end: { dateTime: "2026-10-10T17:00:00.000Z", timeZone: "America/Denver" } }, {}, p);
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds(p)) })).kind, "conflict_changed");
+});
+test("reconcileExisting: changed timed timeZone -> conflict_changed", async () => {
+  const p = timed();
+  const ex = await existing({ start: { dateTime: "2026-10-10T15:00:00.000Z", timeZone: "America/Chicago" }, end: { dateTime: "2026-10-10T17:00:00.000Z", timeZone: "America/Chicago" } }, {}, p);
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds(p)) })).kind, "conflict_changed");
+});
+test("reconcileExisting: foreign ids -> foreign", async () => {
+  const ex = await existing({}, { hubJobId: OTHER.id });
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds()) })).kind, "foreign");
+});
+test("reconcileExisting: cancelled tombstone -> deleted", async () => {
+  const ex = await existing({ status: "cancelled" });
+  assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds()) })).kind, "deleted");
+});
+
+// ---- manual edit detection through each create path (GET-existing / 409 / POST-return) ----
+test("createEvent: manual title edit found via GET -> conflict_changed, no POST", async () => {
+  const ex = await existing({ summary: "Edited" });
+  const t = transport({ get: () => ({ kind: "found", event: ex }) });
+  assert.equal((await run(t)).kind, "conflict_changed");
+  assert.equal(t.calls.insert, 0);
+});
+test("createEvent: 409 then re-GET shows a manual edit -> conflict_changed", async () => {
+  const ex = await existing({ location: "Edited Addr" });
+  let g = 0;
+  const t = transport({ get: () => (++g === 1 ? { kind: "not_found" } : { kind: "found", event: ex }), insert: () => ({ ok: false, status: 409 }) });
+  assert.equal((await run(t)).kind, "conflict_changed");
+  assert.equal(t.calls.get, 2);
+});
+test("createEvent: POST returns a manually edited event -> unknown (insert_mismatch), no second POST", async () => {
+  const t = transport({ get: () => ({ kind: "not_found" }), insert: async (b) => ({ ok: true, status: 200, event: { ...b, summary: "Edited" } }) });
+  assert.equal((await run(t)).kind, "unknown");
+  assert.equal(t.calls.insert, 1);
 });

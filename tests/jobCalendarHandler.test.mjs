@@ -1,13 +1,15 @@
 // Handler-level tests for the injectable job-calendar factory. No live provider,
-// no network, no SDK, no Hub writes. Mock base44 (auth + entities) and mock
-// transport are injected; createEnabled=true exercises the SAME handleCreate code
-// path the production entry would run once enabled. Production create is hard-off
-// and must return disabled BEFORE any transport/token/Hub call.
+// no network, no SDK. Mock base44 (auth + entities) and mock transport are
+// injected; createEnabled=true exercises the SAME handleCreate code path the
+// production entry would run once enabled. Production create is hard-off: it
+// returns disabled BEFORE any transport/token call or Hub WRITE (auth + a Jobs.get
+// read still happen first; zero token/provider calls and zero Hub WRITES).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import * as core from "../base44/shared/jobCalendarCore.js";
 import { createJobCalendarHandler } from "../base44/shared/jobCalendarHandler.js";
+import { createGoogleTransport } from "../base44/shared/jobCalendarGoogleTransport.js";
 
 const sha256 = (s) => createHash("sha256").update(String(s)).digest("hex");
 const JOB = { id: "6a817395914bfa31ecd0f1f6", canonical_name: "Beaver - 412", address: "1497 E 200 N St, Beaver, UT 84713" };
@@ -48,8 +50,9 @@ function mockTransport({ list = null, get = null, insert = null } = {}) {
 const h = (opts) => createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: mockTransport(), createEnabled: false, sha256, ...opts });
 const req = (body) => ({ method: "POST", json: async () => body });
 
-// ---- production create hard-off: zero provider/token/Hub calls ----
-test("handler create: production disabled returns disabled BEFORE any transport/token/Hub call", async () => {
+// ---- production create hard-off: zero provider/token calls and zero Hub WRITES ----
+// (Auth + a Jobs.get read still happen first; no token, no provider call, no Hub write.)
+test("handler create: production disabled returns disabled BEFORE any transport/token call or Hub write", async () => {
   const t = mockTransport({ get: () => { throw new Error("should not be called"); }, insert: () => { throw new Error("should not be called"); } });
   const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: t, createEnabled: false, sha256 });
   const r = await handler.handleCreate({ payload: pl() }, { id: OWNER });
@@ -188,4 +191,47 @@ test("handler create: stale reviewed title -> 409 stale_review, zero transport c
   assert.equal(r.status, 409);
   assert.equal(r.body.error, "stale_review");
   assert.equal(t.calls.get + t.calls.insert, 0);
+});
+
+// ---- real google transport (mock fetch/connector) wired through the handler:
+// disabled and auth-fail must cause ZERO token/fetch/write. The adapter under test
+// is the real createGoogleTransport; only fetch + getToken are mocked. ----
+test("handler + real google transport: production disabled -> zero token/fetch", async () => {
+  let tokenCalls = 0, fetchCalls = 0;
+  const transport = createGoogleTransport({
+    getToken: async () => { tokenCalls++; return "T"; },
+    fetch: async () => { fetchCalls++; return { ok: true, status: 200, json: async () => ({ items: [] }) }; },
+    calendar: "iryedra@gmail.com",
+  });
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport, createEnabled: false, sha256 });
+  const r = await handler.handleCreate({ payload: pl() }, { id: OWNER });
+  assert.equal(r.body.disabled, true);
+  assert.equal(tokenCalls, 0);
+  assert.equal(fetchCalls, 0);
+});
+test("handler + real google transport: auth fail (non-owner) -> zero token/fetch", async () => {
+  let tokenCalls = 0, fetchCalls = 0;
+  const transport = createGoogleTransport({
+    getToken: async () => { tokenCalls++; return "T"; },
+    fetch: async () => { fetchCalls++; return { ok: true, status: 200, json: async () => ({ items: [] }) }; },
+    calendar: "iryedra@gmail.com",
+  });
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: "notowner" } }), transport, createEnabled: false, sha256 });
+  const r = await handler.handle(req({ action: "read_upcoming", job_id: JOB.id }));
+  assert.equal(r.status, 403);
+  assert.equal(tokenCalls, 0);
+  assert.equal(fetchCalls, 0);
+});
+test("handler + real google transport: unauthenticated -> zero token/fetch", async () => {
+  let tokenCalls = 0, fetchCalls = 0;
+  const transport = createGoogleTransport({
+    getToken: async () => { tokenCalls++; return "T"; },
+    fetch: async () => { fetchCalls++; return { ok: true, status: 200, json: async () => ({ items: [] }) }; },
+    calendar: "iryedra@gmail.com",
+  });
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: null }), transport, createEnabled: false, sha256 });
+  const r = await handler.handle(req({ action: "read_upcoming", job_id: JOB.id }));
+  assert.equal(r.status, 401);
+  assert.equal(tokenCalls, 0);
+  assert.equal(fetchCalls, 0);
 });

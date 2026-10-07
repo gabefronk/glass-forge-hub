@@ -3,11 +3,11 @@
 //
 // Read: returns only the upcoming events that belong to ONE job, price-free,
 // minimal (date/time/purpose/location/link). No global calendar dump.
-// Match keys (exact only): explicit Google private property hubJobId, an
-// allowlisted https Hub job URL in the description, OR a unique normalized exact
-// canonical/alias name across the complete Jobs catalog. ALL explicit identities
-// are collected; a conflict or malformed identity rejects. A mirror link never
-// overrides a foreign/conflicting/malformed explicit identity on the live event.
+// Match keys (EXPLICIT only): a Google private property hubJobId, or an
+// allowlisted https Hub /jobs/<id> URL in the description. No name fallback, no
+// global Jobs catalog, no mirror-only fallback. ALL explicit identities are
+// collected; a conflict or malformed identity rejects. A mirror link may only
+// surface a live event whose OWN explicit identity equals this job.
 //
 // Create (orchestrated here, staged OFF in the deployed entry): the reviewed
 // payload is validated strictly (exact types, bounded strings, real dates, IANA
@@ -442,14 +442,60 @@ export function buildCreateEventBody({ payload, fingerprint, eventId }) {
   };
 }
 
+// ---- compare a live event's content to the reviewed provider fields ----
+// Google preserves extendedProperties across manual edits, so a matching
+// hubFingerprint alone does NOT prove the event is unchanged. Compare the current
+// event's summary/location/description/start/end/attendees to the exact expected
+// provider fields. Timed start/end are compared by instant (handles RFC3339
+// normalization: seconds, offset vs Z) AND by timeZone. All-day by date and
+// exclusive end. Missing fields are never accepted as unchanged.
+function expectedTimedInstant(payload, which) {
+  const date = which === 'start' ? payload.start_date : payload.end_date;
+  const time = which === 'start' ? payload.start_time : payload.end_time;
+  const r = wallTimeToUtc(date, time, payload.time_zone);
+  return r.ok ? r.ms : NaN;
+}
+export function eventContentMatches(ev, payload) {
+  if (!ev || typeof ev !== 'object') return false;
+  const exp = providerFields(payload);
+  if (String(ev.summary ?? '') !== String(exp.summary)) return false;
+  if (String(ev.location ?? '') !== String(exp.location)) return false;
+  if (String(ev.description ?? '') !== String(exp.description)) return false;
+  const att = ev.attendees;
+  if (att !== undefined && (!Array.isArray(att) || att.length > 0)) return false;
+  if (payload.all_day) {
+    if (!ev.start || !ev.end) return false;
+    if (ev.start.date !== exp.start.date) return false;
+    if (ev.end.date !== exp.end.date) return false;
+    return true;
+  }
+  if (!ev.start || !ev.end || !ev.start.dateTime || !ev.end.dateTime) return false;
+  const es = expectedTimedInstant(payload, 'start');
+  const ee = expectedTimedInstant(payload, 'end');
+  const vs = Date.parse(ev.start.dateTime);
+  const ve = Date.parse(ev.end.dateTime);
+  if (!Number.isFinite(es) || !Number.isFinite(ee) || !Number.isFinite(vs) || !Number.isFinite(ve)) return false;
+  if (es !== vs || ee !== ve) return false;
+  if (ev.start.timeZone !== exp.start.timeZone) return false;
+  if (ev.end.timeZone !== exp.end.timeZone) return false;
+  return true;
+}
+
 // ---- reconcile a provider event against the create request ----
-export function reconcileExisting({ existingEvent, fingerprint, jobId, ownerId, requestId }) {
-  if (existingEvent.status === 'cancelled') return { kind: 'deleted', event: existingEvent };
-  const priv = existingEvent.extendedProperties?.private || {};
+// A cancelled tombstone is deleted and never recreated. Foreign ids -> foreign.
+// Matching ids + matching content + matching fingerprint -> existing_match.
+// Matching ids but changed content (manual Google edit) OR a mismatched
+// fingerprint -> conflict_changed (no POST). The content check is authoritative:
+// the fingerprint is preserved by Google across manual edits, so it alone cannot
+// prove the event is unchanged.
+export function reconcileExisting({ existingEvent, fingerprint, jobId, ownerId, requestId, payload }) {
+  if (existingEvent?.status === 'cancelled') return { kind: 'deleted', event: existingEvent };
+  const priv = existingEvent?.extendedProperties?.private || {};
   const idsMatch = priv.hubJobId === jobId && priv.hubOwnerId === ownerId && priv.hubRequestId === requestId;
-  if (idsMatch && priv.hubFingerprint === fingerprint) return { kind: 'existing_match', event: existingEvent };
-  if (idsMatch) return { kind: 'conflict_changed', event: existingEvent };
-  return { kind: 'foreign', event: existingEvent };
+  if (!idsMatch) return { kind: 'foreign', event: existingEvent };
+  if (!eventContentMatches(existingEvent, payload)) return { kind: 'conflict_changed', event: existingEvent };
+  if (priv.hubFingerprint !== fingerprint) return { kind: 'conflict_changed', event: existingEvent };
+  return { kind: 'existing_match', event: existingEvent };
 }
 
 const isEventObject = (ev) => !!ev && typeof ev === 'object' && !Array.isArray(ev) && typeof ev.id === 'string';
@@ -471,7 +517,7 @@ export async function createEvent({ transport, job, payload, sha256 }) {
 
   const eventId = await deterministicId(payload.owner_id, payload.request_id, { sha256 });
   const fingerprint = await fingerprintHash(payload, { sha256 });
-  const ids = { fingerprint, jobId: payload.job_id, ownerId: payload.owner_id, requestId: payload.request_id };
+  const ids = { fingerprint, jobId: payload.job_id, ownerId: payload.owner_id, requestId: payload.request_id, payload };
   const out = (kind, extra = {}) => ({ kind, event_id: eventId, fingerprint, ...extra });
 
   const lookup = async () => {

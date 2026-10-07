@@ -58,7 +58,9 @@ export function createJobCalendarHandler({ base44, transport, createEnabled = fa
     const eff = v.effective;
 
     if (!createEnabled) {
-      // Production hard-off: disabled BEFORE any transport GET/POST, token fetch or Hub write.
+      // Production hard-off: disabled BEFORE any transport GET/POST, token fetch or Hub
+      // WRITE. (Auth + a Jobs.get read still happen first to verify the reviewed job;
+      // no token, no provider call, no Hub write occurs.)
       return out(200, { ok: false, disabled: true, stage: 'create_disabled_in_stage', event_id: eventId, fingerprint, reviewed: { ...p, provider_start: eff.start, provider_end: eff.end, last_day: eff.last_day, overnight: eff.overnight, multiday: eff.multiday } });
     }
 
