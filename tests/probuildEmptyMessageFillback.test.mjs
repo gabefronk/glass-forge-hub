@@ -3,8 +3,16 @@
 // the same source post once it has text. Runs the ACTUAL fetchProbuildPosts
 // handler with the ProBuild client + Base44 SDK stubbed (same harness as
 // financeGapIngest). No live sync, no record writes, no provider calls.
-import { test } from 'vitest';
 import assert from 'node:assert/strict';
+// Dual-mode test runner: vitest when executed under vitest (this sandbox blocks
+// `node --test`), node:test otherwise (the project's convention for every other
+// test). Same file, same assertions, both runners.
+let test;
+try {
+  ({ test } = await import('vitest'));
+} catch {
+  test = (await import('node:test')).default;
+}
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
