@@ -6,6 +6,7 @@ import { toMs, getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForP
 import { fetchAllPages } from '../../shared/pagination.ts';
 import { parseServiceBilling } from '../../shared/serviceBilling.ts';
 import { findJobMatches, eligibleJobs } from '../../shared/jobMatchGuard.js';
+import { buildNewReportRow, planReportWrite, executeMessageFills } from '../../shared/sourceNoteFollowthrough.js';
 
 // Ingest Probuild posts into FeeLines + FieldReports. One row per post.
 // Auth: Firebase refresh-token exchange (rotated token persisted to ProbuildAuth).
@@ -281,20 +282,21 @@ export default async function(req) {
     }
     const frToCreate = [];
     const frToUpdate = [];
-    // Message fills are ISOLATED from the photo/job-link bulk patch. The standard
-    // SDK update is an unconditional PUT /<id> with no predicate and no revision
-    // token (verified against @base44/sdk/dist/modules/entities.js: update ->
-    // axios.put(baseURL/id, data); bulkUpdate -> axios.put(baseURL/bulk, data)).
-    // So a message fill is not queued into the same bulk patch as photo/job links;
-    // it is planned here and executed below as a single-field {message} update
-    // only after a freshest exact FieldReports.get re-confirms the record is still
-    // safe to fill. That fresh read preserves a concurrent owner edit that landed
-    // AFTER the earlier existingReports snapshot but BEFORE the fresh read. It is
-    // NOT atomic CAS: a GET-to-update race remains — an owner edit landing BETWEEN
-    // the fresh FieldReports.get and the FieldReports.update would still be
+    // Message/baseline follow-through is ISOLATED from the photo/job-link bulk patch.
+    // The standard SDK update is an unconditional PUT /<id> with no predicate and no
+    // revision token (verified against @base44/sdk/dist/modules/entities.js: update
+    // -> axios.put(baseURL/id, data); bulkUpdate -> axios.put(baseURL/bulk, data)).
+    // So a message/baseline write is never queued into the bulk patch (which carries
+    // only photo_urls/job_id empty-field fills); it is planned here via the pure
+    // planner (planReportWrite) and executed below via an isolated fresh-get that
+    // re-runs the full predicate (freshRecheck) before a source/baseline-only update.
+    // Bulk updates therefore never carry message/baseline, so a stale generic row
+    // cannot overwrite a protected note. This is NOT atomic CAS: a GET-to-update race
+    // remains — an edit landing BETWEEN the fresh get and the update would still be
     // overwritten, because the update carries no predicate/revision the server
     // re-checks. The platform exposes no atomic compare-and-set to close it.
-    const messageFills = []; // { id, srcMsg, postId } planned, pending a fresh read-before-write
+    // Ingest never passes authorizedCorrection (Rainey is an external one-off).
+    const messageFills = []; // { id, postId, sourceMessage, plannedAction, patch } planned, pending a fresh read-before-write
     let frSkippedExisting = 0;
     let frPhotosFilled = 0;
     let frJobsLinked = 0;
@@ -302,6 +304,7 @@ export default async function(req) {
     let frMessagesSkippedDuplicate = 0;
     let frMessagesSkippedFresh = 0;
     const photoUrlByPost = new Map();
+    const nowIso = new Date().toISOString();
     for (const { b, normName, m } of matched) {
       const post = b.post;
       const ext = extractionMap.get(b.postId) || { needs_review: true };
@@ -315,81 +318,70 @@ export default async function(req) {
         photoUrls = await archivePostPhotos(base44, idToken, b.projectId, b.postId, post.attachments);
       }
       photoUrlByPost.set(b.postId, photoUrls);
-      const reportRow = {
-        ...(m.job_id ? { job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: new Date().toISOString() } : {}),
-        job_date: b.jobDate,
-        job_name: b.projectName,
-        message: post.message || '',
-        photo_urls: photoUrls,
-        attachment_count: countAttachments(post.attachments),
-        post_id: b.postId,
-        project_id: b.projectId,
-        created_at: post.createdAt || null,
-        man_hours: ext.man_hours != null ? Number(ext.man_hours) : null,
-        trip_charges: ext.trip_charges != null ? Number(ext.trip_charges) : null,
-      };
+      const reportRow = buildNewReportRow({
+        jobFields: m.job_id ? { job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: nowIso } : null,
+        jobDate: b.jobDate,
+        jobName: b.projectName,
+        message: post.message,
+        photoUrls,
+        attachmentCount: countAttachments(post.attachments),
+        postId: b.postId,
+        projectId: b.projectId,
+        createdAt: post.createdAt,
+        manHours: ext.man_hours,
+        tripCharges: ext.trip_charges,
+        nowIso,
+      });
       if (exRep) {
-        // Append-only (Gabriel 2026-09-15): never overwrite an existing field report.
-        // Permitted additive repairs: fill missing photo_urls, (owner-approved
-        // 2026-09-26) fill a missing job_id from a high-confidence match, and fill
-        // a truly-empty message when the same source post now has text (photos-
-        // arrive-before-message bug). Source bytes are preserved verbatim; nonempty
-        // owner/existing text is never overwritten; non-string existing values are
-        // not coerced to empty. Duplicate existing reports for the same post_id are
-        // skipped (not arbitrarily overwritten by list order).
+        // Append-only: photo/job-link fills stay in the bulk patch (empty-field fills
+        // only). Message/baseline follow-through is planned separately via the pure
+        // planner (planReportWrite) and executed below via an isolated fresh-get —
+        // NEVER bundled into the bulk patch, so a stale generic row cannot overwrite a
+        // protected note. Ingest never passes authorizedCorrection (Rainey is an
+        // external one-off). Duplicate post_id -> fail closed (counted, no write).
         const patch = {};
         if (!(exRep.photo_urls || []).length && photoUrls.length) {
           patch.photo_urls = photoUrls;
           frPhotosFilled++;
         }
         if (!exRep.job_id && m.job_id && m.match_confidence === 'high') {
-          Object.assign(patch, { job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: new Date().toISOString() });
+          Object.assign(patch, { job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: nowIso });
           frJobsLinked++;
         }
-        const exMsg = exRep.message;
-        const exMsgEmpty = exMsg == null || (typeof exMsg === 'string' && exMsg.trim() === '');
-        const srcMsg = post.message;
-        const srcMsgNonempty = typeof srcMsg === 'string' && srcMsg.trim() !== '';
-        const msgEligible = exMsgEmpty && srcMsgNonempty;
-        if (msgEligible && duplicatePostIds.has(b.postId)) frMessagesSkippedDuplicate++;
-        else if (msgEligible) messageFills.push({ id: exRep.id, srcMsg, postId: b.postId });
-        // Photo/job-link fills stay in the bulk patch (last-write-wins, but they
-        // only fill empty fields). Message fills are NOT bundled here.
-        const hasMsgFill = msgEligible && !duplicatePostIds.has(b.postId);
         if (Object.keys(patch).length) frToUpdate.push({ id: exRep.id, ...patch });
-        else if (!hasMsgFill) frSkippedExisting++;
+        const isDup = duplicatePostIds.has(b.postId);
+        const planned = planReportWrite({ existing: exRep, sourceMessage: post.message, nowIso });
+        if (planned.action === 'write') {
+          if (isDup) frMessagesSkippedDuplicate++;
+          else messageFills.push({ id: exRep.id, postId: b.postId, sourceMessage: post.message, plannedAction: planned.plannedAction, patch: planned.patch });
+        } else if (!Object.keys(patch).length) {
+          frSkippedExisting++;
+        }
       }
       else frToCreate.push(reportRow);
     }
     if (!dryRun && frToCreate.length) await base44.asServiceRole.entities.FieldReports.bulkCreate(frToCreate);
     if (!dryRun && frToUpdate.length) await base44.asServiceRole.entities.FieldReports.bulkUpdate(frToUpdate);
 
-    // Isolated message fills: a freshest exact FieldReports.get right before each
-    // single-field {message} update re-confirms the record is still safe to fill,
-    // so a concurrent owner note that landed AFTER the earlier existingReports
-    // snapshot but BEFORE this fresh read is preserved (not overwritten). This is
-    // not a categorical guarantee: a GET-to-update race remains — an owner edit
-    // landing BETWEEN this fresh FieldReports.get and the FieldReports.update would
-    // still be overwritten, because the standard SDK update is unconditional (no
-    // server-side predicate/revision re-check). This is not atomic CAS. Skip
-    // (counted, no write) on: fresh-read failure, post_id mismatch, any owner-edit
-    // marker (edited_at/edited_by/original_text), or a message that is no longer
-    // empty. Source bytes are written verbatim. The counter reflects actual writes
-    // in live mode and planned writes in dry-run.
+    // Message/baseline follow-through execution. Source/baseline-only patch, via the
+    // injected get/update adapter (executeMessageFills) that re-runs the full predicate
+    // (freshRecheck) just before each write: fresh-read failure, post_id mismatch, any
+    // owner-edit marker (edited_at/edited_by/original_text), a Hub that no longer matches
+    // the planned state, or a malformed baseline all skip (counted, no write). Source
+    // bytes are written verbatim. NOT atomic CAS — a GET-to-update race remains (the
+    // platform exposes no compare-and-set); documented, not pretended away. The counter
+    // reflects actual writes in live mode and planned writes in dry-run.
     if (dryRun) {
       frMessagesFilled = messageFills.length;
     } else {
-      for (const mf of messageFills) {
-        let fresh;
-        try { fresh = await base44.asServiceRole.entities.FieldReports.get(mf.id); }
-        catch (e) { frMessagesSkippedFresh++; continue; }
-        if (!fresh || fresh.post_id !== mf.postId) { frMessagesSkippedFresh++; continue; }
-        if (fresh.edited_at || fresh.edited_by || fresh.original_text) { frMessagesSkippedFresh++; continue; }
-        const freshEmpty = fresh.message == null || (typeof fresh.message === 'string' && fresh.message.trim() === '');
-        if (!freshEmpty) { frMessagesSkippedFresh++; continue; }
-        try { await base44.asServiceRole.entities.FieldReports.update(mf.id, { message: mf.srcMsg }); frMessagesFilled++; }
-        catch (e) { frMessagesSkippedFresh++; }
-      }
+      const r = await executeMessageFills({
+        messageFills,
+        get: (id) => base44.asServiceRole.entities.FieldReports.get(id),
+        update: (id, patch) => base44.asServiceRole.entities.FieldReports.update(id, patch),
+        nowIso,
+      });
+      frMessagesFilled = r.filled;
+      frMessagesSkippedFresh = r.skipped;
     }
 
 

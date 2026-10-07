@@ -151,6 +151,17 @@
           ]
         }
       }
+    },
+    "source_message_baseline": {
+      "type": "string",
+      "title": "Source Message Baseline",
+      "description": "Verbatim source post message captured at the last sync that wrote the Hub message. The source-note follow-through update gate requires the current Hub message to byte-equal this baseline before any source-driven update. Null on legacy rows that predate the field; empty string on new rows whose source had no text yet."
+    },
+    "source_baseline_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Source Baseline At",
+      "description": "When source_message_baseline was last set (the sync time that produced the current baseline)."
     }
   },
   "required": [
