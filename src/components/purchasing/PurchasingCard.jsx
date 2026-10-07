@@ -11,7 +11,7 @@ import { money } from '@/components/budgets/ProcurementForms';
 // blue = ETA (a schedule date, never claims verified), neutral = unknown/dash.
 const REF_TONES = {
   green:  { bg: '#EAF5EE', color: '#166447', border: '#C7E4D2', dot: '#166447' },
-  amber:  { bg: '#FFF3DF', color: '#89511A', border: '#F0DBA8', dot: '#C08B2E' },
+  amber:  { bg: '#FFF3DF', color: '#34403F', border: '#F0DBA8', dot: '#C08B2E' },
   red:    { bg: '#FDE8E7', color: '#A43432', border: '#F0C9C5', dot: '#A43432' },
   blue:   { bg: '#EAF2FF', color: '#3977CB', border: '#C7D8EF', dot: '#3977CB' },
 };

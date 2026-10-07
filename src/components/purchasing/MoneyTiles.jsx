@@ -24,7 +24,7 @@ function Tile({ kind, label, value, tone = null, review = false, sub = null }) {
   let tint = KIND[kind] || { bg: '#FAF8F3', top: '#0B3F3B' };
   if (kind === 'profit') {
     if (tone === 'negative') tint = PROFIT_NEG;
-    else if (tone === 'unknown') tint = PROFIT_UNKNOWN;
+    else if (value == null || tone === 'unknown' || tone === 'zero') tint = PROFIT_UNKNOWN;
   }
   return (
     <div className="min-w-0 rounded-[9px] px-2.5 py-2.5 sm:min-w-[130px] sm:flex-1" style={{ backgroundColor: tint.bg, borderTop: `2px solid ${tint.top}` }}>
