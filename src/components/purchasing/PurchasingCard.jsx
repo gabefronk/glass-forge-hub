@@ -3,7 +3,6 @@ import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import MoneyTiles from './MoneyTiles';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
-import { C } from '@/lib/feeUI';
 import { sectionForNextKey } from '@/lib/purchasingViewModel';
 
 function RefDot({ status }) {
@@ -11,13 +10,11 @@ function RefDot({ status }) {
   return <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ backgroundColor: color }} />;
 }
 
-const linkBtn = 'inline-flex min-h-8 items-center gap-1.5 rounded-[7px] border px-2.5 py-1 text-[11.5px] font-semibold';
-
 // Single controlled expansion per job. aria-expanded/controls wired to the
 // workspace region. The next-action opens the correct inline section (not a
 // route) for budgets/orders/tracking; 'job' stays an external Open-job Link.
 export default function PurchasingCard({ card, onEdit, data, onSaved }) {
-  const { job, windows, rough, sale, profit, refs, next, files, supplier, units, conflict } = card;
+  const { job, windows, rough, sale, profit, refs, next, supplier, units, conflict } = card;
   const [expanded, setExpanded] = useState(false);
   const [section, setSection] = useState('budgets');
   const moneyDup = rough.duplicate || sale.duplicate;

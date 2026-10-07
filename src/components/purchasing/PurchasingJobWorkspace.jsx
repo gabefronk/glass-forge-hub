@@ -15,18 +15,18 @@
 //    folder) are preserved but are not the routine path.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, ChevronDown } from 'lucide-react';
+import { ExternalLink, Plus } from 'lucide-react';
 import { C } from '@/lib/feeUI';
 import {
-  money, buttonClass, primaryStyle, secondaryStyle, purchasingRequest, messageOf, Field,
+  money,
   PurchaseOrderForm, BudgetUsageForm, SupplierOrderForm, OrderStatusForm, InvoiceBridge,
 } from '@/components/budgets/ProcurementForms';
 import { NumbersEditor, LinkJobEditor } from '@/components/budgets/BudgetReviewRow';
 import DeleteUnusedQuoteButton from '@/components/budgets/DeleteUnusedQuoteButton';
 import QuoteDropzone from './QuoteDropzone';
 import PrivateSourceButton from './PrivateSourceButton';
-import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount } from '@/lib/purchasingCoreTwin';
-import { purchasingJobName, statusWithDate, etaText } from '@/lib/purchasingDates';
+import { activeBudgets, budgetFigures, budgetRollup } from '@/lib/purchasingCoreTwin';
+import { statusWithDate, etaText } from '@/lib/purchasingDates';
 import { jobProcurementRecords } from '@/lib/purchasingViewModel';
 
 const SECTIONS = [['budgets', 'Quotes & budget'], ['orders', 'POs'], ['tracking', 'Supplier tracking'], ['invoicing', 'Invoicing']];
@@ -143,7 +143,6 @@ function OrderRow({ order, pos, onEdit }) {
 export default function PurchasingJobWorkspace({ job, data, section, onSection, onSaved }) {
   const [editor, setEditor] = useState(null);
   const rec = useMemo(() => jobProcurementRecords(data, job.id), [data, job.id]);
-  const active = useMemo(() => activeBudgets(rec.budgets), [rec.budgets]);
   const rollup = useMemo(() => budgetRollup(rec.budgets), [rec.budgets]);
 
   const openEditor = (next) => setEditor({ ...next, key: crypto.randomUUID() });
