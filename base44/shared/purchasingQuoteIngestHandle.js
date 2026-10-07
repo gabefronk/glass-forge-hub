@@ -25,8 +25,8 @@
 // customer_tax, customer_total) so the viewmodel can ground windows-incl-tax
 // on printed evidence — no identity guess by name, no tax asserted without proof.
 import { isPurchasingMoneyOwner, isEntityId, roundMoney } from './purchasingMoneyPure.js';
-import { normalizeVendorQuote, legacyTotals } from './vendorQuoteParse.js';
-import { QUOTE_SCHEMA, QUOTE_PROMPT } from './vendorQuoteSchema.js';
+import { normalizeVendorQuote } from './vendorQuoteParse.js';
+import { QUOTE_SCHEMA, QUOTE_PROMPT, legacyTotals } from './vendorQuoteSchema.js';
 import { autofillBudget, budgetNameFor, fileNameHints } from './jobBudgetAutofill.js';
 import { computeJobBudget } from './jobBudgetMath.js';
 

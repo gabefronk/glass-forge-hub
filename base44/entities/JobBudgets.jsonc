@@ -143,6 +143,10 @@
       "description": "Base44 storage URL of the dropped quote PDF.",
       "type": "string"
     },
+    "source_pdf_uri": {
+      "description": "Private Base44 storage URI of the dropped quote PDF (UploadPrivateFile). Never a public URL. Server re-signs a short-lived fetch URL only when the reader or owner needs it; this ref is the stable saved source.",
+      "type": "string"
+    },
     "status": {
       "default": "draft",
       "description": "filed = budget sheet + quote PDF are in the Drive job folder; needs_review = job match or extraction uncertain.",
