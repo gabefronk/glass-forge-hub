@@ -14,7 +14,7 @@ import { buildJobsOverview, sortJobGroups, builderOptions, needsYou, JOB_SORTS, 
 import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
 import AddJobDialog from "@/components/jobs/AddJobDialog";
 import QuickFilterMenu from "@/components/jobs/QuickFilterMenu";
-import { jobMatchesSearch } from "@/lib/jobSearch";
+import { jobMatchesSearch, jobSearchTier, NO_MATCH_TIER } from "@/lib/jobSearch";
 
 export default function JobsHub() {
   const [jobs, setJobs] = useState([]);
@@ -137,7 +137,15 @@ export default function JobsHub() {
     if (segment === "needs_you") base = base.filter(g => needsYou(jobStats[g.id]?.status, g));
     if (segment === "service") base = base.filter(g => g.members.some((m) => serviceByJob[m.id]));
     if (builder) base = base.filter(g => sanitizeText(String(g.job?.builder || "").trim()) === builder);
-    return sortJobGroups(base, jobStats, sort);
+    const sorted = sortJobGroups(base, jobStats, sort);
+    if (!q) return sorted;
+    // Nonempty query: rank by name-relevance tier (best tier across the
+    // group's members), preserving the selected sort WITHIN each tier. A
+    // stable sort by tier only keeps the existing Last-visit / Name /
+    // Next-visit order inside every tier, so a name match ranks above an
+    // address-only match without disturbing either. Empty query is unchanged.
+    const tierOf = (g) => g.members.reduce((best, m) => Math.min(best, jobSearchTier(m, q)), NO_MATCH_TIER);
+    return [...sorted].sort((a, b) => tierOf(a) - tierOf(b));
   }, [groups, search, segment, jobStats, sort, builder, serviceByJob]);
   // In combine-select mode, show every active raw Jobs record independently
   // (including non-canonical duplicate siblings hidden inside a group) so each
