@@ -78,11 +78,14 @@ export default function HistoryTextEdit({ type, recordId, jobId, text, canEdit, 
   if (editing) {
     return (
       <div className="mt-1.5">
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.textMuted }}>{type === "report" ? "Field report" : "Note"}</div>
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
           rows={3}
+          maxLength={5000}
           autoFocus
+          aria-label={type === "report" ? "Edit field report text" : "Edit note text"}
           className="w-full text-[14px] leading-[21px] rounded-[8px] p-2 resize-y focus:outline-none"
           style={{ border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.card }}
         />
@@ -95,7 +98,8 @@ export default function HistoryTextEdit({ type, recordId, jobId, text, canEdit, 
           <button type="button" onClick={cancel} disabled={saving}
             className="inline-flex items-center rounded-[8px] px-3 py-1 text-[12.5px] font-semibold min-h-[34px] disabled:opacity-60"
             style={{ border: `1px solid ${C.border}`, color: C.text, backgroundColor: C.card }}>Cancel</button>
-          {error ? <span className="text-[12px]" style={{ color: "#a43432" }}>{error}</span> : null}
+          <span className="ml-auto text-[11px] tabular-nums" style={{ color: C.textMuted }}>{value.length}/5000</span>
+          {error ? <span className="basis-full text-[12px]" style={{ color: "#a43432" }}>{error}</span> : null}
         </div>
       </div>
     );

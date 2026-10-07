@@ -216,7 +216,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
               fieldReports={fieldReports}
               files={folder.files}
               live={live}
-              currentUser={currentUser}
+              currentUser={me}
               onChanged={() => load({ quiet: true })}
               onPhotoClick={setLightbox}
               title="History"

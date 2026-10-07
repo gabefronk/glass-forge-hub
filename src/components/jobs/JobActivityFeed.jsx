@@ -344,7 +344,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
 
       {showForm ? (
         <div className="mb-3">
-          <JobNoteForm jobId={jobId} author={currentUser} onSaved={() => { setShowForm(false); onChanged(); }} onCancel={() => setShowForm(false)} />
+          <JobNoteForm jobId={jobId} author={currentUser?.email || currentUser?.full_name || ""} onSaved={() => { setShowForm(false); onChanged(); }} onCancel={() => setShowForm(false)} />
         </div>
       ) : null}
 

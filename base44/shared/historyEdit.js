@@ -15,14 +15,17 @@
 //    edited_at/edited_by are server-stamped from the auth user, and
 //    original_text is set-once from the pre-edit text.
 //  - Concurrency: a fresh reread immediately before the update compares the
-//    original text + job_id; a mismatch means the record changed since the edit
-//    started -> 409, no write. original_text is a provenance marker (set once,
-//    never overwritten), NOT the concurrency token. The SDK update is a plain
-//    PUT with no predicate/revision — there is NO atomic compare-and-set, so a
-//    GET-to-update race remains (a change landing between the reread and the
-//    PUT would still be overwritten). The platform exposes no CAS to close it;
-//    we do not pretend otherwise. The stored readback below catches the
-//    uncertain outcome and surfaces save_unknown instead of a false ok.
+//    original text + job_id; a mismatch means the record changed before we
+//    started the PUT -> 409, no write. original_text is a provenance marker
+//    (set once, never overwritten), NOT the concurrency token. The SDK update
+//    is a plain PUT with no predicate/revision — there is NO atomic
+//    compare-and-set. The GET-PUT gap is UNDETECTED: a concurrent write landing
+//    between the reread and our PUT is silently clobbered by our PUT, and the
+//    readback below would read back OUR text and pass — so the readback does
+//    NOT catch a write we overwrote. The readback only catches the PUT-readback
+//    gap (a write landing between our PUT and the readback -> mismatched text
+//    -> save_unknown). The platform exposes no CAS to close the GET-PUT gap;
+//    we do not pretend the readback is a CAS substitute.
 //  - Stored readback: after the update we re-get and verify exact id + job_id
 //    + text + marker patch. If the get fails, or the text/markers/id/job don't
 //    match what we just wrote, we return save_unknown (the update may have
@@ -69,10 +72,12 @@ export async function applyHistoryTextEdit({
   const textField = isReport ? 'message' : 'body';
 
   // Fresh reread immediately before the update. Compare original text + job_id;
-  // a mismatch means the record changed since the edit started -> reject, no
-  // write. (No atomic CAS: the SDK PUT carries no predicate/revision, so a
-  // change landing between this reread and the update would still be
-  // overwritten. The readback below surfaces that as save_unknown.)
+  // a mismatch means the record changed before we started the PUT -> reject,
+  // no write. No atomic CAS: the SDK PUT carries no predicate/revision. The
+  // GET-PUT gap is undetected — a concurrent write landing between this reread
+  // and our PUT is silently clobbered, and the readback would read back OUR
+  // text and pass (so the readback does NOT catch a write we overwrote). The
+  // readback only catches the PUT-readback gap (a write after our PUT).
   const rec = await get(type, record_id).catch(() => null);
   if (!rec) return { status: 404, body: { error: 'not_found' } };
   if (rec.job_id !== job_id) return { status: 409, body: { error: 'job_mismatch' } };
