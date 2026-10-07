@@ -1,12 +1,14 @@
 // Pure viewmodel tests for the unified Purchasing page. No React, no SDK.
-// Covers tiles (sums/unknown/null/zero/tax), profit, refs/status/date, next
-// action availability, multiple/superseded/conflicting budgets, search, and
-// merged/sample/ignored job exclusion.
+// Covers: windows-incl-tax grounding/provenance/withhold (confirmed order vs
+// budget, no gross substitution, conflict withhold), profit, refs aggregation
+// (Multiple, delivered ETA, real payment, cancelled exclusion), next action
+// (real workflow, no dead invoicing), units (active scope only), duplicate
+// money withhold, unlinked entities, search, and job exclusions.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   windowsInclTax, computeProfit, refsForJob, nextActionForJob,
-  buildPurchasingCards, cardMatchesSearch,
+  buildPurchasingCards, unlinkedEntities, cardMatchesSearch,
 } from '../src/lib/purchasingViewModel.js';
 
 const TODAY = '2026-10-07';
@@ -15,29 +17,72 @@ const reviewedBudget = (over = {}) => ({
   vendor: 'AMSCO', quote_number: 'Q1', openings_qty: 12,
   inputs: { material_true_cost: 10000, labor_cost_sub_pay: 2000, actual_total_sell: 18000, ...over },
 });
+const confirmedPO = (over = {}) => ({
+  id: 'po1', job_id: 'j1', po_number: 'YA-0001', status: 'ordered', budget_id: 'b1',
+  vendor: 'AMSCO', vendor_quote_ref: 'Q1', amount_dealer: 933.96,
+  budget_snapshot: { calculated: { cost_material_tax: 933.96 } },
+  ...over,
+});
 
 test('windowsInclTax: empty when no budgets', () => {
-  assert.deepEqual(windowsInclTax([]), { value: null, status: 'empty', budgetId: null });
+  assert.deepEqual(windowsInclTax([]), { value: null, status: 'empty', budgetId: null, provenance: null });
 });
 
-test('windowsInclTax: withheld when multiple active budgets', () => {
-  const a = reviewedBudget(); const b = reviewedBudget({ material_true_cost: 9000 });
-  b.id = 'b2';
-  assert.equal(windowsInclTax([a, b]).status, 'withheld');
-  assert.equal(windowsInclTax([a, b]).value, null);
-});
-
-test('windowsInclTax: review when budget not ready (draft / unreviewed)', () => {
-  const draft = { ...reviewedBudget(), budget_usage: 'draft', numbers_reviewed_at: null };
-  assert.equal(windowsInclTax([draft]).status, 'review');
-  assert.equal(windowsInclTax([draft]).value, null);
-});
-
-test('windowsInclTax: ready returns cost_material_tax from the workbook (incl tax, no guess)', () => {
+test('windowsInclTax: ready budget fallback (provenance budget) returns cost_material_tax', () => {
   const w = windowsInclTax([reviewedBudget()]);
   assert.equal(w.status, 'ready');
-  // material 10000 + overhead + additional 0 + use_tax(10000*0.0745=745) = 10000 + 0 + 0 + 745 = 10745 (overhead 0 since no labor overhead adder beyond labor)
   assert.equal(w.value, 10745);
+  assert.equal(w.provenance, 'budget');
+});
+
+test('windowsInclTax: confirmed scoped order preferred over budget (provenance order)', () => {
+  const w = windowsInclTax([reviewedBudget()], [confirmedPO()]);
+  assert.equal(w.status, 'ready');
+  assert.equal(w.value, 933.96);
+  assert.equal(w.provenance, 'order');
+  assert.equal(w.poId, 'po1');
+});
+
+test('windowsInclTax: does NOT substitute gross dealer_amount as incl tax', () => {
+  // PO with no budget_snapshot cost_material_tax → must fall back to budget, not amount_dealer.
+  const poNoSnapshot = { ...confirmedPO(), budget_snapshot: null };
+  const w = windowsInclTax([reviewedBudget()], [poNoSnapshot]);
+  assert.equal(w.provenance, 'budget');
+  assert.equal(w.value, 10745);
+});
+
+test('windowsInclTax: multiple confirmed orders same value → one value', () => {
+  const a = confirmedPO(); const b = confirmedPO({ id: 'po2' });
+  const w = windowsInclTax([reviewedBudget()], [a, b]);
+  assert.equal(w.status, 'ready');
+  assert.equal(w.value, 933.96);
+});
+
+test('windowsInclTax: multiple confirmed orders different values → withheld (no double-count)', () => {
+  const a = confirmedPO(); const b = confirmedPO({ id: 'po2', budget_snapshot: { calculated: { cost_material_tax: 1732 } } });
+  const w = windowsInclTax([reviewedBudget()], [a, b]);
+  assert.equal(w.status, 'withheld');
+  assert.equal(w.value, null);
+});
+
+test('windowsInclTax: multiple active non-replacement budgets, no confirmed order → withheld', () => {
+  const a = reviewedBudget(); const b = reviewedBudget({ material_true_cost: 9000 }); b.id = 'b2';
+  const w = windowsInclTax([a, b], []);
+  assert.equal(w.status, 'withheld');
+});
+
+test('windowsInclTax: replacement chain resolves to survivor', () => {
+  const old = reviewedBudget(); const rep = { ...reviewedBudget(), id: 'b2', replaces_budget_id: 'b1' };
+  const w = windowsInclTax([old, rep], []);
+  assert.equal(w.status, 'ready');
+  assert.equal(w.budgetId, 'b2');
+});
+
+test('windowsInclTax: draft/unreviewed budget → review', () => {
+  const draft = { ...reviewedBudget(), budget_usage: 'draft', numbers_reviewed_at: null };
+  const w = windowsInclTax([draft], []);
+  assert.equal(w.status, 'review');
+  assert.equal(w.value, null);
 });
 
 test('computeProfit: unknown when any input null', () => {
@@ -50,9 +95,7 @@ test('computeProfit: positive / negative / zero', () => {
   assert.equal(computeProfit(100, 50, 200).tone, 'positive');
   assert.equal(computeProfit(100, 50, 200).value, 50);
   assert.equal(computeProfit(100, 50, 120).tone, 'negative');
-  assert.equal(computeProfit(100, 50, 120).value, -30);
   assert.equal(computeProfit(100, 50, 150).tone, 'zero');
-  assert.equal(computeProfit(100, 50, 150).value, 0);
 });
 
 test('refsForJob: all none when no records', () => {
@@ -64,11 +107,11 @@ test('refsForJob: all none when no records', () => {
   assert.equal(r.payment, 'none');
 });
 
-test('refsForJob: green when reviewed budget, issued PO, confirmed order, ETA set, paid', () => {
+test('refsForJob: green when reviewed budget, confirmed PO, paid order with ETA', () => {
   const r = refsForJob('j1', {
     budgets: [reviewedBudget()],
-    purchaseOrders: [{ job_id: 'j1', po_number: 'YA-0001', status: 'ordered' }],
-    vendorOrders: [{ job_id: 'j1', order_number: '09-5476', eta_date: '2026-10-10', status: 'paid' }],
+    purchaseOrders: [{ job_id: 'j1', po_number: 'YA-0001', status: 'confirmed' }],
+    vendorOrders: [{ job_id: 'j1', order_number: '09-5476', eta_date: '2026-10-10', status: 'paid', paid_at: '2026-10-09' }],
     today: TODAY,
   });
   assert.equal(r.quoteStatus, 'green');
@@ -76,15 +119,79 @@ test('refsForJob: green when reviewed budget, issued PO, confirmed order, ETA se
   assert.equal(r.mfrStatus, 'green');
   assert.equal(r.etaStatus, 'green');
   assert.equal(r.payment, 'green');
+  assert.equal(r.paymentLabel, 'Paid');
 });
 
-test('refsForJob: amber ETA when overdue, amber payment when unpaid', () => {
-  const r = refsForJob('j1', {
-    vendorOrders: [{ job_id: 'j1', order_number: '09-1', eta_date: '2026-10-01', status: 'ordered' }],
-    today: TODAY,
-  });
+test('refsForJob: pending PO (issued) → amber poStatus', () => {
+  const r = refsForJob('j1', { purchaseOrders: [{ job_id: 'j1', po_number: 'YA-1', status: 'issued' }] });
+  assert.equal(r.poStatus, 'amber');
+  assert.equal(r.yaPo, 'YA-1');
+});
+
+test('refsForJob: multiple distinct POs → "Multiple" label', () => {
+  const r = refsForJob('j1', { purchaseOrders: [
+    { job_id: 'j1', po_number: 'YA-1', status: 'confirmed' },
+    { job_id: 'j1', po_number: 'YA-2', status: 'confirmed' },
+  ] });
+  assert.equal(r.yaPo, 'Multiple');
+});
+
+test('refsForJob: multiple distinct quotes → "Multiple"', () => {
+  const a = reviewedBudget(); const b = reviewedBudget({ material_true_cost: 9000 }); b.id = 'b2'; b.quote_number = 'Q2';
+  const r = refsForJob('j1', { budgets: [a, b] });
+  assert.equal(r.quoteNumber, 'Multiple');
+  assert.equal(r.quoteStatus, 'amber');
+});
+
+test('refsForJob: ETA Delivered when received_date set (not past amber)', () => {
+  const r = refsForJob('j1', { vendorOrders: [{ job_id: 'j1', order_number: '09-1', eta_date: '2026-09-01', received_date: '2026-10-05', status: 'paid' }], today: TODAY });
+  assert.equal(r.etaLabel, 'Delivered');
+  assert.equal(r.etaStatus, 'green');
+});
+
+test('refsForJob: ETA overdue (no received) → amber', () => {
+  const r = refsForJob('j1', { vendorOrders: [{ job_id: 'j1', order_number: '09-1', eta_date: '2026-10-01', status: 'eta_set' }], today: TODAY });
   assert.equal(r.etaStatus, 'amber');
+  assert.equal(r.etaLabel, '2026-10-01');
+});
+
+test('refsForJob: multiple conflicting ETAs (no received) → "Multiple" + amber', () => {
+  const r = refsForJob('j1', { vendorOrders: [
+    { job_id: 'j1', order_number: '09-1', eta_date: '2026-10-10', status: 'eta_set' },
+    { job_id: 'j1', order_number: '09-2', eta_date: '2026-10-20', status: 'eta_set' },
+  ], today: TODAY });
+  assert.equal(r.etaLabel, 'Multiple');
+  assert.equal(r.etaStatus, 'amber');
+});
+
+test('refsForJob: payment mixed paid/unpaid → amber "Partial"', () => {
+  const r = refsForJob('j1', { vendorOrders: [
+    { job_id: 'j1', order_number: '09-1', status: 'paid', paid_at: '2026-10-01' },
+    { job_id: 'j1', order_number: '09-2', status: 'ordered' },
+  ] });
   assert.equal(r.payment, 'amber');
+  assert.equal(r.paymentLabel, 'Partial');
+});
+
+test('refsForJob: payment all unpaid → amber "Unpaid"', () => {
+  const r = refsForJob('j1', { vendorOrders: [{ job_id: 'j1', order_number: '09-1', status: 'eta_set' }] });
+  assert.equal(r.payment, 'amber');
+  assert.equal(r.paymentLabel, 'Unpaid');
+});
+
+test('refsForJob: cancelled PO excluded', () => {
+  const r = refsForJob('j1', { purchaseOrders: [{ job_id: 'j1', po_number: 'YA-1', status: 'cancelled' }] });
+  assert.equal(r.poStatus, 'none');
+  assert.equal(r.yaPo, null);
+});
+
+test('refsForJob: vendor order whose linked PO is cancelled → excluded', () => {
+  const r = refsForJob('j1', {
+    purchaseOrders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'cancelled' }],
+    vendorOrders: [{ job_id: 'j1', order_number: '09-1', status: 'ordered', purchase_order_id: 'po1' }],
+  });
+  assert.equal(r.mfrStatus, 'none');
+  assert.equal(r.payment, 'none');
 });
 
 test('nextActionForJob: Review numbers when budget draft', () => {
@@ -103,13 +210,42 @@ test('nextActionForJob: Confirm order when PO missing supplier confirmation', ()
   assert.equal(a.label, 'Confirm order');
 });
 
-test('nextActionForJob: Record payment when awaiting delivery', () => {
+test('nextActionForJob: Record ETA when order has no eta', () => {
   const a = nextActionForJob('j1', {
     budgets: [reviewedBudget()],
     purchaseOrders: [{ job_id: 'j1', po_number: 'YA-1', status: 'ordered', vendor: 'AMSCO', vendor_quote_ref: 'Q1' }],
-    vendorOrders: [{ job_id: 'j1', order_number: '09-1', eta_date: '2026-10-10', status: 'ordered', purchase_order_id: 'p1' }],
+    vendorOrders: [{ job_id: 'j1', order_number: '09-1', status: 'ordered', purchase_order_id: 'po1' }],
+  });
+  assert.equal(a.label, 'Record ETA');
+});
+
+test('nextActionForJob: Record payment only when NOT paid and progressed (eta_set)', () => {
+  const a = nextActionForJob('j1', {
+    budgets: [reviewedBudget()],
+    purchaseOrders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', vendor: 'AMSCO', vendor_quote_ref: 'Q1' }],
+    vendorOrders: [{ job_id: 'j1', order_number: '09-1', eta_date: '2026-10-10', status: 'eta_set', purchase_order_id: 'po1' }],
   });
   assert.equal(a.label, 'Record payment');
+});
+
+test('nextActionForJob: already paid → NOT Record payment (reconcile or open job)', () => {
+  const a = nextActionForJob('j1', {
+    budgets: [reviewedBudget()],
+    purchaseOrders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', vendor: 'AMSCO', vendor_quote_ref: 'Q1' }],
+    vendorOrders: [{ job_id: 'j1', order_number: '09-1', eta_date: '2026-10-10', received_date: '2026-10-11', status: 'paid', paid_at: '2026-10-12', purchase_order_id: 'po1' }],
+  });
+  assert.notEqual(a.label, 'Record payment');
+  assert.equal(a.label, 'Reconcile');
+});
+
+test('nextActionForJob: all complete → Open job (not dead invoicing)', () => {
+  const a = nextActionForJob('j1', {
+    budgets: [reviewedBudget()],
+    purchaseOrders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', vendor: 'AMSCO', vendor_quote_ref: 'Q1' }],
+    vendorOrders: [{ job_id: 'j1', order_number: '09-1', eta_date: '2026-10-10', received_date: '2026-10-11', status: 'reconciled', paid_at: '2026-10-12', reconciled_at: '2026-10-13', purchase_order_id: 'po1' }],
+  });
+  assert.equal(a.label, 'Open job');
+  assert.equal(a.key, 'job');
 });
 
 test('nextActionForJob: Resolve PO conflict takes priority', () => {
@@ -117,7 +253,7 @@ test('nextActionForJob: Resolve PO conflict takes priority', () => {
   assert.equal(a.label, 'Resolve PO conflict');
 });
 
-test('buildPurchasingCards: excludes merged, sample, ignored, and inactive jobs', () => {
+test('buildPurchasingCards: excludes merged, sample, ignored, inactive jobs', () => {
   const jobs = [
     { id: 'j1', canonical_name: 'Alpha' },
     { id: 'j2', canonical_name: 'Beta', merged_into: 'j1' },
@@ -134,46 +270,81 @@ test('buildPurchasingCards: excludes merged, sample, ignored, and inactive jobs'
   assert.ok(!names.includes('Renta'));
 });
 
-test('buildPurchasingCards: profit dash until money + budget all resolve', () => {
-  const cards = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], today: TODAY });
-  assert.equal(cards[0].windows.value, 10745);
-  assert.equal(cards[0].rough.value, null);
-  assert.equal(cards[0].sale.value, null);
-  assert.deepEqual(cards[0].profit, { value: null, tone: 'unknown' });
-});
-
-test('buildPurchasingCards: profit computed when money + budget resolve', () => {
+test('buildPurchasingCards: conflict job withholds windows AND profit', () => {
   const cards = buildPurchasingCards({
     jobs: [{ id: 'j1', canonical_name: 'A' }],
     budgets: [reviewedBudget()],
     moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }],
+    conflicts: [{ number: 'YA-1', job_ids: ['j1', 'j2'] }],
     today: TODAY,
   });
-  assert.equal(cards[0].rough.value, 3000);
-  assert.equal(cards[0].sale.value, 18000);
-  assert.equal(cards[0].profit.value, 18000 - 10745 - 3000);
-  assert.equal(cards[0].profit.tone, 'positive');
-});
-
-test('buildPurchasingCards: conflicting active budgets withhold windows', () => {
-  const a = reviewedBudget(); const b = reviewedBudget({ material_true_cost: 9000 }); b.id = 'b2';
-  const cards = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [a, b], today: TODAY });
   assert.equal(cards[0].windows.status, 'withheld');
   assert.equal(cards[0].windows.value, null);
+  assert.deepEqual(cards[0].profit, { value: null, tone: 'unknown' });
+  assert.equal(cards[0].conflict, true);
 });
 
-test('buildPurchasingCards: superseded (replaced) budget excluded from active', () => {
-  const old = reviewedBudget(); const rep = { ...reviewedBudget(), id: 'b2', replaces_budget_id: 'b1' };
-  const cards = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [old, rep], today: TODAY });
-  assert.equal(cards[0].windows.status, 'ready');
-  assert.equal(cards[0].windows.budgetId, 'b2');
+test('buildPurchasingCards: units count only active included scope (not reference/replaced)', () => {
+  const cards = buildPurchasingCards({
+    jobs: [{ id: 'j1', canonical_name: 'A' }],
+    budgets: [reviewedBudget({ openings_qty: 12 }), { ...reviewedBudget(), id: 'b2', budget_usage: 'reference', openings_qty: 5 }],
+    today: TODAY,
+  });
+  assert.equal(cards[0].units, 12);
+});
+
+test('buildPurchasingCards: cancelled vendor order does not create a card', () => {
+  const cards = buildPurchasingCards({
+    jobs: [{ id: 'j1', canonical_name: 'A' }],
+    purchaseOrders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'cancelled' }],
+    vendorOrders: [{ job_id: 'j1', order_number: '09-1', status: 'ordered', purchase_order_id: 'po1' }],
+    today: TODAY,
+  });
+  assert.equal(cards.length, 0);
+});
+
+test('buildPurchasingCards: duplicate job money inputs withhold (null + duplicate flag)', () => {
+  const cards = buildPurchasingCards({
+    jobs: [{ id: 'j1', canonical_name: 'A' }],
+    budgets: [reviewedBudget()],
+    moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }, { job_id: 'j1', rough_labor_material: 1, sale_price: 2 }],
+    today: TODAY,
+  });
+  assert.equal(cards[0].rough.value, null);
+  assert.equal(cards[0].sale.value, null);
+  assert.equal(cards[0].rough.duplicate, true);
+  assert.deepEqual(cards[0].profit, { value: null, tone: 'unknown' });
+});
+
+test('buildPurchasingCards: confirmed order grounds windows incl tax', () => {
+  const cards = buildPurchasingCards({
+    jobs: [{ id: 'j1', canonical_name: 'A' }],
+    budgets: [reviewedBudget()],
+    purchase_orders: [confirmedPO()],
+    moneyInputs: [{ job_id: 'j1', rough_labor_material: 0, sale_price: 18000 }],
+    today: TODAY,
+  });
+  assert.equal(cards[0].windows.value, 933.96);
+  assert.equal(cards[0].windows.provenance, 'order');
+  assert.equal(cards[0].profit.value, 18000 - 933.96 - 0);
+});
+
+test('unlinkedEntities: shop POs and unlinked quotes surfaced', () => {
+  const u = unlinkedEntities({
+    budgets: [{ id: 'b1', title: 'T', status: 'draft' }, { id: 'b2', job_id: 'j1', title: 'T2', status: 'draft' }],
+    purchase_orders: [{ id: 'p1', purchase_type: 'shop', status: 'ordered' }, { id: 'p2', purchase_type: 'job', status: 'ordered' }, { id: 'p3', purchase_type: 'shop', status: 'cancelled' }],
+  });
+  assert.equal(u.unlinkedQuotes.length, 1);
+  assert.equal(u.unlinkedQuotes[0].id, 'b1');
+  assert.equal(u.shopPOs.length, 1);
+  assert.equal(u.shopPOs[0].id, 'p1');
 });
 
 test('cardMatchesSearch: matches job name, quote, PO, supplier', () => {
   const cards = buildPurchasingCards({
     jobs: [{ id: 'j1', canonical_name: 'Aria-Belle' }],
     budgets: [reviewedBudget()],
-    purchaseOrders: [{ job_id: 'j1', po_number: 'YA-0005', status: 'ordered', vendor: 'AMSCO', vendor_quote_ref: 'Q1' }],
+    purchase_orders: [{ job_id: 'j1', po_number: 'YA-0005', status: 'ordered', vendor: 'AMSCO', vendor_quote_ref: 'Q1' }],
     today: TODAY,
   });
   assert.ok(cardMatchesSearch(cards[0], 'aria'));

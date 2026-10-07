@@ -1,13 +1,12 @@
-// Auth + payload validation tests for the purchasingMoney backend. No SDK, no
-// I/O — exercises the pure helpers (owner-id auth, payload validation, money
-// rounding, output sanitization) that entry.ts imports. Verifies owner vs
-// other-admin vs crew vs unauth failures happen BEFORE any entity read, that
-// strict payloads reject extra/malformed/negative/missing, and that only safe
-// fields are returned.
+// Pure helper tests for the purchasingMoney backend: owner-id auth, strict
+// payload validation (no coercion, no overflow, omitted preserves), and
+// output sanitization. No SDK, no I/O. The injectable handler behavior tests
+// (auth-before-read, fail-closed reads, exact writes, readback) live in
+// purchasingMoneyEndpoint.test.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  isPurchasingMoneyOwner, validateSavePayload, sanitizeInput, OWNER_IDS,
+  isPurchasingMoneyOwner, validateSavePayload, validateListBody, sanitizeInput, OWNER_IDS,
 } from '../base44/shared/purchasingMoneyPure.js';
 
 test('OWNER_IDS binds the two immutable owner auth ids, not role/email', () => {
@@ -21,15 +20,15 @@ test('isPurchasingMoneyOwner: owner id passes', () => {
   assert.ok(isPurchasingMoneyOwner({ id: '6a8229a9801b2aef9278ff47', role: 'admin' }));
 });
 
-test('isPurchasingMoneyOwner: another admin (wrong id) is rejected — admin role is not enough', () => {
+test('isPurchasingMoneyOwner: another admin (wrong id) rejected — admin role is not enough', () => {
   assert.ok(!isPurchasingMoneyOwner({ id: 'other-admin-id', role: 'admin' }));
 });
 
-test('isPurchasingMoneyOwner: crew (role user) is rejected', () => {
+test('isPurchasingMoneyOwner: crew (role user) rejected', () => {
   assert.ok(!isPurchasingMoneyOwner({ id: 'crew-id', role: 'user' }));
 });
 
-test('isPurchasingMoneyOwner: unauth / null is rejected', () => {
+test('isPurchasingMoneyOwner: unauth / null / empty rejected', () => {
   assert.ok(!isPurchasingMoneyOwner(null));
   assert.ok(!isPurchasingMoneyOwner(undefined));
   assert.ok(!isPurchasingMoneyOwner({}));
@@ -49,9 +48,22 @@ test('validateSavePayload: negative amount rejected', () => {
   assert.equal(validateSavePayload({ action: 'save', job_id: 'j1', sale_price: -0.01 }).error, 'invalid_sale_price');
 });
 
-test('validateSavePayload: non-finite rejected', () => {
+test('validateSavePayload: NaN / Infinity rejected (no coercion)', () => {
   assert.equal(validateSavePayload({ action: 'save', job_id: 'j1', rough_labor_material: NaN }).error, 'invalid_rough_labor_material');
   assert.equal(validateSavePayload({ action: 'save', job_id: 'j1', sale_price: Infinity }).error, 'invalid_sale_price');
+});
+
+test('validateSavePayload: undefined and empty string rejected (no coercion)', () => {
+  assert.equal(validateSavePayload({ action: 'save', job_id: 'j1', rough_labor_material: undefined }).error, 'invalid_rough_labor_material');
+  assert.equal(validateSavePayload({ action: 'save', job_id: 'j1', sale_price: '' }).error, 'invalid_sale_price');
+});
+
+test('validateSavePayload: numeric string rejected (no coercion)', () => {
+  assert.equal(validateSavePayload({ action: 'save', job_id: 'j1', rough_labor_material: '5' }).error, 'invalid_rough_labor_material');
+});
+
+test('validateSavePayload: 1e308 overflow rejected AFTER rounding', () => {
+  assert.equal(validateSavePayload({ action: 'save', job_id: 'j1', rough_labor_material: 1e308 }).error, 'invalid_rough_labor_material');
 });
 
 test('validateSavePayload: null amounts valid (withhold)', () => {
@@ -69,10 +81,29 @@ test('validateSavePayload: valid payload rounds to cents', () => {
   assert.equal(r.sale_price, 18000);
 });
 
+test('validateSavePayload: omitted key preserves existing (hasRough/hasSale flags)', () => {
+  const r = validateSavePayload({ action: 'save', job_id: 'j1', rough_labor_material: 5 });
+  assert.ok(r.ok);
+  assert.equal(r.hasRough, true);
+  assert.equal(r.hasSale, false);
+  assert.equal(r.rough_labor_material, 5);
+  assert.equal(r.sale_price, undefined);
+});
+
+test('validateSavePayload: both keys omitted → no_fields', () => {
+  assert.equal(validateSavePayload({ action: 'save', job_id: 'j1' }).error, 'no_fields');
+});
+
 test('validateSavePayload: non-object body rejected', () => {
   assert.equal(validateSavePayload(null).error, 'invalid_body');
   assert.equal(validateSavePayload([]).error, 'invalid_body');
   assert.equal(validateSavePayload('string').error, 'invalid_body');
+});
+
+test('validateListBody: only action key allowed', () => {
+  assert.ok(validateListBody({ action: 'list' }).ok);
+  assert.equal(validateListBody({ action: 'list', extra: 1 }).error, 'unexpected_field');
+  assert.equal(validateListBody(null).error, 'invalid_body');
 });
 
 test('sanitizeInput: returns only safe fields, leaks nothing else', () => {

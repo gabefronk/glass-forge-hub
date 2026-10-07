@@ -5,11 +5,12 @@ import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { isPurchasingMoneyOwner } from '@/lib/purchasingMoneyAccess';
 import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
-import { buildPurchasingCards, cardMatchesSearch } from '@/lib/purchasingViewModel';
+import { buildPurchasingCards, cardMatchesSearch, unlinkedEntities } from '@/lib/purchasingViewModel';
 import { PageShell, PageHero } from '@/components/PageShell';
 import PageNotFound from '@/lib/PageNotFound';
 import PurchasingCard from '@/components/purchasing/PurchasingCard';
 import MoneyEditDialog from '@/components/purchasing/MoneyEditDialog';
+import UnlinkedReview from '@/components/purchasing/UnlinkedReview';
 import { C } from '@/lib/feeUI';
 
 // Inlined twin of denverDate (base44/shared/billingCore.js) — platform guard
@@ -28,6 +29,7 @@ function PurchasingWorkspace() {
   const [moneyInputs, setMoneyInputs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [moneyError, setMoneyError] = useState('');
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -36,16 +38,24 @@ function PurchasingWorkspace() {
 
   const load = useCallback(async () => {
     const v = ++loadSeq.current;
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setMoneyError('');
     try {
-      const [overview, moneyRes] = await Promise.all([
-        purchasingRequest({ action: 'overview' }),
-        base44.functions.invoke('purchasingMoney', { action: 'list' })
-          .then((r) => r?.data ?? r).catch(() => ({ inputs: [] })),
-      ]);
+      const overview = await purchasingRequest({ action: 'overview' });
+      // Money list: surface backend errors — no silent empty fallback. A
+      // failure withholds money tiles and shows a visible warning, but the
+      // job cards still render from the procurement overview.
+      let money = [];
+      try {
+        const moneyRes = await base44.functions.invoke('purchasingMoney', { action: 'list' });
+        const r = moneyRes?.data ?? moneyRes;
+        if (!r || !Array.isArray(r.inputs)) throw new Error('invalid_money_response');
+        money = r.inputs;
+      } catch (e) {
+        if (v === loadSeq.current) setMoneyError('Money data unavailable: ' + messageOf(e));
+      }
       if (v !== loadSeq.current) return;
       setData(overview);
-      setMoneyInputs(Array.isArray(moneyRes?.inputs) ? moneyRes.inputs : []);
+      setMoneyInputs(money);
     } catch (e) {
       if (v === loadSeq.current) setError(messageOf(e));
     } finally {
@@ -61,6 +71,7 @@ function PurchasingWorkspace() {
     vendor_orders: data.vendor_orders, moneyInputs, conflicts: data.conflicts, today,
   }) : []), [data, moneyInputs, today]);
   const filtered = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
+  const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
   const counts = useMemo(() => ({
     jobs: cards.length,
     budgets: data?.budgets?.length || 0,
@@ -75,7 +86,10 @@ function PurchasingWorkspace() {
       const res = await base44.functions.invoke('purchasingMoney', { action: 'save', job_id: editing.jobId, ...payload });
       const r = res?.data ?? res;
       if (r?.error) throw new Error(r.error);
-      const item = r.input || { job_id: editing.jobId, ...payload };
+      // No fake readback: only the backend-returned row updates state. On
+      // failure the previous values are preserved (no stale wipe).
+      if (!r.input) throw new Error('no_input_returned');
+      const item = r.input;
       setMoneyInputs((prev) => {
         const idx = prev.findIndex((m) => m.job_id === editing.jobId);
         return idx >= 0 ? prev.map((m, i) => (i === idx ? { ...m, ...item } : m)) : [...prev, item];
@@ -95,11 +109,7 @@ function PurchasingWorkspace() {
 
   return (
     <PageShell width="max-w-[1280px]">
-      <PageHero eyebrow="Glass Forge / purchasing" title="Purchasing" sub="One card per job — windows incl tax, rough labor & material, sale price and profit, sourced from reviewed budgets and your entries."
-        actions={<>
-          <button type="button" disabled={loading} onClick={load} className="inline-flex h-[38px] items-center gap-2 rounded-[9px] px-3.5 text-[13.5px] font-semibold" style={{ backgroundColor: 'rgba(255,255,255,.09)', color: '#f2eee8', border: '1px solid rgba(255,255,255,.12)' }}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} />Refresh</button>
-          <Link to="/purchasing/new-job" className="inline-flex h-[38px] items-center gap-2 rounded-[9px] px-3.5 text-[13.5px] font-semibold" style={{ backgroundColor: '#b8955a', color: '#1d160a' }}><Plus size={15} />Add quote</Link>
-        </>}>
+      <PageHero eyebrow="Glass Forge / purchasing" title="Purchasing" sub="One card per job — windows incl tax, rough labor & material, sale price and profit, sourced from confirmed orders, reviewed budgets and your entries.">
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px]" style={{ color: '#c9d0d1' }}>
           <span><strong className="text-white">{counts.jobs}</strong> jobs</span>
           <span><strong className="text-white">{counts.budgets}</strong> quotes</span>
@@ -108,20 +118,27 @@ function PurchasingWorkspace() {
         </div>
       </PageHero>
 
-      <label className="relative flex min-w-0 flex-1 items-center">
-        <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: C.textFaint }} />
-        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search job, quote, PO, supplier" aria-label="Search purchasing" className="min-h-11 w-full rounded-[9px] bg-white pl-[38px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)]" style={{ border: `1px solid ${C.border}`, color: C.text }} />
-      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="relative flex min-w-[200px] flex-1 items-center">
+          <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: C.textFaint }} />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search job, quote, PO, supplier" aria-label="Search purchasing" className="min-h-11 w-full rounded-[9px] bg-white pl-[38px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)]" style={{ border: `1px solid ${C.border}`, color: C.text }} />
+        </label>
+        <Link to="/purchasing/new-job" className="inline-flex min-h-11 items-center gap-2 rounded-[9px] px-4 text-[13.5px] font-semibold" style={{ backgroundColor: '#0B3F3B', color: '#FFFFFF' }}><Plus size={15} />Add quote</Link>
+        <button type="button" disabled={loading} onClick={load} aria-label="Reload" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[9px] border px-3" style={{ borderColor: C.border, color: C.textSecondary, backgroundColor: '#FFFFFF' }}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
+      </div>
 
       {error && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: 'var(--gf-error-bg)', color: 'var(--gf-error)', border: '1px solid var(--gf-error-border)' }}>{error}</p>}
+      {moneyError && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: '#FFF3DF', color: '#89511A', border: '1px solid #F0DBA8' }}>{moneyError}</p>}
 
       {filtered.length === 0 ? (
         <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query ? 'No jobs match your search.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
       ) : (
-        <div className="grid gap-3">{filtered.map((card) => (
+        <div className="grid gap-2.5">{filtered.map((card) => (
           <PurchasingCard key={card.job.id} card={card} onEdit={() => setEditing({ jobId: card.job.id, jobName: card.job.canonical_name, rough: card.rough.value, sale: card.sale.value })} />
         ))}</div>
       )}
+
+      <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} onUploaded={load} />
 
       {editing && (
         <MoneyEditDialog
