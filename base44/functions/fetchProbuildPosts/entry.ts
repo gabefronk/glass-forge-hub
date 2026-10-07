@@ -273,12 +273,34 @@ export default async function(req) {
     // 8. Write FieldReports (upsert on post_id)
     const existingReports = await fetchAllPages(base44.asServiceRole.entities.FieldReports, '-created_date', 1000);
     const reportByPostId = new Map();
-    for (const r of existingReports) if (r.post_id) reportByPostId.set(r.post_id, r);
+    const duplicatePostIds = new Set();
+    for (const r of existingReports) {
+      if (!r.post_id) continue;
+      if (reportByPostId.has(r.post_id)) duplicatePostIds.add(r.post_id);
+      reportByPostId.set(r.post_id, r);
+    }
     const frToCreate = [];
     const frToUpdate = [];
+    // Message fills are ISOLATED from the photo/job-link bulk patch. The standard
+    // SDK update is an unconditional PUT /<id> with no predicate and no revision
+    // token (verified against @base44/sdk/dist/modules/entities.js: update ->
+    // axios.put(baseURL/id, data); bulkUpdate -> axios.put(baseURL/bulk, data)).
+    // So a message fill is not queued into the same bulk patch as photo/job links;
+    // it is planned here and executed below as a single-field {message} update
+    // only after a freshest exact FieldReports.get re-confirms the record is still
+    // safe to fill. That fresh read preserves a concurrent owner edit that landed
+    // AFTER the earlier existingReports snapshot but BEFORE the fresh read. It is
+    // NOT atomic CAS: a GET-to-update race remains — an owner edit landing BETWEEN
+    // the fresh FieldReports.get and the FieldReports.update would still be
+    // overwritten, because the update carries no predicate/revision the server
+    // re-checks. The platform exposes no atomic compare-and-set to close it.
+    const messageFills = []; // { id, srcMsg, postId } planned, pending a fresh read-before-write
     let frSkippedExisting = 0;
     let frPhotosFilled = 0;
     let frJobsLinked = 0;
+    let frMessagesFilled = 0;
+    let frMessagesSkippedDuplicate = 0;
+    let frMessagesSkippedFresh = 0;
     const photoUrlByPost = new Map();
     for (const { b, normName, m } of matched) {
       const post = b.post;
@@ -308,8 +330,13 @@ export default async function(req) {
       };
       if (exRep) {
         // Append-only (Gabriel 2026-09-15): never overwrite an existing field report.
-        // Permitted additive repairs: fill missing photo_urls, and (owner-approved
-        // 2026-09-26) fill a missing job_id from a high-confidence match.
+        // Permitted additive repairs: fill missing photo_urls, (owner-approved
+        // 2026-09-26) fill a missing job_id from a high-confidence match, and fill
+        // a truly-empty message when the same source post now has text (photos-
+        // arrive-before-message bug). Source bytes are preserved verbatim; nonempty
+        // owner/existing text is never overwritten; non-string existing values are
+        // not coerced to empty. Duplicate existing reports for the same post_id are
+        // skipped (not arbitrarily overwritten by list order).
         const patch = {};
         if (!(exRep.photo_urls || []).length && photoUrls.length) {
           patch.photo_urls = photoUrls;
@@ -319,13 +346,51 @@ export default async function(req) {
           Object.assign(patch, { job_id: m.job_id, job_link_source: 'ingest_match', job_linked_at: new Date().toISOString() });
           frJobsLinked++;
         }
+        const exMsg = exRep.message;
+        const exMsgEmpty = exMsg == null || (typeof exMsg === 'string' && exMsg.trim() === '');
+        const srcMsg = post.message;
+        const srcMsgNonempty = typeof srcMsg === 'string' && srcMsg.trim() !== '';
+        const msgEligible = exMsgEmpty && srcMsgNonempty;
+        if (msgEligible && duplicatePostIds.has(b.postId)) frMessagesSkippedDuplicate++;
+        else if (msgEligible) messageFills.push({ id: exRep.id, srcMsg, postId: b.postId });
+        // Photo/job-link fills stay in the bulk patch (last-write-wins, but they
+        // only fill empty fields). Message fills are NOT bundled here.
+        const hasMsgFill = msgEligible && !duplicatePostIds.has(b.postId);
         if (Object.keys(patch).length) frToUpdate.push({ id: exRep.id, ...patch });
-        else frSkippedExisting++;
+        else if (!hasMsgFill) frSkippedExisting++;
       }
       else frToCreate.push(reportRow);
     }
     if (!dryRun && frToCreate.length) await base44.asServiceRole.entities.FieldReports.bulkCreate(frToCreate);
     if (!dryRun && frToUpdate.length) await base44.asServiceRole.entities.FieldReports.bulkUpdate(frToUpdate);
+
+    // Isolated message fills: a freshest exact FieldReports.get right before each
+    // single-field {message} update re-confirms the record is still safe to fill,
+    // so a concurrent owner note that landed AFTER the earlier existingReports
+    // snapshot but BEFORE this fresh read is preserved (not overwritten). This is
+    // not a categorical guarantee: a GET-to-update race remains — an owner edit
+    // landing BETWEEN this fresh FieldReports.get and the FieldReports.update would
+    // still be overwritten, because the standard SDK update is unconditional (no
+    // server-side predicate/revision re-check). This is not atomic CAS. Skip
+    // (counted, no write) on: fresh-read failure, post_id mismatch, any owner-edit
+    // marker (edited_at/edited_by/original_text), or a message that is no longer
+    // empty. Source bytes are written verbatim. The counter reflects actual writes
+    // in live mode and planned writes in dry-run.
+    if (dryRun) {
+      frMessagesFilled = messageFills.length;
+    } else {
+      for (const mf of messageFills) {
+        let fresh;
+        try { fresh = await base44.asServiceRole.entities.FieldReports.get(mf.id); }
+        catch (e) { frMessagesSkippedFresh++; continue; }
+        if (!fresh || fresh.post_id !== mf.postId) { frMessagesSkippedFresh++; continue; }
+        if (fresh.edited_at || fresh.edited_by || fresh.original_text) { frMessagesSkippedFresh++; continue; }
+        const freshEmpty = fresh.message == null || (typeof fresh.message === 'string' && fresh.message.trim() === '');
+        if (!freshEmpty) { frMessagesSkippedFresh++; continue; }
+        try { await base44.asServiceRole.entities.FieldReports.update(mf.id, { message: mf.srcMsg }); frMessagesFilled++; }
+        catch (e) { frMessagesSkippedFresh++; }
+      }
+    }
 
 
     // 7. Build FeeLines rows + upsert on probuild_post_id
@@ -435,6 +500,9 @@ export default async function(req) {
       fr_skipped_existing: frSkippedExisting,
       fr_photos_filled: frPhotosFilled,
       fr_jobs_linked: frJobsLinked,
+      fr_messages_filled: frMessagesFilled,
+      fr_messages_skipped_duplicate: frMessagesSkippedDuplicate,
+      fr_messages_skipped_fresh: frMessagesSkippedFresh,
       fee_photos_filled: feePhotosFilled,
       service_quantity_filled: serviceFilled,
       merged_into_calendar: merged_count,

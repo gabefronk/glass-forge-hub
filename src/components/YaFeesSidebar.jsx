@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, Mail, Calculator } from "lucide-react";
+import { Receipt, Calendar, Diamond, Briefcase, BarChart3, LogOut, PanelsTopLeft, Library, DollarSign, Mountain, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
@@ -12,7 +12,6 @@ import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
-  { label: "Quote Builder", to: "/QuoteBuilder", icon: Calculator },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Invoicing", to: "/", icon: Receipt },
   { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
