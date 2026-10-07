@@ -1,7 +1,10 @@
 // Scoped job-calendar function: owner-gated read of upcoming crew-calendar events
-// for ONE job (price-free, minimal), and a staged create that is HARD OFF in the
-// deployed entry — it returns disabled BEFORE any transport GET/POST, token fetch
-// or Hub WRITE. The real create orchestration (core.createEvent), the request
+// for ONE job (price-free, minimal), and an owner-gated create route that is ON in
+// the deployed entry. Create is gated by: the two owner auth ids (owner_id == user.id),
+// strict reviewed-payload validation, exact reviewed title/address with stale/merged
+// rejection, price-free notes (no attendees/attachments/copy/PDF), a deterministic
+// event id with frozen retry, GET-exact reconciliation, and cancellation-never-
+// recreated semantics. The real create orchestration (core.createEvent), the request
 // handler and the Google transport live in pure injectable modules tested with
 // mocked transport/fetch/connector:
 //   - base44/shared/jobCalendarHandler.js         (createJobCalendarHandler factory)
@@ -9,17 +12,18 @@
 //   - base44/shared/jobCalendarCore.js            (pure matching + create orchestration)
 //
 // This entry wires REAL adapters: the googlecalendar connector token (server-side)
-// and the real fetch, via createGoogleTransport; createEnabled=false. Tests import
-// the factory + the transport directly with mocks and set createEnabled=true to
-// exercise the same handleCreate code path. No client ever sees the token; no
-// provider reads/writes happen during test/build.
+// and the real fetch, via createGoogleTransport; createEnabled=true (RELEASE). Tests
+// import the factory + the transport directly with mocks and set createEnabled=true
+// or false to exercise the same handleCreate code path. No client ever sees the token;
+// no provider reads/writes happen during test/build.
 //
 // Auth: only the two owner auth ids may call either action. Read does not widen
 // existing CalendarEvents access — it scopes to the job and returns a sanitized,
-// minimal projection. No Hub writes on read. Create validates the payload,
-// re-reads the job (a Hub READ) and rejects a stale reviewed title/address
-// (stale_review), a merged job and an empty jobsite (unless confirmed), then
-// returns disabled — zero token/provider calls and zero Hub WRITES.
+// minimal projection. No Hub writes on read. Create validates the payload, re-reads
+// the job (a Hub READ) and rejects a stale reviewed title/address (stale_review), a
+// merged job and an empty jobsite (unless confirmed), then runs the real create
+// orchestration. No temporary test gate (exactTestPayload) is present; the handler
+// factory no longer accepts one.
 // Explicit-identity-only matching: private property hubJobId or an allowlisted
 // https Hub /jobs/<id> URL. No name fallback, no global Jobs catalog, no
 // mirror-only fallback.
@@ -53,7 +57,9 @@ function realTransport(base44: any) {
 
 export default async function (req: Request) {
   const base44 = createClientFromRequest(req);
-  const handler = createJobCalendarHandler({ base44, transport: realTransport(base44), createEnabled: false, sha256: sha256Hex });
+  // RELEASE GUARD: normal create route is ON. No temporary test gate may be present.
+  const RELEASE_CREATE_ENABLED = true;
+  const handler = createJobCalendarHandler({ base44, transport: realTransport(base44), createEnabled: RELEASE_CREATE_ENABLED, sha256: sha256Hex });
   const r = await handler.handle(req);
   return json(r.body, r.status);
 }

@@ -16,17 +16,7 @@ import * as core from './jobCalendarCore.js';
 
 function out(status, body) { return { status, body }; }
 
-// Strict per-field equality on every CREATE_FIELDS value. Used only by the
-// injectable one-payload test gate; production passes no exactTestPayload.
-function payloadMatchesGate(p, gate) {
-  if (!p || !gate || typeof p !== 'object' || typeof gate !== 'object') return false;
-  for (const f of core.CREATE_FIELDS) {
-    if (p[f] !== gate[f]) return false;
-  }
-  return true;
-}
-
-export function createJobCalendarHandler({ base44, transport, createEnabled = false, sha256, exactTestPayload = null }) {
+export function createJobCalendarHandler({ base44, transport, createEnabled = false, sha256 }) {
   const api = base44?.asServiceRole?.entities;
 
   async function handleRead(body) {
@@ -67,26 +57,17 @@ export function createJobCalendarHandler({ base44, transport, createEnabled = fa
     const fingerprint = await core.fingerprintHash(p, { sha256 });
     const eff = v.effective;
 
-    // One-payload test gate: when an exactTestPayload is injected, create is enabled
-    // ONLY for that exact reviewed payload (every CREATE_FIELDS value strictly equal)
-    // AND a matching server-computed fingerprint AND the caller is the payload's
-    // owner. Production passes no exactTestPayload (null) so this never enables in
-    // production; createEnabled stays the broader test switch.
-    const testEnabled = !!exactTestPayload
-      && user?.id === exactTestPayload.owner_id
-      && fingerprint === exactTestPayload.fingerprint
-      && payloadMatchesGate(p, exactTestPayload);
-    const enabled = createEnabled || testEnabled;
-
-    if (!enabled) {
-      // Production hard-off: disabled BEFORE any transport GET/POST, token fetch or Hub
-      // WRITE. (Auth + a Jobs.get read still happen first to verify the reviewed job;
-      // no token, no provider call, no Hub write occurs.)
+    if (!createEnabled) {
+      // Create disabled (createEnabled=false): returns BEFORE any transport GET/POST,
+      // token fetch or Hub write. Auth + a Jobs.get read still happen first to verify
+      // the reviewed job; no token, no provider call, no Hub write occurs.
       return out(200, { ok: false, disabled: true, stage: 'create_disabled_in_stage', event_id: eventId, fingerprint, reviewed: { ...p, provider_start: eff.start, provider_end: eff.end, last_day: eff.last_day, overnight: eff.overnight, multiday: eff.multiday } });
     }
 
-    // Test-only path: exercise the real createEvent orchestration with the injected
-    // (mocked) transport. Same validation/verify/id/fingerprint/reconcile code path.
+    // Create path: real createEvent orchestration — deterministic id, frozen retry,
+    // GET-exact reconciliation, cancellation never recreated, full live-content
+    // compare. The injected transport is the real Google adapter in production,
+    // mocked in tests.
     const result = await core.createEvent({ transport, job, payload: p, sha256 });
     return out(200, mapCreateResult(result, eventId, fingerprint));
   }
