@@ -6,15 +6,16 @@ import { C } from "@/lib/feeUI";
 import ClampedText from "./ClampedText";
 import PhotoStrip from "./PhotoStrip";
 
-export default function JobNoteEntry({ note, currentUser, onChanged, onPhotoClick, embedded }) {
-  // Inline text correction is owner-only (Gabriel). Delete stays available to
-  // any signed-in user (unchanged) — only the edit path is gated here.
-  const canEditText = canEditHistoryText(currentUser);
+export default function JobNoteEntry({ note, currentUser, authUser, onChanged, onPhotoClick, embedded }) {
+  // Inline text correction is owner-only (Gabriel), gated by authUser.id (the
+  // auth user object). currentUser stays the author STRING (email) for the
+  // legacy delete comparison and note-form author. Delete stays available to
+  // any signed-in user — only the edit path is gated here.
+  const canEditText = canEditHistoryText(authUser);
   const canDelete = !!currentUser;
 
   const handleDelete = async () => {
-    const meEmail = currentUser?.email || currentUser?.full_name;
-    if (!confirm(note.author && note.author !== meEmail ? `Delete this entry by ${note.author}?` : "Delete this note?")) return;
+    if (!confirm(note.author && note.author !== currentUser ? `Delete this entry by ${note.author}?` : "Delete this note?")) return;
     await base44.entities.JobNotes.delete(note.id);
     onChanged();
   };

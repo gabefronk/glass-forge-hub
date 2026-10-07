@@ -199,7 +199,7 @@ function groupFiles(items) {
 
 // services: service items raised by this report — shown right under it (one record of the issue).
 // pointers: items first reported here that are now tracked on their service visit.
-function NoteCard({ note, currentUser, onChanged, onPhotoClick, services = [], pointers = [], onServiceChanged }) {
+function NoteCard({ note, currentUser, authUser, onChanged, onPhotoClick, services = [], pointers = [], onServiceChanged }) {
   const isFieldReport = isFieldReportNote(note);
   const kind = note.interaction_type || "note";
   const badge = [...services, ...pointers.map((p) => p.item)].some(isServiceOpen) ? { label: "Service item", color: "#fff", bg: "#A43432" }
@@ -213,7 +213,7 @@ function NoteCard({ note, currentUser, onChanged, onPhotoClick, services = [], p
       meta={joinMeta(crewName(note.author) || note.author, photoCount(note.attachments?.length))}
       badge={badge}
     >
-      <JobNoteEntry note={note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} embedded />
+      <JobNoteEntry note={note} currentUser={currentUser} authUser={authUser} onChanged={onChanged} onPhotoClick={onPhotoClick} embedded />
       {services.map((s) => <ServiceItemPanel key={s.id} item={s} onChanged={onServiceChanged} />)}
       {pointers.map((p) => <div key={p.item.id}><ServiceItemPointer item={p.item} visitDate={p.date} /></div>)}
     </Entry>
@@ -237,10 +237,12 @@ function ServiceEntry({ item, onServiceChanged }) {
 // Milestones filter and the "Up next" card. Optional; without it the feed is unchanged.
 // serviceItems (job page): the job's service items. Each shows under the field report that
 // raised it; one logged without a report gets its own entry on the day it was logged.
-export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged }) {
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, authUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged }) {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
-  const canEditText = canEditHistoryText(currentUser);
+  // currentUser is the author STRING (email) for legacy note form/delete behavior.
+  // authUser is the auth user OBJECT — the owner-ID gate (canEditHistoryText) needs .id.
+  const canEditText = canEditHistoryText(authUser);
   // A "Log interaction" button elsewhere on the page opens the form here.
   useEffect(() => { if (openFormKey) setShowForm(true); }, [openFormKey]);
 
@@ -344,7 +346,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
 
       {showForm ? (
         <div className="mb-3">
-          <JobNoteForm jobId={jobId} author={currentUser?.email || currentUser?.full_name || ""} onSaved={() => { setShowForm(false); onChanged(); }} onCancel={() => setShowForm(false)} />
+          <JobNoteForm jobId={jobId} author={currentUser} onSaved={() => { setShowForm(false); onChanged(); }} onCancel={() => setShowForm(false)} />
         </div>
       ) : null}
 
@@ -366,7 +368,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                   if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                   if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
                   if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
-                  return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
+                  return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} authUser={authUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
                 })}
               </DayCard>
             </div>
@@ -394,7 +396,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                 if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                 if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
                 if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
-                return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
+                return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} authUser={authUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
               })}
             </div>
           </div>

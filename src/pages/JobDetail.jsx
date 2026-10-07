@@ -242,7 +242,8 @@ export default function JobDetail() {
                 fieldReports={fieldReports}
                 files={folder.files}
                 live={live}
-                currentUser={user}
+                currentUser={user?.email || user?.full_name || ""}
+                authUser={user}
                 onChanged={() => loadAll({ quiet: true })}
                 onPhotoClick={setLightbox}
                 title="History"
