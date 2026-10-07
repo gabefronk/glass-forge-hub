@@ -427,7 +427,7 @@ test("createEvent: POST body has no attendees, copies, labor or FeeLines", async
 // ---- reconcileExisting: manual Google edits leave extendedProperties, so the
 // fingerprint alone cannot prove unchanged. Content (summary/location/description/
 // start/end/attendees) is compared to the reviewed provider fields. ----
-const recIds = (p = pl()) => ({ fingerprint: fpOf(p), jobId: p.job_id, ownerId: p.owner_id, requestId: p.request_id, payload: p });
+const recIds = async (p = pl()) => ({ fingerprint: await fpOf(p), jobId: p.job_id, ownerId: p.owner_id, requestId: p.request_id, payload: p });
 test("reconcileExisting: all-day unchanged -> existing_match", async () => {
   const ex = await existing();
   assert.equal((await core.reconcileExisting({ existingEvent: ex, ...(await recIds()) })).kind, "existing_match");

@@ -128,7 +128,8 @@ test("handler read: invalid job id -> 400; missing job -> 404", async () => {
 // ---- create (test-only, createEnabled=true exercises real code path with mocks) ----
 async function existingEvent(p, fp, over = {}, privOver = {}) {
   const eid = await core.deterministicId(p.owner_id, p.request_id, { sha256 });
-  return { id: eid, status: "confirmed", htmlLink: "https://calendar.google.com/e", extendedProperties: { private: { hubJobId: p.job_id, hubOwnerId: p.owner_id, hubRequestId: p.request_id, hubFingerprint: fp, ...privOver } }, ...over };
+  const body = core.buildCreateEventBody({ payload: p, fingerprint: fp, eventId: eid });
+  return { ...body, status: "confirmed", htmlLink: "https://calendar.google.com/e", extendedProperties: { private: { ...body.extendedProperties.private, ...privOver } }, ...over };
 }
 
 test("handler create(test): existing_match when GET returns matching id+fingerprint, no POST", async () => {
