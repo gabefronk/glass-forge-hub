@@ -6,6 +6,7 @@
 // read from the Jobs entity (builder field).
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { jobMatchesSearch, jobSearchTier, NO_MATCH_TIER } from "../src/lib/jobSearch.js";
 import { sortJobGroups, buildJobsOverview } from "../src/lib/jobsOverview.js";
 
@@ -48,15 +49,25 @@ test("Newco: a name match on a DIFFERENT job is not stolen by a Newco-builder jo
   assert.equal(jobSearchTier(jobs[1], "newco"), 4);
 });
 
-test("Holmes variant: case-insensitive partial builder names all match (Holmes / HOLMES HOMES / holmes)", () => {
+test("Holmes variant: short 'holmes' matches all; full 'holmes homes' matches only Holmes Homes fields", () => {
   // Grounded samples: builder "Holmes", "Holmes Homes", "HOLMES HOMES".
   const jobs = [
     { id: "h1", canonical_name: "407 oquirrh west", builder: "Holmes" },
     { id: "h2", canonical_name: "326 lakeview", builder: "Holmes Homes" },
     { id: "h3", canonical_name: "109", builder: "HOLMES HOMES", customer_name: "HOLMES HOMES" },
   ];
-  for (const q of ["holmes", "Holmes", "HOLMES", "holmes homes", "HOLMES HOMES"]) {
+  // Short partial "holmes" is a substring of every builder here, so all three match.
+  for (const q of ["holmes", "Holmes", "HOLMES"]) {
     for (const j of jobs) assert.equal(jobMatchesSearch(j, q), true, `${j.id} matches "${q}"`);
+  }
+  // Full "holmes homes" matches only builders/customer_names that actually contain it.
+  // builder "Holmes" alone (h1) does NOT match the longer query — it is not a substring,
+  // and h1's name/alias/customer don't contain it either.
+  for (const q of ["holmes homes", "HOLMES HOMES"]) {
+    assert.equal(jobMatchesSearch(jobs[0], q), false, "h1 builder 'Holmes' excludes longer 'holmes homes'");
+    assert.equal(jobSearchTier(jobs[0], q), NO_MATCH_TIER, "h1 no match for longer query");
+    assert.equal(jobMatchesSearch(jobs[1], q), true, "h2 builder 'Holmes Homes' matches 'holmes homes'");
+    assert.equal(jobMatchesSearch(jobs[2], q), true, "h3 builder/customer 'HOLMES HOMES' matches");
   }
   // "holmes" partial-matches builder "Holmes Homes" (substring) at tier 4.
   assert.equal(jobSearchTier(jobs[1], "holmes"), 4);
@@ -131,6 +142,6 @@ test("name-first relevance ranking is unchanged when a builder field also happen
 
 test("JobsHub placeholder mentions builder", () => {
   // Guards the user-facing copy requirement without coupling to live data.
-  const src = require("node:fs").readFileSync(new URL("../src/pages/JobsHub.jsx", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../src/pages/JobsHub.jsx", import.meta.url), "utf8");
   assert.match(src, /placeholder="Search job, builder, address, PO"/);
 });
