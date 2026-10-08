@@ -35,14 +35,14 @@ const sandyJobs = [
   { id: "job-sub", canonical_name: "The Sandywood Cove", address: "12 Canyon Dr", created_date: "2026-09-15T00:00:00Z" },
 ];
 
-test("SANDY: tier 1 starts-with, tier 2 substring, tier 4 address-only — in that order", () => {
+test("SANDY: tier 1 starts-with, tier 2 substring, tier 5 address-only — in that order", () => {
   const { groups, stats } = overview(sandyJobs);
   // Explicit per-job tiers (product semantics, not test wishful thinking).
   assert.equal(jobSearchTier(sandyJobs[0], "sandy"), 1, "SANDY - EAGLE MOUNTAIN starts-with sandy → tier 1");
   assert.equal(jobSearchTier(sandyJobs[3], "sandy"), 2, "The Sandywood Cove contains sandy (not starts-with) → tier 2");
-  assert.equal(jobSearchTier(sandyJobs[1], "sandy"), 4, "Daybreak address-only sandy → tier 4");
-  assert.equal(jobSearchTier(sandyJobs[2], "sandy"), 4, "Omar address-only sandy → tier 4");
-  // Ranked order: tier 1, then tier 2, then the two tier-4 jobs in their within-tier (Last-visit) order.
+  assert.equal(jobSearchTier(sandyJobs[1], "sandy"), 5, "Daybreak address-only sandy → tier 5");
+  assert.equal(jobSearchTier(sandyJobs[2], "sandy"), 5, "Omar address-only sandy → tier 5");
+  // Ranked order: tier 1, then tier 2, then the two tier-5 jobs in their within-tier (Last-visit) order.
   const ranked = rankGroups(groups, stats, "last", "sandy").map((g) => g.job.canonical_name);
   assert.deepEqual(ranked, ["SANDY - EAGLE MOUNTAIN", "The Sandywood Cove", "Daybreak - Lot 41", "Omar Retro Job"]);
 });
@@ -90,14 +90,14 @@ test("aliases rank as tier 3, above address-only, below name substring", () => {
   ];
   const { groups, stats } = overview(jobs);
   const ranked = rankGroups(groups, stats, "last", "sandy").map((g) => g.job.id);
-  // Alias match (b, tier 3) ranks above address-only (a, tier 4).
+  // Alias match (b, tier 3) ranks above address-only (a, tier 5).
   assert.deepEqual(ranked, ["b", "a"]);
   assert.equal(jobSearchTier(jobs[1], "sandy"), 3);
-  assert.equal(jobSearchTier(jobs[0], "sandy"), 4);
+  assert.equal(jobSearchTier(jobs[0], "sandy"), 5);
 });
 
 test("group tier is the BEST tier across its members (group-best-member)", () => {
-  // A presentation group with two members: one matches only on address (tier 4),
+  // A presentation group with two members: one matches only on address (tier 5),
   // the other on name starts-with (tier 1). The group's tier is the min = 1, so
   // the whole group ranks in tier 1, above a tier-2-only group.
   const groupBest = {
@@ -113,7 +113,7 @@ test("group tier is the BEST tier across its members (group-best-member)", () =>
     members: [{ id: "g-sub", canonical_name: "The Sandywood Cove", address: "2 Canyon Dr", created_date: "2026-09-20T00:00:00Z" }],
     memberIds: ["g-sub"], merged: false, mergeReason: "", review: [],
   };
-  assert.equal(jobSearchTier(groupBest.members[0], "sandy"), 4, "address-only member is tier 4");
+  assert.equal(jobSearchTier(groupBest.members[0], "sandy"), 5, "address-only member is tier 5");
   assert.equal(jobSearchTier(groupBest.members[1], "sandy"), 1, "name starts-with member is tier 1");
   assert.equal(tierOf(groupBest, "sandy"), 1, "group tier is the best (min) of its members");
   assert.equal(tierOf(groupSub, "sandy"), 2, "substring-only group is tier 2");
@@ -146,14 +146,14 @@ test("within-tier order matches sortJobGroups for each chosen sort (name / next 
   }
 });
 
-test("PO and OE matches are tier 4 (other searchable fields) and stay included", () => {
+test("PO and OE matches are tier 5 (other searchable fields) and stay included", () => {
   const jobs = [
     { id: "po", canonical_name: "Canyon House", address: "10 Main St", po_numbers: ["PO-7788"], created_date: "2026-09-01T00:00:00Z" },
     { id: "oe", canonical_name: "Ridge Estate", address: "20 Hill Dr", oe_numbers: ["OE-9911"], created_date: "2026-09-20T00:00:00Z" },
     { id: "nomatch", canonical_name: "Daybreak - Lot 5", address: "30 Other Ln", created_date: "2026-09-10T00:00:00Z" },
   ];
-  assert.equal(jobSearchTier(jobs[0], "po-7788"), 4, "PO substring → tier 4");
-  assert.equal(jobSearchTier(jobs[1], "oe-9911"), 4, "OE substring → tier 4");
+  assert.equal(jobSearchTier(jobs[0], "po-7788"), 5, "PO substring → tier 5");
+  assert.equal(jobSearchTier(jobs[1], "oe-9911"), 5, "OE substring → tier 5");
   assert.equal(jobSearchTier(jobs[2], "po-7788"), NO_MATCH_TIER, "no PO/OE/name/address match → no match");
   const { groups, stats } = overview(jobs);
   // JobsHub filters to matching groups before the tiered sort; mirror that here.
@@ -202,7 +202,7 @@ test("other example names: 'canyon' name match beats address-only 'canyon'", () 
   ];
   const { groups, stats } = overview(jobs);
   const ranked = rankGroups(groups, stats, "last", "canyon").map((g) => g.job.id);
-  assert.deepEqual(ranked, ["x", "y"], "name substring (tier 2) above address-only (tier 4)");
+  assert.deepEqual(ranked, ["x", "y"], "name substring (tier 2) above address-only (tier 5)");
 });
 
 test("JobsHub delegates inclusion to jobMatchesSearch and ranks via jobSearchTier", () => {

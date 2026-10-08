@@ -270,7 +270,7 @@ export default function JobsHub() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search job, address, PO"
+            placeholder="Search job, builder, address, PO"
             aria-label="Search jobs"
             className="h-[40px] w-full rounded-[9px] pl-[38px] pr-9 text-[14px] placeholder:text-[#8f999b] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e0c994]"
             style={fieldStyle}

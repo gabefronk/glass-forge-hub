@@ -9,7 +9,12 @@
 //   1  canonical/display job name starts-with the query
 //   2  canonical/display job name contains the query (substring)
 //   3  an alias contains the query      (aliases are already part of search)
-//   4  address / PO / OE contains the query (other searchable fields)
+//   4  builder / customer_name contains the query (true builder/customer TEXT
+//      fields on the Jobs record — never inferred from contacts/messages, no
+//      link creation, no mutation). A builder query like "newco" finds a job
+//      whose canonical_name is "Phil Chadwick - Retro" but whose builder is
+//      "Newco". Ranks below name/aliases, above address-only.
+//   5  address / PO / OE contains the query (other searchable fields)
 // A job whose best tier is NO_MATCH_TIER is not a match. The Jobs list keeps
 // its selected sort (Last visit by default) WITHIN each tier; the tier only
 // reorders groups so a name match ranks above an address-only match.
@@ -36,9 +41,14 @@ export function jobSearchTier(job, query) {
   for (const a of aliases) {
     if (norm(a).includes(q)) return 3;
   }
+  // True builder/customer text fields on the Jobs record. Null/missing fields
+  // norm to "" and never match. No contact/message inference, no link creation.
+  for (const b of [job?.builder, job?.customer_name]) {
+    if (norm(b).includes(q)) return 4;
+  }
   const others = [job?.address, ...(job?.po_numbers || []), ...(job?.oe_numbers || [])];
   for (const o of others) {
-    if (norm(o).includes(q)) return 4;
+    if (norm(o).includes(q)) return 5;
   }
   return NO_MATCH_TIER;
 }
