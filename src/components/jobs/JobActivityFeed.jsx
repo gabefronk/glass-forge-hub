@@ -156,15 +156,35 @@ function ChangeCard({ ev }) {
 const NOTE_ICONS = { note: StickyNote, site_visit: HardHat, call: Phone, text: MessageSquare, email: Mail, meeting: Users, delivery: Truck, issue: TriangleAlert };
 
 // All files saved to the job folder on one day, as one entry.
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|avif)$/i;
+const isImageFile = (f) => IMAGE_EXT.test(f.name || "") || IMAGE_EXT.test(f.url || "");
+
+function ImageThumb({ f }) {
+  return (
+    <a key={f.id} href={f.url} target="_blank" rel="noreferrer" title={sanitizeText(f.name)} className="block overflow-hidden rounded-md" style={{ border: `1px solid ${C.rowBorder}` }}>
+      <img src={f.url} alt={sanitizeText(f.name)} loading="lazy" className="h-24 w-full object-cover hover:opacity-90" />
+    </a>
+  );
+}
+
 function FileGroupCard({ files }) {
+  const images = files.filter(isImageFile);
+  const rest = files.filter((f) => !isImageFile(f));
   return (
     <div className="rounded-[10px] px-3 py-2" style={{ border: `1px solid ${C.rowBorder}` }}>
       <div className="flex items-center gap-2 text-[12px]" style={{ color: C.textMuted }}>
         <FileText className="h-3.5 w-3.5 shrink-0" />
         {files.length === 1 ? "Saved to job folder" : `${files.length} files saved to job folder`}
       </div>
+      {images.length > 0 && (
+        <div className="mt-1.5 grid grid-cols-3 gap-1.5 pl-5">
+          {images.map((f) => (
+            <ImageThumb key={f.id} f={f} />
+          ))}
+        </div>
+      )}
       <div className="mt-1 flex flex-col gap-0.5 pl-5">
-        {files.map((f) => (
+        {rest.map((f) => (
           <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[12.5px] break-words hover:underline" style={{ color: C.accentText }}>
             {fileLabel(sanitizeText(f.name), f.name)}<ExternalLink className="h-3 w-3 shrink-0" />
           </a>
@@ -175,6 +195,16 @@ function FileGroupCard({ files }) {
 }
 
 function FileCard({ file }) {
+  if (isImageFile(file)) {
+    return (
+      <a href={file.url} target="_blank" rel="noreferrer" title={sanitizeText(file.name)} className="block rounded-[10px] p-2" style={{ border: `1px solid ${C.rowBorder}` }}>
+        <img src={file.url} alt={sanitizeText(file.name)} loading="lazy" className="h-36 w-auto max-w-full rounded-md object-cover hover:opacity-90" />
+        <div className="mt-1 flex items-center gap-1.5 text-[12px] break-words" style={{ color: C.textMuted }}>
+          Saved to job folder: {fileLabel(sanitizeText(file.name), file.name)}
+        </div>
+      </a>
+    );
+  }
   return (
     <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-[10px] px-3 py-2 hover:underline" style={{ border: `1px solid ${C.rowBorder}`, color: C.accentText }}>
       <FileText className="h-3.5 w-3.5 shrink-0" style={{ color: C.textMuted }} />
