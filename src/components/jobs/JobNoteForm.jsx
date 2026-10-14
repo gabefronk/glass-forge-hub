@@ -13,6 +13,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
   const [kind, setKind] = useState(editing?.interaction_type || "note");
   const [attachments, setAttachments] = useState(editing?.attachments || []);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
@@ -21,13 +22,24 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
     setUploading(true);
     try {
       const urls = [];
-      for (const file of files) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      for (let i = 0; i < files.length; i++) {
+        setUploadProgress(`Uploading ${i + 1} of ${files.length}…`);
+        const file = files[i];
+        const isHeic = /image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+        let uploadFile = file;
+        if (isHeic) {
+          const { heicTo } = await import("heic-to/csp");
+          const blob = await heicTo({ blob: file, type: "image/jpeg", quality: 0.9 });
+          const jpgName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+          uploadFile = new File([blob], jpgName, { type: "image/jpeg" });
+        }
+        const { file_url } = await base44.integrations.Core.UploadFile({ file: uploadFile });
         urls.push(file_url);
       }
       setAttachments((a) => [...a, ...urls]);
     } finally {
       setUploading(false);
+      setUploadProgress("");
     }
   };
 
@@ -123,7 +135,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
               }}
             />
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
-            {uploading ? "Uploading…" : "Drag & drop photos here, or click to browse"}
+            {uploading ? (uploadProgress || "Uploading…") : "Drag & drop photos here, or click to browse"}
           </label>
         </div>
         {attachments.length > 0 && (
