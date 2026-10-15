@@ -245,7 +245,7 @@ export default function JobDetail() {
                 currentUser={user?.email || user?.full_name || ""}
                 authUser={user}
                 onChanged={() => loadAll({ quiet: true })}
-                onPhotoClick={setLightbox}
+                onPhotoClick={(src, photos) => setLightbox({ src, photos })}
                 title="History"
                 dedupe={snap}
                 progress={progress}
@@ -301,7 +301,7 @@ export default function JobDetail() {
         <JobCreateEventModal job={job} user={user} open={showCreateEvent} onOpenChange={setShowCreateEvent} onCreated={() => setUpcomingKey((k) => k + 1)} />
       ) : null}
 
-      {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
+      {lightbox && <AttachmentViewer src={lightbox.src} photos={lightbox.photos} onClose={() => setLightbox(null)} onNavigate={(next) => setLightbox((l) => (l ? { ...l, src: next } : l))} />}
     </div>
   );
 }

@@ -219,7 +219,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
               currentUser={currentUser}
               authUser={me}
               onChanged={() => load({ quiet: true })}
-              onPhotoClick={setLightbox}
+              onPhotoClick={(src, photos) => setLightbox({ src, photos })}
               title="History"
               dedupe={snap}
               progress={progress}
@@ -242,7 +242,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
         <JobCreateEventModal job={job} user={me} open={showCreateEvent} onOpenChange={setShowCreateEvent} onCreated={() => setUpcomingKey((k) => k + 1)} />
       ) : null}
 
-      {lightbox && <AttachmentViewer src={lightbox} onClose={() => setLightbox(null)} />}
+      {lightbox && <AttachmentViewer src={lightbox.src} photos={lightbox.photos} onClose={() => setLightbox(null)} onNavigate={(next) => setLightbox((l) => (l ? { ...l, src: next } : l))} />}
     </div>
   );
 }

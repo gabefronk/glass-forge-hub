@@ -85,7 +85,7 @@ export default function JobPlansPhotos({ folder, plans, events, sitePhotos, onPh
           {photoCount ? (
             <div className="grid grid-cols-3 gap-1.5">
               {(sitePhotos || []).map((p) => (
-                <button key={p.url} type="button" onClick={() => onPhotoClick(p.url)} className="relative aspect-square overflow-hidden rounded-[8px]" style={{ border: `1px solid ${C.border}` }} aria-label={`Site photo from ${day(p.date)}`}>
+                <button key={p.url} type="button" onClick={() => onPhotoClick(p.url, (sitePhotos || []).map((x) => x.url))} className="relative aspect-square overflow-hidden rounded-[8px]" style={{ border: `1px solid ${C.border}` }} aria-label={`Site photo from ${day(p.date)}`}>
                   <ThumbImage src={p.url} alt="" className="h-full w-full object-cover" />
                   <span className="absolute bottom-1 left-1 rounded bg-black/55 px-1 text-[10px] text-white">{day(p.date)}</span>
                 </button>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, FileText, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, FileText, X } from "lucide-react";
 import { fileLabel, isPdfUrl } from "@/lib/fileLinks";
 
 // Photo file URLs hosted on base44.app / media.base44.com can return 403 to
@@ -193,16 +193,42 @@ function PdfFrame({ src }) {
 }
 
 // Full-screen viewer for job attachments: images as before, PDFs embedded.
-export function AttachmentViewer({ src, onClose }) {
+// When the caller passes the grid's full photo list, the viewer gains
+// previous/next arrows, arrow-key and swipe navigation, and a position counter.
+export function AttachmentViewer({ src, photos, onClose, onNavigate }) {
   const [pdf, setPdf] = useState(() => isPdfUrl(src));
   useEffect(() => { setPdf(isPdfUrl(src)); }, [src]);
+  const list = Array.isArray(photos) && photos.length > 1 ? photos : null;
+  const idx = list ? list.indexOf(src) : -1;
+  const canPrev = idx > 0;
+  const canNext = list && idx >= 0 && idx < list.length - 1;
+  const go = (delta) => {
+    if (!list || idx < 0) return;
+    const n = idx + delta;
+    if (n >= 0 && n < list.length) onNavigate?.(list[n]);
+  };
+  const goRef = useRef(go);
+  goRef.current = go;
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft") goRef.current(-1);
+      else if (e.key === "ArrowRight") goRef.current(1);
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
+  const touchX = useRef(null);
+  const onTouchStart = (e) => { touchX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (touchX.current == null) return;
+    const dx = e.changedTouches[0].clientX - touchX.current;
+    touchX.current = null;
+    if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+  };
+  const navBtn = "absolute top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 active:bg-white/35";
   return (
-    <div className="fixed inset-0 z-50 flex flex-col p-4" style={{ backgroundColor: "rgba(0,0,0,.85)" }} onClick={onClose} role="dialog" aria-modal="true" aria-label="Attachment">
+    <div className="fixed inset-0 z-50 flex flex-col p-4" style={{ backgroundColor: "rgba(0,0,0,.85)" }} onClick={onClose} role="dialog" aria-modal="true" aria-label="Attachment" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="mb-3 flex shrink-0 items-center justify-end gap-2">
         <a href={src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white/10 px-3.5 text-[12px] font-semibold text-white">
           <ExternalLink className="h-3.5 w-3.5" />Open in new tab
@@ -211,8 +237,21 @@ export function AttachmentViewer({ src, onClose }) {
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center" onClick={pdf ? (e) => e.stopPropagation() : undefined}>
+      <div className="relative flex min-h-0 flex-1 items-center justify-center" onClick={pdf ? (e) => e.stopPropagation() : undefined}>
         {pdf ? <PdfFrame src={src} /> : <FeedImage src={src} alt="photo" className="max-w-full max-h-full rounded-[12px]" onNotImage={() => setPdf(true)} />}
+        {canPrev ? (
+          <button type="button" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); go(-1); }} className={`${navBtn} left-2`}>
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+        ) : null}
+        {canNext ? (
+          <button type="button" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); go(1); }} className={`${navBtn} right-2`}>
+            <ChevronRight className="h-6 w-6" />
+          </button>
+        ) : null}
+        {list && idx >= 0 ? (
+          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-[12px] font-semibold text-white">{idx + 1} / {list.length}</div>
+        ) : null}
       </div>
     </div>
   );

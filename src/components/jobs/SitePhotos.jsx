@@ -17,7 +17,7 @@ export default function SitePhotos({ photos, onAddPhoto, onPhotoClick }) {
         {photos.map((url, i) => (
           <button
             key={i}
-            onClick={() => onPhotoClick(url)}
+            onClick={() => onPhotoClick(url, photos)}
             className="aspect-square rounded-[12px] overflow-hidden"
             style={{ border: `1px solid ${C.border}` }}
           >

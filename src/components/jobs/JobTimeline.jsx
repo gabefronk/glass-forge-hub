@@ -100,7 +100,7 @@ function FeeEntryCard({ row, onPhotoClick }) {
       {row.photo_urls && row.photo_urls.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
           {row.photo_urls.map((url, i) => (
-            <button key={i} onClick={() => onPhotoClick(url)} className="h-14 w-14 rounded border overflow-hidden" style={{ borderColor: C.border }}>
+            <button key={i} onClick={() => onPhotoClick(url, row.photo_urls)} className="h-14 w-14 rounded border overflow-hidden" style={{ borderColor: C.border }}>
               <img src={url} alt="" className="h-full w-full object-cover" />
             </button>
           ))}
