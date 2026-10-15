@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { createJobIndex, canonicalJob } from '../../shared/jobIdentity.js';
 import { fetchAllPages } from '../../shared/pagination.ts';
+import { textGabeFieldReport } from '../../shared/fieldReportNotify.js';
 
 // Resolve a field report flag from the Dashboard / Calendar / Job page action.
 // Actions:
@@ -186,6 +187,27 @@ export default async function(req) {
             });
           }
         }
+      }
+
+      // Crew upload -> text Gabe (this action only runs from the signed-in app UI, so
+      // automations never reach it; Gabe's own uploads are skipped). Dedup: a double
+      // submit that already produced an identical note in the last 2 minutes sends nothing.
+      if (user.email !== 'gabefronk@gmail.com') {
+        try {
+          const recent = await api.JobNotes.filter({ job_id: jobId, author: user.email }, '-created_date', 5, 0).catch(() => []);
+          const dup = (recent || []).some((n) => n.id !== note?.id
+            && (n.body || '') === (notes || 'Field report photos uploaded')
+            && (n.attachments || []).length === (photos || []).length
+            && Date.parse(now) - Date.parse(n.created_date || 0) < 120000);
+          if (!dup) {
+            await textGabeFieldReport({
+              jobName: jobName || 'job',
+              completion: completionValue,
+              note: notes,
+              author: user.full_name || user.email,
+            });
+          }
+        } catch (_) { /* a failed text never blocks the report */ }
       }
 
       return Response.json({ ok: true, action: 'upload', completion: completionValue, job_id: jobId, note_id: note?.id || '' });

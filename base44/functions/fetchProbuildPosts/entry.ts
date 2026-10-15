@@ -7,6 +7,7 @@ import { fetchAllPages } from '../../shared/pagination.ts';
 import { parseServiceBilling } from '../../shared/serviceBilling.ts';
 import { findJobMatches, eligibleJobs } from '../../shared/jobMatchGuard.js';
 import { buildNewReportRow, planReportWrite, executeMessageFills } from '../../shared/sourceNoteFollowthrough.js';
+import { textGabeFieldReport } from '../../shared/fieldReportNotify.js';
 
 // Ingest Probuild posts into FeeLines + FieldReports. One row per post.
 // Auth: Firebase refresh-token exchange (rotated token persisted to ProbuildAuth).
@@ -361,6 +362,18 @@ export default async function(req) {
       else frToCreate.push(reportRow);
     }
     if (!dryRun && frToCreate.length) await base44.asServiceRole.entities.FieldReports.bulkCreate(frToCreate);
+    // New crew ProBuild posts just ingested -> one text to Gabe per new report. ProBuild
+    // posts are always human-written (no automation posts there), and the ProBuild API
+    // exposes no author field to filter Gabe's own rare posts by. bulkCreate only fires
+    // for genuinely new post_ids (existing rows take the patch path above), so re-runs
+    // never re-text. Note latency: texts land when the sync runs, not at post time.
+    if (!dryRun && frToCreate.length) {
+      for (const row of frToCreate) {
+        try {
+          await textGabeFieldReport({ jobName: row.job_name, completion: '', note: row.message, author: 'ProBuild' });
+        } catch (_) { /* a failed text never breaks the sync */ }
+      }
+    }
     if (!dryRun && frToUpdate.length) await base44.asServiceRole.entities.FieldReports.bulkUpdate(frToUpdate);
 
     // Message/baseline follow-through execution. Source/baseline-only patch, via the
