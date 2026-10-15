@@ -31,6 +31,7 @@ function visitBadge(ev, today = denverDate(), { reports = [], photoNote = false 
 }
 
 import PhotoStrip from "./PhotoStrip";
+import { ThumbImage } from "./FeedImage";
 
 // One entry in the job history: icon, what happened, when/who, status, then details.
 // Ledger: flat entries on a timeline (the job sheet), instead of bordered cards.
@@ -159,17 +160,18 @@ const NOTE_ICONS = { note: StickyNote, site_visit: HardHat, call: Phone, text: M
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|avif)$/i;
 const isImageFile = (f) => IMAGE_EXT.test(f.name || "") || IMAGE_EXT.test(f.url || "");
 
-function ImageThumb({ f }) {
+function ImageThumb({ f, photos, onPhotoClick }) {
   return (
-    <a key={f.id} href={f.url} target="_blank" rel="noreferrer" title={sanitizeText(f.name)} className="block overflow-hidden rounded-md" style={{ border: `1px solid ${C.rowBorder}` }}>
-      <img src={f.url} alt={sanitizeText(f.name)} loading="lazy" className="h-24 w-full object-cover hover:opacity-90" />
-    </a>
+    <button key={f.id} type="button" onClick={() => onPhotoClick?.(f.url, photos)} title={sanitizeText(f.name)} className="block cursor-pointer overflow-hidden rounded-md p-0" style={{ border: `1px solid ${C.rowBorder}` }}>
+      <ThumbImage src={f.url} alt={sanitizeText(f.name)} className="h-24 w-full object-cover hover:opacity-90" />
+    </button>
   );
 }
 
-function FileGroupCard({ files }) {
+function FileGroupCard({ files, onPhotoClick }) {
   const images = files.filter(isImageFile);
   const rest = files.filter((f) => !isImageFile(f));
+  const photoUrls = images.map((f) => f.url);
   return (
     <div className="rounded-[10px] px-3 py-2" style={{ border: `1px solid ${C.rowBorder}` }}>
       <div className="flex items-center gap-2 text-[12px]" style={{ color: C.textMuted }}>
@@ -179,7 +181,7 @@ function FileGroupCard({ files }) {
       {images.length > 0 && (
         <div className="mt-1.5 grid grid-cols-3 gap-1.5 pl-5">
           {images.map((f) => (
-            <ImageThumb key={f.id} f={f} />
+            <ImageThumb key={f.id} f={f} photos={photoUrls} onPhotoClick={onPhotoClick} />
           ))}
         </div>
       )}
@@ -194,15 +196,15 @@ function FileGroupCard({ files }) {
   );
 }
 
-function FileCard({ file }) {
+function FileCard({ file, onPhotoClick }) {
   if (isImageFile(file)) {
     return (
-      <a href={file.url} target="_blank" rel="noreferrer" title={sanitizeText(file.name)} className="block rounded-[10px] p-2" style={{ border: `1px solid ${C.rowBorder}` }}>
-        <img src={file.url} alt={sanitizeText(file.name)} loading="lazy" className="h-36 w-auto max-w-full rounded-md object-cover hover:opacity-90" />
+      <button type="button" onClick={() => onPhotoClick?.(file.url, [file.url])} title={sanitizeText(file.name)} className="block cursor-pointer rounded-[10px] p-2 text-left" style={{ border: `1px solid ${C.rowBorder}` }}>
+        <ThumbImage src={file.url} alt={sanitizeText(file.name)} className="h-36 w-auto max-w-full rounded-md object-cover hover:opacity-90" />
         <div className="mt-1 flex items-center gap-1.5 text-[12px] break-words" style={{ color: C.textMuted }}>
           Saved to job folder: {fileLabel(sanitizeText(file.name), file.name)}
         </div>
-      </a>
+      </button>
     );
   }
   return (
@@ -392,11 +394,11 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
               <DayCard date={date} today={today} stages={stageDays?.[date]}>
                 {groupFiles(items).map((it, i, dayItems) => {
                   if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
-                  if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
+                  if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} onPhotoClick={onPhotoClick} />;
                   if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today, { reports: it.reports, photoNote: dayItems.some((x) => x.kind === "note" && x.note?.job_id && (x.note.attachments?.length || 0) > 0) })} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} tickets={visitTickets(tickets, it.ev)} canEditText={canEditText} onChanged={onChanged} />;
                   if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} />;
                   if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
-                  if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
+                  if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} onPhotoClick={onPhotoClick} />;
                   if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
                   return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} authUser={authUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
                 })}
@@ -420,11 +422,11 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
             </div>
             <div className={ledger ? "space-y-4" : "space-y-2"}>
               {groupFiles(items).map((it, i) => {
-                if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} />;
+                if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} onPhotoClick={onPhotoClick} />;
                 if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} dedupe={dedupe} canEditText={canEditText} onChanged={onChanged} />;
                 if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} />;
                 if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
-                if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} />;
+                if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} onPhotoClick={onPhotoClick} />;
                 if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
                 return <NoteCard key={`n-${it.note.id}`} note={it.note} currentUser={currentUser} authUser={authUser} onChanged={onChanged} onPhotoClick={onPhotoClick} services={noteServices(it.note)} pointers={notePointers(it.note)} onServiceChanged={onServiceChanged} />;
               })}

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, FileText, X } from "lucide-react";
 import { fileLabel, isPdfUrl } from "@/lib/fileLinks";
+import { driveFileId } from "../../../base44/shared/eventAttachments.js";
+import { appParams } from "@/lib/app-params";
 
 // Photo file URLs hosted on base44.app / media.base44.com can return 403 to
 // browsers that lack Base44 login cookies. Render the normal <img> first; on
@@ -19,6 +21,25 @@ async function fetchWithToken(src) {
   if (!token) return null;
   const res = await fetch(src, { headers: { Authorization: `Bearer ${token}` } });
   return res.ok ? res.blob() : null;
+}
+
+// Drive view links (drive.google.com/file/d/<id>/view) are HTML pages, not
+// image bytes - they always break <img>. The driveThumb function streams the
+// real bytes using the app's Drive connection (owner-gated server side).
+const driveIdOf = (src) => driveFileId({ file_url: String(src || "") });
+async function fetchDriveBlob(src, size) {
+  const id = driveIdOf(src);
+  const token = getAccessToken();
+  if (!id || !token) return null;
+  const res = await fetch(`${window.location.origin}/api/apps/${appParams.appId}/functions/driveThumb`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ file_id: id, size: size || "thumb" }),
+  }).catch(() => null);
+  if (!res || !res.ok) return null;
+  const type = res.headers.get("content-type") || "";
+  if (!type.startsWith("image/") && type !== "application/pdf" && type !== "application/octet-stream") return null;
+  return res.blob();
 }
 
 // Tile shown instead of a broken image for PDFs and other non-image attachments
@@ -57,6 +78,7 @@ function enqueue(fn) {
   return new Promise((resolve, reject) => { queue.push(() => fn().then(resolve, reject)); runQueue(); });
 }
 async function loadBlob(src) {
+  if (driveIdOf(src)) return fetchDriveBlob(src, "thumb");
   try { const r = await fetch(directUrl(src)); if (r.ok) return await r.blob(); } catch { /* fall through */ }
   return fetchWithToken(src);
 }
@@ -139,7 +161,9 @@ export default function FeedImage({ src, alt, className, style, loading, onNotIm
     if (retried) { setNotImage(true); return; }
     setRetried(true);
     try {
-      const blob = await fetchWithToken(src);
+      let blob = null;
+      if (driveIdOf(src)) blob = await fetchDriveBlob(src, "full");
+      if (!blob) blob = await fetchWithToken(src);
       // Storage may label photos as octet-stream; let <img> try those, and a second
       // decode failure (retried) turns the slot into a file tile.
       const generic = !blob?.type || blob.type === "application/octet-stream";
@@ -174,7 +198,8 @@ function PdfFrame({ src }) {
     let active = true, objectUrl = null;
     (async () => {
       let blob = null;
-      try { const res = await fetch(src); if (res.ok) blob = await res.blob(); } catch {}
+      if (driveIdOf(src)) { try { blob = await fetchDriveBlob(src, "full"); } catch {} }
+      if (!blob) { try { const res = await fetch(src); if (res.ok) blob = await res.blob(); } catch {} }
       if (!blob) { try { blob = await fetchWithToken(src); } catch {} }
       if (!active) return;
       if (blob) {
