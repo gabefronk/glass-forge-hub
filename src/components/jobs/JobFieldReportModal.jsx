@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { resolveFieldReport } from "@/lib/fieldReports";
 import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
+import { isVideoUrl } from "@/lib/fileLinks";
 import { Camera, Loader2, X, CheckCircle2, AlertCircle } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
 
@@ -98,7 +99,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
           <div>
             <label className="mono-label-sm block mb-1.5">Photos</label>
             <label className="cursor-pointer">
-              <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => { handleFiles(Array.from(e.target.files)); e.target.value = ""; }} />
+              <input type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => { handleFiles(Array.from(e.target.files)); e.target.value = ""; }} />
               <span className="inline-flex items-center gap-1.5 text-[12px] px-3 py-2 rounded-[10px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary, backgroundColor: C.cardAlt }}>
                 {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
                 {uploading ? "Uploading…" : "Add photos"}
@@ -108,7 +109,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
               <div className="grid grid-cols-3 gap-1.5 mt-2">
                 {photos.map((url, i) => (
                   <div key={i} className="relative aspect-square rounded-md overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
-                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    {isVideoUrl(url) ? <video src={url} muted playsInline preload="metadata" className="h-full w-full object-cover" /> : <img src={url} alt="" className="h-full w-full object-cover" />}
                     <button type="button" onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} aria-label="Remove photo" className="absolute top-0 right-0 rounded-bl p-1" style={{ backgroundColor: "rgba(19,26,38,.6)", color: "#fff" }}>
                       <X className="h-3 w-3" />
                     </button>

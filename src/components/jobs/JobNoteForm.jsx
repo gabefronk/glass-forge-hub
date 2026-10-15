@@ -5,6 +5,7 @@ import { Paperclip, X, Loader2 } from "lucide-react";
 import { C } from "@/lib/feeUI";
 import { denverDate } from "../../../base44/shared/billingCore.js";
 import { INTERACTION_TYPES } from "@/lib/jobHistory";
+import { isVideoUrl } from "@/lib/fileLinks";
 
 export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel }) {
   const today = denverDate();
@@ -127,7 +128,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
             <input
               type="file"
               multiple
-              accept="image/*"
+              accept="image/*,video/*"
               className="hidden"
               onChange={(e) => {
                 handleFiles(Array.from(e.target.files));
@@ -142,7 +143,7 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
           <div className="flex flex-wrap gap-1.5">
             {attachments.map((url, i) => (
               <div key={i} className="relative h-24 w-24 rounded border overflow-hidden group" style={{ borderColor: C.border }}>
-                <img src={url} alt="" className="h-full w-full object-cover" />
+                {isVideoUrl(url) ? <video src={url} muted playsInline preload="metadata" className="h-full w-full object-cover" /> : <img src={url} alt="" className="h-full w-full object-cover" />}
                 <button
                   type="button"
                   onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}

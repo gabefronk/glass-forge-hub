@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ExternalLink, FileText, X } from "lucide-react";
-import { fileLabel, isPdfUrl } from "@/lib/fileLinks";
+import { ChevronLeft, ChevronRight, ExternalLink, FileText, Play, X } from "lucide-react";
+import { fileLabel, isPdfUrl, isVideoUrl } from "@/lib/fileLinks";
 import { driveFileId } from "../../../base44/shared/eventAttachments.js";
 import { appParams } from "@/lib/app-params";
 
@@ -126,7 +126,7 @@ export function ThumbImage({ src, alt, className, style }) {
   useEffect(() => {
     setThumb(thumbCache.get(src) || null);
     setFailed(false);
-    if (!src || thumbCache.has(src) || isPdfUrl(src)) return undefined;
+    if (!src || thumbCache.has(src) || isPdfUrl(src) || isVideoUrl(src)) return undefined;
     let alive = true;
     const start = () => makeThumb(src).then((u) => { if (alive) setThumb(u); }).catch(() => { if (alive) setFailed(true); });
     const el = ref.current;
@@ -137,6 +137,16 @@ export function ThumbImage({ src, alt, className, style }) {
     io.observe(el);
     return () => { alive = false; io.disconnect(); };
   }, [src]);
+  if (isVideoUrl(src)) {
+    return (
+      <span className={`relative block overflow-hidden ${className || ""}`} style={style}>
+        <video src={src} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+        <span className="absolute inset-0 flex items-center justify-center">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white"><Play className="h-4 w-4 fill-current" /></span>
+        </span>
+      </span>
+    );
+  }
   if (isPdfUrl(src) || (failed && !looksLikePhoto(src))) return <FeedImage src={src} alt={alt} className={className} style={style} loading="lazy" />;
   if (thumb) return <img src={thumb} alt={alt} className={className} style={style} />;
   if (failed) return <FeedImage src={directUrl(src)} alt={alt} className={className} style={style} loading="lazy" photo />;
@@ -176,6 +186,8 @@ export default function FeedImage({ src, alt, className, style, loading, onNotIm
       setNotImage(true);
     }
   };
+
+  if (isVideoUrl(src)) return <video src={src} controls playsInline preload="metadata" className={className} style={style} />;
 
   // A known photo that won't render inline still reads as a photo: tap opens it full size.
   if (notImage && (photo || looksLikePhoto(src)) && !isPdfUrl(src)) {
@@ -223,6 +235,7 @@ function PdfFrame({ src }) {
 export function AttachmentViewer({ src, photos, onClose, onNavigate }) {
   const [pdf, setPdf] = useState(() => isPdfUrl(src));
   useEffect(() => { setPdf(isPdfUrl(src)); }, [src]);
+  const video = isVideoUrl(src);
   const list = Array.isArray(photos) && photos.length > 1 ? photos : null;
   const idx = list ? list.indexOf(src) : -1;
   const canPrev = idx > 0;
@@ -262,8 +275,8 @@ export function AttachmentViewer({ src, photos, onClose, onNavigate }) {
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center" onClick={pdf ? (e) => e.stopPropagation() : undefined}>
-        {pdf ? <PdfFrame src={src} /> : <FeedImage src={src} alt="photo" className="max-w-full max-h-full rounded-[12px]" onNotImage={() => setPdf(true)} />}
+      <div className="relative flex min-h-0 flex-1 items-center justify-center" onClick={pdf || video ? (e) => e.stopPropagation() : undefined}>
+        {pdf ? <PdfFrame src={src} /> : video ? <video src={src} controls playsInline preload="auto" className="max-w-full max-h-full rounded-[12px]" /> : <FeedImage src={src} alt="photo" className="max-w-full max-h-full rounded-[12px]" onNotImage={() => setPdf(true)} />}
         {canPrev ? (
           <button type="button" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); go(-1); }} className={`${navBtn} left-2`}>
             <ChevronLeft className="h-6 w-6" />

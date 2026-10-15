@@ -26,6 +26,17 @@ export function isPdfUrl(url) {
   }
 }
 
+// True when the URL points at a video by path (query strings and case ignored).
+export function isVideoUrl(url) {
+  if (typeof url !== "string" || !url) return false;
+  if (/^data:video\//i.test(url)) return true;
+  try {
+    return /\.(mp4|mov|m4v|webm)$/i.test(new URL(url, "https://files.invalid").pathname);
+  } catch {
+    return false;
+  }
+}
+
 // Short display name for a file URL ("plans.pdf"), falling back to "File".
 export function fileLabel(url) {
   try {

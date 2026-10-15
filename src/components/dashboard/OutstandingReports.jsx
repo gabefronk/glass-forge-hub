@@ -188,7 +188,7 @@ export default function OutstandingReports({ events, user, onChanged, compliance
           <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[14px] p-5 max-w-md w-full card-shadow-elevated" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-heading text-[15px] font-semibold mb-1" style={{ color: C.text }}>Upload field report</h3>
             <p className="text-[12px] mb-3 break-words" style={{ color: C.textMuted }}>{uploading.job_name}</p>
-            <input type="file" multiple accept="image/*" onChange={(e) => setUploadPhotos([...e.target.files])} className="mb-3 w-full text-[12px]" style={{ color: C.textSecondary }} />
+            <input type="file" multiple accept="image/*,video/*" onChange={(e) => setUploadPhotos([...e.target.files])} className="mb-3 w-full text-[12px]" style={{ color: C.textSecondary }} />
             <textarea value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} placeholder="Notes..." className="w-full rounded-[10px] p-2.5 text-[13px] mb-3" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} rows={3} />
             {actionError && <p role="alert" className="mb-3 text-[12px] break-words" style={{ color: "#A43432" }}>{actionError}</p>}
             <div className="flex justify-end gap-2">
