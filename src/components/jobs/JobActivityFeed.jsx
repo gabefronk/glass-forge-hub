@@ -234,14 +234,16 @@ function groupFiles(items) {
 function NoteCard({ note, currentUser, authUser, onChanged, onPhotoClick, services = [], pointers = [], onServiceChanged }) {
   const isFieldReport = isFieldReportNote(note);
   const kind = note.interaction_type || "note";
+  // Notes logged from a customer text thread read as "Text", not "Note".
+  const fromText = /^\s*instinct \((?:customer )?texts/i.test(note.body || "");
   const badge = [...services, ...pointers.map((p) => p.item)].some(isServiceOpen) ? { label: "Service item", color: "#fff", bg: "#A43432" }
     : note.completion === "complete" ? { label: "Work complete", color: "#0b3f3b", bg: "#E2EEEB" }
     : note.completion === "incomplete" ? { label: "Not finished", color: "#A43432", bg: "#FCEDEC" } : null;
   return (
     <Entry
-      icon={isFieldReport ? Camera : NOTE_ICONS[kind] || StickyNote}
-      tone={isFieldReport ? "teal" : kind === "issue" ? "red" : kind === "call" || kind === "text" || kind === "email" ? "blue" : "neutral"}
-      title={isFieldReport ? "Field report" : interactionLabel(kind)}
+      icon={isFieldReport ? Camera : fromText ? MessageSquare : NOTE_ICONS[kind] || StickyNote}
+      tone={isFieldReport ? "teal" : fromText ? "blue" : kind === "issue" ? "red" : kind === "call" || kind === "text" || kind === "email" ? "blue" : "neutral"}
+      title={isFieldReport ? "Field report" : fromText ? "Text" : interactionLabel(kind)}
       meta={joinMeta(crewName(note.author) || note.author, photoCount(note.attachments?.length))}
       badge={badge}
     >

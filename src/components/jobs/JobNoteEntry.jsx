@@ -23,7 +23,7 @@ export default function JobNoteEntry({ note, currentUser, authUser, onChanged, o
   const body = (
     <>
       {!embedded ? <div className="mb-1.5 text-[12px] truncate" style={{ color: C.textSecondary }}>{note.author}</div> : null}
-      <ClampedText text={note.body} maxLines={5} className="mt-1 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words" style={{ color: C.text }} />
+      <ClampedText text={note.body} maxLines={3} className="mt-1 text-[14.5px] leading-[21px] whitespace-pre-wrap break-words" style={{ color: C.text }} />
       <PhotoStrip urls={note.attachments} onPhotoClick={onPhotoClick} />
       {canEditText ? <HistoryTextEdit type="note" recordId={note.id} jobId={note.job_id} text={note.body} canEdit={canEditText} onSaved={onChanged} /> : null}
       {(note.edited || canDelete) ? (
