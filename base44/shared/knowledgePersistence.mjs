@@ -11,13 +11,13 @@ export function snapshotStore(api){
  const enc=new TextEncoder(),hash=v=>digest(enc.encode(serialize(v)));
  return{
  save:async(plan,progress=async()=>{},options={})=>{
-  const text=serialize(plan),parts=[];for(let i=0;i<text.length;i+=60000)parts.push({payload:{text:text.slice(i,i+60000)}});
+  const text=serialize(plan),parts=[];for(let i=0;i<text.length;i+=900000){const segment=text.slice(i,i+900000);parts.push({payload:{segments:Array.from({length:Math.ceil(segment.length/4000)},(_,j)=>segment.slice(j*4000,(j+1)*4000))}});}
   let size=0;for(const p of parts){const bytes=enc.encode(serialize(p.payload));size+=bytes.length;if(bytes.length>3*1048576)throw Error('Snapshot part exceeds size limit');p.sha256=await digest(bytes);}
   const sha=await hash(parts.map(p=>p.sha256)),runId=plan.run_id;
   if(!runId)throw Error('Missing snapshot run');
-  for(let i=0;i<parts.length;i+=20){
+  for(let i=0;i<parts.length;i+=2){
     await progress('save_snapshot_parts',{snapshot_saved_parts:i,snapshot_expected_parts:parts.length,snapshot_bytes:size});
-    await writeGeneratedBatch(api.entities.JobKnowledgeBuildPart,runId,'part_key',parts.slice(i,i+20).map((p,j)=>({run_id:runId,snapshot_id:sha,part_key:sha+':'+(i+j),part_index:i+j,...p})),options);
+    await writeGeneratedBatch(api.entities.JobKnowledgeBuildPart,runId,'part_key',parts.slice(i,i+2).map((p,j)=>({run_id:runId,snapshot_id:sha,part_key:sha+':'+(i+j),part_index:i+j,...p})),options);
     await (options.sleep||delay)(5000);
   }
   return{snapshot_uri:'entity:'+sha,snapshot_sha256:sha,snapshot_bytes:size,snapshot_saved_parts:parts.length,snapshot_expected_parts:parts.length};
@@ -28,7 +28,7 @@ export function snapshotStore(api){
   if(parts.length!==run.snapshot_expected_parts||parts.some((p,i)=>p.part_index!==i))throw Error('Snapshot parts missing or duplicate');
   let size=0;for(const p of parts){const bytes=enc.encode(serialize(p.payload));size+=bytes.length;if(await digest(bytes)!==p.sha256)throw Error('Snapshot integrity mismatch');}
   if(size!==run.snapshot_bytes||await hash(parts.map(p=>p.sha256))!==run.snapshot_sha256)throw Error('Snapshot integrity mismatch');
-  const plan=JSON.parse(parts.map(p=>p.payload.text).join(''));if(plan.run_id!==run.id)throw Error('Snapshot run integrity mismatch');return plan;
+  const plan=JSON.parse(parts.map(p=>p.payload.segments?p.payload.segments.join(''):p.payload.text).join(''));if(plan.run_id!==run.id)throw Error('Snapshot run integrity mismatch');return plan;
  }
 };}
 
