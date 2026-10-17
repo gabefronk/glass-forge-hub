@@ -301,9 +301,8 @@ function snapshotStore(api) {
   return {
     save: async (plan, progress = async () => {
     }, options = {}) => {
-      const { records, chunks, ...meta } = plan, parts = [{ payload: { meta } }];
-      for (let i = 0; i < records.length; i += 25) parts.push({ payload: { records: records.slice(i, i + 25) } });
-      for (let i = 0; i < chunks.length; i += 10) parts.push({ payload: { chunks: chunks.slice(i, i + 10) } });
+      const text3 = serialize(plan), parts = [];
+      for (let i = 0; i < text3.length; i += 9e5) parts.push({ payload: { text: text3.slice(i, i + 9e5) } });
       let size = 0;
       for (const p of parts) {
         const bytes = enc.encode(serialize(p.payload));
@@ -313,10 +312,10 @@ function snapshotStore(api) {
       }
       const sha = await hash(parts.map((p) => p.sha256)), runId = plan.run_id;
       if (!runId) throw Error("Missing snapshot run");
-      for (let i = 0; i < parts.length; i += 4) {
+      for (let i = 0; i < parts.length; i += 2) {
         await progress("save_snapshot_parts", { snapshot_saved_parts: i, snapshot_expected_parts: parts.length, snapshot_bytes: size });
-        await writeGeneratedBatch(api.entities.JobKnowledgeBuildPart, runId, "part_key", parts.slice(i, i + 4).map((p, j) => ({ run_id: runId, snapshot_id: sha, part_key: sha + ":" + (i + j), part_index: i + j, ...p })), options);
-        await (options.sleep || delay)(2e3);
+        await writeGeneratedBatch(api.entities.JobKnowledgeBuildPart, runId, "part_key", parts.slice(i, i + 2).map((p, j) => ({ run_id: runId, snapshot_id: sha, part_key: sha + ":" + (i + j), part_index: i + j, ...p })), options);
+        await (options.sleep || delay)(5e3);
       }
       return { snapshot_uri: "entity:" + sha, snapshot_sha256: sha, snapshot_bytes: size, snapshot_saved_parts: parts.length, snapshot_expected_parts: parts.length };
     },
@@ -331,7 +330,9 @@ function snapshotStore(api) {
         if (await digest(bytes) !== p.sha256) throw Error("Snapshot integrity mismatch");
       }
       if (size !== run.snapshot_bytes || await hash(parts.map((p) => p.sha256)) !== run.snapshot_sha256) throw Error("Snapshot integrity mismatch");
-      return { ...parts[0].payload.meta, records: parts.flatMap((p) => p.payload.records || []), chunks: parts.flatMap((p) => p.payload.chunks || []) };
+      const plan = JSON.parse(parts.map((p) => p.payload.text).join(""));
+      if (plan.run_id !== run.id) throw Error("Snapshot run integrity mismatch");
+      return plan;
     }
   };
 }
@@ -1886,7 +1887,7 @@ function adaptKnowledgeSources(data, now, generatedAt = now) {
   return { ...result, source_status: sourceStatus, issues, source_counts: { jobs: jobs.length, calendar: calendar.length, field_reports: reports.length, library_projects: projects.length, library_reports: libraryReports.length, files: files.length, pdf_files: pdfCount, job_notes: notes.length, tracker_rows: trackerRows.length, service_cases: serviceCases.length, live_google: liveCounts.calendar, live_probuild: liveCounts.probuild, document_extractions: documentExtraction.received, indexed_document_extractions: documentExtraction.indexed, rejected_document_extractions: documentExtraction.rejected.length, trusted_project_links: trusted.counts.project_links, trusted_calendar_links: trusted.counts.calendar_links, trusted_post_links: trusted.counts.post_links, trusted_identity_diagnostics: trusted.diagnostics.length, duplicate_report_origins: [...libraryIds].filter((id2) => reports.some((r) => r.post_id === id2)).length } };
 }
 async function collectKnowledgeSources(api, readTracker, now, providerData, getNow, onProgress = async () => {
-}) {
+}, rawOnly = false) {
   const definitions = {
     jobs: ["Jobs", "id,canonical_name,aliases,po_numbers,oe_numbers,address,builder"],
     calendar: ["CalendarEvents", "id,job_id,job_name,address,source,source_status,event_date,start_time,end_time,end_date,scope_notes,po_number,oe_number,google_event_id,updated_date"],
@@ -1933,7 +1934,7 @@ async function collectKnowledgeSources(api, readTracker, now, providerData, getN
   } else data.providerData = providerData;
   const generatedAt = typeof getNow === "function" ? getNow() : now;
   await onProgress("assemble_contexts");
-  return adaptKnowledgeSources(data, now, generatedAt);
+  return rawOnly ? { data, now, generatedAt } : adaptKnowledgeSources(data, now, generatedAt);
 }
 async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* @__PURE__ */ new Date()).toISOString(), getNow = () => (/* @__PURE__ */ new Date()).toISOString(), force = false, resumeRunId, storage = snapshotStore(api), sleep = (ms) => new Promise((r) => setTimeout(r, ms)), maxWorkMs = 9e4, clock = () => Date.now() }) {
   const start = clock(), ent = api.entities;
@@ -1973,46 +1974,50 @@ async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* 
     for (const [k, v] of Object.entries(patch)) if (JSON.stringify(run[k]) !== JSON.stringify(v)) throw Error("Checkpoint verification failed");
   };
   try {
-    let plan;
+    let raw;
     if (!run.snapshot_uri) {
       stage = "collect_sources";
-      const result2 = await retryBuildRead(() => collectKnowledgeSources(api, readTracker, now, readProviders, getNow, async (phase) => {
+      raw = { ...await retryBuildRead(() => collectKnowledgeSources(api, readTracker, now, readProviders, getNow, async (phase) => {
         stage = phase;
         await checkpoint({ stage });
-      }), opts);
-      const records = result2.contexts.map((context) => ({ run_id: run.id, job_id: context.job_id, job_name: context.job_name, status: context.status, generated_at: context.generated_at, briefing: context.briefing, context }));
-      const chunks = [];
-      for (let i = 0; i < result2.unassigned.length; i += 200) chunks.push({ run_id: run.id, chunk_index: i / 200, records: result2.unassigned.slice(i, i + 200) });
-      plan = { run_id: run.id, records, chunks, counts: result2.counts, source_counts: result2.source_counts, source_status: result2.source_status, issues: result2.issues, unassigned_count: result2.unassigned.length };
+      }, true), opts), run_id: run.id, format: "raw_sources_v1" };
       stage = "save_snapshot";
-      await checkpoint({ stage, expected_jobs: records.length, expected_chunks: chunks.length });
-      const receipt = await storage.save(plan, async (phase, metrics) => {
+      await checkpoint({ stage });
+      const receipt = await storage.save(raw, async (phase, metrics) => {
         stage = phase;
         await checkpoint({ stage, ...metrics });
       }, opts);
-      await checkpoint({ ...receipt, expected_jobs: records.length, expected_chunks: chunks.length, job_cursor: 0, chunk_cursor: 0, status: "building", stage: "write_jobs" });
+      await checkpoint({ ...receipt, job_cursor: 0, chunk_cursor: 0, expected_jobs: null, expected_chunks: null, status: "building", stage: "load_snapshot" });
     }
     stage = "load_snapshot";
     await checkpoint({ stage });
-    plan = await retryBuildRead(() => storage.load(run, opts), opts);
+    raw = await retryBuildRead(() => storage.load(run, opts), opts);
+    if (raw.format !== "raw_sources_v1") throw Error("Snapshot format integrity mismatch");
+    stage = "assemble_contexts";
+    await checkpoint({ stage });
+    const result = adaptKnowledgeSources(raw.data, raw.now, raw.generatedAt);
+    const records = result.contexts.map((context) => ({ run_id: run.id, job_id: context.job_id, job_name: context.job_name, status: context.status, generated_at: context.generated_at, briefing: context.briefing, context })), chunks = [];
+    for (let i = 0; i < result.unassigned.length; i += 200) chunks.push({ run_id: run.id, chunk_index: i / 200, records: result.unassigned.slice(i, i + 200) });
+    const plan = { records, chunks, counts: result.counts, source_counts: result.source_counts, source_status: result.source_status, issues: result.issues, unassigned_count: result.unassigned.length };
+    if (run.expected_jobs == null || run.expected_chunks == null) await checkpoint({ expected_jobs: records.length, expected_chunks: chunks.length });
     if (plan.records.length !== run.expected_jobs || plan.chunks.length !== run.expected_chunks || new Set(plan.records.map((r) => r.job_id)).size !== plan.records.length || plan.records.some((r) => r.run_id !== run.id) || plan.chunks.some((c, i) => c.run_id !== run.id || c.chunk_index !== i)) throw Error("Snapshot integrity mismatch");
     const pause = async () => {
       await checkpoint({ status: "paused", stage, lock_token: "", lock_expires_at: "", updated_at: getNow() });
       return { status: "paused", run_id: run.id, stage, job_cursor: run.job_cursor, expected_jobs: run.expected_jobs, chunk_cursor: run.chunk_cursor, expected_chunks: run.expected_chunks, rate_limit_seen: run.rate_limit_seen === true };
     };
-    for (let i = run.job_cursor || 0; i < plan.records.length; i += 25) {
+    for (let i = run.job_cursor || 0; i < plan.records.length; i += 50) {
       stage = "write_jobs";
       if (clock() - start > maxWorkMs) return await pause();
-      await writeGeneratedBatch(ent.JobKnowledge, run.id, "job_id", plan.records.slice(i, i + 25), opts);
-      await checkpoint({ job_cursor: Math.min(i + 25, plan.records.length), stage });
-      await sleep(2e3);
+      await writeGeneratedBatch(ent.JobKnowledge, run.id, "job_id", plan.records.slice(i, i + 50), opts);
+      await checkpoint({ job_cursor: Math.min(i + 50, plan.records.length), stage });
+      await sleep(5e3);
     }
     for (let i = run.chunk_cursor || 0; i < plan.chunks.length; i += 10) {
       stage = "write_chunks";
       if (clock() - start > maxWorkMs) return await pause();
       await writeGeneratedBatch(ent.JobKnowledgeUnassigned, run.id, "chunk_index", plan.chunks.slice(i, i + 10), opts);
       await checkpoint({ chunk_cursor: Math.min(i + 10, plan.chunks.length), stage });
-      await sleep(2e3);
+      await sleep(5e3);
     }
     stage = "verify_counts";
     const persisted = await allKnowledgeRows(ent.JobKnowledge, ["id", "job_id"], { run_id: run.id });
@@ -2021,7 +2026,7 @@ async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* 
     const savedChunks = await allKnowledgeRows(ent.JobKnowledgeUnassigned, ["id", "chunk_index", "records"], { run_id: run.id });
     const normalized = (v) => v && typeof v === "object" ? Array.isArray(v) ? v.map(normalized) : Object.fromEntries(Object.keys(v).sort().map((k) => [k, normalized(v[k])])) : v;
     if (savedChunks.length !== plan.chunks.length || new Set(savedChunks.map((c) => c.chunk_index)).size !== plan.chunks.length || savedChunks.some((c) => !Number.isInteger(c.chunk_index) || !plan.chunks[c.chunk_index] || JSON.stringify(normalized(c.records)) !== JSON.stringify(normalized(plan.chunks[c.chunk_index].records)))) throw Error("Prepared unassigned source references mismatch");
-    const result = plan, completed_at = getNow();
+    const completed_at = getNow();
     await checkpoint({ status: "complete", completed_at, stage: "complete", retry_after_at: "", counts: plan.counts, source_counts: plan.source_counts, source_status: plan.source_status, issues: plan.issues, unassigned_count: plan.unassigned_count, unassigned_chunks: plan.chunks.length, verified_jobs: persisted.length, verified_chunks: savedChunks.length, lock_token: "", lock_expires_at: "", error: "", error_code: "", automatic_send_allowed: false });
     let notification_error = false;
     try {
