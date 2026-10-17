@@ -5,6 +5,7 @@ import { sanitizeText } from "@/lib/jobsSanitize";
 import { visitFields, visibleNotes } from "@/lib/visitFields";
 import { attachmentProvenance, fileBadge, ticketLabel } from "@/lib/jobHistory";
 import ClampedText from "./ClampedText";
+import { filterLang } from "@/lib/visitLang";
 import PhotoStrip from "./PhotoStrip";
 import { ServiceItemPanel } from "./ServiceItems";
 import HistoryTextEdit from "./HistoryTextEdit";
@@ -165,11 +166,11 @@ const joinMeta = (...parts) => parts.filter(Boolean).join(" · ");
 // One calendar visit, laid out as rows. badge: the visit's report pill from the feed.
 // services: the service items this visit is the fix for (their service_event_id). The item is
 // tracked here — one place — and the report it came from just points to it.
-export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [], onServiceChanged, tickets = [], canEditText, onChanged }) {
+export function VisitEntry({ ev, reports = [], badge, onPhotoClick, services = [], onServiceChanged, tickets = [], canEditText, onChanged, lang = "en" }) {
   const f = useMemo(() => visitFields(ev), [ev]);
   const [showOther, setShowOther] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
-  const list = (arr) => arr.map(clean).filter(Boolean);
+  const list = (arr) => filterLang(arr.map(clean).filter(Boolean), lang);
   const work = list(f.work);
   const headsUp = list(f.headsUp);
   const result = list(f.result);

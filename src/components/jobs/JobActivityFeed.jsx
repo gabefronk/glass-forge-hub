@@ -32,6 +32,7 @@ function visitBadge(ev, today = denverDate(), { reports = [], photoNote = false 
 
 import PhotoStrip from "./PhotoStrip";
 import { ThumbImage } from "./FeedImage";
+import { preferredLang } from "@/lib/visitLang";
 
 // One entry in the job history: icon, what happened, when/who, status, then details.
 // Ledger: flat entries on a timeline (the job sheet), instead of bordered cards.
@@ -277,6 +278,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   // currentUser is the author STRING (email) for legacy note form/delete behavior.
   // authUser is the auth user OBJECT — the owner-ID gate (canEditHistoryText) needs .id.
   const canEditText = canEditHistoryText(authUser);
+  const lang = new URLSearchParams(window.location.search).get("feedlang") || preferredLang(authUser);
   // A "Log interaction" button elsewhere on the page opens the form here.
   useEffect(() => { if (openFormKey) setShowForm(true); }, [openFormKey]);
 
@@ -397,8 +399,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
                 {groupFiles(items).map((it, i, dayItems) => {
                   if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
                   if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} onPhotoClick={onPhotoClick} />;
-                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today, { reports: it.reports, photoNote: dayItems.some((x) => x.kind === "note" && x.note?.job_id && (x.note.attachments?.length || 0) > 0) })} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} tickets={visitTickets(tickets, it.ev)} canEditText={canEditText} onChanged={onChanged} />;
-                  if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} />;
+                  if (it.kind === "visit") return <VisitEntry key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} badge={visitBadge(it.ev, today, { reports: it.reports, photoNote: dayItems.some((x) => x.kind === "note" && x.note?.job_id && (x.note.attachments?.length || 0) > 0) })} onPhotoClick={onPhotoClick} services={visitServices(it.ev)} onServiceChanged={onServiceChanged} tickets={visitTickets(tickets, it.ev)} canEditText={canEditText} onChanged={onChanged} lang={lang} />;
+                  if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} lang={lang} />;
                   if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                   if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} onPhotoClick={onPhotoClick} />;
                   if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
@@ -425,8 +427,8 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
             <div className={ledger ? "space-y-4" : "space-y-2"}>
               {groupFiles(items).map((it, i) => {
                 if (it.kind === "files") return <FileGroupCard key={`fg-${date}`} files={it.files} onPhotoClick={onPhotoClick} />;
-                if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} dedupe={dedupe} canEditText={canEditText} onChanged={onChanged} />;
-                if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} />;
+                if (it.kind === "visit") return <VisitCard key={`v-${it.ev.id || i}`} ev={it.ev} reports={it.reports} onPhotoClick={onPhotoClick} dedupe={dedupe} canEditText={canEditText} onChanged={onChanged} lang={lang} />;
+                if (it.kind === "report") return <ReportCard key={`r-${it.report.post_id || i}`} report={it.report} onPhotoClick={onPhotoClick} canEditText={canEditText} onChanged={onChanged} lang={lang} />;
                 if (it.kind === "change") return <ChangeCard key={`c-${it.ev.id || i}`} ev={it.ev} />;
                 if (it.kind === "file") return <FileCard key={`f-${it.file.id}`} file={it.file} onPhotoClick={onPhotoClick} />;
                 if (it.kind === "service") return <ServiceEntry key={`svc-${it.item.id}`} item={it.item} onServiceChanged={onServiceChanged} />;
