@@ -1,14 +1,38 @@
 // Frozen private snapshot + reconciled generated-only writes. No source mutations.
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
+const canonical=v=>v&&typeof v==='object'?Array.isArray(v)?v.map(canonical):Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+const serialize=v=>JSON.stringify(canonical(v));
 const digest=async bytes=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const statusOf=e=>[e?.status,e?.response?.status].find(Number.isInteger)||0;
 const transient=e=>[429,408,500,502,503,504].includes(statusOf(e))||['TypeError','TimeoutError','AbortError'].includes(e?.name);
 export const safeBuildError=(e,stage)=>({stage,error_code:statusOf(e)===429?'rate_limited':/count mismatch|references mismatch|duplicate|changed|integrity/.test(e?.message||'')?'verification_failed':transient(e)?'transient_transport':'build_step_failed',error_http_status:statusOf(e),last_error_at:new Date().toISOString()});
 export async function retryBuildRead(work,{sleep=delay,onRetry=async()=>{}}={}){for(let i=0;;i++){try{return await work();}catch(e){if(!transient(e)||i>=4)throw e;await onRetry(e,i);await sleep(1000*2**i);}}}
-export function snapshotStore(api){return{
- save:async plan=>{const bytes=new TextEncoder().encode(JSON.stringify(plan));if(bytes.length>100*1048576)throw Error('Build snapshot exceeds size limit');const hash=await digest(bytes);const r=await api.integrations.Core.UploadPrivateFile({file:new File([bytes],'job-knowledge-build.json',{type:'application/json'})});if(!/^(?:mp\/)?private(?:\/|:\/\/)[^?#\\\s]+$/.test(r.file_uri||''))throw Error('Private snapshot missing');return{snapshot_uri:r.file_uri,snapshot_sha256:hash,snapshot_bytes:bytes.length};},
- load:async run=>{if(!/^(mp\/)?private(\/|:\/\/)/.test(run.snapshot_uri||''))throw Error('Invalid private snapshot');const {signed_url}=await api.integrations.Core.CreateFileSignedUrl({file_uri:run.snapshot_uri,expires_in:300});const r=await fetch(signed_url,{signal:AbortSignal.timeout(60000)});if(!r.ok)throw Object.assign(Error('Snapshot unavailable'),{status:r.status});const reader=r.body.getReader(),parts=[];let n=0;for(;;){const{done,value}=await reader.read();if(done)break;n+=value.length;if(n>100*1048576){await reader.cancel();throw Error('Snapshot size limit');}parts.push(value);}const bytes=new Uint8Array(n);let p=0;for(const v of parts){bytes.set(v,p);p+=v.length;}if(n!==run.snapshot_bytes||await digest(bytes)!==run.snapshot_sha256)throw Error('Snapshot integrity mismatch');return JSON.parse(new TextDecoder().decode(bytes));}
+export function snapshotStore(api){
+ const enc=new TextEncoder(),hash=v=>digest(enc.encode(serialize(v)));
+ return{
+ save:async(plan,progress=async()=>{},options={})=>{
+  const {records,chunks,...meta}=plan,parts=[{payload:{meta}}];
+  for(let i=0;i<records.length;i+=25)parts.push({payload:{records:records.slice(i,i+25)}});
+  for(let i=0;i<chunks.length;i+=10)parts.push({payload:{chunks:chunks.slice(i,i+10)}});
+  let size=0;for(const p of parts){const bytes=enc.encode(serialize(p.payload));size+=bytes.length;if(bytes.length>3*1048576)throw Error('Snapshot part exceeds size limit');p.sha256=await digest(bytes);}
+  const sha=await hash(parts.map(p=>p.sha256)),runId=plan.run_id;
+  if(!runId)throw Error('Missing snapshot run');
+  for(let i=0;i<parts.length;i++){
+    await progress('save_snapshot_parts',{snapshot_saved_parts:i,snapshot_expected_parts:parts.length,snapshot_bytes:size});
+    await writeGeneratedBatch(api.entities.JobKnowledgeBuildPart,runId,'part_key',[{run_id:runId,snapshot_id:sha,part_key:sha+':'+i,part_index:i,...parts[i]}],options);
+  }
+  return{snapshot_uri:'entity:'+sha,snapshot_sha256:sha,snapshot_bytes:size,snapshot_saved_parts:parts.length,snapshot_expected_parts:parts.length};
+ },
+ load:async(run,options={})=>{
+  if(run.snapshot_uri!=='entity:'+run.snapshot_sha256||!/^[a-f0-9]{64}$/.test(run.snapshot_sha256||''))throw Error('Snapshot integrity mismatch');
+  const parts=await retryBuildRead(()=>api.entities.JobKnowledgeBuildPart.filter({run_id:run.id,snapshot_id:run.snapshot_sha256},'part_index',500),options);
+  if(parts.length!==run.snapshot_expected_parts||parts.some((p,i)=>p.part_index!==i))throw Error('Snapshot parts missing or duplicate');
+  let size=0;for(const p of parts){const bytes=enc.encode(serialize(p.payload));size+=bytes.length;if(await digest(bytes)!==p.sha256)throw Error('Snapshot integrity mismatch');}
+  if(size!==run.snapshot_bytes||await hash(parts.map(p=>p.sha256))!==run.snapshot_sha256)throw Error('Snapshot integrity mismatch');
+  return{...parts[0].payload.meta,records:parts.flatMap(p=>p.payload.records||[]),chunks:parts.flatMap(p=>p.payload.chunks||[])};
+ }
 };}
+
 export async function writeGeneratedBatch(entity,runId,key,rows,{sleep=delay,onRetry=async()=>{}}={}){
  const wanted=new Map(rows.map(r=>[r[key],r]));
  for(let attempt=0;;attempt++){

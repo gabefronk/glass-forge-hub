@@ -1,0 +1,38 @@
+{
+  "name": "JobKnowledgeBuildPart",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "part_key": {
+      "type": "string"
+    },
+    "part_index": {
+      "type": "number"
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "run_id",
+    "snapshot_id",
+    "part_key",
+    "part_index",
+    "sha256",
+    "payload"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

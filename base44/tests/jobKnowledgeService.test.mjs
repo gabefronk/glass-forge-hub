@@ -39,7 +39,7 @@ const ctx=out=>out.contexts.find(c=>c.job_id==='j16');
 
 function fakeApi(initial={},options={}) {
   const stores={},calls=[],uploads=new Map();let sequence=0;
-  const names=['Jobs','CalendarEvents','FieldReports','FieldLibraryProject','FieldLibraryReport','FieldLibraryFile','ProbuildProjectLink','JobNotes','FeeLines','OutlookCalendarSnapshot','OutlookCalendarBatch','MessageServiceCase','SalesTrackerSnapshot','FieldLibraryImport','JobKnowledgeRun','JobKnowledge','JobKnowledgeUnassigned','AgentCenterEscalation','JobDocumentExtraction','CalendarReviewCapture'];
+  const names=['Jobs','CalendarEvents','FieldReports','FieldLibraryProject','FieldLibraryReport','FieldLibraryFile','ProbuildProjectLink','JobNotes','FeeLines','OutlookCalendarSnapshot','OutlookCalendarBatch','MessageServiceCase','SalesTrackerSnapshot','FieldLibraryImport','JobKnowledgeRun','JobKnowledgeBuildPart','JobKnowledge','JobKnowledgeUnassigned','AgentCenterEscalation','JobDocumentExtraction','CalendarReviewCapture'];
   const entities=Object.fromEntries(names.map(name=>{
     stores[name]=structuredClone(initial[name]||[]);
     const filter=async(query={},sort='id',limit=500,skip=0,selected)=>{
@@ -123,7 +123,7 @@ test('immutable generation writes all jobs, then records completion without modi
   const api=fakeApi({Jobs:JOBS,JobNotes:[{id:'n1',job_id:'j16',note_date:'2026-09-12',body:'Door inspected',updated_date:NOW}]});
   const out=await refreshJobKnowledge({sleep:async()=>{},api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true});assert.equal(out.status,'complete');
   assert.equal(api.stores.JobKnowledge.length,2);assert.equal(api.stores.JobKnowledgeRun[0].status,'complete');
-  assert.ok(api.calls.filter(c=>['create','update','bulkCreate'].includes(c.method)).every(c=>['JobKnowledge','JobKnowledgeRun','JobKnowledgeUnassigned','AgentCenterEscalation'].includes(c.name)));
+  assert.ok(api.calls.filter(c=>['create','update','bulkCreate'].includes(c.method)).every(c=>['JobKnowledge','JobKnowledgeBuildPart','JobKnowledgeRun','JobKnowledgeUnassigned','AgentCenterEscalation'].includes(c.name)));
 });
 test('unassigned references persisted in complete chunks before publishing generation',async()=>{
   const calendar=Array.from({length:401},(_,i)=>({id:'g'+i,job_name:'Unknown '+i,event_date:'2026-09-14',source:'google'}));
@@ -303,4 +303,13 @@ test('changed generated row blocks completion, not overwritten',async()=>{
  const api=fakeApi({Jobs:JOBS});const original=api.entities.JobKnowledge.bulkCreate;
  api.entities.JobKnowledge.bulkCreate=async rows=>original(rows.map(r=>({...r,briefing:'tampered'})));
  await assert.rejects(()=>refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,force:true,sleep:async()=>{}}),/changed/);assert.equal(api.stores.JobKnowledgeRun[0].status,'failed');assert.equal(api.stores.JobKnowledge[0].briefing,'tampered');
+});
+test('interrupted snapshot uses a separate verified manifest and retains every older private part',async()=>{
+ const api=fakeApi({Jobs:JOBS});const original=api.entities.JobKnowledgeBuildPart.bulkCreate;let once=true;
+ api.entities.JobKnowledgeBuildPart.bulkCreate=async rows=>{if(once){once=false;await original(rows);throw Error('synthetic interrupted snapshot');}return original(rows);};
+ await assert.rejects(()=>refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,force:true,sleep:async()=>{}}),/interrupted snapshot/);
+ const run=api.stores.JobKnowledgeRun[0],oldPart=structuredClone(api.stores.JobKnowledgeBuildPart[0]);assert.ok(!run.snapshot_uri);
+ api.stores.Jobs[0].canonical_name='Changed before snapshot finished';
+ const done=await refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,resumeRunId:run.id,sleep:async()=>{}});
+ assert.equal(done.status,'complete');assert.equal(api.stores.JobKnowledgeRun.length,1);assert.deepEqual(api.stores.JobKnowledgeBuildPart.find(p=>p.id===oldPart.id),oldPart);assert.equal(api.stores.JobKnowledge.find(x=>x.job_id==='j16').job_name,'Changed before snapshot finished');
 });

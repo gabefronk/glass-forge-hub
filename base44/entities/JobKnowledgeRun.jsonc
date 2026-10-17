@@ -108,6 +108,12 @@
     },
     "rate_limit_seen": {
       "type": "boolean"
+    },
+    "snapshot_saved_parts": {
+      "type": "number"
+    },
+    "snapshot_expected_parts": {
+      "type": "number"
     }
   },
   "required": [
