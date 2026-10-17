@@ -88,7 +88,7 @@ export function rowFlag(stats, group) {
 
 // Teal outline + soft halo glow for the selected (and hovered) job card; the
 // card itself stays white.
-const HALO = "0 0 0 3px rgba(15,118,110,.16), 0 6px 18px -6px rgba(15,118,110,.45), 0 1px 2px rgba(10,29,31,.10)";
+const HALO = "0 0 0 5px rgba(15,118,110,.22), 0 10px 32px -4px rgba(15,118,110,.55), 0 2px 4px rgba(10,29,31,.10)";
 const TEAL = "#0f766e";
 // Job card for the Jobs list: bold name, builder · address, kind, and the
 // next (or last) visit on the right. The selected job keeps its white card and
