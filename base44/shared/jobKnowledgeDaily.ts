@@ -14,11 +14,11 @@ export async function prepareDailyKnowledge(base44,{triggeredBy,onlyLeadId}={}) 
     const documents=await extractJobDocuments(api,{maxFiles:2}).catch(()=>({status:'failed',error:'Private document extraction could not complete.'}));
     const prepared=await refreshJobKnowledge({api,readTracker:readKnowledgeTracker,readProviders:()=>readJobKnowledgeProviders(base44)});
     return {...prepared,documents};
-  } catch {
+  } catch(error) {
     const key='job_knowledge:preparation_failed';
     const old=(await api.entities.AgentCenterEscalation.filter({escalation_key:key},'-created_date',1))[0];
     const row={escalation_key:key,agent_id:'development_lead',department:'Job information',title:'Daily job preparation failed',context:'The new job brief could not finish. The previous complete generation remains available; check its date before replying.',status:'needs_owner_decision',created_at:old?.created_at||new Date().toISOString()};
     if(old)await api.entities.AgentCenterEscalation.update(old.id,row);else await api.entities.AgentCenterEscalation.create(row);
-    return {status:'failed',automatic_send_allowed:false};
+    return {status:'failed',run_id:error?.run_id,build_detail:error?.build_detail,automatic_send_allowed:false};
   }
 }

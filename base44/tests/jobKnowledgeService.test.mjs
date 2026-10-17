@@ -38,21 +38,21 @@ const adapt=patch=>adaptKnowledgeSources(data(patch),NOW);
 const ctx=out=>out.contexts.find(c=>c.job_id==='j16');
 
 function fakeApi(initial={},options={}) {
-  const stores={},calls=[];let sequence=0;
+  const stores={},calls=[],uploads=new Map();let sequence=0;
   const names=['Jobs','CalendarEvents','FieldReports','FieldLibraryProject','FieldLibraryReport','FieldLibraryFile','ProbuildProjectLink','JobNotes','FeeLines','OutlookCalendarSnapshot','OutlookCalendarBatch','MessageServiceCase','SalesTrackerSnapshot','FieldLibraryImport','JobKnowledgeRun','JobKnowledge','JobKnowledgeUnassigned','AgentCenterEscalation','JobDocumentExtraction','CalendarReviewCapture'];
   const entities=Object.fromEntries(names.map(name=>{
     stores[name]=structuredClone(initial[name]||[]);
     const filter=async(query={},sort='id',limit=500,skip=0,selected)=>{
       calls.push({name,method:'filter',query,sort,limit,skip,selected});
-      let rows=stores[name].filter(r=>Object.entries(query).every(([k,v])=>r[k]===v));
+      let rows=stores[name].filter(r=>Object.entries(query).every(([k,v])=>(v&&typeof v==='object'&&Array.isArray(v.$in))?v.$in.includes(r[k]):r[k]===v));
       const direction=sort?.startsWith('-')?-1:1,field=sort?.replace(/^-/,'')||'id';
       rows=[...rows].sort((a,b)=>direction*String(a[field]??'').localeCompare(String(b[field]??''))).slice(skip,skip+limit);
       return rows.map(r=>selected?Object.fromEntries(selected.filter(k=>k in r).map(k=>[k,structuredClone(r[k])])):structuredClone(r));
     };
     const create=async row=>{calls.push({name,method:'create'});const saved={...structuredClone(row),id:`${name}-${++sequence}`};stores[name].push(saved);return structuredClone(saved);};
-    return [name,{filter,list:(sort,limit,skip,selected)=>filter({},sort,limit,skip,selected),create,update:async(id,row)=>{calls.push({name,method:'update',id});const found=stores[name].find(r=>r.id===id);if(!found)throw Error('missing');Object.assign(found,structuredClone(row));return structuredClone(found);},bulkCreate:async rows=>{calls.push({name,method:'bulkCreate'});if(options.failChunk&&name==='JobKnowledgeUnassigned')throw Error('synthetic chunk failure');for(const row of rows)await create(options.wrongJob&&name==='JobKnowledge'?{...row,job_id:'wrong-'+row.job_id}:row);return rows;}}];
+    return [name,{filter,updateMany:async(query,change)=>{const rows=await filter(query);for(const r of rows){const found=stores[name].find(x=>x.id===r.id);Object.assign(found,structuredClone(change.$set||{}));for(const[k,v]of Object.entries(change.$inc||{}))found[k]=(found[k]||0)+v;}return{updated:rows.length};},list:(sort,limit,skip,selected)=>filter({},sort,limit,skip,selected),create,update:async(id,row)=>{calls.push({name,method:'update',id});const found=stores[name].find(r=>r.id===id);if(!found)throw Error('missing');Object.assign(found,structuredClone(row));return structuredClone(found);},bulkCreate:async rows=>{calls.push({name,method:'bulkCreate'});if(options.failChunk&&name==='JobKnowledgeUnassigned')throw Error('synthetic chunk failure');for(const row of rows)await create(options.wrongJob&&name==='JobKnowledge'?{...row,job_id:'wrong-'+row.job_id}:row);return rows;}}];
   }));
-  return {entities,stores,calls};
+  return {entities,stores,calls,integrations:{Core:{UploadPrivateFile:async({file})=>{const uri='private/snapshot'+(++sequence);uploads.set(uri,await file.text());return {file_uri:uri};},CreateFileSignedUrl:async({file_uri})=>({signed_url:'data:application/json;base64,'+Buffer.from(uploads.get(file_uri)).toString('base64')})}}};
 }
 
 test('owner gate requires both admin and exact approved account',()=>{
@@ -121,23 +121,23 @@ test('collector projects timezone fields required for coverage validation',async
 });
 test('immutable generation writes all jobs, then records completion without modifying original sources',async()=>{
   const api=fakeApi({Jobs:JOBS,JobNotes:[{id:'n1',job_id:'j16',note_date:'2026-09-12',body:'Door inspected',updated_date:NOW}]});
-  const out=await refreshJobKnowledge({api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true});assert.equal(out.status,'complete');
+  const out=await refreshJobKnowledge({sleep:async()=>{},api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true});assert.equal(out.status,'complete');
   assert.equal(api.stores.JobKnowledge.length,2);assert.equal(api.stores.JobKnowledgeRun[0].status,'complete');
   assert.ok(api.calls.filter(c=>['create','update','bulkCreate'].includes(c.method)).every(c=>['JobKnowledge','JobKnowledgeRun','JobKnowledgeUnassigned','AgentCenterEscalation'].includes(c.name)));
 });
 test('unassigned references persisted in complete chunks before publishing generation',async()=>{
   const calendar=Array.from({length:401},(_,i)=>({id:'g'+i,job_name:'Unknown '+i,event_date:'2026-09-14',source:'google'}));
-  const api=fakeApi({Jobs:JOBS,CalendarEvents:calendar});await refreshJobKnowledge({api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true});
+  const api=fakeApi({Jobs:JOBS,CalendarEvents:calendar});await refreshJobKnowledge({sleep:async()=>{},api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true});
   assert.deepEqual(api.stores.JobKnowledgeUnassigned.map(c=>c.records.length),[200,200,1]);assert.equal(api.stores.JobKnowledgeRun[0].unassigned_count,401);assert.equal(api.stores.JobKnowledgeRun[0].unassigned_chunks,3);assert.equal(api.stores.JobKnowledgeRun[0].unassigned,undefined);
 });
 test('failed unmatched chunk prevents generation from becoming complete',async()=>{
   const previous={id:'previous',status:'complete',started_at:'2026-09-01T00:00:00Z',completed_at:'2026-09-01T01:00:00Z'};
   const api=fakeApi({Jobs:JOBS,JobKnowledgeRun:[previous],CalendarEvents:[{id:'g1',job_name:'Unknown',source:'google',event_date:'2026-09-14'}]},{failChunk:true});
-  await assert.rejects(()=>refreshJobKnowledge({api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true}),/chunk failure/);
+  await assert.rejects(()=>refreshJobKnowledge({sleep:async()=>{},api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true}),/chunk failure/);
   assert.equal(api.stores.JobKnowledgeRun.find(r=>r.id!=='previous').status,'failed');assert.equal(api.stores.JobKnowledgeRun.find(r=>r.id==='previous').status,'complete');
 });
 test('mismatched persisted job ID set prevents generation completion despite equal row count',async()=>{
-  const api=fakeApi({Jobs:JOBS},{wrongJob:true});await assert.rejects(()=>refreshJobKnowledge({api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true}),/job count mismatch/);assert.equal(api.stores.JobKnowledgeRun[0].status,'failed');
+  const api=fakeApi({Jobs:JOBS},{wrongJob:true});await assert.rejects(()=>refreshJobKnowledge({sleep:async()=>{},api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true}),/retry limit|duplicate|changed|job count mismatch/);assert.equal(api.stores.JobKnowledgeRun[0].status,'failed');
 });
 test('read chooses newest source generation even if older run finished later',async()=>{
   const old={id:'old',status:'complete',started_at:'2026-09-13T10:00:00Z',completed_at:'2026-09-13T14:00:00Z'}, newer={id:'new',status:'complete',started_at:'2026-09-13T11:00:00Z',completed_at:'2026-09-13T12:00:00Z'};
@@ -192,7 +192,7 @@ test('provider callback invoked once after stored reads, and completion clock ve
 });
 test('provider callback rejection cannot discard successfully read notes or fail generation',async()=>{
   const api=fakeApi({Jobs:JOBS,JobNotes:[{id:'n1',job_id:'j16',note_date:'2026-09-12',body:'Existing note'}]});let calls=0;
-  const out=await refreshJobKnowledge({api,readTracker:async()=>[],readProviders:async()=>{calls++;throw Error('sensitive provider credentials');},now:NOW,getNow:()=>NOW,force:true});
+  const out=await refreshJobKnowledge({sleep:async()=>{},api,readTracker:async()=>[],readProviders:async()=>{calls++;throw Error('sensitive provider credentials');},now:NOW,getNow:()=>NOW,force:true});
   assert.equal(out.status,'complete');assert.equal(calls,1);const c=api.stores.JobKnowledge.find(j=>j.job_id==='j16').context;assert.equal(c.latest_notes.length,1);assert.doesNotMatch(JSON.stringify(api.stores.JobKnowledgeRun),/sensitive provider credentials/);
 });
 test('unassigned rows preserve identity metadata for owner resolution but omit text and URLs',()=>{
@@ -252,7 +252,7 @@ test('collector queries only review-pending extraction records and projects hash
 });
 test('completed preparation resolves only absent generated job-information issues',async()=>{
   const api=fakeApi({Jobs:JOBS,AgentCenterEscalation:[{id:'generated',department:'Job information',escalation_key:'job_knowledge:fixed_source:fixed_issue',status:'needs_owner_decision'},{id:'manual',department:'Job information',escalation_key:'owner:follow_up',status:'needs_owner_decision'},{id:'other_department',department:'Other',escalation_key:'job_knowledge:fixed_source:fixed_issue',status:'needs_owner_decision'}]});
-  const result=await refreshJobKnowledge({api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true});
+  const result=await refreshJobKnowledge({sleep:async()=>{},api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true});
   const stale=api.stores.AgentCenterEscalation.find(e=>e.id==='generated');assert.equal(stale.status,'answered');assert.match(stale.resolution,new RegExp(result.run_id));assert.equal(stale.resolved_at,NOW);
   assert.equal(api.stores.AgentCenterEscalation.find(e=>e.id==='manual').status,'needs_owner_decision');assert.equal(api.stores.AgentCenterEscalation.find(e=>e.id==='other_department').status,'needs_owner_decision');
 });
@@ -260,7 +260,47 @@ test('recurring issue reopens after absence while a continuously dismissed issue
   const key='job_knowledge:calendar:upstream_freshness_unverified';
   for(const continued of [false,true]){
     const api=fakeApi({Jobs:JOBS,JobKnowledgeRun:[{id:'prev',status:'complete',started_at:'2026-09-12T15:00:00Z',completed_at:'2026-09-12T15:01:00Z',issues:continued?[{source:'calendar',code:'upstream_freshness_unverified'}]:[]}],AgentCenterEscalation:[{id:'old',department:'Job information',escalation_key:key,status:'dismissed',resolved_at:'2026-09-12T16:00:00Z',resolution:'Owner reviewed'}]});
-    await refreshJobKnowledge({api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true});const issue=api.stores.AgentCenterEscalation.find(e=>e.id==='old');
+    await refreshJobKnowledge({sleep:async()=>{},api,readTracker:async()=>[],now:NOW,getNow:()=>NOW,force:true});const issue=api.stores.AgentCenterEscalation.find(e=>e.id==='old');
     assert.equal(issue.status,continued?'dismissed':'needs_owner_decision');assert.equal(issue.resolution,continued?'Owner reviewed':'');
   }
+});
+
+test('paused rebuild resumes the frozen snapshot without recollecting changed sources',async()=>{
+ const api=fakeApi({Jobs:JOBS});let tick=0;
+ const paused=await refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,force:true,maxWorkMs:0,clock:()=>tick++,sleep:async()=>{}});
+ assert.equal(paused.status,'paused');assert.equal(api.stores.JobKnowledge.length,0);
+ api.stores.Jobs[0].canonical_name='CHANGED AFTER SNAPSHOT';
+ const done=await refreshJobKnowledge({api,resumeRunId:paused.run_id,now:NOW,getNow:()=>NOW,sleep:async()=>{}});
+ assert.equal(done.status,'complete');assert.equal(api.stores.JobKnowledgeRun.length,1);assert.equal(done.verified_jobs,2);assert.notEqual(api.stores.JobKnowledge[0].job_name,'CHANGED AFTER SNAPSHOT');
+});
+test('429 after partial batch persistence reconciles missing rows, records rate limiting and never duplicates',async()=>{
+ const api=fakeApi({Jobs:JOBS});const original=api.entities.JobKnowledge.bulkCreate;let once=true;
+ api.entities.JobKnowledge.bulkCreate=async rows=>{if(once){once=false;await original(rows.slice(0,1));throw Object.assign(Error('sensitive response data'),{status:429});}return original(rows);};
+ const r=await refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,force:true,sleep:async()=>{}});
+ assert.equal(r.status,'complete');assert.equal(r.rate_limit_seen,true);assert.equal(api.stores.JobKnowledge.length,2);assert.equal(api.stores.JobKnowledgeRun[0].retry_count,1);assert.doesNotMatch(JSON.stringify(api.stores.JobKnowledgeRun),/sensitive response/);
+});
+test('lost response after entire write reads back instead of rewriting',async()=>{
+ const api=fakeApi({Jobs:JOBS});const original=api.entities.JobKnowledge.bulkCreate;let calls=0;
+ api.entities.JobKnowledge.bulkCreate=async rows=>{calls++;await original(rows);throw Object.assign(Error('lost response'),{name:'TimeoutError'});};
+ assert.equal((await refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,force:true,sleep:async()=>{}})).status,'complete');assert.equal(calls,1);
+});
+test('same run live lock rejects a competing resume',async()=>{
+ const api=fakeApi({JobKnowledgeRun:[{id:'run',status:'paused',started_at:NOW,snapshot_uri:'private/frozen',lock_token:'someone',lock_expires_at:'2026-09-13T15:05:00Z'}]});
+ const r=await refreshJobKnowledge({api,now:NOW,resumeRunId:'run',sleep:async()=>{}});assert.equal(r.status,'busy');assert.equal(api.stores.JobKnowledge.length,0);
+});
+test('stale building receipt becomes timed_out, preserving last complete generation',async()=>{
+ const api=fakeApi({Jobs:JOBS,JobKnowledgeRun:[{id:'old',status:'building',started_at:'2026-09-11T15:00:00Z'}]});
+ await refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,force:true,sleep:async()=>{}});assert.equal(api.stores.JobKnowledgeRun.find(r=>r.id==='old').status,'timed_out');
+});
+test('snapshot corruption blocks resume with safe stage error and prior complete intact',async()=>{
+ const api=fakeApi({Jobs:JOBS,JobKnowledgeRun:[{id:'previous',status:'complete',started_at:'2026-09-01',completed_at:'2026-09-01'}]});let tick=0;
+ const r=await refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,force:true,maxWorkMs:0,clock:()=>tick++,sleep:async()=>{}});
+ api.stores.JobKnowledgeRun.find(x=>x.id===r.run_id).snapshot_sha256='a'.repeat(64);
+ await assert.rejects(()=>refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,resumeRunId:r.run_id,sleep:async()=>{}}),/integrity/);
+ assert.equal(api.stores.JobKnowledge.length,0);assert.equal(api.stores.JobKnowledgeRun.find(x=>x.id==='previous').status,'complete');assert.equal(api.stores.JobKnowledgeRun.find(x=>x.id===r.run_id).stage,'load_snapshot');
+});
+test('changed generated row blocks completion, not overwritten',async()=>{
+ const api=fakeApi({Jobs:JOBS});const original=api.entities.JobKnowledge.bulkCreate;
+ api.entities.JobKnowledge.bulkCreate=async rows=>original(rows.map(r=>({...r,briefing:'tampered'})));
+ await assert.rejects(()=>refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,force:true,sleep:async()=>{}}),/changed/);assert.equal(api.stores.JobKnowledgeRun[0].status,'failed');assert.equal(api.stores.JobKnowledge[0].briefing,'tampered');
 });

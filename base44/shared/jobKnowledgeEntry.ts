@@ -36,12 +36,12 @@ Deno.serve(async req=>{
       return reply({lookup,research_plan:buildJobResearchPlan({query,lookup:{...lookup,job_name:job?.canonical_name},research:input.research||{},now})});
     }
     if(input.action==='extract_documents')return reply(await extractJobDocuments(api,{maxFiles:2}));
-    if(input.action==='refresh')return reply(await refreshJobKnowledge({api,readTracker:readKnowledgeTracker,readProviders:()=>readJobKnowledgeProviders(client),force:input.force===true}));
+    if(input.action==='refresh'||input.action==='resume')return reply(await refreshJobKnowledge({api,readTracker:readKnowledgeTracker,readProviders:()=>readJobKnowledgeProviders(client),force:input.force===true,resumeRunId:input.action==='resume'?input.run_id:undefined}));
     if(input.action==='get')return reply(await readPreparedJob(api,input.job_id));
     if(input.action==='status') {
       const [rows,completed]=await Promise.all([api.entities.JobKnowledgeRun.list('-started_at',5),api.entities.JobKnowledgeRun.filter({status:'complete'},'-started_at',1)]);
       const clean=({unassigned,...r})=>({...r,unassigned_count:r.unassigned_count??unassigned?.length??0});
-      return reply({runs:rows.map(clean),latest_complete:completed[0]?clean(completed[0]):null,automatic_send_allowed:false,document_extractor_revision:JOB_DOCUMENT_EXTRACTOR_REVISION,calendar_review_revision:REVIEW_VERSION});
+      return reply({runs:rows.map(clean),latest_complete:completed[0]?clean(completed[0]):null,knowledge_recovery_revision:'knowledge-recovery-20261016-v1',automatic_send_allowed:false,document_extractor_revision:JOB_DOCUMENT_EXTRACTOR_REVISION,calendar_review_revision:REVIEW_VERSION});
     }
     if(input.action==='unassigned') {
       const run=(await api.entities.JobKnowledgeRun.filter({status:'complete'},'-started_at',1))[0];
@@ -53,6 +53,6 @@ Deno.serve(async req=>{
     return reply({error:'Unsupported action.'},400);
   } catch(error) {
     console.error('Job knowledge failed',error?.name||'Error');
-    return reply({error:'Job information could not finish loading. The previous complete preparation is retained. No source records or messages were changed.'},500);
+    return reply({error:'Job information could not finish loading. The previous complete preparation is retained. No source records or messages were changed.',run_id:error?.run_id,build_detail:error?.build_detail},500);
   }
 });

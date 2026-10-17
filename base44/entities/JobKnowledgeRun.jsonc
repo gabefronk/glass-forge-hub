@@ -7,7 +7,9 @@
       "enum": [
         "building",
         "complete",
-        "failed"
+        "failed",
+        "paused",
+        "timed_out"
       ]
     },
     "started_at": {
@@ -49,6 +51,63 @@
     },
     "unassigned_chunks": {
       "type": "integer"
+    },
+    "stage": {
+      "type": "string"
+    },
+    "error_code": {
+      "type": "string"
+    },
+    "last_error_at": {
+      "type": "string"
+    },
+    "snapshot_uri": {
+      "type": "string"
+    },
+    "snapshot_sha256": {
+      "type": "string"
+    },
+    "lock_token": {
+      "type": "string"
+    },
+    "lock_expires_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    },
+    "snapshot_bytes": {
+      "type": "number"
+    },
+    "expected_jobs": {
+      "type": "number"
+    },
+    "expected_chunks": {
+      "type": "number"
+    },
+    "job_cursor": {
+      "type": "number"
+    },
+    "chunk_cursor": {
+      "type": "number"
+    },
+    "verified_jobs": {
+      "type": "number"
+    },
+    "verified_chunks": {
+      "type": "number"
+    },
+    "error_http_status": {
+      "type": "number"
+    },
+    "retry_count": {
+      "type": "number"
+    },
+    "rate_limit_seen": {
+      "type": "boolean"
     }
   },
   "required": [
