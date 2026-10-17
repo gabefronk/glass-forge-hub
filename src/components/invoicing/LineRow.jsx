@@ -78,7 +78,7 @@ function StatusDot({ label, dot, text, onClick, clickable }) {
   );
 }
 
-export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, expanded, onToggleExpand, onReady, onSendForReview, onCollapse, jobs, onLinkJob }) {
+export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, expanded, onToggleExpand, onReady, onSendForReview, onCollapse, jobs, onLinkJob, selectionEnabled = true }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUp, setMenuUp] = useState(false);
@@ -124,6 +124,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
 
   const handleCheckboxClick = (e) => {
     e.stopPropagation();
+    if (!selectionEnabled) return;
     if (e.shiftKey) onShiftClick(row.id);
     else onToggle(row.id);
   };
@@ -193,7 +194,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
           onClick={handleCheckboxClick}
           aria-label={`Select ${row.job_name_raw || row.job_name_norm || "invoice line"}`}
           aria-pressed={selected}
-          style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--r-check)", border: "none", backgroundColor: "transparent", cursor: "pointer", flexShrink: 0 }}
+          style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--r-check)", border: "none", backgroundColor: "transparent", cursor: "pointer", flexShrink: 0, visibility: selectionEnabled ? "visible" : "hidden" }}
         >
           <span aria-hidden="true" style={{ width: "16px", height: "16px", borderRadius: "4.5px", border: selected ? "none" : `1.5px solid var(--gf-check)`, backgroundColor: selected ? "var(--gf-teal-600)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {selected && <Check style={{ width: "11px", height: "11px", color: "#FFFFFF" }} strokeWidth={3} />}
@@ -286,7 +287,7 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
             onClick={handleCheckboxClick}
             aria-label={`Select ${row.job_name_raw || row.job_name_norm || "invoice line"}`}
             aria-pressed={selected}
-            style={{ width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--r-check)", border: "none", backgroundColor: "transparent", cursor: "pointer", flexShrink: 0 }}
+            style={{ width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--r-check)", border: "none", backgroundColor: "transparent", cursor: "pointer", flexShrink: 0, visibility: selectionEnabled ? "visible" : "hidden" }}
           >
             <span aria-hidden="true" style={{ width: "20px", height: "20px", borderRadius: "4.5px", border: selected ? "none" : `1.5px solid var(--gf-check)`, backgroundColor: selected ? "var(--gf-teal-600)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {selected && <Check style={{ width: "13px", height: "13px", color: "#FFFFFF" }} strokeWidth={3} />}

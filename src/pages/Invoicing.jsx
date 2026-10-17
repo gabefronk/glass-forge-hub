@@ -1,4 +1,4 @@
-import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
+import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
 import { refreshMonth } from "@/lib/refreshMonth";
 import { invoicingStats } from "@/lib/invoicingStats";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
@@ -24,6 +24,11 @@ import LineDetailsDrawer from "@/components/invoicing/LineDetailsDrawer";
 import JobProfitabilityPanel from "@/components/invoicing/JobProfitabilityPanel";
 import BudgetEstimateNote from "@/components/invoicing/BudgetEstimateNote";
 import NeedsConfirmationList from "@/components/invoicing/NeedsConfirmationList";
+import DateRangeBar from "@/components/invoicing/dashboard/DateRangeBar";
+import DashboardCards from "@/components/invoicing/dashboard/DashboardCards";
+import RevenueSplitPanel from "@/components/invoicing/dashboard/RevenueSplitPanel";
+import DashboardMonthList from "@/components/invoicing/dashboard/DashboardMonthList";
+import { resolveDashboardRange, dashboardData, inDashboardRange, dashboardMonthGroups } from "@/lib/invoiceDashboard";
 import { useAuth } from "@/lib/AuthContext";
 
 export default function Invoicing() {
@@ -37,11 +42,13 @@ export default function Invoicing() {
   const changeMonth = value => { setMonth(value); const p = new URLSearchParams(params); p.set('month', value); setParams(p); };
   const [feeLines, setFeeLines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState(() => localStorage.getItem("inv_view") || "lines");
+  const [view, setView] = useState(() => localStorage.getItem("inv_view") || "dashboard");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(() => localStorage.getItem("inv_sort") || "date");
   const [hideZeros, setHideZeros] = useState(() => localStorage.getItem("inv_hideZeros") === "true");
+  const [dashPreset, setDashPreset] = useState(() => localStorage.getItem("inv_dash_preset") || "this_month");
+  const [dashCustom, setDashCustom] = useState({ start: "", end: "" });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [undo, setUndo] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -66,9 +73,11 @@ export default function Invoicing() {
   const [deletingRows, setDeletingRows] = useState(false);
 
   useEffect(() => { setSelectedIds(new Set()); setDetailRow(null); setUndo(null); lastClickedIndex.current = null; clearTimeout(undoTimer.current); }, [month, focusedJobId]);
+  useEffect(() => { if (focusedJobId && view === "dashboard") setView("lines"); }, [focusedJobId, view]);
   useEffect(() => { localStorage.setItem("inv_view", view); }, [view]);
   useEffect(() => { localStorage.setItem("inv_sort", sort); }, [sort]);
   useEffect(() => { localStorage.setItem("inv_hideZeros", String(hideZeros)); }, [hideZeros]);
+  useEffect(() => { localStorage.setItem("inv_dash_preset", dashPreset); }, [dashPreset]);
   useEffect(() => { localStorage.setItem("inv_reportAttached", JSON.stringify([...reportAttached])); }, [reportAttached]);
 
   // Ignore responses from an older load (e.g. after quickly switching months).
@@ -159,6 +168,21 @@ export default function Invoicing() {
   }, [monthRows, reportStatusMap, supersededSet]);
 
   const heroStats = useMemo(() => invoicingStats(monthRows, reportStatusMap, supersededSet), [monthRows, reportStatusMap, supersededSet]);
+
+  // Dashboard view: same FeeLines rows over a date range instead of one month.
+  const dashToday = denverDate();
+  const dashRange = useMemo(() => resolveDashboardRange(dashPreset, dashToday, dashCustom.start, dashCustom.end), [dashPreset, dashCustom.start, dashCustom.end, dashToday]);
+  const dashData = useMemo(() => dashboardData(billingRows, { range: dashRange, reportStatusMap, supersededSet, today: dashToday }), [billingRows, dashRange, reportStatusMap, supersededSet, dashToday]);
+  const dashGroups = useMemo(() => {
+    let rows = billingRows.filter((r) => inDashboardRange(r, dashRange) && !(r.customer_collection_state && r.customer_collection_state !== "paid") && !supersededSet.has(r.id) && !r._companion_folded);
+    if (hideZeros) rows = rows.filter((r) => computeFeeAmt(r) !== 0 || isMatchBlocked(r) || r.fee_type === "profit_split");
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      rows = rows.filter((r) => [r.line_description, r.job_name_raw, r.job_name_norm, r.po_number, r.oe_number, r.note_text].filter(Boolean).some((s) => s.toLowerCase().includes(q)));
+    }
+    return dashboardMonthGroups(rows);
+  }, [billingRows, dashRange, supersededSet, hideZeros, search]);
+  const dashLineCount = useMemo(() => dashGroups.reduce((n, g) => n + g.rows.length, 0), [dashGroups]);
 
   const selectedFee = useMemo(() => {
     return monthRows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + (computeFeeAmt(r) || 0), 0);
@@ -471,7 +495,7 @@ export default function Invoicing() {
   const currentMonth = currentMonthStr();
   const isPast = month < currentMonth;
   const isFutureM = month > currentMonth;
-  const showEmptyState = monthRows.length === 0 && (isPast || isFutureM);
+  const showEmptyState = view !== "dashboard" && monthRows.length === 0 && (isPast || isFutureM);
 
   if (loading) {
     return (
@@ -518,6 +542,22 @@ export default function Invoicing() {
           </div>
         ) : (
           <>
+            {view === "dashboard" && !focusedJobId && (
+              <>
+                <DateRangeBar
+                  preset={dashPreset}
+                  onPresetChange={setDashPreset}
+                  customStart={dashCustom.start}
+                  customEnd={dashCustom.end}
+                  onCustomChange={(start, end) => setDashCustom({ start, end })}
+                  rangeLabel={dashRange.label}
+                />
+                <DashboardCards buckets={dashData.buckets} rangeLabel={dashRange.label} />
+                <RevenueSplitPanel split={dashData.split} rangeLabel={dashRange.label} />
+              </>
+            )}
+            {!(view === "dashboard" && !focusedJobId) && (
+              <>
             {unprocessedCount > 0 && !focusedJobId && (
               <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
             )}
@@ -539,8 +579,11 @@ export default function Invoicing() {
               supersededSet={supersededSet}
             />
             </details>
+              </>
+            )}
             <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "16px" }}>
             <InvoiceToolbar
+              dashboardMode={view === "dashboard" && !focusedJobId}
               search={search}
               onSearchChange={setSearch}
               searchRef={searchRef}
@@ -553,11 +596,40 @@ export default function Invoicing() {
               onSortChange={setSort}
               hideZeros={hideZeros}
               onHideZerosChange={() => setHideZeros(!hideZeros)}
-              lineCount={filteredRows.length}
+              lineCount={view === "dashboard" && !focusedJobId ? dashLineCount : filteredRows.length}
               readyCount={heroStats.readyCount}
               onSelectAllReady={handleSelectAllReady}
             />
-            {view === "lines" ? (
+            {view === "dashboard" && !focusedJobId ? (
+              <DashboardMonthList
+                groups={dashGroups}
+                selectedIds={selectedIds}
+                onToggle={toggleRow}
+                onShiftClick={shiftClickRow}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onAddReport={handleAddReport}
+                onMarkBilled={handleMarkBilled}
+                onOpenJob={() => {}}
+                onOpenDetails={setDetailRow}
+                reportAttached={reportAttached}
+                editRequestId={editRequestId}
+                onEditRequestHandled={clearEditRequest}
+                onReady={handleReady}
+                onSendForReview={handleSendForReview}
+                jobs={profitabilityInputs.jobs}
+                onLinkJob={handleLinkJob}
+                reportStatusMap={reportStatusMap}
+              />
+            ) : view === "jobs" ? (
+              <JobsView
+                rows={filteredRows}
+                isLineReady={isLineReady}
+                onBillJob={handleBillJob}
+                onExportJob={handleExportJob}
+                onOpenJob={() => {}}
+              />
+            ) : (
               <LineList
                 rows={filteredRows.map(r => ({ ...r, _reportBlocked: isReportBlocked(r, reportStatusMap) }))}
                 sort={sort}
@@ -579,14 +651,6 @@ export default function Invoicing() {
                 onSendForReview={handleSendForReview}
                 jobs={profitabilityInputs.jobs}
                 onLinkJob={handleLinkJob}
-              />
-            ) : (
-              <JobsView
-                rows={filteredRows}
-                isLineReady={isLineReady}
-                onBillJob={handleBillJob}
-                onExportJob={handleExportJob}
-                onOpenJob={() => {}}
               />
             )}
             </div>

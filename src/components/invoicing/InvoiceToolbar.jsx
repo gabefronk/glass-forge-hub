@@ -8,7 +8,7 @@ const FILTERS = [
   { key: "billed", label: "Billed" },
 ];
 
-export default function InvoiceToolbar({ search, onSearchChange, searchRef, view, onViewChange, filter, onFilterChange, filterCounts, sort, onSortChange, hideZeros, onHideZerosChange, lineCount, readyCount, onSelectAllReady }) {
+export default function InvoiceToolbar({ search, onSearchChange, searchRef, view, onViewChange, filter, onFilterChange, filterCounts, sort, onSortChange, hideZeros, onHideZerosChange, lineCount, readyCount, onSelectAllReady, dashboardMode = false }) {
   return (
     <div className="flex flex-wrap items-center gap-1" style={{ minHeight: "48px", padding: "5px 16px", borderBottom: "1px solid var(--gf-hairline)" }}>
       {/* Search */}
@@ -29,7 +29,7 @@ export default function InvoiceToolbar({ search, onSearchChange, searchRef, view
       <div className="hidden sm:block" style={{ width: "1px", height: "24px", backgroundColor: "var(--gf-hairline)", flexShrink: 0 }} />
 
       {/* Filter chips */}
-      <div className="flex items-center gap-1.5 overflow-x-auto inv-toolbar-scroll" style={{ flex: "1 1 auto", minWidth: 0 }}>
+      {!dashboardMode && (<div className="flex items-center gap-1.5 overflow-x-auto inv-toolbar-scroll" style={{ flex: "1 1 auto", minWidth: 0 }}>
         {FILTERS.map((f) => {
           const active = filter === f.key;
           return (
@@ -58,13 +58,14 @@ export default function InvoiceToolbar({ search, onSearchChange, searchRef, view
             </button>
           );
         })}
-      </div>
+      </div>)}
+      {dashboardMode && <div style={{ flex: "1 1 auto", minWidth: 0 }} />}
 
       {/* Right group */}
       <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
         {/* Lines / Jobs segmented toggle */}
         <div style={{ display: "inline-flex", backgroundColor: "var(--gf-field)", borderRadius: "var(--r-control)", padding: "3px", flexShrink: 0, border: "1px solid var(--gf-border)" }}>
-          {["lines", "jobs"].map((v) => (
+          {["dashboard", "lines", "jobs"].map((v) => (
             <button
               key={v}
               onClick={() => onViewChange(v)}
@@ -104,7 +105,8 @@ export default function InvoiceToolbar({ search, onSearchChange, searchRef, view
           <span className="hidden md:inline" style={{ fontSize: "13px", color: "var(--gf-ink-2)", whiteSpace: "nowrap" }}>Hide $0</span>
         </div>
 
-        {/* Sort toggle */}
+        {!dashboardMode && (<>
+      {/* Sort toggle */}
         <button
           onClick={() => onSortChange(sort === "date" ? "fee" : "date")}
           className="inline-flex items-center gap-1 whitespace-nowrap transition-colors hover:bg-[var(--gf-field)]"
@@ -136,6 +138,7 @@ export default function InvoiceToolbar({ search, onSearchChange, searchRef, view
         >
           Select ready{readyCount > 0 ? ` (${readyCount})` : ""}
         </button>
+      </>)}
       </div>
     </div>
   );
