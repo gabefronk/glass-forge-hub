@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   OVERDUE_DAYS, addDays, daysBetween, resolveDashboardRange, inDashboardRange,
   billingClockDate, dashboardBuckets, revenueSplit, dashboardMonthGroups, dashboardData,
+  lineDashboardStatus, revenueSplitDetailed, manuallyAdjustedCount,
 } from "../../src/lib/invoiceDashboard.js";
 
 const TODAY = "2026-10-16";
@@ -117,4 +118,43 @@ test("dashboardData scopes everything to the range", () => {
   const d = dashboardData(rows, { range: resolveDashboardRange("this_month", TODAY), reportStatusMap: noMap, supersededSet: noSup, today: TODAY });
   assert.deepEqual(d.buckets.drafts, { total: 20, count: 1 });
   assert.equal(d.split.total, 20);
+});
+
+test("line status: paid, overdue, outstanding, draft, then operational states", () => {
+  assert.equal(lineDashboardStatus(billed({ paid_date: "2026-10-10" }), noMap, noSup, TODAY), "paid");
+  assert.equal(lineDashboardStatus(billed({ updated_date: "2026-10-10T00:00:00Z" }), noMap, noSup, TODAY), "overdue");
+  assert.equal(lineDashboardStatus(billed({ updated_date: "2026-10-15T00:00:00Z" }), noMap, noSup, TODAY), "outstanding");
+  assert.equal(lineDashboardStatus(draft(), noMap, noSup, TODAY), "draft");
+  assert.equal(lineDashboardStatus(draft({ billable: false, needs_review: true }), noMap, noSup, TODAY), "review");
+});
+
+test("detailed split shows both sides with ratio terms, drafts excludable", () => {
+  const rows = [
+    draft({ id: "d", labor_amt: 200, fee_pct: 0.1, fee_amt: 20 }),           // draft, included by default
+    billed({ id: "b", labor_amt: 300, fee_pct: 0.1, fee_amt: 30 }),
+    { id: "y1", job_date: "2020-10-07", invoice_month: "2020-10", billable: true, billed_to_bfs: true, fee_type: "profit_split", split_pct: 0.5, split_candidate_amt: 100, labor_amt: 0, fee_amt: 50, source: "app", manually_adjusted: true },
+  ];
+  const all = revenueSplitDetailed(rows, noSup, { reportStatusMap: noMap, today: TODAY });
+  const bfs = all.channels.find((c) => c.key === "bfs");
+  const ya = all.channels.find((c) => c.key === "ya");
+  assert.equal(bfs.terms, "10 / 90");
+  assert.equal(bfs.gfFee, 50);
+  assert.equal(bfs.other, 450);
+  assert.equal(ya.terms, "50 / 50");
+  assert.equal(ya.gfFee, 50);
+  assert.equal(ya.other, 50);
+  assert.equal(all.total, 100);
+  const noDrafts = revenueSplitDetailed(rows, noSup, { includeDrafts: false, reportStatusMap: noMap, today: TODAY });
+  assert.equal(noDrafts.channels.find((c) => c.key === "bfs").gfFee, 30);
+  assert.equal(noDrafts.channels.find((c) => c.key === "ya").gfFee, 50);
+});
+
+test("manually adjusted count skips superseded and collection-parked rows", () => {
+  const rows = [
+    draft({ id: "m1" }),
+    draft({ id: "m2", manually_adjusted: false }),
+    draft({ id: "m3", customer_collection_state: "awaiting_request" }),
+  ];
+  assert.equal(manuallyAdjustedCount(rows, noSup), 1);
+  assert.equal(manuallyAdjustedCount(rows, new Set(["m1"])), 0);
 });

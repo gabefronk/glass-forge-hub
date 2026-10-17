@@ -27,7 +27,7 @@ import NeedsConfirmationList from "@/components/invoicing/NeedsConfirmationList"
 import DateRangeBar from "@/components/invoicing/dashboard/DateRangeBar";
 import DashboardCards from "@/components/invoicing/dashboard/DashboardCards";
 import RevenueSplitPanel from "@/components/invoicing/dashboard/RevenueSplitPanel";
-import DashboardMonthList from "@/components/invoicing/dashboard/DashboardMonthList";
+import DashboardLineList from "@/components/invoicing/dashboard/DashboardLineList";
 import { resolveDashboardRange, dashboardData, inDashboardRange, dashboardMonthGroups } from "@/lib/invoiceDashboard";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -49,6 +49,7 @@ export default function Invoicing() {
   const [hideZeros, setHideZeros] = useState(() => localStorage.getItem("inv_hideZeros") === "true");
   const [dashPreset, setDashPreset] = useState(() => localStorage.getItem("inv_dash_preset") || "this_month");
   const [dashCustom, setDashCustom] = useState({ start: "", end: "" });
+  const [dashIncludeDrafts, setDashIncludeDrafts] = useState(() => localStorage.getItem("inv_dash_inc_drafts") !== "false");
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [undo, setUndo] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -78,6 +79,7 @@ export default function Invoicing() {
   useEffect(() => { localStorage.setItem("inv_sort", sort); }, [sort]);
   useEffect(() => { localStorage.setItem("inv_hideZeros", String(hideZeros)); }, [hideZeros]);
   useEffect(() => { localStorage.setItem("inv_dash_preset", dashPreset); }, [dashPreset]);
+  useEffect(() => { localStorage.setItem("inv_dash_inc_drafts", String(dashIncludeDrafts)); }, [dashIncludeDrafts]);
   useEffect(() => { localStorage.setItem("inv_reportAttached", JSON.stringify([...reportAttached])); }, [reportAttached]);
 
   // Ignore responses from an older load (e.g. after quickly switching months).
@@ -172,7 +174,7 @@ export default function Invoicing() {
   // Dashboard view: same FeeLines rows over a date range instead of one month.
   const dashToday = denverDate();
   const dashRange = useMemo(() => resolveDashboardRange(dashPreset, dashToday, dashCustom.start, dashCustom.end), [dashPreset, dashCustom.start, dashCustom.end, dashToday]);
-  const dashData = useMemo(() => dashboardData(billingRows, { range: dashRange, reportStatusMap, supersededSet, today: dashToday }), [billingRows, dashRange, reportStatusMap, supersededSet, dashToday]);
+  const dashData = useMemo(() => dashboardData(billingRows, { range: dashRange, reportStatusMap, supersededSet, today: dashToday, includeDrafts: dashIncludeDrafts }), [billingRows, dashRange, reportStatusMap, supersededSet, dashToday, dashIncludeDrafts]);
   const dashGroups = useMemo(() => {
     let rows = billingRows.filter((r) => inDashboardRange(r, dashRange) && !(r.customer_collection_state && r.customer_collection_state !== "paid") && !supersededSet.has(r.id) && !r._companion_folded);
     if (hideZeros) rows = rows.filter((r) => computeFeeAmt(r) !== 0 || isMatchBlocked(r) || r.fee_type === "profit_split");
@@ -547,13 +549,12 @@ export default function Invoicing() {
                 <DateRangeBar
                   preset={dashPreset}
                   onPresetChange={setDashPreset}
-                  customStart={dashCustom.start}
-                  customEnd={dashCustom.end}
                   onCustomChange={(start, end) => setDashCustom({ start, end })}
                   rangeLabel={dashRange.label}
+                  rangeStart={dashRange.start}
+                  rangeEnd={dashRange.end}
                 />
                 <DashboardCards buckets={dashData.buckets} rangeLabel={dashRange.label} />
-                <RevenueSplitPanel split={dashData.split} rangeLabel={dashRange.label} />
               </>
             )}
             {!(view === "dashboard" && !focusedJobId) && (
@@ -601,26 +602,25 @@ export default function Invoicing() {
               onSelectAllReady={handleSelectAllReady}
             />
             {view === "dashboard" && !focusedJobId ? (
-              <DashboardMonthList
-                groups={dashGroups}
-                selectedIds={selectedIds}
-                onToggle={toggleRow}
-                onShiftClick={shiftClickRow}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onAddReport={handleAddReport}
-                onMarkBilled={handleMarkBilled}
-                onOpenJob={() => {}}
-                onOpenDetails={setDetailRow}
-                reportAttached={reportAttached}
-                editRequestId={editRequestId}
-                onEditRequestHandled={clearEditRequest}
-                onReady={handleReady}
-                onSendForReview={handleSendForReview}
-                jobs={profitabilityInputs.jobs}
-                onLinkJob={handleLinkJob}
-                reportStatusMap={reportStatusMap}
-              />
+              <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_340px]" style={{ alignItems: "start" }}>
+                <DashboardLineList
+                  groups={dashGroups}
+                  onOpenDetails={setDetailRow}
+                  reportStatusMap={reportStatusMap}
+                  supersededSet={supersededSet}
+                  today={dashToday}
+                />
+                <RevenueSplitPanel
+                  split={dashData.split}
+                  rangeLabel={dashRange.label}
+                  includeDrafts={dashIncludeDrafts}
+                  onIncludeDraftsChange={setDashIncludeDrafts}
+                  manuallyAdjusted={dashData.manuallyAdjusted}
+                  onReview={() => setView("lines")}
+                  onViewSplitByJob={() => setView("jobs")}
+                  onPartnerStatements={handleExportPdf}
+                />
+              </div>
             ) : view === "jobs" ? (
               <JobsView
                 rows={filteredRows}

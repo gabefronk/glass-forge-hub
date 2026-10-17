@@ -28,7 +28,7 @@ const dateInput = {
 
 // Date filter for the dashboard view. Presets plus an optional custom range;
 // the label names the active range so the cards and list always agree.
-export default function DateRangeBar({ preset, onPresetChange, customStart, customEnd, onCustomChange, rangeLabel }) {
+export default function DateRangeBar({ preset, onPresetChange, onCustomChange, rangeLabel, rangeStart, rangeEnd }) {
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[12px] px-4 py-3" style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", boxShadow: "var(--shadow-card)" }}>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -43,19 +43,19 @@ export default function DateRangeBar({ preset, onPresetChange, customStart, cust
         <input
           type="date"
           aria-label="Start date"
-          value={customStart}
-          onChange={(e) => { onCustomChange(e.target.value, customEnd); if (e.target.value) onPresetChange("custom"); }}
+          value={rangeStart || ""}
+          onChange={(e) => { onCustomChange(e.target.value, rangeEnd || ""); if (e.target.value) onPresetChange("custom"); }}
           style={dateInput}
         />
         <span style={{ color: "var(--gf-ink-3)" }}>–</span>
         <input
           type="date"
           aria-label="End date"
-          value={customEnd}
-          onChange={(e) => { onCustomChange(customStart, e.target.value); if (e.target.value) onPresetChange("custom"); }}
+          value={rangeEnd || ""}
+          onChange={(e) => { onCustomChange(rangeStart || "", e.target.value); if (e.target.value) onPresetChange("custom"); }}
           style={dateInput}
         />
-        {(customStart || customEnd) && (
+        {preset === "custom" && (
           <button
             onClick={() => { onCustomChange("", ""); onPresetChange("this_month"); }}
             aria-label="Clear dates"

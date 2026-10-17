@@ -10,7 +10,7 @@
 // billing-date proxy: an edit after billing only moves the clock forward, so a line
 // can surface overdue LATE but never early.
 import { computeFeeAmt, monthLabel, shiftMonthStr } from "./feeMath.js";
-import { isReady, isMatchBlocked } from "./invoicingFilters.js";
+import { isReady, isMatchBlocked, isReportBlocked } from "./invoicingFilters.js";
 
 export const OVERDUE_DAYS = 3;
 
@@ -132,11 +132,67 @@ export function dashboardMonthGroups(rows) {
     }));
 }
 
-export function dashboardData(rows, { range, reportStatusMap, supersededSet, today }) {
+// Display status for one list row. The four card buckets win first; lines that are
+// not billable yet keep their existing operational states.
+export function lineDashboardStatus(row, reportStatusMap, supersededSet, today) {
+  if (row.paid_date || row.customer_collection_state === "paid") return "paid";
+  if (row.billed_to_bfs) {
+    const clock = billingClockDate(row);
+    return clock && daysBetween(clock, today) > OVERDUE_DAYS ? "overdue" : "outstanding";
+  }
+  if (isReady(row, reportStatusMap, supersededSet)) return "draft";
+  if (isReportBlocked(row, reportStatusMap)) return "needs_report";
+  if (isMatchBlocked(row)) return "check_billing";
+  return "review";
+}
+
+// Richer split for the dashboard panel: Glass Forge fee plus the channel's own
+// share of the same basis, with split-ratio terms ("10 / 90", "50 / 50").
+export function revenueSplitDetailed(rows, supersededSet, { includeDrafts = true, reportStatusMap, today } = {}) {
+  let active = dashboardActive(rows, supersededSet);
+  if (!includeDrafts) {
+    active = active.filter((r) => !(isReady(r, reportStatusMap, supersededSet) && !r.paid_date && !r.billed_to_bfs && r.customer_collection_state !== "paid"));
+  }
+  const channels = new Map();
+  for (const r of active) {
+    const isSplit = r.fee_type === "profit_split";
+    const key = isSplit ? "ya" : "bfs";
+    if (!channels.has(key)) channels.set(key, { key, label: isSplit ? "YA" : "BFS", pcts: new Set(), gfFee: 0, basis: 0, lineCount: 0 });
+    const c = channels.get(key);
+    c.pcts.add(isSplit ? (r.split_pct ?? 0.5) : (r.fee_pct ?? 0.1));
+    const fee = computeFeeAmt(r);
+    c.gfFee += fee;
+    c.basis += isSplit ? Number(r.split_candidate_amt) || 0 : Number(r.labor_amt) || 0;
+    c.lineCount += 1;
+  }
+  const list = [...channels.values()].map((c) => {
+    const pcts = [...c.pcts];
+    const gfFee = Math.round(c.gfFee * 100) / 100;
+    let other;
+    if (c.basis > 0) other = Math.round((c.basis - c.gfFee) * 100) / 100;
+    else {
+      const p = pcts[0] || 0;
+      other = p > 0 && p < 1 ? Math.round(gfFee * (1 - p) / p * 100) / 100 : 0;
+    }
+    if (other < 0) other = 0;
+    const terms = pcts.length === 1
+      ? `${Math.round(pcts[0] * 100)} / ${100 - Math.round(pcts[0] * 100)}`
+      : "mixed";
+    return { key: c.key, label: c.label, terms, gfFee, other, lineCount: c.lineCount, mixed: pcts.length > 1 };
+  }).sort((a, b) => (a.key === "ya" ? -1 : 1) - (b.key === "ya" ? -1 : 1));
+  return { channels: list, total: Math.round(list.reduce((n, c) => n + c.gfFee, 0) * 100) / 100 };
+}
+
+export function manuallyAdjustedCount(rows, supersededSet) {
+  return dashboardActive(rows, supersededSet).filter((r) => r.manually_adjusted).length;
+}
+
+export function dashboardData(rows, { range, reportStatusMap, supersededSet, today, includeDrafts = true }) {
   const scoped = (Array.isArray(rows) ? rows : []).filter((r) => inDashboardRange(r, range));
   return {
     buckets: dashboardBuckets(scoped, reportStatusMap, supersededSet, today),
-    split: revenueSplit(scoped, supersededSet),
+    split: revenueSplitDetailed(scoped, supersededSet, { includeDrafts, reportStatusMap, today }),
+    manuallyAdjusted: manuallyAdjustedCount(scoped, supersededSet),
   };
 }
 
