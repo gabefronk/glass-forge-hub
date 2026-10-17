@@ -16,6 +16,7 @@ const pill = (active) => ({
 
 const dateInput = {
   height: "30px",
+  maxWidth: "132px",
   borderRadius: "var(--r-control)",
   border: "1px solid var(--gf-border)",
   backgroundColor: "var(--gf-card)",
@@ -37,7 +38,7 @@ export default function DateRangeBar({ preset, onPresetChange, customStart, cust
           </button>
         ))}
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[10.5px] font-semibold tracking-[.08em]" style={{ color: "var(--gf-ink-3)" }}>CUSTOM</span>
         <input
           type="date"
