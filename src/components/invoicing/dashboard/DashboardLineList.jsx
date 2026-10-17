@@ -59,9 +59,9 @@ export default function DashboardLineList({ groups, onOpenDetails, reportStatusM
                 key={row.id}
                 onClick={() => onOpenDetails(row)}
                 className="flex w-full items-center text-left"
-                style={{ padding: "10px 16px", gap: "14px", background: "none", border: "none", borderTop: "1px solid var(--gf-hairline)", cursor: "pointer" }}
+                style={{ background: "none", border: "none", borderTop: "1px solid var(--gf-hairline)", cursor: "pointer", padding: "10px 12px", gap: "10px" }}
               >
-                <div style={{ width: "86px", flexShrink: 0 }}>
+                <div className="w-16 sm:w-[86px]" style={{ flexShrink: 0 }}>
                   <div className="text-[13px] font-bold" style={{ color: "var(--gf-ink)" }}>{shortDate(row.job_date)}</div>
                   <div className="text-[11px]" style={{ color: "var(--gf-ink-3)" }}>{feeTerms(row)}</div>
                 </div>
@@ -74,10 +74,10 @@ export default function DashboardLineList({ groups, onOpenDetails, reportStatusM
                     )}
                   </div>
                 </div>
-                <div className="text-right" style={{ width: "110px", flexShrink: 0 }}>
+                <div className="w-20 sm:w-[110px] text-right" style={{ flexShrink: 0 }}>
                   <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: st.bg, color: st.fg, whiteSpace: "nowrap" }}>{st.label}</span>
                 </div>
-                <div className="text-right text-[13.5px] font-bold tabular-nums" style={{ color: "var(--gf-ink)", width: "90px", flexShrink: 0 }}>
+                <div className="w-16 sm:w-[90px] text-right text-[13.5px] font-bold tabular-nums" style={{ color: "var(--gf-ink)", flexShrink: 0 }}>
                   ${formatMoney(computeFeeAmt(row))}
                 </div>
               </button>
