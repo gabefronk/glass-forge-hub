@@ -42,7 +42,13 @@ export default function Invoicing() {
   const changeMonth = value => { setMonth(value); const p = new URLSearchParams(params); p.set('month', value); setParams(p); };
   const [feeLines, setFeeLines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState(() => localStorage.getItem("inv_view") || "dashboard");
+  // One-time default: everyone lands on the new Dashboard once; after that their
+  // stored choice wins (flag set on the first persist below).
+  const [view, setView] = useState(() =>
+    localStorage.getItem("inv_view_migrated") === "1"
+      ? localStorage.getItem("inv_view") || "dashboard"
+      : "dashboard"
+  );
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(() => localStorage.getItem("inv_sort") || "date");
@@ -75,7 +81,7 @@ export default function Invoicing() {
 
   useEffect(() => { setSelectedIds(new Set()); setDetailRow(null); setUndo(null); lastClickedIndex.current = null; clearTimeout(undoTimer.current); }, [month, focusedJobId]);
   useEffect(() => { if (focusedJobId && view === "dashboard") setView("lines"); }, [focusedJobId, view]);
-  useEffect(() => { localStorage.setItem("inv_view", view); }, [view]);
+  useEffect(() => { localStorage.setItem("inv_view", view); localStorage.setItem("inv_view_migrated", "1"); }, [view]);
   useEffect(() => { localStorage.setItem("inv_sort", sort); }, [sort]);
   useEffect(() => { localStorage.setItem("inv_hideZeros", String(hideZeros)); }, [hideZeros]);
   useEffect(() => { localStorage.setItem("inv_dash_preset", dashPreset); }, [dashPreset]);
