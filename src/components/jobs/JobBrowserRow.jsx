@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check } from "lucide-react";
 import { titleCase } from "@/lib/displayName";
@@ -85,8 +86,13 @@ export function rowFlag(stats, group) {
   return null;
 }
 
+// Teal outline + soft halo glow for the selected (and hovered) job card; the
+// card itself stays white.
+const HALO = "0 0 0 3px rgba(15,118,110,.16), 0 6px 18px -6px rgba(15,118,110,.45), 0 1px 2px rgba(10,29,31,.10)";
+const TEAL = "#0f766e";
 // Job card for the Jobs list: bold name, builder · address, kind, and the
-// next (or last) visit on the right. The selected job turns dark.
+// next (or last) visit on the right. The selected job keeps its white card and
+// gets a teal outline with a soft halo glow.
 export default function JobBrowserRow({ job, group = null, stats, selected, onSelect, href, serviceCount = 0, selectMode = false, combineSelected = false, onToggleCombine }) {
   const today = denverDate();
   const when = stats?.nextVisit ? friendlyDay(stats.nextVisit, today) : stats?.lastVisit ? friendlyDay(stats.lastVisit, today) : "";
@@ -96,6 +102,7 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
   const sub = [job.builder && sanitizeText(job.builder), job.address && sanitizeText(job.address)].filter(Boolean).join(" · ") || "No builder or address";
   const kindLine = [stats?.kind, group?.merged ? `${group.members.length} records` : ""].filter(Boolean).join(" · ");
   // Already-merged jobs can't be combined: disable the checkbox in select mode.
+  const [hovered, setHovered] = useState(false);
   const merged = Boolean(job.merged_into);
   const disabledInSelect = selectMode && merged;
   const body = (
@@ -113,18 +120,18 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
           {combineSelected ? <Check className="h-3.5 w-3.5" /> : null}
         </span>
       ) : (
-        <span className="mt-[7px] h-[9px] w-[9px] shrink-0 rounded-full" style={{ backgroundColor: selected ? "#e0c994" : stats?.thisWeek ? "#0b3f3b" : "#c9c2b5" }} aria-hidden="true" />
+        <span className="mt-[7px] h-[9px] w-[9px] shrink-0 rounded-full" style={{ backgroundColor: selected ? TEAL : stats?.thisWeek ? "#0b3f3b" : "#c9c2b5" }} aria-hidden="true" />
       )}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15.5px] font-bold" style={{ letterSpacing: "-0.02em" }}>{titleCase(sanitizeText(job.canonical_name))}</span>
-        <span className="mt-0.5 block truncate text-[13px]" style={{ color: selected ? "#c9d0d1" : "#566063" }}>{sub}</span>
+        <span className="mt-0.5 block truncate text-[13px]" style={{ color: "#566063" }}>{sub}</span>
         {selectMode && <span className="mt-0.5 block font-mono text-[10.5px]" style={{ color: "#8a8f93" }}>ID {job.id}</span>}
-        {kindLine ? <span className="mt-0.5 block truncate text-[12.5px]" style={{ color: selected ? "#aeb5b7" : "#6b7477" }}>{kindLine}</span> : null}
+        {kindLine ? <span className="mt-0.5 block truncate text-[12.5px]" style={{ color: "#6b7477" }}>{kindLine}</span> : null}
         {merged ? <span className="mt-0.5 block truncate text-[11.5px] font-semibold" style={{ color: "#8a6420" }}>Merged away</span> : null}
       </span>
       <span className="flex shrink-0 flex-col items-end gap-1">
         {when ? (
-          <span className="whitespace-nowrap text-[13px] font-bold" style={{ color: selected ? "#e0c994" : upcoming ? "#0b3f3b" : "#6b7477" }} title={upcoming ? "Next visit" : "Last visit"}>{when}</span>
+          <span className="whitespace-nowrap text-[13px] font-bold" style={{ color: selected ? TEAL : upcoming ? "#0b3f3b" : "#6b7477" }} title={upcoming ? "Next visit" : "Last visit"}>{when}</span>
         ) : null}
         {serviceCount ? <span className="whitespace-nowrap rounded-md px-[7px] py-0.5 text-[11.5px] font-bold uppercase tracking-[.04em]" style={{ backgroundColor: "#a43432", color: "#fff" }} title="Open service item on this job">Service{serviceCount > 1 ? ` ×${serviceCount}` : ""}</span> : null}
         {flag ? <span className="whitespace-nowrap rounded-md px-[7px] py-0.5 text-[11.5px] font-semibold" style={{ backgroundColor: fbg, color: fink }}>{flag.label}</span> : null}
@@ -154,11 +161,11 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
     );
   }
   const style = selected
-    ? { backgroundColor: "#0e2426", color: "#ffffff", border: `1px solid ${serviceCount ? "#a43432" : "#0e2426"}`, boxShadow: "0 8px 20px -12px rgba(14,36,38,.6)" }
-    : { backgroundColor: "#ffffff", color: "#101617", border: `1px solid ${serviceCount ? "#a43432" : "#d3cabb"}`, borderLeftWidth: serviceCount ? 4 : 1, boxShadow: "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -8px rgba(10,29,31,.18)" };
-  if (href) return <Link to={href} className={`${cls} hover:shadow-md`} style={style}>{body}</Link>;
+    ? { backgroundColor: "#ffffff", color: "#101617", border: `2px solid ${serviceCount ? "#a43432" : TEAL}`, boxShadow: HALO }
+    : { backgroundColor: "#ffffff", color: "#101617", border: `1px solid ${serviceCount ? "#a43432" : "#d3cabb"}`, borderLeftWidth: serviceCount ? 4 : 1, boxShadow: hovered ? HALO : "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -8px rgba(10,29,31,.18)" };
+  if (href) return <Link to={href} className={cls} style={style} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>{body}</Link>;
   return (
-    <button type="button" onClick={onSelect} aria-current={selected ? "true" : undefined} className={`${cls} ${selected ? "" : "hover:shadow-md"}`} style={style}>
+    <button type="button" onClick={onSelect} aria-current={selected ? "true" : undefined} className={cls} style={style} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       {body}
     </button>
   );
