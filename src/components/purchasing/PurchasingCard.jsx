@@ -74,7 +74,7 @@ export default function PurchasingCard({ card, onEdit, data, onSaved }) {
         <RefChip label="Mfr" value={refs.mfrOrder} tone={refTone(refs.mfrStatus)} />
         <RefChip label="YA PO" value={refs.yaPo} tone={refTone(refs.poStatus)} />
         <RefChip label="ETA" value={refs.etaLabel} tone={etaTone(refs.etaLabel)} />
-        <RefChip label="Payment" value={refs.paymentLabel} tone={paymentTone(refs.paymentLabel)} />
+        <RefChip label="Supplier payment" value={refs.paymentLabel} tone={paymentTone(refs.paymentLabel)} />
       </div>
 
       {windows.display?.review && (chosenBudget || windows.display?.alternatives?.length) ? (

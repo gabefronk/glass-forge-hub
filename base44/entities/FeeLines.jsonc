@@ -270,6 +270,218 @@
       "type": "string",
       "title": "Sent For Review By",
       "description": "Email of the user who sent the line for crew review."
+    },
+    "customer_collection_state": {
+      "type": "string",
+      "description": "Owner-only customer collection workflow. Separate from supplier payments. No automatic QuickBooks sends.",
+      "enum": [
+        "awaiting_request",
+        "prepared",
+        "paid"
+      ],
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "customer_completion_note_id": {
+      "type": "string",
+      "description": "Owner-only customer collection workflow. Separate from supplier payments. No automatic QuickBooks sends.",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "customer_request_prepared_at": {
+      "type": "string",
+      "description": "Owner-only customer collection workflow. Separate from supplier payments. No automatic QuickBooks sends.",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "customer_payment_reference": {
+      "type": "string",
+      "description": "Owner-only customer collection workflow. Separate from supplier payments. No automatic QuickBooks sends.",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "customer_original_invoice_month": {
+      "type": "string",
+      "description": "Owner-only customer collection workflow. Separate from supplier payments. No automatic QuickBooks sends.",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "customer_collection_history": {
+      "type": "array",
+      "description": "Owner-only customer collection workflow. Separate from supplier payments. No automatic QuickBooks sends.",
+      "items": {
+        "type": "object"
+      },
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "id": "6a7f0d834a5f825c724273ea"
+              }
+            },
+            {
+              "user_condition": {
+                "id": "6a8229a9801b2aef9278ff47"
+              }
+            }
+          ]
+        }
+      }
     }
   },
   "required": [

@@ -75,11 +75,11 @@ export function isFutureRow(r) {
 // labor is excluded too. Excluded rows are surfaced in their own sections with
 // visible subtotals so nothing is hidden.
 export function isBillableNow(r) {
-  return r.billable && !r._suppressed && (!r.needs_review || r.manually_adjusted) && !isFutureRow(r);
+  return !(r.customer_collection_state && r.customer_collection_state !== 'paid') && r.billable && !r._suppressed && (!r.needs_review || r.manually_adjusted) && !isFutureRow(r);
 }
 
 export function isBillableFuture(r) {
-  return r.billable && !r._suppressed && (!r.needs_review || r.manually_adjusted) && isFutureRow(r);
+  return !(r.customer_collection_state && r.customer_collection_state !== 'paid') && r.billable && !r._suppressed && (!r.needs_review || r.manually_adjusted) && isFutureRow(r);
 }
 
 // Held-out rows — visible in Needs Review / Scheduled sections, never in totals.

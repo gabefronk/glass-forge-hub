@@ -1,7 +1,7 @@
 import { computeFeeAmt, computeLaborAmt, isFutureRow } from "./feeMath";
 import { buildSupersededSet, isReady, isMatchBlocked, isReportBlocked, isCustomFee } from "./invoicingFilters";
 export function invoicingStats(rows, reportStatusMap, supersededSet = buildSupersededSet(rows)) {
-  const active = rows.filter(r => r.billable && !supersededSet.has(r.id));
+  const active = rows.filter(r => !(r.customer_collection_state && r.customer_collection_state !== 'paid') && r.billable && !supersededSet.has(r.id));
   const past = active.filter(r => !isFutureRow(r));
   const ready = past.filter(r => isReady(r, reportStatusMap, supersededSet));
   const billed = past.filter(r => r.billed_to_bfs);
@@ -12,7 +12,7 @@ export function invoicingStats(rows, reportStatusMap, supersededSet = buildSuper
   // The month total is what is done AND reported: a visit the crew has not reported yet stays
   // out until the report lands; scheduled (future) work never counts. Pricing-review lines are
   // done and reported, so they count at their provisional amount.
-  const counted = past.filter(r => r.billed_to_bfs || (!isReportBlocked(r, reportStatusMap) && !r._billing_review));
+  const counted = past.filter(r => r.billed_to_bfs || (!isReportBlocked(r, reportStatusMap) && !r._billing_review && !(r.customer_collection_state && isMatchBlocked(r))));
   const sum = arr => Math.round(arr.reduce((n, r) => n + computeFeeAmt(r), 0) * 100) / 100;
   return {
     readyTotal: sum(ready), readyCount: ready.length,

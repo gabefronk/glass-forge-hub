@@ -1,3 +1,4 @@
+import { enqueueCustomerCollection } from '../../shared/enqueueCustomerCollection.js';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { createJobIndex, canonicalJob } from '../../shared/jobIdentity.js';
 import { fetchAllPages } from '../../shared/pagination.ts';
@@ -210,7 +211,10 @@ export default async function(req) {
         } catch (_) { /* a failed text never blocks the report */ }
       }
 
-      return Response.json({ ok: true, action: 'upload', completion: completionValue, job_id: jobId, note_id: note?.id || '' });
+      let customerCollection = null;
+      try { customerCollection = await enqueueCustomerCollection(api, { jobId, note, now }); }
+      catch (_) { customerCollection = { state: 'collection_review_required' }; }
+      return Response.json({ ok: true, action: 'upload', completion: completionValue, job_id: jobId, note_id: note?.id || '', customer_collection: customerCollection });
     }
 
     return Response.json({ error: 'unknown_action' }, { status: 200 });

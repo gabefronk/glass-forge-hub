@@ -49,7 +49,14 @@ export function buildReportEvidence({ events = [], notes = [], groupOf = identit
   for (const n of notes || []) {
     if (n?.job_id && n.note_date && isFieldReportNote(n)) noteJobDates.add(`${groupOf(n.job_id)}|${dayOf(n.note_date)}`);
   }
-  return { eventsByLink, clearedJobDates, noteJobDates, groupOf };
+  const completionByJob = new Map();
+  for (const n of notes || []) {
+    if (!n?.job_id || !['complete', 'incomplete'].includes(n.completion)) continue;
+    const id = groupOf(n.job_id), previous = completionByJob.get(id);
+    const stamp = String(n.created_date || n.note_date || '');
+    if (!previous || stamp > String(previous.created_date || previous.note_date || '')) completionByJob.set(id, n);
+  }
+  return { eventsByLink, clearedJobDates, noteJobDates, groupOf, completionByJob };
 }
 
 const isCalendarRow = (r) => r.source === "calendar" || r.source === "both";

@@ -28,6 +28,7 @@ const OK_REPORT_STATUSES = ["ok", "waived", "pre_compliance"];
 // ProBuild companion that may repeat calendar labor (see withCompanions).
 // This is NOT the same as a missing field report — keep them separate.
 export const isMatchBlocked = (r) =>
+  (r.customer_collection_state && r.fee_type === 'profit_split' && (![r.sale_price, r.cost].every(v => typeof v === 'number' && Number.isFinite(v) && v >= 0))) ||
   !!r._billing_review || ((r.needs_review || !!r._companion_review) && !r.manually_adjusted);
 
 // Field-report block: the crew hasn't uploaded photos/notes for the source
@@ -125,6 +126,7 @@ export function buildSupersededSet(rows, events) {
 //   - not superseded (conditional — see buildSupersededSet)
 //   - has labor > 0 OR is a profit-split row (cost $0 is valid for splits)
 export const isReady = (r, reportStatusMap, supersededSet) =>
+  !(r.customer_collection_state && r.customer_collection_state !== 'paid') &&
   r.billable &&
   !r._billing_hidden &&
   !r.billed_to_bfs &&

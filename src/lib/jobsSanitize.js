@@ -125,6 +125,11 @@ export function cleanFeedText(input) {
 // evidence: optional field-report evidence, see jobReports.buildReportEvidence.
 // today: optional YYYY-MM-DD override (tests); defaults to the Denver date.
 export function jobsStatus(rows, evidence, today) {
+  const ids = [...new Set(rows.map(r => evidence?.groupOf ? evidence.groupOf(r.job_id) : r.job_id))].filter(Boolean);
+  const completion = ids.length === 1 ? evidence?.completionByJob?.get(ids[0]) : null;
+  const upcoming = rows.some(r => (r.source === 'calendar' || r.source === 'both') && String(evidence?.eventsByLink?.get(r.calendar_event_id)?.event_date || r.job_date || '').slice(0,10) > (today || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())));
+  if (completion?.completion === 'complete' && !upcoming) return { label: 'Complete', key: 'complete', bg: C.tagBillable.bg, text: C.tagBillable.text };
+  if (completion?.completion === 'incomplete') return { label: 'Active', key: 'active', bg: C.tagCal.bg, text: C.tagCal.text };
   const s = jobStatus(rows, evidence, today);
   if (s.key === "no_charge") {
     return { label: "Active", key: "active", bg: C.tagCal.bg, text: C.tagCal.text };

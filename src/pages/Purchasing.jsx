@@ -1,3 +1,4 @@
+import CustomerCollectionsQueue from '@/components/purchasing/CustomerCollectionsQueue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Plus } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -125,6 +126,8 @@ function PurchasingWorkspace() {
 
       {error && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: 'var(--gf-error-bg)', color: 'var(--gf-error)', border: '1px solid var(--gf-error-border)' }}>{error}</p>}
       {moneyError && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: '#FFF3DF', color: '#89511A', border: '1px solid #F0DBA8' }}>{moneyError}</p>}
+
+      <CustomerCollectionsQueue query={query} onChanged={load} />
 
       {filtered.length === 0 ? (
         <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query ? 'No jobs match your search.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
