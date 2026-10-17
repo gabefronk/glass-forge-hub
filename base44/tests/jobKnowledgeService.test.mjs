@@ -277,7 +277,7 @@ test('429 after partial batch persistence reconciles missing rows, records rate 
  const api=fakeApi({Jobs:JOBS});const original=api.entities.JobKnowledge.bulkCreate;let once=true;
  api.entities.JobKnowledge.bulkCreate=async rows=>{if(once){once=false;await original(rows.slice(0,1));throw Object.assign(Error('sensitive response data'),{status:429});}return original(rows);};
  const r=await refreshJobKnowledge({api,now:NOW,getNow:()=>NOW,force:true,sleep:async()=>{}});
- assert.equal(r.status,'complete');assert.equal(r.rate_limit_seen,true);assert.equal(api.stores.JobKnowledge.length,2);assert.equal(api.stores.JobKnowledgeRun[0].retry_count,1);assert.doesNotMatch(JSON.stringify(api.stores.JobKnowledgeRun),/sensitive response/);
+ assert.equal(r.status,'paused');assert.equal(r.rate_limit_seen,true);assert.equal(api.stores.JobKnowledge.length,1);assert.equal(api.stores.JobKnowledgeRun[0].retry_count,1);const done=await refreshJobKnowledge({api,resumeRunId:r.run_id,now:'2026-09-13T15:02:00Z',getNow:()=>NOW,sleep:async()=>{}});assert.equal(done.status,'complete');assert.equal(api.stores.JobKnowledge.length,2);assert.doesNotMatch(JSON.stringify(api.stores.JobKnowledgeRun),/sensitive response/);
 });
 test('lost response after entire write reads back instead of rewriting',async()=>{
  const api=fakeApi({Jobs:JOBS});const original=api.entities.JobKnowledge.bulkCreate;let calls=0;

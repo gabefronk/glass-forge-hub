@@ -283,7 +283,7 @@ var serialize = (v) => JSON.stringify(canonical(v));
 var digest = async (bytes) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((x) => x.toString(16).padStart(2, "0")).join("");
 var statusOf = (e) => [e?.status, e?.response?.status].find(Number.isInteger) || 0;
 var transient = (e) => [429, 408, 500, 502, 503, 504].includes(statusOf(e)) || ["TypeError", "TimeoutError", "AbortError"].includes(e?.name);
-var safeBuildError = (e, stage) => ({ stage, error_code: statusOf(e) === 429 ? "rate_limited" : /count mismatch|references mismatch|duplicate|changed|integrity/.test(e?.message || "") ? "verification_failed" : transient(e) ? "transient_transport" : "build_step_failed", error_http_status: statusOf(e), last_error_at: (/* @__PURE__ */ new Date()).toISOString() });
+var safeBuildError = (e, stage) => ({ stage, error_code: statusOf(e) === 429 ? "rate_limited" : /count mismatch|references mismatch|duplicate|changed|integrity/.test(e?.message || "") ? "verification_failed" : transient(e) ? "transient_transport" : "build_step_failed", error_http_status: statusOf(e), retry_after_seconds: Math.min(3600, Math.max(0, Number(e?.originalError?.response?.headers?.["retry-after"] || e?.response?.headers?.["retry-after"]) || 0)), last_error_at: (/* @__PURE__ */ new Date()).toISOString() });
 async function retryBuildRead(work, { sleep = delay, onRetry = async () => {
 } } = {}) {
   for (let i = 0; ; i++) {
@@ -313,9 +313,10 @@ function snapshotStore(api) {
       }
       const sha = await hash(parts.map((p) => p.sha256)), runId = plan.run_id;
       if (!runId) throw Error("Missing snapshot run");
-      for (let i = 0; i < parts.length; i++) {
+      for (let i = 0; i < parts.length; i += 4) {
         await progress("save_snapshot_parts", { snapshot_saved_parts: i, snapshot_expected_parts: parts.length, snapshot_bytes: size });
-        await writeGeneratedBatch(api.entities.JobKnowledgeBuildPart, runId, "part_key", [{ run_id: runId, snapshot_id: sha, part_key: sha + ":" + i, part_index: i, ...parts[i] }], options);
+        await writeGeneratedBatch(api.entities.JobKnowledgeBuildPart, runId, "part_key", parts.slice(i, i + 4).map((p, j) => ({ run_id: runId, snapshot_id: sha, part_key: sha + ":" + (i + j), part_index: i + j, ...p })), options);
+        await (options.sleep || delay)(2e3);
       }
       return { snapshot_uri: "entity:" + sha, snapshot_sha256: sha, snapshot_bytes: size, snapshot_saved_parts: parts.length, snapshot_expected_parts: parts.length };
     },
@@ -1941,8 +1942,9 @@ async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* 
   const previous = (await retryBuildRead(() => ent.JobKnowledgeRun.filter({ status: "complete" }, "-started_at", 1), { sleep }))[0];
   const unfinished = await retryBuildRead(() => ent.JobKnowledgeRun.filter({ status: { $in: ["building", "paused", "timed_out"] } }, "-started_at", 20), { sleep });
   for (const r of unfinished) if (r.status === "building" && Date.parse(now) - Date.parse(r.updated_date || r.started_at) > 10 * 6e4) await ent.JobKnowledgeRun.update(r.id, { status: "timed_out", completed_at: now, stage: "interrupted_before_checkpoint", error_code: "run_timed_out", error: "Interrupted build; last complete generation retained." });
-  run = resumeRunId ? await getRun(resumeRunId) : unfinished.find((r) => r.snapshot_uri) || unfinished.find((r) => r.status === "building" && Date.parse(now) - Date.parse(r.updated_date || r.started_at) <= 10 * 6e4);
+  run = resumeRunId ? await getRun(resumeRunId) : unfinished.find((r) => r.snapshot_uri) || unfinished.find((r) => r.status === "paused") || unfinished.find((r) => r.status === "building" && Date.parse(now) - Date.parse(r.updated_date || r.started_at) <= 10 * 6e4);
   if (resumeRunId && !run) throw Error("Build run not found");
+  if (run?.retry_after_at && Date.parse(run.retry_after_at) > Date.parse(now)) return { status: "paused", run_id: run.id, retry_after_at: run.retry_after_at, rate_limit_seen: run.rate_limit_seen === true };
   if (run?.status === "complete") return { status: "complete", run_id: run.id, counts: run.counts };
   if (run && !["building", "paused", "failed", "timed_out"].includes(run.status)) throw Error("Build cannot resume");
   if (run && !resumeRunId && !run.snapshot_uri && Date.parse(now) - Date.parse(run.started_at) < 10 * 6e4) return { status: "busy", run_id: run.id };
@@ -1956,6 +1958,7 @@ async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* 
     if (token) await ent.JobKnowledgeRun.updateMany({ id: run.id, lock_token: token }, { $set: patch }).catch(() => {
     });
     Object.assign(run, patch);
+    if (patch.error_code === "rate_limited") throw Object.assign(e, { build_pause: true });
   };
   const opts = { sleep, onRetry };
   if (run.lock_token && Date.parse(run.lock_expires_at) > Date.parse(now)) return { status: "busy", run_id: run.id };
@@ -2002,14 +2005,14 @@ async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* 
       if (clock() - start > maxWorkMs) return await pause();
       await writeGeneratedBatch(ent.JobKnowledge, run.id, "job_id", plan.records.slice(i, i + 25), opts);
       await checkpoint({ job_cursor: Math.min(i + 25, plan.records.length), stage });
-      await sleep(300);
+      await sleep(2e3);
     }
     for (let i = run.chunk_cursor || 0; i < plan.chunks.length; i += 10) {
       stage = "write_chunks";
       if (clock() - start > maxWorkMs) return await pause();
       await writeGeneratedBatch(ent.JobKnowledgeUnassigned, run.id, "chunk_index", plan.chunks.slice(i, i + 10), opts);
       await checkpoint({ chunk_cursor: Math.min(i + 10, plan.chunks.length), stage });
-      await sleep(300);
+      await sleep(2e3);
     }
     stage = "verify_counts";
     const persisted = await allKnowledgeRows(ent.JobKnowledge, ["id", "job_id"], { run_id: run.id });
@@ -2019,7 +2022,7 @@ async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* 
     const normalized = (v) => v && typeof v === "object" ? Array.isArray(v) ? v.map(normalized) : Object.fromEntries(Object.keys(v).sort().map((k) => [k, normalized(v[k])])) : v;
     if (savedChunks.length !== plan.chunks.length || new Set(savedChunks.map((c) => c.chunk_index)).size !== plan.chunks.length || savedChunks.some((c) => !Number.isInteger(c.chunk_index) || !plan.chunks[c.chunk_index] || JSON.stringify(normalized(c.records)) !== JSON.stringify(normalized(plan.chunks[c.chunk_index].records)))) throw Error("Prepared unassigned source references mismatch");
     const result = plan, completed_at = getNow();
-    await checkpoint({ status: "complete", completed_at, stage: "complete", counts: plan.counts, source_counts: plan.source_counts, source_status: plan.source_status, issues: plan.issues, unassigned_count: plan.unassigned_count, unassigned_chunks: plan.chunks.length, verified_jobs: persisted.length, verified_chunks: savedChunks.length, lock_token: "", lock_expires_at: "", error: "", error_code: "", automatic_send_allowed: false });
+    await checkpoint({ status: "complete", completed_at, stage: "complete", retry_after_at: "", counts: plan.counts, source_counts: plan.source_counts, source_status: plan.source_status, issues: plan.issues, unassigned_count: plan.unassigned_count, unassigned_chunks: plan.chunks.length, verified_jobs: persisted.length, verified_chunks: savedChunks.length, lock_token: "", lock_expires_at: "", error: "", error_code: "", automatic_send_allowed: false });
     let notification_error = false;
     try {
       const activeKeys = /* @__PURE__ */ new Set(), previousKeys = new Set((previous?.issues || []).map((i) => "job_knowledge:" + i.source + ":" + i.code));
@@ -2041,9 +2044,10 @@ async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* 
     }
     return { status: "complete", run_id: run.id, counts: result.counts, source_counts: result.source_counts, verified_jobs: persisted.length, verified_chunks: savedChunks.length, rate_limit_seen: run.rate_limit_seen === true, notification_error, automatic_send_allowed: false };
   } catch (error) {
-    const detail = safeBuildError(error, stage);
-    await ent.JobKnowledgeRun.updateMany({ id: run.id, lock_token: token }, { $set: { status: "failed", completed_at: getNow(), ...detail, lock_token: "", lock_expires_at: "", error: "Job preparation failed at " + stage + ". Last complete generation retained." } }).catch(() => {
+    const detail = safeBuildError(error, stage), limited = detail.error_code === "rate_limited", retry_after_at = limited ? new Date(Date.parse(getNow()) + Math.max(90, detail.retry_after_seconds || 0) * 1e3).toISOString() : "";
+    await ent.JobKnowledgeRun.updateMany({ id: run.id, lock_token: token }, { $set: { status: limited ? "paused" : "failed", retry_after_at, completed_at: getNow(), ...detail, lock_token: "", lock_expires_at: "", error: "Job preparation failed at " + stage + ". Last complete generation retained." } }).catch(() => {
     });
+    if (limited) return { status: "paused", run_id: run.id, retry_after_at, rate_limit_seen: true, build_detail: detail };
     throw Object.assign(error, { run_id: run.id, build_detail: detail });
   }
 }
