@@ -3,6 +3,7 @@ import { X, Pencil, Trash2, Check, ExternalLink } from "lucide-react";
 import { computeFeeAmt, computeLaborAmt, formatMoney, feeMathString } from "@/lib/feeMath";
 import { crewName } from "@/lib/feeUI";
 import { isMatchBlocked } from "@/lib/invoicingFilters";
+import NoteOrganized from "./NoteOrganized";
 
 const TILES = [
   { bg: "var(--gf-tile-teal)", ink: "var(--gf-tile-teal-ink)" },
@@ -241,6 +242,9 @@ export default function LineDetailsDrawer({ row, onClose, onEdit, onDelete, onMa
             {row.probuild_post_id && <FactRow label="ProBuild post"><span className="font-ref">{row.probuild_post_id}</span></FactRow>}
             {row._companion_ids?.length > 0 && <FactRow label="ProBuild report lines">{row._companion_ids.length} $0 {row._companion_ids.length === 1 ? "line" : "lines"} shown with this visit, not billed separately</FactRow>}
           </div>
+
+          {/* Organized note parse (staged) */}
+          {row.note_text && <NoteOrganized text={row.note_text} />}
 
           {/* Notes */}
           {row.note_text && (
