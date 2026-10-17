@@ -280,7 +280,7 @@ export function adaptKnowledgeSources(data,now,generatedAt=now) {
   return {...result,source_status:sourceStatus,issues,source_counts:{jobs:jobs.length,calendar:calendar.length,field_reports:reports.length,library_projects:projects.length,library_reports:libraryReports.length,files:files.length,pdf_files:pdfCount,job_notes:notes.length,tracker_rows:trackerRows.length,service_cases:serviceCases.length,live_google:liveCounts.calendar,live_probuild:liveCounts.probuild,document_extractions:documentExtraction.received,indexed_document_extractions:documentExtraction.indexed,rejected_document_extractions:documentExtraction.rejected.length,trusted_project_links:trusted.counts.project_links,trusted_calendar_links:trusted.counts.calendar_links,trusted_post_links:trusted.counts.post_links,trusted_identity_diagnostics:trusted.diagnostics.length,duplicate_report_origins:[...libraryIds].filter(id=>reports.some(r=>r.post_id===id)).length}};
 }
 
-export async function collectKnowledgeSources(api,readTracker,now,providerData,getNow) {
+export async function collectKnowledgeSources(api,readTracker,now,providerData,getNow,onProgress=async()=>{}) {
   const definitions={
     jobs:['Jobs','id,canonical_name,aliases,po_numbers,oe_numbers,address,builder'],
     calendar:['CalendarEvents','id,job_id,job_name,address,source,source_status,event_date,start_time,end_time,end_date,scope_notes,po_number,oe_number,google_event_id,updated_date'],
@@ -296,19 +296,24 @@ export async function collectKnowledgeSources(api,readTracker,now,providerData,g
     serviceCases:['MessageServiceCase','id,status,result,updated_date'],
     calendarReviews:['CalendarReviewCapture','id,status,schema_version,capture_key,package_sha256,calendar_name,captured_at,range_start,range_end,timezone,scope,complete,agenda_coverage_complete,selected_detail_coverage_complete,full_calendar_details_complete,source_manifest,selected_events,deferred_agenda,daily_coverage,content_sha256'],
   };
+  await onProgress('read_stored_sources');
   const data={},entries=Object.entries(definitions);let cursor=0;
   await Promise.all(Array.from({length:3},async()=>{for(;;){const item=entries[cursor++];if(!item)return;const [key,[entity,selected,query={}]]=item;data[key]=await allKnowledgeRows(api.entities[entity],fields(selected),query);}}));
+  await onProgress('validate_source_manifests');
   const reviewCheck=await verifyCalendarReviews(data.calendarReviews,now);
   data.calendarReviews=reviewCheck.captures;data.calendarReviewRejected=reviewCheck.rejected;
   data.tracker=(await api.entities.SalesTrackerSnapshot.filter({status:'validated'},'-source_captured_at',1))[0]||null;
   data.libraryImport=(await api.entities.FieldLibraryImport.list('-created_date',1,0,fields('id,checked_at,source_complete,files_complete')))[0]||null;
   data.trackerRows=[];
+  await onProgress('read_tracker');
   if(data.tracker) data.trackerRows=await readTracker(data.tracker,api);
+  await onProgress('read_live_providers');
   if(typeof providerData==='function') {
     try {data.providerData=await providerData();}
     catch {data.providerData={calendar:{items:[],complete:false,error:'provider_read_failed'},probuild:{items:[],complete:false,error:'provider_read_failed'}};}
   } else data.providerData=providerData;
   const generatedAt=typeof getNow==='function'?getNow():now;
+  await onProgress('assemble_contexts');
   return adaptKnowledgeSources(data,now,generatedAt);
 }
 
@@ -322,7 +327,7 @@ export async function refreshJobKnowledge({api,readTracker,readProviders,now=new
   if(resumeRunId&&!run)throw Error('Build run not found');
   if(run?.status==='complete')return {status:'complete',run_id:run.id,counts:run.counts};
   if(run&&!['building','paused','failed','timed_out'].includes(run.status))throw Error('Build cannot resume');
-  if(run&&!run.snapshot_uri&&Date.parse(now)-Date.parse(run.started_at)<10*60000)return {status:'busy',run_id:run.id};
+  if(run&&!resumeRunId&&!run.snapshot_uri&&Date.parse(now)-Date.parse(run.started_at)<10*60000)return {status:'busy',run_id:run.id};
   if(!run&&!force&&previous&&Date.parse(now)-Date.parse(previous.completed_at)<30*60000)return {status:'recent',run_id:previous.id,counts:previous.counts};
   if(!run)run=await ent.JobKnowledgeRun.create({status:'building',started_at:now,automatic_send_allowed:false,revision:0,lock_token:'',stage:'collect_sources'});
   let retries=run.retry_count||0,rateLimited=run.rate_limit_seen===true;
@@ -334,8 +339,8 @@ export async function refreshJobKnowledge({api,readTracker,readProviders,now=new
   const checkpoint=async patch=>{patch={...patch,retry_count:retries,rate_limit_seen:rateLimited};const saved=await retryBuildRead(()=>ent.JobKnowledgeRun.updateMany({id:run.id,lock_token:token},{$set:{...patch,lock_expires_at:patch.lock_token===''?'':new Date(Date.parse(getNow())+5*60000).toISOString()}}),opts);if(saved?.updated!==1)throw Error('Build lock ownership changed');run=await retryBuildRead(()=>getRun(run.id),opts);for(const [k,v]of Object.entries(patch))if(JSON.stringify(run[k])!==JSON.stringify(v))throw Error('Checkpoint verification failed');};
   try {
     let plan;
-    if(!run.snapshot_uri){stage='collect_sources';const result=await retryBuildRead(()=>collectKnowledgeSources(api,readTracker,now,readProviders,getNow),opts);const records=result.contexts.map(context=>({run_id:run.id,job_id:context.job_id,job_name:context.job_name,status:context.status,generated_at:context.generated_at,briefing:context.briefing,context}));const chunks=[];for(let i=0;i<result.unassigned.length;i+=200)chunks.push({run_id:run.id,chunk_index:i/200,records:result.unassigned.slice(i,i+200)});plan={records,chunks,counts:result.counts,source_counts:result.source_counts,source_status:result.source_status,issues:result.issues,unassigned_count:result.unassigned.length};stage='save_snapshot';const receipt=await storage.save(plan);await checkpoint({...receipt,expected_jobs:records.length,expected_chunks:chunks.length,job_cursor:0,chunk_cursor:0,status:'building',stage:'write_jobs'});}
-    stage='load_snapshot';plan=await retryBuildRead(()=>storage.load(run),opts);
+    if(!run.snapshot_uri){stage='collect_sources';const result=await retryBuildRead(()=>collectKnowledgeSources(api,readTracker,now,readProviders,getNow,async phase=>{stage=phase;await checkpoint({stage});}),opts);const records=result.contexts.map(context=>({run_id:run.id,job_id:context.job_id,job_name:context.job_name,status:context.status,generated_at:context.generated_at,briefing:context.briefing,context}));const chunks=[];for(let i=0;i<result.unassigned.length;i+=200)chunks.push({run_id:run.id,chunk_index:i/200,records:result.unassigned.slice(i,i+200)});plan={records,chunks,counts:result.counts,source_counts:result.source_counts,source_status:result.source_status,issues:result.issues,unassigned_count:result.unassigned.length};stage='save_snapshot';await checkpoint({stage,expected_jobs:records.length,expected_chunks:chunks.length});const receipt=await storage.save(plan);await checkpoint({...receipt,expected_jobs:records.length,expected_chunks:chunks.length,job_cursor:0,chunk_cursor:0,status:'building',stage:'write_jobs'});}
+    stage='load_snapshot';await checkpoint({stage});plan=await retryBuildRead(()=>storage.load(run),opts);
     if(plan.records.length!==run.expected_jobs||plan.chunks.length!==run.expected_chunks||new Set(plan.records.map(r=>r.job_id)).size!==plan.records.length||plan.records.some(r=>r.run_id!==run.id)||plan.chunks.some((c,i)=>c.run_id!==run.id||c.chunk_index!==i))throw Error('Snapshot integrity mismatch');
     const pause=async()=>{await checkpoint({status:'paused',stage,lock_token:'',lock_expires_at:'',updated_at:getNow()});return{status:'paused',run_id:run.id,stage,job_cursor:run.job_cursor,expected_jobs:run.expected_jobs,chunk_cursor:run.chunk_cursor,expected_chunks:run.expected_chunks,rate_limit_seen:run.rate_limit_seen===true};};
     for(let i=run.job_cursor||0;i<plan.records.length;i+=25){stage='write_jobs';if(clock()-start>maxWorkMs)return await pause();await writeGeneratedBatch(ent.JobKnowledge,run.id,'job_id',plan.records.slice(i,i+25),opts);await checkpoint({job_cursor:Math.min(i+25,plan.records.length),stage});await sleep(300);}

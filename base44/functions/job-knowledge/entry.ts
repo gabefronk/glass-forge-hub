@@ -1630,7 +1630,8 @@ function adaptKnowledgeSources(data, now, generatedAt = now) {
   for (const [key, g] of groups) issues.push({ ...warning(key.split(":")[0], key.split(":").slice(1).join(":"), g.count + " source records were not assigned safely; some may be non-job events.", /^(?:document|document_extraction|field_report|library_report|live_probuild|identity_probuild_project|identity_probuild_post):/.test(key) ? "field_reporting_lead" : key.startsWith("tracker:") ? "sales_order_lead" : "calendar_ops_lead"), count: g.count, examples: g.examples });
   return { ...result, source_status: sourceStatus, issues, source_counts: { jobs: jobs.length, calendar: calendar.length, field_reports: reports.length, library_projects: projects.length, library_reports: libraryReports.length, files: files.length, pdf_files: pdfCount, job_notes: notes.length, tracker_rows: trackerRows.length, service_cases: serviceCases.length, live_google: liveCounts.calendar, live_probuild: liveCounts.probuild, document_extractions: documentExtraction.received, indexed_document_extractions: documentExtraction.indexed, rejected_document_extractions: documentExtraction.rejected.length, trusted_project_links: trusted.counts.project_links, trusted_calendar_links: trusted.counts.calendar_links, trusted_post_links: trusted.counts.post_links, trusted_identity_diagnostics: trusted.diagnostics.length, duplicate_report_origins: [...libraryIds].filter((id3) => reports.some((r) => r.post_id === id3)).length } };
 }
-async function collectKnowledgeSources(api, readTracker, now, providerData, getNow) {
+async function collectKnowledgeSources(api, readTracker, now, providerData, getNow, onProgress = async () => {
+}) {
   const definitions = {
     jobs: ["Jobs", "id,canonical_name,aliases,po_numbers,oe_numbers,address,builder"],
     calendar: ["CalendarEvents", "id,job_id,job_name,address,source,source_status,event_date,start_time,end_time,end_date,scope_notes,po_number,oe_number,google_event_id,updated_date"],
@@ -1647,6 +1648,7 @@ async function collectKnowledgeSources(api, readTracker, now, providerData, getN
     serviceCases: ["MessageServiceCase", "id,status,result,updated_date"],
     calendarReviews: ["CalendarReviewCapture", "id,status,schema_version,capture_key,package_sha256,calendar_name,captured_at,range_start,range_end,timezone,scope,complete,agenda_coverage_complete,selected_detail_coverage_complete,full_calendar_details_complete,source_manifest,selected_events,deferred_agenda,daily_coverage,content_sha256"]
   };
+  await onProgress("read_stored_sources");
   const data = {}, entries = Object.entries(definitions);
   let cursor = 0;
   await Promise.all(Array.from({ length: 3 }, async () => {
@@ -1657,13 +1659,16 @@ async function collectKnowledgeSources(api, readTracker, now, providerData, getN
       data[key] = await allKnowledgeRows(api.entities[entity], fields(selected), query);
     }
   }));
+  await onProgress("validate_source_manifests");
   const reviewCheck = await verifyCalendarReviews(data.calendarReviews, now);
   data.calendarReviews = reviewCheck.captures;
   data.calendarReviewRejected = reviewCheck.rejected;
   data.tracker = (await api.entities.SalesTrackerSnapshot.filter({ status: "validated" }, "-source_captured_at", 1))[0] || null;
   data.libraryImport = (await api.entities.FieldLibraryImport.list("-created_date", 1, 0, fields("id,checked_at,source_complete,files_complete")))[0] || null;
   data.trackerRows = [];
+  await onProgress("read_tracker");
   if (data.tracker) data.trackerRows = await readTracker(data.tracker, api);
+  await onProgress("read_live_providers");
   if (typeof providerData === "function") {
     try {
       data.providerData = await providerData();
@@ -1672,6 +1677,7 @@ async function collectKnowledgeSources(api, readTracker, now, providerData, getN
     }
   } else data.providerData = providerData;
   const generatedAt = typeof getNow === "function" ? getNow() : now;
+  await onProgress("assemble_contexts");
   return adaptKnowledgeSources(data, now, generatedAt);
 }
 async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* @__PURE__ */ new Date()).toISOString(), getNow = () => (/* @__PURE__ */ new Date()).toISOString(), force = false, resumeRunId, storage = snapshotStore(api), sleep = (ms) => new Promise((r) => setTimeout(r, ms)), maxWorkMs = 9e4, clock = () => Date.now() }) {
@@ -1685,7 +1691,7 @@ async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* 
   if (resumeRunId && !run) throw Error("Build run not found");
   if (run?.status === "complete") return { status: "complete", run_id: run.id, counts: run.counts };
   if (run && !["building", "paused", "failed", "timed_out"].includes(run.status)) throw Error("Build cannot resume");
-  if (run && !run.snapshot_uri && Date.parse(now) - Date.parse(run.started_at) < 10 * 6e4) return { status: "busy", run_id: run.id };
+  if (run && !resumeRunId && !run.snapshot_uri && Date.parse(now) - Date.parse(run.started_at) < 10 * 6e4) return { status: "busy", run_id: run.id };
   if (!run && !force && previous && Date.parse(now) - Date.parse(previous.completed_at) < 30 * 6e4) return { status: "recent", run_id: previous.id, counts: previous.counts };
   if (!run) run = await ent.JobKnowledgeRun.create({ status: "building", started_at: now, automatic_send_allowed: false, revision: 0, lock_token: "", stage: "collect_sources" });
   let retries = run.retry_count || 0, rateLimited = run.rate_limit_seen === true;
@@ -1713,16 +1719,21 @@ async function refreshJobKnowledge({ api, readTracker, readProviders, now = (/* 
     let plan;
     if (!run.snapshot_uri) {
       stage = "collect_sources";
-      const result2 = await retryBuildRead(() => collectKnowledgeSources(api, readTracker, now, readProviders, getNow), opts);
+      const result2 = await retryBuildRead(() => collectKnowledgeSources(api, readTracker, now, readProviders, getNow, async (phase) => {
+        stage = phase;
+        await checkpoint({ stage });
+      }), opts);
       const records = result2.contexts.map((context) => ({ run_id: run.id, job_id: context.job_id, job_name: context.job_name, status: context.status, generated_at: context.generated_at, briefing: context.briefing, context }));
       const chunks = [];
       for (let i = 0; i < result2.unassigned.length; i += 200) chunks.push({ run_id: run.id, chunk_index: i / 200, records: result2.unassigned.slice(i, i + 200) });
       plan = { records, chunks, counts: result2.counts, source_counts: result2.source_counts, source_status: result2.source_status, issues: result2.issues, unassigned_count: result2.unassigned.length };
       stage = "save_snapshot";
+      await checkpoint({ stage, expected_jobs: records.length, expected_chunks: chunks.length });
       const receipt = await storage.save(plan);
       await checkpoint({ ...receipt, expected_jobs: records.length, expected_chunks: chunks.length, job_cursor: 0, chunk_cursor: 0, status: "building", stage: "write_jobs" });
     }
     stage = "load_snapshot";
+    await checkpoint({ stage });
     plan = await retryBuildRead(() => storage.load(run), opts);
     if (plan.records.length !== run.expected_jobs || plan.chunks.length !== run.expected_chunks || new Set(plan.records.map((r) => r.job_id)).size !== plan.records.length || plan.records.some((r) => r.run_id !== run.id) || plan.chunks.some((c, i) => c.run_id !== run.id || c.chunk_index !== i)) throw Error("Snapshot integrity mismatch");
     const pause = async () => {
