@@ -94,7 +94,8 @@ export function parseStoredRow(row) {
   const rough = row.rough_labor_material === undefined ? null : row.rough_labor_material;
   const sale = row.sale_price === undefined ? null : row.sale_price;
   if (!validAmount(rough) || !validAmount(sale)) return { ok: false, reason: 'invalid_amount', job_id: row.job_id };
-  return { ok: true, row: { id: row.id, job_id: row.job_id, rough_labor_material: rough, sale_price: sale } };
+  const extra = isEntityId(row.new_sale_run_id) && typeof row.windows_incl_tax === 'number' && validAmount(row.windows_incl_tax) ? {new_sale_run_id:row.new_sale_run_id,windows_incl_tax:row.windows_incl_tax} : {};
+  return { ok: true, row: { id: row.id, job_id: row.job_id, rough_labor_material: rough, sale_price: sale, ...extra } };
 }
 
 // Return only the safe public fields of a money input row. Never leak internal
@@ -106,5 +107,6 @@ export function sanitizeInput(row) {
     job_id: row.job_id,
     rough_labor_material: row.rough_labor_material,
     sale_price: row.sale_price,
+    ...(isEntityId(row.new_sale_run_id) && typeof row.windows_incl_tax === 'number' && validAmount(row.windows_incl_tax) ? {new_sale_run_id:row.new_sale_run_id,windows_incl_tax:row.windows_incl_tax} : {}),
   };
 }

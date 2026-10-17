@@ -1,0 +1,59 @@
+{
+  "name": "NewSaleRuns",
+  "type": "object",
+  "properties": {
+    "request_key": {
+      "type": "string"
+    },
+    "fingerprint": {
+      "type": "string"
+    },
+    "sale": {
+      "type": "object"
+    },
+    "owner_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "budget_id": {
+      "type": "string"
+    },
+    "money_id": {
+      "type": "string"
+    },
+    "note_id": {
+      "type": "string"
+    },
+    "po_id": {
+      "type": "string"
+    },
+    "po_number": {
+      "type": "string"
+    },
+    "eta_event_id": {
+      "type": "string"
+    },
+    "eta_url": {
+      "type": "string"
+    },
+    "last_message": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_key",
+    "fingerprint",
+    "owner_id"
+  ],
+  "rls": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false
+  }
+}

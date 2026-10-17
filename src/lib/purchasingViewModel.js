@@ -420,10 +420,15 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     const jobBudgets = budgets.filter((b) => b.job_id === job.id);
     const jobPOs = purchase_orders.filter((p) => p.job_id === job.id);
     const isConflict = conflictJobIds.has(job.id);
-    const win = isConflict ? { value: null, status: 'withheld', budgetId: null, provenance: null, reason: 'po_conflict' } : windowsInclTax(jobBudgets);
+    let win = isConflict ? { value: null, status: 'withheld', budgetId: null, provenance: null, reason: 'po_conflict' } : windowsInclTax(jobBudgets);
 
     const money = moneyByJob.get(job.id);
     const moneyDup = !!money?.duplicate;
+    // Only the newly-created single-scope sale may use its explicit owner-reviewed
+    // tax-inclusive payable. Legacy jobs and later add-on scopes keep old rules.
+    const saleScopes = activeBudgets(jobBudgets);
+    const reviewedNewSale = !isConflict && !moneyDup && job.new_sale_run_id && money?.new_sale_run_id === job.new_sale_run_id && saleScopes.length === 1 && saleScopes[0].new_sale_run_id === job.new_sale_run_id && typeof money.windows_incl_tax === 'number' && Number.isFinite(money.windows_incl_tax) && money.windows_incl_tax >= 0;
+    if (reviewedNewSale) win = {value:money.windows_incl_tax,status:'verified',budgetId:saleScopes[0].id,provenance:'Owner reviewed supplier payable incl tax / freight in New sale'};
     const rough = money && !moneyDup && amount(money.rough_labor_material) != null ? Number(amount(money.rough_labor_material)) : null;
     const sale = money && !moneyDup && amount(money.sale_price) != null ? Number(amount(money.sale_price)) : null;
     const profit = isConflict ? { value: null, tone: 'unknown' } : computeProfit(win.value, rough, sale);
@@ -437,7 +442,7 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     const jobActivePOs = jobPOs.filter((p) => p.status !== 'cancelled');
     const jobActiveOrders = activeVendorOrders(vendor_orders.filter((o) => o.job_id === job.id), purchase_orders);
     const pickBudget = pickDisplayBudget(jobBudgets);
-    const winDisplay = windowsDisplayCandidate(jobBudgets, jobActivePOs, jobActiveOrders, { conflict: isConflict });
+    const winDisplay = reviewedNewSale ? {value:win.value,label:'Owner reviewed supplier payable incl tax / freight',review:false} : windowsDisplayCandidate(jobBudgets, jobActivePOs, jobActiveOrders, { conflict: isConflict });
     const roughDisplay = roughDisplayCandidate(pickBudget, rough, moneyDup);
     const saleDisplay = saleDisplayCandidate(pickBudget, sale, moneyDup);
     const profitDisp = profitDisplayCalc(winDisplay, roughDisplay, saleDisplay);

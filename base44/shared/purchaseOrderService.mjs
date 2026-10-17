@@ -65,7 +65,7 @@ export async function issuePurchaseOrder(api, body, user, deps = {}) {
   const retry = await findExisting();
   if (retry) return { ...retry, duplicate: true, job_update: await appendPoToJob(api, retry) };
 
-  return withProcurementLock(api, key, async lock => {
+  return (deps.withLock || withProcurementLock)(api, key, async lock => {
     // Recheck after acquiring the lock; a previous caller may have just finished.
     const existingRetry = await findExisting();
     if (existingRetry) return { ...existingRetry, duplicate: true, job_update: await appendPoToJob(api, existingRetry) };

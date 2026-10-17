@@ -14,6 +14,14 @@
     "sale_price": {
       "type": "number",
       "description": "Owner-entered actual sale price. Null until set. Not interchangeable with the budget estimate sell (actual_total_sell)."
+    },
+    "new_sale_run_id": {
+      "type": "string",
+      "description": "Owner-reviewed new-sale journal identity; no historical backfill."
+    },
+    "windows_incl_tax": {
+      "type": "number",
+      "description": "Owner-reviewed supplier payable incl tax/freight for the one new-sale scope. Not inferred from legacy budgets."
     }
   },
   "required": [
