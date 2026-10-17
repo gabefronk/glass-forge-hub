@@ -120,6 +120,9 @@
     },
     "retry_after_seconds": {
       "type": "number"
+    },
+    "error_message": {
+      "type": "string"
     }
   },
   "required": [

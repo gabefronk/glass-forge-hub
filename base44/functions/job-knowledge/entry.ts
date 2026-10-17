@@ -10,7 +10,7 @@ var serialize = (v) => JSON.stringify(canonical(v));
 var digest = async (bytes) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((x) => x.toString(16).padStart(2, "0")).join("");
 var statusOf = (e) => [e?.status, e?.response?.status].find(Number.isInteger) || 0;
 var transient = (e) => [429, 408, 500, 502, 503, 504].includes(statusOf(e)) || ["TypeError", "TimeoutError", "AbortError"].includes(e?.name);
-var safeBuildError = (e, stage) => ({ stage, error_code: statusOf(e) === 429 ? "rate_limited" : /count mismatch|references mismatch|duplicate|changed|integrity/.test(e?.message || "") ? "verification_failed" : transient(e) ? "transient_transport" : "build_step_failed", error_http_status: statusOf(e), retry_after_seconds: Math.min(3600, Math.max(0, Number(e?.originalError?.response?.headers?.["retry-after"] || e?.response?.headers?.["retry-after"]) || 0)), last_error_at: (/* @__PURE__ */ new Date()).toISOString() });
+var safeBuildError = (e, stage) => ({ stage, error_code: statusOf(e) === 429 ? "rate_limited" : /count mismatch|references mismatch|duplicate|changed|integrity/.test(e?.message || "") ? "verification_failed" : transient(e) ? "transient_transport" : "build_step_failed", error_http_status: statusOf(e), retry_after_seconds: Math.min(3600, Math.max(0, Number(e?.originalError?.response?.headers?.["retry-after"] || e?.response?.headers?.["retry-after"]) || 0)), error_message: statusOf(e) === 400 ? String(e?.message || "Validation failed").slice(0, 600) : void 0, last_error_at: (/* @__PURE__ */ new Date()).toISOString() });
 async function retryBuildRead(work, { sleep = delay, onRetry = async () => {
 } } = {}) {
   for (let i = 0; ; i++) {

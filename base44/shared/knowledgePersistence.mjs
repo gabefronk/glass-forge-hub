@@ -5,7 +5,7 @@ const serialize=v=>JSON.stringify(canonical(v));
 const digest=async bytes=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const statusOf=e=>[e?.status,e?.response?.status].find(Number.isInteger)||0;
 const transient=e=>[429,408,500,502,503,504].includes(statusOf(e))||['TypeError','TimeoutError','AbortError'].includes(e?.name);
-export const safeBuildError=(e,stage)=>({stage,error_code:statusOf(e)===429?'rate_limited':/count mismatch|references mismatch|duplicate|changed|integrity/.test(e?.message||'')?'verification_failed':transient(e)?'transient_transport':'build_step_failed',error_http_status:statusOf(e),retry_after_seconds:Math.min(3600,Math.max(0,Number(e?.originalError?.response?.headers?.['retry-after']||e?.response?.headers?.['retry-after'])||0)),last_error_at:new Date().toISOString()});
+export const safeBuildError=(e,stage)=>({stage,error_code:statusOf(e)===429?'rate_limited':/count mismatch|references mismatch|duplicate|changed|integrity/.test(e?.message||'')?'verification_failed':transient(e)?'transient_transport':'build_step_failed',error_http_status:statusOf(e),retry_after_seconds:Math.min(3600,Math.max(0,Number(e?.originalError?.response?.headers?.['retry-after']||e?.response?.headers?.['retry-after'])||0)),error_message:statusOf(e)===400?String(e?.message||'Validation failed').slice(0,600):undefined,last_error_at:new Date().toISOString()});
 export async function retryBuildRead(work,{sleep=delay,onRetry=async()=>{}}={}){for(let i=0;;i++){try{return await work();}catch(e){if(!transient(e)||i>=4)throw e;await onRetry(e,i);await sleep(1000*2**i);}}}
 export function snapshotStore(api){
  const enc=new TextEncoder(),hash=v=>digest(enc.encode(serialize(v)));
