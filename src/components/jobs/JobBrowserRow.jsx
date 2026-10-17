@@ -88,8 +88,8 @@ export function rowFlag(stats, group) {
 
 // Teal outline + soft halo glow for the selected (and hovered) job card; the
 // card itself stays white.
-const HALO = "0 0 0 5px rgba(15,118,110,.22), 0 10px 32px -4px rgba(15,118,110,.55), 0 2px 4px rgba(10,29,31,.10)";
-const TEAL = "#0f766e";
+const ACCENT = "#10b981"; // emerald
+const HALO = `0 0 0 5px rgba(16,185,129,.25), 0 0 34px 2px rgba(16,185,129,.5), 0 2px 4px rgba(10,29,31,.10)`;
 // Job card for the Jobs list: bold name, builder · address, kind, and the
 // next (or last) visit on the right. The selected job keeps its white card and
 // gets a teal outline with a soft halo glow.
@@ -120,7 +120,7 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
           {combineSelected ? <Check className="h-3.5 w-3.5" /> : null}
         </span>
       ) : (
-        <span className="mt-[7px] h-[9px] w-[9px] shrink-0 rounded-full" style={{ backgroundColor: selected ? TEAL : stats?.thisWeek ? "#0b3f3b" : "#c9c2b5" }} aria-hidden="true" />
+        <span className="mt-[7px] h-[9px] w-[9px] shrink-0 rounded-full" style={{ backgroundColor: selected ? ACCENT : stats?.thisWeek ? "#0b3f3b" : "#c9c2b5" }} aria-hidden="true" />
       )}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15.5px] font-bold" style={{ letterSpacing: "-0.02em" }}>{titleCase(sanitizeText(job.canonical_name))}</span>
@@ -131,7 +131,7 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
       </span>
       <span className="flex shrink-0 flex-col items-end gap-1">
         {when ? (
-          <span className="whitespace-nowrap text-[13px] font-bold" style={{ color: selected ? TEAL : upcoming ? "#0b3f3b" : "#6b7477" }} title={upcoming ? "Next visit" : "Last visit"}>{when}</span>
+          <span className="whitespace-nowrap text-[13px] font-bold" style={{ color: selected ? ACCENT : upcoming ? "#0b3f3b" : "#6b7477" }} title={upcoming ? "Next visit" : "Last visit"}>{when}</span>
         ) : null}
         {serviceCount ? <span className="whitespace-nowrap rounded-md px-[7px] py-0.5 text-[11.5px] font-bold uppercase tracking-[.04em]" style={{ backgroundColor: "#a43432", color: "#fff" }} title="Open service item on this job">Service{serviceCount > 1 ? ` ×${serviceCount}` : ""}</span> : null}
         {flag ? <span className="whitespace-nowrap rounded-md px-[7px] py-0.5 text-[11.5px] font-semibold" style={{ backgroundColor: fbg, color: fink }}>{flag.label}</span> : null}
@@ -161,7 +161,7 @@ export default function JobBrowserRow({ job, group = null, stats, selected, onSe
     );
   }
   const style = selected
-    ? { backgroundColor: "#ffffff", color: "#101617", border: `2px solid ${serviceCount ? "#a43432" : TEAL}`, boxShadow: HALO }
+    ? { backgroundColor: "#ffffff", color: "#101617", border: `2px solid ${serviceCount ? "#a43432" : ACCENT}`, boxShadow: HALO }
     : { backgroundColor: "#ffffff", color: "#101617", border: `1px solid ${serviceCount ? "#a43432" : "#d3cabb"}`, borderLeftWidth: serviceCount ? 4 : 1, boxShadow: hovered ? HALO : "0 1px 2px rgba(10,29,31,.08), 0 6px 14px -8px rgba(10,29,31,.18)" };
   if (href) return <Link to={href} className={cls} style={style} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>{body}</Link>;
   return (
