@@ -43,7 +43,7 @@ async function sha256Hex(text: string): Promise<string> {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function realTransport(base44: any) {
+function realTransport(base44: any, calendar: string = core.CREW_CALENDAR) {
   return createGoogleTransport({
     getToken: async () => {
       const { accessToken } = await base44.asServiceRole.connectors.getConnection('googlecalendar');
@@ -51,7 +51,7 @@ function realTransport(base44: any) {
       return accessToken;
     },
     fetch,
-    calendar: core.CREW_CALENDAR,
+    calendar,
   });
 }
 
@@ -59,7 +59,7 @@ export default async function (req: Request) {
   const base44 = createClientFromRequest(req);
   // RELEASE GUARD: normal create route is ON. No temporary test gate may be present.
   const RELEASE_CREATE_ENABLED = true;
-  const handler = createJobCalendarHandler({ base44, transport: realTransport(base44), createEnabled: RELEASE_CREATE_ENABLED, sha256: sha256Hex });
+  const handler = createJobCalendarHandler({ base44, transport: realTransport(base44), transportFor: (key: any) => realTransport(base44, core.calendarIdFor(key) || core.CREW_CALENDAR), createEnabled: RELEASE_CREATE_ENABLED, sha256: sha256Hex });
   const r = await handler.handle(req);
   return json(r.body, r.status);
 }

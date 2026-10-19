@@ -16,7 +16,7 @@ import * as core from './jobCalendarCore.js';
 
 function out(status, body) { return { status, body }; }
 
-export function createJobCalendarHandler({ base44, transport, createEnabled = false, sha256 }) {
+export function createJobCalendarHandler({ base44, transport, transportFor, createEnabled = false, sha256 }) {
   const api = base44?.asServiceRole?.entities;
 
   async function handleRead(body) {
@@ -68,7 +68,7 @@ export function createJobCalendarHandler({ base44, transport, createEnabled = fa
     // GET-exact reconciliation, cancellation never recreated, full live-content
     // compare. The injected transport is the real Google adapter in production,
     // mocked in tests.
-    const result = await core.createEvent({ transport, job, payload: p, sha256 });
+    const result = await core.createEvent({ transport: (typeof transportFor === 'function' ? transportFor(p.calendar) : transport), job, payload: p, sha256 });
     return out(200, mapCreateResult(result, eventId, fingerprint));
   }
 

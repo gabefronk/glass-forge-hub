@@ -16,6 +16,11 @@ export const isJobCalendarOwner = (user) => !!user && JOB_CALENDAR_OWNER_IDS.has
 export const JOB_CREATE_ENABLED = true;
 
 export const CREW_CALENDAR_LABEL = 'Israel crew calendar (iryedra@gmail.com)';
+export const CREW_CALENDAR_OPTIONS = [
+  { key: 'israel', label: 'Israel crew calendar (iryedra@gmail.com)', short: 'Israel' },
+  { key: 'milan', label: 'Milan crew calendar (milanfronk@gmail.com)', short: 'Milan' },
+];
+export const crewCalendarLabel = (key) => (CREW_CALENDAR_OPTIONS.find((o) => o.key === key) || CREW_CALENDAR_OPTIONS[0]).label;
 export const HUB_BASE = 'https://gfglassforge.com';
 
 export function newRequestId() {

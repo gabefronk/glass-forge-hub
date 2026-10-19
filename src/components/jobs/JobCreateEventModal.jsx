@@ -6,12 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ExternalLink } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { CREW_CALENDAR_LABEL, newRequestId, isJobCalendarOwner, safeError } from "@/lib/jobCalendarShared";
+import { CREW_CALENDAR_OPTIONS, crewCalendarLabel, newRequestId, isJobCalendarOwner, safeError } from "@/lib/jobCalendarShared";
 import { buildReviewedPayload, validateReviewed, reviewErrorMessage } from "@/lib/jobCalendarValidate";
 import { createVisitController } from "@/lib/jobCalendarCreateController";
 import JobCreateEventReview from "@/components/jobs/JobCreateEventReview";
 
-const EMPTY = { all_day: true, start_date: "", end_date: "", start_time: "", end_time: "", notes: "", confirm_no_jobsite: false };
+const EMPTY = { all_day: true, start_date: "", end_date: "", start_time: "", end_time: "", notes: "", confirm_no_jobsite: false, calendar: "israel" };
 const getStore = () => { try { return window.sessionStorage; } catch { return null; } };
 const MUTED = { color: "#566063" };
 
@@ -90,7 +90,20 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
         {step === "form" && (
           <div className="space-y-3">
             <div className="rounded-[9px] px-3 py-2 text-[12px]" style={{ backgroundColor: "#eef5f3", border: "1px solid #c7e4d2", color: "#082f2c" }}>
-              Crew calendar: <b>{CREW_CALENDAR_LABEL}</b>. Title and jobsite come from this job. No pricing.
+              Title and jobsite come from this job. No pricing.
+            </div>
+            <div>
+              <Label className="text-xs">Crew calendar</Label>
+              <div className="mt-1 flex gap-2" role="radiogroup" aria-label="Crew calendar">
+                {CREW_CALENDAR_OPTIONS.map((o) => (
+                  <button key={o.key} type="button" role="radio" aria-checked={form.calendar === o.key}
+                    onClick={() => setForm((s) => ({ ...s, calendar: o.key }))}
+                    className="flex-1 rounded-[9px] px-3 py-2 text-left text-[12.5px] font-semibold"
+                    style={form.calendar === o.key ? { backgroundColor: "#082f2c", color: "#fff", border: "1px solid #082f2c" } : { backgroundColor: "#fff", color: "#082f2c", border: "1px solid #c7d3d0" }}>
+                    {o.short}<span className="block text-[11px] font-normal" style={form.calendar === o.key ? { color: "#d6ebe6" } : MUTED}>{o.label.match(/\(([^)]+)\)/)?.[1]}</span>
+                  </button>
+                ))}
+              </div>
             </div>
             <label className="flex items-center gap-2 text-[13px] font-medium">
               <input type="checkbox" checked={form.all_day} onChange={(e) => setForm((s) => ({ ...s, all_day: e.target.checked }))} /> All day
@@ -134,8 +147,8 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
           <div className="space-y-2">
             <p className="text-[13px] font-semibold" style={{ color: "#082f2c" }}>
               {result.kind === "staged" ? "Review confirmed. Creating is turned off in this version — no calendar event was created."
-                : result.kind === "created" ? "Visit created on the crew calendar."
-                : result.kind === "existing" ? "This visit was already on the crew calendar."
+                : result.kind === "created" ? `Visit created on ${crewCalendarLabel(reviewed?.calendar).split(" (")[0]}.`
+                : result.kind === "existing" ? `This visit was already on ${crewCalendarLabel(reviewed?.calendar).split(" (")[0]}.`
                 : "This request's visit was deleted from the crew calendar. Nothing was recreated."}
             </p>
             {result.link ? <a href={result.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[12px] font-semibold hover:underline" style={{ color: "#0b3f3b" }}>Open in Google Calendar<ExternalLink className="h-3 w-3" /></a> : null}

@@ -6,7 +6,7 @@ const HEX24 = /^[a-f0-9]{24}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const REQUEST_ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]{7,99}$/;
-export const CREATE_FIELDS = ['job_id', 'owner_id', 'request_id', 'all_day', 'start_date', 'end_date', 'start_time', 'end_time', 'time_zone', 'title', 'address', 'notes', 'confirm_no_jobsite'];
+export const CREATE_FIELDS = ['job_id', 'owner_id', 'request_id', 'all_day', 'start_date', 'end_date', 'start_time', 'end_time', 'time_zone', 'title', 'address', 'notes', 'confirm_no_jobsite', 'calendar'];
 export const LIMITS = { title: 200, address: 300, notes: 2000, maxDays: 31 };
 export const DEFAULT_TZ = 'America/Denver';
 
@@ -65,6 +65,7 @@ export function validateReviewed(p, { ownerId } = {}) {
   if (typeof p.job_id !== 'string' || !HEX24.test(p.job_id)) errors.push('invalid_job_id');
   if (typeof p.owner_id !== 'string' || !HEX24.test(p.owner_id)) errors.push('invalid_owner_id');
   else if (ownerId !== undefined && p.owner_id !== ownerId) errors.push('owner_mismatch');
+  if (p.calendar !== undefined && p.calendar !== 'israel' && p.calendar !== 'milan') errors.push('invalid_calendar');
   if (typeof p.request_id !== 'string' || !REQUEST_ID_RE.test(p.request_id)) errors.push('invalid_request_id');
   if (typeof p.all_day !== 'boolean') errors.push('invalid_all_day');
   if (typeof p.title !== 'string' || !p.title.trim() || p.title.length > LIMITS.title) errors.push('invalid_title');
@@ -132,6 +133,7 @@ export function buildReviewedPayload({ user, job, form, requestId }) {
     address: job.address || '',
     notes: typeof form.notes === 'string' ? form.notes : '',
     confirm_no_jobsite: form.confirm_no_jobsite === true,
+    calendar: form.calendar === 'milan' ? 'milan' : 'israel',
   };
 }
 
@@ -165,6 +167,7 @@ export function describeReviewed(p) {
   const rows = [
     ['Title', p.title],
     ['Jobsite', p.address || (p.confirm_no_jobsite ? 'None (confirmed)' : '—')],
+    ['Crew calendar', p.calendar === 'milan' ? 'Milan (milanfronk@gmail.com)' : 'Israel (iryedra@gmail.com)'],
   ];
   if (p.all_day) {
     rows.push(['Start', `${fmtDay(p.start_date)} · all day`]);
