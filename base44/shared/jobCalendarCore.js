@@ -276,7 +276,7 @@ export async function deterministicId(ownerId, requestId, { len = 40, sha256 } =
 }
 
 // ================= create validation (frontend twin: src/lib/jobCalendarShared.js) =================
-export const CREATE_FIELDS = ['job_id', 'owner_id', 'request_id', 'all_day', 'start_date', 'end_date', 'start_time', 'end_time', 'time_zone', 'title', 'address', 'notes', 'confirm_no_jobsite', 'calendar'];
+export const CREATE_FIELDS = ['job_id', 'owner_id', 'request_id', 'all_day', 'start_date', 'end_date', 'start_time', 'end_time', 'time_zone', 'title', 'address', 'notes', 'confirm_no_jobsite', 'calendar', 'contact'];
 export const LIMITS = { title: 200, address: 300, notes: 2000, maxDays: 31 };
 
 // Notes are blocked (never edited) when a line carries a currency mark, or a
@@ -349,6 +349,7 @@ export function validateCreatePayload(p, { ownerId } = {}) {
   if (typeof p.address !== 'string' || p.address.length > LIMITS.address) errors.push('invalid_address');
   if (typeof p.notes !== 'string' || p.notes.length > LIMITS.notes) errors.push('invalid_notes');
   else if (notesPricingLines(p.notes).length) errors.push('notes_contain_pricing');
+  if (p.contact !== undefined && (typeof p.contact !== 'string' || p.contact.length > 200 || notesPricingLines(p.contact).length)) errors.push('invalid_contact');
   if (typeof p.confirm_no_jobsite !== 'boolean') errors.push('invalid_confirm_no_jobsite');
   if (!isValidTimeZone(p.time_zone)) errors.push('invalid_time_zone');
   if (!isValidDate(p.start_date)) errors.push('invalid_start_date');
@@ -413,7 +414,7 @@ export function providerFields(p) {
     identity: { job: p.job_id, owner: p.owner_id, request: p.request_id },
     summary: p.title,
     location: p.address,
-    description: `${p.notes ? p.notes + '\n' : ''}Hub job: ${HUB_BASE_URL}/jobs/${p.job_id}`,
+    description: `${p.contact ? 'Site contact: ' + p.contact + '\n' : ''}${p.notes ? p.notes + '\n' : ''}Hub job: ${HUB_BASE_URL}/jobs/${p.job_id}`,
     start: eff.start,
     end: eff.end,
   };

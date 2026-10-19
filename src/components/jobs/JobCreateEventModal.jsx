@@ -9,9 +9,12 @@ import { base44 } from "@/api/base44Client";
 import { CREW_CALENDAR_OPTIONS, crewCalendarLabel, newRequestId, isJobCalendarOwner, safeError } from "@/lib/jobCalendarShared";
 import { buildReviewedPayload, validateReviewed, reviewErrorMessage } from "@/lib/jobCalendarValidate";
 import { createVisitController } from "@/lib/jobCalendarCreateController";
+import { useJobContacts } from "@/hooks/use-job-contacts";
 import JobCreateEventReview from "@/components/jobs/JobCreateEventReview";
 
-const EMPTY = { all_day: true, start_date: "", end_date: "", start_time: "", end_time: "", notes: "", confirm_no_jobsite: false, calendar: "israel" };
+const EMPTY = { all_day: true, start_date: "", end_date: "", start_time: "", end_time: "", notes: "", confirm_no_jobsite: false, calendar: "israel", contact: "" };
+const CONTACT_ORDER = ["site", "superintendent", "project_manager", "homeowner", "customer"];
+const pickContact = (linked) => { for (const r of CONTACT_ORDER) { const c = (linked || []).find((x) => x.role === r && x.phone); if (c) return `${c.name ? c.name + " " : ""}${c.phone}`.trim(); } return ""; };
 const getStore = () => { try { return window.sessionStorage; } catch { return null; } };
 const MUTED = { color: "#566063" };
 
@@ -33,6 +36,11 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const owner = isJobCalendarOwner(user);
+  const jc = useJobContacts(open && owner ? job?.id : null);
+  const defaultContact = pickContact(jc.view?.job?.id === job?.id ? jc.view?.linked : []);
+  const touchedContact = useRef(false);
+  useEffect(() => { touchedContact.current = false; }, [open, job?.id]);
+  useEffect(() => { if (step === "form" && defaultContact && !touchedContact.current) setForm((s) => (s.contact ? s : { ...s, contact: defaultContact })); }, [defaultContact, step, open, form.contact]);
   const noJobsite = !job?.address;
 
   useEffect(() => {
@@ -124,6 +132,10 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
                 <span>This job has no jobsite address. I&apos;ve confirmed that&apos;s correct for this visit.</span>
               </label>
             ) : null}
+            <div>
+              <Label className="text-xs">Site contact (name and number, shown on the event)</Label>
+              <Input value={form.contact} onChange={(e) => { touchedContact.current = true; set("contact")(e); }} placeholder="Stephany Llewellyn 435-300-1000" />
+            </div>
             <div>
               <Label className="text-xs">Notes (crew-safe, no pricing)</Label>
               <Textarea rows={3} value={form.notes} onChange={set("notes")} placeholder="Finish up install trim items…" />

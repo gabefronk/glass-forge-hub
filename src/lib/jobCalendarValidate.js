@@ -6,7 +6,7 @@ const HEX24 = /^[a-f0-9]{24}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const REQUEST_ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]{7,99}$/;
-export const CREATE_FIELDS = ['job_id', 'owner_id', 'request_id', 'all_day', 'start_date', 'end_date', 'start_time', 'end_time', 'time_zone', 'title', 'address', 'notes', 'confirm_no_jobsite', 'calendar'];
+export const CREATE_FIELDS = ['job_id', 'owner_id', 'request_id', 'all_day', 'start_date', 'end_date', 'start_time', 'end_time', 'time_zone', 'title', 'address', 'notes', 'confirm_no_jobsite', 'calendar', 'contact'];
 export const LIMITS = { title: 200, address: 300, notes: 2000, maxDays: 31 };
 export const DEFAULT_TZ = 'America/Denver';
 
@@ -72,6 +72,7 @@ export function validateReviewed(p, { ownerId } = {}) {
   if (typeof p.address !== 'string' || p.address.length > LIMITS.address) errors.push('invalid_address');
   if (typeof p.notes !== 'string' || p.notes.length > LIMITS.notes) errors.push('invalid_notes');
   else if (notesPricingLines(p.notes).length) errors.push('notes_contain_pricing');
+  if (p.contact !== undefined && (typeof p.contact !== 'string' || p.contact.length > 200 || notesPricingLines(p.contact).length)) errors.push('invalid_contact');
   if (typeof p.confirm_no_jobsite !== 'boolean') errors.push('invalid_confirm_no_jobsite');
   if (!isValidTimeZone(p.time_zone)) errors.push('invalid_time_zone');
   if (!isValidDate(p.start_date)) errors.push('invalid_start_date');
@@ -134,10 +135,12 @@ export function buildReviewedPayload({ user, job, form, requestId }) {
     notes: typeof form.notes === 'string' ? form.notes : '',
     confirm_no_jobsite: form.confirm_no_jobsite === true,
     calendar: form.calendar === 'milan' ? 'milan' : 'israel',
+    contact: typeof form.contact === 'string' ? form.contact.trim() : '',
   };
 }
 
 const REVIEW_MESSAGES = {
+  invalid_contact: 'Site contact is too long or contains pricing.',
   notes_contain_pricing: 'Notes contain pricing (a dollar amount, or labor/cost/price with a number). Remove it — notes are never edited for you.',
   invalid_start_date: 'Add a valid start date.',
   invalid_end_date: 'Add a valid end date.',
@@ -179,6 +182,7 @@ export function describeReviewed(p) {
     rows.push(['End', `${fmtDay(p.end_date)} · ${p.end_time}${span === 1 ? ' (overnight)' : span > 1 ? ' (multi-day)' : ''}`]);
   }
   rows.push(['Timezone', p.time_zone]);
+  rows.push(['Site contact', p.contact || '—']);
   rows.push(['Notes', p.notes || '—']);
   rows.push(['Request id', p.request_id]);
   return rows;
