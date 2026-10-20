@@ -31,6 +31,8 @@ export const CREW_CALENDAR = 'iryedra@gmail.com';
 // Crew calendars an owner may pick for a new visit. Key -> calendar id. Anything else is rejected.
 export const CREW_CALENDARS = { israel: 'iryedra@gmail.com', milan: 'milanfronk@gmail.com' };
 export const calendarIdFor = (key) => CREW_CALENDARS[key == null ? 'israel' : key] || null;
+// 'both' lands the same visit on every crew calendar (same event id on each; ids are per calendar).
+export const calendarKeysFor = (key) => (key === 'both' ? Object.keys(CREW_CALENDARS) : [key == null ? 'israel' : key]);
 export const ALLOWED_HOSTS = ['gfglassforge.com', 'glass-forge-hub.base44.app'];
 export const HUB_BASE_URL = 'https://gfglassforge.com';
 const HEX24 = /^[a-f0-9]{24}$/;
@@ -343,7 +345,7 @@ export function validateCreatePayload(p, { ownerId } = {}) {
   if (typeof p.owner_id !== 'string' || !HEX24.test(p.owner_id)) errors.push('invalid_owner_id');
   else if (ownerId !== undefined && p.owner_id !== ownerId) errors.push('owner_mismatch');
   if (typeof p.request_id !== 'string' || !REQUEST_ID_RE.test(p.request_id)) errors.push('invalid_request_id');
-  if (p.calendar !== undefined && !Object.prototype.hasOwnProperty.call(CREW_CALENDARS, p.calendar)) errors.push('invalid_calendar');
+  if (p.calendar !== undefined && p.calendar !== 'both' && !Object.prototype.hasOwnProperty.call(CREW_CALENDARS, p.calendar)) errors.push('invalid_calendar');
   if (typeof p.all_day !== 'boolean') errors.push('invalid_all_day');
   if (typeof p.title !== 'string' || !p.title.trim() || p.title.length > LIMITS.title) errors.push('invalid_title');
   if (typeof p.address !== 'string' || p.address.length > LIMITS.address) errors.push('invalid_address');

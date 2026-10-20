@@ -12,7 +12,7 @@ import { createVisitController } from "@/lib/jobCalendarCreateController";
 import { useJobContacts } from "@/hooks/use-job-contacts";
 import JobCreateEventReview from "@/components/jobs/JobCreateEventReview";
 
-const EMPTY = { all_day: true, start_date: "", end_date: "", start_time: "", end_time: "", notes: "", confirm_no_jobsite: false, calendar: "israel", contact: "" };
+const EMPTY = { all_day: true, start_date: "", end_date: "", start_time: "", end_time: "", notes: "", confirm_no_jobsite: false, calendars: ["israel"], contact: "" };
 const CONTACT_ORDER = ["site", "superintendent", "project_manager", "homeowner", "customer"];
 const pickContact = (linked) => { for (const r of CONTACT_ORDER) { const c = (linked || []).find((x) => x.role === r && x.phone); if (c) return `${c.name ? c.name + " " : ""}${c.phone}`.trim(); } return ""; };
 const getStore = () => { try { return window.sessionStorage; } catch { return null; } };
@@ -101,16 +101,23 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
               Title and jobsite come from this job. No pricing.
             </div>
             <div>
-              <Label className="text-xs">Crew calendar</Label>
-              <div className="mt-1 flex gap-2" role="radiogroup" aria-label="Crew calendar">
-                {CREW_CALENDAR_OPTIONS.map((o) => (
-                  <button key={o.key} type="button" role="radio" aria-checked={form.calendar === o.key}
-                    onClick={() => setForm((s) => ({ ...s, calendar: o.key }))}
-                    className="flex-1 rounded-[9px] px-3 py-2 text-left text-[12.5px] font-semibold"
-                    style={form.calendar === o.key ? { backgroundColor: "#082f2c", color: "#fff", border: "1px solid #082f2c" } : { backgroundColor: "#fff", color: "#082f2c", border: "1px solid #c7d3d0" }}>
-                    {o.short}<span className="block text-[11px] font-normal" style={form.calendar === o.key ? { color: "#d6ebe6" } : MUTED}>{o.label.match(/\(([^)]+)\)/)?.[1]}</span>
-                  </button>
-                ))}
+              <Label className="text-xs">Crew calendar <span className="font-normal" style={MUTED}>(pick one or both)</span></Label>
+              <div className="mt-1 flex gap-2" role="group" aria-label="Crew calendar">
+                {CREW_CALENDAR_OPTIONS.map((o) => {
+                  const on = form.calendars.includes(o.key);
+                  return (
+                    <button key={o.key} type="button" role="checkbox" aria-checked={on}
+                      onClick={() => setForm((s) => {
+                        const has = s.calendars.includes(o.key);
+                        if (has && s.calendars.length === 1) return s; // keep at least one calendar selected
+                        return { ...s, calendars: has ? s.calendars.filter((k) => k !== o.key) : [...s.calendars, o.key] };
+                      })}
+                      className="flex-1 rounded-[9px] px-3 py-2 text-left text-[12.5px] font-semibold"
+                      style={on ? { backgroundColor: "#082f2c", color: "#fff", border: "1px solid #082f2c" } : { backgroundColor: "#fff", color: "#082f2c", border: "1px solid #c7d3d0" }}>
+                      {on ? "\u2713 " : ""}{o.short}<span className="block text-[11px] font-normal" style={on ? { color: "#d6ebe6" } : MUTED}>{o.label.match(/\(([^)]+)\)/)?.[1]}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <label className="flex items-center gap-2 text-[13px] font-medium">

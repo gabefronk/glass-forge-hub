@@ -20,7 +20,7 @@ export const CREW_CALENDAR_OPTIONS = [
   { key: 'israel', label: 'Israel crew calendar (iryedra@gmail.com)', short: 'Israel' },
   { key: 'milan', label: 'Milan crew calendar (milanfronk@gmail.com)', short: 'Milan' },
 ];
-export const crewCalendarLabel = (key) => (CREW_CALENDAR_OPTIONS.find((o) => o.key === key) || CREW_CALENDAR_OPTIONS[0]).label;
+export const crewCalendarLabel = (key) => key === 'both' ? 'Israel and Milan crew calendars (both)' : (CREW_CALENDAR_OPTIONS.find((o) => o.key === key) || CREW_CALENDAR_OPTIONS[0]).label;
 export const HUB_BASE = 'https://gfglassforge.com';
 
 export function newRequestId() {

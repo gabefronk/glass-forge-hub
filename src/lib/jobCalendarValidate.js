@@ -65,7 +65,7 @@ export function validateReviewed(p, { ownerId } = {}) {
   if (typeof p.job_id !== 'string' || !HEX24.test(p.job_id)) errors.push('invalid_job_id');
   if (typeof p.owner_id !== 'string' || !HEX24.test(p.owner_id)) errors.push('invalid_owner_id');
   else if (ownerId !== undefined && p.owner_id !== ownerId) errors.push('owner_mismatch');
-  if (p.calendar !== undefined && p.calendar !== 'israel' && p.calendar !== 'milan') errors.push('invalid_calendar');
+  if (p.calendar !== undefined && p.calendar !== 'israel' && p.calendar !== 'milan' && p.calendar !== 'both') errors.push('invalid_calendar');
   if (typeof p.request_id !== 'string' || !REQUEST_ID_RE.test(p.request_id)) errors.push('invalid_request_id');
   if (typeof p.all_day !== 'boolean') errors.push('invalid_all_day');
   if (typeof p.title !== 'string' || !p.title.trim() || p.title.length > LIMITS.title) errors.push('invalid_title');
@@ -134,7 +134,7 @@ export function buildReviewedPayload({ user, job, form, requestId }) {
     address: job.address || '',
     notes: typeof form.notes === 'string' ? form.notes : '',
     confirm_no_jobsite: form.confirm_no_jobsite === true,
-    calendar: form.calendar === 'milan' ? 'milan' : 'israel',
+    calendar: (() => { const c = Array.isArray(form.calendars) ? form.calendars : ['israel']; const i = c.includes('israel'), m = c.includes('milan'); return i && m ? 'both' : m ? 'milan' : 'israel'; })(),
     contact: typeof form.contact === 'string' ? form.contact.trim() : '',
   };
 }
@@ -170,7 +170,7 @@ export function describeReviewed(p) {
   const rows = [
     ['Title', p.title],
     ['Jobsite', p.address || (p.confirm_no_jobsite ? 'None (confirmed)' : '—')],
-    ['Crew calendar', p.calendar === 'milan' ? 'Milan (milanfronk@gmail.com)' : 'Israel (iryedra@gmail.com)'],
+    ['Crew calendar', p.calendar === 'both' ? 'Both: Israel (iryedra@gmail.com) and Milan (milanfronk@gmail.com)' : p.calendar === 'milan' ? 'Milan (milanfronk@gmail.com)' : 'Israel (iryedra@gmail.com)'],
   ];
   if (p.all_day) {
     rows.push(['Start', `${fmtDay(p.start_date)} · all day`]);

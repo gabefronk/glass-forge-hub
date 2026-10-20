@@ -68,8 +68,23 @@ export function createJobCalendarHandler({ base44, transport, transportFor, crea
     // GET-exact reconciliation, cancellation never recreated, full live-content
     // compare. The injected transport is the real Google adapter in production,
     // mocked in tests.
-    const result = await core.createEvent({ transport: (typeof transportFor === 'function' ? transportFor(p.calendar) : transport), job, payload: p, sha256 });
-    return out(200, mapCreateResult(result, eventId, fingerprint));
+    // One createEvent per selected calendar (calendar 'both' = Israel and Milan). The event id is the
+    // same on each calendar; every calendar reconciles on its own, so a retry only fills what is missing.
+    const keys = core.calendarKeysFor(p.calendar);
+    const results = [];
+    for (const key of keys) {
+      const t = typeof transportFor === 'function' ? transportFor(key) : transport;
+      results.push({ key, result: await core.createEvent({ transport: t, job, payload: p, sha256 }) });
+    }
+    if (results.length === 1) return out(200, mapCreateResult(results[0].result, eventId, fingerprint));
+    const mapped = results.map(({ key, result }) => ({ key, ...mapCreateResult(result, eventId, fingerprint) }));
+    const bad = mapped.find((m) => !(m.ok === true && (m.kind === 'created' || m.kind === 'existing_match')));
+    const summary = mapped.map((m) => ({ calendar: m.key, ok: m.ok === true, kind: m.kind }));
+    if (bad) { const { key, ...rest } = bad; return out(200, { ...rest, calendars: summary }); }
+    const first = mapped[0];
+    const anyCreated = mapped.some((m) => m.kind === 'created');
+    const { key: _k, ...firstRest } = first;
+    return out(200, { ...firstRest, kind: anyCreated ? 'created' : 'existing_match', calendars: summary });
   }
 
   async function handle(req) {

@@ -177,6 +177,44 @@ test("handler create(test): network unknown (GET throw / insert 5xx) -> unknown,
   const r2 = await h2.handleCreate({ payload: pl() }, { id: OWNER });
   assert.equal(r2.body.kind, "unknown");
 });
+test("handler create(test): calendar both -> one create on each crew calendar, same event id", async () => {
+  const seen = [];
+  const mk = (key) => mockTransport({ get: () => ({ kind: "not_found" }), insert: (body) => { seen.push({ key, id: body.id }); return { ok: true, status: 200, event: { ...body, htmlLink: "https://calendar.google.com/event?eid=" + key } }; } });
+  const ts = { israel: mk("israel"), milan: mk("milan") };
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: ts.israel, transportFor: (k) => ts[k], createEnabled: true, sha256 });
+  const r = await handler.handleCreate({ payload: pl({ calendar: "both" }) }, { id: OWNER });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.kind, "created");
+  assert.deepEqual(r.body.calendars.map((c) => c.calendar), ["israel", "milan"]);
+  assert.equal(ts.israel.calls.insert, 1);
+  assert.equal(ts.milan.calls.insert, 1);
+  assert.equal(seen[0].id, seen[1].id);
+});
+test("handler create(test): calendar both, retry only fills the calendar that is missing", async () => {
+  const p = pl({ calendar: "both" });
+  const fp = await core.fingerprintHash(p, { sha256 });
+  const ex = await existingEvent(p, fp);
+  const tIsrael = mockTransport({ get: () => ({ kind: "found", event: ex }) });
+  const tMilan = mockTransport({ get: () => ({ kind: "not_found" }), insert: (body) => ({ ok: true, status: 200, event: { ...body, htmlLink: "https://calendar.google.com/event?eid=x" } }) });
+  const ts = { israel: tIsrael, milan: tMilan };
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: tIsrael, transportFor: (k) => ts[k], createEnabled: true, sha256 });
+  const r = await handler.handleCreate({ payload: p }, { id: OWNER });
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.kind, "created");
+  assert.equal(tIsrael.calls.insert, 0);
+  assert.equal(tMilan.calls.insert, 1);
+});
+test("handler create(test): calendar both, one side fails -> not ok, no fabricated success", async () => {
+  const ok = mockTransport({ get: () => ({ kind: "not_found" }), insert: (body) => ({ ok: true, status: 200, event: { ...body, htmlLink: "https://calendar.google.com/event?eid=x" } }) });
+  const bad = mockTransport({ get: () => { throw new Error("net"); } });
+  const ts = { israel: ok, milan: bad };
+  const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: ok, transportFor: (k) => ts[k], createEnabled: true, sha256 });
+  const r = await handler.handleCreate({ payload: pl({ calendar: "both" }) }, { id: OWNER });
+  assert.equal(r.body.ok, false);
+  assert.equal(r.body.kind, "unknown");
+  assert.equal(r.body.calendars.find((c) => c.calendar === "israel").ok, true);
+});
 test("handler create: rejected pricing payload -> 400 notes_contain_pricing, zero transport calls", async () => {
   const t = mockTransport({ get: () => { throw new Error("no"); }, insert: () => { throw new Error("no"); } });
   const handler = createJobCalendarHandler({ base44: mockBase44({ me: { id: OWNER } }), transport: t, createEnabled: true, sha256 });
