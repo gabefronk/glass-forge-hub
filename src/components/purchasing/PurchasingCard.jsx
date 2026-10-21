@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import MoneyTiles from './MoneyTiles';
+import { PaymentStatusChip } from '@/components/jobs/JobPaymentStatus';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import { sectionForNextKey } from '@/lib/purchasingViewModel';
 import { money } from '@/components/budgets/ProcurementForms';
@@ -75,6 +76,7 @@ export default function PurchasingCard({ card, onEdit, data, onSaved }) {
         <RefChip label="YA PO" value={refs.yaPo} tone={refTone(refs.poStatus)} />
         <RefChip label="ETA" value={refs.etaLabel} tone={etaTone(refs.etaLabel)} />
         <RefChip label="Supplier payment" value={refs.paymentLabel} tone={paymentTone(refs.paymentLabel)} />
+        <PaymentStatusChip job={fullJob} />
       </div>
 
       {windows.display?.review && (chosenBudget || windows.display?.alternatives?.length) ? (

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
+import { PaymentStatusChip } from "@/components/jobs/JobPaymentStatus";
 
 export const COLS = "minmax(220px,1fr) 130px 120px 130px 20px";
 
@@ -37,7 +38,8 @@ export default function JobListRow({ job, stats }) {
       <span style={{ minWidth: 0, fontFamily: "'Archivo',sans-serif", fontWeight: 400, fontSize: "13px", color: "#53615B",
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sanitizeText(job.builder || "—")}</span>
       <span style={{ textAlign: "right", fontFamily: "'Archivo',sans-serif", fontWeight: 500, fontSize: "13px", color: "#53615B", whiteSpace: "nowrap" }}>{stats.lastReport ? formatShort(stats.lastReport) : "—"}</span>
-      <span style={{ minWidth: 0 }}>
+      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+        <PaymentStatusChip job={job} />
         <span style={{
           display: "inline-block", fontFamily: "'Archivo',sans-serif", fontWeight: 600, fontSize: "9.5px", letterSpacing: ".01em",
           padding: "4px 8px", borderRadius: 4, whiteSpace: "nowrap",

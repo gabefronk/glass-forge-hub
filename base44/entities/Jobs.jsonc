@@ -127,6 +127,21 @@
       ],
       "description": "Where the job is in its life: quoted \u2192 sold \u2192 ordered \u2192 handed_off (Stage 2, in the PM's hands) \u2192 scheduled \u2192 installed \u2192 closed. Set by hand from the job hero; the handoff sets handed_off itself."
     },
+    "payment_status": {
+      "type": "string",
+      "enum": [
+        "installed",
+        "sent_for_payment",
+        "waiting_on_payment",
+        "paid"
+      ],
+      "description": "Gabriel's one-tap customer-payment tracking: job installed -> sent for payment via QuickBooks -> waiting on payment -> paid. Null means not tracked yet. Set from the job page payment buttons."
+    },
+    "payment_status_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When payment_status was last changed (ISO timestamp)."
+    },
     "pm_member_key": {
       "type": "string",
       "description": "TeamMember.member_key of who runs the job after handoff (e.g. Milan)."

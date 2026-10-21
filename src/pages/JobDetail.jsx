@@ -35,6 +35,7 @@ import { denverDate } from "../../base44/shared/billingCore.js";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
 import { ServiceMarker, useServiceItems } from "@/components/jobs/ServiceItems";
+import JobPaymentStatus, { PaymentStatusChip } from "@/components/jobs/JobPaymentStatus";
 import JobUpcomingCard from "@/components/jobs/JobUpcomingCard";
 import JobCreateEventModal from "@/components/jobs/JobCreateEventModal";
 import { isJobCalendarOwner, JOB_CREATE_ENABLED } from "@/lib/jobCalendarShared";
@@ -225,6 +226,10 @@ export default function JobDetail() {
               </>
             }
           />
+
+          {owner
+            ? <JobPaymentStatus job={job} onChanged={() => loadAll({ quiet: true })} />
+            : (job.payment_status ? <div><PaymentStatusChip job={job} /></div> : null)}
 
           <MergedJobBanner job={job} onReversed={() => loadAll()} />
           <DuplicateJobNotice group={group} currentId={id} />
