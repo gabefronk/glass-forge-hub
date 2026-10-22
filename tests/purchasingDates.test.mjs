@@ -16,9 +16,9 @@ test('headings follow the linked job, never the saved PO name or title', () => {
 });
 test('Denver recorded date is distinct from documented original order date', () => {
   assert.deepEqual(statusDate(po), { date: '2026-10-03', basis: 'recorded' });
-  assert.equal(statusWithDate(po), 'Confirmed · recorded Oct 3, 2026');
+  assert.equal(statusWithDate(po), 'Confirmed · recorded 10/3/2026');
   assert.equal(originalOrderDate(po), '2026-09-25');
-  assert.equal(displayDate(supplier.eta_date), 'Oct 6, 2026');
+  assert.equal(displayDate(supplier.eta_date), '10/6/2026');
 });
 test('missing or mismatched history never falls back to creation, update or today', () => {
   for (const status_history of [undefined, [], [{ status: 'ordered', at: '2026-01-01T00:00:00Z' }], [{ status: 'confirmed', at: '2026-10-04' }], [{ status: 'confirmed', at: 'bad' }]]) {

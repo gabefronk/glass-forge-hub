@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { displayDate } from '@/lib/purchasingDates';
 import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 
@@ -14,7 +15,7 @@ export function CollectionItem({ item, onSave, busy, error }) {
   const run=async action=>{const ok=await onSave({...payload,action,...(action==='paid'?{received_date:date,reference}:{})});if(ok){setMode('');setReviewed(false);}};
   return <article className="rounded-xl border border-stone-300 bg-white p-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">{job_name}</h3><span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold">{paid?'Customer paid':!complete?'Work incomplete':!state?'Review enrollment':state==='prepared'?'Request prepared - not sent':'Complete - customer unpaid'}</span></div>
-    <p className="mt-1 text-xs text-stone-600">Outside BFS · {Math.round((line.split_pct ?? .5)*100)}% profit split · Work date {line.job_date || 'Not recorded'}</p>
+    <p className="mt-1 text-xs text-stone-600">Outside BFS · {Math.round((line.split_pct ?? .5)*100)}% profit split · Work date {line.job_date ? displayDate(line.job_date) : 'Not recorded'}</p>
     <p className="mt-2 text-sm">Sale {money(line.sale_price)} · Full cost {money(line.cost)}. Missing prices stay on review. Nothing is sent to QuickBooks here.</p>
     {ambiguous && <p role="alert" className="mt-2 text-sm text-red-800">Multiple profit-split lines share this job. Review which work this payment covers before continuing.</p>}
     {!complete && !paid && <p className="mt-2 text-sm text-red-800">Latest report is incomplete. Resolve the work before requesting payment.</p>}

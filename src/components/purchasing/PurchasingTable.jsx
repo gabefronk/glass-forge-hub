@@ -4,6 +4,7 @@ import { PaymentStatusChip } from '@/components/jobs/JobPaymentStatus';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import { RefChip, refTone, paymentTone } from './PurchasingCard';
 import { money } from '@/components/budgets/ProcurementForms';
+import { displayDate } from '@/lib/purchasingDates';
 
 // Spreadsheet-style purchasing table - one row of figures per job, with the
 // job name on its own line directly above (10/22 layout pass per Gabriel).
@@ -72,7 +73,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
         <MoneyCell display={profitDisplay} accent={ACCENT.profit} tone={profitDisplay?.tone} />
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.quoteStatus) || 'gray'}>{quoteText}</DotText></td>
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
-        <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refs.etaLabel ? 'blue' : 'gray'}>{refs.etaLabel}</DotText></td>
+        <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refs.etaLabel ? 'blue' : 'gray'}>{/^\d{4}-\d{2}-\d{2}$/.test(refs.etaLabel || '') ? displayDate(refs.etaLabel) : refs.etaLabel}</DotText></td>
         <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
           <div className="flex flex-col items-start gap-1">
             <RefChip label="Supplier" value={refs.paymentLabel} tone={paymentTone(refs.paymentLabel)} />

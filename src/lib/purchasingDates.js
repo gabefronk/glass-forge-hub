@@ -10,7 +10,8 @@ export function purchasingJobName(row, jobs = []) {
 }
 export function displayDate(value) {
   if (!validDate(value)) return '';
-  return new Date(value + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' });
+  // Gabriel 10/22: dates read month/day/year (11/02/2026) everywhere.
+  return new Date(value + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'numeric', day: 'numeric', year: 'numeric' });
 }
 function recordedDay(value) {
   // Require a timestamp with timezone; a date-only string must never shift a day.
