@@ -8,6 +8,7 @@ import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
 import { ASSIGNABLE_CONTACT_ROLES, ROLE_LABELS } from "@/lib/jobContacts";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import JobMatchWarningDialog from "@/components/jobs/JobMatchWarningDialog";
+import NewJobContactFields from "@/components/jobs/NewJobContactFields";
 
 const blank = { canonical_name: "", builder: "", address: "", po_number: "", oe_number: "", source_window_quote_id: "", initial_note: "" };
 const inputClass = "mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base focus:border-emerald-700 focus:outline-none sm:text-sm";
@@ -22,7 +23,7 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
   const [selected, setSelected] = useState([]);
   const [contactRoles, setContactRoles] = useState({});
   const [newContactRole, setNewContactRole] = useState("");
-  const [newContact, setNewContact] = useState({name:"",email:"",phone:"",company:"",builder:""});
+  const [newContact, setNewContact] = useState({first_name:"",last_name:"",email:"",phone:"",builder:""});
   const [contactsError, setContactsError] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -43,7 +44,7 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
 
   const reset = () => {
     setValues(blank); setContactSearch(""); setSelected([]); setContactRoles({}); setNewContactRole(""); setError("");
-    setMatchWarning(null); setWeakMatches([]); setForceCreate(false); setContactsError(""); setContacts([]); setCreatedState(null); setNewContact({name:"",email:"",phone:"",company:"",builder:""});
+    setMatchWarning(null); setWeakMatches([]); setForceCreate(false); setContactsError(""); setContacts([]); setCreatedState(null); setNewContact({first_name:"",last_name:"",email:"",phone:"",builder:""});
   };
   const change = (key, value) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -55,6 +56,8 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
     return contacts.filter((contact) => [contact.name, contact.company, contact.email, contact.phone]
       .some((value) => String(value || "").toLowerCase().includes(q))).slice(0, 20);
   }, [contacts, contactSearch]);
+  // The contact store keeps one name; the form asks for first and last.
+  const newContactName = `${newContact.first_name} ${newContact.last_name}`.trim();
 
   const submit = async (event) => {
     event.preventDefault();
@@ -81,13 +84,13 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
   const proceedCreate = async () => {
     const payload = newJobPayload(values);
     if (!payload.canonical_name) { setError("Job name is required."); return; }
-    if (newContact.name.trim() && !owner) { setError("Only the owner can add a contact here. Ask them to create it in Contacts."); return; }
+    if (newContactName && !owner) { setError("Only the owner can add a contact here. Ask them to create it in Contacts."); return; }
     if (values.source_window_quote_id.trim() && !owner) { setError("Only the owner can link a source quote. Leave this blank."); return; }
     if (values.source_window_quote_id.trim()) {
       try { const q=await base44.entities.QuoteRequests.get(values.source_window_quote_id.trim()); if (!q) throw Error("Quote not found"); }
       catch { setError("Source quote ID was not found. Leave it blank or choose a verified quote."); return; }
     }
-    if (selected.some(key => !contactRoles[key]) || (newContact.name.trim() && !newContactRole)) { setError("Choose a role for each contact before creating the job."); return; }
+    if (selected.some(key => !contactRoles[key]) || (newContactName && !newContactRole)) { setError("Choose a role for each contact before creating the job."); return; }
     setSaving(true); setError("");
     try {
       // Create the job first. If it succeeds, never invite a duplicate job write
@@ -96,9 +99,9 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
       const result = { jobId: created.id, contactLinks: [], folder: "pending", note: "skipped", contact: "skipped" };
       setCreatedState(result);
       let newContactKey = "";
-      if (newContact.name.trim()) {
+      if (newContactName) {
         try {
-          const r = (await base44.functions.invoke("contacts-directory", { action: "create_contact", contact: newContact })).data;
+          const r = (await base44.functions.invoke("contacts-directory", { action: "create_contact", contact: { name: newContactName, email: newContact.email, phone: newContact.phone, builder: newContact.builder } })).data;
           if (r?.error) throw Error(r.error);
           newContactKey = r.contact.key;
           result.contact = "saved";
@@ -164,7 +167,7 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
                 return <div key={contact.key} className="rounded-lg px-2.5 py-2 hover:bg-slate-50"><label className="flex min-h-11 cursor-pointer items-center gap-3"><input type="checkbox" checked={checked} onChange={() => setSelected((current) => checked ? current.filter((key) => key !== contact.key) : [...current, contact.key])} /><span className="min-w-0"><strong className="block truncate text-sm">{contact.name}</strong><span className="block truncate text-xs text-slate-500">{contact.company || contact.email || contact.phone}</span></span></label>{checked && <label className="mt-1 block text-xs">Role for {contact.name}<select className={inputClass} value={contactRoles[contact.key] || ""} onChange={e => setContactRoles(v => ({...v, [contact.key]: e.target.value}))}><option value="">Choose role</option>{ASSIGNABLE_CONTACT_ROLES.map(role => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}</select></label>}</div>;
               })}
             </div>}
-            {owner && <details className="mt-2 rounded-xl border p-3"><summary className="cursor-pointer text-sm">Add new contact for this job (owner only)</summary><div className="mt-2 grid gap-2 sm:grid-cols-2">{[["name","Name"],["email","Email"],["phone","Phone"],["company","Company"],["builder","Builder"]].map(([key,label])=><label key={key} className="text-xs">{label}<input className={inputClass} type={key==='email'?'email':'text'} value={newContact[key]} onChange={e=>setNewContact(v=>({...v,[key]:e.target.value}))}/></label>)}</div><label className="mt-2 block text-xs">Role for new contact<select className={inputClass} value={newContactRole} onChange={e=>setNewContactRole(e.target.value)}><option value="">Choose role</option>{ASSIGNABLE_CONTACT_ROLES.map(role=><option key={role} value={role}>{ROLE_LABELS[role]}</option>)}</select></label><p className="mt-2 text-xs">An existing email or phone must be selected from the picker instead of creating a duplicate.</p></details>}
+            {owner && <details className="mt-2 rounded-xl border p-3"><summary className="cursor-pointer text-sm">Add new contact for this job (owner only)</summary><NewJobContactFields value={newContact} onChange={setNewContact} role={newContactRole} onRole={setNewContactRole} /></details>}
           {selected.length > 0 && <p className="mt-2 flex items-center gap-1 text-xs text-emerald-800"><Link2 className="h-3.5 w-3.5" />{selected.length} contact{selected.length === 1 ? "" : "s"} selected</p>}
           </div>
           {weakMatches.length > 0 && <div className="rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
