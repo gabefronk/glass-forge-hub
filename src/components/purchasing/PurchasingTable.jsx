@@ -1,6 +1,7 @@
 import { useRef, useState, Fragment } from 'react';
 import { ChevronDown } from 'lucide-react';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
+import PurchasingRowTitle from './PurchasingRowTitle';
 import { refTone } from './PurchasingCard';
 import { money } from '@/components/budgets/ProcurementForms';
 import { displayDate } from '@/lib/purchasingDates';
@@ -15,18 +16,10 @@ import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementFo
 // cell reads "Supplier - quote #"; the PO cell is just the YA number. Fits
 // the page width - no horizontal scroll. Money stays big, charcoal, tabular.
 const ACCENT = { windows: '#3977CB', rough: '#7862B2', sale: '#248B88', profit: '#238557' };
-const INK = '#101617', SUB = '#566063', LINE = '#E2E8F0', HEAD = '#0B3F3B';
+const INK = '#101617', LINE = '#E2E8F0', HEAD = '#0B3F3B';
 const DOT = { green: '#166447', amber: '#C08B2E', red: '#A43432', blue: '#3977CB', gray: '#B8B0A4' };
 
 const HEADERS = ['Windows incl tax', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', 'Actions'];
-
-// Row title: the builder first, then the job name ("Perry - Perry Res").
-// Jobs with no builder on file keep the plain job name.
-function rowTitle(job) {
-  const name = job.canonical_name || 'Unnamed job';
-  const builder = String(job.builder || '').trim();
-  return builder ? `${builder} - ${name}` : name;
-}
 
 function MoneyCell({ display, accent, tone, divider }) {
   const negative = tone === 'negative';
@@ -120,10 +113,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   return (
     <Fragment>
       <div className="px-4 pb-0.5 pt-3" style={{ backgroundColor: rowBg }}>
-          <span className="break-words text-[14px] font-extrabold leading-tight" style={{ color: INK }}>{rowTitle(job)}</span>
-          {units > 0 && (
-            <span className="ml-2 text-[11px] font-semibold" style={{ color: SUB }}>{`${units} ${units === 1 ? 'unit' : 'units'}`}</span>
-          )}
+        <PurchasingRowTitle job={job} units={units} onSaved={onSaved} />
       </div>
       <table className="w-full border-collapse text-left" style={{ tableLayout: 'fixed' }}>
         <colgroup>
