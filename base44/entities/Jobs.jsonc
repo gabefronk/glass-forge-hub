@@ -130,12 +130,14 @@
     "payment_status": {
       "type": "string",
       "enum": [
+        "half_down",
         "installed",
         "sent_for_payment",
         "waiting_on_payment",
+        "partial",
         "paid"
       ],
-      "description": "Gabriel's one-tap customer-payment tracking: job installed -> sent for payment via QuickBooks -> waiting on payment -> paid. Null means not tracked yet. Set from the job page payment buttons."
+      "description": "Gabriel's one-tap customer-payment tracking: half down paid, job installed, full payment received (paid), waiting on payment. sent_for_payment and partial are retired but kept so older jobs still read correctly. Null means not tracked yet. Set from the job page payment buttons."
     },
     "payment_status_at": {
       "type": "string",

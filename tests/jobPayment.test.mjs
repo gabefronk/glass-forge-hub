@@ -4,25 +4,29 @@ import assert from 'node:assert/strict';
 
 const { PAYMENT_STAGES, paymentStage, paymentPatch } = await import('../src/lib/jobPayment.js');
 
-test('the five tracking stages match what Gabriel asked for (Partial added 10/22)', () => {
+test('the tracking stages match what Gabriel asked for (10/22 reorder)', () => {
   assert.deepEqual(PAYMENT_STAGES.map((s) => s.label), [
+    'Half down paid',
     'Job installed',
-    'Sent for payment · QuickBooks',
+    'Full payment received',
     'Waiting on payment',
-    'Partial payment',
-    'Paid',
   ]);
 });
 
+test('retired stages still read correctly on old jobs but cannot be chosen', () => {
+  assert.equal(paymentStage('partial').label, 'Partial payment');
+  assert.throws(() => paymentPatch({}, 'partial'), /unknown payment stage/);
+});
+
 test('paymentStage rejects unknown keys and finds known ones', () => {
-  assert.equal(paymentStage('paid').label, 'Paid');
+  assert.equal(paymentStage('paid').label, 'Full payment received');
   assert.equal(paymentStage('nonsense'), null);
   assert.equal(paymentStage(undefined), null);
 });
 
 test('tapping a stage sets status and timestamp', () => {
-  const patch = paymentPatch({ payment_status: null, payment_status_at: null }, 'sent_for_payment', '2026-10-21T10:00:00Z');
-  assert.deepEqual(patch, { payment_status: 'sent_for_payment', payment_status_at: '2026-10-21T10:00:00Z' });
+  const patch = paymentPatch({ payment_status: null, payment_status_at: null }, 'half_down', '2026-10-21T10:00:00Z');
+  assert.deepEqual(patch, { payment_status: 'half_down', payment_status_at: '2026-10-21T10:00:00Z' });
 });
 
 test('tapping a different stage moves to it', () => {

@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { PAYMENT_STAGES, paymentStage, paymentPatch } from "@/lib/jobPayment";
 
 const CHIP_TONES = {
+  half_down:        { bg: "#FCEFE0", color: "#96490F", border: "#F1D3B2" },
   installed:        { bg: "#EAF2FF", color: "#3977CB", border: "#C7D8EF" },
   sent_for_payment: { bg: "#FFF3DF", color: "#8a6420", border: "#F0DBA8" },
   waiting_on_payment:{ bg: "#FFF3DF", color: "#34403F", border: "#F0DBA8" },
