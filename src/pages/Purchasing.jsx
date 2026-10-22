@@ -10,7 +10,7 @@ import { buildPurchasingCards, cardMatchesSearch, unlinkedEntities } from '@/lib
 import { PageShell } from '@/components/PageShell';
 import PurchasingHeader from '@/components/purchasing/PurchasingHeader';
 import PageNotFound from '@/lib/PageNotFound';
-import PurchasingCard from '@/components/purchasing/PurchasingCard';
+import PurchasingTable from '@/components/purchasing/PurchasingTable';
 import MoneyEditDialog from '@/components/purchasing/MoneyEditDialog';
 import UnlinkedReview from '@/components/purchasing/UnlinkedReview';
 import { C } from '@/lib/feeUI';
@@ -122,7 +122,7 @@ function PurchasingWorkspace() {
           <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: C.textFaint }} />
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search job, quote, PO, supplier" aria-label="Search purchasing" className="min-h-11 w-full rounded-[9px] bg-white pl-[38px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)]" style={{ border: `1px solid ${C.border}`, color: C.text }} />
         </label>
-        <Link to="/purchasing/new-sale" className="inline-flex min-h-11 shrink-0 items-center rounded-[9px] bg-[#b8955a] px-4 text-[13.5px] font-bold text-[#1d160a]">New sale</Link>
+        <Link to="/purchasing/new-sale" className="inline-flex min-h-11 shrink-0 items-center rounded-[9px] px-4 text-[13.5px] font-bold text-white" style={{ backgroundColor: '#248B88' }}>New sale</Link>
         <button type="button" onClick={() => setAddQuoteSignal((n) => n + 1)} className="inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-[9px] px-4 text-[13.5px] font-semibold" style={{ backgroundColor: '#0B3F3B', color: '#FFFFFF' }}><Plus size={15} />Add quote PDF</button>
       </div>
 
@@ -134,9 +134,7 @@ function PurchasingWorkspace() {
       {filtered.length === 0 ? (
         <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query ? 'No jobs match your search.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
       ) : (
-        <div className="grid gap-2.5">{filtered.map((card) => (
-          <PurchasingCard key={card.job.id} card={card} data={data} onSaved={load} onEdit={() => setEditing({ jobId: card.job.id, jobName: card.job.canonical_name, rough: card.rough.value, sale: card.sale.value })} />
-        ))}</div>
+        <PurchasingTable cards={filtered} data={data} onSaved={load} onEdit={(card) => setEditing({ jobId: card.job.id, jobName: card.job.canonical_name, rough: card.rough.value, sale: card.sale.value })} />
       )}
 
       <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} onUploaded={load} focusSignal={addQuoteSignal} onReload={load} loading={loading} />

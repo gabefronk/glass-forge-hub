@@ -16,16 +16,16 @@ const REF_TONES = {
   red:    { bg: '#FDE8E7', color: '#A43432', border: '#F0C9C5', dot: '#A43432' },
   blue:   { bg: '#EAF2FF', color: '#3977CB', border: '#C7D8EF', dot: '#3977CB' },
 };
-function RefChip({ label, value, tone }) {
+export function RefChip({ label, value, tone }) {
   if (!tone) {
     return <span className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: '#8A8F93' }}><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#B8B0A4' }} />{label} {value || '—'}</span>;
   }
   const t = REF_TONES[tone];
   return <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap" style={{ backgroundColor: t.bg, color: t.color, border: `1px solid ${t.border}` }}><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: t.dot }} />{label} {value || '—'}</span>;
 }
-const refTone = (s) => (s === 'green' ? 'green' : s === 'amber' ? 'amber' : null);
-const paymentTone = (lbl) => (lbl === 'Unpaid' ? 'red' : lbl === 'Partial' ? 'amber' : lbl === 'Paid' ? 'green' : null);
-const etaTone = (lbl) => (lbl ? 'blue' : null);
+export const refTone = (s) => (s === 'green' ? 'green' : s === 'amber' ? 'amber' : null);
+export const paymentTone = (lbl) => (lbl === 'Unpaid' ? 'red' : lbl === 'Partial' ? 'amber' : lbl === 'Paid' ? 'green' : null);
+export const etaTone = (lbl) => (lbl ? 'blue' : null);
 
 // Single controlled expansion per job. aria-expanded/controls wired to the
 // workspace region. The next-action opens the correct inline section (not a
