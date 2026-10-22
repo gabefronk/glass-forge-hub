@@ -25,7 +25,7 @@ export default async function(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
-    const { event_id, action, photos, notes, reason, completion, job_id, request_key, service_type } = body;
+    const { event_id, action, photos, notes, reason, completion, job_id, request_key, service_type, ticket_type, hours, material, long_distance } = body;
     if (!action) return Response.json({ error: 'missing_params' }, { status: 200 });
 
     const now = new Date().toISOString();
@@ -116,6 +116,61 @@ export default async function(req) {
         edited: false,
         completion: completionValue,
       });
+
+      // Pricing rubric charge: the form's ticket type / hours / material / long distance picks
+      // price out SERVER-SIDE from the live PricingRubric entity (the client sends keys, never
+      // amounts) and land as one draft FeeLines row on the job, unbilled - it shows in
+      // Invoicing's Ready to bill like any other open line until billed. Skipped at $0.
+      let feeLine = null;
+      try {
+        const hrs = Math.round((Number(hours) || 0) * 2) / 2;
+        const ld = !!long_distance;
+        if (ticket_type || hrs > 0 || material || ld) {
+          const rows = await api.PricingRubric.list('sort', 200, 0).catch(() => []);
+          const active = (Array.isArray(rows) ? rows : []).filter((r) => r && !r.retired);
+          const ttRow = active.find((r) => r.kind === 'ticket_type' && (r.key === ticket_type || r.label === ticket_type)) || null;
+          const matRow = active.find((r) => r.kind === 'material' && (r.key === material || r.label === material)) || null;
+          const ldAmt = Number((active.find((r) => r.kind === 'setting' && r.key === 'long_distance') || {}).amount) || 0;
+          const visitFee = ttRow ? Number(ttRow.visit_fee) || 0 : 0;
+          const rate = matRow ? Number(matRow.hourly_rate) || 0 : 0;
+          const h = hrs > 0 ? hrs : 0;
+          const trip = ld ? 1 : 0;
+          const laborAmt = Math.round((visitFee + h * rate + trip * ldAmt) * 100) / 100;
+          if (laborAmt > 0) {
+            const parts = [`${(ttRow && ttRow.label) || 'Visit'} visit${visitFee ? ` $${visitFee}` : ''}`];
+            if (h > 0) parts.push(`${h} h x $${rate}${matRow ? ` ${matRow.label}` : ''}`);
+            if (trip) parts.push(`long distance $${ldAmt}`);
+            feeLine = await api.FeeLines.create({
+              job_id: jobId,
+              job_date: noteDate,
+              invoice_month: String(noteDate || '').slice(0, 7),
+              job_name_raw: String(jobName || '').toUpperCase(),
+              job_name_norm: String(jobName || '').toLowerCase(),
+              line_description: `Field report charge: ${parts.join(' + ')}`,
+              man_hours: h || null,
+              trip_charges: trip || null,
+              service_material: material || null,
+              service_rate: rate || null,
+              labor_amt: laborAmt,
+              fee_type: 'labor_pct',
+              fee_pct: 0.1,
+              fee_amt: Math.round(laborAmt * 0.1 * 100) / 100,
+              manually_adjusted: true,
+              billable: true,
+              billed_to_bfs: false,
+              paid_to_ya: false,
+              invoiced_to_ya: false,
+              source: 'field_report',
+              written_by: user.email || 'field_report',
+              match_confidence: 'high',
+              calendar_event_id: (event && event.google_event_id) || null,
+              photo_urls: Array.isArray(photos) ? photos : [],
+            }).catch((e) => { console.log('field report fee line failed:', (e && e.message) || e); return null; });
+          }
+        }
+      } catch (e) {
+        console.log('field report rubric charge skipped:', (e && e.message) || e);
+      }
 
       if (event_id) {
         await api.CalendarEvents.update(event_id, {
@@ -220,7 +275,7 @@ export default async function(req) {
       let customerCollection = null;
       try { customerCollection = await enqueueCustomerCollection(api, { jobId, note, now }); }
       catch (_) { customerCollection = { state: 'collection_review_required' }; }
-      return Response.json({ ok: true, action: 'upload', completion: completionValue, job_id: jobId, note_id: note?.id || '', customer_collection: customerCollection });
+      return Response.json({ ok: true, action: 'upload', completion: completionValue, job_id: jobId, note_id: note?.id || '', customer_collection: customerCollection, fee_line_id: feeLine?.id || '', charge_labor_amt: feeLine ? Number(feeLine.labor_amt) || 0 : 0, charge_fee_amt: feeLine ? Number(feeLine.fee_amt) || 0 : 0 });
     }
 
     return Response.json({ error: 'unknown_action' }, { status: 200 });

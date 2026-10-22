@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { resolveFieldReport } from "@/lib/fieldReports";
 import { sanitizeText } from "@/lib/jobsSanitize";
@@ -7,8 +7,23 @@ import { Camera, Loader2, X, Film } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
 
 const PENDING = ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"];
-const TICKET_TYPES = ["Initial visit / PO", "Install", "Repair", "Measurement", "Follow-up", "Inspection"];
-const MATERIALS = ["Vinyl", "Composite", "Wood"];
+// Fallbacks only - the form reads the live PricingRubric entity (ticket types with visit fees,
+// materials with hourly rates, the long distance charge). These apply when the rubric fetch
+// fails; the server always prices the report from the rubric itself, never from this file.
+const FALLBACK_TYPES = [
+  { key: "initial_visit_po", label: "Initial visit / PO", visitFee: null },
+  { key: "install", label: "Install", visitFee: null },
+  { key: "repair", label: "Repair", visitFee: null },
+  { key: "measurement", label: "Measurement", visitFee: null },
+  { key: "follow_up", label: "Follow-up", visitFee: 0 },
+  { key: "inspection", label: "Inspection", visitFee: 25 },
+];
+const FALLBACK_MATERIALS = [
+  { key: "vinyl", label: "Vinyl", rate: 100 },
+  { key: "composite", label: "Composite", rate: 125 },
+  { key: "wood", label: "Wood", rate: 150 },
+];
+const FALLBACK_LD_FEE = 75;
 
 // Palette pulled from the "New ticket" example Gabriel supplied: light blue-gray
 // page, white inner card, dark navy pills, pale-teal selected chips, teal links.
@@ -47,9 +62,37 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [rubric, setRubric] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    base44.entities.PricingRubric.list("sort", 200).then((rows) => {
+      if (cancelled) return;
+      const active = (Array.isArray(rows) ? rows : []).filter((r) => r && !r.retired);
+      const types = active.filter((r) => r.kind === "ticket_type").map((r) => ({ key: r.key, label: r.label, visitFee: r.visit_fee ?? null }));
+      const materials = active.filter((r) => r.kind === "material").map((r) => ({ key: r.key, label: r.label, rate: Number(r.hourly_rate) || 0 }));
+      const ldRow = active.find((r) => r.kind === "setting" && r.key === "long_distance");
+      if (types.length && materials.length) setRubric({ types, materials, ldFee: ldRow ? Number(ldRow.amount) || 0 : FALLBACK_LD_FEE });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const requestKey = useRef(`field-report:${jobId}:${crypto.randomUUID()}`);
 
   const canSubmit = (photos.length + videos.length > 0 || notes.trim()) && status && !saving;
+
+  // Live rubric values drive the chips and the charge preview.
+  const types = rubric ? rubric.types : FALLBACK_TYPES;
+  const materials = rubric ? rubric.materials : FALLBACK_MATERIALS;
+  const ldFee = rubric ? rubric.ldFee : FALLBACK_LD_FEE;
+  const typeRow = types.find((t) => t.label === ticketType || t.key === ticketType) || null;
+  const matRow = materials.find((m) => m.label === material || m.key === material) || null;
+  const visitFee = typeRow && typeRow.visitFee != null ? Number(typeRow.visitFee) || 0 : 0;
+  const rate = matRow ? matRow.rate : 0;
+  const chargeParts = [];
+  if (typeRow) chargeParts.push(`$${visitFee} ${typeRow.label} visit`);
+  if (hours > 0 && matRow) chargeParts.push(`${hours.toFixed(1)} h × $${rate} ${matRow.label}`);
+  if (longDistance === "Yes") chargeParts.push(`$${ldFee} long distance`);
+  const chargeTotal = (typeRow ? visitFee : 0) + (hours > 0 && matRow ? hours * rate : 0) + (longDistance === "Yes" ? ldFee : 0);
 
   const handleFiles = async (files, target) => {
     if (!files.length) return;
@@ -89,6 +132,11 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
         photos: [...photos, ...videos],
         notes: lines.join("\n") || "Field report photos uploaded",
         completion: status === "Closed" ? "complete" : "incomplete",
+        // Priced server-side from the live PricingRubric; keys only, never amounts.
+        ticket_type: typeRow ? typeRow.key : ticketType,
+        hours,
+        material: matRow ? matRow.key : material,
+        long_distance: longDistance === "Yes",
         // One key per opened form, so a retried submit cannot raise a second to-do.
         request_key: requestKey.current,
       });
@@ -127,7 +175,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
           <div>
             <div className="text-[11px] font-bold uppercase mb-1.5" style={label}>Ticket type</div>
             <div className="flex flex-wrap gap-2">
-              {TICKET_TYPES.map((t) => <Chip key={t} on={ticketType === t} onClick={() => setTicketType(t)}>{t}</Chip>)}
+              {types.map((t) => <Chip key={t.key} on={ticketType === t.label} onClick={() => setTicketType(t.label)}>{t.label}</Chip>)}
             </div>
           </div>
 
@@ -178,7 +226,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-bold uppercase" style={label}>Material</span>
               <div className="flex gap-2">
-                {MATERIALS.map((m) => <Chip key={m} on={material === m} onClick={() => setMaterial((cur) => (cur === m ? "" : m))}>{m}</Chip>)}
+                {materials.map((m) => <Chip key={m.key} on={material === m.label} onClick={() => setMaterial((cur) => (cur === m.label ? "" : m.label))}>{m.label}</Chip>)}
               </div>
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -189,6 +237,16 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
               </div>
             </div>
           </div>
+
+          {chargeTotal > 0 && (
+            <div className="rounded-[12px] px-3 py-2.5" style={{ backgroundColor: TEAL_BG, border: `1px solid ${TEAL_BG}` }}>
+              <span className="text-[11px] font-bold uppercase" style={{ color: TEAL_INK, letterSpacing: ".08em" }}>Charge</span>
+              <div className="text-[13px] mt-0.5" style={{ color: INK }}>
+                {chargeParts.join(" + ")} = <span className="font-bold">${chargeTotal.toFixed(2)}</span>
+              </div>
+              <div className="text-[11px] mt-0.5" style={{ color: MUT }}>Lands on the job as a draft billing line (Ready to bill) with the standard 10% fee.</div>
+            </div>
+          )}
 
           <div>
             <div className="text-[11px] font-bold uppercase mb-1.5" style={label}>Photos</div>
