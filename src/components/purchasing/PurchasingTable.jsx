@@ -41,7 +41,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   const [section, setSection] = useState('budgets');
   const fullJob = data?.jobs?.find((j) => j.id === job.id) || job;
   const rowBg = zebra ? '#F8FAFC' : '#FFFFFF';
-  const quoteText = refs.quoteNumber ? [supplier, refs.quoteNumber].filter(Boolean).join(' - ') : null;
+  const quoteText = refs.quoteNumber ? [card.brand, refs.quoteNumber].filter(Boolean).join(' - ') : null;
   const toggle = () => setExpanded((e) => { if (!e) setSection('budgets'); return !e; });
 
   return (

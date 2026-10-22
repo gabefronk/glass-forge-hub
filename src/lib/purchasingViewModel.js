@@ -201,6 +201,14 @@ function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
   const q = budget.quote || {};
   const dealer = amount(q.dealer_subtotal) ?? amount(q.dealer_total);
   if (dealer != null) return { value: Number(dealer), label: 'Dealer price (review)', source: 'dealer_price', budgetId: budget.id, alternatives: [] };
+  // Budget-review figures the owner typed (restored 10/22 after his live
+  // read: the budget must show on the main row). Material incl overhead+tax
+  // from the reviewed budget - the honest label stays, direct records above
+  // always win when they exist.
+  const hasCostInput = ['material_true_cost', 'labor_cost_sub_pay', 'additional_install_material', 'additional_equipment']
+    .some((k) => amount(budget.inputs?.[k]) != null);
+  const cmt = budgetFigures(budget).calculated?.cost_material_tax;
+  if (hasCostInput && cmt != null) return { value: cmt, label: 'Material incl tax (budget, incl. overhead)', source: 'cost_material_tax', budgetId: budget.id, alternatives: [] };
   return { value: null, label: 'No cost figure', source: 'none', budgetId: budget.id, alternatives: [] };
 }
 
@@ -250,9 +258,16 @@ export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders 
 // real 0 stays 0; a missing component is NOT inferred as 0 — a partial estimate
 // names the available component. No budget → dash (never crashes on null).
 export function roughDisplayCandidate(budget, ownerValue, duplicate) {
-  // Direct figures only: the owner-entered money input, or nothing. Budget
-  // labor/material estimates are no longer shown (they read as actuals).
+  // The owner-entered money input wins. After it, the figures he typed into
+  // the budget review (labor sub pay + additional install material) - also
+  // owner-entered, just stored on the budget. Computed sheet math never shows.
   if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Owner-entered', review: false, source: 'owner' };
+  if (!budget) return { value: null, label: null, review: false, source: 'none' };
+  const labor = amount(budget.inputs?.labor_cost_sub_pay);
+  const mat = amount(budget.inputs?.additional_install_material);
+  if (labor != null || mat != null) {
+    return { value: roundMoney((labor ?? 0) + (mat ?? 0)), label: duplicate ? 'From budget review - duplicate owner entries' : 'From budget review', review: true, source: 'budget_inputs' };
+  }
   return { value: null, label: duplicate ? 'Duplicate owner entries - fix to show' : null, review: Boolean(duplicate), source: 'none' };
 }
 
@@ -261,9 +276,12 @@ export function roughDisplayCandidate(budget, ownerValue, duplicate) {
 // suggested_total_sell when the target is missing. Legacy empty → unknown
 // (dash), never invented. No budget → dash (never crashes on null).
 export function saleDisplayCandidate(budget, ownerValue, duplicate) {
-  // Direct figures only: the owner-entered sale price, or nothing. Budget
-  // target/suggested sell estimates are no longer shown.
+  // The owner-entered sale price wins. After it, the target sell he typed in
+  // the budget review. The computed suggested sell never shows.
   if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Owner-entered', review: false, source: 'owner' };
+  if (!budget) return { value: null, label: null, review: false, source: 'none' };
+  const sell = amount(budget.inputs?.actual_total_sell);
+  if (sell != null) return { value: Number(sell), label: duplicate ? 'From budget review - duplicate owner entries' : 'From budget review', review: true, source: 'budget_inputs' };
   return { value: null, label: duplicate ? 'Duplicate owner entries - fix to show' : null, review: Boolean(duplicate), source: 'none' };
 }
 
@@ -449,14 +467,18 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
 
     const activeBs = activeBudgets(jobBudgets);
     const fileBudget = activeBs[0] || jobBudgets[0] || null;
-    // Brand label for the Quote cell (10/22): the plain brand name only -
-    // his own company quoting (BFS / UTAH DESIGN / Glass Forge) yields to the
-    // manufacturer, and filler words like WINDOWS are stripped.
-    const vendorRaw = fileBudget?.vendor || (jobPOs.find((p) => p.status !== 'cancelled')?.vendor) || '';
+    // Brand label for the Quote cell (10/22): the plain manufacturer brand
+    // only, never the dealer/builder/customer name. Filler like WINDOWS /
+    // WINDOWS & DOORS is stripped. Vendor stays raw below for search.
     const mfrRaw = fileBudget?.manufacturer || '';
-    const ownCo = /BFS|UTAH DESIGN|GLASS FORGE/i.test(vendorRaw);
-    const brandRaw = (ownCo && mfrRaw) ? mfrRaw : (vendorRaw || mfrRaw);
-    const supplier = brandRaw.replace(/\bWINDOWS?\b/gi, '').replace(/\s{2,}/g, ' ').replace(/\s*-\s*$/, '').trim();
+    const brand = mfrRaw
+      .replace(/\bWINDOWS?(\s*(&|AND)\s+DOORS?)?\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/[\s\-–&,/]+$/, '')
+      .replace(/^[\s\-–&,/]+/, '')
+      .trim();
+    const supplier = fileBudget?.vendor || fileBudget?.manufacturer ||
+      (jobPOs.find((p) => p.status !== 'cancelled')?.vendor) || '';
     const units = activeBs.reduce((s, b) => s + (Number(b.openings_qty) || 0), 0);
     const files = {
       sourceQuote: safeHref(fileBudget?.source_pdf_url) || fileHref(fileBudget?.drive_quote_file_id),
@@ -483,7 +505,7 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
       profit,
       profitDisplay: profitDisp,
       chosenBudget: pickBudget ? { id: pickBudget.id, title: pickBudget.title || pickBudget.quote_name || 'Budget' } : null,
-      refs, next, files, supplier, units, conflict: isConflict, search,
+      refs, next, files, supplier, brand, units, conflict: isConflict, search,
     });
   }
   cards.sort((a, b) => String(a.job.canonical_name || '').localeCompare(String(b.job.canonical_name || '')));
