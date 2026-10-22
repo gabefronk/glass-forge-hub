@@ -14,7 +14,7 @@ export function CollectionItem({ item, onSave, busy, error }) {
   const payload={line_id:line.id,expected_updated_date:line.updated_date,review_confirmed:true};
   const run=async action=>{const ok=await onSave({...payload,action,...(action==='paid'?{received_date:date,reference}:{})});if(ok){setMode('');setReviewed(false);}};
   return <article className="rounded-xl border border-stone-300 bg-white p-4">
-    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">{job_name}</h3><span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold">{paid?'Customer paid':!complete?'Work incomplete':!state?'Review enrollment':state==='prepared'?'Request prepared - not sent':'Complete - customer unpaid'}</span></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">{job_name}</h3><span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold">{paid?'Customer paid':!complete?'Work incomplete':!state?'Review enrollment':state==='prepared'?'Waiting on customer payment':'Complete - customer unpaid'}</span></div>
     <p className="mt-1 text-xs text-stone-600">Outside BFS · {Math.round((line.split_pct ?? .5)*100)}% profit split · Work date {line.job_date ? displayDate(line.job_date) : 'Not recorded'}</p>
     <p className="mt-2 text-sm">Sale {money(line.sale_price)} · Full cost {money(line.cost)}. Missing prices stay on review. Nothing is sent to QuickBooks here.</p>
     {ambiguous && <p role="alert" className="mt-2 text-sm text-red-800">Multiple profit-split lines share this job. Review which work this payment covers before continuing.</p>}
@@ -48,10 +48,22 @@ export default function CustomerCollectionsQueue({ query='', onChanged }) {
   useEffect(()=>{load();},[]);
   const save=async p=>{setBusy(p.line_id);setError('');try{const r=await base44.functions.invoke('customerCollections',p);if(r?.data?.error)throw new Error(r.data.error);await load();onChanged?.();return true;}catch(e){setError(e?.response?.data?.error||e.message);return false;}finally{setBusy('');}};
   const filtered=items.filter(i=>`${i.job_name} ${i.line.job_date}`.toLowerCase().includes(query.toLowerCase()));
+  // Work whose payment request is already out and the customer has not paid yet is
+  // waiting, not actionable: it stays reachable (to record the receipt) but sits
+  // behind one quiet line so the queue only shows work that needs a decision.
+  const waitingOne=i=>i.line.customer_collection_state==='prepared';
+  const action=filtered.filter(i=>!waitingOne(i));
+  const waiting=filtered.filter(waitingOne);
+  const card=i=><CollectionItem key={i.line.id} item={i} onSave={save} busy={busy===i.line.id} error={busy?'':undefined} />;
   return <section aria-label="Customer payment queue" className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-stone-900">
     <h2 className="text-lg font-bold">Customer payment queue</h2><p className="mb-3 text-sm">Completed outside-BFS work. Customer receipts are separate from supplier payments. Existing jobs require explicit enrollment; no historical amounts are backfilled.</p>
     {loading?<p>Loading customer collections...</p>:null}{error?<p role="alert" className="mb-3 text-red-800">{error}. Reload before retrying.</p>:null}
     {!loading&&!error&&!filtered.length?<p className="text-sm">No matching completed outside-BFS work.</p>:null}
-    <div className="space-y-3">{filtered.map(item=><CollectionItem key={item.line.id} item={item} onSave={save} busy={busy===item.line.id} error={busy?'':undefined} />)}</div>
+    <div className="space-y-3">{action.map(card)}</div>
+    {waiting.length>0 && <details className="mt-3">
+      <summary className="cursor-pointer text-sm font-semibold">Waiting on customer payment ({waiting.length})</summary>
+      <p className="mt-2 text-sm">Requested and not yet received. Open this list to record the receipt when the customer pays.</p>
+      <div className="mt-3 space-y-3">{waiting.map(card)}</div>
+    </details>}
   </section>;
 }
