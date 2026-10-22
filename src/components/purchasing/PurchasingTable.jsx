@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react';
+import { useRef, useState, Fragment } from 'react';
 import { ChevronDown } from 'lucide-react';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import { refTone } from './PurchasingCard';
@@ -45,6 +45,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   const [busy, setBusy] = useState(false);
   const [etaError, setEtaError] = useState('');
   const [payError, setPayError] = useState('');
+  const etaInputRef = useRef(null);
   const fullJob = data?.jobs?.find((j) => j.id === job.id) || job;
   // Inline ETA edit only when ONE active supplier order carries the ETA and
   // Record ETA (save_supplier_order) has everything it requires; anything
@@ -110,12 +111,16 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
           {etaOrder ? (
-            <div className="flex flex-col items-center gap-1">
-              <input type="date" aria-label="Supplier ETA" disabled={busy}
+            <div className="relative flex flex-col items-center gap-1">
+              <button type="button" disabled={busy} title="Change the supplier ETA"
+                onClick={() => etaInputRef.current?.showPicker?.()}
+                className="rounded-md px-1 py-0.5 hover:bg-stone-100">
+                <DotText tone="blue">{etaOrder.eta_date ? displayDate(etaOrder.eta_date) : 'Set ETA'}</DotText>
+              </button>
+              <input ref={etaInputRef} type="date" aria-label="Supplier ETA" tabIndex={-1}
                 value={etaOrder.eta_date || ''}
                 onChange={(e) => saveEta(e.target.value)}
-                className="rounded-md border px-1 py-1 text-[11px] font-semibold"
-                style={{ borderColor: LINE, color: INK, width: '100%', boxSizing: 'border-box' }} />
+                style={{ position: 'absolute', left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} />
               {etaError && <span className="text-[10px] font-semibold" style={{ color: '#A43432' }}>{etaError}</span>}
             </div>
           ) : (
