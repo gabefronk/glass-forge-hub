@@ -53,7 +53,7 @@ function DotText({ tone = 'gray', children }) {
 }
 
 function Row({ card, data, onEdit, onSaved, zebra }) {
-  const { job, windows, rough, sale, profitDisplay, refs, supplier, units } = card;
+  const { job, windows, rough, sale, profitDisplay, refs, supplier } = card;
   const [expanded, setExpanded] = useState(false);
   const [section, setSection] = useState('budgets');
   const [busy, setBusy] = useState(false);
@@ -113,7 +113,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   return (
     <Fragment>
       <div className="px-4 pb-0.5 pt-3" style={{ backgroundColor: rowBg }}>
-        <PurchasingRowTitle job={job} units={units} onSaved={onSaved} />
+        <PurchasingRowTitle job={job} onSaved={onSaved} />
       </div>
       <table className="w-full border-collapse text-left" style={{ tableLayout: 'fixed' }}>
         <colgroup>

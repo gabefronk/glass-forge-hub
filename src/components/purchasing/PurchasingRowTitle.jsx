@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Pencil } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { renameJob } from "@/lib/jobRename";
 
@@ -15,11 +14,11 @@ export function rowTitle(job) {
 
 const clean = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
-// Tap the pencil to correct the builder or the job name in place. Enter saves,
-// Escape cancels. A renamed job keeps its old name as an alias (renameJob), so
+// Click the job name (or right-click it) to correct the builder or the job name
+// in place. Enter saves, Escape cancels. A renamed job keeps its old name as an alias (renameJob), so
 // past visits and files still match it - which is why the full record is read
 // before saving instead of patching the trimmed card record.
-export default function PurchasingRowTitle({ job, units = 0, onSaved }) {
+export default function PurchasingRowTitle({ job, onSaved }) {
   const [editing, setEditing] = useState(false);
   const [builder, setBuilder] = useState("");
   const [name, setName] = useState("");
@@ -55,16 +54,11 @@ export default function PurchasingRowTitle({ job, units = 0, onSaved }) {
 
   if (!editing) {
     return (
-      <div className="flex items-start gap-2">
+      <button type="button" onClick={start} onContextMenu={(e) => { e.preventDefault(); start(); }}
+        aria-label={`Edit builder and job name: ${rowTitle(job)}`} title="Click to edit the builder and job name"
+        className="-mx-1 rounded-[7px] px-1 text-left hover:bg-stone-100">
         <span className="break-words text-[14px] font-extrabold leading-tight" style={{ color: INK }}>{rowTitle(job)}</span>
-        {units > 0 && (
-          <span className="text-[11px] font-semibold" style={{ color: SUB }}>{`${units} ${units === 1 ? "unit" : "units"}`}</span>
-        )}
-        <button type="button" onClick={start} aria-label="Edit builder and job name" title="Edit builder and job name"
-          className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] hover:bg-stone-100" style={{ color: "#8A8F93" }}>
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      </button>
     );
   }
 
