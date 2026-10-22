@@ -83,19 +83,13 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
 
   const canSubmit = (photos.length + videos.length > 0 || notes.trim()) && status && !saving;
 
-  // Live rubric values drive the chips and the charge preview.
+  // Live rubric values drive the pickers. The charge itself is priced
+  // server-side on submit (from these keys) and lands on the job's budget
+  // and invoicing - nothing is shown or totalled here.
   const types = rubric ? rubric.types : FALLBACK_TYPES;
   const materials = rubric ? rubric.materials : FALLBACK_MATERIALS;
-  const ldFee = rubric ? rubric.ldFee : FALLBACK_LD_FEE;
   const typeRow = types.find((t) => t.label === ticketType || t.key === ticketType) || null;
   const matRow = materials.find((m) => m.label === material || m.key === material) || null;
-  const visitFee = typeRow && typeRow.visitFee != null ? Number(typeRow.visitFee) || 0 : 0;
-  const rate = matRow ? matRow.rate : 0;
-  const chargeParts = [];
-  if (typeRow) chargeParts.push(`$${visitFee} ${typeRow.label} visit`);
-  if (hours > 0 && matRow) chargeParts.push(`${hours.toFixed(1)} h × $${rate} ${matRow.label}`);
-  if (longDistance === "Yes") chargeParts.push(`$${ldFee} long distance`);
-  const chargeTotal = (typeRow ? visitFee : 0) + (hours > 0 && matRow ? hours * rate : 0) + (longDistance === "Yes" ? ldFee : 0);
 
   const handleFiles = async (files, target) => {
     if (!files.length) return;
@@ -245,16 +239,6 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
               </div>
             </div>
           </div>
-
-          {chargeTotal > 0 && (
-            <div className="rounded-[12px] px-3 py-2.5" style={{ backgroundColor: TEAL_BG, border: `1px solid ${TEAL_BG}` }}>
-              <span className="text-[11px] font-bold uppercase" style={{ color: TEAL_INK, letterSpacing: ".08em" }}>Charge</span>
-              <div className="text-[13px] mt-0.5" style={{ color: INK }}>
-                {chargeParts.join(" + ")} = <span className="font-bold">${chargeTotal.toFixed(2)}</span>
-              </div>
-              <div className="text-[11px] mt-0.5" style={{ color: MUT }}>Lands on the job as a draft billing line (Ready to bill) with the standard 10% fee.</div>
-            </div>
-          )}
 
           <div>
             <div className="text-[11px] font-bold uppercase mb-1.5" style={label}>Photos</div>
