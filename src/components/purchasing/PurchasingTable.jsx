@@ -52,7 +52,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
             <span className="ml-2 text-[11px] font-semibold" style={{ color: SUB }}>{`${units} ${units === 1 ? 'unit' : 'units'}`}</span>
           )}
       </div>
-      <table className="mx-auto border-collapse text-left">
+      <table className="w-full border-collapse text-left">
         <thead>
           <tr style={{ backgroundColor: '#F1F5F4' }}>
             {HEADERS.map((h, hi) => (
