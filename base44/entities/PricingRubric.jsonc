@@ -1,0 +1,65 @@
+{
+  "name": "PricingRubric",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "description": "ticket_type | material | setting",
+      "title": "Kind"
+    },
+    "key": {
+      "type": "string",
+      "description": "Stable machine key: install, repair, vinyl, long_distance, ...",
+      "title": "Key"
+    },
+    "label": {
+      "type": "string",
+      "description": "Display label shown on the field report form chips.",
+      "title": "Label"
+    },
+    "visit_fee": {
+      "type": "number",
+      "description": "ticket_type rows: fee charged per visit of this type ($).",
+      "title": "Visit Fee"
+    },
+    "hourly_rate": {
+      "type": "number",
+      "description": "material rows: hourly labor rate ($/hr) for hours worked against this material.",
+      "title": "Hourly Rate"
+    },
+    "amount": {
+      "type": "number",
+      "description": "setting rows: scalar value, e.g. the long distance charge.",
+      "title": "Amount"
+    },
+    "color": {
+      "type": "string",
+      "description": "Optional chip color hint (hex). Neutral grey when blank.",
+      "title": "Color"
+    },
+    "sort": {
+      "type": "number",
+      "description": "Display order on the form.",
+      "title": "Sort"
+    },
+    "retired": {
+      "type": "boolean",
+      "default": false,
+      "description": "Retired rows stay on existing tickets but are hidden from the form.",
+      "title": "Retired"
+    }
+  },
+  "required": ["kind", "key", "label"],
+  "rls": {
+    "read": {
+      "$or": [
+        { "user_condition": { "role": "admin" } },
+        { "user_condition": { "role": "manager" } },
+        { "user_condition": { "role": "user" } }
+      ]
+    },
+    "create": { "user_condition": { "role": "admin" } },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}
