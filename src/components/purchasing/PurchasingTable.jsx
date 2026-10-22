@@ -114,8 +114,8 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
               <input type="date" aria-label="Supplier ETA" disabled={busy}
                 value={etaOrder.eta_date || ''}
                 onChange={(e) => saveEta(e.target.value)}
-                className="rounded-md border px-1 py-1 text-[11.5px] font-semibold"
-                style={{ borderColor: LINE, color: INK }} />
+                className="rounded-md border px-1 py-1 text-[11px] font-semibold"
+                style={{ borderColor: LINE, color: INK, width: '100%', boxSizing: 'border-box' }} />
               {etaError && <span className="text-[10px] font-semibold" style={{ color: '#A43432' }}>{etaError}</span>}
             </div>
           ) : (
@@ -129,7 +129,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
               onChange={(e) => savePayment(e.target.value)}
               className="w-full rounded-md border px-1 py-1 text-[11.5px] font-semibold"
               style={{ borderColor: LINE, color: INK, backgroundColor: '#FFFFFF' }}>
-              <option value="">Customer: not tracked</option>
+              <option value="">Not tracked</option>
               {PAYMENT_STAGES.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
             </select>
             {payError && <span className="text-[10px] font-semibold" style={{ color: '#A43432' }}>{payError}</span>}
