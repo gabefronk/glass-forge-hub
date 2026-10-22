@@ -59,6 +59,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [scheduleStage, setScheduleStage] = useState(null);
   const [upcomingKey, setUpcomingKey] = useState(0);
   const [me, setMe] = useState(null);
   const upcoming = useJobUpcoming(jobId, upcomingKey, { enabled: isJobCalendarOwner(me) });
@@ -208,6 +209,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
             {reportsError ? <p role="alert" className="mb-3 rounded-[9px] px-3 py-2 text-[12.5px]" style={{ color: "#a43432", backgroundColor: "#fcedec", border: "1px solid #f0c9c5" }}>Some field reports could not load. {reportsError}</p> : null}
             <JobActivityFeed
+              onScheduleNext={(next) => { setScheduleStage(next); setShowCreateEvent(true); }}
               ledger
               jobId={jobId}
               events={calEvents}
@@ -239,7 +241,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
       )}
 
       {showCreateEvent && isJobCalendarOwner(me) ? (
-        <JobCreateEventModal job={job} user={me} open={showCreateEvent} onOpenChange={setShowCreateEvent} onCreated={() => setUpcomingKey((k) => k + 1)} />
+        <JobCreateEventModal job={job} user={me} open={showCreateEvent} prefill={scheduleStage ? { notes: scheduleStage.label, stageLabel: scheduleStage.label } : null} onOpenChange={(o) => { setShowCreateEvent(o); if (!o) setScheduleStage(null); }} onCreated={() => setUpcomingKey((k) => k + 1)} />
       ) : null}
 
       {lightbox && <AttachmentViewer src={lightbox.src} photos={lightbox.photos} onClose={() => setLightbox(null)} onNavigate={(next) => setLightbox((l) => (l ? { ...l, src: next } : l))} />}
