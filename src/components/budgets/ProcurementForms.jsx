@@ -114,7 +114,11 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
   const pos = purchaseOrders.filter(p => p.job_id === form.job_id && p.status !== 'cancelled');
   async function submit(e) {
     e.preventDefault(); if (busy || !reviewed) return; setBusy(true); setError('');
-    try { const r = await purchasingRequest({ ...form, action: 'save_supplier_order', order_id: order?.id, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true }); onDone(r, 'Supplier confirmation saved against the selected job and PO. No order or payment was sent.'); }
+    // A fresh confirmation is never "received": the owner mixing up the
+    // received field stamped bogus received dates on live orders. Recording
+    // receipt stays possible when updating an existing confirmation.
+    const payload = order ? form : { ...form, received_date: '' };
+    try { const r = await purchasingRequest({ ...payload, action: 'save_supplier_order', order_id: order?.id, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true }); onDone(r, 'Supplier confirmation saved against the selected job and PO. No order or payment was sent.'); }
     catch (e2) { setError(messageOf(e2)); } finally { setBusy(false); }
   }
   return <FormPanel title={order ? 'Update supplier confirmation' : 'Record supplier confirmation'}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
@@ -124,7 +128,7 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
       <Field label="Supplier confirmation / order number" value={form.order_number} onChange={v => set('order_number', v)} />
       <Field label="Confirmed supplier amount" type="number" value={form.amount} onChange={v => set('amount', v)} hint="Record what the supplier confirmed. An issued PO is not a supplier confirmation." />
       <Field label="Supplier ETA" type="date" value={form.eta_date} onChange={v => set('eta_date', v)} />
-      <Field label="Received date (only when received)" type="date" value={form.received_date} onChange={v => set('received_date', v)} />
+      {order ? <Field label="Received date (only when received)" type="date" value={form.received_date} onChange={v => set('received_date', v)} /> : null}
     </div>
     <Field label="Notes" value={form.notes} onChange={v => set('notes', v)} />
     <Review checked={reviewed} onChange={setReviewed}>These details come from the supplier confirmation. Record them only; do not place an order or change the installation calendar.</Review>

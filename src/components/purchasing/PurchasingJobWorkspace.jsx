@@ -26,6 +26,7 @@ import { C } from '@/lib/feeUI';
 import {
   money,
   PurchaseOrderForm, BudgetUsageForm, SupplierOrderForm, OrderStatusForm, InvoiceBridge,
+  purchasingRequest, messageOf,
 } from '@/components/budgets/ProcurementForms';
 import { NumbersEditor } from '@/components/budgets/BudgetReviewRow';
 import DeleteUnusedQuoteButton from '@/components/budgets/DeleteUnusedQuoteButton';
@@ -201,10 +202,27 @@ function PORow({ po, budgets, orders, onEdit, onShowOrder, highlight }) {
   );
 }
 
-function OrderRow({ order, pos, onEdit, highlight }) {
+function OrderRow({ order, pos, onEdit, onSaved, highlight }) {
   const po = pos.find((p) => p.id === order.purchase_order_id);
   const pay = paymentState(order);
   const highlightStyle = highlight ? { boxShadow: '0 0 0 2px #0B3F3B' } : null;
+  const [etaBusy, setEtaBusy] = useState(false);
+  const [etaError, setEtaError] = useState('');
+  // The ETA edits in place on the real supplier record (same save path as the
+  // board's ETA cell). Received material and reference-only rows stay read-only.
+  const etaEditable = Boolean(order.order_number) && order.amount != null && !order.received_date;
+  async function saveEta(value) {
+    if (etaBusy) return;
+    setEtaBusy(true); setEtaError('');
+    try {
+      await purchasingRequest({ action: 'save_supplier_order', order_id: order.id, job_id: order.job_id,
+        purchase_order_id: order.purchase_order_id, order_number: order.order_number,
+        amount: order.amount, eta_date: value || '', received_date: order.received_date || '',
+        notes: order.notes || '', expected_updated_date: order.updated_date,
+        request_key: crypto.randomUUID(), review_confirmed: true });
+      await onSaved?.();
+    } catch (e) { setEtaError(messageOf(e)); } finally { setEtaBusy(false); }
+  }
   return (
     <div className="rounded-[10px] p-3" style={{ border: '1px solid #D3CABB', backgroundColor: '#FAF8F3', ...highlightStyle }}>
       <div className="flex items-start justify-between gap-2">
@@ -219,9 +237,15 @@ function OrderRow({ order, pos, onEdit, highlight }) {
       </div>
       <div className="mt-1.5 grid grid-cols-2 gap-2 text-[12px]" style={{ color: C.text }}>
         <span>Amount <strong>{money(order.amount)}</strong></span>
-        <span>ETA <strong>{etaText(order)}</strong></span>
+        <span>ETA {etaEditable ? (
+          <input type="date" aria-label={`ETA for supplier order ${order.order_number}`} disabled={etaBusy}
+            value={order.eta_date || ''} onChange={(e) => saveEta(e.target.value)}
+            className="ml-1 rounded-md border px-1 py-0.5 text-[12px] font-semibold"
+            style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff', maxWidth: 140 }} />
+        ) : <strong>{etaText(order)}</strong>}</span>
         <span>Received <strong>{order.received_date || '—'}</strong></span>
       </div>
+      {etaError ? <p className="mt-1 text-[11px]" style={{ color: '#B42318' }}>{etaError}</p> : null}
       <div className="mt-2 flex flex-wrap gap-1.5">
         <button type="button" onClick={() => onEdit({ mode: 'supplier', order_id: order.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Details / link PO</button>
         <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: order.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Record payment status</button>
@@ -302,7 +326,7 @@ export default function PurchasingJobWorkspace({ job, data, section, onSection, 
           <div className="space-y-2">
             <button type="button" onClick={() => openEditor({ mode: 'supplier', job_id: job.id })} className={linkBtn} style={{ borderColor: '#0B3F3B', color: '#fff', backgroundColor: '#0B3F3B' }}><Plus className="h-3.5 w-3.5" />Record confirmation</button>
             {rec.orders.length === 0 ? <p className="text-[12px]" style={{ color: C.textSecondary }}>No supplier confirmations for this job.</p> : null}
-            {rec.orders.map((o) => <OrderRow key={o.id} order={o} pos={rec.pos} onEdit={editWithSaved} highlight={highlightPO != null && o.purchase_order_id === highlightPO} />)}
+            {rec.orders.map((o) => <OrderRow key={o.id} order={o} pos={rec.pos} onEdit={editWithSaved} onSaved={onSaved} highlight={highlightPO != null && o.purchase_order_id === highlightPO} />)}
           </div>
         )}
         {section === 'invoicing' && (
