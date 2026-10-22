@@ -28,12 +28,11 @@ const CMT = 10885.54;
 // b2: material 5000, labor 1000 → overhead 351.351; material+overhead*keep = 5070.2702; tax 372.50; cmt = 5442.77
 const CMT_B2 = 5442.77;
 
-test('windowsDisplayCandidate: known-unverified (legacy budget, no source quote) shows cost_material_tax amber', () => {
+test('windowsDisplayCandidate: legacy budget without direct figures -> dash (overhead-loaded budget math is never shown)', () => {
   const d = windowsDisplayCandidate([reviewedBudget({}, { quote: null })], [], []);
-  assert.equal(d.value, CMT);
+  assert.equal(d.value, null);
+  assert.equal(d.source, 'none');
   assert.equal(d.review, true);
-  assert.equal(d.source, 'cost_material_tax');
-  assert.match(d.label, /overhead/);
 });
 
 test('windowsDisplayCandidate: genuinely missing (no inputs, no PO, no order) → dash', () => {
@@ -49,16 +48,16 @@ test('windowsDisplayCandidate: zero verified quote total (0 + 0 = 0) stays 0, no
   assert.equal(d.source, 'source_quote');
 });
 
-test('windowsDisplayCandidate: multiple scopes → deterministic candidate + alternatives, never sum, labelled review', () => {
+test('windowsDisplayCandidate: multiple scopes -> deterministic candidate + alternatives, never sum, labelled review', () => {
   const b1 = reviewedBudget({}, { quote: null });
   const b2 = { ...reviewedBudget({}, { quote: null }), id: 'b2', inputs: { material_true_cost: 5000, labor_cost_sub_pay: 1000, actual_total_sell: 9000 } };
-  const d = windowsDisplayCandidate([b1, b2], [], []);
+  const pos = [{ id: 'p1', budget_id: 'b1', amount_dealer: 100, po_number: 'YA-0001' }, { id: 'p2', budget_id: 'b2', amount_dealer: 200, po_number: 'YA-0002' }];
+  const d = windowsDisplayCandidate([b1, b2], pos, []);
   assert.equal(d.source, 'multiple_scopes');
   assert.equal(d.review, true);
-  assert.equal(d.value, CMT); // b1 picked on id tiebreak (same score)
+  assert.equal(d.value, 100); // b1's scoped PO picked on id tiebreak (same score)
   assert.equal(d.alternatives.length, 1);
-  assert.equal(d.alternatives[0].value, CMT_B2);
-  assert.match(d.label, /1 of 2 scopes/);
+  assert.equal(d.alternatives[0].value, 200);
 });
 
 test('windowsDisplayCandidate: conflict shows candidate with po_conflict provenance + review flag', () => {
@@ -109,13 +108,11 @@ test('roughDisplayCandidate: owner-entered 0 stays 0 (not dash, not invented)', 
   assert.equal(d.review, false);
 });
 
-test('roughDisplayCandidate: absent owner → budget labor+material estimate, labelled estimate (not owner-entered)', () => {
+test('roughDisplayCandidate: absent owner -> dash (budget labor/material estimates no longer shown)', () => {
   const d = roughDisplayCandidate(reviewedBudget(), null, false);
-  assert.equal(d.value, 2000); // labor_cost_sub_pay 2000 + additional_install_material 0
-  assert.equal(d.review, true);
-  assert.equal(d.source, 'budget_estimate');
-  assert.match(d.label, /estimate/);
-  assert.doesNotMatch(d.label, /owner/i);
+  assert.equal(d.value, null);
+  assert.equal(d.review, false);
+  assert.equal(d.source, 'none');
 });
 
 test('roughDisplayCandidate: genuinely missing (no budget labor) → dash', () => {
@@ -131,13 +128,11 @@ test('saleDisplayCandidate: owner-entered value shown, not review', () => {
   assert.equal(d.source, 'owner');
 });
 
-test('saleDisplayCandidate: absent owner → budget target sell estimate, labelled estimate (not owner-entered)', () => {
+test('saleDisplayCandidate: absent owner -> dash (budget target/suggested sell estimates no longer shown)', () => {
   const d = saleDisplayCandidate(reviewedBudget(), null, false);
-  assert.equal(d.value, 18000);
-  assert.equal(d.review, true);
-  assert.equal(d.source, 'budget_estimate');
-  assert.match(d.label, /estimate/);
-  assert.doesNotMatch(d.label, /owner/i);
+  assert.equal(d.value, null);
+  assert.equal(d.review, false);
+  assert.equal(d.source, 'none');
 });
 
 test('profitDisplayCalc: flag propagates when any input is a candidate', () => {
@@ -166,11 +161,10 @@ test('buildPurchasingCards: verified canonical preserved separate; display candi
   assert.equal(card.windows.value, null);
   assert.equal(card.windows.status, 'review');
   assert.deepEqual(card.profit, { value: null, tone: 'unknown' }); // verified profit withheld (windows unverified)
-  // Display candidate present
-  assert.equal(card.windows.display.value, CMT);
+  // No direct cost figure -> display dash (budget overhead math never shown)
+  assert.equal(card.windows.display.value, null);
   assert.equal(card.windows.display.review, true);
-  assert.equal(card.profitDisplay.value, 4114.46);
-  assert.equal(card.profitDisplay.review, true);
+  assert.equal(card.profitDisplay.value, null);
   // No mutation of inputs
   assert.deepEqual({ jobs, budgets, moneyInputs }, before);
 });
@@ -185,15 +179,15 @@ test('buildPurchasingCards: all-verified job — display equals verified, profit
   assert.equal(card.profit.value, 13925.5);
 });
 
-test('buildPurchasingCards: duplicate money — owner verified withheld, budget estimates shown flagged', () => {
+test('buildPurchasingCards: duplicate money - owner verified withheld, displays dash with duplicate flag', () => {
   const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }, { job_id: 'j1', rough_labor_material: 1, sale_price: 2 }], today: TODAY });
   assert.equal(card.rough.value, null); // verified owner withheld (duplicate)
   assert.equal(card.rough.duplicate, true);
-  assert.equal(card.rough.display.value, 2000); // budget labor estimate
+  assert.equal(card.rough.display.value, null); // no estimate shown
   assert.equal(card.rough.display.review, true);
-  assert.equal(card.sale.display.value, 18000); // budget target sell estimate
+  assert.equal(card.sale.display.value, null);
   assert.equal(card.sale.display.review, true);
-  assert.equal(card.profitDisplay.review, true);
+  assert.equal(card.profitDisplay.value, null);
   assert.deepEqual(card.profit, { value: null, tone: 'unknown' }); // verified profit still withheld
 });
 
@@ -230,17 +224,22 @@ test('buildPurchasingCards: PO-only job (no budget) does not crash; shows PO amo
   assert.equal(card.chosenBudget, null);
 });
 
-test('roughDisplayCandidate: partial estimate when one component missing (labor only)', () => {
+test('roughDisplayCandidate: labor-only budget with no owner value -> dash (no partial estimates)', () => {
   const d = roughDisplayCandidate({ inputs: { labor_cost_sub_pay: 2000 } }, null, false);
-  assert.equal(d.value, 2000);
-  assert.equal(d.review, true);
-  assert.match(d.label, /partial/);
-  assert.match(d.label, /labor/);
+  assert.equal(d.value, null);
+  assert.equal(d.review, false);
 });
 
-test('saleDisplayCandidate: explicit 0 target sell stays 0 (not invented, not dropped)', () => {
-  const d = saleDisplayCandidate({ inputs: { actual_total_sell: 0 } }, null, false);
-  assert.equal(d.value, 0);
+test('saleDisplayCandidate: budget target sell 0 no longer shown (budget figures dropped); owner 0 still shows', () => {
+  assert.equal(saleDisplayCandidate({ inputs: { actual_total_sell: 0 } }, null, false).value, null);
+  assert.equal(saleDisplayCandidate({ inputs: {} }, 0, false).value, 0);
+});
+
+test('windowsDisplayCandidate: unreviewed draft with a verified supplier quote shows the printed total, flagged review', () => {
+  const draft = { ...reviewedBudget(), budget_usage: 'draft', numbers_reviewed_at: '' };
+  const d = windowsDisplayCandidate([draft], [], []);
+  assert.equal(d.value, 1074.5);
+  assert.equal(d.source, 'source_quote');
   assert.equal(d.review, true);
-  assert.equal(d.source, 'budget_estimate');
+  assert.match(d.label, /Supplier quote total incl tax/);
 });

@@ -172,13 +172,11 @@ function scopedRecords(budget, jobPOs, jobOrders) {
 function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
   if (!budget) return { value: null, label: null, source: 'none', budgetId: null, alternatives: [] };
   const src = sourceQuoteInclTax(budget);
-  if (src.value != null && budgetFigures(budget).ready) return { value: src.value, label: 'Supplier quote total incl tax', source: 'source_quote', budgetId: budget.id, alternatives: [] };
-  const fig = budgetFigures(budget);
-  const hasCost = ['material_true_cost', 'labor_cost_sub_pay', 'additional_install_material', 'additional_equipment']
-    .some((k) => amount(budget.inputs?.[k]) != null);
-  if (hasCost && fig.calculated && fig.calculated.cost_material_tax != null) {
-    return { value: fig.calculated.cost_material_tax, label: 'Material incl tax (budget, incl. overhead)', source: 'cost_material_tax', budgetId: budget.id, alternatives: [] };
-  }
+  // The supplier's printed quote total is a real document figure - show it
+  // whether or not the budget numbers are reviewed (the caller still flags
+  // unreviewed). The overhead-loaded budget math (cost_material_tax) is never
+  // shown: it mixed labor overhead into a "windows" number and misled reads.
+  if (src.value != null) return { value: src.value, label: 'Supplier quote total incl tax', source: 'source_quote', budgetId: budget.id, alternatives: [] };
   const poPick = pickAmount(scopedPOs, 'amount_dealer');
   if (poPick.pick) {
     const alts = poPick.alternatives.map((a) => ({ value: a.amount, label: `PO ${a.ref} dealer amount (no tax verified)` }));
@@ -241,19 +239,10 @@ export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders 
 // real 0 stays 0; a missing component is NOT inferred as 0 — a partial estimate
 // names the available component. No budget → dash (never crashes on null).
 export function roughDisplayCandidate(budget, ownerValue, duplicate) {
+  // Direct figures only: the owner-entered money input, or nothing. Budget
+  // labor/material estimates are no longer shown (they read as actuals).
   if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Owner-entered', review: false, source: 'owner' };
-  if (!budget) return { value: null, label: null, review: false, source: 'none' };
-  const labor = amount(budget.inputs?.labor_cost_sub_pay);
-  const mat = amount(budget.inputs?.additional_install_material);
-  const hasLabor = labor != null;
-  const hasMat = mat != null;
-  if (!hasLabor && !hasMat) return { value: null, label: null, review: false, source: 'none' };
-  const est = roundMoney((labor ?? 0) + (mat ?? 0));
-  let label = hasLabor && hasMat ? 'Budget labor + material (estimate)'
-    : hasLabor ? 'Budget labor only (partial estimate — material missing)'
-    : 'Budget material only (partial estimate — labor missing)';
-  if (duplicate) label = `${label} — duplicate owner entries`;
-  return { value: est, label, review: true, source: 'budget_estimate' };
+  return { value: null, label: duplicate ? 'Duplicate owner entries - fix to show' : null, review: Boolean(duplicate), source: 'none' };
 }
 
 // Sale price display: owner-entered (verified) when present; else budget
@@ -261,13 +250,10 @@ export function roughDisplayCandidate(budget, ownerValue, duplicate) {
 // suggested_total_sell when the target is missing. Legacy empty → unknown
 // (dash), never invented. No budget → dash (never crashes on null).
 export function saleDisplayCandidate(budget, ownerValue, duplicate) {
+  // Direct figures only: the owner-entered sale price, or nothing. Budget
+  // target/suggested sell estimates are no longer shown.
   if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Owner-entered', review: false, source: 'owner' };
-  if (!budget) return { value: null, label: null, review: false, source: 'none' };
-  const sell = amount(budget.inputs?.actual_total_sell);
-  if (sell != null) return { value: Number(sell), label: duplicate ? 'Budget target sell (estimate) — duplicate owner entries' : 'Budget target sell (estimate)', review: true, source: 'budget_estimate' };
-  const suggested = budgetFigures(budget).calculated?.suggested_total_sell;
-  if (suggested != null && suggested > 0) return { value: suggested, label: 'Budget suggested sell (estimate)', review: true, source: 'budget_suggested' };
-  return { value: null, label: null, review: false, source: 'none' };
+  return { value: null, label: duplicate ? 'Duplicate owner entries - fix to show' : null, review: Boolean(duplicate), source: 'none' };
 }
 
 // Display profit from the three display inputs (candidate or verified). Shown
