@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { C } from '@/lib/feeUI';
 import { amount, prepareBudgetPO, activeBudgets, budgetVersion, validMonth, isLiveBudget } from '../../../base44/shared/procurementCore.js';
 import { denverDate } from '../../../base44/shared/billingCore.js';
+import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
 
 export const money = value => amount(value) === null ? '\u2014' : amount(value).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 export const percent = value => value == null ? '\u2014' : `${(value * 100).toFixed(1)}%`;
@@ -118,7 +119,16 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
     // received field stamped bogus received dates on live orders. Recording
     // receipt stays possible when updating an existing confirmation.
     const payload = order ? form : { ...form, received_date: '' };
-    try { const r = await purchasingRequest({ ...payload, action: 'save_supplier_order', order_id: order?.id, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true }); onDone(r, 'Supplier confirmation saved against the selected job and PO. No order or payment was sent.'); }
+    try {
+      const r = await purchasingRequest({ ...payload, action: 'save_supplier_order', order_id: order?.id, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true });
+      // The recorded ETA is the event on Israel's calendar: this save creates it
+      // or moves it, so the two can never drift apart.
+      const saved = r?.order;
+      const sync = saved?.id
+        ? await syncEtaCalendar({ jobId: saved.job_id || form.job_id, etaKey: `order:${saved.id}`, date: saved.eta_date || '', ref: saved.order_number || '', vendor: saved.vendor || '' })
+        : { error: 'missing_order' };
+      onDone(r, 'Supplier confirmation saved against the selected job and PO. No order or payment was sent.' + (sync.error ? ` ${CALENDAR_MISSED}` : ''));
+    }
     catch (e2) { setError(messageOf(e2)); } finally { setBusy(false); }
   }
   return <FormPanel title={order ? 'Update supplier confirmation' : 'Record supplier confirmation'}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">

@@ -1,0 +1,100 @@
+{
+  "name": "EtaCalendarLinks",
+  "type": "object",
+  "description": "Ties one supplier ETA (a job budget or a vendor order) to its Google Calendar event on Israel's calendar. The stored Google event id is what lets a later ETA change MOVE the same event instead of creating a second one.",
+  "properties": {
+    "eta_key": {
+      "type": "string",
+      "title": "Eta Key",
+      "description": "Stable key of the ETA this event mirrors: order:<VendorOrders id> or budget:<JobBudgets id>."
+    },
+    "job_id": {
+      "type": "string",
+      "title": "Job Id",
+      "description": "Jobs record this ETA belongs to."
+    },
+    "google_event_id": {
+      "type": "string",
+      "title": "Google Event Id",
+      "description": "The Google Calendar event id on Israel's calendar (iryedra@gmail.com)."
+    },
+    "event_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Event Date",
+      "description": "The ETA day currently shown on the calendar event."
+    },
+    "summary": {
+      "type": "string",
+      "title": "Summary",
+      "description": "Event title last pushed, for recognition in the Hub."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Updated At",
+      "description": "When the linked event was last created or moved."
+    }
+  },
+  "required": [
+    "eta_key"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        }
+      ]
+    }
+  }
+}

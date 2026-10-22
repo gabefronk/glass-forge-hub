@@ -35,6 +35,7 @@ import PrivateSourceButton from './PrivateSourceButton';
 import { activeBudgets, budgetFigures, budgetRollup } from '@/lib/purchasingCoreTwin';
 import { statusWithDate, etaText } from '@/lib/purchasingDates';
 import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
+import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
 
 const SECTIONS = [['budgets', 'Quotes & budget'], ['orders', 'POs'], ['tracking', 'Supplier tracking'], ['invoicing', 'Invoicing']];
 const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v : ''; } catch { return ''; } };
@@ -220,6 +221,10 @@ function OrderRow({ order, pos, onEdit, onSaved, highlight }) {
         amount: order.amount, eta_date: value || '', received_date: order.received_date || '',
         notes: order.notes || '', expected_updated_date: order.updated_date,
         request_key: crypto.randomUUID(), review_confirmed: true });
+      // Same tie as the board's ETA cell: this in-place ETA edit moves the event
+      // on Israel's calendar too.
+      const sync = await syncEtaCalendar({ jobId: order.job_id, etaKey: `order:${order.id}`, date: value || '', ref: order.order_number || '', vendor: order.vendor || '' });
+      if (sync.error) setEtaError(CALENDAR_MISSED);
       await onSaved?.();
     } catch (e) { setEtaError(messageOf(e)); } finally { setEtaBusy(false); }
   }

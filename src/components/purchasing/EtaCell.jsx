@@ -5,6 +5,7 @@ import { pickDisplayBudget } from '@/lib/purchasingViewModel';
 import { isLiveBudget } from '@/lib/purchasingCoreTwin';
 import { displayDate } from '@/lib/purchasingDates';
 import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
+import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
 
 // The ETA cell: clicking it picks a date in place - no form to fill in.
 //   - A job with ONE pending supplier confirmation keeps its ETA on that order
@@ -52,6 +53,13 @@ export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier }
         const body = response?.data ?? response;
         if (body?.error) throw new Error(body.error);
       }
+      // The ETA on Israel's Google Calendar is the same ETA: it is created here
+      // and moved here, never duplicated, and removed when the ETA is cleared.
+      const sync = await syncEtaCalendar({
+        jobId: job.id, etaKey: order ? `order:${order.id}` : `budget:${budget.id}`, date: value || '',
+        ref: order?.order_number || '', vendor: order?.vendor || '',
+      });
+      if (sync.error) setError(CALENDAR_MISSED);
       await onSaved?.();
     } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
   }
