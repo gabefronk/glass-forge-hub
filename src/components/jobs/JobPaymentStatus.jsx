@@ -6,6 +6,7 @@ const CHIP_TONES = {
   installed:        { bg: "#EAF2FF", color: "#3977CB", border: "#C7D8EF" },
   sent_for_payment: { bg: "#FFF3DF", color: "#8a6420", border: "#F0DBA8" },
   waiting_on_payment:{ bg: "#FFF3DF", color: "#34403F", border: "#F0DBA8" },
+  partial:          { bg: "#FFF3DF", color: "#8a6420", border: "#F0DBA8" },
   paid:             { bg: "#EAF5EE", color: "#166447", border: "#C7E4D2" },
 };
 

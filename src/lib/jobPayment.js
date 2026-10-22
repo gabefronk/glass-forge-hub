@@ -5,6 +5,7 @@ export const PAYMENT_STAGES = [
   { key: "installed", label: "Job installed" },
   { key: "sent_for_payment", label: "Sent for payment · QuickBooks" },
   { key: "waiting_on_payment", label: "Waiting on payment" },
+  { key: "partial", label: "Partial payment" },
   { key: "paid", label: "Paid" },
 ];
 
