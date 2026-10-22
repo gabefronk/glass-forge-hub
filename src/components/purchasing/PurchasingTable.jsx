@@ -132,7 +132,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
             <select aria-label="Customer payment status" disabled={busy}
               value={fullJob?.payment_status || ''}
               onChange={(e) => savePayment(e.target.value)}
-              className="w-full rounded-md border px-1 py-1 text-[11.5px] font-semibold"
+              className="w-full rounded-md border px-0.5 py-1 text-[11px] font-semibold"
               style={{ borderColor: LINE, color: INK, backgroundColor: '#FFFFFF' }}>
               <option value="">Not tracked</option>
               {PAYMENT_STAGES.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
