@@ -388,7 +388,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
 
       {ledger ? (
         <div>
-          {(filter === "all" || filter === "milestones") ? <UpNextCard next={progress?.next} /> : null}
+          {(filter === "all" || filter === "milestones") ? <UpNextCard next={progress?.next} onSchedule={onScheduleNext} /> : null}
           {days.length === 0 && !showForm ? (
             <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter === "all" ? "No activity recorded yet." : "Nothing of this type yet."}</div>
           ) : null}
