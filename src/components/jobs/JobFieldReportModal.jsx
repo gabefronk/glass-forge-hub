@@ -1,13 +1,32 @@
 import { useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { resolveFieldReport } from "@/lib/fieldReports";
-import { C } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { isVideoUrl } from "@/lib/fileLinks";
-import { Camera, Loader2, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { Camera, Loader2, X, Film } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
 
 const PENDING = ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"];
+const TICKET_TYPES = ["Initial visit / PO", "Install", "Repair", "Measurement", "Follow-up", "Inspection"];
+const MATERIALS = ["Vinyl", "Composite", "Wood"];
+
+// Palette pulled from the "New ticket" example Gabriel supplied: light blue-gray
+// page, white inner card, dark navy pills, pale-teal selected chips, teal links.
+const PAGE = "#EDF2F6", CARD = "#FFFFFF", LINE = "#D8E0E6", INK = "#0F1B22", MUT = "#64748B";
+const NAVY = "#0E2A38", TEAL = "#0E7C7B", TEAL_BG = "#E2F1EF", TEAL_INK = "#0B5F5E";
+
+const label = { color: MUT, letterSpacing: ".08em" };
+function Chip({ on, onClick, children, dark }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="rounded-[10px] px-4 py-2 text-[13px] font-semibold transition-colors"
+      style={on
+        ? (dark ? { backgroundColor: NAVY, color: "#fff", border: `1px solid ${NAVY}` } : { backgroundColor: TEAL_BG, color: TEAL_INK, border: `1px solid ${TEAL_BG}` })
+        : { backgroundColor: CARD, color: INK, border: `1px solid ${LINE}` }}>
+      {children}
+    </button>
+  );
+}
 
 export default function JobFieldReportModal({ jobId, jobName, events, onClose, onDone }) {
   const pendingEvents = useMemo(
@@ -17,17 +36,22 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
   const general = { id: "", label: "General field report (no specific appointment)" };
   const options = [general, ...pendingEvents.map((e) => ({ id: e.id, label: `${formatShort(e.event_date)}${e.start_time ? ` · ${e.start_time}` : ""}`, ev: e }))];
   const [selected, setSelected] = useState(pendingEvents[0] ? pendingEvents[0].id : "");
+  const [ticketType, setTicketType] = useState("Install");
+  const [status, setStatus] = useState(""); // Open | Closed -> incomplete | complete (required, like the old question)
+  const [hours, setHours] = useState(0);
+  const [material, setMaterial] = useState("");
+  const [longDistance, setLongDistance] = useState("No");
   const [photos, setPhotos] = useState([]);
+  const [videos, setVideos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [notes, setNotes] = useState("");
-  const [completion, setCompletion] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const requestKey = useRef(`field-report:${jobId}:${crypto.randomUUID()}`);
 
-  const canSubmit = (photos.length > 0 || notes.trim()) && completion && !saving;
+  const canSubmit = (photos.length + videos.length > 0 || notes.trim()) && status && !saving;
 
-  const handleFiles = async (files) => {
+  const handleFiles = async (files, target) => {
     if (!files.length) return;
     setUploading(true);
     try {
@@ -36,9 +60,9 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
         const { file_url } = await base44.integrations.Core.UploadFile({ file });
         urls.push(file_url);
       }
-      setPhotos((p) => [...p, ...urls]);
+      (target === "video" ? setVideos : setPhotos)((p) => [...p, ...urls]);
     } catch {
-      setError("Photo upload failed. Try again.");
+      setError("Upload failed. Try again.");
     } finally {
       setUploading(false);
     }
@@ -49,13 +73,22 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
     setSaving(true);
     setError("");
     try {
+      // The report record keeps its existing shape (body + attachments + completion);
+      // the new structured picks ride as readable lines on the note so the office
+      // sees them in the job history exactly as typed.
+      const lines = [];
+      if (ticketType) lines.push(`Type: ${ticketType}`);
+      if (notes.trim()) lines.push(notes.trim());
+      if (hours > 0) lines.push(`Hours: ${hours.toFixed(1)}`);
+      if (material) lines.push(`Material: ${material}`);
+      if (longDistance === "Yes") lines.push("Long distance: Yes");
       await resolveFieldReport({
         action: "upload",
         event_id: selected || undefined,
         job_id: jobId,
-        photos,
-        notes: notes.trim(),
-        completion,
+        photos: [...photos, ...videos],
+        notes: lines.join("\n") || "Field report photos uploaded",
+        completion: status === "Closed" ? "complete" : "incomplete",
         // One key per opened form, so a retried submit cannot raise a second to-do.
         request_key: requestKey.current,
       });
@@ -67,100 +100,140 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
     }
   };
 
+  const media = [...photos.map((u) => ({ u, v: false })), ...videos.map((u) => ({ u, v: true }))];
+  const removeAt = (i) => {
+    if (i < photos.length) setPhotos((p) => p.filter((_, j) => j !== i));
+    else setVideos((p) => p.filter((_, j) => j !== i - photos.length));
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ backgroundColor: "rgba(24,36,34,.45)" }} onClick={onClose}>
       <div
         className="rounded-t-[16px] sm:rounded-[14px] w-full sm:max-w-md max-h-[92dvh] overflow-y-auto overscroll-contain card-shadow-elevated"
-        style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}
+        style={{ backgroundColor: PAGE, border: `1px solid ${LINE}` }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 flex items-center justify-between px-4 py-3" style={{ backgroundColor: C.card, borderBottom: `1px solid ${C.border}` }}>
-          <h3 className="font-heading text-[15px] font-semibold" style={{ color: C.text }}>Add field report</h3>
-          <button type="button" onClick={onClose} aria-label="Close" className="p-2" style={{ color: C.textMuted }}><X className="h-4 w-4" /></button>
+        <div className="sticky top-0 z-10 px-4 pt-4 pb-3" style={{ backgroundColor: PAGE }}>
+          <div className="flex items-start justify-between">
+            <div className="min-w-0">
+              <h3 className="font-heading text-[17px] font-bold" style={{ color: INK }}>New field report</h3>
+              <p className="text-[12.5px] break-words" style={{ color: MUT }}>{sanitizeText(jobName || "")}</p>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Close" className="p-1.5 rounded-full" style={{ border: `1px solid ${LINE}`, color: INK, backgroundColor: CARD }}><X className="h-4 w-4" /></button>
+          </div>
         </div>
 
-        <div className="p-4 space-y-4">
-          <p className="text-[12px] break-words" style={{ color: C.textMuted }}>{sanitizeText(jobName || "")}</p>
+        <div className="px-4 pb-4 space-y-4">
+          <div>
+            <div className="text-[11px] font-bold uppercase mb-1.5" style={label}>Ticket type</div>
+            <div className="flex flex-wrap gap-2">
+              {TICKET_TYPES.map((t) => <Chip key={t} on={ticketType === t} onClick={() => setTicketType(t)}>{t}</Chip>)}
+            </div>
+          </div>
 
-          {options.length > 1 && (
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-6">
             <div>
-              <label className="mono-label-sm block mb-1.5">For appointment</label>
+              <div className="text-[11px] font-bold uppercase mb-1.5" style={label}>Status</div>
+              <div className="flex items-center gap-3">
+                <Chip dark on={status === "Open"} onClick={() => setStatus("Open")}>Open</Chip>
+                <button type="button" onClick={() => setStatus("Closed")}
+                  className="px-1 py-2 text-[13px] font-semibold"
+                  style={status === "Closed" ? { backgroundColor: NAVY, color: "#fff", border: `1px solid ${NAVY}`, borderRadius: 10, padding: "8px 16px" } : { color: INK }}>
+                  Closed
+                </button>
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] font-bold uppercase mb-1.5" style={label}>Service date</div>
               <select
                 value={selected}
                 onChange={(e) => setSelected(e.target.value)}
                 className="w-full min-h-[44px] rounded-[10px] px-3 text-[13px] focus:outline-none"
-                style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }}
+                style={{ border: `1px solid ${LINE}`, backgroundColor: CARD, color: INK }}
               >
                 {options.map((o) => <option key={o.id || "general"} value={o.id}>{o.label}</option>)}
               </select>
             </div>
-          )}
+          </div>
 
           <div>
-            <label className="mono-label-sm block mb-1.5">Photos</label>
-            <label className="cursor-pointer">
-              <input type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => { handleFiles(Array.from(e.target.files)); e.target.value = ""; }} />
-              <span className="inline-flex items-center gap-1.5 text-[12px] px-3 py-2 rounded-[10px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary, backgroundColor: C.cardAlt }}>
-                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
-                {uploading ? "Uploading…" : "Add photos"}
-              </span>
-            </label>
-            {photos.length > 0 && (
-              <div className="grid grid-cols-3 gap-1.5 mt-2">
-                {photos.map((url, i) => (
-                  <div key={i} className="relative aspect-square rounded-md overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
-                    {isVideoUrl(url) ? <video src={url} muted playsInline preload="metadata" className="h-full w-full object-cover" /> : <img src={url} alt="" className="h-full w-full object-cover" />}
-                    <button type="button" onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} aria-label="Remove photo" className="absolute top-0 right-0 rounded-bl p-1" style={{ backgroundColor: "rgba(19,26,38,.6)", color: "#fff" }}>
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
+            <div className="text-[11px] font-bold uppercase mb-1.5" style={label}>Notes</div>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4}
+              placeholder="What was done, what's left, anything the office should know…"
+              className="w-full rounded-[12px] p-3 text-[13px] resize-y focus:outline-none"
+              style={{ border: `1px solid ${LINE}`, backgroundColor: CARD, color: INK }} />
+          </div>
+
+          <div className="rounded-[14px] p-3 space-y-3" style={{ backgroundColor: CARD, border: `1px solid ${LINE}` }}>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase" style={label}>Hours worked</span>
+              <div className="flex items-center gap-3 rounded-[10px] px-2 py-1" style={{ backgroundColor: PAGE }}>
+                <button type="button" aria-label="Less time" onClick={() => setHours((h) => Math.max(0, Math.round((h - 0.5) * 2) / 2))}
+                  className="h-8 w-8 rounded-[8px] text-[16px] font-bold" style={{ backgroundColor: CARD, border: `1px solid ${LINE}`, color: INK }}>−</button>
+                <span className="w-10 text-center text-[16px] font-bold" style={{ color: INK }}>{hours.toFixed(1)}</span>
+                <button type="button" aria-label="More time" onClick={() => setHours((h) => Math.min(24, Math.round((h + 0.5) * 2) / 2))}
+                  className="h-8 w-8 rounded-[8px] text-[16px] font-bold" style={{ backgroundColor: CARD, border: `1px solid ${LINE}`, color: INK }}>+</button>
               </div>
-            )}
-          </div>
-
-          <div>
-            <label className="mono-label-sm block mb-1.5">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="What did you do, find, or need fixed?" className="w-full rounded-[10px] p-2.5 text-[13px] resize-y focus:outline-none" style={{ border: `1px solid ${C.border}`, backgroundColor: C.cardAlt, color: C.text }} />
-          </div>
-
-          <div>
-            <label className="mono-label-sm block mb-1.5">Is this job complete or incomplete?</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setCompletion("complete")}
-                className="flex items-center justify-center gap-2 min-h-[48px] rounded-[10px] text-[13px] font-medium transition-colors"
-                style={{
-                  border: `1px solid ${completion === "complete" ? "#166447" : C.border}`,
-                  backgroundColor: completion === "complete" ? "#EAF5EE" : C.cardAlt,
-                  color: completion === "complete" ? "#166447" : C.text,
-                }}
-              >
-                <CheckCircle2 className="h-4 w-4" />Complete
-              </button>
-              <button
-                type="button"
-                onClick={() => setCompletion("incomplete")}
-                className="flex items-center justify-center gap-2 min-h-[48px] rounded-[10px] text-[13px] font-medium transition-colors"
-                style={{
-                  border: `1px solid ${completion === "incomplete" ? "#A43432" : C.border}`,
-                  backgroundColor: completion === "incomplete" ? "#FCEDEC" : C.cardAlt,
-                  color: completion === "incomplete" ? "#A43432" : C.text,
-                }}
-              >
-                <AlertCircle className="h-4 w-4" />Incomplete
-              </button>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase" style={label}>Material</span>
+              <div className="flex gap-2">
+                {MATERIALS.map((m) => <Chip key={m} on={material === m} onClick={() => setMaterial((cur) => (cur === m ? "" : m))}>{m}</Chip>)}
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase" style={label}>Long distance</span>
+              <div className="flex gap-2">
+                <Chip dark on={longDistance === "No"} onClick={() => setLongDistance("No")}>No</Chip>
+                <Chip on={longDistance === "Yes"} onClick={() => setLongDistance("Yes")}>Yes</Chip>
+              </div>
             </div>
           </div>
 
+          <div>
+            <div className="text-[11px] font-bold uppercase mb-1.5" style={label}>Photos</div>
+            <label className="block cursor-pointer rounded-[14px] border-2 border-dashed px-3 py-5 text-center" style={{ borderColor: LINE, backgroundColor: CARD }}>
+              <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => { handleFiles(Array.from(e.target.files), "photo"); e.target.value = ""; }} />
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: TEAL }}>
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{uploading ? "Uploading…" : "+ Add photos"}
+              </span>
+            </label>
+          </div>
 
+          <div>
+            <div className="mb-1.5 flex items-center gap-3">
+              <span className="text-[11px] font-bold uppercase" style={label}>Videos · {videos.length}</span>
+              <label className="cursor-pointer text-[13px] font-semibold" style={{ color: TEAL }}>
+                <input type="file" multiple accept="video/*" className="hidden" onChange={(e) => { handleFiles(Array.from(e.target.files), "video"); e.target.value = ""; }} />
+                + Add video
+              </label>
+            </div>
+            <label className="block cursor-pointer rounded-[14px] border-2 border-dashed px-3 py-5 text-center" style={{ borderColor: LINE, backgroundColor: CARD }}>
+              <input type="file" multiple accept="video/*" className="hidden" onChange={(e) => { handleFiles(Array.from(e.target.files), "video"); e.target.value = ""; }} />
+              <Film className="mx-auto h-6 w-6" style={{ color: TEAL }} />
+              <span className="mt-1 block text-[13px] font-semibold" style={{ color: TEAL }}>Add video</span>
+            </label>
+          </div>
+
+          {media.length > 0 && (
+            <div className="grid grid-cols-3 gap-1.5">
+              {media.map((m, i) => (
+                <div key={i} className="relative aspect-square rounded-md overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
+                  {m.v || isVideoUrl(m.u) ? <video src={m.u} muted playsInline preload="metadata" className="h-full w-full object-cover" /> : <img src={m.u} alt="" className="h-full w-full object-cover" />}
+                  <button type="button" onClick={() => removeAt(i)} aria-label="Remove" className="absolute top-0 right-0 rounded-bl p-1" style={{ backgroundColor: "rgba(19,26,38,.6)", color: "#fff" }}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {error ? <p role="alert" className="text-[12px]" style={{ color: "#A43432" }}>{error}</p> : null}
 
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="px-3.5 py-2 rounded-full text-[12px]" style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>Cancel</button>
-            <button type="button" onClick={handleSubmit} disabled={!canSubmit} className="px-3.5 py-2 rounded-full text-[12px] font-semibold" style={{ backgroundColor: canSubmit ? C.accent : C.mutedBg, color: canSubmit ? C.accentDark : C.textMuted }}>
+            <button type="button" onClick={onClose} className="px-4 py-2.5 rounded-[12px] text-[13px] font-semibold" style={{ border: `1px solid ${LINE}`, color: INK, backgroundColor: CARD }}>Cancel</button>
+            <button type="button" onClick={handleSubmit} disabled={!canSubmit} className="px-4 py-2.5 rounded-[12px] text-[13px] font-semibold"
+              style={{ backgroundColor: canSubmit ? NAVY : "#C7D1D9", color: "#fff", opacity: saving ? 0.8 : 1 }}>
               {saving ? "Submitting…" : "Submit report"}
             </button>
           </div>
