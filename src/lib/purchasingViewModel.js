@@ -449,8 +449,14 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
 
     const activeBs = activeBudgets(jobBudgets);
     const fileBudget = activeBs[0] || jobBudgets[0] || null;
-    const supplier = fileBudget?.vendor || fileBudget?.manufacturer ||
-      (jobPOs.find((p) => p.status !== 'cancelled')?.vendor) || '';
+    // Brand label for the Quote cell (10/22): the plain brand name only -
+    // his own company quoting (BFS / UTAH DESIGN / Glass Forge) yields to the
+    // manufacturer, and filler words like WINDOWS are stripped.
+    const vendorRaw = fileBudget?.vendor || (jobPOs.find((p) => p.status !== 'cancelled')?.vendor) || '';
+    const mfrRaw = fileBudget?.manufacturer || '';
+    const ownCo = /BFS|UTAH DESIGN|GLASS FORGE/i.test(vendorRaw);
+    const brandRaw = (ownCo && mfrRaw) ? mfrRaw : (vendorRaw || mfrRaw);
+    const supplier = brandRaw.replace(/\bWINDOWS?\b/gi, '').replace(/\s{2,}/g, ' ').replace(/\s*-\s*$/, '').trim();
     const units = activeBs.reduce((s, b) => s + (Number(b.openings_qty) || 0), 0);
     const files = {
       sourceQuote: safeHref(fileBudget?.source_pdf_url) || fileHref(fileBudget?.drive_quote_file_id),

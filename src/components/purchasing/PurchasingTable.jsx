@@ -52,7 +52,11 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
             <span className="ml-2 text-[11px] font-semibold" style={{ color: SUB }}>{`${units} ${units === 1 ? 'unit' : 'units'}`}</span>
           )}
       </div>
-      <table className="w-full border-collapse text-left">
+      <table className="w-full border-collapse text-left" style={{ tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '11%' }} />
+          <col style={{ width: '15%' }} /><col style={{ width: '10%' }} /><col style={{ width: '8%' }} /><col style={{ width: '11%' }} /><col style={{ width: '6%' }} />
+        </colgroup>
         <thead>
           <tr style={{ backgroundColor: '#F1F5F4' }}>
             {HEADERS.map((h, hi) => (
