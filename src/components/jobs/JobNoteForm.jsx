@@ -48,8 +48,18 @@ export default function JobNoteForm({ jobId, author, editing, onSaved, onCancel 
     if (!body.trim()) return;
     setSaving(true);
     try {
+      // If this job was combined into another, file the entry on the surviving
+      // job so it stays visible (merged records are hidden from the Hub).
+      let targetJobId = jobId;
+      try {
+        let j = await base44.entities.Jobs.get(jobId);
+        for (let hops = 0; j?.merged_into && hops < 5; hops++) {
+          j = await base44.entities.Jobs.get(j.merged_into);
+        }
+        if (j?.id && !j.merged_into) targetJobId = j.id;
+      } catch (_) { /* keep jobId */ }
       const payload = {
-        job_id: jobId,
+        job_id: targetJobId,
         note_date: noteDate,
         body: body.trim(),
         interaction_type: kind,

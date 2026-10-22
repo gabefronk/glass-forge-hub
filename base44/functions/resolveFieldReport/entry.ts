@@ -92,6 +92,12 @@ export default async function(req) {
         const jobs = await fetchAllPages(api.Jobs, '-created_date', 1000);
         index = createJobIndex(jobs);
         job = canonicalJob(index.byId.get(jobId), index);
+        // Follow a combine: notes must land on the surviving job, not the
+        // hidden merged-away record (e.g. a calendar row linked pre-merge).
+        if (job?.merged_into) {
+          const survivor = index.byId.get(job.merged_into);
+          if (survivor && !survivor.merged_into) job = canonicalJob(survivor, index);
+        }
       } catch (_) {
         job = null;
       }

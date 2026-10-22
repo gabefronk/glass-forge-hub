@@ -221,7 +221,14 @@ export function createEmailAgentHandler({ getClient, fetchImpl = globalThis.fetc
 
   async function relayNote(api, row, mailbox, changes, job) {
     if (!T.shouldRelay(row)) return null;
-    const note = await api.JobNotes.create(T.buildNotePayload(row, mailbox, changes));
+    // A thread linked before a combine still names the merged-away record, which
+    // is hidden - relay the note onto the surviving job instead.
+    let jobId = row.job_id;
+    if (job?.merged_into) {
+      const survivor = await api.Jobs.get(job.merged_into).catch(() => null);
+      if (survivor && !survivor.merged_into) { jobId = survivor.id; job = survivor; }
+    }
+    const note = await api.JobNotes.create({ ...T.buildNotePayload(row, mailbox, changes), job_id: jobId });
     return { note_id: note.id, relayed_at: now(), change: `Note added to ${job?.canonical_name || 'the job'}` };
   }
 

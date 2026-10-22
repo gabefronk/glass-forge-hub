@@ -8,7 +8,7 @@ export function normalizeJobLinkValue(value) {
 
 const exactId = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
-export function resolveJobLink(row, jobs, projectLinks = []) {
+function resolveJobLinkRaw(row, jobs, projectLinks = []) {
   // Never re-evaluate or overwrite an owner-confirmed link (job_link_source "owner").
   if (row?.job_id && row?.job_link_source === "owner") return { job_id: row.job_id, source: "owner", unchanged: true };
   if (row?.job_id) return { job_id: row.job_id, source: row.job_link_source || null, unchanged: true };
@@ -53,6 +53,34 @@ export function resolveJobLink(row, jobs, projectLinks = []) {
   return candidates.length === 1
     ? { job_id: candidates[0].id, source: 'name_exact' }
     : { job_id: '', source: null, ambiguous: candidates.length > 1 };
+}
+
+
+// A job that was combined into another (Jobs.merged_into) is hidden from lists
+// and matching, but stale references still name it. Follow the merge chain to
+// the surviving record so nothing new lands on the hidden one. Cycle-safe.
+export function followMergedJobId(jobs, jobId) {
+  if (!jobId) return jobId;
+  const byId = new Map((jobs || []).map((j) => [j.id, j]));
+  let cur = jobId;
+  const seen = new Set();
+  for (let hops = 0; hops < 10; hops++) {
+    if (seen.has(cur)) break;
+    seen.add(cur);
+    const j = byId.get(cur);
+    if (!j || !j.merged_into) break;
+    cur = j.merged_into;
+  }
+  return cur;
+}
+
+export function resolveJobLink(row, jobs, projectLinks = []) {
+  const link = resolveJobLinkRaw(row, jobs, projectLinks);
+  if (link.job_id) {
+    const followed = followMergedJobId(jobs, link.job_id);
+    if (followed !== link.job_id) return { ...link, job_id: followed, merged_from: link.job_id };
+  }
+  return link;
 }
 
 export function suggestJobLinks(row, jobs, limit = 3) {

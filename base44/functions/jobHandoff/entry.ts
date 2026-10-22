@@ -96,6 +96,9 @@ export default async function jobHandoff(req) {
   if (!jobId) return json({ error: 'job_id is required' }, 400);
   const job = await db.Jobs.get(jobId).catch(() => null);
   if (!job) return json({ error: 'job not found' }, 404);
+  // A combined-away record is hidden; act on the surviving job instead of
+  // stranding handoff notes/events on this one.
+  if (job.merged_into) return json({ error: 'This job was combined into another - open the surviving job to hand it off.', surviving_job_id: job.merged_into }, 400);
   const fromName = str(user.full_name || user.email, 80);
   const now = new Date().toISOString();
   const today = denverDate();

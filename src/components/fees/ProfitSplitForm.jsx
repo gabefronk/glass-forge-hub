@@ -18,6 +18,7 @@ export default function ProfitSplitForm({ jobs, onSaved, onCancel }) {
     const q = jobQuery.trim().toLowerCase();
     if (!q) return [];
     return jobs.filter(j => {
+      if (j.merged_into || j.is_sample) return false; // combined-away records stay out of pickers
       const name = (j.canonical_name || "").toLowerCase();
       const aliases = (j.aliases || []).join(" ").toLowerCase();
       const addr = (j.address || "").toLowerCase();
