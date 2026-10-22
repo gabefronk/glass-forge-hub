@@ -272,7 +272,7 @@ function ServiceEntry({ item, onServiceChanged }) {
 // Milestones filter and the "Up next" card. Optional; without it the feed is unchanged.
 // serviceItems (job page): the job's service items. Each shows under the field report that
 // raised it; one logged without a report gets its own entry on the day it was logged.
-export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, authUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged }) {
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, authUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged, onScheduleNext = null}) {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
   // currentUser is the author STRING (email) for legacy note form/delete behavior.

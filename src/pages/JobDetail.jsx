@@ -63,6 +63,7 @@ export default function JobDetail() {
   const [showReport, setShowReport] = useState(false);
   const [showCombine, setShowCombine] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [scheduleStage, setScheduleStage] = useState(null);
   const [upcomingKey, setUpcomingKey] = useState(0);
   const upcoming = useJobUpcoming(id, upcomingKey, { enabled: isJobCalendarOwner(user) });
   const loadVersion = useRef(0);
@@ -239,6 +240,7 @@ export default function JobDetail() {
           <div id="add-note" className="scroll-mt-4">
             <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
               <JobActivityFeed
+                onScheduleNext={(next) => { setScheduleStage(next); setShowCreateEvent(true); }}
                 ledger
                 jobId={id}
                 events={calEvents}
@@ -303,7 +305,7 @@ export default function JobDetail() {
       )}
 
       {showCreateEvent && isJobCalendarOwner(user) ? (
-        <JobCreateEventModal job={job} user={user} open={showCreateEvent} onOpenChange={setShowCreateEvent} onCreated={() => setUpcomingKey((k) => k + 1)} />
+        <JobCreateEventModal job={job} user={user} open={showCreateEvent} prefill={scheduleStage ? { notes: scheduleStage.label, stageLabel: scheduleStage.label } : null} onOpenChange={(o) => { setShowCreateEvent(o); if (!o) setScheduleStage(null); }} onCreated={() => setUpcomingKey((k) => k + 1)} />
       ) : null}
 
       {lightbox && <AttachmentViewer src={lightbox.src} photos={lightbox.photos} onClose={() => setLightbox(null)} onNavigate={(next) => setLightbox((l) => (l ? { ...l, src: next } : l))} />}

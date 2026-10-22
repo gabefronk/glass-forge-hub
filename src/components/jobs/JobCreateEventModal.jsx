@@ -22,7 +22,7 @@ const MUTED = { color: "#566063" };
 // into the reviewed payload; the review, locked and done views render that frozen
 // payload. Lifecycle (freeze before call, byte-equal retries, double-submit guard,
 // release rules) lives in createVisitController.
-export default function JobCreateEventModal({ job, user, open, onOpenChange, onCreated }) {
+export default function JobCreateEventModal({ job, user, open, onOpenChange, onCreated, prefill = null }) {
   const ctrl = useRef(null);
   if (!ctrl.current) ctrl.current = createVisitController({ store: getStore(), invoke: (name, body) => base44.functions.invoke(name, body) });
   const keyRef = useRef("");
@@ -49,8 +49,8 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
     const cur = ctrl.current.load(user.id, job.id);
     if (cur.state === "locked") { setReviewed(cur.record.payload); setStep("locked"); setError(safeError("prior_unknown")); return; }
     if (cur.state === "damaged") { setReviewed(null); setStep("damaged"); setError(safeError("damaged")); return; }
-    setReviewed(null); setForm(EMPTY); setRequestId(newRequestId()); setStep("form");
-  }, [open, job?.id, user?.id, owner]);
+    setReviewed(null); setForm({ ...EMPTY, ...(prefill?.notes ? { notes: prefill.notes } : {}) }); setRequestId(newRequestId()); setStep("form");
+  }, [open, job?.id, user?.id, owner, prefill?.notes]);
 
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
 
@@ -98,7 +98,7 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
         {step === "form" && (
           <div className="space-y-3">
             <div className="rounded-[9px] px-3 py-2 text-[12px]" style={{ backgroundColor: "#eef5f3", border: "1px solid #c7e4d2", color: "#082f2c" }}>
-              Title and jobsite come from this job. No pricing.
+              {prefill?.stageLabel ? <>Scheduling stage: <strong>{prefill.stageLabel}</strong>. </> : null}Title and jobsite come from this job. No pricing.
             </div>
             <div>
               <Label className="text-xs">Crew calendar <span className="font-normal" style={MUTED}>(pick one or both)</span></Label>

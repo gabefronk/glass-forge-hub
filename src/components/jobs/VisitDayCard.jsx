@@ -90,17 +90,28 @@ export function DayCard({ date, today, stages, children }) {
   );
 }
 
-// The next stage when nothing is booked for it yet.
-export function UpNextCard({ next }) {
+// The next stage when nothing is booked for it yet. When the owner can schedule
+// (onSchedule provided), the whole card is a button: click it, pick the date(s)
+// in the create-visit flow and the stage's event lands on the crew calendar.
+export function UpNextCard({ next, onSchedule }) {
   if (!next || next.booked) return null;
-  return (
-    <section className="mb-3.5 flex flex-wrap items-center gap-3 rounded-[14px] px-[18px] py-3.5" style={{ border: "1.5px dashed #b9a98a" }}>
+  const inner = (
+    <>
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px]" style={{ border: "1px dashed #b9a98a", color: MUTED }}><CalendarClock className="h-[15px] w-[15px]" /></span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 text-left">
         <div className="text-[10.5px] font-bold uppercase tracking-[.12em]" style={{ color: INK2 }}>Up next · stage {next.n} of 7</div>
         <div className="text-[15px] font-bold" style={{ color: INK }}>{next.label} <span className="text-[13px] font-medium" style={{ color: MUTED }}>— not on the calendar yet</span></div>
       </div>
-    </section>
+      {onSchedule ? <span className="shrink-0 rounded-[8px] px-2.5 py-1 text-[12px] font-bold" style={{ backgroundColor: TEAL, color: "#fff" }}>Pick a date</span> : null}
+    </>
+  );
+  if (!onSchedule) {
+    return <section className="mb-3.5 flex flex-wrap items-center gap-3 rounded-[14px] px-[18px] py-3.5" style={{ border: "1.5px dashed #b9a98a" }}>{inner}</section>;
+  }
+  return (
+    <button type="button" onClick={() => onSchedule(next)} aria-label={`Schedule ${next.label}`}
+      className="mb-3.5 flex w-full cursor-pointer flex-wrap items-center gap-3 rounded-[14px] px-[18px] py-3.5 hover:brightness-[1.03]"
+      style={{ border: "1.5px dashed #b9a98a", backgroundColor: AMBER050 }}>{inner}</button>
   );
 }
 
