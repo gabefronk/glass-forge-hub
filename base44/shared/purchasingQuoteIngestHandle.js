@@ -234,8 +234,34 @@ async function ingest(adapter, p, user) {
   }
   if (!budget || !isEntityId(budget.id) || budget.source_sha256 !== sha) fail('create_unverified');
   await bindReceipt(adapter, receipt, budget.id);
-  return { ...summary(budget), quote, inputs: fill.inputs, computed, notes: fill.notes };
+  // Sale auto-fill: when the quote prints a sell (his own quote total, or the
+  // customer level on a two-price supplier quote), put it on the job's money
+  // input so he never re-types it. An existing owner value always wins. Cost
+  // stays on the budget/quote side (never copied into money inputs).
+  const sale_autofill = await autofillJobSale(adapter, job?.id, fill.inputs.actual_total_sell);
+  return { ...summary(budget), quote, inputs: fill.inputs, computed, notes: fill.notes, sale_autofill };
 }
+
+// Returns 'filled' | 'kept_existing' | 'skipped' | 'failed'. Never overwrites a
+// value already on the row; never creates a second row when duplicates exist.
+async function autofillJobSale(adapter, jobId, sell) {
+  if (!jobId || !(Number(sell) > 0)) return 'skipped';
+  let found = null;
+  try { found = await rows(adapter.moneyFilter, { job_id: jobId }, 2); } catch { return 'failed'; }
+  if (found.length > 1) return 'kept_existing';
+  const cur = found[0];
+  try {
+    if (cur) {
+      const have = cur.sale_price;
+      if (have != null && Number(have) > 0) return 'kept_existing';
+      const upd = await adapter.moneyUpdate(cur.id, { sale_price: round2(sell) });
+      return upd ? 'filled' : 'failed';
+    }
+    const created = await adapter.moneyCreate({ job_id: jobId, sale_price: round2(sell) });
+    return created ? 'filled' : 'failed';
+  } catch { return 'failed'; }
+}
+const round2 = (v) => Math.round(Number(v) * 100) / 100;
 
 // Fresh exact-id GET + the server-only receipt bound to that budget.
 async function loadBound(adapter, budgetId) {

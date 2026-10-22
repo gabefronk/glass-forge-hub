@@ -18,7 +18,7 @@ const num = (v) => { const n = Number(String(v ?? "").replace(/[$,\s]/g, "")); r
 const FIELDS = [
   ["material_true_cost", "Material cost (what you pay)", "2748.78"],
   ["labor_cost_sub_pay", "Labor cost (sub pay)", "900"],
-  ["labor_sell_price", "Labor sell price", "1850"],
+  // Labor sell price hidden for now (Gabriel 10/22: he fills sub pay only).
   ["actual_total_sell", "Total sell to customer (incl. tax)", "7022.31"],
 ];
 const EXTRA = [

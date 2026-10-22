@@ -124,22 +124,12 @@ export function autofillBudget(quote = {}, { fileName = '', glassEach = GLASS_LA
   }
   if (material === null) notes.push(ours ? 'This is your quote to the customer, so it has no dealer cost — type the material cost.' : 'No cost found on the quote — type the material cost.');
 
-  // Labor (C24 / C25).
+  // Labor (C24): Gabriel types the labor sub pay himself (10/22: "for labor sub pay is
+  // the one I would fill in not the sub pay sale price anymore"). No sheet rates are
+  // auto-filled and the labor sell-price field is dropped for now.
   const install_material = installMaterialFor(quote, hints);
-  const labor = laborFromLines(quote.lines || [], { material: install_material, glassEach, hints, openings: quote.openings_qty });
-  if (labor.priced) {
-    const kinds = [...new Set(labor.lines.map((l) => l.kind))];
-    const what = kinds.length === 1 && kinds[0] === 'glass' ? `glass only, ${money(glassEach)} sub pay a pane at the sheet's 27% labor margin` : `${install_material} rates from the 2026 install price sheet`;
-    sources.labor_cost_sub_pay = `${labor.priced} unit${labor.priced === 1 ? '' : 's'}, ${what}`;
-    sources.labor_sell_price = labor.trip_minimum ? `Trip minimum ${money(labor.trip_minimum)}` : sources.labor_cost_sub_pay;
-    if (labor.unpriced.length) notes.push(`Labor leaves out ${labor.unpriced.length} line${labor.unpriced.length === 1 ? '' : 's'} with no listed rate (${labor.unpriced.slice(0, 3).join('; ')}) — add them.`);
-    if (install_material !== 'vinyl' || !/amsco|vinyl|milgard|western|studio/i.test([quote.manufacturer, hints.brand].join(' '))) {
-      if (!kinds.every((k) => k === 'glass')) notes.push(`Install rates assume ${install_material}; change the labor if that's wrong.`);
-    }
-    if (labor.lines.some((l) => l.kind === 'door')) notes.push('Door labor uses the 2-panel system rate — check panel count.');
-  } else {
-    notes.push('No sized openings on the quote to price labor — type labor cost and sell.');
-  }
+  const labor = { cost: 0, sell: 0, priced: 0, unpriced: [], lines: [] };
+  notes.push('Type the labor sub pay (what you pay the sub) — labor is not auto-filled.');
 
   // Total sell (B28).
   const printedTotal = pos(quote.customer_total) ?? pos(quote.actual_total_sell);

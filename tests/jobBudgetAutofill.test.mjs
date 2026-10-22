@@ -26,15 +26,19 @@ test('generic quote names fall back to the file name', () => {
   assert.equal(budgetNameFor({ quote_name: 'AGREN RES', project_name: 'CASH CUSTOMER' }, {}), 'AGREN RES');
 });
 
-test('WTS glass-only quote fills cost + labor, sell left for the owner', () => {
+test('WTS glass-only quote fills cost; labor sub pay and sell left for the owner', () => {
   const f = autofillBudget(wts, { fileName: 'SANDY EAGLE MTN - GLASSS REPLACEMENT - AMSCO.pdf' });
   assert.equal(f.inputs.material_true_cost, 108.24); // net price, not list, and never the sell
-  assert.equal(f.inputs.labor_cost_sub_pay, 125);
-  assert.equal(f.inputs.labor_sell_price, 275); // trip minimum
+  // 10/22 steer: labor sub pay is typed by Gabriel, never auto-filled; no labor sell field.
+  assert.equal(f.inputs.labor_cost_sub_pay, 0);
+  assert.equal(f.inputs.labor_sell_price, 0);
+  assert.ok(!f.filled.includes('labor_cost_sub_pay'));
+  assert.ok(!f.filled.includes('labor_sell_price'));
   // Purchasing side: no 30% margin auto-adder — the owner types his own sell.
   assert.equal(f.inputs.actual_total_sell, 0);
   assert.ok(!f.filled.includes('actual_total_sell'));
-  assert.deepEqual(f.filled.sort(), ['labor_cost_sub_pay', 'labor_sell_price', 'material_true_cost']);
+  assert.deepEqual(f.filled.sort(), ['material_true_cost']);
+  assert.ok(f.notes.some((t) => /sub pay/i.test(t)));
   assert.ok(f.notes.some((t) => /total sell/i.test(t)));
 });
 
@@ -42,8 +46,9 @@ test('old-schema Agren extraction (studio quote, no lines) still fills', () => {
   const q = normalizeVendorQuote({ vendor: 'BTB HOME IMPROVEMENTS', manufacturer: 'AMSCO WINDOWS', quote_name: 'AGREN RES', quoted_by: 'israelyedra', openings_qty: 1, actual_total_sell: 83.97, customer_sub_total: 78.15, customer_tax: 5.82 });
   const f = autofillBudget(q, { fileName: 'AGREN - GLASS REPLACEMENT - AMSCO STUDIO.pdf' });
   assert.equal(f.inputs.material_true_cost, 78.15); // what Gabe typed
-  assert.equal(f.inputs.labor_cost_sub_pay, 125);
-  assert.equal(f.inputs.labor_sell_price, 275);
+  // Labor is typed by Gabriel (sub pay), never auto-filled.
+  assert.equal(f.inputs.labor_cost_sub_pay, 0);
+  assert.equal(f.inputs.labor_sell_price, 0);
   // Purchasing side: no 30% margin auto-adder — the owner types the sell.
   assert.equal(f.inputs.actual_total_sell, 0);
   assert.ok(f.notes.some((t) => /total sell/i.test(t)));
@@ -55,10 +60,9 @@ test('AMSCO dealer pricing keeps the printed customer total as the sell', () => 
   const f = autofillBudget(q, { fileName: 'BAXTER - WINDOWS - AMSCO.pdf' });
   assert.equal(f.inputs.material_true_cost, 2748.78);
   assert.equal(f.inputs.actual_total_sell, 7022.31);
-  // 35.5 x 59.5 = 14.7 sq ft -> vinyl under-30 ($36/$52) x3, door 2-panel 6/8 ($66/$95)
-  assert.equal(f.inputs.labor_cost_sub_pay, 36 * 3 + 66);
-  assert.equal(f.labor.sell, 275); // 52*3+95 = 251, lifted to the trip minimum
-  assert.equal(f.inputs.labor_sell_price, 275);
+  // Labor is typed by Gabriel (sub pay), never auto-filled from the sheet.
+  assert.equal(f.inputs.labor_cost_sub_pay, 0);
+  assert.equal(f.inputs.labor_sell_price, 0);
   assert.equal(f.install_material, 'vinyl');
 });
 
@@ -70,7 +74,7 @@ test("Gabe's own quote: sell is the total, cost left for him", () => {
   assert.ok(!f.filled.includes('material_true_cost'));
   assert.equal(f.inputs.actual_total_sell, 7022.31);
   assert.equal(f.install_material, 'composite');
-  assert.equal(f.inputs.labor_cost_sub_pay, 46 * 2); // composite under 30 sq ft
+  assert.equal(f.inputs.labor_cost_sub_pay, 0); // typed by Gabriel, never auto-filled
   assert.ok(f.notes.some((t) => /material cost/.test(t)));
 });
 

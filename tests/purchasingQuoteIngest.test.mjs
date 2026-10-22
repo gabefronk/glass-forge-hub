@@ -33,6 +33,9 @@ function mock(over = {}) {
     signUrl: async () => ({ signed_url: SIGNED }),
     fetchBytes: async () => ({ bytes: PDF, contentType: 'application/pdf' }),
     invokeReader: async () => ({ vendor: 'AMSCO', quote_number: 'Q1', notes: `see ${SIGNED}`, raw_source: { link: SIGNED.split('?')[0], other: 'https://cdn.x.com/f?sig=zzz' } }),
+    moneyFilter: async () => page([]),
+    moneyCreate: async (d) => ({ id: 'f'.repeat(24), ...d }),
+    moneyUpdate: async (id, p) => ({ id, ...p }),
   };
   const merged = { ...base, ...over };
   const adapter = Object.fromEntries(Object.entries(merged).map(([k, fn]) => [k, log(k, fn)]));
@@ -216,4 +219,60 @@ test('validStoredUri is sanity only: rejects URLs, query, traversal (raw and enc
 test('unknown action → 400', async () => {
   const { adapter } = mock();
   assert.equal((await handle(req({ action: 'nope' }), adapter)).status, 400);
+});
+
+const OWN_QUOTE = { vendor: 'BFS-UTAH DESIGN', manufacturer: 'AMSCO', quote_name: 'PHIL CHADWICK', quoted_by: 'gabrielfronk', price_levels: 'single', customer_sub_total: 1126.74, customer_tax: 83.94, customer_total: 1210.68, openings_qty: 1, lines: [{ qty: 1, kind: 'window', extended: 1126.74, description: 'Casement' }] };
+const REP_QUOTE = { vendor: 'AMSCO', manufacturer: 'AMSCO', quote_name: 'HIDDEN HALLOW 509', quoted_by: 'israelyedra', price_levels: 'single', customer_sub_total: 67.03, customer_tax: 4.99, customer_total: 72.02, openings_qty: 1, lines: [{ qty: 1, kind: 'glass', extended: 67.03, description: 'Glass only' }] };
+const TWO_LEVEL = { vendor: 'AMSCO', manufacturer: 'AMSCO', quote_name: 'BAXTER', quoted_by: 'israelyedra', price_levels: 'dealer_and_customer', dealer_subtotal: 2748.78, material_true_cost: 2748.78, customer_total: 7022.31, openings_qty: 4, lines: [{ qty: 3, kind: 'window', extended: 900, description: 'SH' }] };
+
+test('sale autofill: his own quote total fills the job sale price (money row created)', async () => {
+  const { adapter, calls } = mock({ invokeReader: async () => OWN_QUOTE });
+  const r = await handle(req(ingestBody()), adapter);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.sale_autofill, 'filled');
+  assert.equal(r.body.inputs.actual_total_sell, 1210.68);
+  assert.ok(calls.includes('moneyCreate'));
+});
+
+test('sale autofill: supplier rep single-price quote fills cost, never the sale', async () => {
+  const { adapter, calls } = mock({ invokeReader: async () => REP_QUOTE });
+  const r = await handle(req(ingestBody()), adapter);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.sale_autofill, 'skipped');
+  assert.equal(r.body.inputs.actual_total_sell, 0);
+  assert.ok(!calls.includes('moneyCreate') && !calls.includes('moneyUpdate'));
+  // Cost lands on the budget, never on the sale side.
+  assert.equal(r.body.inputs.material_true_cost, 67.03);
+});
+
+test('sale autofill: two-price supplier quote fills the printed customer total as sale', async () => {
+  const { adapter, calls } = mock({ invokeReader: async () => TWO_LEVEL });
+  const r = await handle(req(ingestBody()), adapter);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.sale_autofill, 'filled');
+  assert.equal(r.body.inputs.actual_total_sell, 7022.31);
+  assert.ok(calls.includes('moneyCreate'));
+});
+
+test('sale autofill: an existing owner sale price is never overwritten', async () => {
+  const row = { id: 'f'.repeat(24), job_id: JOB, sale_price: 999, rough_labor_material: null };
+  const { adapter, calls } = mock({ invokeReader: async () => OWN_QUOTE, moneyFilter: async () => page([row]) });
+  const r = await handle(req(ingestBody()), adapter);
+  assert.equal(r.body.sale_autofill, 'kept_existing');
+  assert.ok(!calls.includes('moneyCreate') && !calls.includes('moneyUpdate'));
+});
+
+test('sale autofill: existing money row with no sale gets patched, not duplicated', async () => {
+  const row = { id: 'f'.repeat(24), job_id: JOB, sale_price: null, rough_labor_material: 125 };
+  const { adapter, calls } = mock({ invokeReader: async () => OWN_QUOTE, moneyFilter: async () => page([row]) });
+  const r = await handle(req(ingestBody()), adapter);
+  assert.equal(r.body.sale_autofill, 'filled');
+  assert.ok(calls.includes('moneyUpdate') && !calls.includes('moneyCreate'));
+});
+
+test('sale autofill: no job linked - skipped', async () => {
+  const { adapter, calls } = mock({ invokeReader: async () => OWN_QUOTE });
+  const r = await handle(req(ingestBody({ job_id: undefined })), adapter);
+  assert.equal(r.body.sale_autofill, 'skipped');
+  assert.ok(!calls.includes('moneyCreate'));
 });

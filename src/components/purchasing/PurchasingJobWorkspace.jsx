@@ -67,7 +67,7 @@ function BudgetBreakdown({ budget }) {
   const rows = [
     ['Material cost', i.material_true_cost, false],
     ['Labor cost (sub pay)', i.labor_cost_sub_pay, false],
-    ['Labor sell', i.labor_sell_price, false],
+    // 'Labor sell' hidden for now (Gabriel 10/22: sub pay only).
     ['Additional install material', i.additional_install_material, false],
     ['Additional equipment', i.additional_equipment, false],
     ['Use tax', c.use_tax, false],

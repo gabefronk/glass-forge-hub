@@ -243,3 +243,20 @@ test('windowsDisplayCandidate: unreviewed draft with a verified supplier quote s
   assert.equal(d.review, true);
   assert.match(d.label, /Supplier quote total incl tax/);
 });
+
+test('windowsDisplayCandidate: rep-issued supplier quote (bill_to missing) shows the printed total, always flagged review', () => {
+  const repQuote = { ...supplierQuote, bill_to: null, quoted_by: 'israelyedra' };
+  const reviewed = reviewedBudget({}, { quote: repQuote });
+  const d = windowsDisplayCandidate([reviewed], [], []);
+  assert.equal(d.value, 1074.5);
+  assert.equal(d.source, 'source_quote');
+  assert.equal(d.review, true); // recipient inferred - never unflagged
+  assert.match(d.label, /confirm/);
+  // Verified canonical still refuses it (strict recipient proof required).
+});
+
+test('windowsDisplayCandidate: own sell quote still never shows as cost', () => {
+  const own = { ...supplierQuote, bill_to: null, quoted_by: 'gabrielfronk' };
+  const d = windowsDisplayCandidate([reviewedBudget({}, { quote: own })], [], []);
+  assert.equal(d.value, null);
+});

@@ -62,7 +62,7 @@ const OUR_ACCOUNT = /glass\s*forge|\bya\s+windows|\by\.\s?a\.\s+windows/i;
 const UNIT_KINDS = ['window', 'door', 'glass'];
 const printed = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 const no = (reason) => ({ value: null, reason });
-export function sourceQuoteInclTax(budget) {
+export function sourceQuoteInclTax(budget, { allowInferredRecipient = false } = {}) {
   const q = budget?.quote;
   if (!q || q.price_levels !== 'single') return no('no_single_supplier_total');
   const issuer = pText(q.vendor);
@@ -70,7 +70,17 @@ export function sourceQuoteInclTax(budget) {
   if (OWN_QUOTE.test(`${issuer} ${q.quoted_by || ''} ${q.prepared_by || ''}`) || OUR_ACCOUNT.test(issuer)) return no('own_quote');
   if (!pText(budget.vendor) && !pText(budget.manufacturer)) return no('budget_vendor_absent');
   if (!sameVendor({ vendor: issuer, manufacturer: q.manufacturer }, budget)) return no('issuer_vendor_mismatch');
-  if (!OUR_ACCOUNT.test(pText(q.bill_to))) return no('recipient_unproven');
+  // Cost role needs recipient evidence. Proven: billed to us. Inferred (display
+  // only, always flagged review): a named third party issued the doc (a vendor
+  // rep/dealer login), never Gabriel and never our own account - his own sell
+  // quotes are excluded by the own_quote gate above, so a third-party issuer's
+  // single-price doc is the supplier's bill to the dealer.
+  const recipientProven = OUR_ACCOUNT.test(pText(q.bill_to));
+  if (!recipientProven) {
+    const issuedBy = pText(`${q.quoted_by || ''} ${q.prepared_by || ''}`.trim());
+    const thirdParty = issuedBy && !OWN_QUOTE.test(issuedBy) && !OUR_ACCOUNT.test(issuedBy);
+    if (!(allowInferredRecipient && thirdParty)) return no('recipient_unproven');
+  }
   const lines = Array.isArray(q.lines) ? q.lines : [];
   if (!lines.length) return no('scope_unproven');
   if (lines.some((l) => l?.kind === 'part')) return no('mixed_scope');
@@ -82,7 +92,7 @@ export function sourceQuoteInclTax(budget) {
   if (Math.abs(sub + q.customer_tax - q.customer_total) > 0.01) return { value: null, reason: 'totals_do_not_reconcile' };
   const lineSum = lines.reduce((s, l) => s + l.extended, 0);
   if (Math.abs(lineSum - sub) > 0.01) return no('scope_unproven');
-  return { value: roundMoney(q.customer_total), reason: null };
+  return { value: roundMoney(q.customer_total), reason: null, inferred: !recipientProven };
 }
 
 // Tile 1 — Windows incl tax. Single active reviewed scope with a verified
@@ -170,13 +180,14 @@ function scopedRecords(budget, jobPOs, jobOrders) {
 // Multiple POs/orders on one budget → deterministic pick (earliest id) +
 // alternatives, never summed.
 function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
-  if (!budget) return { value: null, label: null, source: 'none', budgetId: null, alternatives: [] };
-  const src = sourceQuoteInclTax(budget);
+  if (!budget) return { value: null, label: null, source: 'none', budgetId: null, alternatives: [], inferred: false };
+  const src = sourceQuoteInclTax(budget, { allowInferredRecipient: true });
   // The supplier's printed quote total is a real document figure - show it
   // whether or not the budget numbers are reviewed (the caller still flags
-  // unreviewed). The overhead-loaded budget math (cost_material_tax) is never
-  // shown: it mixed labor overhead into a "windows" number and misled reads.
-  if (src.value != null) return { value: src.value, label: 'Supplier quote total incl tax', source: 'source_quote', budgetId: budget.id, alternatives: [] };
+  // unreviewed, and recipient-inferred figures are always flagged). The
+  // overhead-loaded budget math (cost_material_tax) is never shown: it mixed
+  // labor overhead into a "windows" number and misled reads.
+  if (src.value != null) return { value: src.value, label: src.inferred ? 'Supplier quote total incl tax (confirm)' : 'Supplier quote total incl tax', source: 'source_quote', budgetId: budget.id, alternatives: [], inferred: Boolean(src.inferred) };
   const poPick = pickAmount(scopedPOs, 'amount_dealer');
   if (poPick.pick) {
     const alts = poPick.alternatives.map((a) => ({ value: a.amount, label: `PO ${a.ref} dealer amount (no tax verified)` }));
@@ -220,7 +231,7 @@ export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders 
     const { pos, orders } = scopedRecords(sorted[0], jobPOs, jobOrders);
     const c = bestWindowsFromBudget(sorted[0], pos, orders);
     const reviewed = budgetFigures(sorted[0]).ready;
-    const review = conflict || !(c.source === 'source_quote' && reviewed);
+    const review = conflict || c.inferred || !(c.source === 'source_quote' && reviewed);
     return { value: c.value, label: conflict ? `PO conflict — ${c.label || 'review'}` : c.label, review, source: conflict ? 'po_conflict' : c.source, budgetId: c.budgetId, alternatives: c.alternatives || [] };
   }
   const pick = sorted[0];

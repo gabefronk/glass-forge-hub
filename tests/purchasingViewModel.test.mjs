@@ -30,7 +30,7 @@ const reviewedBudget = (over = {}, opts = {}) => ({
 });
 
 test('sourceQuoteInclTax: printed subtotal + tax reconcile → printed total', () => {
-  assert.deepEqual(sourceQuoteInclTax({ ...AMSCO, quote: supplierQuote }), { value: 1074.5, reason: null });
+  assert.deepEqual(sourceQuoteInclTax({ ...AMSCO, quote: supplierQuote }), { value: 1074.5, reason: null, inferred: false });
 });
 
 test('sourceQuoteInclTax: explicit zero tax is valid (500 + 0 = 500)', () => {
@@ -355,4 +355,19 @@ test('cardMatchesSearch: finds the correct card by name, not cards[0]', () => {
   assert.ok(!cardMatchesSearch(aria, 'zzz'));
   assert.ok(!cardMatchesSearch(cards[0], 'YA-0005'));
   assert.ok(cardMatchesSearch(aria, ''));
+});
+
+test('sourceQuoteInclTax: rep-issued supplier doc (bill_to missing) - strict read refuses, display read shows flagged inferred', () => {
+  const repQuote = { ...supplierQuote, bill_to: null, quoted_by: 'israelyedra' };
+  const strict = sourceQuoteInclTax({ ...AMSCO, quote: repQuote });
+  assert.equal(strict.value, null);
+  assert.equal(strict.reason, 'recipient_unproven');
+  const display = sourceQuoteInclTax({ ...AMSCO, quote: repQuote }, { allowInferredRecipient: true });
+  assert.equal(display.value, 1074.5);
+  assert.equal(display.inferred, true);
+});
+
+test('sourceQuoteInclTax: own quote never counts as cost even with the display read', () => {
+  const own = { ...supplierQuote, bill_to: null, quoted_by: 'gabrielfronk' };
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: own }, { allowInferredRecipient: true }).value, null);
 });
