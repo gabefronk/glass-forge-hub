@@ -109,6 +109,9 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   const payTone = PAYMENT_TONES[payKey] || PAYMENT_TONES.none;
   const payLabel = paymentStage(payKey)?.label || 'Not tracked';
   const toggle = () => setExpanded((e) => { if (!e) setSection('budgets'); return !e; });
+  // A blank ETA is entered on the supplier confirmation, so clicking the cell opens
+  // the row's supplier section instead of doing nothing.
+  const openSupplierSection = () => { setExpanded(true); setSection('tracking'); };
 
   return (
     <Fragment>
@@ -147,7 +150,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
               ) : (
                 <button type="button" disabled={busy} title="Change the supplier ETA"
                   onClick={openEtaPicker}
-                  className="rounded-md px-1 py-0.5 hover:bg-stone-100">
+                  className="cursor-pointer rounded-md px-1 py-0.5 hover:bg-stone-100">
                   <DotText tone="blue">{etaOrder.eta_date ? displayDate(etaOrder.eta_date) : 'Set ETA'}</DotText>
                 </button>
               )}
@@ -158,7 +161,11 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
               {etaError && <span className="text-[10px] font-semibold" style={{ color: '#A43432' }}>{etaError}</span>}
             </div>
           ) : (
-            <DotText tone={refs.etaLabel ? 'blue' : 'gray'}>{/^\d{4}-\d{2}-\d{2}$/.test(refs.etaLabel || '') ? displayDate(refs.etaLabel) : refs.etaLabel}</DotText>
+            <button type="button" onClick={openSupplierSection}
+              title={refs.etaLabel ? 'Open this job\'s supplier dates' : 'Record the supplier confirmation and ETA for this job'}
+              className="cursor-pointer rounded-md px-1 py-0.5 hover:bg-stone-100">
+              <DotText tone={refs.etaLabel ? 'blue' : 'gray'}>{/^\d{4}-\d{2}-\d{2}$/.test(refs.etaLabel || '') ? displayDate(refs.etaLabel) : refs.etaLabel}</DotText>
+            </button>
           )}
         </td>
         <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
