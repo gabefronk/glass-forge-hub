@@ -45,7 +45,19 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   const [busy, setBusy] = useState(false);
   const [etaError, setEtaError] = useState('');
   const [payError, setPayError] = useState('');
+  // showPicker() is refused inside the preview's cross-origin iframe (SecurityError).
+  // When that happens, swap the label for a real date field: tapping it opens the
+  // browser's own picker, which is allowed in a frame.
+  const [etaManual, setEtaManual] = useState(false);
   const etaInputRef = useRef(null);
+  function openEtaPicker() {
+    const el = etaInputRef.current;
+    if (!el) return;
+    try {
+      if (!el.showPicker) throw new Error('unsupported');
+      el.showPicker();
+    } catch { setEtaManual(true); }
+  }
   const fullJob = data?.jobs?.find((j) => j.id === job.id) || job;
   // Inline ETA edit only when ONE active supplier order carries the ETA and
   // Record ETA (save_supplier_order) has everything it requires; anything
@@ -112,11 +124,19 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
           {etaOrder ? (
             <div className="relative flex flex-col items-center gap-1">
-              <button type="button" disabled={busy} title="Change the supplier ETA"
-                onClick={() => etaInputRef.current?.showPicker?.()}
-                className="rounded-md px-1 py-0.5 hover:bg-stone-100">
-                <DotText tone="blue">{etaOrder.eta_date ? displayDate(etaOrder.eta_date) : 'Set ETA'}</DotText>
-              </button>
+              {etaManual ? (
+                <input type="date" aria-label="Supplier ETA" disabled={busy}
+                  value={etaOrder.eta_date || ''}
+                  onChange={(e) => saveEta(e.target.value)}
+                  className="w-full rounded-md border px-1 py-1 text-[11.5px] font-semibold"
+                  style={{ borderColor: LINE, color: INK, backgroundColor: '#FFFFFF' }} />
+              ) : (
+                <button type="button" disabled={busy} title="Change the supplier ETA"
+                  onClick={openEtaPicker}
+                  className="rounded-md px-1 py-0.5 hover:bg-stone-100">
+                  <DotText tone="blue">{etaOrder.eta_date ? displayDate(etaOrder.eta_date) : 'Set ETA'}</DotText>
+                </button>
+              )}
               <input ref={etaInputRef} type="date" aria-label="Supplier ETA" tabIndex={-1}
                 value={etaOrder.eta_date || ''}
                 onChange={(e) => saveEta(e.target.value)}
