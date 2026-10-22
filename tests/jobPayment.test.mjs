@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 
 const { PAYMENT_STAGES, paymentStage, paymentPatch } = await import('../src/lib/jobPayment.js');
 
-test('the four tracking stages match what Gabriel asked for', () => {
+test('the five tracking stages match what Gabriel asked for (Partial added 10/22)', () => {
   assert.deepEqual(PAYMENT_STAGES.map((s) => s.label), [
     'Job installed',
     'Sent for payment · QuickBooks',
     'Waiting on payment',
+    'Partial payment',
     'Paid',
   ]);
 });

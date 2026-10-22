@@ -16,6 +16,7 @@ export const PAYMENT_TONES = {
   installed:          { dot: "#C2601C", text: "#96490F", bg: "#FCEFE0", border: "#F1D3B2" },
   sent_for_payment:   { dot: "#A8861A", text: "#7A6010", bg: "#FBF4DB", border: "#EDE0A8" },
   waiting_on_payment: { dot: "#5D8C3A", text: "#3F6B21", bg: "#EFF6E4", border: "#D3E5BB" },
+  partial:            { dot: "#3E7C46", text: "#2C5F33", bg: "#E9F4E2", border: "#CCE2BD" },
   paid:               { dot: "#166447", text: "#166447", bg: "#EAF5EE", border: "#C7E4D2" },
 };
 
