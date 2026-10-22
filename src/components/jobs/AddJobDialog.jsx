@@ -9,6 +9,9 @@ import { ASSIGNABLE_CONTACT_ROLES, ROLE_LABELS } from "@/lib/jobContacts";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import JobMatchWarningDialog from "@/components/jobs/JobMatchWarningDialog";
 import NewJobContactFields from "@/components/jobs/NewJobContactFields";
+import BuilderPicker from "@/components/jobs/BuilderPicker";
+import { builderOptions } from "@/lib/jobsOverview";
+import { sanitizeText } from "@/lib/jobsSanitize";
 
 const blank = { canonical_name: "", builder: "", address: "", po_number: "", oe_number: "", source_window_quote_id: "", initial_note: "" };
 const inputClass = "mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base focus:border-emerald-700 focus:outline-none sm:text-sm";
@@ -58,6 +61,8 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
   }, [contacts, contactSearch]);
   // The contact store keeps one name; the form asks for first and last.
   const newContactName = `${newContact.first_name} ${newContact.last_name}`.trim();
+  // Every builder already mapped on a job, for the picker.
+  const builders = useMemo(() => builderOptions(jobs.map((job) => ({ job })), sanitizeText).map((b) => b.name), [jobs]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -149,7 +154,10 @@ export default function AddJobDialog({ jobs, onCreated, triggerClassName = "", l
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           <label className="block text-sm font-medium">Job name <span className="text-red-700">*</span><input autoFocus required className={inputClass} value={values.canonical_name} onChange={(e) => change("canonical_name", e.target.value)} /></label>
-          <label className="block text-sm font-medium">Builder <span className="font-normal text-slate-500">(optional)</span><input className={inputClass} value={values.builder} onChange={(e) => change("builder", e.target.value)} /></label>
+          <div>
+            <label htmlFor="new-job-builder" className="block text-sm font-medium">Builder <span className="font-normal text-slate-500">(optional)</span></label>
+            <BuilderPicker value={values.builder} onChange={(v) => change("builder", v)} builders={builders} />
+          </div>
           <label className="block text-sm font-medium">Site address <span className="font-normal text-slate-500">(recommended)</span><input className={inputClass} autoComplete="street-address" value={values.address} onChange={(e) => change("address", e.target.value)} /></label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm font-medium">PO number <span className="font-normal text-slate-500">(optional)</span><input className={inputClass} value={values.po_number} onChange={(e) => change("po_number", e.target.value)} /></label>
