@@ -105,8 +105,9 @@ export default async function (req) {
       return Response.json({ ok: true, cleared: true, eta_key: etaKey });
     }
 
-    const summary = [job?.canonical_name || 'Glass job', 'Glass ETA', String(body.ref || '').trim()]
-      .filter(Boolean).join(' \u00b7 ');
+    // Matches the ETA events already on Israel's calendar: "ETA - <builder> - <job>".
+    // The supplier reference stays in the description, so the title stays scannable.
+    const summary = ['ETA', job?.builder, job?.canonical_name || 'Glass job'].filter(Boolean).join(' - ');
     const pushed = await upsertEvent(ISRAEL_CAL, link?.google_event_id, eventBody(job, { date, etaKey, ref: body.ref, vendor: body.vendor, summary }), headers);
     if (pushed.error) {
       return Response.json({ error: pushed.error, status: pushed.status, detail: pushed.detail }, { status: 200 });
