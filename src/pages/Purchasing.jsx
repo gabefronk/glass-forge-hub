@@ -1,5 +1,6 @@
 import {Link} from 'react-router-dom';
-import CustomerCollectionsQueue from '@/components/purchasing/CustomerCollectionsQueue';
+import PurchasingSummaryBar from '@/components/purchasing/PurchasingSummaryBar';
+import { summarizeCards, applySummaryFilters } from '@/lib/purchasingSummary';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -33,6 +34,8 @@ function PurchasingWorkspace() {
   const [error, setError] = useState('');
   const [moneyError, setMoneyError] = useState('');
   const [query, setQuery] = useState('');
+  const [etaFilter, setEtaFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -73,7 +76,12 @@ function PurchasingWorkspace() {
     jobs: data.jobs, budgets: data.budgets, purchase_orders: data.purchase_orders,
     vendor_orders: data.vendor_orders, moneyInputs, conflicts: data.conflicts, today,
   }) : []), [data, moneyInputs, today]);
-  const filtered = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
+  const jobsById = useMemo(() => new Map((data?.jobs || []).map((j) => [j.id, j])), [data]);
+  const filtered = useMemo(
+    () => applySummaryFilters(cards.filter((c) => cardMatchesSearch(c, query)), { eta: etaFilter, payment: paymentFilter }, { jobsById, today }),
+    [cards, query, etaFilter, paymentFilter, jobsById, today],
+  );
+  const totals = useMemo(() => summarizeCards(filtered), [filtered]);
   const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
   const counts = useMemo(() => ({
     jobs: cards.length,
@@ -128,10 +136,13 @@ function PurchasingWorkspace() {
       {error && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: 'var(--gf-error-bg)', color: 'var(--gf-error)', border: '1px solid var(--gf-error-border)' }}>{error}</p>}
       {moneyError && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: '#FFF3DF', color: '#89511A', border: '1px solid #F0DBA8' }}>{moneyError}</p>}
 
-      <CustomerCollectionsQueue query={query} onChanged={load} />
+      {cards.length > 0 && (
+        <PurchasingSummaryBar totals={totals} shown={filtered.length} total={cards.length}
+          eta={etaFilter} payment={paymentFilter} onEta={setEtaFilter} onPayment={setPaymentFilter} />
+      )}
 
       {filtered.length === 0 ? (
-        <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query ? 'No jobs match your search.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
+        <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query || etaFilter !== 'all' || paymentFilter !== 'all' ? 'No jobs match your search or filters.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
       ) : (
         <PurchasingTable cards={filtered} data={data} onSaved={load} onEdit={(card) => setEditing({ jobId: card.job.id, jobName: card.job.canonical_name, rough: card.rough.value, sale: card.sale.value })} />
       )}
