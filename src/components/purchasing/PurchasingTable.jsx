@@ -16,10 +16,10 @@ const DOT = { green: '#166447', amber: '#C08B2E', red: '#A43432', blue: '#3977CB
 
 const HEADERS = ['Windows incl tax', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', 'Actions'];
 
-function MoneyCell({ display, accent, tone }) {
+function MoneyCell({ display, accent, tone, divider }) {
   const negative = tone === 'negative';
   return (
-    <td className="px-2.5 py-2 align-top" style={{ borderTop: `2px solid ${negative ? '#A43432' : accent}`, backgroundColor: negative ? '#FDE8E7' : undefined }}>
+    <td className="px-2.5 py-2 align-top" style={{ borderTop: `2px solid ${negative ? '#A43432' : accent}`, borderLeft: divider ? undefined : `1px solid ${LINE}`, backgroundColor: negative ? '#FDE8E7' : undefined }}>
       <div className="text-[15px] font-extrabold tabular-nums" style={{ color: INK, letterSpacing: '-0.01em' }}>{money(display?.value)}</div>
     </td>
   );
@@ -46,31 +46,36 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
 
   return (
     <Fragment>
-      <tr style={{ backgroundColor: rowBg, borderTop: `1px solid ${LINE}` }}>
-        <td colSpan={HEADERS.length} className="px-3 pb-0.5 pt-2.5">
+      <div className="px-4 pb-0.5 pt-3" style={{ backgroundColor: rowBg }}>
           <span className="break-words text-[14px] font-extrabold leading-tight" style={{ color: INK }}>{job.canonical_name || 'Unnamed job'}</span>
-          {(supplier || units > 0) && (
-            <span className="ml-2 text-[11px] font-semibold" style={{ color: SUB }}>
-              {[supplier, units > 0 ? `${units} ${units === 1 ? 'unit' : 'units'}` : ''].filter(Boolean).join(' · ')}
-            </span>
+          {units > 0 && (
+            <span className="ml-2 text-[11px] font-semibold" style={{ color: SUB }}>{`${units} ${units === 1 ? 'unit' : 'units'}`}</span>
           )}
-        </td>
-      </tr>
+      </div>
+      <table className="w-full border-collapse text-left">
+        <thead>
+          <tr style={{ backgroundColor: '#F1F5F4' }}>
+            {HEADERS.map((h, hi) => (
+              <th key={h} className="px-2.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.07em]" style={{ color: HEAD, backgroundColor: '#F1F5F4', borderLeft: hi === 0 ? undefined : `1px solid ${LINE}` }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
       <tr style={{ backgroundColor: rowBg }}>
-        <MoneyCell display={windows.display} accent={ACCENT.windows} />
+        <MoneyCell display={windows.display} accent={ACCENT.windows} divider />
         <MoneyCell display={rough.display} accent={ACCENT.rough} />
         <MoneyCell display={sale.display} accent={ACCENT.sale} />
         <MoneyCell display={profitDisplay} accent={ACCENT.profit} tone={profitDisplay?.tone} />
-        <td className="px-2.5 py-2 align-top"><DotText tone={refTone(refs.quoteStatus) || 'gray'}>{quoteText}</DotText></td>
-        <td className="px-2.5 py-2 align-top"><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
-        <td className="px-2.5 py-2 align-top"><DotText tone={refs.etaLabel ? 'blue' : 'gray'}>{refs.etaLabel}</DotText></td>
-        <td className="px-2.5 py-2 align-top">
+        <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.quoteStatus) || 'gray'}>{quoteText}</DotText></td>
+        <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
+        <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refs.etaLabel ? 'blue' : 'gray'}>{refs.etaLabel}</DotText></td>
+        <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
           <div className="flex flex-col items-start gap-1">
             <RefChip label="Supplier" value={refs.paymentLabel} tone={paymentTone(refs.paymentLabel)} />
             <PaymentStatusChip job={fullJob} />
           </div>
         </td>
-        <td className="px-2.5 py-2 align-top">
+        <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
           <div className="flex flex-col items-start gap-1">
             <button type="button" onClick={onEdit} className="text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>Edit money</button>
             <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={`purchasing-row-${job.id}`}
@@ -87,27 +92,20 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
           </td>
         </tr>
       )}
+        </tbody>
+      </table>
     </Fragment>
   );
 }
 
 export default function PurchasingTable({ cards, data, onEdit, onSaved }) {
   return (
-    <div className="rounded-[12px] bg-white" style={{ border: `1px solid ${LINE}`, boxShadow: '0 1px 2px rgba(10,29,31,.05)' }}>
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr style={{ backgroundColor: '#F1F5F4' }}>
-            {HEADERS.map((h) => (
-              <th key={h} className="px-2.5 py-2.5 text-[10.5px] font-bold uppercase tracking-[0.07em]" style={{ color: HEAD, backgroundColor: '#F1F5F4' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {cards.map((card, i) => (
-            <Row key={card.job.id} card={card} data={data} zebra={i % 2 === 1} onEdit={() => onEdit(card)} onSaved={onSaved} />
-          ))}
-        </tbody>
-      </table>
+    <div className="flex flex-col gap-4">
+      {cards.map((card, i) => (
+        <div key={card.job.id} className="overflow-hidden rounded-[16px] bg-white" style={{ border: `1px solid ${LINE}`, boxShadow: '0 1px 2px rgba(10,29,31,.05)' }}>
+          <Row card={card} data={data} zebra={i % 2 === 1} onEdit={() => onEdit(card)} onSaved={onSaved} />
+        </div>
+      ))}
     </div>
   );
 }
