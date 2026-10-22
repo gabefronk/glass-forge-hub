@@ -1,12 +1,15 @@
-import { useRef, useState, Fragment } from 'react';
+import { useState, Fragment } from 'react';
 import { ChevronDown } from 'lucide-react';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
+import PurchasingRowTitle from './PurchasingRowTitle';
+import DotText from './DotText';
+import EtaCell from './EtaCell';
 import { refTone } from './PurchasingCard';
 import { money } from '@/components/budgets/ProcurementForms';
-import { displayDate } from '@/lib/purchasingDates';
-import { PAYMENT_STAGES, paymentPatch } from '@/lib/jobPayment';
+import { PAYMENT_STAGES, PAYMENT_TONES, paymentPatch, paymentStage } from '@/lib/jobPayment';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { base44 } from '@/api/base44Client';
-import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
+import { messageOf } from '@/components/budgets/ProcurementForms';
 
 // Spreadsheet-style purchasing table - one row of figures per job, with the
 // job name on its own line directly above (10/22 layout pass per Gabriel).
@@ -14,8 +17,7 @@ import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementFo
 // cell reads "Supplier - quote #"; the PO cell is just the YA number. Fits
 // the page width - no horizontal scroll. Money stays big, charcoal, tabular.
 const ACCENT = { windows: '#3977CB', rough: '#7862B2', sale: '#248B88', profit: '#238557' };
-const INK = '#101617', SUB = '#566063', LINE = '#E2E8F0', HEAD = '#0B3F3B';
-const DOT = { green: '#166447', amber: '#C08B2E', red: '#A43432', blue: '#3977CB', gray: '#B8B0A4' };
+const INK = '#101617', LINE = '#E2E8F0', HEAD = '#0B3F3B';
 
 const HEADERS = ['Windows incl tax', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', 'Actions'];
 
@@ -28,44 +30,25 @@ function MoneyCell({ display, accent, tone, divider }) {
   );
 }
 
-// Colored status dot + wrapping text (no chip pill, no forced single line).
-function DotText({ tone = 'gray', children }) {
+// One row of the payment dropdown: tinted + dotted along the red → green ramp so
+// the list reads as a scale at a glance.
+function StageItem({ value, label }) {
+  const t = PAYMENT_TONES[value] || PAYMENT_TONES.none;
   return (
-    <span className="inline-flex items-start gap-1.5 text-[12px] font-semibold" style={{ color: INK }}>
-      <span className="mt-[5px] inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: DOT[tone] || DOT.gray }} />
-      <span>{children || '—'}</span>
-    </span>
+    <SelectItem value={value} className="text-[12px] font-semibold" style={{ backgroundColor: t.bg, color: t.text }}>
+      <span className="mr-2 inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: t.dot }} />
+      {label}
+    </SelectItem>
   );
 }
 
 function Row({ card, data, onEdit, onSaved, zebra }) {
-  const { job, windows, rough, sale, profitDisplay, refs, supplier, units } = card;
+  const { job, windows, rough, sale, profitDisplay, refs, supplier } = card;
   const [expanded, setExpanded] = useState(false);
   const [section, setSection] = useState('budgets');
   const [busy, setBusy] = useState(false);
-  const [etaError, setEtaError] = useState('');
   const [payError, setPayError] = useState('');
-  const etaInputRef = useRef(null);
   const fullJob = data?.jobs?.find((j) => j.id === job.id) || job;
-  // Inline ETA edit only when ONE active supplier order carries the ETA and
-  // Record ETA (save_supplier_order) has everything it requires; anything
-  // else stays read-only here and editable in the Money workspace.
-  const activeOrders = (data?.vendor_orders || []).filter((o) => o.job_id === job.id &&
-    !(o.purchase_order_id && (data?.purchase_orders || []).some((po) => po.id === o.purchase_order_id && po.status === 'cancelled')));
-  const sole = activeOrders.length === 1 ? activeOrders[0] : null;
-  const etaOrder = sole && !sole.received_date && sole.order_number && sole.amount != null ? sole : null;
-  async function saveEta(date) {
-    if (busy || !etaOrder) return;
-    setBusy(true); setEtaError('');
-    try {
-      await purchasingRequest({ action: 'save_supplier_order', order_id: etaOrder.id, job_id: job.id,
-        purchase_order_id: etaOrder.purchase_order_id, order_number: etaOrder.order_number,
-        amount: etaOrder.amount, eta_date: date || '', received_date: etaOrder.received_date || '',
-        notes: etaOrder.notes || '', expected_updated_date: etaOrder.updated_date,
-        request_key: crypto.randomUUID(), review_confirmed: true });
-      await onSaved?.();
-    } catch (e) { setEtaError(messageOf(e)); } finally { setBusy(false); }
-  }
   // Customer payment stage on the Jobs entity - the same one-tap stages the
   // job page uses. Records a fact only; never sends anything to QuickBooks.
   async function savePayment(key) {
@@ -79,15 +62,18 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   }
   const rowBg = zebra ? '#F8FAFC' : '#FFFFFF';
   const quoteText = refs.quoteNumber ? [card.brand, refs.quoteNumber].filter(Boolean).join(' - ') : null;
+  const payKey = fullJob?.payment_status || 'none';
+  const payTone = PAYMENT_TONES[payKey] || PAYMENT_TONES.none;
+  const payLabel = paymentStage(payKey)?.label || 'Not tracked';
   const toggle = () => setExpanded((e) => { if (!e) setSection('budgets'); return !e; });
+  // When the ETA cannot be written straight from the cell, clicking it opens the
+  // row's supplier section instead of doing nothing.
+  const openSupplierSection = () => { setExpanded(true); setSection('tracking'); };
 
   return (
     <Fragment>
       <div className="px-4 pb-0.5 pt-3" style={{ backgroundColor: rowBg }}>
-          <span className="break-words text-[14px] font-extrabold leading-tight" style={{ color: INK }}>{job.canonical_name || 'Unnamed job'}</span>
-          {units > 0 && (
-            <span className="ml-2 text-[11px] font-semibold" style={{ color: SUB }}>{`${units} ${units === 1 ? 'unit' : 'units'}`}</span>
-          )}
+        <PurchasingRowTitle job={job} onSaved={onSaved} />
       </div>
       <table className="w-full border-collapse text-left" style={{ tableLayout: 'fixed' }}>
         <colgroup>
@@ -110,33 +96,24 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.quoteStatus) || 'gray'}>{quoteText}</DotText></td>
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
-          {etaOrder ? (
-            <div className="relative flex flex-col items-center gap-1">
-              <button type="button" disabled={busy} title="Change the supplier ETA"
-                onClick={() => etaInputRef.current?.showPicker?.()}
-                className="rounded-md px-1 py-0.5 hover:bg-stone-100">
-                <DotText tone="blue">{etaOrder.eta_date ? displayDate(etaOrder.eta_date) : 'Set ETA'}</DotText>
-              </button>
-              <input ref={etaInputRef} type="date" aria-label="Supplier ETA" tabIndex={-1}
-                value={etaOrder.eta_date || ''}
-                onChange={(e) => saveEta(e.target.value)}
-                style={{ position: 'absolute', left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} />
-              {etaError && <span className="text-[10px] font-semibold" style={{ color: '#A43432' }}>{etaError}</span>}
-            </div>
-          ) : (
-            <DotText tone={refs.etaLabel ? 'blue' : 'gray'}>{/^\d{4}-\d{2}-\d{2}$/.test(refs.etaLabel || '') ? displayDate(refs.etaLabel) : refs.etaLabel}</DotText>
-          )}
+          <EtaCell job={job} data={data} etaLabel={refs.etaLabel} onSaved={onSaved} onOpenSupplier={openSupplierSection} />
         </td>
         <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
           <div className="flex flex-col items-start gap-1">
-            <select aria-label="Customer payment status" disabled={busy}
-              value={fullJob?.payment_status || ''}
-              onChange={(e) => savePayment(e.target.value)}
-              className="w-full rounded-md border px-0.5 py-1 text-[11px] font-semibold"
-              style={{ borderColor: LINE, color: INK, backgroundColor: '#FFFFFF' }}>
-              <option value="">Not tracked</option>
-              {PAYMENT_STAGES.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
-            </select>
+            <Select disabled={busy} value={payKey} onValueChange={(v) => savePayment(v === 'none' ? '' : v)}>
+              <SelectTrigger aria-label="Customer payment status"
+                className="h-auto w-full gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold shadow-none"
+                style={{ borderColor: payTone.border, color: payTone.text, backgroundColor: payTone.bg }}>
+                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: payTone.dot }} />
+                  <span className="truncate">{payLabel}</span>
+                </span>
+              </SelectTrigger>
+              <SelectContent className="min-w-[15rem]">
+                <StageItem value="none" label="Not tracked" />
+                {PAYMENT_STAGES.map((st) => <StageItem key={st.key} value={st.key} label={st.label} />)}
+              </SelectContent>
+            </Select>
             {payError && <span className="text-[10px] font-semibold" style={{ color: '#A43432' }}>{payError}</span>}
           </div>
         </td>

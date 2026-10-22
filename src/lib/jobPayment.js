@@ -9,6 +9,16 @@ export const PAYMENT_STAGES = [
   { key: "paid", label: "Paid" },
 ];
 
+// Colour ramp for the payment picker on the purchasing table: red means nothing
+// has been billed yet, green means it is paid. `none` is the untracked start.
+export const PAYMENT_TONES = {
+  none:               { dot: "#A43432", text: "#8E2F2C", bg: "#FBEAE8", border: "#F0C9C5" },
+  installed:          { dot: "#C2601C", text: "#96490F", bg: "#FCEFE0", border: "#F1D3B2" },
+  sent_for_payment:   { dot: "#A8861A", text: "#7A6010", bg: "#FBF4DB", border: "#EDE0A8" },
+  waiting_on_payment: { dot: "#5D8C3A", text: "#3F6B21", bg: "#EFF6E4", border: "#D3E5BB" },
+  paid:               { dot: "#166447", text: "#166447", bg: "#EAF5EE", border: "#C7E4D2" },
+};
+
 export function paymentStage(key) {
   return PAYMENT_STAGES.find((s) => s.key === key) || null;
 }
