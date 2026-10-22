@@ -25,7 +25,9 @@ export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier }
   const [manual, setManual] = useState(false);
   const inputRef = useRef(null);
 
-  const orders = (data?.vendor_orders || []).filter((o) => o.job_id === job.id &&
+  // Reference-only rows (PO-reconciliation placeholders with no supplier order
+  // number) are not real orders: they never get a picker or block one.
+  const orders = (data?.vendor_orders || []).filter((o) => o.job_id === job.id && o.order_number &&
     !(o.purchase_order_id && (data?.purchase_orders || []).some((po) => po.id === o.purchase_order_id && po.status === 'cancelled')));
   const pending = orders.filter((o) => !o.received_date);
   const order = pending.length === 1 && pending[0].order_number && pending[0].amount != null ? pending[0] : null;
