@@ -510,6 +510,10 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
       profitDisplay: profitDisp,
       chosenBudget: pickBudget ? { id: pickBudget.id, title: pickBudget.title || pickBudget.quote_name || 'Budget' } : null,
       refs, next, files, supplier, brand, units, conflict: isConflict, search,
+      // The budget the Quote cell reads its brand + number from (edited in place).
+      quoteBudgetId: fileBudget?.id || null,
+      quoteManufacturer: fileBudget?.manufacturer || '',
+      quoteRawNumber: fileBudget?.quote_number || '',
     });
   }
   cards.sort((a, b) => String(a.job.canonical_name || '').localeCompare(String(b.job.canonical_name || '')));

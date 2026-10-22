@@ -4,6 +4,7 @@ import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import PurchasingRowTitle from './PurchasingRowTitle';
 import DotText from './DotText';
 import EtaCell from './EtaCell';
+import QuoteCell from './QuoteCell';
 import { refTone } from './PurchasingCard';
 import { money } from '@/components/budgets/ProcurementForms';
 import { PAYMENT_STAGES, PAYMENT_TONES, paymentPatch, paymentStage } from '@/lib/jobPayment';
@@ -61,7 +62,6 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
     } catch (e) { setPayError(messageOf(e)); } finally { setBusy(false); }
   }
   const rowBg = zebra ? '#F8FAFC' : '#FFFFFF';
-  const quoteText = refs.quoteNumber ? [card.brand, refs.quoteNumber].filter(Boolean).join(' - ') : null;
   const payKey = fullJob?.payment_status || 'none';
   const payTone = PAYMENT_TONES[payKey] || PAYMENT_TONES.none;
   const payLabel = paymentStage(payKey)?.label || 'Not tracked';
@@ -93,7 +93,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
         <MoneyCell display={rough.display} accent={ACCENT.rough} />
         <MoneyCell display={sale.display} accent={ACCENT.sale} />
         <MoneyCell display={profitDisplay} accent={ACCENT.profit} tone={profitDisplay?.tone} />
-        <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.quoteStatus) || 'gray'}>{quoteText}</DotText></td>
+        <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><QuoteCell card={card} onSaved={onSaved} /></td>
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
           <EtaCell job={job} data={data} etaLabel={refs.etaLabel} onSaved={onSaved} onOpenSupplier={openSupplierSection} />
