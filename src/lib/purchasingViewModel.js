@@ -346,8 +346,12 @@ export function refsForJob(jobId, { budgets = [], purchaseOrders = [], vendorOrd
   const receivedCount = orders.filter((o) => o.received_date).length;
   const etaDates = [...new Set(orders.map((o) => o.eta_date).filter(Boolean))];
   const etaMissing = orders.some((o) => !o.eta_date);
+  // No supplier confirmation yet: the glass ETA lives on the budget the money tiles
+  // read from (glass_eta_date) - that is what the ETA cell sets with one click.
+  const etaBudget = orders.length ? null : pickDisplayBudget(jobBudgets);
+  const budgetEta = etaBudget?.glass_eta_date || null;
   let etaLabel = null, etaStatus = 'none';
-  if (!orders.length) { etaLabel = null; etaStatus = 'none'; }
+  if (!orders.length) { etaLabel = budgetEta; etaStatus = budgetEta ? ((today && budgetEta < today) ? 'amber' : 'green') : 'none'; }
   else if (receivedCount === orders.length) { etaLabel = 'Delivered'; etaStatus = 'green'; }
   else if (receivedCount > 0) { etaLabel = 'Partial'; etaStatus = 'amber'; }
   else if (etaDates.length === 0) { etaLabel = null; etaStatus = 'amber'; }
