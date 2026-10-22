@@ -56,7 +56,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
       <table className="w-full border-collapse text-left" style={{ tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '11%' }} />
-          <col style={{ width: '15%' }} /><col style={{ width: '10%' }} /><col style={{ width: '8%' }} /><col style={{ width: '11%' }} /><col style={{ width: '6%' }} />
+          <col style={{ width: '13%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '6%' }} />
         </colgroup>
         <thead>
           <tr style={{ backgroundColor: '#F1F5F4' }}>
@@ -81,18 +81,18 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
           </div>
         </td>
         <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
-          <div className="flex flex-col items-center gap-1">
-            <button type="button" onClick={onEdit} className="text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>Edit money</button>
-            <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={`purchasing-row-${job.id}`}
-              className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: '#8A8F93' }}>
-              <ChevronDown className="h-3.5 w-3.5" style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />{expanded ? 'Hide details' : 'Details'}
-            </button>
-          </div>
+          <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={`purchasing-row-${job.id}`}
+            className="inline-flex items-center gap-1 text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>
+            Money<ChevronDown className="h-3.5 w-3.5" style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />
+          </button>
         </td>
       </tr>
       {expanded && fullJob && data && (
         <tr id={`purchasing-row-${job.id}`} style={{ backgroundColor: rowBg, borderTop: `1px solid ${LINE}` }}>
           <td colSpan={HEADERS.length} className="px-3 py-3">
+            <div className="mb-2 flex justify-end">
+              <button type="button" onClick={onEdit} className="text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>Edit money</button>
+            </div>
             <PurchasingJobWorkspace job={fullJob} data={data} section={section} onSection={setSection} onSaved={onSaved} />
           </td>
         </tr>
