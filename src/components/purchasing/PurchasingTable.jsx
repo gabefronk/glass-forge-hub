@@ -4,7 +4,8 @@ import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import { refTone } from './PurchasingCard';
 import { money } from '@/components/budgets/ProcurementForms';
 import { displayDate } from '@/lib/purchasingDates';
-import { PAYMENT_STAGES, paymentPatch } from '@/lib/jobPayment';
+import { PAYMENT_STAGES, PAYMENT_TONES, paymentPatch, paymentStage } from '@/lib/jobPayment';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { base44 } from '@/api/base44Client';
 import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
 
@@ -25,6 +26,18 @@ function MoneyCell({ display, accent, tone, divider }) {
     <td className="px-2 py-2 text-center align-top" style={{ borderTop: `2px solid ${negative ? '#A43432' : accent}`, borderLeft: divider ? undefined : `1px solid ${LINE}`, backgroundColor: negative ? '#FDE8E7' : undefined }}>
       <div className="text-[15px] font-extrabold tabular-nums" style={{ color: INK, letterSpacing: '-0.01em' }}>{money(display?.value)}</div>
     </td>
+  );
+}
+
+// One row of the payment dropdown: tinted + dotted along the red → green ramp so
+// the list reads as a scale at a glance.
+function StageItem({ value, label }) {
+  const t = PAYMENT_TONES[value] || PAYMENT_TONES.none;
+  return (
+    <SelectItem value={value} className="text-[12px] font-semibold" style={{ backgroundColor: t.bg, color: t.text }}>
+      <span className="mr-2 inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: t.dot }} />
+      {label}
+    </SelectItem>
   );
 }
 
@@ -91,6 +104,9 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   }
   const rowBg = zebra ? '#F8FAFC' : '#FFFFFF';
   const quoteText = refs.quoteNumber ? [card.brand, refs.quoteNumber].filter(Boolean).join(' - ') : null;
+  const payKey = fullJob?.payment_status || 'none';
+  const payTone = PAYMENT_TONES[payKey] || PAYMENT_TONES.none;
+  const payLabel = paymentStage(payKey)?.label || 'Not tracked';
   const toggle = () => setExpanded((e) => { if (!e) setSection('budgets'); return !e; });
 
   return (
@@ -149,14 +165,20 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
         </td>
         <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
           <div className="flex flex-col items-start gap-1">
-            <select aria-label="Customer payment status" disabled={busy}
-              value={fullJob?.payment_status || ''}
-              onChange={(e) => savePayment(e.target.value)}
-              className="w-full rounded-md border px-0.5 py-1 text-[11px] font-semibold"
-              style={{ borderColor: LINE, color: INK, backgroundColor: '#FFFFFF' }}>
-              <option value="">Not tracked</option>
-              {PAYMENT_STAGES.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
-            </select>
+            <Select disabled={busy} value={payKey} onValueChange={(v) => savePayment(v === 'none' ? '' : v)}>
+              <SelectTrigger aria-label="Customer payment status"
+                className="h-auto w-full gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold shadow-none"
+                style={{ borderColor: payTone.border, color: payTone.text, backgroundColor: payTone.bg }}>
+                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: payTone.dot }} />
+                  <span className="truncate">{payLabel}</span>
+                </span>
+              </SelectTrigger>
+              <SelectContent className="min-w-[15rem]">
+                <StageItem value="none" label="Not tracked" />
+                {PAYMENT_STAGES.map((st) => <StageItem key={st.key} value={st.key} label={st.label} />)}
+              </SelectContent>
+            </Select>
             {payError && <span className="text-[10px] font-semibold" style={{ color: '#A43432' }}>{payError}</span>}
           </div>
         </td>
