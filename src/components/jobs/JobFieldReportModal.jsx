@@ -177,9 +177,14 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
         <div className="px-4 pb-4 space-y-4">
           <div>
             <div className="text-[11px] font-bold uppercase mb-1.5" style={label}>Ticket type</div>
-            <div className="flex flex-wrap gap-2">
-              {types.map((t) => <Chip key={t.key} on={ticketType === t.label} onClick={() => setTicketType(t.label)}>{t.label}</Chip>)}
-            </div>
+            <select
+              value={ticketType}
+              onChange={(e) => setTicketType(e.target.value)}
+              className="w-full min-h-[44px] rounded-[10px] px-3 text-[13px] focus:outline-none"
+              style={{ border: `1px solid ${LINE}`, backgroundColor: CARD, color: INK }}
+            >
+              {types.map((t) => <option key={t.key} value={t.label}>{t.label}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-6">
