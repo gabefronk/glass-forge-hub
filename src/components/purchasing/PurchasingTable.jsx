@@ -19,7 +19,7 @@ const HEADERS = ['Windows incl tax', 'Labor & material', 'Sale price', 'Profit',
 function MoneyCell({ display, accent, tone, divider }) {
   const negative = tone === 'negative';
   return (
-    <td className="px-2.5 py-2 align-top" style={{ borderTop: `2px solid ${negative ? '#A43432' : accent}`, borderLeft: divider ? undefined : `1px solid ${LINE}`, backgroundColor: negative ? '#FDE8E7' : undefined }}>
+    <td className="px-2 py-2 text-center align-top" style={{ borderTop: `2px solid ${negative ? '#A43432' : accent}`, borderLeft: divider ? undefined : `1px solid ${LINE}`, backgroundColor: negative ? '#FDE8E7' : undefined }}>
       <div className="text-[15px] font-extrabold tabular-nums" style={{ color: INK, letterSpacing: '-0.01em' }}>{money(display?.value)}</div>
     </td>
   );
@@ -52,11 +52,11 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
             <span className="ml-2 text-[11px] font-semibold" style={{ color: SUB }}>{`${units} ${units === 1 ? 'unit' : 'units'}`}</span>
           )}
       </div>
-      <table className="w-full border-collapse text-left">
+      <table className="mx-auto border-collapse text-left">
         <thead>
           <tr style={{ backgroundColor: '#F1F5F4' }}>
             {HEADERS.map((h, hi) => (
-              <th key={h} className="px-2.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.07em]" style={{ color: HEAD, backgroundColor: '#F1F5F4', borderLeft: hi === 0 ? undefined : `1px solid ${LINE}` }}>{h}</th>
+              <th key={h} className="px-2 py-2 text-center text-[10.5px] font-bold uppercase tracking-[0.07em]" style={{ color: HEAD, backgroundColor: '#F1F5F4', borderLeft: hi === 0 ? undefined : `1px solid ${LINE}` }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -66,17 +66,17 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
         <MoneyCell display={rough.display} accent={ACCENT.rough} />
         <MoneyCell display={sale.display} accent={ACCENT.sale} />
         <MoneyCell display={profitDisplay} accent={ACCENT.profit} tone={profitDisplay?.tone} />
-        <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.quoteStatus) || 'gray'}>{quoteText}</DotText></td>
-        <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
-        <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refs.etaLabel ? 'blue' : 'gray'}>{refs.etaLabel}</DotText></td>
+        <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.quoteStatus) || 'gray'}>{quoteText}</DotText></td>
+        <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
+        <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refs.etaLabel ? 'blue' : 'gray'}>{refs.etaLabel}</DotText></td>
         <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
           <div className="flex flex-col items-start gap-1">
             <RefChip label="Supplier" value={refs.paymentLabel} tone={paymentTone(refs.paymentLabel)} />
             <PaymentStatusChip job={fullJob} />
           </div>
         </td>
-        <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
-          <div className="flex flex-col items-start gap-1">
+        <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
+          <div className="flex flex-col items-center gap-1">
             <button type="button" onClick={onEdit} className="text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>Edit money</button>
             <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={`purchasing-row-${job.id}`}
               className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: '#8A8F93' }}>
