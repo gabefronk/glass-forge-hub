@@ -20,6 +20,14 @@ const DOT = { green: '#166447', amber: '#C08B2E', red: '#A43432', blue: '#3977CB
 
 const HEADERS = ['Windows incl tax', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', 'Actions'];
 
+// Row title: the builder first, then the job name ("Perry - Perry Res").
+// Jobs with no builder on file keep the plain job name.
+function rowTitle(job) {
+  const name = job.canonical_name || 'Unnamed job';
+  const builder = String(job.builder || '').trim();
+  return builder ? `${builder} - ${name}` : name;
+}
+
 function MoneyCell({ display, accent, tone, divider }) {
   const negative = tone === 'negative';
   return (
@@ -112,7 +120,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   return (
     <Fragment>
       <div className="px-4 pb-0.5 pt-3" style={{ backgroundColor: rowBg }}>
-          <span className="break-words text-[14px] font-extrabold leading-tight" style={{ color: INK }}>{job.canonical_name || 'Unnamed job'}</span>
+          <span className="break-words text-[14px] font-extrabold leading-tight" style={{ color: INK }}>{rowTitle(job)}</span>
           {units > 0 && (
             <span className="ml-2 text-[11px] font-semibold" style={{ color: SUB }}>{`${units} ${units === 1 ? 'unit' : 'units'}`}</span>
           )}
