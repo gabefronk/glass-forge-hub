@@ -31,10 +31,14 @@ export function prepareBudgetPO(budget) {
   const q = budget.quote || {};
   const ownQuote = /gabriel|\bgabe\b|fronk|glass\s*forge/i.test(`${q.quoted_by || ''} ${q.prepared_by || ''}`);
   const supplierTotal = q.price_levels === 'single' && !ownQuote ? amount(q.customer_total) : null;
+  const openings = amount(q.openings_qty ?? budget.openings_qty);
+  const scope = [text(q.quote_name || budget.quote_name), openings ? `${openings} openings` : ''].filter(Boolean).join(' - ');
+  const draft = budget.budget_usage === 'draft';
   return {
-    form: { job_id: budget.job_id, budget_id: budget.id, vendor: text(budget.vendor || budget.manufacturer), vendor_quote_ref: text(budget.quote_number), amount_dealer: supplierTotal === null ? '' : String(supplierTotal), amount_customer: '', notes: '', budget_version: budgetVersion(budget) },
-    supplier_hint: supplierTotal === null ? 'Enter the supplier payable after reviewing tax, freight and the source quote.' : 'Printed supplier total; verify tax and freight before issuing.',
+    form: { job_id: budget.job_id, budget_id: budget.id, vendor: text(budget.vendor || budget.manufacturer), vendor_quote_ref: text(budget.quote_number), amount_dealer: supplierTotal === null ? '' : String(supplierTotal), amount_customer: '', notes: scope, budget_version: budgetVersion(budget) },
+    supplier_hint: (supplierTotal === null ? 'Enter the supplier payable after reviewing tax, freight and the source quote.' : 'Printed supplier total; verify tax and freight before issuing.') + (draft ? ' Draft quote - numbers are not reviewed yet.' : ''),
     budget_sell: amount(budget.inputs?.actual_total_sell),
+    draft,
   };
 }
 export const poRefs = value => [...new Set(text(value).toUpperCase().match(/\bYA-\d+\b/g) || [])];

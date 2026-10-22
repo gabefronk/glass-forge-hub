@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { C } from '@/lib/feeUI';
-import { amount, prepareBudgetPO, activeBudgets, budgetVersion, validMonth } from '../../../base44/shared/procurementCore.js';
+import { amount, prepareBudgetPO, activeBudgets, budgetVersion, validMonth, isLiveBudget } from '../../../base44/shared/procurementCore.js';
 import { denverDate } from '../../../base44/shared/billingCore.js';
 
 export const money = value => amount(value) === null ? '\u2014' : amount(value).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -38,7 +38,15 @@ function Buttons({ busy, enabled = true, label, onCancel }) {
 export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCancel }) {
   const shop = !job;
   const jobName = job?.canonical_name || 'Shop purchase';
-  const eligible = useMemo(() => job ? activeBudgets(budgets.filter(b => b.job_id === job.id)) : [], [budgets, job]);
+  // Uploaded quotes land as draft budgets (numbers unreviewed). Offer them here too -
+  // clearly labeled - so an upload auto-fills the PO instead of forcing a Manual PO.
+  const eligible = useMemo(() => {
+    if (!job) return [];
+    const rows = budgets.filter(b => b.job_id === job.id);
+    const active = activeBudgets(rows);
+    const drafts = rows.filter(b => isLiveBudget(b) && b.budget_usage === 'draft' && !active.some(a => a.id === b.id));
+    return [...active, ...drafts];
+  }, [budgets, job]);
   const [form, setForm] = useState(() => { const source = initialBudget || (eligible.length === 1 ? eligible[0] : null); return source ? prepareBudgetPO(source).form : { job_id: job?.id || '', budget_id: '', vendor: '', vendor_quote_ref: '', amount_dealer: '', amount_customer: '', notes: '', budget_version: '' }; });
   const [reviewed, setReviewed] = useState(false), [zero, setZero] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -62,7 +70,7 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
   return <FormPanel title={`Prepare PO \u00b7 ${jobName}`}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
     {shop && <p className="mb-3 text-sm text-slate-600">Shop purchase: supplies, packaging or stock. No job will be created. Enter item quantities, prices and any customer references in the scope notes.</p>}
     <div className="grid gap-3 sm:grid-cols-2">
-      <Field disabled={shop} label="Source quote / budget" value={form.budget_id} onChange={selectBudget}><option value="">Manual PO (no budget source)</option>{eligible.map(b => <option value={b.id} key={b.id}>{b.title}</option>)}</Field>
+      <Field disabled={shop} label="Source quote / budget" value={form.budget_id} onChange={selectBudget}><option value="">Manual PO (no budget source)</option>{eligible.map(b => <option value={b.id} key={b.id}>{b.title}{b.budget_usage === 'draft' ? ' (draft - review numbers)' : ''}</option>)}</Field>
       <Field label="Supplier" value={form.vendor} onChange={v => set('vendor', v)} />
       <Field label="Supplier quote / reference" value={form.vendor_quote_ref} onChange={v => set('vendor_quote_ref', v)} />
       <Field label="Supplier payable for this PO" type="number" value={form.amount_dealer} onChange={v => { set('amount_dealer', v); setZero(false); }} hint="Review supplier tax and freight. This is not the whole-job budget cost." />
