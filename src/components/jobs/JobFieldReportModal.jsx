@@ -11,12 +11,15 @@ const PENDING = ["pending", "missing_photos", "missing_notes", "missing_all", "r
 // materials with hourly rates, the long distance charge). These apply when the rubric fetch
 // fails; the server always prices the report from the rubric itself, never from this file.
 const FALLBACK_TYPES = [
-  { key: "initial_visit_po", label: "Initial visit / PO", visitFee: null },
+  { key: "initial_visit_po", label: "Initial visit", visitFee: null },
+  { key: "delivery", label: "Delivery", visitFee: null },
   { key: "install", label: "Install", visitFee: null },
-  { key: "repair", label: "Repair", visitFee: null },
-  { key: "measurement", label: "Measurement", visitFee: null },
+  { key: "sheetrock_window", label: "Sheetrock window", visitFee: null },
+  { key: "screen_service", label: "Screen Service", visitFee: null },
+  { key: "service", label: "Service", visitFee: null },
   { key: "follow_up", label: "Follow-up", visitFee: 0 },
-  { key: "inspection", label: "Inspection", visitFee: 25 },
+  { key: "warranty", label: "Warranty", visitFee: null },
+  { key: "punch_list", label: "Punch List", visitFee: null },
 ];
 const FALLBACK_MATERIALS = [
   { key: "vinyl", label: "Vinyl", rate: 100 },
