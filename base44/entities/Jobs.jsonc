@@ -37,6 +37,12 @@
       "title": "Address",
       "description": "Job site address \u2014 a hard match key that doesn't change when the name is written differently"
     },
+    "address_manual": {
+      "type": "boolean",
+      "title": "Address Set by Manager",
+      "default": false,
+      "description": "True when a manager edited the jobsite address in the Hub (including an intentional clear). Calendar ingest never fills or replaces a manager-touched address."
+    },
     "builder": {
       "type": "string",
       "title": "Builder",
