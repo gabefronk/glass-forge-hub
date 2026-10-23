@@ -56,8 +56,8 @@ export default function PurchasingRowTitle({ job, onSaved }) {
     return (
       <button type="button" onClick={start} onContextMenu={(e) => { e.preventDefault(); start(); }}
         aria-label={`Edit builder and job name: ${rowTitle(job)}`} title="Click to edit the builder and job name"
-        className="-ml-1 inline-flex max-w-full rounded-[8px] border px-2 py-1 text-left hover:border-[#8FB3AB] hover:bg-[#E9F2EF]"
-        style={{ borderColor: '#BFD3CD', backgroundColor: '#F1F6F4' }}>
+        className="-ml-1 inline-flex max-w-full rounded-[8px] border px-2 py-1 text-left hover:bg-[#DCEDE6]"
+        style={{ borderColor: '#8FB9AF', backgroundColor: '#E6F1ED', boxShadow: '0 1px 2px rgba(11,63,59,.10), 0 3px 8px -3px rgba(11,63,59,.28)' }}>
         <span className="break-words text-[14px] font-extrabold leading-tight" style={{ color: INK }}>{rowTitle(job)}</span>
       </button>
     );
