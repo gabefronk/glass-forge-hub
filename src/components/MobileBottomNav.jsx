@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, Mail } from "lucide-react";
+import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, Mail, LogOut } from "lucide-react";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
+import { base44 } from "@/api/base44Client";
 import { isEmailOwner } from "@/lib/ownerAccess";
 import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
 
@@ -59,6 +60,13 @@ function SheetLink({ item, active, onNavigate }) {
 export default function MobileBottomNav({ user }) {
   const { pathname } = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  // The mobile top bar is gone; sign-out lives here in the More sheet.
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try { await base44.auth.logout("/login"); }
+    catch { window.location.href = "/login"; }
+  };
 
   useEffect(() => { setMoreOpen(false); }, [pathname]);
   useEffect(() => {
@@ -119,6 +127,14 @@ export default function MobileBottomNav({ user }) {
                 </div>
               </details>
             )}
+            <div className="mx-4 mt-1 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.08)" }}>
+              <button type="button" onClick={handleSignOut} disabled={signingOut}
+                aria-label="Sign out"
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-semibold"
+                style={{ color: IDLE, background: "none", border: "1px solid rgba(255,255,255,.12)" }}>
+                <LogOut className="h-4 w-4" />{signingOut ? "Signing out…" : "Sign out"}
+              </button>
+            </div>
           </div>
         </>
       )}

@@ -299,7 +299,6 @@
     overflow: visible !important;
   }
   body:has(.gf-system-map) .min-h-dvh:has(> main.app-main .gf-system-map) > aside,
-  body:has(.gf-system-map) .min-h-dvh:has(> main.app-main .gf-system-map) > header.app-mobile-header,
   body:has(.gf-system-map) .min-h-dvh:has(> main.app-main .gf-system-map) > nav[aria-label="Main navigation"] {
     display: none !important;
   }
