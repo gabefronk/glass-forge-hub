@@ -97,7 +97,7 @@ export default function JobReportMenu({ job, entries, tone = "hero" }) {
           </div>
 
           <div className="rounded-[10px] px-3 py-2.5 text-[12.5px]" style={{ backgroundColor: "#F4F1E9", color: "#5c5237", border: "1px solid #E4DCC6" }}>
-            Sending is not wired up yet: once Gabriel picks the send path, this becomes a draft in Outlook that he reviews and sends from YAWindowinstall@outlook.com. For now, copy the report.
+            Sending is not wired up yet. The planned path creates a draft in the Outlook mailbox, where the From line defaults to the account primary (gabefronk@gmail.com) - Gabriel then picks YAWindowinstall@outlook.com as From in Outlook himself before sending. Draft capability still has to be confirmed live. For now, copy the report.
           </div>
 
           <div className="flex gap-2">
