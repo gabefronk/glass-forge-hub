@@ -41,10 +41,10 @@ const ACTIVE_ICON = "var(--gf-brass-300)";
 const IDLE = "var(--gf-sidebar-text)";
 const ACTIVE_TEXT = "var(--gf-sidebar-text-on)";
 
-function SheetLink({ item, active }) {
+function SheetLink({ item, active, onNavigate }) {
   const Icon = item.icon;
   return (
-    <Link to={item.to} aria-label={item.ariaLabel || item.label} aria-current={active ? "page" : undefined}
+    <Link to={item.to} onClick={onNavigate} aria-label={item.ariaLabel || item.label} aria-current={active ? "page" : undefined}
       className="flex min-h-[44px] flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-2.5"
       style={{
         backgroundColor: active ? "rgba(184,149,90,.14)" : "transparent",
@@ -108,14 +108,14 @@ export default function MobileBottomNav({ user }) {
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2 px-4 pb-4">
-              {visibleSecondary.map((item) => <SheetLink key={item.to} item={item} active={isSecondaryActive(item.to)} />)}
+              {visibleSecondary.map((item) => <SheetLink key={item.to} item={item} active={isSecondaryActive(item.to)} onNavigate={() => setMoreOpen(false)} />)}
             </div>
             {visibleAdmin.length > 0 && (
               <details className="mx-4 mb-2 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,.08)" }}>
                 <summary className="flex min-h-11 cursor-pointer items-center gap-3 px-2 text-[13px] font-semibold" style={{ color: IDLE }}><Settings className="h-4 w-4" />Operations<span aria-hidden="true" className="ml-auto">⌄</span></summary>
                 <p className="px-2 pb-2 text-xs" style={{ color: "var(--gf-sidebar-muted)" }}>Automation, records and diagnostics</p>
                 <div className="grid grid-cols-3 gap-2 pb-2">
-                  {visibleAdmin.map((item) => <SheetLink key={item.to} item={item} active={isSecondaryActive(item.to)} />)}
+                  {visibleAdmin.map((item) => <SheetLink key={item.to} item={item} active={isSecondaryActive(item.to)} onNavigate={() => setMoreOpen(false)} />)}
                 </div>
               </details>
             )}

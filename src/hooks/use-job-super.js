@@ -31,6 +31,9 @@ export function useJobSuper(jobId) {
   }, [jobId]);
   useEffect(() => { load(); return () => { version.current++; }; }, [load]);
   const save = useCallback(async ({ name, phone, email }) => {
+    // A save wins over any load already in flight: bump the version so a stale
+    // read resolving after the write cannot blank the super the user just saved.
+    version.current++;
     const data = await call({ action: "set_job_super", job_id: jobId, contact: { name, phone, email } });
     setState({ loading: false, saved: data?.super || null, error: "" });
     return data?.super;

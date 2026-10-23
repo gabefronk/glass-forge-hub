@@ -65,7 +65,18 @@ function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const search = useRef(0);
+  const initialSig = useRef(null);
+  const triedSig = useRef(null);
   const set = (k) => (e) => setF((v) => ({ ...v, [k]: e.target.value }));
+  // Saving is automatic: picking a directory match saves right away, and a typed
+  // entry saves itself once it has a name plus a full phone or email. The button
+  // only remains as an explicit path for entries the auto-save rule waits on.
+  const doSave = async (c) => {
+    if (saving) return;
+    setSaving(true); setError("");
+    try { await onSave(c); }
+    catch (err) { setError(err.message || "Could not save."); setSaving(false); throw err; }
+  };
   // Typing in the name box searches the contact directory so a super can be
   // picked from existing people even when the builder has no one on file.
   useEffect(() => {
@@ -74,21 +85,39 @@ function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }
     const t = setTimeout(() => { searchContacts(f.name).then((list) => { if (n === search.current) setMatches(list); }).catch(() => {}); }, 200);
     return () => clearTimeout(t);
   }, [f.name]);
-  const choose = (c) => { setMatches([]); setF({ name: c.name || "", phone: c.phone || "", email: c.email || "" }); };
+  const choose = (c) => {
+    // Fill first so a failed save leaves the picked values in place for a retry.
+    const next = { name: c.name || "", phone: c.phone || "", email: c.email || "" };
+    setMatches([]); setF(next);
+    triedSig.current = `${next.name.trim()}|${next.phone.trim()}|${next.email.trim()}`;
+    doSave(next).catch(() => { triedSig.current = null; });
+  };
   const idOf = (c) => c.key || `${c.name}|${c.phone}`;
   const pickChoice = async (e) => {
     const c = choices.find((x) => idOf(x) === e.target.value);
     if (!c) return;
-    setSaving(true); setError("");
-    try { await onSave({ name: c.name, phone: c.phone || "", email: c.email || "" }); }
-    catch (err) { setError(err.message || "Could not save."); setSaving(false); }
+    doSave({ name: c.name, phone: c.phone || "", email: c.email || "" }).catch(() => {});
   };
+  const complete = f.name.trim().length >= 2
+    && (f.phone.replace(/\D/g, "").length >= 10 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim()));
+  const sig = `${f.name.trim()}|${f.phone.trim()}|${f.email.trim()}`;
+  if (initialSig.current === null) initialSig.current = sig;
+  useEffect(() => {
+    // Never save on open (initial values) or twice for the same entry; a failed
+    // save re-arms only after the entry changes.
+    if (!complete || sig === initialSig.current || sig === triedSig.current) return undefined;
+    const t = setTimeout(() => {
+      triedSig.current = sig;
+      doSave({ name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim() })
+        .catch(() => { triedSig.current = null; });
+    }, 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig, complete]);
   const submit = async (e) => {
     e.preventDefault();
     if (!f.name.trim() || (!f.phone.trim() && !f.email.trim())) { setError("Add a name and a phone or email."); return; }
-    setSaving(true); setError("");
-    try { await onSave({ name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim() }); }
-    catch (err) { setError(err.message || "Could not save."); setSaving(false); }
+    doSave({ name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim() }).catch(() => {});
   };
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
@@ -125,9 +154,13 @@ function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }
       </div>
       <input aria-label="Super phone" placeholder="Phone" inputMode="tel" value={f.phone} onChange={set("phone")} className={FIELD} style={FIELD_STYLE} />
       <input aria-label="Super email" placeholder="Email (optional)" inputMode="email" value={f.email} onChange={set("email")} className={FIELD} style={FIELD_STYLE} />
-      {error ? <p role="alert" className="m-0 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
+      {error ? <p role="alert" className="m-0 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : (
+        <p className="m-0 text-[12px]" style={{ color: "#8f999b" }}>
+          {saving ? "Saving…" : complete ? "Saves automatically." : "Saves automatically once there's a name and a full phone or email."}
+        </p>
+      )}
       <div className="flex gap-2">
-        <button type="submit" disabled={saving} className="inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] text-[13.5px] font-semibold disabled:opacity-60" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{saving ? "Saving…" : "Save super"}</button>
+        <button type="submit" disabled={saving} className="inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] text-[13.5px] font-semibold disabled:opacity-60" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{saving ? "Saving…" : "Save now"}</button>
         <button type="button" onClick={onCancel} className="inline-flex h-[34px] items-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>Cancel</button>
       </div>
     </form>
@@ -589,7 +622,7 @@ function JobInfo({ snap, folder }) {
 
 // progress (optional): jobProgress() from jobStages — shows a small "Stage n of 7" chip.
 // alert (optional): a node shown first in the chip row by the job name — the red service-item marker.
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, extra, headingLevel = "h1", progress = null, alert = null, upcoming = null }) {
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, extra, headingLevel = "h1", progress = null, alert = null, upcoming = null, payment = null }) {
   const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
   // The builder already leads most job names ("Bangerter Homes - Gomez Res"); only add it
   // to the eyebrow when the title doesn't carry it.
@@ -623,7 +656,10 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
                 </span>
               ) : null}
             </div>
-            <JobTitle job={job} onRename={onRename} headingLevel={headingLevel} />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <JobTitle job={job} onRename={onRename} headingLevel={headingLevel} />
+              {payment}
+            </div>
             {job.address ? (
               <a href={dirHref} target="_blank" rel="noopener noreferrer" title="Get directions" aria-label={`Get directions to ${sanitizeText(job.address)}`} className="mt-2 inline-flex min-h-11 items-center gap-[7px] text-[14.5px] font-medium hover:underline" style={{ color: "#c9d0d1" }}>
                 <MapPin className="h-[15px] w-[15px] shrink-0" style={{ color: BRASS_LT }} />{sanitizeText(job.address)}

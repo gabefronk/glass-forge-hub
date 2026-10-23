@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { PAYMENT_STAGES, paymentStage, paymentPatch } from "@/lib/jobPayment";
 
@@ -28,57 +29,53 @@ export function PaymentStatusChip({ job }) {
   );
 }
 
-// One-tap stage buttons on the job page. Owner-only (the page gates it).
-export default function JobPaymentStatus({ job, onChanged }) {
+// The status switcher beside the job name in the hero (owner-only; the page gates it).
+// Just the current status as a colored dropdown - picking a stage saves immediately,
+// "Clear status" untracks the job. Same Jobs.payment_status fields the jobs list and
+// purchasing cards read, so everything stays in sync. Colors match the old card.
+export default function PaymentStatusDropdown({ job, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const active = paymentStage(job?.payment_status);
+  const t = active ? CHIP_TONES[active.key] : null;
 
-  const tap = async (key) => {
-    if (busy) return;
+  const change = async (e) => {
+    const key = e.target.value;
+    if (busy || key === (job?.payment_status || "")) return;
     setBusy(true); setError("");
     try {
-      const patch = paymentPatch(job, key);
+      const patch = key ? paymentPatch(job, key) : { payment_status: null, payment_status_at: null };
       await base44.entities.Jobs.update(job.id, patch);
       await onChanged?.();
-    } catch (e) {
-      setError(e?.message || "Could not save the payment status.");
+    } catch (err) {
+      setError(err?.message || "Could not save the payment status.");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="rounded-[14px] px-5 py-4 card-shadow" style={{ border: "1px solid #DDE0DA", backgroundColor: "#FFFFFF" }}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold tracking-[.12em] uppercase mr-1" style={{ color: "#53615B" }}>Customer payment</span>
-        {PAYMENT_STAGES.map((s) => {
-          const isActive = active?.key === s.key;
-          const t = CHIP_TONES[s.key];
-          return (
-            <button
-              key={s.key}
-              type="button"
-              disabled={busy}
-              aria-pressed={isActive}
-              onClick={() => tap(s.key)}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold whitespace-nowrap transition-opacity disabled:opacity-60"
-              style={isActive
-                ? { backgroundColor: t.color, color: "#FFFFFF", border: `1px solid ${t.color}` }
-                : { backgroundColor: t.bg, color: t.color, border: `1px solid ${t.border}` }}
-            >
-              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: isActive ? "#FFFFFF" : t.color }} />
-              {s.label}
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-2 text-[11.5px]" style={{ color: "#8A958F" }}>
-        {active
-          ? <>Set to <strong>{active.label}</strong>{job.payment_status_at ? ` on ${String(job.payment_status_at).slice(0, 10)}` : ""}. Tap it again to clear.</>
-          : "Tap a stage when it happens. It shows on the jobs list and purchasing cards."}
-      </div>
-      {error ? <p role="alert" className="mt-1 text-[12px]" style={{ color: "#A43432" }}>{error}</p> : null}
-    </div>
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <span className="relative inline-flex">
+        <select
+          aria-label="Customer payment status"
+          value={active?.key || ""}
+          disabled={busy}
+          onChange={change}
+          className="h-[30px] max-w-[210px] appearance-none rounded-full pl-3 pr-8 text-[12.5px] font-bold outline-none transition-opacity disabled:opacity-60"
+          style={active
+            ? { backgroundColor: t.color, color: "#FFFFFF", border: `1px solid ${t.color}` }
+            : { backgroundColor: "rgba(255,255,255,.09)", color: "#c9d0d1", border: "1px solid rgba(255,255,255,.18)" }}
+        >
+          <option value="">{active ? "Clear status" : "Payment status"}</option>
+          {active && !PAYMENT_STAGES.some((s) => s.key === active.key)
+            ? <option value={active.key}>{active.label}</option>
+            : null}
+          {PAYMENT_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: active ? "#FFFFFF" : "#c9d0d1" }} />
+      </span>
+      {error ? <span role="alert" className="text-[12px] font-semibold" style={{ color: "#f1b9b3" }}>{error}</span> : null}
+    </span>
   );
 }
