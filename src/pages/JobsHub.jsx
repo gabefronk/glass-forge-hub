@@ -86,8 +86,15 @@ export default function JobsHub() {
 
   useEffect(() => {
     base44.auth.me().then((u) => { setOwner(isAgentCenterOwner(u)); setIsAdmin(u?.role === "admin"); }).catch(() => { setOwner(false); setIsAdmin(false); });
-    if (searchParams.get("report") || searchParams.get("project") || searchParams.get("conversation")) setView("reports");
   }, []);
+
+  // Field reports lives in the More menu now (10/22 per Gabriel - the Jobs page
+  // toggle is gone). Deep links (report/project/conversation) and the nav entry
+  // (?view=reports) still open the composer; plain /jobs always shows the list.
+  useEffect(() => {
+    const wantsReports = searchParams.get("report") || searchParams.get("project") || searchParams.get("conversation") || searchParams.get("view") === "reports";
+    setView(wantsReports ? "reports" : "jobs");
+  }, [searchParams]);
 
   const toggleSelect = (id) => setSelectedIds((prev) => {
     const next = new Set(prev);
@@ -188,24 +195,13 @@ export default function JobsHub() {
     setSelectedJobId(job.id);
   };
 
-  const renderToggle = (onDark) => (
-    <div className="inline-flex items-center gap-1 p-1 rounded-full" style={{ backgroundColor: onDark ? "rgba(255,255,255,.06)" : C.cardAlt, border: `1px solid ${onDark ? "rgba(255,255,255,.1)" : C.border}` }}>
-      {[["jobs", "Jobs"], ["reports", "Field reports"]].map(([k, label]) => (
-        <button key={k} onClick={() => switchView(k)} className="px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors"
-          style={view === k
-            ? (onDark ? { backgroundColor: "var(--gf-brass-400)", color: "var(--gf-on-brass)" } : { backgroundColor: C.accent, color: "#fff" })
-            : (onDark ? { color: "var(--gf-sidebar-text)" } : { color: C.textSecondary })}>{label}</button>
-      ))}
-    </div>
-  );
-
   if (view === "reports" && owner) {
     return (
       <div style={{ backgroundColor: C.pageBg, minHeight: "100dvh" }}>
         <div className="px-[26px] max-[699px]:px-[18px] pt-[26px] max-[699px]:pt-[18px] pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="font-heading text-[30px] font-bold" style={{ color: C.text, letterSpacing: "-0.03em" }}>Field reports</h1>
-            {renderToggle(false)}
+            <button type="button" onClick={() => switchView("jobs")} className="text-[13px] font-semibold underline" style={{ color: C.textSecondary }}>Back to jobs</button>
           </div>
         </div>
         <ProbuildReports embedded />
@@ -239,7 +235,6 @@ export default function JobsHub() {
         <h1 className="m-0 text-[26px] font-bold" style={{ color: HERO_INK, letterSpacing: "-0.035em" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>Jobs</h1>
         <span className="text-[12.5px]" style={{ color: HERO_MUTED }}>{todayLabel} · <span style={{ color: "#e0c994", fontWeight: 600 }}>{counts.today}</span> {counts.today === 1 ? "visit" : "visits"} today</span>
       </div>
-      {owner && <div>{renderToggle(true)}</div>}
       {isAdmin && !selectMode && (
         <div>
           <button type="button" onClick={() => setSelectMode(true)} className="inline-flex h-[36px] items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold" style={{ backgroundColor: "rgba(184,149,90,.16)", color: "#e0c994", border: "1px solid rgba(224,201,148,.4)" }}>

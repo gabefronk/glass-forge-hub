@@ -23,6 +23,7 @@ const MORE_ITEMS = [
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
+  { label: "Field reports", to: "/jobs?view=reports", icon: FileText, ownerOnly: true },
 ];
 
 // Owner-only admin tools (mirrored in MobileBottomNav's More sheet).

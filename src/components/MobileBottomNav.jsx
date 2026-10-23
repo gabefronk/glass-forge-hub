@@ -18,6 +18,7 @@ const SECONDARY_NAV = [
   { label: "Team Structure", to: "/team-structure", icon: GitBranch },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
+  { label: "Field reports", to: "/jobs?view=reports", icon: FileText, ownerOnly: true },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", ariaLabel: "Summit door service", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
