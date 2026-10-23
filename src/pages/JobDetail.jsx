@@ -262,13 +262,19 @@ export default function JobDetail() {
             </SheetCard>
           </div>
 
-          {/* Office tools: contacts, Drive folder link, money, messages. Each hides itself for crew logins. */}
+          {/* Office tools: contacts, Drive folder link, money, messages. Each hides itself for crew logins.
+              10/22 mobile pass: these three are redundant on the phone - contacts and
+              budgeting live in the hero links at top, and Drive files arrive with the
+              report PDFs - so they stay desktop-only. */}
           {canContacts ? (
-            <SheetCard icon={Users} tile={TILE.teal} title="Contacts" sub="linked to this job" bodyClassName="">
-              <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} hideDocuments contactsOnly />
-            </SheetCard>
+            <div className="max-[699px]:hidden">
+              <SheetCard icon={Users} tile={TILE.teal} title="Contacts" sub="linked to this job" bodyClassName="">
+                <JobFactsRail job={job} jobContacts={jobContacts} plans={plans} events={calEvents} hideDocuments contactsOnly />
+              </SheetCard>
+            </div>
           ) : null}
           {canWriteJobDocuments(user) && (
+            <div className="max-[699px]:hidden">
             <SheetCard icon={FolderOpen} tile={TILE.bronze} title="Drive job folder" sub={job.drive_job_folder_id ? "linked" : "not linked"}>
               <p className="m-0 text-[13px]" style={{ color: "#566063" }}>Paste the ID of a verified folder inside Glass Forge Jobs. A matching name alone is not enough. {job.drive_job_folder_id ? "Linking a new folder replaces the current link." : ""}</p>
               <div className="mt-2 flex gap-2">
@@ -278,13 +284,16 @@ export default function JobDetail() {
               {job.drive_job_folder_id && <button type="button" disabled={linkingFolder} className="mt-2 text-[13px] underline disabled:opacity-50" onClick={unlinkFolder}>Unlink folder</button>}
               {folderError && <p role="alert" className="mt-2 text-[13px] text-red-700">{folderError}</p>}
             </SheetCard>
+            </div>
           )}
           {(owner || isAgentCenterOwner(user)) && (
+            <div className="max-[699px]:hidden">
             <OwnerSection>
               <JobLinkedRecords jobId={id} memberIds={group?.memberIds} sourceQuoteId={job.source_window_quote_id} />
               <JobMoneyPanel jobId={id} memberIds={group?.memberIds} />
               <JobMessageThreads jobId={id} />
             </OwnerSection>
+            </div>
           )}
         </div>
       </div>
