@@ -169,7 +169,7 @@ function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }
   );
 }
 
-function SuperBox({ jobId, jobContacts, events }) {
+export function SuperBox({ jobId, jobContacts, events }) {
   const jobSuper = useJobSuper(jobId);
   const view = jobContacts?.view?.job?.id === jobId ? jobContacts.view : null;
   const person = useMemo(() => pickSuper({ saved: jobSuper.saved, view, events }), [jobSuper.saved, view, events]);
@@ -360,7 +360,7 @@ function HomeownerForm({ initial, canRemove, onSave, onRemove, onCancel }) {
   );
 }
 
-function HomeownerBox({ job, jobContacts }) {
+export function HomeownerBox({ job, jobContacts }) {
   const jobId = job?.id;
   const homeowner = useJobHomeowner(jobId);
   const view = jobContacts?.view?.job?.id === jobId ? jobContacts.view : null;
@@ -460,7 +460,8 @@ export function jobFileItems({ folder, plans, events }) {
   return [...folderFiles, ...intake, ...cal];
 }
 
-function FilesMenu({ folder, plans, events }) {
+// tile: the phone header's square icon tile instead of the hero pill button.
+export function FilesMenu({ folder, plans, events, tile = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const items = useMemo(() => jobFileItems({ folder, plans, events }), [folder, plans, events]);
@@ -476,10 +477,17 @@ function FilesMenu({ folder, plans, events }) {
 
   return (
     <div ref={ref} className="relative">
+      {tile ? (
+        <button type="button" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((v) => !v)} className="flex min-h-[56px] w-full flex-col items-center justify-center gap-1 rounded-[12px] text-[12px] font-semibold" style={{ backgroundColor: "#1a3537", border: `1px solid ${open ? "rgba(224,201,148,.55)" : "#2e4c4c"}`, color: HERO_INK }}>
+          <FileText className="h-[18px] w-[18px]" style={{ color: BRASS_LT }} />
+          <span>Files{folder?.loading && !items.length ? "" : items.length ? ` · ${items.length}` : ""}</span>
+        </button>
+      ) : (
       <button type="button" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((v) => !v)} className={`${HERO_BTN} ${open ? "outline outline-2" : ""}`} style={{ ...HERO_SEC, outlineColor: "rgba(224,201,148,.45)" }}>
         <FileText className="h-[15px] w-[15px]" style={{ color: BRASS_LT }} />Files<span style={{ color: HERO_MUTED, fontWeight: 500 }}>{folder?.loading && !items.length ? "…" : items.length}</span>
         <ChevronDown className="h-[13px] w-[13px]" style={{ color: BRASS_LT }} />
       </button>
+      )}
       {open ? (
         <div role="menu" className="absolute right-0 top-[calc(100%+6px)] z-30 w-[430px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[12px] bg-white max-[699px]:left-0 max-[699px]:right-auto" style={{ border: "1px solid #e2dcd1", boxShadow: "0 18px 44px -12px rgba(21,24,26,.35),0 2px 6px rgba(21,24,26,.06)" }}>
           <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: "1px solid #eee9e0", backgroundColor: "#faf8f3" }}>
@@ -582,7 +590,7 @@ function JobTitle({ job, onRename, headingLevel }) {
 // Tap the pencil to edit the job-site address in place; Enter saves, Escape
 // cancels. Clearing the field removes the address. Mirrors the JobTitle
 // interaction. Only rendered when the page passes onEditAddress (owner gate).
-function JobAddress({ job, onEditAddress }) {
+export function JobAddress({ job, onEditAddress }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
