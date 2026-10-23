@@ -67,7 +67,7 @@ export default function PaymentStatusDropdown({ job, onChanged, plain = false })
             ? "max-w-[200px] appearance-none bg-transparent pl-1 pr-6 text-right text-[14px] font-semibold outline-none disabled:opacity-60"
             : "h-[30px] max-w-[210px] appearance-none rounded-full pl-3 pr-8 text-[12.5px] font-bold outline-none transition-opacity disabled:opacity-60"}
           style={plain
-            ? { color: active ? "#e0c994" : "#a9bdb9", border: 0, direction: "rtl" }
+            ? { color: active ? "#e0c994" : "#a9bdb9", border: 0, textAlignLast: "right" }
             : active
             ? { backgroundColor: t.color, color: "#FFFFFF", border: `1px solid ${t.color}` }
             : { backgroundColor: "rgba(255,255,255,.09)", color: "#c9d0d1", border: "1px solid rgba(255,255,255,.18)" }}
