@@ -5,6 +5,7 @@ import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
 import { ROLE_LABELS } from "@/lib/jobContacts";
 import { pickSuper, superChoices, superChoiceGroups, parseScopeNotes, scopeIsEmpty } from "@/lib/jobWorkspace";
+import { superEntryComplete, superEntrySig } from "@/lib/superEntry";
 import ScopeNotes from "@/components/jobs/ScopeNotes";
 import { fileBadge, fileLabel } from "@/lib/jobHistory";
 import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs/JobEventDocuments";
@@ -98,9 +99,8 @@ function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }
     if (!c) return;
     doSave({ name: c.name, phone: c.phone || "", email: c.email || "" }).catch(() => {});
   };
-  const complete = f.name.trim().length >= 2
-    && (f.phone.replace(/\D/g, "").length >= 10 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim()));
-  const sig = `${f.name.trim()}|${f.phone.trim()}|${f.email.trim()}`;
+  const complete = superEntryComplete(f);
+  const sig = superEntrySig(f);
   if (initialSig.current === null) initialSig.current = sig;
   useEffect(() => {
     // Never save on open (initial values) or twice for the same entry; a failed
@@ -114,10 +114,13 @@ function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig, complete]);
-  const submit = async (e) => {
+  // No save button: a complete entry saves itself, and Enter only hurries a
+  // complete entry along. Partial entries never save and say so above.
+  const submit = (e) => {
     e.preventDefault();
-    if (!f.name.trim() || (!f.phone.trim() && !f.email.trim())) { setError("Add a name and a phone or email."); return; }
-    doSave({ name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim() }).catch(() => {});
+    if (!complete || saving) return;
+    triedSig.current = sig;
+    doSave({ name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim() }).catch(() => { triedSig.current = null; });
   };
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
@@ -160,8 +163,7 @@ function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }
         </p>
       )}
       <div className="flex gap-2">
-        <button type="submit" disabled={saving} className="inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] text-[13.5px] font-semibold disabled:opacity-60" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{saving ? "Saving…" : "Save now"}</button>
-        <button type="button" onClick={onCancel} className="inline-flex h-[34px] items-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>Cancel</button>
+        <button type="button" onClick={onCancel} className="inline-flex h-[34px] flex-1 items-center justify-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" }}>{saving ? "Close without saving" : "Cancel"}</button>
       </div>
     </form>
   );

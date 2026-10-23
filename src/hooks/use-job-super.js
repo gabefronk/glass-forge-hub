@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { invokeErrorOf } from "@/lib/jobContacts";
+import { createJobSuperSession } from "@/lib/jobSuperSession";
 
 const call = async (body) => {
   try {
@@ -12,31 +13,18 @@ const call = async (body) => {
   }
 };
 
-// The job's saved super, readable and editable by anyone signed in. Saving
-// reuses a directory contact with the same phone or email and links it to the
-// job as superintendent (one per job). Nothing is written until save() runs.
+// The job's saved super, readable and editable by anyone signed in. The load/save
+// ordering rules live in createJobSuperSession (a save wins over a load already
+// in flight); this hook only binds the session to React.
 export function useJobSuper(jobId) {
-  const [state, setState] = useState({ loading: true, saved: null, error: "" });
-  const version = useRef(0);
-  const load = useCallback(async () => {
-    const n = ++version.current;
-    if (!jobId) { setState({ loading: false, saved: null, error: "" }); return; }
-    setState((s) => ({ ...s, loading: true }));
-    try {
-      const data = await call({ action: "job_super", job_id: jobId });
-      if (n === version.current) setState({ loading: false, saved: data?.super || null, error: "" });
-    } catch (e) {
-      if (n === version.current) setState({ loading: false, saved: null, error: e.message });
-    }
-  }, [jobId]);
-  useEffect(() => { load(); return () => { version.current++; }; }, [load]);
-  const save = useCallback(async ({ name, phone, email }) => {
-    // A save wins over any load already in flight: bump the version so a stale
-    // read resolving after the write cannot blank the super the user just saved.
-    version.current++;
-    const data = await call({ action: "set_job_super", job_id: jobId, contact: { name, phone, email } });
-    setState({ loading: false, saved: data?.super || null, error: "" });
-    return data?.super;
-  }, [jobId]);
-  return { ...state, reload: load, save };
+  const ref = useRef(null);
+  if (!ref.current || ref.current.jobId !== jobId) ref.current = { jobId, session: createJobSuperSession(jobId, call) };
+  const session = ref.current.session;
+  const [state, setState] = useState(session.getState);
+  useEffect(() => {
+    const unsubscribe = session.subscribe(setState);
+    session.load();
+    return () => { unsubscribe(); session.invalidate(); };
+  }, [session]);
+  return { ...state, reload: session.load, save: session.save };
 }
