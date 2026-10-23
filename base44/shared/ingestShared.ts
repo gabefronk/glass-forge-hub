@@ -111,13 +111,25 @@ export function normalizeAddress(addr) {
 // Virtual meeting locations that are NOT real addresses.
 const VIRTUAL_RE = /microsoft teams|zoom|google meet|meet\.google|virtual|teleconference|video call|online meeting/i;
 
+// Supplier pickup / will-call / shop-drop stops are day logistics, never a
+// job site. They must not become a job's address: the job keeps its own
+// stable identity and a vendor/shop address would also poison customer +
+// address identity matching. The raw location text still lands on the event's
+// source_location, so the day's pickup/delivery directions are not lost.
+const LOGISTICS_LOC_RE = /\bwill[- ]?call\b|\bpick[\s-]?up\b|\bamsco\b|\bbuilders firstsource\b|\bwarehouse\b|\b(?:gabriel'?s|our|the|my|his)\s+shop\b|\bback to (?:the |gabriel'?s )?shop\b/i;
+
+export function isLogisticsLocation(loc) {
+  return !!loc && LOGISTICS_LOC_RE.test(String(loc));
+}
+
 // Extract a job site address. Priority: Google Calendar location field
-// (filtered for virtual meetings), then "Address:" label in description.
+// (filtered for virtual meetings and logistics stops), then "Address:" label
+// in description.
 export function extractAddress(location, description) {
-  if (location && location.trim() && !VIRTUAL_RE.test(location)) return location.trim();
+  if (location && location.trim() && !VIRTUAL_RE.test(location) && !isLogisticsLocation(location)) return location.trim();
   if (description) {
     const m = description.match(/address\s*:\s*(.+?)(?:\n|$)/i);
-    if (m && m[1].trim() && !VIRTUAL_RE.test(m[1])) return m[1].trim();
+    if (m && m[1].trim() && !VIRTUAL_RE.test(m[1]) && !isLogisticsLocation(m[1])) return m[1].trim();
   }
   return null;
 }
