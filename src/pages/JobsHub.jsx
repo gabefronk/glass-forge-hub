@@ -232,11 +232,12 @@ export default function JobsHub() {
   const listHeader = (
     <div className="flex flex-col gap-3 rounded-[14px] px-4 pt-4 pb-3.5" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
       <div className="flex items-baseline justify-between gap-3">
-        <h1 className="m-0 text-[26px] font-bold" style={{ color: HERO_INK, letterSpacing: "-0.035em" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>Jobs</h1>
-        <span className="text-[12.5px]" style={{ color: HERO_MUTED }}>{todayLabel} · <span style={{ color: "#e0c994", fontWeight: 600 }}>{counts.today}</span> {counts.today === 1 ? "visit" : "visits"} today</span>
+        <h1 className="m-0 text-[26px] font-bold max-[1023px]:text-[21px]" style={{ color: HERO_INK, letterSpacing: "-0.035em" }} title={counts.records !== groups.length ? `${counts.records.toLocaleString()} records; duplicates with the same customer and address are shown once` : undefined}>Jobs</h1>
+        <span className="text-[12.5px] max-[1023px]:hidden" style={{ color: HERO_MUTED }}>{todayLabel} · <span style={{ color: "#e0c994", fontWeight: 600 }}>{counts.today}</span> {counts.today === 1 ? "visit" : "visits"} today</span>
+        <span className="text-[12px] lg:hidden" style={{ color: HERO_MUTED }}>{listTotal.toLocaleString()} · <span style={{ color: "#e0c994", fontWeight: 600 }}>{counts.today}</span> {counts.today === 1 ? "visit" : "visits"} today</span>
       </div>
       {isAdmin && !selectMode && (
-        <div>
+        <div className="max-[1023px]:hidden">
           <button type="button" onClick={() => setSelectMode(true)} className="inline-flex h-[36px] items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold" style={{ backgroundColor: "rgba(184,149,90,.16)", color: "#e0c994", border: "1px solid rgba(224,201,148,.4)" }}>
             <GitMerge className="h-4 w-4" />Combine jobs
           </button>
@@ -278,13 +279,27 @@ export default function JobsHub() {
         </label>
         <AddJobDialog jobs={jobs} onCreated={handleJobCreated} label="New job" triggerClassName="inline-flex h-[40px] shrink-0 items-center gap-1.5 rounded-[9px] bg-[#b8955a] px-3.5 text-[13.5px] font-semibold text-[#1d160a]" />
       </div>
-      <QuickFilterMenu
-        views={segments} moreViews={moreViews} view={segment} onView={setSegment}
-        builders={builders} builder={builder} onBuilder={setBuilder}
-        sorts={JOB_SORTS} sort={sort} onSort={setSort}
-        onClear={clearFilters}
-      />
-      <div className="flex items-center justify-between text-[12px]" style={{ color: HERO_MUTED }}>
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <QuickFilterMenu
+            views={segments} moreViews={moreViews} view={segment} onView={setSegment}
+            builders={builders} builder={builder} onBuilder={setBuilder}
+            sorts={JOB_SORTS} sort={sort} onSort={setSort}
+            onClear={clearFilters}
+          />
+        </div>
+        {isAdmin && !selectMode && (
+          <button type="button" onClick={() => setSelectMode(true)} aria-label="Combine jobs" className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] px-2.5 text-[12px] font-semibold lg:hidden" style={{ backgroundColor: "rgba(184,149,90,.16)", color: "#e0c994", border: "1px solid rgba(224,201,148,.4)" }}>
+            <GitMerge className="h-3.5 w-3.5" />Combine
+          </button>
+        )}
+        {owner && <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[12px] lg:hidden" style={{ color: HERO_MUTED }}>
+          <input type="checkbox" checked={showMerged} onChange={(e) => setShowMerged(e.target.checked)} className="h-3.5 w-3.5" />
+          Merged
+        </label>}
+        {filtersActive && <button type="button" onClick={clearFilters} className="shrink-0 text-[12px] font-semibold hover:underline lg:hidden" style={{ color: "#e0c994" }}>Clear</button>}
+      </div>
+      <div className="flex items-center justify-between text-[12px] max-[1023px]:hidden" style={{ color: HERO_MUTED }}>
         <span>{summary}</span>
         <div className="flex items-center gap-3">
           {owner && <label className="flex cursor-pointer items-center gap-1.5 text-[12px]" style={{ color: HERO_MUTED }}>

@@ -43,7 +43,7 @@ export default function QuickFilterMenu({ views, moreViews, view, onView, builde
         style={active ? { backgroundColor: "#e0c994", color: "#1d160a", border: "1px solid #e0c994" } : { backgroundColor: "rgba(255,255,255,.08)", color: "#f2eee8", border: "1px solid rgba(255,255,255,.16)" }}>
         <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" style={{ color: active ? "#1d160a" : "#e0c994" }} />
         <span className="min-w-0 flex-1 truncate text-left">{summary}</span>
-        <span className="shrink-0 tabular-nums" style={{ color: active ? "#4a3a17" : "#aeb5b7", fontWeight: 500 }}>{current?.count?.toLocaleString()}</span>
+        <span className="shrink-0 tabular-nums max-[1023px]:hidden" style={{ color: active ? "#4a3a17" : "#aeb5b7", fontWeight: 500 }}>{current?.count?.toLocaleString()}</span>
         <ChevronDown className="h-3.5 w-3.5 shrink-0" style={{ color: active ? "#1d160a" : "#e0c994" }} />
       </button>
       {open ? (
