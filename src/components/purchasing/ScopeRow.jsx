@@ -18,15 +18,26 @@ function ScopeEta({ scope, job, onSaved, onOpenTracking }) {
   return <EtaCell job={job} etaTarget={scope.etaTarget} etaLabel={scope.etaLabel} onSaved={onSaved} onOpenSupplier={onOpenTracking} />;
 }
 
-// Non-money cells of a scope row: same column separators as the job row, plus a
-// hairline top edge so the scope row still reads as separate from the row above
-// (the removed label bar used to carry that edge).
-const CELL = { borderLeft: `1px solid ${LINE}`, borderTop: '1px solid #EEE9E0' };
+// Non-money cells of a scope row: same column separators as the job row. The
+// row separator is its own full-width divider row (DIVIDER), so it runs edge to
+// edge instead of stopping at the money columns.
+const CELL = { borderLeft: `1px solid ${LINE}` };
+const ROW = { backgroundColor: '#FCFDFC' };
+
+// One-pixel divider between the job row and its scopes, and between each scope.
+// A single spanning cell keeps the line continuous across every column (the
+// money cells carry their own colored top strip, so a row border would break).
+const DIVIDER = (
+  <tr aria-hidden="true">
+    <td colSpan={9} style={{ height: 0, padding: 0, borderTop: `1px solid ${LINE}`, backgroundColor: '#FCFDFC' }} />
+  </tr>
+);
 
 export function ScopeTableRows({ scopes, job, onSaved, onOpenTracking }) {
   return scopes.map((scope) => (
     <Fragment key={scope.key}>
-      <tr style={{ backgroundColor: '#FCFDFC' }}>
+      {DIVIDER}
+      <tr style={ROW}>
         <MoneyCell display={scope.windows} accent={ACCENT.windows} divider />
         <MoneyCell display={scope.rough} accent={ACCENT.rough} />
         <MoneyCell display={scope.sale} accent={ACCENT.sale} />
