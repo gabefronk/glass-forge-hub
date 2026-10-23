@@ -42,11 +42,27 @@ import JobUpcomingCard from "@/components/jobs/JobUpcomingCard";
 import JobCreateEventModal from "@/components/jobs/JobCreateEventModal";
 import { isJobCalendarOwner, JOB_CREATE_ENABLED } from "@/lib/jobCalendarShared";
 import { useJobUpcoming } from "@/hooks/use-job-upcoming";
+import JobHeroMobile from "@/components/jobs/JobHeroMobile";
+
+// Phone width (matches the max-[699px] breakpoint used across the job page).
+function useIsPhone() {
+  const query = "(max-width: 699px)";
+  const [isPhone, setIsPhone] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setIsPhone(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isPhone;
+}
 
 export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isPhone = useIsPhone();
   const [job, setJob] = useState(null);
   const [rows, setRows] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -200,11 +216,46 @@ export default function JobDetail() {
     <div style={{ backgroundColor: SHEET_BG, minHeight: "100vh" }}>
       <div className="job-page px-5 max-[699px]:px-3 pt-5 max-[699px]:pt-4 pb-28 lg:pb-12">
         <div className="max-w-[1080px] mx-auto flex flex-col gap-[18px]">
+          {!isPhone ? (
           <Link to="/jobs" className="inline-flex w-fit items-center gap-1 text-[13px] font-semibold -mb-1 hover:opacity-80" style={{ color: "#3d3322" }}>
             <ArrowLeft className="h-3.5 w-3.5" />Back to jobs
           </Link>
+          ) : null}
+
+          {isPhone ? (
+            <div className="-mx-3 -mt-4">
+              <JobHeroMobile
+                job={job}
+                status={status}
+                snap={snap}
+                jobContacts={jobContacts}
+                events={calEvents}
+                folder={folder}
+                plans={plans}
+                upcoming={upcoming}
+                alert={<ServiceMarker open={service.open} />}
+                onFieldReport={() => setShowReport(true)}
+                onRename={async (name) => setJob(await renameJob(job, name))}
+                onEditAddress={owner ? async (next) => setJob(await updateJobAddress(job, next)) : null}
+                payment={owner
+                  ? <PaymentStatusDropdown job={job} onChanged={() => loadAll({ quiet: true })} />
+                  : (job.payment_status ? <PaymentStatusChip job={job} /> : null)}
+                onAddVisit={JOB_CREATE_ENABLED && isJobCalendarOwner(user) ? () => setShowCreateEvent(true) : null}
+                setupHref={owner ? `/jobs/${id}/setup` : null}
+                budgetHref={owner ? procurementPath(id) : null}
+                menuExtra={(JOB_REPORT_EMAIL_ENABLED || owner || isAgentCenterOwner(user)) ? (
+                  <>
+                    {JOB_REPORT_EMAIL_ENABLED ? <JobReportMenu job={job} entries={reportEntries} tone="hero" /> : null}
+                    {(owner || isAgentCenterOwner(user)) ? <DeleteJobButton job={job} onDeleted={() => navigate("/jobs")} className={`${heroLinkClass} w-full justify-center`} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
+                  </>
+                ) : null}
+              />
+            </div>
+          ) : null}
+
           {loadError && <p role="alert" className="rounded-lg border bg-white p-3 text-[13px] break-words" style={{ color: "#A43432" }}>Some job activity could not load and may be incomplete. {loadError}</p>}
 
+          {!isPhone ? (
           <JobHero
             job={job}
             status={status}
@@ -232,12 +283,14 @@ export default function JobDetail() {
               </>
             }
           />
+          ) : null}
 
           <MergedJobBanner job={job} onReversed={() => loadAll()} />
           <DuplicateJobNotice group={group} currentId={id} />
           {user?.role === "admin" ? <CombinedRecordsPanel job={job} onChanged={() => loadAll({ quiet: true })} /> : null}
 
-          {isJobCalendarOwner(user) ? <JobUpcomingCard upcoming={upcoming} /> : null}
+          {/* Phone: the next visit lives in the header's Job info dropdown. */}
+          {isJobCalendarOwner(user) && !isPhone ? <JobUpcomingCard upcoming={upcoming} /> : null}
           <div id="add-note" className="scroll-mt-4">
             <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<>{JOB_REPORT_EMAIL_ENABLED ? <JobReportMenu job={job} entries={reportEntries} tone="card" /> : null}<LiveMark live={live} /></>}>
               <JobActivityFeed
