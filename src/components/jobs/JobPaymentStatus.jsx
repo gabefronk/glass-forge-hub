@@ -33,7 +33,8 @@ export function PaymentStatusChip({ job }) {
 // Just the current status as a colored dropdown - picking a stage saves immediately,
 // "Clear status" untracks the job. Same Jobs.payment_status fields the jobs list and
 // purchasing cards read, so everything stays in sync. Colors match the old card.
-export default function PaymentStatusDropdown({ job, onChanged }) {
+// plain: the phone header's Job info row - status as tinted text with a chevron, no pill.
+export default function PaymentStatusDropdown({ job, onChanged, plain = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const active = paymentStage(job?.payment_status);
@@ -62,8 +63,12 @@ export default function PaymentStatusDropdown({ job, onChanged }) {
           value={active?.key || ""}
           disabled={busy}
           onChange={change}
-          className="h-[30px] max-w-[210px] appearance-none rounded-full pl-3 pr-8 text-[12.5px] font-bold outline-none transition-opacity disabled:opacity-60"
-          style={active
+          className={plain
+            ? "max-w-[200px] appearance-none bg-transparent pl-1 pr-6 text-right text-[14px] font-semibold outline-none disabled:opacity-60"
+            : "h-[30px] max-w-[210px] appearance-none rounded-full pl-3 pr-8 text-[12.5px] font-bold outline-none transition-opacity disabled:opacity-60"}
+          style={plain
+            ? { color: active ? "#e0c994" : "#a9bdb9", border: 0, direction: "rtl" }
+            : active
             ? { backgroundColor: t.color, color: "#FFFFFF", border: `1px solid ${t.color}` }
             : { backgroundColor: "rgba(255,255,255,.09)", color: "#c9d0d1", border: "1px solid rgba(255,255,255,.18)" }}
         >
@@ -73,7 +78,7 @@ export default function PaymentStatusDropdown({ job, onChanged }) {
             : null}
           {PAYMENT_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: active ? "#FFFFFF" : "#c9d0d1" }} />
+        <ChevronDown className={`pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${plain ? "right-0" : "right-2.5"}`} style={{ color: plain ? (active ? "#e0c994" : "#a9bdb9") : active ? "#FFFFFF" : "#c9d0d1" }} />
       </span>
       {error ? <span role="alert" className="text-[12px] font-semibold" style={{ color: "#f1b9b3" }}>{error}</span> : null}
     </span>
