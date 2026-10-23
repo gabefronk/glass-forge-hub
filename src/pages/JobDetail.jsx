@@ -27,7 +27,9 @@ import DeleteJobButton from "@/components/jobs/DeleteJobButton";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
 import { JobHero, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
 import { jobProgress } from "@/lib/jobStages";
-import { buildReports } from "@/lib/jobHistory";
+import { buildReports, buildJobHistory } from "@/lib/jobHistory";
+import JobReportMenu from "@/components/jobs/JobReportMenu";
+import { JOB_REPORT_EMAIL_ENABLED } from "@/lib/jobReportFlag";
 import { jobSnapshot } from "@/lib/jobWorkspace";
 import { planMatchesJob, renameJob } from "@/lib/jobRename";
 import { denverDate } from "../../base44/shared/billingCore.js";
@@ -162,6 +164,10 @@ export default function JobDetail() {
   const today = denverDate();
   const snap = useMemo(() => jobSnapshot({ job, events: calEvents, rows, fieldReports, status, today }), [job, calEvents, rows, fieldReports, status, today]);
   const progress = useMemo(() => jobProgress({ events: calEvents, reports: buildReports(rows, fieldReports), status, today }), [calEvents, rows, fieldReports, status, today]);
+  const reportEntries = useMemo(
+    () => (JOB_REPORT_EMAIL_ENABLED ? buildJobHistory({ events: calEvents, rows, notes, fieldReports, files: folder.files }) : []),
+    [calEvents, rows, notes, fieldReports, folder.files]
+  );
 
   if (loading) {
     return (
@@ -214,6 +220,7 @@ export default function JobDetail() {
             payment={owner
               ? <PaymentStatusDropdown job={job} onChanged={() => loadAll({ quiet: true })} />
               : (job.payment_status ? <PaymentStatusChip job={job} /> : null)}
+            corner={JOB_REPORT_EMAIL_ENABLED ? <JobReportMenu job={job} entries={reportEntries} tone="hero" /> : null}
             extra={
               <>
                 {JOB_CREATE_ENABLED && isJobCalendarOwner(user) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
@@ -230,7 +237,7 @@ export default function JobDetail() {
 
           {isJobCalendarOwner(user) ? <JobUpcomingCard upcoming={upcoming} /> : null}
           <div id="add-note" className="scroll-mt-4">
-            <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
+            <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<>{JOB_REPORT_EMAIL_ENABLED ? <JobReportMenu job={job} entries={reportEntries} tone="card" /> : null}<LiveMark live={live} /></>}>
               <JobActivityFeed
                 onScheduleNext={(next) => { setScheduleStage(next); setShowCreateEvent(true); }}
                 ledger
