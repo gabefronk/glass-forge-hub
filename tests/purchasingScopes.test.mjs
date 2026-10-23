@@ -115,3 +115,18 @@ test('a reference-only budget is not a scope; a draft one is', () => {
   assert.deepEqual(scopes.map((s) => s.key), ['budget:b1', 'budget:b3']);
   assert.equal(scopes[1].quoteCard.refs.quoteStatus, 'amber');
 });
+test('a reference-only supplier order (no PO, number or amount) is not a scope', () => {
+  const scopes = scopesForJob('j1', {
+    budgets: [budget()],
+    purchase_orders: [
+      { id: 'p1', job_id: 'j1', budget_id: 'b1', po_number: 'YA-0009', vendor: 'AMSCO', status: 'ordered', amount_dealer: 1074.5 },
+    ],
+    vendor_orders: [
+      { id: 'v1', job_id: 'j1', purchase_order_id: 'p1', order_number: '10-858.26', amount: 1074.5, status: 'eta_set', eta_date: '2026-12-07' },
+      // Disputed reference-only row: no PO, no order number, no amount.
+      { id: 'v2', job_id: 'j1', purchase_order_id: null, order_number: null, amount: null, status: 'ordered', vendor: 'AMSCO' },
+    ],
+  });
+  // The claimed PO folds into the single budget scope; the reference row adds nothing.
+  assert.deepEqual(scopes.map((s) => s.key), ['budget:b1']);
+});

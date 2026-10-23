@@ -163,6 +163,11 @@ export function scopesForJob(jobId, { budgets = [], purchase_orders = [], vendor
   }
   for (const order of orders) {
     if (claimedOrderIds.has(order.id)) continue;
+    // Reference-only order rows (no PO, no order number, no amount) carry no
+    // purchasing figure a scope row could show or edit - e.g. the disputed
+    // dual-mapped AMSCO placeholder recorded by the Oct 13 PO reconciliation.
+    // They stay visible in supplier tracking; they are not a scope.
+    if (!order.purchase_order_id && order.amount == null && !pText(order.order_number)) continue;
     scopes.push(orderScope(order));
   }
   return scopes;
