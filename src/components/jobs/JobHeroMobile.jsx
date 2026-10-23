@@ -88,7 +88,7 @@ export default function JobHeroMobile({
 
   const proj = useMemo(() => (upcoming?.events?.length ? nextVisitProjection(upcoming.events) : null), [upcoming]);
   const name = titleCase(sanitizeText(job.canonical_name));
-  const kind = snap?.kind ? titleCase(String(snap.kind)) : "";
+  const kind = snap?.kind ? sanitizeText(String(snap.kind)) : "";
   const city = String(job.address || "").split(",")[1]?.trim() || "";
   const pay = paymentStage(job?.payment_status)?.label || "";
   const summary = [city, pay].filter(Boolean).join(" · ");
