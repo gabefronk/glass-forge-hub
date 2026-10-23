@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, FolderOpen, GitMerge, HardHat, Users } from "lucide-react";
+import { ArrowLeft, Camera, FolderOpen, HardHat, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { jobsStatus } from "@/lib/jobsSanitize";
@@ -24,7 +24,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { isPurchaseOrderOwner } from "@/lib/purchaseOrderAccess";
 import { procurementPath } from "@/lib/procurementRoutes";
 import DeleteJobButton from "@/components/jobs/DeleteJobButton";
-import CombineJobsDialog from "@/components/jobs/CombineJobsDialog";
 import { canWriteJobDocuments } from "../../base44/shared/jobDocumentsAccess.mjs";
 import { JobHero, SheetCard, LiveMark, TILE, SHEET_BG, heroLinkClass, heroLinkStyle } from "@/components/jobs/JobSheet";
 import { jobProgress } from "@/lib/jobStages";
@@ -61,7 +60,6 @@ export default function JobDetail() {
   const [loadError, setLoadError] = useState("");
   const [lightbox, setLightbox] = useState(null);
   const [showReport, setShowReport] = useState(false);
-  const [showCombine, setShowCombine] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [scheduleStage, setScheduleStage] = useState(null);
   const [upcomingKey, setUpcomingKey] = useState(0);
@@ -219,11 +217,6 @@ export default function JobDetail() {
                 {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
                 {owner ? <Link to={procurementPath(id)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link> : null}
                 {(owner || isAgentCenterOwner(user)) ? <DeleteJobButton job={job} onDeleted={() => navigate("/jobs")} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
-                {user?.role === "admin" && !job.merged_into ? (
-                  <button type="button" onClick={() => setShowCombine(true)} className={heroLinkClass} style={heroLinkStyle} title="Combine with another job">
-                    <GitMerge className="h-[15px] w-[15px]" />Combine
-                  </button>
-                ) : null}
               </>
             }
           />
@@ -309,9 +302,6 @@ export default function JobDetail() {
         <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); service.reload(); loadAll(); }} />
       )}
 
-      {showCombine && (
-        <CombineJobsDialog job={job} onClose={() => setShowCombine(false)} onDone={() => loadAll()} />
-      )}
 
       {showCreateEvent && isJobCalendarOwner(user) ? (
         <JobCreateEventModal job={job} user={user} open={showCreateEvent} prefill={scheduleStage ? { notes: scheduleStage.label, stageLabel: scheduleStage.label } : null} onOpenChange={(o) => { setShowCreateEvent(o); if (!o) setScheduleStage(null); }} onCreated={() => setUpcomingKey((k) => k + 1)} />
