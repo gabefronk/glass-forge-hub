@@ -92,7 +92,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
 
   return (
     <Fragment>
-      <div className="px-4 pb-0.5 pt-3" style={{ backgroundColor: rowBg }}>
+      <div className="px-4 pb-1.5 pt-2.5" style={{ backgroundColor: '#E6F1ED', borderBottom: '1px solid #8FB9AF' }}>
         <PurchasingRowTitle job={job} onSaved={onSaved} />
       </div>
       <div className="max-[699px]:hidden">
