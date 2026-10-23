@@ -130,3 +130,66 @@ test('a reference-only supplier order (no PO, number or amount) is not a scope',
   // The claimed PO folds into the single budget scope; the reference row adds nothing.
   assert.deepEqual(scopes.map((s) => s.key), ['budget:b1']);
 });
+
+// --- applyScopeRollup: multi-scope job rows never show one scope's money ---
+import { applyScopeRollup } from '../src/lib/purchasingScopes.js';
+
+const scopeStub = (label) => ({ key: label, label });
+const cardStub = ({ win, rough, sale, profit }) => ({
+  job: { id: 'j1' },
+  windows: { value: 1860.49, status: 'verified', display: win },
+  rough: { value: null, display: rough },
+  sale: { value: null, display: sale },
+  profit: { value: null },
+  profitDisplay: profit,
+});
+
+test('multi-scope: scope-derived money withheld from the job row, profit too', () => {
+  const card = cardStub({
+    win: { value: 1860.49, label: 'Material incl tax (budget, incl. overhead) · 1 of 2 scopes', review: true, source: 'multiple_scopes', alternatives: [{ value: 8388.62 }] },
+    rough: { value: 0, label: 'From budget review', review: true, source: 'budget_inputs' },
+    sale: { value: 3271.38, label: 'From budget review', review: true, source: 'budget_inputs' },
+    profit: { value: 1410.89, tone: 'positive', review: true },
+  });
+  card.scopes = [scopeStub('a'), scopeStub('b')];
+  const out = applyScopeRollup(card);
+  assert.equal(out.windows.display.value, null);
+  assert.equal(out.windows.display.label, 'Multiple scopes - see scope rows');
+  assert.equal(out.windows.display.alternatives.length, 0);
+  assert.equal(out.rough.display.value, null);
+  assert.equal(out.sale.display.value, null);
+  assert.equal(out.profitDisplay.value, null);
+  assert.equal(out.profitDisplay.label, 'Multiple scopes - see scope rows');
+  // Verified canonical value untouched.
+  assert.equal(out.windows.value, 1860.49);
+});
+
+test('multi-scope: owner-entered job-level money stays; profit still withheld (windows partial)', () => {
+  const card = cardStub({
+    win: { value: 19841.95, label: 'PO YA-0011 dealer amount (no tax verified)', review: true, source: 'po_dealer', alternatives: [] },
+    rough: { value: 0, label: 'Owner-entered', review: false, source: 'owner' },
+    sale: { value: 24341.56, label: 'Owner-entered', review: false, source: 'owner' },
+    profit: { value: 4499.61, tone: 'positive', review: true },
+  });
+  card.scopes = [scopeStub('PO YA-0015'), scopeStub('PO YA-0011')];
+  const out = applyScopeRollup(card);
+  assert.equal(out.windows.display.value, null);
+  assert.equal(out.rough.display.value, 0);
+  assert.equal(out.rough.display.source, 'owner');
+  assert.equal(out.sale.display.value, 24341.56);
+  assert.equal(out.profitDisplay.value, null);
+});
+
+test('single-scope and no-scope cards pass through untouched', () => {
+  const solo = cardStub({
+    win: { value: 132074.19, label: 'Order 10-858.26 amount (no tax verified)', review: true, source: 'vendor_order', alternatives: [] },
+    rough: { value: 3013.79, label: 'Owner-entered', review: false, source: 'owner' },
+    sale: { value: 178020.51, label: 'Owner-entered', review: false, source: 'owner' },
+    profit: { value: 42932.53, tone: 'positive', review: true },
+  });
+  solo.scopes = [scopeStub('only')];
+  assert.deepEqual(applyScopeRollup(solo), solo);
+  const none = { ...solo };
+  delete none.scopes;
+  assert.deepEqual(applyScopeRollup(none), none);
+});

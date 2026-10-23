@@ -131,6 +131,40 @@ function orderScope(order) {
 // listed budget claims, then each supplier order with neither. A budget with
 // several POs (a reorder) splits into one row per PO. Cancelled POs, and orders
 // under a cancelled PO, are excluded everywhere — exactly as the card refs.
+// Multi-scope job roll-up guard (display only). A job row must never show
+// one scope's money as if it were the job total: when a job has more than one
+// scope, scope-derived figures (budget-review figures, PO/order amounts, the
+// picked scope's quote total) are withheld from the job row - dash plus
+// 'Multiple scopes - see scope rows'. Owner-entered job-level money inputs
+// stay: they ARE job-level. Profit is withheld whenever any input is
+// withheld, since it would recompute from partial coverage. Aggregates are
+// never fabricated by summing scopes (mixed tax treatment, shared-budget
+// overlap). Verified canonical values (card.windows.value etc.) are
+// untouched; only the display objects change.
+export function applyScopeRollup(card) {
+  const scopes = card?.scopes || [];
+  if (scopes.length < 2) return card;
+  const MULTI_LABEL = 'Multiple scopes - see scope rows';
+  const suppress = (d) => (d && d.value != null && d.source !== 'owner'
+    ? { ...d, value: null, alternatives: [], label: MULTI_LABEL, review: true, suppressed: true }
+    : d);
+  const windows = suppress(card.windows?.display);
+  const rough = suppress(card.rough?.display);
+  const sale = suppress(card.sale?.display);
+  const anySuppressed = [windows, rough, sale].some((d) => d?.suppressed);
+  const prev = card.profitDisplay;
+  const profitDisplay = anySuppressed && prev?.value != null
+    ? { ...prev, value: null, tone: 'unknown', review: true, label: MULTI_LABEL, suppressed: true }
+    : prev;
+  return {
+    ...card,
+    windows: { ...card.windows, display: windows },
+    rough: { ...card.rough, display: rough },
+    sale: { ...card.sale, display: sale },
+    profitDisplay,
+  };
+}
+
 export function scopesForJob(jobId, { budgets = [], purchase_orders = [], vendor_orders = [] } = {}) {
   if (!jobId) return [];
   const cancelledPOIds = new Set(purchase_orders.filter((p) => p.status === 'cancelled').map((p) => p.id));

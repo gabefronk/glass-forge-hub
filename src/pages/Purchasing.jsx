@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { isPurchasingMoneyOwner } from '@/lib/purchasingMoneyAccess';
 import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
 import { buildPurchasingCards, cardMatchesSearch, unlinkedEntities } from '@/lib/purchasingViewModel';
-import { scopesForJob } from '@/lib/purchasingScopes';
+import { scopesForJob, applyScopeRollup } from '@/lib/purchasingScopes';
 import { PageShell } from '@/components/PageShell';
 import PurchasingHeader from '@/components/purchasing/PurchasingHeader';
 import PageNotFound from '@/lib/PageNotFound';
@@ -81,8 +81,9 @@ function PurchasingWorkspace() {
     });
     // Each job also carries its scopes: the board adds one row per scope when a
     // job holds more than one (a second budget, a reorder PO, an order with no
-    // PO). Display only - the job's own roll-up figures are untouched.
-    return built.map((card) => ({ ...card, scopes: scopesForJob(card.job.id, data) }));
+    // PO). Multi-scope job rows then withhold scope-derived money via
+    // applyScopeRollup so the roll-up can never read as a job total.
+    return built.map((card) => applyScopeRollup({ ...card, scopes: scopesForJob(card.job.id, data) }));
   }, [data, moneyInputs, today]);
   const jobsById = useMemo(() => new Map((data?.jobs || []).map((j) => [j.id, j])), [data]);
   const filtered = useMemo(
