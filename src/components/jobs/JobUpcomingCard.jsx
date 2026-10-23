@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { CalendarClock, ExternalLink, MapPin } from "lucide-react";
 import { SheetCard, TILE } from "@/components/jobs/JobSheet";
-import { formatUpcomingLine, truncatePurpose } from "@/lib/jobCalendarShared";
+import { formatUpcomingLine, purposePreviewText, stripLangMarks } from "@/lib/jobCalendarShared";
 
 // Owner-gated upcoming-visits card for one job. Pure presentational: the read
 // lives in useJobUpcoming (lifted to the page so the hero and card share one
@@ -10,8 +10,9 @@ import { formatUpcomingLine, truncatePurpose } from "@/lib/jobCalendarShared";
 // word-boundary preview with an expand toggle to the full sanitized punch list.
 function EventRow({ ev }) {
   const full = String(ev.purpose || "").trim();
-  const preview = truncatePurpose(full, 120);
-  const expandable = preview !== full && full.length > 0;
+  const stripped = stripLangMarks(full);
+  const preview = purposePreviewText(full, 120);
+  const expandable = preview !== stripped && stripped.length > 0;
   const [expanded, setExpanded] = useState(false);
   const shown = expandable && expanded ? full : preview;
   return (

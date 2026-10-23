@@ -3,6 +3,7 @@
 // base44/shared/jobCalendarCore.js. Display shaping, safe error mapping, the pure
 // create-outcome decision, the validated frozen-request storage, preview fixtures.
 import { validateReviewed } from './jobCalendarValidate.js';
+import { LANG_MARK_RE } from './visitLang.js';
 
 export const JOB_CALENDAR_OWNER_IDS = new Set([
   '6a7f0d834a5f825c724273ea',
@@ -54,6 +55,16 @@ export function truncatePurpose(text, max = 120) {
   return cut.replace(/[\s,;:.\-]+$/, '').trim() + '…';
 }
 
+// Display-only: bare English/Español section headings are not work notes, so a
+// preview never leads with one. The full original text (both language sections,
+// word for word) stays in purposeFull and the Upcoming card's expanded view.
+export function stripLangMarks(text) {
+  return String(text || '').split(/\r?\n/).filter((l) => !LANG_MARK_RE.test(l.trim())).join('\n').trim();
+}
+export function purposePreviewText(text, max = 120) {
+  return truncatePurpose(stripLangMarks(text), max);
+}
+
 // Hero "next visit" projection from the first confirmed upcoming event. Pure: no
 // fetch, no records. purposePreview is word-boundary truncated; purposeFull is the
 // complete sanitized punch list for expansion. Returns null when there are no events.
@@ -62,14 +73,15 @@ export function nextVisitProjection(events) {
   const ev = events[0];
   if (!ev) return null;
   const full = String(ev.purpose || '').trim();
-  const preview = truncatePurpose(full, 120);
+  const stripped = stripLangMarks(full);
+  const preview = truncatePurpose(stripped, 120);
   return {
     line: formatUpcomingLine(ev),
     purposePreview: preview || 'No notes.',
     purposeFull: full || 'No notes.',
     link: safeLink(ev.link),
     flagged: !!ev.flagged,
-    expandable: preview !== full && full.length > 0,
+    expandable: preview !== stripped && stripped.length > 0,
   };
 }
 

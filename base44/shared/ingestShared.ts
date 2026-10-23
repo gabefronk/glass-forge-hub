@@ -170,11 +170,12 @@ export function extractAddress(location, description, summary = '') {
 // Additive-only job patch from a matched calendar event: appends new PO/OE ids,
 // fills an EMPTY address with the event's job-site portion and an empty builder.
 // Never touches canonical_name or aliases (the job name is stable) and never
-// overwrites an owner-edited value - a manager-set address is sync-proof.
+// overwrites an owner-edited value - a manager-set address is sync-proof, and a
+// manager-CLEARED address (address_manual with no address) stays cleared.
 export function accumulateJobPatch(u, ev) {
   if (ev.po_number && !u.po_numbers.includes(ev.po_number)) u.po_numbers.push(ev.po_number);
   if (ev.oe_number && !u.oe_numbers.includes(ev.oe_number)) u.oe_numbers.push(ev.oe_number);
-  if (!u.address && ev.address) {
+  if (!u.address && !u.address_manual && ev.address) {
     const site = jobSiteFromLocation(ev.address, ev.job_name || '');
     if (site) u.address = site;
   }

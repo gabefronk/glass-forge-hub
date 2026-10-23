@@ -10,7 +10,11 @@ export function preferredLang(user) {
   return SPANISH_EMAILS.includes(email) || SPANISH_NAME_RE.test(name) ? "es" : "en";
 }
 
-const MARK_RE = /^(english|ingl[eé]s|español|espanol|spanish)\.?$/i;
+// Bare English/Español section-heading lines in bilingual calendar notes.
+// Headings, never work content: summary extraction skips them; the notes
+// themselves keep both sections word for word.
+export const LANG_MARK_RE = /^(english|ingl[eé]s|español|espanol|spanish)\.?$/i;
+const MARK_RE = LANG_MARK_RE;
 
 // Split a bullet list on English/Español marker lines and keep only the block
 // for lang. If the list has no markers, or only the other language exists,

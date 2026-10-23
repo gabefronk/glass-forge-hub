@@ -77,3 +77,15 @@ test("nextVisitProjection: uses first event only", () => {
   assert.equal(p.line, formatUpcomingLine(a));
   assert.equal(p.purposeFull, "first");
 });
+test("nextVisitProjection: bare language headings stripped from preview, full text preserved", () => {
+  const purpose = "ENGLISH\nAMSCO ORDER # 10-2716.26 pickup at will-call\n\nESPAÑOL\nRecoger en AMSCO will-call";
+  const p = nextVisitProjection([{ id: "e1", date: "2026-10-23", all_day: true, purpose, link: "", flagged: false }]);
+  assert.ok(p.purposePreview.startsWith("AMSCO ORDER # 10-2716.26"), `preview leads with actual notes: ${JSON.stringify(p.purposePreview)}`);
+  assert.ok(!/ENGLISH|ESPAÑOL/.test(p.purposePreview), "no heading in preview");
+  assert.equal(p.purposeFull, purpose, "full text keeps both sections and headings verbatim");
+});
+
+test("nextVisitProjection: heading-only purpose shows No notes", () => {
+  const p = nextVisitProjection([{ id: "e1", date: "2026-10-23", all_day: true, purpose: "ENGLISH", link: "", flagged: false }]);
+  assert.equal(p.purposePreview, "No notes.");
+});

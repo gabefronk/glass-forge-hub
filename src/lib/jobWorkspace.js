@@ -3,6 +3,7 @@
 import { eventKind, KIND, reportMissing } from "@/lib/calendarModel";
 import { crewName, formatShort } from "@/lib/feeUI";
 import { addDays } from "@/lib/jobsOverview";
+import { LANG_MARK_RE } from "@/lib/visitLang";
 
 const dayOf = (e) => String(e?.event_date || "").slice(0, 10);
 const live = (events) => (events || []).filter((e) => e?.event_date && e.source_status !== "cancelled");
@@ -44,6 +45,7 @@ export function workLines(scope, max = 5) {
       .replace(/\s+/g, " ")
       .trim())
     .filter((l) => l.length > 2
+      && !LANG_MARK_RE.test(l)
       && !/\$\s?\d/.test(l)
       && !/^(po|oe)\b[\s#:]/i.test(l)
       && !/^(labor|price|total)\b/i.test(l)
@@ -89,6 +91,7 @@ export function parseScopeNotes(text, { keepMoney = false, keepContacts = false,
     for (const [re, add] of FACTS) seg = seg.replace(re, (...m) => { add(m); return " "; });
     seg = clean(seg);
     if (seg.length < 2) continue;
+    if (LANG_MARK_RE.test(seg)) continue;
     const head = seg.match(HEAD_RE);
     if (head) {
       const tag = /[a-z]/.test(head[1]) ? clean(head[1]) : tagCase(clean(head[1]));

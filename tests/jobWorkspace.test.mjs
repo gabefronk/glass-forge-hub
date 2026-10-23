@@ -121,3 +121,19 @@ test('parseScopeNotes splits scheduler notes into tags, items, notes and referen
   assert.ok(all.facts.some((f) => f.k === 'Orig. PO' && f.v === '7249419'));
   assert.deepEqual(parseScopeNotes('Closing 9/24<br>Take shoes off.').notes, ['Closing 9/24', 'Take shoes off.']);
 });
+
+test('bilingual notes: section headings are not work lines or the step summary', async () => {
+  const { parseScopeNotes } = await import('../src/lib/jobWorkspace.js');
+  const scope = 'ENGLISH\nAMSCO ORDER # 10-2716.26 pickup at will-call<br>Bring glass to the shop\n\nESPAÑOL\nRecoger en AMSCO will-call';
+  const s = jobSnapshot({ job: {}, today: TODAY, status: { key: 'active', label: 'Active' }, events: [
+    { event_date: '2026-09-25', scope_notes: scope },
+  ] });
+  assert.equal(s.step.tag, 'Today');
+  assert.equal(s.step.text, 'Today, all day. AMSCO ORDER # 10-2716.26 pickup at will-call');
+  assert.ok(!s.work.includes('ENGLISH') && !s.work.includes('ESPAÑOL'), 'markers stay out of work lines');
+  assert.ok(s.work.includes('Recoger en AMSCO will-call'), 'Spanish section content is kept');
+  const p = parseScopeNotes(scope);
+  assert.ok(!p.tags.some((t) => /english|espa/i.test(t)), 'no language heading becomes a tag');
+  assert.ok(p.notes.some((n) => n.includes('Recoger')), 'Spanish note content kept');
+  assert.equal(s.workText, scope, 'original text preserved verbatim');
+});
