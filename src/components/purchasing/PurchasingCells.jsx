@@ -10,6 +10,7 @@ export function MoneyCell({ display, accent, tone, divider }) {
   return (
     <td className="px-2 py-2 text-center align-top" style={{ borderTop: `2px solid ${negative ? '#A43432' : accent}`, borderLeft: divider ? undefined : `1px solid ${LINE}`, backgroundColor: negative ? '#FDE8E7' : undefined }}>
       <div className="text-[15px] font-extrabold tabular-nums" style={{ color: INK, letterSpacing: '-0.01em' }}>{money(display?.value)}</div>
+      <ReviewCaption display={display} />
     </td>
   );
 }
@@ -21,6 +22,19 @@ export function MoneyStat({ label, display, accent, tone }) {
     <div className="px-3 py-2.5" style={{ borderTop: `2px solid ${negative ? '#A43432' : accent}`, backgroundColor: negative ? '#FDE8E7' : '#FFFFFF' }}>
       <div className="text-[10px] font-bold uppercase tracking-[0.07em]" style={{ color: HEAD }}>{label}</div>
       <div className="mt-0.5 text-[16px] font-extrabold tabular-nums" style={{ color: INK, letterSpacing: '-0.01em' }}>{money(display?.value)}</div>
+      <ReviewCaption display={display} />
+    </div>
+  );
+}
+
+// Provenance caption under a money figure: rendered only when the viewmodel
+// flags the figure as a candidate (review). Review figures without an
+// explicit label (display profit) read "Estimate".
+export function ReviewCaption({ display }) {
+  if (!display?.review) return null;
+  return (
+    <div className="mx-auto mt-0.5 max-w-[140px] text-[9px] font-semibold leading-snug" style={{ color: '#8A8F93' }}>
+      {display.label || 'Estimate'}
     </div>
   );
 }

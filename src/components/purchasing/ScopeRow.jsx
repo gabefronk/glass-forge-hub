@@ -27,6 +27,8 @@ const ROW = { backgroundColor: '#FCFDFC' };
 // One-pixel divider between the job row and its scopes, and between each scope.
 // A single spanning cell keeps the line continuous across every column (the
 // money cells carry their own colored top strip, so a row border would break).
+const ACCENT_WINDOWS = '#3977CB';
+
 const DIVIDER = (
   <tr aria-hidden="true">
     <td colSpan={9} style={{ height: 0, padding: 0, borderTop: `1px solid ${LINE}`, backgroundColor: '#FCFDFC' }} />
@@ -37,6 +39,14 @@ export function ScopeTableRows({ scopes, job, onSaved, onOpenTracking }) {
   return scopes.map((scope) => (
     <Fragment key={scope.key}>
       {DIVIDER}
+      {scope.label ? (
+        <tr>
+          <td colSpan={9} className="px-2.5 pt-1.5" style={{ ...CELL, backgroundColor: '#FCFDFC', borderLeft: `3px solid ${ACCENT_WINDOWS}` }}>
+            <span className="text-[10px] font-bold uppercase tracking-[0.05em]" style={{ color: '#5E6B66' }}>Scope</span>{' '}
+            <span className="text-[11px] font-medium" style={{ color: '#33403B' }}>{scope.label}</span>
+          </td>
+        </tr>
+      ) : null}
       <tr style={ROW}>
         <MoneyCell display={scope.windows} accent={ACCENT.windows} divider />
         <MoneyCell display={scope.rough} accent={ACCENT.rough} />
@@ -61,6 +71,12 @@ export function ScopeMobileBlocks({ scopes, job, onSaved, onOpenTracking }) {
     <div className="mt-2.5 flex flex-col gap-2">
       {scopes.map((scope) => (
         <div key={scope.key} className="overflow-hidden rounded-[10px]" style={{ border: `1px solid ${LINE}`, backgroundColor: '#FCFDFC' }}>
+          {scope.label ? (
+            <div className="px-3 py-1.5" style={{ borderLeft: `3px solid ${ACCENT_WINDOWS}`, borderBottom: `1px solid ${LINE}` }}>
+              <span className="text-[10px] font-bold uppercase tracking-[0.05em]" style={{ color: '#5E6B66' }}>Scope</span>{' '}
+              <span className="text-[11.5px] font-medium" style={{ color: '#33403B' }}>{scope.label}</span>
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-px" style={{ backgroundColor: LINE }}>
             <MoneyStat label="Windows incl tax" display={scope.windows} accent={ACCENT.windows} />
             <MoneyStat label="Labor & material" display={scope.rough} accent={ACCENT.rough} />
