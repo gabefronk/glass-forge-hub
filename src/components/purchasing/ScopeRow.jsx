@@ -78,7 +78,7 @@ export function ScopeMobileBlocks({ scopes, job, onSaved, onOpenTracking }) {
             </div>
           ) : null}
           <div className="grid grid-cols-2 gap-px" style={{ backgroundColor: LINE }}>
-            <MoneyStat label="Windows incl tax" display={scope.windows} accent={ACCENT.windows} />
+            <MoneyStat label="Windows" display={scope.windows} accent={ACCENT.windows} />
             <MoneyStat label="Labor & material" display={scope.rough} accent={ACCENT.rough} />
             <MoneyStat label="Sale price" display={scope.sale} accent={ACCENT.sale} />
             <MoneyStat label="Profit" display={scope.profit} accent={ACCENT.profit} tone={scope.profit?.tone} />

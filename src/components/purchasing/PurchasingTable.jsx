@@ -23,7 +23,11 @@ import { messageOf } from '@/components/budgets/ProcurementForms';
 // stacked card (money as a 2x2 stat grid, then labeled Quote / YA PO / ETA
 // rows, then the payment dropdown). The desktop table is untouched and still
 // renders at >=700px. One expanded Money workspace serves both layouts.
-const HEADERS = ['Windows incl tax', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', 'Actions'];
+// The windows column heading stays neutral: some figures are verified
+// tax-inclusive supplier totals, others are PO/order amounts with no tax
+// field. The per-figure caption carries the tax status; the heading asserts
+// nothing the unverified figures cannot back.
+const HEADERS = ['Windows', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', 'Actions'];
 
 // One row of the payment dropdown: tinted + dotted along the red → green ramp so
 // the list reads as a scale at a glance.
@@ -138,7 +142,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
       </div>
       <div className="px-4 pb-3 pt-1 min-[700px]:hidden" style={{ backgroundColor: rowBg }}>
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px]" style={{ backgroundColor: LINE, border: `1px solid ${LINE}` }}>
-          <MoneyStat label="Windows incl tax" display={windows.display} accent={ACCENT.windows} />
+          <MoneyStat label="Windows" display={windows.display} accent={ACCENT.windows} />
           <MoneyStat label="Labor & material" display={rough.display} accent={ACCENT.rough} />
           <MoneyStat label="Sale price" display={sale.display} accent={ACCENT.sale} />
           <MoneyStat label="Profit" display={profitDisplay} accent={ACCENT.profit} tone={profitDisplay?.tone} />

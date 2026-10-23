@@ -50,7 +50,7 @@ function Tile({ kind, label, value, tone = null, review = false, sub = null }) {
 export default function MoneyTiles({ windows, rough, sale, profit }) {
   return (
     <div className="grid grid-cols-2 gap-1 sm:flex sm:items-stretch">
-      <Tile kind="windows" label="Windows incl tax" value={windows?.value} review={windows?.review} sub={windows?.label} />
+      <Tile kind="windows" label="Windows" value={windows?.value} review={windows?.review} sub={windows?.label} />
       <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 self-center sm:block" style={{ color: '#B8B0A4' }} strokeWidth={2.2} strokeLinecap="round" />
       <Tile kind="rough" label="Labor & material" value={rough?.value} review={rough?.review} sub={rough?.label} />
       <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 self-center sm:block" style={{ color: '#B8B0A4' }} strokeWidth={2.2} strokeLinecap="round" />

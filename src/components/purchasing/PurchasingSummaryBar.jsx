@@ -14,7 +14,7 @@ const ACCENT = { windows: '#7FB3F2', rough: '#B7A5EA', sale: '#5FD1CC', profit: 
 const NEGATIVE = '#FF8A85';
 const BAR = '#0B3F3B', BAR_DEEP = '#082F2C', DIVIDER = 'rgba(255,255,255,.14)';
 const WHITE = '#FFFFFF', SOFT = 'rgba(255,255,255,.72)';
-const HEADERS = ['Windows incl tax', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', ''];
+const HEADERS = ['Windows', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', ''];
 
 function Total({ value, accent, first, negative }) {
   return (
@@ -111,7 +111,7 @@ export default function PurchasingSummaryBar({ totals, shown, total, eta, paymen
       </div>
       <div className="px-4 pb-4 min-[700px]:hidden">
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px]" style={{ backgroundColor: DIVIDER, border: `1px solid ${DIVIDER}` }}>
-          <TotalStat label="Windows incl tax" value={totals.windows} accent={ACCENT.windows} />
+          <TotalStat label="Windows" value={totals.windows} accent={ACCENT.windows} />
           <TotalStat label="Labor & material" value={totals.rough} accent={ACCENT.rough} />
           <TotalStat label="Sale price" value={totals.sale} accent={ACCENT.sale} />
           <TotalStat label="Profit" value={totals.profit} accent={ACCENT.profit} negative={totals.profit < 0} />
