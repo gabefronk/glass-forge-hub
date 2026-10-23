@@ -223,7 +223,7 @@ export default function JobDetail() {
           ) : null}
 
           {isPhone ? (
-            <div className="-mx-3 -mt-4">
+            <div className="-mx-3" style={{ marginTop: "calc(-16px - env(safe-area-inset-top, 0px))" }}>
               <JobHeroMobile
                 job={job}
                 status={status}
@@ -238,7 +238,7 @@ export default function JobDetail() {
                 onRename={async (name) => setJob(await renameJob(job, name))}
                 onEditAddress={owner ? async (next) => setJob(await updateJobAddress(job, next)) : null}
                 payment={owner
-                  ? <PaymentStatusDropdown job={job} onChanged={() => loadAll({ quiet: true })} />
+                  ? <PaymentStatusDropdown job={job} plain onChanged={() => loadAll({ quiet: true })} />
                   : (job.payment_status ? <PaymentStatusChip job={job} /> : null)}
                 onAddVisit={JOB_CREATE_ENABLED && isJobCalendarOwner(user) ? () => setShowCreateEvent(true) : null}
                 setupHref={owner ? `/jobs/${id}/setup` : null}
