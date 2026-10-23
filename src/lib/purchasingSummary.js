@@ -14,6 +14,10 @@ export function summarizeCards(cards = []) {
     profit: sum(cards, (c) => c.profitDisplay?.value),
     quotes: cards.filter((c) => c.refs?.quoteNumber).length,
     pos: cards.filter((c) => c.refs?.yaPo).length,
+    // Jobs whose roll-up row withholds multi-scope money: the totals then
+    // exclude those amounts, so the bar must say it is partial.
+    partialScopes: cards.filter((c) =>
+      [c.windows?.display, c.rough?.display, c.sale?.display, c.profitDisplay].some((d) => d?.suppressed)).length,
   };
 }
 

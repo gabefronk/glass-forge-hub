@@ -66,6 +66,11 @@ export default function PurchasingSummaryBar({ totals, shown, total, eta, paymen
             className="text-[12px] font-semibold underline" style={{ color: WHITE, minHeight: 0 }}>Clear filters</button>
         )}
       </div>
+      {totals.partialScopes > 0 && (
+        <div className="px-4 pb-1 text-[11.5px] font-medium" style={{ color: SOFT }}>
+          Partial - excludes multi-scope amounts (itemized on the scope rows below); not a complete job total.
+        </div>
+      )}
       <div className="max-[699px]:hidden">
         <table className="w-full border-collapse text-left" style={{ tableLayout: 'fixed' }}>
           <colgroup>
