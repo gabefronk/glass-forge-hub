@@ -1,11 +1,9 @@
 import { useRef, useState } from 'react';
-import { base44 } from '@/api/base44Client';
 import DotText from './DotText';
 import { pickDisplayBudget } from '@/lib/purchasingViewModel';
 import { isLiveBudget } from '@/lib/purchasingCoreTwin';
 import { displayDate } from '@/lib/purchasingDates';
-import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
-import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
+import { saveEtaTarget } from '@/lib/etaTarget';
 
 // The ETA cell: clicking it picks a date in place - no form to fill in.
 //   - A job with ONE pending supplier confirmation keeps its ETA on that order
@@ -14,10 +12,25 @@ import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
 //     the money tiles read from (glass_eta_date, source 'manual').
 // Anything else (several confirmations, a missing order number, material already
 // received) is written in the Money workspace, so the cell opens that instead.
+// A scope row passes its own etaTarget (its budget or its one pending order) and
+// no `data`, so the cell never falls back to the job's aggregate records.
 const LINE = '#E2E8F0';
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier }) {
+function jobEtaTarget(job, data) {
+  // Reference-only rows (PO-reconciliation placeholders with no supplier order
+  // number) are not real orders: they never get a picker or block one.
+  const orders = (data?.vendor_orders || []).filter((o) => o.job_id === job.id && o.order_number &&
+    !(o.purchase_order_id && (data?.purchase_orders || []).some((po) => po.id === o.purchase_order_id && po.status === 'cancelled')));
+  const pending = orders.filter((o) => !o.received_date);
+  const order = pending.length === 1 && pending[0].order_number && pending[0].amount != null ? pending[0] : null;
+  if (order) return { order, date: order.eta_date || '' };
+  if (orders.length) return null;
+  const budget = pickDisplayBudget((data?.budgets || []).filter((b) => b.job_id === job.id && isLiveBudget(b)));
+  return budget ? { budgetId: budget.id, date: budget.glass_eta_date || '' } : null;
+}
+
+export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier, etaTarget }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   // showPicker() is refused inside the preview's cross-origin iframe (SecurityError).
@@ -26,42 +39,19 @@ export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier }
   const [manual, setManual] = useState(false);
   const inputRef = useRef(null);
 
-  // Reference-only rows (PO-reconciliation placeholders with no supplier order
-  // number) are not real orders: they never get a picker or block one.
-  const orders = (data?.vendor_orders || []).filter((o) => o.job_id === job.id && o.order_number &&
-    !(o.purchase_order_id && (data?.purchase_orders || []).some((po) => po.id === o.purchase_order_id && po.status === 'cancelled')));
-  const pending = orders.filter((o) => !o.received_date);
-  const order = pending.length === 1 && pending[0].order_number && pending[0].amount != null ? pending[0] : null;
-  const budget = !orders.length
-    ? pickDisplayBudget((data?.budgets || []).filter((b) => b.job_id === job.id && isLiveBudget(b)))
-    : null;
-  const target = order || budget;
-  const date = order ? order.eta_date || '' : budget?.glass_eta_date || '';
+  const target = etaTarget ?? jobEtaTarget(job, data);
+  const date = target?.date || '';
 
   async function save(value) {
     if (busy || !target) return;
     setBusy(true); setError('');
     try {
-      if (order) {
-        await purchasingRequest({ action: 'save_supplier_order', order_id: order.id, job_id: job.id,
-          purchase_order_id: order.purchase_order_id, order_number: order.order_number,
-          amount: order.amount, eta_date: value || '', received_date: order.received_date || '',
-          notes: order.notes || '', expected_updated_date: order.updated_date,
-          request_key: crypto.randomUUID(), review_confirmed: true });
-      } else {
-        const response = await base44.functions.invoke('jobBudgetIngest', { action: 'set_glass_eta', budget_id: budget.id, eta_date: value, source: 'manual' });
-        const body = response?.data ?? response;
-        if (body?.error) throw new Error(body.error);
-      }
       // The ETA on Israel's Google Calendar is the same ETA: it is created here
       // and moved here, never duplicated, and removed when the ETA is cleared.
-      const sync = await syncEtaCalendar({
-        jobId: job.id, etaKey: order ? `order:${order.id}` : `budget:${budget.id}`, date: value || '',
-        ref: order?.order_number || '', vendor: order?.vendor || '',
-      });
-      if (sync.error) setError(CALENDAR_MISSED);
-      await onSaved?.();
-    } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
+      const result = await saveEtaTarget({ jobId: job.id, order: target.order || null, budgetId: target.budgetId || '', date: value });
+      if (result.error) setError(result.error);
+      if (result.saved) await onSaved?.();
+    } finally { setBusy(false); }
   }
 
   function openPicker() {

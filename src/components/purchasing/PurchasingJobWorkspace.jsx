@@ -26,7 +26,6 @@ import { C } from '@/lib/feeUI';
 import {
   money,
   PurchaseOrderForm, BudgetUsageForm, SupplierOrderForm, OrderStatusForm, InvoiceBridge,
-  purchasingRequest, messageOf,
 } from '@/components/budgets/ProcurementForms';
 import { NumbersEditor } from '@/components/budgets/BudgetReviewRow';
 import DeleteUnusedQuoteButton from '@/components/budgets/DeleteUnusedQuoteButton';
@@ -35,7 +34,7 @@ import PrivateSourceButton from './PrivateSourceButton';
 import { activeBudgets, budgetFigures, budgetRollup } from '@/lib/purchasingCoreTwin';
 import { statusWithDate, etaText } from '@/lib/purchasingDates';
 import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
-import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
+import { saveEtaTarget } from '@/lib/etaTarget';
 
 const SECTIONS = [['budgets', 'Quotes & budget'], ['orders', 'POs'], ['tracking', 'Supplier tracking'], ['invoicing', 'Invoicing']];
 const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v : ''; } catch { return ''; } };
@@ -216,17 +215,12 @@ function OrderRow({ order, pos, onEdit, onSaved, highlight }) {
     if (etaBusy) return;
     setEtaBusy(true); setEtaError('');
     try {
-      await purchasingRequest({ action: 'save_supplier_order', order_id: order.id, job_id: order.job_id,
-        purchase_order_id: order.purchase_order_id, order_number: order.order_number,
-        amount: order.amount, eta_date: value || '', received_date: order.received_date || '',
-        notes: order.notes || '', expected_updated_date: order.updated_date,
-        request_key: crypto.randomUUID(), review_confirmed: true });
-      // Same tie as the board's ETA cell: this in-place ETA edit moves the event
-      // on Israel's calendar too.
-      const sync = await syncEtaCalendar({ jobId: order.job_id, etaKey: `order:${order.id}`, date: value || '', ref: order.order_number || '', vendor: order.vendor || '' });
-      if (sync.error) setEtaError(CALENDAR_MISSED);
-      await onSaved?.();
-    } catch (e) { setEtaError(messageOf(e)); } finally { setEtaBusy(false); }
+      // Same path as the board's ETA cell: this in-place edit writes the real
+      // supplier record and moves its event on Israel's calendar too.
+      const result = await saveEtaTarget({ jobId: order.job_id, order, date: value });
+      if (result.error) setEtaError(result.error);
+      if (result.saved) await onSaved?.();
+    } finally { setEtaBusy(false); }
   }
   return (
     <div className="rounded-[10px] p-3" style={{ border: '1px solid #D3CABB', backgroundColor: '#FAF8F3', ...highlightStyle }}>

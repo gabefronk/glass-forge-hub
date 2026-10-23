@@ -5,8 +5,9 @@ import PurchasingRowTitle from './PurchasingRowTitle';
 import DotText from './DotText';
 import EtaCell from './EtaCell';
 import QuoteCell from './QuoteCell';
+import { ScopeTableRows, ScopeMobileBlocks } from './ScopeRow';
 import { refTone } from './PurchasingCard';
-import { money } from '@/components/budgets/ProcurementForms';
+import { MoneyCell, MoneyStat, FieldRow, ACCENT, LINE, HEAD } from './PurchasingCells';
 import { PAYMENT_STAGES, PAYMENT_TONES, paymentPatch, paymentStage } from '@/lib/jobPayment';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { base44 } from '@/api/base44Client';
@@ -22,40 +23,7 @@ import { messageOf } from '@/components/budgets/ProcurementForms';
 // stacked card (money as a 2x2 stat grid, then labeled Quote / YA PO / ETA
 // rows, then the payment dropdown). The desktop table is untouched and still
 // renders at >=700px. One expanded Money workspace serves both layouts.
-const ACCENT = { windows: '#3977CB', rough: '#7862B2', sale: '#248B88', profit: '#238557' };
-const INK = '#101617', LINE = '#E2E8F0', HEAD = '#0B3F3B';
-
 const HEADERS = ['Windows incl tax', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', 'Actions'];
-
-function MoneyCell({ display, accent, tone, divider }) {
-  const negative = tone === 'negative';
-  return (
-    <td className="px-2 py-2 text-center align-top" style={{ borderTop: `2px solid ${negative ? '#A43432' : accent}`, borderLeft: divider ? undefined : `1px solid ${LINE}`, backgroundColor: negative ? '#FDE8E7' : undefined }}>
-      <div className="text-[15px] font-extrabold tabular-nums" style={{ color: INK, letterSpacing: '-0.01em' }}>{money(display?.value)}</div>
-    </td>
-  );
-}
-
-// Mobile stat: same accent strip and figure style as a desktop money cell.
-function MoneyStat({ label, display, accent, tone }) {
-  const negative = tone === 'negative';
-  return (
-    <div className="px-3 py-2.5" style={{ borderTop: `2px solid ${negative ? '#A43432' : accent}`, backgroundColor: negative ? '#FDE8E7' : '#FFFFFF' }}>
-      <div className="text-[10px] font-bold uppercase tracking-[0.07em]" style={{ color: HEAD }}>{label}</div>
-      <div className="mt-0.5 text-[16px] font-extrabold tabular-nums" style={{ color: INK, letterSpacing: '-0.01em' }}>{money(display?.value)}</div>
-    </div>
-  );
-}
-
-// Labeled row inside the mobile card: label left, cell content right.
-function FieldRow({ label, children }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.07em]" style={{ color: HEAD }}>{label}</span>
-      <span className="min-w-0 text-right">{children}</span>
-    </div>
-  );
-}
 
 // One row of the payment dropdown: tinted + dotted along the red → green ramp so
 // the list reads as a scale at a glance.
@@ -116,6 +84,11 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
   // When the ETA cannot be written straight from the cell, clicking it opens the
   // row's supplier section instead of doing nothing.
   const openSupplierSection = () => { setExpanded(true); setSection('tracking'); };
+  // A job with more than one scope (a second budget, a reorder PO, a supplier
+  // confirmation with no PO) lists each scope on its own row under this one, so
+  // a second order keeps its own quote, PO, ETA and supplier payment. One scope
+  // renders exactly the row above and nothing more.
+  const multiScope = (card.scopes || []).length > 1;
 
   return (
     <Fragment>
@@ -159,6 +132,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
                 </button>
               </td>
             </tr>
+            {multiScope && <ScopeTableRows scopes={card.scopes} job={job} onSaved={onSaved} onOpenTracking={openSupplierSection} />}
           </tbody>
         </table>
       </div>
@@ -181,6 +155,7 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
           <PaymentSelect payKey={payKey} busy={busy} onChange={(v) => savePayment(v)} />
           {payError && <div className="mt-1 text-[10px] font-semibold" style={{ color: '#A43432' }}>{payError}</div>}
         </div>
+        {multiScope && <ScopeMobileBlocks scopes={card.scopes} job={job} onSaved={onSaved} onOpenTracking={openSupplierSection} />}
         <div className="mt-1 flex justify-end">
           <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={`purchasing-row-${job.id}`}
             className="inline-flex min-h-[44px] items-center gap-1 text-[12px] font-medium underline" style={{ color: '#8A8F93' }}>

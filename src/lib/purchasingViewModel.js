@@ -179,7 +179,7 @@ function scopedRecords(budget, jobPOs, jobOrders) {
 // dealer not supplier). Never customer_total / actual_total_sell (sale-side).
 // Multiple POs/orders on one budget → deterministic pick (earliest id) +
 // alternatives, never summed.
-function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
+export function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
   if (!budget) return { value: null, label: null, source: 'none', budgetId: null, alternatives: [], inferred: false };
   const src = sourceQuoteInclTax(budget, { allowInferredRecipient: true });
   // The supplier's printed quote total is a real document figure - show it
@@ -408,6 +408,19 @@ export function nextActionForJob(jobId, { budgets = [], purchaseOrders = [], ven
   return { label: 'Open job', href: `/jobs/${encodeURIComponent(jobId)}`, key: 'job' };
 }
 
+// Brand label for the Quote cell (10/22): the plain manufacturer brand only,
+// never the dealer/builder/customer name. Filler like WINDOWS / WINDOWS & DOORS
+// is stripped. Shared by the job row and its per-scope rows so both read the
+// same label.
+export function quoteBrandLabel(manufacturer = '') {
+  return pText(manufacturer)
+    .replace(/\bWINDOWS?(\s*(&|AND)\s+DOORS?)?\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[\s\-–&,/]+$/, '')
+    .replace(/^[\s\-–&,/]+/, '')
+    .trim();
+}
+
 // Build one card per job that has any purchasing activity. Merged, sample and
 // ignored jobs are excluded. Cards are sorted by canonical name. A job in a
 // PO conflict withholds windows AND profit. Duplicate job money inputs withhold.
@@ -472,15 +485,9 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     const activeBs = activeBudgets(jobBudgets);
     const fileBudget = activeBs[0] || jobBudgets[0] || null;
     // Brand label for the Quote cell (10/22): the plain manufacturer brand
-    // only, never the dealer/builder/customer name. Filler like WINDOWS /
-    // WINDOWS & DOORS is stripped. Vendor stays raw below for search.
-    const mfrRaw = fileBudget?.manufacturer || '';
-    const brand = mfrRaw
-      .replace(/\bWINDOWS?(\s*(&|AND)\s+DOORS?)?\b/gi, '')
-      .replace(/\s{2,}/g, ' ')
-      .replace(/[\s\-–&,/]+$/, '')
-      .replace(/^[\s\-–&,/]+/, '')
-      .trim();
+    // only, never the dealer/builder/customer name. Vendor stays raw below for
+    // search. Shared with the per-scope rows so both read the same label.
+    const brand = quoteBrandLabel(fileBudget?.manufacturer);
     const supplier = fileBudget?.vendor || fileBudget?.manufacturer ||
       (jobPOs.find((p) => p.status !== 'cancelled')?.vendor) || '';
     const units = activeBs.reduce((s, b) => s + (Number(b.openings_qty) || 0), 0);
