@@ -1,7 +1,7 @@
 import { assessBillingLine, isSalesTrackerOnlyEvent } from "../../shared/billingAudit.js";
 import { isIgnoredWorkItem, pricingReview, canonicalPostRows, COMPANION_WINDOW_DAYS } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, isLogisticsLocation, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit, isTripChargeAmount } from '../../shared/ingestShared.ts';
+import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, jobSiteFromLocation, accumulateJobPatch, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit, isTripChargeAmount } from '../../shared/ingestShared.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Derive FeeLines from CalendarEvents (the single Google reader).
@@ -155,7 +155,7 @@ export default async function(req) {
     const plan = planIngestJobs(matched.map(({ ev, title, normName }) => {
       const ex = existingByEventId.get(ev.google_event_id);
       return {
-        key: ev.google_event_id, normName, rawName: title, builder: ev.builder || '', address: isLogisticsLocation(ev.address) ? '' : (ev.address || ''),
+        key: ev.google_event_id, normName, rawName: title, builder: ev.builder || '', address: jobSiteFromLocation(ev.address, title) || '',
         poNumber: ev.po_number || '', oeNumber: ev.oe_number || '',
         currentJobId: ex?.job_id || '',
         // Rows the loop below will skip must not create a job; nor do locked-month gap fills.
@@ -405,8 +405,6 @@ export default async function(req) {
       if (!jobId) continue;
       const job = allJobs.find(j => j.id === jobId);
       if (!job) continue;
-      const existingPOs = new Set(job.po_numbers || []);
-      const existingOEs = new Set(job.oe_numbers || []);
       if (!jobPatches.has(jobId)) jobPatches.set(jobId, {
         id: jobId,
         po_numbers: [...(job.po_numbers || [])],
@@ -415,10 +413,7 @@ export default async function(req) {
         builder: job.builder || null,
       });
       const u = jobPatches.get(jobId);
-      if (ev.po_number && !existingPOs.has(ev.po_number) && !u.po_numbers.includes(ev.po_number)) u.po_numbers.push(ev.po_number);
-      if (ev.oe_number && !existingOEs.has(ev.oe_number) && !u.oe_numbers.includes(ev.oe_number)) u.oe_numbers.push(ev.oe_number);
-      if (!u.address && ev.address && !isLogisticsLocation(ev.address)) u.address = ev.address;
-      if (!u.builder && ev.builder) u.builder = ev.builder;
+      accumulateJobPatch(u, ev);
     }
     for (const batch of chunk([...jobPatches.values()], 500)) await base44.asServiceRole.entities.Jobs.bulkUpdate(batch);
 

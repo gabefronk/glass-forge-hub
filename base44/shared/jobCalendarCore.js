@@ -199,13 +199,15 @@ export function shapeUpcomingEvent(ev, job) {
   };
 }
 
-// ---- merge live + mirror into the scoped upcoming list (EXPLICIT identity only) ----
-// Mirror rows are read-only (never modified). A mirror link may only surface a
-// live event whose OWN explicit identity equals this job — no name fallback, no
-// mirror-only fallback. With explicit-only matching the live loop already surfaces
-// every such event, so the mirror loop is a safe no-op for matches; it is kept to
-// preserve the cross-reference plumbing and to reject no-identity / foreign /
-// conflicting / malformed mirror links.
+// ---- merge live + mirror into the scoped upcoming list (explicit identity first) ----
+// Mirror rows are read-only (never modified). A live event whose OWN explicit
+// identity equals this job surfaces via the live loop. A mirror row linked to
+// THIS job may additionally surface a live event that carries NO explicit
+// identity of its own — that is how crew-calendar visits linked by the Hub
+// ingest (high-confidence match or manual link, the same link that already
+// shows the visit in the job's History) appear in Upcoming. An explicit
+// identity still wins: foreign, conflicting or malformed identities never
+// surface, and a stale mirror (no live event) never becomes a phantom.
 export function buildUpcomingRead({ liveAll, mirrorRows, job, now, todayDenver }) {
   const liveById = new Map();
   for (const ev of liveAll || []) if (ev?.id) liveById.set(ev.id, ev);
@@ -225,7 +227,8 @@ export function buildUpcomingRead({ liveAll, mirrorRows, job, now, todayDenver }
     const live = liveById.get(gid);
     if (!live || live.status === 'cancelled') continue; // stale mirror never a phantom
     const x = extractExplicitJobId(live);
-    if (!x || x.malformed || x.conflict || x.jobId !== job.id) continue; // explicit identity required, equal to this job
+    if (x && (x.malformed || x.conflict || x.jobId !== job.id)) continue; // an explicit identity still wins
+    if (!(x && x.jobId === job.id) && String(mir.job_id || '') !== String(job.id)) continue; // no-identity events need this job's mirror link
     if (!isUpcoming(live, now, todayDenver)) continue;
     out.push(shapeUpcomingEvent(live, job));
     matched.add(gid);

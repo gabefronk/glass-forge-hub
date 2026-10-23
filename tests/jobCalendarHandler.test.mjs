@@ -17,7 +17,7 @@ const OTHER = { id: "6a8229a9801b2aef9278ff48", canonical_name: "Beaver - 412" }
 const OWNER = "6a7f0d834a5f825c724273ea";
 
 function ev({ id = "evt1", summary = "beaver - finish up", description = "", location = "1497 E 200 N St, Beaver, UT 84713", start, end, status, priv } = {}) {
-  const e = { id, summary, location, start: start || { date: "2026-10-10" }, end: end || { date: "2026-10-11" }, htmlLink: "https://calendar.google.com/event?eid=x", organizer: { email: "iryedra@gmail.com" } };
+  const e = { id, summary, location, start: start || { date: "2099-10-10" }, end: end || { date: "2099-10-11" }, htmlLink: "https://calendar.google.com/event?eid=x", organizer: { email: "iryedra@gmail.com" } };
   if (status) e.status = status;
   if (description) e.description = description;
   if (priv) e.extendedProperties = { private: priv };

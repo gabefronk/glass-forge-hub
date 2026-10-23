@@ -576,7 +576,70 @@ function JobTitle({ job, onRename, headingLevel }) {
   );
 }
 
+
+// ---------- Editable job address (manager-only; page gates the prop) ----------
+
+// Tap the pencil to edit the job-site address in place; Enter saves, Escape
+// cancels. Clearing the field removes the address. Mirrors the JobTitle
+// interaction. Only rendered when the page passes onEditAddress (owner gate).
+function JobAddress({ job, onEditAddress }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setEditing(false); setError(""); }, [job?.id]);
+  const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
+  const start = () => { setValue(job.address || ""); setError(""); setEditing(true); };
+  const save = async () => {
+    if (saving) return;
+    const next = value.replace(/\s+/g, " ").trim();
+    if (next === (job.address || "")) { setEditing(false); return; }
+    setSaving(true); setError("");
+    try { await onEditAddress(next); setEditing(false); }
+    catch (e) { setError(e.message || "Could not save the address."); }
+    finally { setSaving(false); }
+  };
+  if (editing) {
+    return (
+      <div className="mt-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            autoFocus aria-label="Job address" value={value} onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") setEditing(false); }}
+            placeholder="Job-site address"
+            className="min-w-[220px] flex-1 rounded-[9px] px-3 text-[15px] font-medium leading-[38px] outline-none"
+            style={{ backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(224,201,148,.45)" }}
+          />
+          <button type="button" onClick={save} disabled={saving} className="inline-flex h-[38px] items-center rounded-[9px] px-3.5 text-[13.5px] font-semibold disabled:opacity-60" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{saving ? "Saving…" : "Save"}</button>
+          <button type="button" onClick={() => setEditing(false)} className="inline-flex h-[38px] items-center rounded-[9px] px-3 text-[13.5px] font-semibold" style={HERO_SEC}>Cancel</button>
+        </div>
+        {error ? <p role="alert" className="m-0 mt-1 text-[12px]" style={{ color: "#f1b9b3" }}>{error}</p> : null}
+        <p className="m-0 mt-1 text-[12px]" style={{ color: "#8f999b" }}>The job-site address stays put; calendar pickup or delivery stops never replace it.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="group mt-2 flex items-center gap-2">
+      {job.address ? (
+        <a href={dirHref} target="_blank" rel="noopener noreferrer" title="Get directions" aria-label={`Get directions to ${sanitizeText(job.address)}`} className="inline-flex min-h-11 items-center gap-[7px] text-[14.5px] font-medium hover:underline" style={{ color: "#c9d0d1" }}>
+          <MapPin className="h-[15px] w-[15px] shrink-0" style={{ color: BRASS_LT }} />{sanitizeText(job.address)}
+        </a>
+      ) : (
+        <span className="inline-flex min-h-11 items-center gap-[7px] text-[13.5px]" style={{ color: "#8f999b" }}>
+          <MapPin className="h-[15px] w-[15px] shrink-0" style={{ color: BRASS_LT }} />No job-site address on file
+        </span>
+      )}
+      {onEditAddress ? (
+        <button type="button" onClick={start} aria-label={job.address ? "Edit job address" : "Add job address"} title={job.address ? "Edit job address" : "Add job address"} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] opacity-60 hover:opacity-100" style={{ color: BRASS_LT, backgroundColor: "rgba(255,255,255,.06)" }}>
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 // ---------- Hero ----------
+
 
 const HERO_BTN = "inline-flex h-[38px] items-center gap-[7px] rounded-[9px] px-3.5 text-[13.5px] font-semibold whitespace-nowrap";
 const HERO_SEC = { backgroundColor: "rgba(255,255,255,.09)", color: HERO_INK, border: "1px solid rgba(255,255,255,.12)" };
@@ -624,8 +687,7 @@ function JobInfo({ snap, folder }) {
 
 // progress (optional): jobProgress() from jobStages — shows a small "Stage n of 7" chip.
 // alert (optional): a node shown first in the chip row by the job name — the red service-item marker.
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, extra, headingLevel = "h1", progress = null, alert = null, upcoming = null, payment = null, corner = null }) {
-  const dirHref = job?.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, onEditAddress = null, extra, headingLevel = "h1", progress = null, alert = null, upcoming = null, payment = null, corner = null }) {
   // The builder already leads most job names ("Bangerter Homes - Gomez Res"); only add it
   // to the eyebrow when the title doesn't carry it.
   const builderText = sanitizeText(job.builder || "");
@@ -663,11 +725,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
               <JobTitle job={job} onRename={onRename} headingLevel={headingLevel} />
               {payment}
             </div>
-            {job.address ? (
-              <a href={dirHref} target="_blank" rel="noopener noreferrer" title="Get directions" aria-label={`Get directions to ${sanitizeText(job.address)}`} className="mt-2 inline-flex min-h-11 items-center gap-[7px] text-[14.5px] font-medium hover:underline" style={{ color: "#c9d0d1" }}>
-                <MapPin className="h-[15px] w-[15px] shrink-0" style={{ color: BRASS_LT }} />{sanitizeText(job.address)}
-              </a>
-            ) : null}
+            <JobAddress job={job} onEditAddress={onEditAddress} />
             <JobInfo snap={snap} folder={folder} />
           </div>
           <div className="flex w-[300px] max-w-full shrink-0 flex-col gap-2 max-[899px]:w-full">

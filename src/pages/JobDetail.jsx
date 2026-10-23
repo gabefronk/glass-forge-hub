@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, FolderOpen, HardHat, Users } from "lucide-react";
+import { ArrowLeft, FolderOpen, HardHat, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { jobsStatus } from "@/lib/jobsSanitize";
@@ -32,6 +32,7 @@ import JobReportMenu from "@/components/jobs/JobReportMenu";
 import { JOB_REPORT_EMAIL_ENABLED } from "@/lib/jobReportFlag";
 import { jobSnapshot } from "@/lib/jobWorkspace";
 import { planMatchesJob, renameJob } from "@/lib/jobRename";
+import { updateJobAddress } from "@/lib/jobAddress";
 import { denverDate } from "../../base44/shared/billingCore.js";
 import { useJobFolderFiles } from "@/hooks/use-job-folder-files";
 import { useJobLive } from "@/hooks/use-job-live";
@@ -214,6 +215,7 @@ export default function JobDetail() {
             plans={plans}
             onFieldReport={() => setShowReport(true)}
             onRename={async (name) => setJob(await renameJob(job, name))}
+            onEditAddress={owner ? async (next) => setJob(await updateJobAddress(job, next)) : null}
             progress={progress}
             alert={<ServiceMarker open={service.open} />}
             upcoming={upcoming}
@@ -295,13 +297,6 @@ export default function JobDetail() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Mobile sticky Add field report action */}
-      <div className="lg:hidden fixed left-0 right-0 z-30 px-4 pt-2 pb-3" style={{ bottom: "calc(68px + env(safe-area-inset-bottom))", backgroundColor: SHEET_BG, borderTop: "1px solid #c9b995" }}>
-        <button type="button" onClick={() => setShowReport(true)} className="w-full inline-flex items-center justify-center gap-1.5 min-h-[48px] rounded-full text-[13px] font-semibold" style={{ backgroundColor: C.accent, color: C.accentDark }}>
-          <Camera className="h-4 w-4" />Add field report
-        </button>
       </div>
 
       {showReport && (

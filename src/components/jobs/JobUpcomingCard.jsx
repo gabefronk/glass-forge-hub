@@ -34,25 +34,27 @@ function EventRow({ ev }) {
   );
 }
 
+// The card only exists when there is an actual upcoming visit: nothing renders
+// while checking or when the crew calendar has none (owner direction 2026-10-23),
+// so the section pops up with the day's details instead of sitting empty.
 export default function JobUpcomingCard({ upcoming }) {
   const { loading, error, events } = upcoming || { loading: false, error: "", events: [] };
-  return (
-    <SheetCard icon={CalendarClock} tile={TILE.green} title="Upcoming" sub="next visits on the crew calendar">
-      {loading ? (
-        <div className="flex items-center gap-2 py-3 text-[13px]" style={{ color: "#566063" }}>
-          <span className="h-3.5 w-3.5 rounded-full border-2 animate-spin" style={{ borderColor: "#e2dcd1", borderTopColor: "#0b3f3b" }} /> Checking the crew calendar…
-        </div>
-      ) : error ? (
+  if (loading) return null;
+  if (error) {
+    return (
+      <SheetCard icon={CalendarClock} tile={TILE.green} title="Upcoming" sub="next visits on the crew calendar">
         <p role="alert" className="m-0 rounded-[9px] px-3 py-2 text-[12.5px]" style={{ color: "#a43432", backgroundColor: "#fcedec", border: "1px solid #f0c9c5" }}>
           Upcoming visits could not load. {error}
         </p>
-      ) : !events.length ? (
-        <p className="m-0 py-2 text-[13px]" style={{ color: "#566063" }}>No upcoming visits on the crew calendar.</p>
-      ) : (
-        <ul className="m-0 flex flex-col gap-2">
-          {events.map((ev) => <EventRow key={ev.id} ev={ev} />)}
-        </ul>
-      )}
+      </SheetCard>
+    );
+  }
+  if (!events.length) return null;
+  return (
+    <SheetCard icon={CalendarClock} tile={TILE.green} title="Upcoming" sub="next visits on the crew calendar">
+      <ul className="m-0 flex flex-col gap-2">
+        {events.map((ev) => <EventRow key={ev.id} ev={ev} />)}
+      </ul>
     </SheetCard>
   );
 }

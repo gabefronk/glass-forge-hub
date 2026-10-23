@@ -107,7 +107,7 @@ export default async function(req) {
         end_date,
         job_name: ev.summary || '(untitled)',
         builder: extractBuilder(ev.summary),
-        address: extractAddress(ev.location, ev.description),
+        address: extractAddress(ev.location, ev.description, ev.summary),
         source_location: ev.location || null,
         scope_notes: ev.description || '',
         event_attachments: (ev.attachments || []).map((a) => ({ title: a.title || '', file_url: a.fileUrl || '', mime_type: a.mimeType || '' })).filter((a) => a.file_url),

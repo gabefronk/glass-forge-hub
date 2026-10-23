@@ -128,9 +128,22 @@ test("buildUpcomingRead: explicit-only scoped, stale mirror, cancelled, dedupe, 
   const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, now: NOW, todayDenver: TODAY });
   assert.deepEqual(events.map((e) => e.id), ["next", "sat"]);
 });
-test("buildUpcomingRead: mirror never surfaces a live event with no explicit identity (mirror-only fallback off)", () => {
-  const live = [ev({ id: "L1", summary: "beaver - finish up install trim items" })];
+test("buildUpcomingRead: this job's mirror link surfaces a live event with no explicit identity (owner direction 2026-10-23)", () => {
+  // Crew-calendar visits linked by the Hub ingest carry no hubJobId of their own;
+  // the mirror row's explicit job link (the same link that shows the visit in the
+  // job's History) is enough to surface them in Upcoming - today's all-day pickup
+  // included (isUpcoming keeps all-day today).
+  const live = [ev({ id: "L1", summary: "ETA - Scott Neighbor (YA-0012)", location: "Pickup: AMSCO will-call, 1880 S 1045 W, Salt Lake City, UT 84104. Bring to Gabriel's shop.", start: { date: TODAY }, end: { date: "2026-10-07" } })];
   const mirror = [{ google_event_id: "L1", job_id: JOB.id, source_status: "confirmed" }];
+  const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, now: NOW, todayDenver: TODAY });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].id, "L1");
+  assert.equal(events[0].all_day, true);
+  assert.match(events[0].location, /AMSCO will-call/);
+});
+test("buildUpcomingRead: a mirror row linked to a DIFFERENT job never surfaces a no-identity event here", () => {
+  const live = [ev({ id: "L1", summary: "beaver - finish up install trim items" })];
+  const mirror = [{ google_event_id: "L1", job_id: OTHER.id, source_status: "confirmed" }];
   const { events } = core.buildUpcomingRead({ liveAll: live, mirrorRows: mirror, job: JOB, now: NOW, todayDenver: TODAY });
   assert.equal(events.length, 0);
 });

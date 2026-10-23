@@ -111,27 +111,75 @@ export function normalizeAddress(addr) {
 // Virtual meeting locations that are NOT real addresses.
 const VIRTUAL_RE = /microsoft teams|zoom|google meet|meet\.google|virtual|teleconference|video call|online meeting/i;
 
-// Supplier pickup / will-call / shop-drop stops are day logistics, never a
-// job site. They must not become a job's address: the job keeps its own
-// stable identity and a vendor/shop address would also poison customer +
-// address identity matching. The raw location text still lands on the event's
-// source_location, so the day's pickup/delivery directions are not lost.
-const LOGISTICS_LOC_RE = /\bwill[- ]?call\b|\bpick[\s-]?up\b|\bamsco\b|\bbuilders firstsource\b|\bwarehouse\b|\b(?:gabriel'?s|our|the|my|his)\s+shop\b|\bback to (?:the |gabriel'?s )?shop\b/i;
+// Pickup / will-call / shop-drop stops are day logistics, not a job site. A bare
+// vendor or warehouse venue is NOT rejected on its own - a training or pickup
+// visit legitimately happens at the vendor. What makes a location logistics is
+// the event's intent (ETA/pickup/will-call/ready/order in the event name) or an
+// explicit pickup/shop instruction in the location text. A "deliver/bring to X"
+// segment names the day's real destination and wins, unless X is the shop. The
+// raw calendar location still lands on the event's source_location, so the day's
+// directions stay on the visit where they belong.
+const PICKUP_INTENT_RE = /\bwill[- ]?call\b|\bpick[\s-]?up\b/i;
+const VENDOR_LOC_RE = /\bamsco\b|\bbuilders firstsource\b/i;
+const SHOP_DEST_RE = /\b(?:gabriel'?s|our|the|my|his)\s+shop\b|\bback\s+to\s+(?:the\s+|gabriel'?s\s+)?shop\b/i;
+const LOGISTICS_EVENT_RE = /\b(?:eta|pick[\s-]?up|will[- ]?call|ready|arrival|arriving|order)\b/i;
+const DELIVER_TO_RE = /\b(?:deliver(?:y|ing)?|drop(?:ping)?\s*off|bring(?:ing)?|take(?:n|ing)?)\b[^.\n]*?\bto\b[:\s]+([^.\n]{3,})/i;
 
-export function isLogisticsLocation(loc) {
-  return !!loc && LOGISTICS_LOC_RE.test(String(loc));
+// The day's delivery/drop destination inside a mixed logistics location, else null.
+export function deliveryDestination(loc) {
+  const m = String(loc || '').match(DELIVER_TO_RE);
+  return m ? m[1].trim() : null;
 }
 
-// Extract a job site address. Priority: Google Calendar location field
-// (filtered for virtual meetings and logistics stops), then "Address:" label
-// in description.
-export function extractAddress(location, description) {
-  if (location && location.trim() && !VIRTUAL_RE.test(location) && !isLogisticsLocation(location)) return location.trim();
+// The job-site portion of a calendar location, or null when it is only a
+// logistics stop. Mixed "pickup at vendor, deliver to X" yields X (never the
+// shop). A bare vendor venue passes unless the event itself is logistics
+// (ETA/pickup/ready/order), so training and work venues at a vendor survive.
+export function jobSiteFromLocation(loc, summary = '') {
+  const s = String(loc || '').trim();
+  if (!s || VIRTUAL_RE.test(s)) return null;
+  const dest = deliveryDestination(s);
+  if (dest) return SHOP_DEST_RE.test(dest) ? null : dest;
+  if (PICKUP_INTENT_RE.test(s) || SHOP_DEST_RE.test(s)) return null;
+  if (VENDOR_LOC_RE.test(s) && summary && LOGISTICS_EVENT_RE.test(String(summary))) return null;
+  return s;
+}
+
+export function isLogisticsLocation(loc, summary = '') {
+  return jobSiteFromLocation(loc, summary) === null;
+}
+
+// Extract a job site address. Priority: Google Calendar location field (its
+// job-site portion), then "Address:" label in description. Virtual meetings and
+// logistics stops never become a job's address; the job keeps its own stable
+// identity and a vendor/shop address would also poison customer + address
+// identity matching.
+export function extractAddress(location, description, summary = '') {
+  const site = jobSiteFromLocation(location, summary);
+  if (site) return site;
   if (description) {
     const m = description.match(/address\s*:\s*(.+?)(?:\n|$)/i);
-    if (m && m[1].trim() && !VIRTUAL_RE.test(m[1]) && !isLogisticsLocation(m[1])) return m[1].trim();
+    if (m) {
+      const d = jobSiteFromLocation(m[1], summary);
+      if (d) return d;
+    }
   }
   return null;
+}
+
+// Additive-only job patch from a matched calendar event: appends new PO/OE ids,
+// fills an EMPTY address with the event's job-site portion and an empty builder.
+// Never touches canonical_name or aliases (the job name is stable) and never
+// overwrites an owner-edited value - a manager-set address is sync-proof.
+export function accumulateJobPatch(u, ev) {
+  if (ev.po_number && !u.po_numbers.includes(ev.po_number)) u.po_numbers.push(ev.po_number);
+  if (ev.oe_number && !u.oe_numbers.includes(ev.oe_number)) u.oe_numbers.push(ev.oe_number);
+  if (!u.address && ev.address) {
+    const site = jobSiteFromLocation(ev.address, ev.job_name || '');
+    if (site) u.address = site;
+  }
+  if (!u.builder && ev.builder) u.builder = ev.builder;
+  return u;
 }
 
 // Extract the builder/GC name from a job name — the part before the first
