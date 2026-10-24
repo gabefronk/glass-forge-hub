@@ -4,7 +4,7 @@ import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft,
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { base44 } from "@/api/base44Client";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug } from "lucide-react";
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
 // labels because five slots share the phone width.
@@ -16,7 +16,6 @@ const PRIMARY_NAV = [
 ];
 
 const SECONDARY_NAV = [
-  { label: "Team Structure", to: "/team-structure", icon: GitBranch },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
   { label: "Field reports", to: "/jobs?view=reports", icon: FileText, ownerOnly: true },

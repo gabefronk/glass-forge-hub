@@ -1,8 +1,3 @@
-export const TEAM_STRUCTURE_NOTICE = {
-  title: "New team structure draft",
-  body: "I put together a first draft of how I currently see the Glass Forge team structure, responsibilities, and the main areas each person is helping own and develop. This is a working version for clarity, not rank. Please review it and let me know what feels right, what feels off, what is missing, or what should change."
-};
-
 export const TEAM_PROFILES = {
   gabe: {
     names: ["gabe fronk", "gabriel fronk", "gabe", "gabriel"],

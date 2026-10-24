@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, GitBranch, Sparkles } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug, Sparkles } from "lucide-react";
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
@@ -19,7 +19,6 @@ const NAV_ITEMS = [
 ];
 
 const MORE_ITEMS = [
-  { label: "Team Structure", to: "/team-structure", icon: GitBranch },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
