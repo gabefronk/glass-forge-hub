@@ -3,18 +3,19 @@
 // (ISO timestamp of the last change). Both null means not tracked yet.
 //
 // PAYMENT_STAGES is the picker list, in the order shown (after "Not tracked").
-// The `paid` key is kept (labelled "Full payment received") so jobs already
-// marked paid keep their status.
+// Receivable states only, in the order money arrives (deposit, balance invoiced,
+// paid), as QuickBooks tracks a customer job. Install progress is a job stage, not
+// a payment state. Keys are kept so existing jobs keep their status.
 export const PAYMENT_STAGES = [
-  { key: "half_down", label: "Half down paid" },
-  { key: "installed", label: "Job installed" },
-  { key: "paid", label: "Full payment received" },
-  { key: "waiting_on_payment", label: "Waiting on payment" },
+  { key: "half_down", label: "Deposit paid (half down)" },
+  { key: "waiting_on_payment", label: "Balance invoiced · waiting" },
+  { key: "paid", label: "Paid in full" },
 ];
 
 // Stages retired from the picker. Jobs already on one still show it correctly;
 // it just cannot be chosen again.
 const LEGACY_STAGES = [
+  { key: "installed", label: "Job installed · set payment" },
   { key: "sent_for_payment", label: "Sent for payment · QuickBooks" },
   { key: "partial", label: "Partial payment" },
 ];
@@ -26,7 +27,7 @@ export const PAYMENT_TONES = {
   half_down:          { dot: "#C2601C", text: "#96490F", bg: "#FCEFE0", border: "#F1D3B2" },
   installed:          { dot: "#A8861A", text: "#7A6010", bg: "#FBF4DB", border: "#EDE0A8" },
   paid:               { dot: "#166447", text: "#166447", bg: "#EAF5EE", border: "#C7E4D2" },
-  waiting_on_payment: { dot: "#5D8C3A", text: "#3F6B21", bg: "#EFF6E4", border: "#D3E5BB" },
+  waiting_on_payment: { dot: "#A8861A", text: "#7A6010", bg: "#FBF4DB", border: "#EDE0A8" },
   sent_for_payment:   { dot: "#A8861A", text: "#7A6010", bg: "#FBF4DB", border: "#EDE0A8" },
   partial:            { dot: "#3E7C46", text: "#2C5F33", bg: "#E9F4E2", border: "#CCE2BD" },
 };
