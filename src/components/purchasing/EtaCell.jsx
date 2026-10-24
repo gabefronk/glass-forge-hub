@@ -4,7 +4,7 @@ import { pickDisplayBudget } from '@/lib/purchasingViewModel';
 import { isLiveBudget } from '@/lib/purchasingCoreTwin';
 import { displayDate, etaDistance } from '@/lib/purchasingDates';
 import { saveEtaTarget } from '@/lib/etaTarget';
-import { etaShort } from '@/lib/purchasingSummary';
+import { etaDate } from '@/lib/purchasingSummary';
 
 // The ETA cell: clicking it picks a date in place - no form to fill in.
 //   - A job with ONE pending supplier confirmation keeps its ETA on that order
@@ -25,10 +25,10 @@ function EtaText({ date }) {
   return <>{displayDate(date)}{d ? <span className="ml-1 font-bold" style={{ color: d.late ? '#A43432' : '#4A5652' }}>· {d.text}</span> : null}</>;
 }
 
-// Compact grid form (declutter, Oct 24): "Nov 9 · 16d", late in red, no dot.
+// Compact grid form (Gabriel, Oct 24): just the date, "10/13/26" - no countdown, no late flag.
 function EtaWords({ label, empty = '—' }) {
-  const e = etaShort(label, denverToday());
-  return <span className="whitespace-nowrap text-[14px]" style={{ color: e.late ? '#A43432' : e.text ? '#101617' : '#566063', fontWeight: e.late ? 600 : 400 }}>{e.text || empty}</span>;
+  const text = etaDate(label);
+  return <span className="whitespace-nowrap text-[14px]" style={{ color: text ? '#101617' : '#566063', fontWeight: 500 }}>{text || empty}</span>;
 }
 
 function jobEtaTarget(job, data) {
