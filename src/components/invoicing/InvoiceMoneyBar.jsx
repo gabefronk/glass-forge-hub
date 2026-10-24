@@ -1,8 +1,8 @@
 import { formatMoney } from "@/lib/feeMath";
 
 // QuickBooks-style money bar: one strip from "waiting on a report" to "paid". Each part
-// shows the labor (what goes on the BFS invoice) and the fee (your share), and opens the
-// matching lines or invoices. Replaces the tall month summary card.
+// shows the labor (what goes on the BFS invoice) and the fee (your share). Totals only;
+// the toolbar's Show dropdown is the one filter (same buckets). Replaces the tall card.
 const TONES = {
   muted: { rule: "#9A9080", text: "#34403F" },
   amber: { rule: "#C08B2E", text: "#6F4E10" },
@@ -11,7 +11,7 @@ const TONES = {
   green: { rule: "#166447", text: "#166447" },
 };
 
-export default function InvoiceMoneyBar({ segments, monthEarnedTotal, monthEarnedCount, month, active, onSelect, notes }) {
+export default function InvoiceMoneyBar({ segments, monthEarnedTotal, monthEarnedCount, month, notes }) {
   const [y, m] = String(month || "").split("-").map(Number);
   const monthName = y ? new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long" }) : "";
   return (
@@ -23,18 +23,17 @@ export default function InvoiceMoneyBar({ segments, monthEarnedTotal, monthEarne
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         {segments.map((s) => {
           const t = TONES[s.tone] || TONES.ink;
-          const isActive = active === s.key;
           return (
-            <button key={s.key} type="button" onClick={() => onSelect(s)} aria-pressed={isActive}
-              className="min-h-[64px] px-3 py-2 text-left transition-colors hover:bg-[#F3EEE4]"
-              style={{ borderTop: `3px solid ${t.rule}`, borderRight: "1px solid #D6CCBA", borderBottom: "1px solid #D6CCBA", backgroundColor: isActive ? "#F3EEE4" : s.primary ? "#F4FAF7" : "#FFFFFF" }}>
+            <div key={s.key}
+              className="min-h-[64px] px-3 py-2 text-left"
+              style={{ borderTop: `3px solid ${t.rule}`, borderRight: "1px solid #D6CCBA", borderBottom: "1px solid #D6CCBA", backgroundColor: s.primary ? "#F4FAF7" : "#FFFFFF" }}>
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-[11.5px] font-bold" style={{ color: t.text }}>{s.label}</span>
                 <span className="text-[11px] font-semibold tabular-nums" style={{ color: "#4A5652" }}>{s.count}</span>
               </div>
               <div className="mt-0.5 font-mono-num-bold text-[16px] leading-tight" style={{ color: s.count ? "#101617" : "#6B7276" }}>${formatMoney(s.labor)}</div>
               <div className="text-[11px] font-medium tabular-nums" style={{ color: "#4A5652" }}>labor · ${formatMoney(s.fee)} fee</div>
-            </button>
+            </div>
           );
         })}
       </div>
