@@ -110,7 +110,7 @@ export default function InvoiceHeader({ month, onMonthChange, onExportPdf, expor
               </span>
             </div>
           ) : (
-            <button onClick={onCloseMonth} disabled={closing} aria-label={closing ? "Closing" : "Close month"} title="Close month" className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", background: "#b8955a", color: "#1d160a", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", whiteSpace: "nowrap", flexShrink: 0, boxShadow: "0 1px 2px rgba(11,63,59,.35), inset 0 1px 0 rgba(255,255,255,.12)", cursor: closing ? "wait" : "pointer" }}>
+            <button onClick={onCloseMonth} disabled={closing} aria-label={closing ? "Closing" : "Close month"} title="Close month" className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-[34px]" style={{ height: "34px", borderRadius: "var(--r-button)", background: "transparent", border: "1px solid #e0c994", color: "#e0c994", fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px", padding: "0 14px", whiteSpace: "nowrap", flexShrink: 0, cursor: closing ? "wait" : "pointer" }}>
               <FileText className="h-4 w-4" strokeWidth={1.8} strokeLinecap="round" />
               <span className="hidden sm:inline">{closing ? "Closing…" : "Close month"}</span>
             </button>
