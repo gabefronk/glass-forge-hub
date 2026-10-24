@@ -1,43 +1,38 @@
 import { formatMoney } from "@/lib/feeMath";
 
-// QuickBooks-style money bar: one strip from "waiting on a report" to "paid". Each part
-// shows the labor (what goes on the BFS invoice) and the fee (your share). Totals only;
-// the toolbar's Show dropdown is the one filter (same buckets). Replaces the tall card.
-const TONES = {
-  muted: { rule: "#9A9080", text: "#34403F" },
-  amber: { rule: "#C08B2E", text: "#6F4E10" },
-  teal: { rule: "#0B3F3B", text: "#0B3F3B" },
-  ink: { rule: "#34403F", text: "#101617" },
-  green: { rule: "#166447", text: "#166447" },
-};
+// The money strip (declutter, Oct 24): one row of three figures and a thin display-only
+// bar sized by labor dollars, QuickBooks style. Ready to invoice, Needs attention (one
+// count: waiting on a report + needs a decision + $0 to confirm) and Invoiced, unpaid.
+// Figures come from moneyStrip(moneyBarSegments(...)), the same buckets as Show. Not
+// clickable: the Show dropdown is the filter.
+const TEAL = "#0B3F3B", AMBER = "#C08B2E", SLATE = "#34506A", RULE = "#D6CCBA";
 
-export default function InvoiceMoneyBar({ segments, monthEarnedTotal, monthEarnedCount, month, notes }) {
-  const [y, m] = String(month || "").split("-").map(Number);
-  const monthName = y ? new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long" }) : "";
+function Cell({ dot, label, figure, figureColor, rest, first }) {
   return (
-    <section aria-label="Billing money bar" className="mt-4 overflow-hidden rounded-[12px] bg-white" style={{ border: "1px solid #B3A792" }}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2" style={{ backgroundColor: "#0B3F3B" }}>
-        <span className="text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: "#E0C994" }}>{monthName} · done and reported</span>
-        <span className="font-mono-num-bold text-[15px]" style={{ color: "#FFFFFF" }}>${formatMoney(monthEarnedTotal)} fee <span className="text-[12px] font-normal" style={{ color: "#CFE3DA" }}>· {monthEarnedCount} lines</span></span>
+    <div className="flex min-w-0 items-baseline gap-2 px-4 max-[699px]:py-2" style={{ borderLeft: first ? undefined : `1px solid ${RULE}`, minHeight: "54px", alignItems: "center" }}>
+      <span aria-hidden="true" style={{ width: "8px", height: "8px", borderRadius: "99px", backgroundColor: dot, flexShrink: 0, alignSelf: "center" }} />
+      <span className="whitespace-nowrap text-[14px] font-semibold" style={{ color: "#34403F" }}>{label}</span>
+      <span className="font-mono-num-bold whitespace-nowrap text-[20px] font-bold" style={{ color: figureColor }}>{figure}</span>
+      {rest && <span className="min-w-0 truncate text-[14px]" style={{ color: "#566063" }}>{rest}</span>}
+    </div>
+  );
+}
+
+export default function InvoiceMoneyBar({ strip }) {
+  const { ready, attention, unpaid } = strip;
+  const parts = [[ready.labor, TEAL], [attention.labor, AMBER], [unpaid.labor, SLATE]].filter(([v]) => v > 0);
+  return (
+    <section aria-label="Billing money strip" className="mt-4 overflow-hidden rounded-[12px] bg-white" style={{ border: "1px solid #B3A792" }}>
+      <div className="grid grid-cols-1 md:grid-cols-[1.7fr_1fr_1fr]">
+        <Cell first dot={TEAL} label="Ready to invoice" figure={`$${formatMoney(ready.fee)}`} figureColor={TEAL}
+          rest={`fee on $${formatMoney(ready.labor)} labor · ${ready.count} ${ready.count === 1 ? "line" : "lines"}`} />
+        <Cell dot={AMBER} label="Needs attention" figure={attention.count} figureColor="#6F4E10" rest={attention.count === 1 ? "line" : "lines"} />
+        <Cell dot={SLATE} label="Invoiced, unpaid" figure={`$${formatMoney(unpaid.fee)}`} figureColor="#101617"
+          rest={unpaid.count ? `fee · ${unpaid.count} ${unpaid.count === 1 ? "invoice" : "invoices"}` : ""} />
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-        {segments.map((s) => {
-          const t = TONES[s.tone] || TONES.ink;
-          return (
-            <div key={s.key}
-              className="min-h-[64px] px-3 py-2 text-left"
-              style={{ borderTop: `3px solid ${t.rule}`, borderRight: "1px solid #D6CCBA", borderBottom: "1px solid #D6CCBA", backgroundColor: s.primary ? "#F4FAF7" : "#FFFFFF" }}>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[11.5px] font-bold" style={{ color: t.text }}>{s.label}</span>
-                <span className="text-[11px] font-semibold tabular-nums" style={{ color: "#4A5652" }}>{s.count}</span>
-              </div>
-              <div className="mt-0.5 font-mono-num-bold text-[16px] leading-tight" style={{ color: s.count ? "#101617" : "#6B7276" }}>${formatMoney(s.labor)}</div>
-              <div className="text-[11px] font-medium tabular-nums" style={{ color: "#4A5652" }}>labor · ${formatMoney(s.fee)} fee</div>
-            </div>
-          );
-        })}
+      <div aria-hidden="true" className="flex" style={{ height: "6px", backgroundColor: "#E9E2D4" }}>
+        {parts.map(([v, color], i) => <span key={i} style={{ flex: `${v} 1 0`, backgroundColor: color }} />)}
       </div>
-      {notes}
     </section>
   );
 }
