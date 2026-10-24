@@ -5,7 +5,7 @@
 // fee_amt is always derived from labor_amt × fee_pct.
 
 import { isIgnoredWorkItem, computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount, laborRate, denverDate } from "../../base44/shared/billingCore.js";
-export { computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount };
+export { computeLaborAmt, computeFeeAmt, MAN_HOUR_RATE, TRIP_RATE, isTripChargeAmount, denverDate };
 
 // Rows as the Invoicing page sees them: labor/fee recomputed from source fields.
 // Every "ready to bill" view (Invoicing, Dashboard, sidebar) must use this so their totals agree.
