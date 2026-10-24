@@ -15,6 +15,38 @@ export const waitingOnReport = (r, reports) => inPlay(r) && !isFutureRow(r) && !
 
 const sum = (rows) => ({ count: rows.length, labor: round(rows.reduce((n, r) => n + (computeLaborAmt(r) || 0), 0)), fee: round(rows.reduce((n, r) => n + (computeFeeAmt(r) || 0), 0)) });
 
+// One status per line in the same words as the Show filter, from the same predicates, so
+// the Status column never disagrees with a filter count. Billed lines are Invoiced until
+// paid.
+export const STATUS_LABELS = {
+  ready: 'Ready', needs_review: 'Needs decision', zero_confirm: '$0 to confirm', needs_report: 'Waiting on report',
+  invoiced: 'Invoiced', paid: 'Paid', scheduled: 'Scheduled', none: '',
+};
+export function lineStatus(r, reports, superseded) {
+  if (r.billed_to_bfs) return r.paid_to_ya || r.paid_date ? 'paid' : 'invoiced';
+  if (isReady(r, reports, superseded)) return 'ready';
+  if (needsDecision(r)) return 'needs_review';
+  if (isZeroToConfirm(r)) return 'zero_confirm';
+  if (waitingOnReport(r, reports)) return 'needs_report';
+  if (isFutureRow(r)) return 'scheduled';
+  return 'none';
+}
+
+// The slim money strip (Oct 24 declutter): Ready to invoice, Needs attention (waiting on
+// a report + needs a decision + $0 to confirm, one count) and Invoiced, unpaid (open
+// invoices). Built from moneyBarSegments so it always ties to the Show counts.
+export function moneyStrip(segments = []) {
+  const by = new Map(segments.map((s) => [s.key, s]));
+  const pick = (k) => by.get(k) || { count: 0, labor: 0, fee: 0 };
+  const attention = ['needs_report', 'needs_review', 'zero_confirm'].map(pick);
+  const add = (list, f) => round(list.reduce((n, s) => n + (s[f] || 0), 0));
+  return {
+    ready: pick('ready'),
+    attention: { count: attention.reduce((n, s) => n + s.count, 0), labor: add(attention, 'labor'), fee: add(attention, 'fee') },
+    unpaid: pick('invoices_open'),
+  };
+}
+
 // rows: the month's billing rows (display copies); register: invoiceRegister output.
 export function moneyBarSegments(rows, reports, superseded, register = []) {
   const shown = rows.filter((r) => !superseded.has(r.id));
