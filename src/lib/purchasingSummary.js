@@ -106,24 +106,92 @@ export function jobFlags(card, today = '') {
     sold,
     customerOwes: sold ? round(sold * customerOwedShare(stage)) : 0,
     weOwe: ap.owed || 0,
+    quoted: Boolean(card?.refs?.quoteNumber),
+    po_placed: Boolean(card?.refs?.yaPo),
     open_orders: openOrder,
     needs_eta: openOrder && !eta,
     eta_late: ISO_DAY.test(eta) && Boolean(today) && eta < today,
+    waiting_payment: stage === 'waiting_on_payment',
     deposit_due: Boolean(sold) && !stage,
     supplier_unpaid: ap.unpaid > 0,
     missing_cost: !hasCost,
   };
 }
 
+// The Show dropdown (approved design, Oct 24). The page hides an option whose count is 0.
 export const PURCHASING_FILTERS = [
   { key: 'all', label: 'All jobs' },
-  { key: 'open_orders', label: 'Open orders' },
-  { key: 'needs_eta', label: 'Needs ETA' },
+  { key: 'quoted', label: 'Quoted' },
+  { key: 'po_placed', label: 'PO placed' },
   { key: 'eta_late', label: 'ETA late' },
-  { key: 'deposit_due', label: 'Deposit due' },
+  { key: 'needs_eta', label: 'Needs ETA' },
+  { key: 'waiting_payment', label: 'Waiting on payment' },
   { key: 'supplier_unpaid', label: 'Supplier unpaid' },
   { key: 'missing_cost', label: 'Missing cost' },
 ];
+
+// ETA said in a few characters: "Nov 9 · 16d", or "Oct 13 · 11d late" (late: true).
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dayNum = (iso) => Date.parse(iso + 'T12:00:00Z') / 86400000;
+export function etaShort(label, today = '') {
+  if (!label) return { text: '', late: false };
+  if (!ISO_DAY.test(label)) return { text: label, late: false };
+  const [, m, d] = label.split('-').map(Number);
+  const date = `${MONTHS[m - 1]} ${d}`;
+  if (!ISO_DAY.test(today)) return { text: date, late: false };
+  const days = Math.round(dayNum(label) - dayNum(today));
+  if (days === 0) return { text: `${date} · today`, late: false };
+  return days > 0 ? { text: `${date} · ${days}d`, late: false } : { text: `${date} · ${-days}d late`, late: true };
+}
+
+// A multi-scope job's ETAs as one phrase: "62–63d late", "5–12d", or the single ETA.
+export function etaRange(labels = [], today = '') {
+  const dates = labels.filter((l) => ISO_DAY.test(l || ''));
+  if (!dates.length || !ISO_DAY.test(today)) return etaShort(labels.find(Boolean) || '', today);
+  const days = dates.map((l) => Math.round(dayNum(l) - dayNum(today)));
+  const lo = Math.min(...days), hi = Math.max(...days);
+  if (lo === hi) return etaShort(dates[0], today);
+  if (hi < 0) return { text: `${-hi}–${-lo}d late`, late: true };
+  if (lo >= 0) return { text: `${lo}–${hi}d`, late: false };
+  return { text: `${-lo}d late – ${hi}d`, late: true };
+}
+
+// Column-header sorting for the grid. Default: ETA, soonest first. ETA order: dated
+// (earliest first), then other labels, then no ETA, then Delivered.
+export const PURCHASING_SORTS = ['job', 'eta', 'payment', 'windows', 'sale', 'profit'];
+export const DEFAULT_PURCHASING_SORT = { key: 'eta', dir: 'asc' };
+const STAGE_ORDER = ['', 'half_down', 'installed', 'paid', 'waiting_on_payment'];
+function etaKey(card) {
+  const labels = card?.scopes?.length > 1 ? card.scopes.map((s) => s.etaLabel) : [card?.refs?.etaLabel];
+  const dates = labels.filter((l) => ISO_DAY.test(l || '')).sort();
+  if (dates.length) return `0${dates[0]}`;
+  const l = labels.find(Boolean) || '';
+  return l === 'Delivered' ? '3' : l ? '1' : '2';
+}
+const SORT_VALUE = {
+  job: (c) => `${c.job?.builder || ''} ${c.job?.canonical_name || ''}`.trim().toLowerCase(),
+  eta: etaKey,
+  payment: (c) => STAGE_ORDER.indexOf(c.paymentStage || ''),
+  windows: (c) => column(c, 'windows').value,
+  sale: (c) => column(c, 'sale').value,
+  profit: (c) => column(c, 'profit').value,
+};
+export function sortCards(cards = [], sort = DEFAULT_PURCHASING_SORT) {
+  const s = PURCHASING_SORTS.includes(sort?.key) ? sort : DEFAULT_PURCHASING_SORT;
+  const get = SORT_VALUE[s.key];
+  const sign = s.dir === 'desc' ? -1 : 1;
+  return [...cards].sort((a, b) => {
+    const x = get(a), y = get(b);
+    const c = typeof x === 'number' ? x - y : String(x).localeCompare(String(y));
+    return c * sign || SORT_VALUE.job(a).localeCompare(SORT_VALUE.job(b));
+  });
+}
+
+// One job's own figures as the grid shows them (a multi-scope job adds its scope rows).
+export function cardFigures(card) {
+  const t = summarizeCards([card]);
+  return { windows: t.windows, sale: t.sale, profit: t.profit };
+}
 
 export function applyPurchasingFilter(cards = [], key = 'all', today = '') {
   if (key === 'all' || !PURCHASING_FILTERS.some((f) => f.key === key)) return cards;
