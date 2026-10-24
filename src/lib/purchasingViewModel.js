@@ -165,7 +165,7 @@ export function pickDisplayBudget(jobBudgets = []) { return sortedDisplayPool(jo
 // double-counts. A real 0 is a valid amount (kept); null/empty is absent.
 function pickAmount(records, field) {
   const withAmt = records
-    .map((r) => ({ id: r.id, amount: amount(r[field]), ref: r.po_number || r.order_number || r.id }))
+    .map((r) => ({ id: r.id, amount: amount(r[field]), ref: r.po_number || r.order_number || r.id, includes_sales_tax: r.includes_sales_tax === true }))
     .filter((x) => x.amount != null);
   if (!withAmt.length) return { pick: null, alternatives: [] };
   withAmt.sort((a, b) => String(a.id).localeCompare(String(b.id)));
@@ -175,7 +175,7 @@ function pickAmount(records, field) {
 // PO and vendor order amounts carry no tax field. Job cost adds the use tax unless the
 // amount is the supplier's taxed quote total on this budget (costWithUseTax).
 function supplierCandidate(kind, pick, rest, budget = null) {
-  const one = (p) => ({ value: costWithUseTax(p.amount, budget), label: supplierTaxIncluded(p.amount, budget) ? `${kind} ${p.ref} (supplier tax incl.)` : `${kind} ${p.ref} + ${USE_TAX}` });
+  const one = (p) => ({ value: costWithUseTax(p.amount, budget, p), label: supplierTaxIncluded(p.amount, budget, p) ? `${kind} ${p.ref} (supplier tax incl.)` : `${kind} ${p.ref} + ${USE_TAX}` });
   return { ...one(pick.pick), alternatives: pick.alternatives.map(one), ...rest };
 }
 const poCandidate = (pick, rest, budget) => supplierCandidate('PO', pick, rest, budget);

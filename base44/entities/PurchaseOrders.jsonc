@@ -59,6 +59,10 @@
       "type": "number",
       "description": "Dealer cost (what Glass Forge pays the vendor)."
     },
+    "includes_sales_tax": {
+      "type": "boolean",
+      "description": "Owner marked amount_dealer as already including the supplier's sales tax, so job cost adds no use tax."
+    },
     "amount_customer": {
       "type": "number",
       "description": "Customer sell price for the same scope."

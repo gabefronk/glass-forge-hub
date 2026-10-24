@@ -32,13 +32,13 @@ export function orderedCost(jobId, { purchase_orders = [], vendor_orders = [], b
   const take = (value) => { if (value == null) partial = true; else { total += value; counted += 1; } };
   for (const po of pos) {
     const budget = budgetOf(po.budget_id);
-    const linked = orders.filter((o) => o.purchase_order_id === po.id).map((o) => costWithUseTax(o.amount, budget));
-    take(num(po.amount_dealer) != null ? costWithUseTax(po.amount_dealer, budget) : (linked.length && linked.every((v) => v != null) ? linked.reduce((n, v) => n + v, 0) : null));
+    const linked = orders.filter((o) => o.purchase_order_id === po.id).map((o) => costWithUseTax(o.amount, budget, o));
+    take(num(po.amount_dealer) != null ? costWithUseTax(po.amount_dealer, budget, po) : (linked.length && linked.every((v) => v != null) ? linked.reduce((n, v) => n + v, 0) : null));
   }
   for (const o of orders) {
     if (o.purchase_order_id && poIds.has(o.purchase_order_id)) continue;
     if (!o.purchase_order_id && num(o.amount) == null && !String(o.order_number || '').trim()) continue;
-    take(costWithUseTax(o.amount, budgetOf(o.budget_id)));
+    take(costWithUseTax(o.amount, budgetOf(o.budget_id), o));
   }
   return { value: counted ? round(total) : null, partial };
 }
