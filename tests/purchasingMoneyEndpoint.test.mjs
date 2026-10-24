@@ -110,7 +110,7 @@ test('list: malformed stored amount (string / overflow) withholds that job', asy
 
 test('save: retired (Oct 24) - the old Edit money write is refused with no reads or writes', async () => {
   const a = mock();
-  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5, sale_price: 10 }), a.adapter);
+  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5, sale_price: 10 }), a);
   assert.equal(r.status, 400);
   assert.equal(r.body.error, 'unknown_action');
   assert.equal(a.calls.moneyCreate.length + a.calls.moneyUpdate.length + a.calls.moneyFilter.length, 0);
