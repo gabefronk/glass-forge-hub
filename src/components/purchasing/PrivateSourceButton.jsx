@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 
 // Owner click → server signs the receipt-bound private PDF for 60s → opens it.
 // The private ref never reaches the browser; only the short-lived link does.
-export default function PrivateSourceButton({ budgetId, className, style }) {
+export default function PrivateSourceButton({ budgetId, className, style, label = 'Source quote' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,8 +27,8 @@ export default function PrivateSourceButton({ budgetId, className, style }) {
 
   return (
     <button type="button" onClick={open} disabled={busy} className={className} style={style} title={error || 'Open source quote'}>
+      {error ? error : label}
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-      {error ? error : 'Source quote'}
     </button>
   );
 }
