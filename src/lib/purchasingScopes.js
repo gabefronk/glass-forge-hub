@@ -73,8 +73,8 @@ function budgetQuoteCard(budget) {
 
 function budgetScope(budget, pos, orders) {
   const windows = bestWindowsFromBudget(budget, pos, orders);
-  const rough = roughDisplayCandidate(budget, null, false);
-  const sale = saleDisplayCandidate(budget, null, false);
+  const rough = roughDisplayCandidate(budget);
+  const sale = saleDisplayCandidate(budget);
   const eta = etaFor(budget, orders);
   const poNumbers = [...new Set(pos.map((p) => p.po_number).filter(Boolean))];
   return {

@@ -258,25 +258,22 @@ export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders 
   return { value: pickC.value, label: conflict ? `PO conflict — ${baseLabel}` : baseLabel, review: true, source: conflict ? 'po_conflict' : 'multiple_scopes', budgetId: pickC.budgetId, alternatives };
 }
 
-// The budget is the one source of a job's money (Gabriel, Oct 24): the figures
-// he types in Edit numbers on the budget win. The older per-job money entry
-// (JobMoneyInputs, the retired "Edit money" button) only fills in a job whose
-// budget has no figure yet. Computed sheet math never shows.
-export function roughDisplayCandidate(budget, ownerValue, duplicate) {
+// The budget is the one source of a job's money (Gabriel, Oct 24): labor (sub pay +
+// additional install material) and the customer sell he types in Edit numbers.
+// Computed sheet math never shows. No budget figure → dash.
+export function roughDisplayCandidate(budget) {
   const labor = budget ? amount(budget.inputs?.labor_cost_sub_pay) : null;
   const mat = budget ? amount(budget.inputs?.additional_install_material) : null;
   if (labor != null || mat != null) {
     return { value: roundMoney((labor ?? 0) + (mat ?? 0)), label: 'From budget', review: false, source: 'budget_inputs' };
   }
-  if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Older money entry', review: true, source: 'owner' };
-  return { value: null, label: duplicate ? 'Duplicate owner entries - fix to show' : null, review: Boolean(duplicate), source: 'none' };
+  return { value: null, label: null, review: false, source: 'none' };
 }
 
-export function saleDisplayCandidate(budget, ownerValue, duplicate) {
+export function saleDisplayCandidate(budget) {
   const sell = budget ? amount(budget.inputs?.actual_total_sell) : null;
   if (sell != null) return { value: Number(sell), label: 'From budget', review: false, source: 'budget_inputs' };
-  if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Older money entry', review: true, source: 'owner' };
-  return { value: null, label: duplicate ? 'Duplicate owner entries - fix to show' : null, review: Boolean(duplicate), source: 'none' };
+  return { value: null, label: null, review: false, source: 'none' };
 }
 
 // Display profit from the three display inputs (candidate or verified). Shown
@@ -418,16 +415,7 @@ export function quoteBrandLabel(manufacturer = '') {
 // Build one card per job that has any purchasing activity. Merged, sample and
 // ignored jobs are excluded. Cards are sorted by canonical name. A job in a
 // PO conflict withholds windows AND profit. Duplicate job money inputs withhold.
-export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders = [], vendor_orders = [], moneyInputs = [], conflicts = [], today = '' } = {}) {
-  const moneyByJob = new Map();
-  for (const m of moneyInputs) {
-    if (!m?.job_id) continue;
-    if (moneyByJob.has(m.job_id)) {
-      moneyByJob.set(m.job_id, { ...moneyByJob.get(m.job_id), duplicate: true, rough_labor_material: null, sale_price: null });
-    } else {
-      moneyByJob.set(m.job_id, m);
-    }
-  }
+export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders = [], vendor_orders = [], conflicts = [], today = '' } = {}) {
   const conflictJobIds = new Set();
   for (const c of conflicts) for (const id of (c.job_ids || [])) conflictJobIds.add(id);
 
@@ -435,7 +423,6 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
   for (const b of budgets) if (b.job_id && isLiveBudget(b)) activeJobIds.add(b.job_id);
   for (const p of purchase_orders) if (p.job_id && p.status !== 'cancelled') activeJobIds.add(p.job_id);
   for (const o of vendor_orders) if (o.job_id && !isVendorOrderCancelled(o, purchase_orders)) activeJobIds.add(o.job_id);
-  for (const m of moneyInputs) if (m?.job_id) activeJobIds.add(m.job_id);
 
   const cards = [];
   for (const job of jobs) {
@@ -446,31 +433,22 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     const jobBudgets = budgets.filter((b) => b.job_id === job.id);
     const jobPOs = purchase_orders.filter((p) => p.job_id === job.id);
     const isConflict = conflictJobIds.has(job.id);
-    let win = isConflict ? { value: null, status: 'withheld', budgetId: null, provenance: null, reason: 'po_conflict' } : windowsInclTax(jobBudgets);
+    const win = isConflict ? { value: null, status: 'withheld', budgetId: null, provenance: null, reason: 'po_conflict' } : windowsInclTax(jobBudgets);
 
-    const money = moneyByJob.get(job.id);
-    const moneyDup = !!money?.duplicate;
-    // Only the newly-created single-scope sale may use its explicit owner-reviewed
-    // tax-inclusive payable. Legacy jobs and later add-on scopes keep old rules.
-    const saleScopes = activeBudgets(jobBudgets);
-    const reviewedNewSale = !isConflict && !moneyDup && job.new_sale_run_id && money?.new_sale_run_id === job.new_sale_run_id && saleScopes.length === 1 && saleScopes[0].new_sale_run_id === job.new_sale_run_id && typeof money.windows_incl_tax === 'number' && Number.isFinite(money.windows_incl_tax) && money.windows_incl_tax >= 0;
-    if (reviewedNewSale) win = {value:money.windows_incl_tax,status:'verified',budgetId:saleScopes[0].id,provenance:'Owner reviewed supplier payable incl tax / freight in New sale'};
-    const rough = money && !moneyDup && amount(money.rough_labor_material) != null ? Number(amount(money.rough_labor_material)) : null;
-    const sale = money && !moneyDup && amount(money.sale_price) != null ? Number(amount(money.sale_price)) : null;
-    const profit = isConflict ? { value: null, tone: 'unknown' } : computeProfit(win.value, rough, sale);
-
-    // Display candidates (DISPLAY ONLY — no datastore writes). The verified
-    // canonical value (win.value / rough / sale) stays separate on the card;
-    // these build the best-known number shown in the tile when verified is
-    // null, with an honest label and amber review flag. Truly absent → null
+    // Display candidates (DISPLAY ONLY — no datastore writes). Truly absent → null
     // (dash). A real 0 stays 0. Multiple scopes / conflict → one deterministic
-    // candidate + alternatives, labelled estimate/review.
+    // candidate + alternatives, labelled estimate/review. Sale and labor come from
+    // the job's budget - its one money source (Oct 24) - so they are also the
+    // card's verified sale/labor; the verified profit still needs a verified windows cost.
     const jobActivePOs = jobPOs.filter((p) => p.status !== 'cancelled');
     const jobActiveOrders = activeVendorOrders(vendor_orders.filter((o) => o.job_id === job.id), purchase_orders);
     const pickBudget = pickDisplayBudget(jobBudgets);
-    const winDisplay = reviewedNewSale ? {value:win.value,label:'Owner reviewed supplier payable incl tax / freight',review:false} : windowsDisplayCandidate(jobBudgets, jobActivePOs, jobActiveOrders, { conflict: isConflict });
-    const roughDisplay = roughDisplayCandidate(pickBudget, rough, moneyDup);
-    const saleDisplay = saleDisplayCandidate(pickBudget, sale, moneyDup);
+    const winDisplay = windowsDisplayCandidate(jobBudgets, jobActivePOs, jobActiveOrders, { conflict: isConflict });
+    const roughDisplay = roughDisplayCandidate(pickBudget);
+    const saleDisplay = saleDisplayCandidate(pickBudget);
+    const rough = roughDisplay.value;
+    const sale = saleDisplay.value;
+    const profit = isConflict ? { value: null, tone: 'unknown' } : computeProfit(win.value, rough, sale);
     const profitDisp = profitDisplayCalc(winDisplay, roughDisplay, saleDisplay);
 
     const refs = refsForJob(job.id, { budgets, purchaseOrders: purchase_orders, vendorOrders: vendor_orders, today });
@@ -505,8 +483,8 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     cards.push({
       job: { id: job.id, canonical_name: job.canonical_name, address: job.address, builder: job.builder },
       windows: { ...win, display: winDisplay },
-      rough: { value: rough, moneyId: money?.id || null, duplicate: moneyDup, display: roughDisplay },
-      sale: { value: sale, moneyId: money?.id || null, duplicate: moneyDup, display: saleDisplay },
+      rough: { value: rough, display: roughDisplay },
+      sale: { value: sale, display: saleDisplay },
       profit,
       profitDisplay: profitDisp,
       chosenBudget: pickBudget ? { id: pickBudget.id, title: pickBudget.title || pickBudget.quote_name || 'Budget' } : null,

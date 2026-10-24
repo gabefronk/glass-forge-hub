@@ -51,9 +51,9 @@ function laborActual(rows) {
 
 const line = (key, label, estimate, actual, extra = {}) => ({ key, label, estimate, actual, variance: less(actual, estimate), ...extra });
 
-export function jobProject(jobId, memberIds = [], { jobs = [], budgets = [], purchaseOrders = [], vendorOrders = [], moneyInputs = [], invoices = [], costInputs = [], today = '' } = {}) {
+export function jobProject(jobId, memberIds = [], { jobs = [], budgets = [], purchaseOrders = [], vendorOrders = [], invoices = [], costInputs = [], today = '' } = {}) {
   const job = jobs.find((j) => j.id === jobId);
-  const head = jobMoneyHeadline(jobId, memberIds, { jobs, budgets, purchaseOrders, vendorOrders, moneyInputs, today });
+  const head = jobMoneyHeadline(jobId, memberIds, { jobs, budgets, purchaseOrders, vendorOrders, today });
   if (!job || !head) return null;
   const ids = new Set([jobId, ...memberIds]);
   const toPrimary = (rows) => rows.filter((r) => ids.has(r.job_id)).map((r) => ({ ...r, job_id: jobId }));
