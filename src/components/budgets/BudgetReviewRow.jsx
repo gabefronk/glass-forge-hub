@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link2, Pencil, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { Link2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { computeJobBudget, SALES_TAX_RATE } from "../../../base44/shared/jobBudgetMath.js";
