@@ -1,20 +1,33 @@
-// Four distinct money states per job for vendor/material spend.
+// Four distinct money states per job for VENDOR MATERIAL spend.
 //
 // Estimated -> Committed -> Incurred -> Paid are STAGES OF THE SAME MONEY.
 // A dollar committed on a PO becomes incurred when the vendor bills it and
 // paid when it is settled - so the four figures overlap by design and must
 // NEVER be summed together, and none of them is an independent extra cost.
 //
-// State definitions (QBO-style job costing, from records the Hub already has):
-//  - estimated:  the reviewed budget cost rollup for the job's active scopes.
-//  - committed:  what open POs obligate us to pay (dealer amounts, no tax
-//                field exists on a PO). Cancelled POs are excluded.
-//  - incurred:   vendor bills actually received - the vendor has asked for
-//                money (ACH link received) or the bill is already settled.
-//                An UNPAID vendor bill still counts here; payment state does
-//                not change incurred cost. Orders placed but not yet billed
-//                (ordered / eta_set) stay commitment-stage only.
-//  - paid:       vendor orders recorded paid or reconciled.
+// Scope is explicit and uneven, by record design:
+//  - estimated:  reviewed budget cost rollup - material INCL TAX + sub-pay
+//                labor + overhead. The widest basis of the four.
+//  - committed:  open PO dealer amounts - PRE-TAX (a PO carries no tax
+//                field), vendor material only.
+//  - incurred:   vendor bills actually received. A bill is established ONLY
+//                by positive record evidence: an ACH payment link (the
+//                vendor's payment request arrives with its invoice), an
+//                ach_link_received status/timestamp, or a settled record.
+//                An UNPAID vendor bill still counts as incurred - payment
+//                state does not change incurred cost. Order confirmations,
+//                ETAs and logged amounts on unbilled orders are NOT bills
+//                (several records document their amount is pre-tax and not
+//                the final payable), so they stay commitment-stage only.
+//  - paid:       records marked paid or reconciled. Payment evidence is the
+//                record's own reference (e.g. a processor invoice); unless
+//                the order is reconciled, settlement is processor-marked,
+//                not bank-verified - the UI says so.
+//
+// What these records CANNOT represent (no schema fields exist): partial
+// payments, credits/refunds, and per-record tax on PO/vendor-order amounts.
+// Nothing here implies full actual job cost - labor actuals are not in
+// vendor orders at all.
 //
 // Honest absence: a state with no qualifying records is null (dash), never 0.
 // A state whose records include a missing amount reports partial: true so the
@@ -22,14 +35,21 @@
 
 import { budgetRollup, isLiveBudget, amount, roundMoney } from './purchasingCoreTwin.js';
 
-const BILLED_VO_STATUS = ['ach_link_received', 'paid', 'reconciled'];
 const PAID_VO_STATUS = ['paid', 'reconciled'];
 
 const isVendorOrderCancelled = (o, pos) =>
   Boolean(o.purchase_order_id && pos.some((p) => p.id === o.purchase_order_id && p.status === 'cancelled'));
+
 export const isOrderPaid = (o) => PAID_VO_STATUS.includes(o?.status) || Boolean(o?.paid_at);
+
+// A vendor bill exists only when the record carries positive billing evidence.
 export const isOrderBilled = (o) =>
-  BILLED_VO_STATUS.includes(o?.status) || Boolean(o?.ach_link) || Boolean(o?.paid_at);
+  o?.status === 'ach_link_received' || Boolean(o?.ach_link) || Boolean(o?.ach_link_received_at) || isOrderPaid(o);
+
+// How strong the payment evidence is: reconciled = tied out; otherwise the
+// record's paid mark is processor-reported, not independently settled.
+export const paymentEvidence = (o) =>
+  o?.status === 'reconciled' || Boolean(o?.reconciled_at) ? 'reconciled' : 'processor_marked';
 
 function sumKnown(records, field) {
   let total = 0, known = 0, missing = 0;
@@ -47,13 +67,18 @@ export function moneyStatesForJob(jobId, { budgets = [], purchaseOrders = [], ve
   const pos = purchaseOrders.filter((p) => p.job_id === jobId && p.status !== 'cancelled');
   const orders = vendorOrders.filter((o) => o.job_id === jobId && !isVendorOrderCancelled(o, purchaseOrders));
 
+  const paidOrders = orders.filter(isOrderPaid);
+  const paid = sumKnown(paidOrders, 'amount');
+  paid.reconciled = paidOrders.filter((o) => paymentEvidence(o) === 'reconciled').length;
+  paid.processorMarked = paidOrders.length - paid.reconciled;
+
   return {
     // Budget estimate is a cost rollup of active scopes; withheld (null) when
     // the rollup needs review, matching the money-tile withholding rules.
     estimated: { value: rollup.status === 'ready' ? rollup.cost : null, status: rollup.status, scopes: rollup.count },
     committed: sumKnown(pos, 'amount_dealer'),
     incurred: sumKnown(orders.filter(isOrderBilled), 'amount'),
-    paid: sumKnown(orders.filter(isOrderPaid), 'amount'),
+    paid,
   };
 }
 

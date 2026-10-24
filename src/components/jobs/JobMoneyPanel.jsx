@@ -78,8 +78,8 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
           <Metric label="Budget customer sell" value={data.totals.budgetSell} note="Estimate / entered sell, not cash" />
           <Metric label="PO dealer amount" value={data.totals.poDealer} note="Ordered amount; not proof of payment" />
           <Metric label="PO customer amount" value={data.totals.poCustomer} note="PO amount; not an invoice receipt" />
-          <Metric label="Vendor bills incurred" value={data.totals.voIncurred} note="Vendor bills received, paid or not; unpaid bills still count" />
-          <Metric label="Vendor payments recorded" value={data.totals.voPaid} note="Settled vendor orders; a stage of the incurred figure, never added to it" />
+          <Metric label="Vendor bills incurred" value={data.totals.voIncurred} note="Bills with positive billing evidence (ACH link / invoice), paid or not; vendor material only, not labor or full job cost" />
+          <Metric label="Vendor payments recorded" value={data.totals.voPaid} note="A stage of the incurred figure, never added to it; processor-marked unless the order is reconciled" />
           <Metric label="Fees recorded" value={data.totals.feeRecorded} note="FeeLines using invoicing math" />
           <Metric label="Fee share on YA-paid work" value={data.totals.feePaid} note="YA received payment; does not confirm your fee was paid" />
         </div>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { moneyStatesForJob, hasMoneyStates, isOrderBilled, isOrderPaid } from '../src/lib/purchasingMoneyStates.js';
+import { moneyStatesForJob, hasMoneyStates, isOrderBilled, isOrderPaid, paymentEvidence } from '../src/lib/purchasingMoneyStates.js';
 
 const JOB = 'job-1';
 
@@ -87,4 +87,26 @@ test('records from other jobs never leak in', () => {
     vendorOrders: [vo({ job_id: 'job-2', status: 'paid', amount: 5, paid_at: '2026-10-20' })],
   });
   assert.equal(hasMoneyStates(s), false);
+});
+
+test('billing evidence requires an ACH link, ach status/timestamp, or settlement - not an order confirmation', () => {
+  assert.equal(isOrderBilled(vo({ status: 'ordered', ach_link: 'https://pay.example/x' })), true);
+  assert.equal(isOrderBilled(vo({ status: 'ordered', ach_link_received_at: '2026-10-15T05:14:21Z' })), true);
+  assert.equal(isOrderBilled(vo({ status: 'eta_set', amount: 19841.95 })), false);
+});
+
+test('payment evidence is processor-marked unless reconciled', () => {
+  assert.equal(paymentEvidence(vo({ status: 'paid', paid_at: '2026-10-15', paid_reference: 'Helcim INV001194' })), 'processor_marked');
+  assert.equal(paymentEvidence(vo({ status: 'reconciled' })), 'reconciled');
+  assert.equal(paymentEvidence(vo({ status: 'paid', reconciled_at: '2026-10-20' })), 'reconciled');
+
+  const s = moneyStatesForJob(JOB, {
+    vendorOrders: [
+      vo({ status: 'paid', amount: 100, paid_at: '2026-10-15' }),
+      vo({ id: 'vo2', status: 'reconciled', amount: 50 }),
+    ],
+  });
+  assert.equal(s.paid.value, 150);
+  assert.equal(s.paid.reconciled, 1);
+  assert.equal(s.paid.processorMarked, 1);
 });
