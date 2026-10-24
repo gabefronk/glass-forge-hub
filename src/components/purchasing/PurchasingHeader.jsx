@@ -1,46 +1,50 @@
+import { MoreHorizontal } from 'lucide-react';
 import { money } from '@/components/budgets/ProcurementForms';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
-// Purchasing title band with the four header figures (M2, Oct 24): Sold,
-// Customers owe, We owe suppliers, Est. profit. Every figure adds only the rows
-// shown under the current search and filter (headerFigures in
-// purchasingSummary.js). Replaces the dark totals table and the record counts
-// that used to sit in this band. Phones stack the figures 2 x 2.
-const BAND = '#0B3F3B', WHITE = '#FFFFFF', SOFT = 'rgba(255,255,255,.80)', DIVIDER = 'rgba(255,255,255,.18)', NEGATIVE = '#FFB4AE';
+// Purchasing header band (declutter, Oct 24): title, then Sold · Customers owe · We owe
+// suppliers · Est. profit over exactly the jobs shown (headerFigures in
+// purchasingSummary.js), and one ⋯ menu. On phones the figures sit in a 2 x 2 card.
+// How each figure is worked out is in its hover title, not in caption text.
+const BAND = '#0B3F3B', TITLE = '#F2EEE8', LABEL = '#C3CBCC', DIVIDER = 'rgba(242,238,232,.18)';
 
-function Figure({ label, value, note, negative }) {
+function Figure({ label, value, title, color = TITLE }) {
   return (
-    <div className="min-w-0 px-3 py-1.5 max-[699px]:px-2.5" style={{ borderLeft: `1px solid ${DIVIDER}` }}>
-      <div className="text-[10.5px] font-bold uppercase tracking-[0.07em]" style={{ color: SOFT }}>{label}</div>
-      <div className="text-[19px] font-extrabold tabular-nums leading-tight max-[699px]:text-[17px]" style={{ color: negative ? NEGATIVE : WHITE, letterSpacing: '-0.01em' }}>{money(value)}</div>
-      {note ? <div className="text-[10.5px] font-medium leading-tight" style={{ color: SOFT }}>{note}</div> : null}
+    <div title={title} className="min-w-0 px-5 max-[1023px]:px-3 max-[1023px]:py-2" style={{ borderLeft: `1px solid ${DIVIDER}` }}>
+      <div className="whitespace-nowrap text-[13px] font-medium" style={{ color: LABEL }}>{label}</div>
+      <div className="whitespace-nowrap text-[18px] font-bold tabular-nums max-[1023px]:text-[17px]" style={{ color, letterSpacing: '-0.01em' }}>{money(value)}</div>
     </div>
   );
 }
 
-export default function PurchasingHeader({ figures, shown, total }) {
+export default function PurchasingHeader({ figures, onExport, onReload, reloading }) {
   const partial = [
-    figures.partialScopes > 0 && `${figures.partialScopes} multi-scope ${figures.partialScopes === 1 ? 'job has' : 'jobs have'} a scope with no figure`,
-    figures.apMissing > 0 && `${figures.apMissing} unpaid supplier ${figures.apMissing === 1 ? 'record has' : 'records have'} no amount`,
-  ].filter(Boolean);
+    figures.partialScopes > 0 && `${figures.partialScopes} multi-scope job(s) have a scope with no figure`,
+    figures.apMissing > 0 && `${figures.apMissing} unpaid supplier record(s) have no amount`,
+  ].filter(Boolean).join('; ');
   return (
-    <section className="overflow-hidden rounded-[12px]" style={{ backgroundColor: BAND, border: '1px solid #082F2C' }}>
-      <div className="flex items-stretch max-[699px]:flex-col">
-        <div className="flex shrink-0 flex-col justify-center px-4 py-2 max-[699px]:px-3">
-          <h1 className="m-0 text-[19px] font-bold leading-[24px]" style={{ color: '#F2EEE8', letterSpacing: '-0.03em' }}>Purchasing</h1>
-          <span className="text-[11.5px] font-medium" style={{ color: SOFT }}>{shown === total ? `${total} jobs` : `${shown} of ${total} jobs`}</span>
+    <section className="rounded-[12px]" style={{ backgroundColor: BAND }}>
+      <div className="flex flex-wrap items-center gap-y-2" style={{ minHeight: '68px', padding: '10px 12px 10px 20px' }}>
+        <h1 className="m-0 text-[24px] font-bold max-[1023px]:text-[22px]" style={{ color: TITLE, letterSpacing: '-0.03em' }}>Purchasing</h1>
+        <div style={{ flex: 1 }} />
+        <div className="grid grid-cols-4 max-[1023px]:order-last max-[1023px]:w-full max-[1023px]:grid-cols-2 max-[1023px]:overflow-hidden max-[1023px]:rounded-[10px]" style={{ borderColor: DIVIDER }}>
+          <Figure label="Sold" value={figures.sold} title={`Total sale price of the ${figures.jobs} jobs shown (the Sale column)`} />
+          <Figure label="Customers owe" value={figures.customersOwe} title="Sale less payments by stage: half down owes half, full payment owes nothing, any other stage owes the whole sale" />
+          <Figure label="We owe suppliers" value={figures.weOwe} title={`Unpaid POs at the raw PO amount, before the 7.45% use tax${partial ? `. Partial: ${partial}` : ''}`} />
+          <Figure label="Est. profit" value={figures.profit} title={`The Est. profit column${partial ? `. Partial: ${partial}` : ''}`} color="#E0C994" />
         </div>
-        <div className="grid min-w-0 flex-1 grid-cols-4 max-[699px]:grid-cols-2 max-[699px]:border-t" style={{ borderColor: DIVIDER }}>
-          <Figure label="Sold" value={figures.sold} note="Sale price column" />
-          <Figure label="Customers owe" value={figures.customersOwe} note="Sale less payments by stage" />
-          <Figure label="We owe suppliers" value={figures.weOwe} note="Unpaid POs, before tax" />
-          <Figure label="Est. profit" value={figures.profit} note="Profit column" negative={figures.profit < 0} />
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button aria-label="More purchasing actions" className="ml-2" style={{ width: '36px', height: '36px', borderRadius: '8px', border: '1px solid rgba(242,238,232,.3)', background: 'none', color: TITLE, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <MoreHorizontal style={{ width: '18px', height: '18px' }} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[220px] p-1">
+            <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" onSelect={onExport}>Export shown jobs (CSV)</DropdownMenuItem>
+            <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" disabled={reloading} onSelect={onReload}>{reloading ? 'Reloading…' : 'Reload'}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      {partial.length > 0 && (
-        <div className="px-4 py-1 text-[11px] font-medium max-[699px]:px-3" style={{ color: SOFT, borderTop: `1px solid ${DIVIDER}` }}>
-          Partial: {partial.join('; ')}.
-        </div>
-      )}
     </section>
   );
 }
