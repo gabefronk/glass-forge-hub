@@ -4,11 +4,13 @@
 // (e.g. "Phil Chadwick - Retro" with builder "Newco"). Pure unit tests — no
 // live data, no function invokes, no writes. Mirrors the grounded sample rows
 // read from the Jobs entity (builder field).
+import "./support/register-src-alias.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { jobMatchesSearch, jobSearchTier, NO_MATCH_TIER } from "../src/lib/jobSearch.js";
-import { sortJobGroups, buildJobsOverview } from "../src/lib/jobsOverview.js";
+// Loaded after the alias hook is registered (jobsOverview uses "@/lib" imports).
+const { sortJobGroups, buildJobsOverview } = await import("../src/lib/jobsOverview.js");
 
 function rankGroups(groups, stats, sort, q) {
   const sorted = sortJobGroups(groups, stats, sort);

@@ -3,11 +3,13 @@
 // jobs that only match on address, while preserving the selected sort (Last
 // visit by default) WITHIN each tier and leaving the empty-query order
 // untouched. Pure unit tests — no live data, no function invokes.
+import "./support/register-src-alias.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { jobMatchesSearch, jobSearchTier, NO_MATCH_TIER } from "../src/lib/jobSearch.js";
-import { sortJobGroups, buildJobsOverview } from "../src/lib/jobsOverview.js";
+// Loaded after the alias hook is registered (jobsOverview uses "@/lib" imports).
+const { sortJobGroups, buildJobsOverview } = await import("../src/lib/jobsOverview.js");
 
 // Mirror JobsHub: a group's tier is the best tier across its members, and a
 // nonempty query re-sorts the already-sorted groups by tier (stable), so the
