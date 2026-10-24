@@ -4,13 +4,22 @@ import assert from 'node:assert/strict';
 
 const { PAYMENT_STAGES, paymentStage, paymentPatch } = await import('../src/lib/jobPayment.js');
 
-test('the tracking stages match what Gabriel asked for (10/22 reorder)', () => {
+test('the job stages match what Gabriel asked for (Oct 24)', () => {
   assert.deepEqual(PAYMENT_STAGES.map((s) => s.label), [
+    'Sent to customer',
+    'Ordered',
     'Half down paid',
-    'Job installed',
-    'Full payment received',
+    'Delivered',
+    'Installed',
+    'Billed',
+    'Waiting on check',
     'Waiting on payment',
+    'Paid',
   ]);
+});
+
+test('existing stage keys carry over unchanged', () => {
+  for (const key of ['half_down', 'installed', 'waiting_on_payment', 'paid']) assert.ok(PAYMENT_STAGES.some((s) => s.key === key), key);
 });
 
 test('retired stages still read correctly on old jobs but cannot be chosen', () => {
@@ -19,7 +28,7 @@ test('retired stages still read correctly on old jobs but cannot be chosen', () 
 });
 
 test('paymentStage rejects unknown keys and finds known ones', () => {
-  assert.equal(paymentStage('paid').label, 'Full payment received');
+  assert.equal(paymentStage('paid').label, 'Paid');
   assert.equal(paymentStage('nonsense'), null);
   assert.equal(paymentStage(undefined), null);
 });
