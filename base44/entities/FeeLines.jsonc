@@ -157,10 +157,15 @@
       "default": false,
       "description": "Has BFS been billed for this line?"
     },
+    "invoice_id": {
+      "type": "string",
+      "title": "Invoice",
+      "description": "Invoices record this line was billed on. Set with billed_to_bfs."
+    },
     "invoice_number": {
       "type": "string",
       "title": "Invoice Number",
-      "description": "QuickBooks invoice number this line was billed on. Set with billed_to_bfs."
+      "description": "QuickBooks invoice number this line was billed on (copied from its Invoices record). Set with billed_to_bfs."
     },
     "invoice_date": {
       "type": "string",
