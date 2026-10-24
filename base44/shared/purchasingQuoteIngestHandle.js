@@ -87,6 +87,11 @@ export function validateIngestBody(body) {
   return { ok: true, bytes, file_name: name, job_id: body.job_id || null, request_key: body.request_key };
 }
 
+// One-time move of an older budget's PUBLIC quote PDF (a base44 /files/mp/public/ URL from
+// the retired public upload) into private storage, behind the same receipt the private
+// upload writes. Only that exact public-file URL shape for this app is ever fetched.
+export const PUBLIC_SOURCE = /^https:\/\/base44\.app\/api\/apps\/[a-f0-9]{24}\/files\/mp\/public\/[a-f0-9]{24}\/[A-Za-z0-9._-]+\.pdf$/;
+
 export function validateBudgetBody(body, { refresh = false } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'invalid_body' };
   const allowed = new Set(refresh ? ['action', 'budget_id', 'expected_version', 'review_confirmed'] : ['action', 'budget_id']);
@@ -234,34 +239,10 @@ async function ingest(adapter, p, user) {
   }
   if (!budget || !isEntityId(budget.id) || budget.source_sha256 !== sha) fail('create_unverified');
   await bindReceipt(adapter, receipt, budget.id);
-  // Sale auto-fill: when the quote prints a sell (his own quote total, or the
-  // customer level on a two-price supplier quote), put it on the job's money
-  // input so he never re-types it. An existing owner value always wins. Cost
-  // stays on the budget/quote side (never copied into money inputs).
-  const sale_autofill = await autofillJobSale(adapter, job?.id, fill.inputs.actual_total_sell);
-  return { ...summary(budget), quote, inputs: fill.inputs, computed, notes: fill.notes, sale_autofill };
+  // The quote's printed sell is already the budget's customer sell (fill.inputs), and the
+  // budget is the job's one money source (Oct 24) - nothing is copied anywhere else.
+  return { ...summary(budget), quote, inputs: fill.inputs, computed, notes: fill.notes };
 }
-
-// Returns 'filled' | 'kept_existing' | 'skipped' | 'failed'. Never overwrites a
-// value already on the row; never creates a second row when duplicates exist.
-async function autofillJobSale(adapter, jobId, sell) {
-  if (!jobId || !(Number(sell) > 0)) return 'skipped';
-  let found = null;
-  try { found = await rows(adapter.moneyFilter, { job_id: jobId }, 2); } catch { return 'failed'; }
-  if (found.length > 1) return 'kept_existing';
-  const cur = found[0];
-  try {
-    if (cur) {
-      const have = cur.sale_price;
-      if (have != null && Number(have) > 0) return 'kept_existing';
-      const upd = await adapter.moneyUpdate(cur.id, { sale_price: round2(sell) });
-      return upd ? 'filled' : 'failed';
-    }
-    const created = await adapter.moneyCreate({ job_id: jobId, sale_price: round2(sell) });
-    return created ? 'filled' : 'failed';
-  } catch { return 'failed'; }
-}
-const round2 = (v) => Math.round(Number(v) * 100) / 100;
 
 // Fresh exact-id GET + the server-only receipt bound to that budget.
 async function loadBound(adapter, budgetId) {
@@ -290,6 +271,39 @@ async function refresh(adapter, p) {
   return { status: 'staged', budget_id: budget.id, expected_version: budget.updated_date, saved: pickQuote(budget.quote), staged: pickQuote(quote), writes: 0 };
 }
 
+async function privatizeSource(adapter, p, user) {
+  const budget = await adapter.budgetGet(p.budget_id).catch(() => null);
+  if (!budget || budget.id !== p.budget_id) fail('budget_not_found');
+  if (budget.deleted_at) fail('budget_deleted');
+  const url = String(budget.source_pdf_url || '');
+  if (!PUBLIC_SOURCE.test(url)) fail('no_public_source');
+  const res = await adapter.fetchBytes(url, MAX_PDF_BYTES).catch(() => null);
+  if (!res || res.error || !(res.bytes instanceof Uint8Array) || !res.bytes.length) fail(res?.error === 'pdf_too_large' ? 'pdf_too_large' : 'pdf_fetch_failed');
+  if (!isPdf(res.bytes)) fail('not_a_pdf');
+  const sha = await sha256Hex(res.bytes);
+  if (budget.source_sha256 && budget.source_sha256 !== sha) fail('source_changed');
+  const fileName = String(budget.source_pdf_name || url.split('/').pop()).replace(/^[a-f0-9]{9}_/, '').slice(0, 256);
+  const bound = await rows(adapter.receiptFilter, { budget_id: budget.id }, 2);
+  if (bound.length > 1) fail('source_binding_ambiguous');
+  let receipt = bound[0] || null;
+  if (receipt && (!validReceipt(receipt) || receipt.sha256 !== sha)) fail('source_binding_mismatch');
+  if (!receipt) {
+    const up = await adapter.uploadPrivate(res.bytes, /\.pdf$/i.test(fileName) ? fileName : 'quote.pdf').catch(() => null);
+    if (!validStoredUri(up?.file_uri)) fail('upload_failed');
+    receipt = await adapter.receiptCreate({
+      file_uri: up.file_uri, owner_user_id: user.id, sha256: sha, size: res.bytes.length, file_name: fileName,
+      request_key: `privatize-${budget.id}`, job_id: budget.job_id || '', budget_id: budget.id, uploaded_at: new Date().toISOString(),
+    }).catch(() => null);
+    if (!validReceipt(receipt) || receipt.file_uri !== up.file_uri || receipt.sha256 !== sha || receipt.budget_id !== budget.id) fail('receipt_unverified');
+  }
+  // Prove the private copy reads back byte-for-byte before the public link is dropped.
+  const signed = await signFor(adapter, receipt.file_uri, REVIEW_TTL);
+  await fetchVerified(adapter, signed, sha);
+  const updated = await adapter.budgetUpdate(budget.id, { source_sha256: sha, source_pdf_url: null, source_pdf_name: budget.source_pdf_name || fileName }).catch(() => null);
+  if (!updated || updated.source_sha256 !== sha || updated.source_pdf_url) fail('budget_update_failed');
+  return { status: 'private', budget_id: budget.id };
+}
+
 async function signSource(adapter, p) {
   const { receipt } = await loadBound(adapter, p.budget_id);
   return { signed_url: await signFor(adapter, receipt.file_uri, REVIEW_TTL), expires_in: REVIEW_TTL };
@@ -309,5 +323,6 @@ export async function handle(req, adapter) {
   if (action === 'refresh') return run(validateBudgetBody(body, { refresh: true }), (p) => refresh(adapter, p), 'refresh_failed');
   // The explicit owner click is the only response that carries a (60s) signed URL.
   if (action === 'sign_source') return run(validateBudgetBody(body), (p) => signSource(adapter, p), 'sign_failed', false);
+  if (action === 'privatize_source') return run(validateBudgetBody(body), (p) => privatizeSource(adapter, p, user), 'privatize_failed');
   return { status: 400, body: { error: 'unknown_action' } };
 }
