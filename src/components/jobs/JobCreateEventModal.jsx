@@ -210,7 +210,7 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
                         <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] text-[13px] font-bold text-white" style={on ? { backgroundColor: TEAL } : { border: `2px solid ${FIELD}` }} aria-hidden="true">{on ? "✓" : ""}</span>
                         <span className="min-w-0">
                           <span className="block text-[14.5px] font-semibold" style={{ color: INK }}>{o.short}</span>
-                          <span className="block truncate text-[12px]" style={{ color: MUT }}>{n !== null && n !== undefined ? `${n} booked that day` : o.email}</span>
+                          <span className="block truncate text-[12px]" style={{ color: MUT }}>{n !== null && n !== undefined ? `${n} booked` : o.email}</span>
                         </span>
                       </button>
                     );
