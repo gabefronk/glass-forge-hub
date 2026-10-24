@@ -3,12 +3,6 @@ import assert from 'node:assert/strict';
 import { purchasingSearchIndex, matchesPurchasingSearch } from '../src/lib/purchasingSearch.js';
 import { procurementPath } from '../src/lib/procurementRoutes.js';
 
-const ready = () => ({
-  customer: { name: 'Test customer', job_site_address: 'Test site' },
-  pricing: { sell_price: 1000, tax: 50, contract_total: 1050 },
-  scope_lines: [{ qty: 1, product: 'Window', customer_price: 1000 }],
-  terms: { deposit_pct: 0, quote_valid_days: 14, payment_schedule: 'On completion', estimated_lead_time: 'Six weeks', warranty_text: 'Manufacturer warranty attached' },
-});
 test('search finds stale titles through the linked job and explicit PO and budget IDs', () => {
   const jobs = [{ id: 'j', canonical_name: 'Sandy Eagle Mountain', address: 'Example address' }];
   const budget = { id: 'b', job_id: 'j', title: 'Supplier quotation', quote_number: '3526241' };
