@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { CUSTOMER_KINDS, invoiceInputError, jobInvoiceSummary, kindLabel } from "@/lib/invoiceRegister";
-import { denverDate } from "../../../base44/shared/billingCore.js";
+import { denverDate } from "@/lib/feeMath";
 
 const money = (value) => value === null || value === undefined ? "—" : Number(value).toLocaleString("en-US", { style: "currency", currency: "USD" });
 const day = (iso) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—");

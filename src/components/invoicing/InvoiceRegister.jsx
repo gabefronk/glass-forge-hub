@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { formatMoney } from "@/lib/feeMath";
 import { openInvoiceTotals } from "@/lib/invoiceRegister";
-import { denverDate } from "../../../base44/shared/billingCore.js";
+import { denverDate } from "@/lib/feeMath";
 
 const STATUS = {
   open: { label: "Open", color: "var(--gf-amber-700)" },

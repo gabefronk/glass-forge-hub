@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatMoney } from "@/lib/feeMath";
 import { invoiceInputError, findInvoice, lineTotals, kindLabel } from "@/lib/invoiceRegister";
-import { denverDate } from "../../../base44/shared/billingCore.js";
+import { denverDate } from "@/lib/feeMath";
 
 const inputClass = "mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base focus:border-emerald-700 focus:outline-none sm:text-sm";
 
