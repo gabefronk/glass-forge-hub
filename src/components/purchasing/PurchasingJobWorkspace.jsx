@@ -308,7 +308,7 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
                 </div>
                 <div className="flex flex-wrap gap-3.5 text-[12px]" style={{ color: INK2 }}>
                   <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#8C9EAF' }} />Cost {lineMoney(total)}</span>
-                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#0B3F3B' }} />Profit {lineMoney(profit)}</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#0B3F3B' }} />Margin after overhead {lineMoney(profit)}</span>
                 </div>
               </div>
             )}
