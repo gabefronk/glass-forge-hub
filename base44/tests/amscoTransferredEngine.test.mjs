@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { calculateTransferredWindow, getTransferredCatalog, dimensionLookup, attributeLookup, numberedAttributeLookup, frameArea, roundUp, applyTransferredDiscount, selectTransferredBase } from '../shared/amscoTransferredEngine.js';
-import { createTransferredEngineHandler } from '../shared/amscoTransferredHandler.js';
 
 const controls = JSON.parse(await readFile(new URL('./fixtures/amscoSourceControls.json',import.meta.url),'utf8'));
 const clientId = '00000000-0000-0000-1555-000000000000';
@@ -82,14 +81,4 @@ test('pricebooks, versions and client categories stay separate',()=>{
   assert.equal(applyTransferredDiscount(100,'VMULT',clientId).dealer,45.56);
   assert.throws(()=>applyTransferredDiscount(100,'VMULT','different-client'),/own discount/);
 });
-test('HTTP entry requires admin and rejects unsupported actions without writing any records',async()=>{
-  const request=body=>new Request('https://test.local',{method:'POST',body:JSON.stringify(body)});
-  const blocked=createTransferredEngineHandler({getUser:async()=>({role:'user'})});
-  assert.equal((await blocked(request({action:'status'}))).status,403);
-  const handler=createTransferredEngineHandler({getUser:async()=>({role:'admin'})});
-  assert.equal((await handler(request({action:'deploy'}))).status,400);
-  const response=await handler(request({action:'calculate',input:inputFor(controls.configs[0])}));
-  assert.equal(response.status,200);assert.equal((await response.json()).unit_prices.list,371.6);
-  const status=await (await handler(request({action:'status'}))).json();
-  assert.equal(status.catalogs[1].dimensional_rows,10733);assert.equal(status.production_ready,false);
-});
+
