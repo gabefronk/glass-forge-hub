@@ -9,8 +9,6 @@ import { selectedReadyInvoiceRows, selectedLaborFeeRows, deleteInvoiceRows } fro
 import { validMonth } from "../../base44/shared/procurementCore.js";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
-import { SheetCard, TILE } from "@/components/PageShell";
-import { Receipt } from "lucide-react";
 import { computeFeeAmt, computeLaborAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 import { isReady, isMatchBlocked, isReportBlocked, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import InvoiceHeader from "@/components/invoicing/InvoiceHeader";
