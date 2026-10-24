@@ -8,7 +8,7 @@
 // the same provenance rules the board already uses (see purchasingViewModel):
 //  - a quote-scope windows value = that budget's verified supplier total, else
 //    its own PO / order amount, else its reviewed figure;
-//  - a PO or order scope shows only that record's own amount (no tax verified);
+//  - a PO or order scope shows only that record's own amount, plus use tax (job cost basis);
 //  - labor & material and sale price come only from the scope's own budget
 //    review inputs — a scope without a budget shows a dash, never a guess.
 // A reorder (several POs on ONE budget) splits into one row per PO: the quote
