@@ -1,8 +1,10 @@
-import { Search } from "lucide-react";
+import { Search, ChevronDown, Check } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
-// One control per choice (Oct 24): Show, View and Sort are dropdowns instead of rows
-// of buttons. Show uses the same buckets as the money bar (invoiceMoneyBar.js), so a
-// filter's count always matches the lines it lists.
+// Toolbar on one line (declutter, Oct 24): search, Show and View. Each dropdown carries its
+// label inside the button and Show carries the counts, which use the same buckets as the
+// money strip. Sorting moved to the column headers; Select ready moved to the header
+// checkbox (Show → Ready, then check it).
 export const SHOW = [
   { key: "all", label: "All lines" },
   { key: "ready", label: "Ready to invoice" },
@@ -17,63 +19,49 @@ const VIEWS = [
   { key: "invoices", label: "Invoices" },
 ];
 
-const selectStyle = { height: "34px", borderRadius: "var(--r-control)", border: "1px solid var(--gf-check)", backgroundColor: "var(--gf-card)", color: "var(--gf-ink)", fontSize: "13px", fontWeight: 600, padding: "0 28px 0 10px", cursor: "pointer" };
+const button = { height: "36px", borderRadius: "8px", border: "1px solid #9A9080", backgroundColor: "#FFFFFF", color: "#101617", fontSize: "14px", padding: "0 10px 0 12px", display: "inline-flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap", cursor: "pointer", flexShrink: 0 };
 
-function Dropdown({ label, value, onChange, children, width }) {
+function Dropdown({ label, options, value, onChange, counts }) {
+  const current = options.find((o) => o.key === value) || options[0];
   return (
-    <label className="inline-flex items-center gap-1.5" style={{ flexShrink: 0 }}>
-      <span className="text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: "var(--gf-ink-3)" }}>{label}</span>
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} style={{ ...selectStyle, width }}>{children}</select>
-    </label>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button aria-label={`${label}: ${current.label}`} style={button}>
+          <span style={{ color: "#566063", fontWeight: 500 }}>{label}</span>
+          <span style={{ fontWeight: 600 }}>{current.label}</span>
+          {counts && <span className="tabular-nums" style={{ color: "#566063", fontWeight: 500 }}>{counts[current.key] || 0}</span>}
+          <ChevronDown style={{ width: "16px", height: "16px", color: "#566063" }} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[230px] p-1">
+        {options.map((o) => (
+          <DropdownMenuItem key={o.key} onSelect={() => onChange(o.key)} className="flex min-h-9 cursor-pointer items-center gap-2 text-[14px]">
+            <Check style={{ width: "15px", height: "15px", visibility: o.key === value ? "visible" : "hidden", color: "#0B3F3B" }} />
+            <span className="flex-1" style={{ fontWeight: o.key === value ? 600 : 400 }}>{o.label}</span>
+            {counts && <span className="tabular-nums" style={{ color: "#566063" }}>{counts[o.key] || 0}</span>}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-export default function InvoiceToolbar({ search, onSearchChange, searchRef, view, onViewChange, filter, onFilterChange, filterCounts, sort, onSortChange, lineCount, readyCount, onSelectAllReady, invoicesMode = false }) {
+export default function InvoiceToolbar({ search, onSearchChange, searchRef, view, onViewChange, filter, onFilterChange, filterCounts, invoicesMode = false }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2" style={{ minHeight: "52px", padding: "8px 16px", borderBottom: "2px solid var(--gf-ink-4)", backgroundColor: "#F3EEE4" }}>
-      <div className="relative w-full sm:w-auto" style={{ flexShrink: 0, maxWidth: "280px" }}>
-        <Search style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", width: "15px", height: "15px", color: "var(--gf-placeholder)", pointerEvents: "none" }} strokeWidth={1.8} strokeLinecap="round" />
+    <div className="flex items-center gap-2 overflow-x-auto max-[699px]:flex-wrap" style={{ padding: "12px", borderBottom: "1px solid #D6CCBA" }}>
+      <div className="relative max-[699px]:w-full" style={{ flex: "1 1 260px", maxWidth: "440px", minWidth: "200px" }}>
+        <Search style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", width: "16px", height: "16px", color: "#6B7276", pointerEvents: "none" }} strokeWidth={1.8} />
         <input
           ref={searchRef}
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search lines and jobs"
-          aria-label="Search lines and jobs"
-          style={{ width: "100%", minWidth: 0, height: "34px", borderRadius: "var(--r-control)", backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-check)", color: "var(--gf-ink)", fontSize: "13px", fontFamily: "var(--font-body)", paddingLeft: "33px", paddingRight: "38px", outline: "none" }}
+          placeholder="Search jobs, POs, work"
+          aria-label="Search jobs, POs and work"
+          style={{ width: "100%", height: "36px", borderRadius: "8px", backgroundColor: "#F4F1EA", border: "1px solid #9A9080", color: "#101617", fontSize: "14px", fontFamily: "var(--font-body)", paddingLeft: "34px", paddingRight: "10px", outline: "none" }}
         />
-        <span style={{ position: "absolute", right: "9px", top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--gf-placeholder)", border: "1px solid var(--gf-check)", borderRadius: "4px", padding: "1px 4px", pointerEvents: "none" }}>⌘K</span>
       </div>
-
-      {!invoicesMode && (
-        <Dropdown label="Show" value={filter} onChange={onFilterChange}>
-          {SHOW.map((f) => <option key={f.key} value={f.key}>{f.label} ({filterCounts[f.key] || 0})</option>)}
-        </Dropdown>
-      )}
-
-      <Dropdown label="View" value={view} onChange={onViewChange}>
-        {VIEWS.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
-      </Dropdown>
-
-      {!invoicesMode && (
-        <Dropdown label="Sort" value={sort} onChange={onSortChange}>
-          <option value="date">Date</option>
-          <option value="fee">Fee</option>
-        </Dropdown>
-      )}
-
-      <span style={{ flex: "1 1 auto" }} />
-
-      {!invoicesMode && (<>
-        <span className="hidden lg:inline" style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--gf-ink-3)", whiteSpace: "nowrap" }}>{lineCount} lines</span>
-        <button
-          onClick={onSelectAllReady}
-          disabled={!readyCount}
-          className="whitespace-nowrap disabled:opacity-50"
-          style={{ fontSize: "13px", fontWeight: 600, borderRadius: "var(--r-button)", padding: "7px 14px", backgroundColor: "var(--gf-teal-600)", border: "none", color: "#F4F1EA", cursor: "pointer", flexShrink: 0 }}
-        >
-          Select ready{readyCount > 0 ? ` (${readyCount})` : ""}
-        </button>
-      </>)}
+      {!invoicesMode && <Dropdown label="Show" options={SHOW} value={filter} onChange={onFilterChange} counts={filterCounts} />}
+      <Dropdown label="View" options={VIEWS} value={view} onChange={onViewChange} />
     </div>
   );
 }
