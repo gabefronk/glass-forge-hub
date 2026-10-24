@@ -1,38 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, MoreHorizontal, ExternalLink, Trash2, Pencil, ChevronDown } from "lucide-react";
-import { computeFeeAmt, formatMoney } from "@/lib/feeMath";
-import { crewName, noteTokens } from "@/lib/feeUI";
+import { Check, MoreHorizontal, ExternalLink, Trash2, Pencil } from "lucide-react";
+import { computeFeeAmt, computeLaborAmt, formatMoney } from "@/lib/feeMath";
+import { crewName, noteTokens, UNBILLED_GRID, GRID_WIDE } from "@/lib/feeUI";
 import { isMatchBlocked } from "@/lib/invoicingFilters";
+import { cellPatch, shortDay } from "@/lib/invoiceGrid";
 import LineInlineExpansion from "./LineInlineExpansion";
 
-const TILES = [
-  { bg: "var(--gf-tile-teal)", ink: "var(--gf-tile-teal-ink)" },
-  { bg: "var(--gf-tile-slate)", ink: "var(--gf-tile-slate-ink)" },
-  { bg: "var(--gf-tile-sage)", ink: "var(--gf-tile-sage-ink)" },
-  { bg: "var(--gf-tile-sand)", ink: "var(--gf-tile-sand-ink)" },
-  { bg: "var(--gf-tile-stone)", ink: "var(--gf-tile-stone-ink)" },
-];
-
-function builderFromName(name) {
-  if (!name) return "";
-  const dashIdx = name.indexOf("-");
-  if (dashIdx > 0) return name.slice(0, dashIdx).trim();
-  return name.trim();
-}
-
-function builderInitials(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(/[\s\-]+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
-
-function builderTile(name) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
-  return TILES[Math.abs(hash) % TILES.length];
-}
+// One invoice line as a ruled grid row (M1b, Oct 24): Date · Job · PO · Crew · Work ·
+// Labor · Fee % · Fee · Status · Invoice, warm rules and no card per line, so about ten
+// lines fit where six did. Job names wrap instead of being cut off. Clicking the row
+// opens LineInlineExpansion as before. Labor and Fee % edit in the cell through the
+// page's handleEdit (the same save path as the line menu), only on lines that carry no
+// review or report hold, are not billed and are not profit splits.
 
 function MenuItem({ icon: Icon, label, onClick, danger }) {
   return (
@@ -56,34 +36,86 @@ function StatusDot({ label, dot, text, onClick, clickable }) {
   const Tag = clickable ? "button" : "span";
   return (
     <Tag
+      data-no-open={clickable ? true : undefined}
       onClick={onClick}
       className="inline-flex items-center gap-1.5 whitespace-nowrap"
-      style={{
-        fontSize: "12.5px",
-        fontWeight: 500,
-        color: text,
-        background: "none",
-        border: "none",
-        cursor: clickable ? "pointer" : "default",
-        padding: 0,
-        textAlign: "left",
-      }}
+      style={{ fontSize: "12px", fontWeight: 600, color: text, background: "none", border: "none", cursor: clickable ? "pointer" : "default", padding: 0, textAlign: "left", textDecoration: clickable ? "underline" : "none", textDecorationColor: "var(--gf-hairline)", textUnderlineOffset: "3px" }}
     >
-      <span style={{ position: "relative", width: "7px", height: "7px", flexShrink: 0 }}>
-        <span style={{ position: "absolute", inset: "-3px", borderRadius: "99px", backgroundColor: dot, opacity: 0.2 }} />
-        <span style={{ position: "absolute", inset: 0, borderRadius: "99px", backgroundColor: dot }} />
-      </span>
+      <span style={{ width: "7px", height: "7px", borderRadius: "99px", backgroundColor: dot, flexShrink: 0 }} />
       {label}
     </Tag>
   );
 }
 
-export default function LineRow({ row, selected, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, isFuture, isBilled, isZero, expanded, onToggleExpand, onReady, onSendForReview, onCollapse, jobs, onLinkJob, selectionEnabled = true }) {
+// A Labor or Fee % cell: the figure, or a small input while editing. Enter or leaving
+// the field saves; Escape cancels; a value that is not a valid amount is ignored.
+function EditCell({ field, current, display, editable, onSave, label, bold }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState("");
+  const done = useRef(false);
+  const figure = <span className={bold ? "font-mono-num-bold" : "font-mono-num"}>{display}</span>;
+  if (!editable) return <span className="block text-right text-[13px]" style={{ color: "var(--gf-ink)" }}>{figure}</span>;
+  const commit = () => {
+    if (done.current) return;
+    done.current = true;
+    setEditing(false);
+    const patch = cellPatch(field, text);
+    if (!patch) return;
+    const next = field === "labor" ? patch.labor_amt : patch.fee_pct;
+    if (Math.abs(next - (Number(current) || 0)) > 0.00001) onSave(patch);
+  };
+  if (editing) {
+    return (
+      <input
+        data-no-open
+        autoFocus
+        inputMode="decimal"
+        aria-label={label}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+        onFocus={(e) => e.target.select()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); commit(); }
+          if (e.key === "Escape") { e.preventDefault(); done.current = true; setEditing(false); }
+        }}
+        onBlur={commit}
+        className="font-mono-num"
+        style={{ width: "100%", height: "24px", textAlign: "right", fontSize: "12.5px", border: "1.5px solid var(--gf-teal-600)", borderRadius: "4px", padding: "0 4px", outline: "none", backgroundColor: "#FFFFFF", color: "var(--gf-ink)" }}
+      />
+    );
+  }
+  return (
+    <button
+      data-no-open
+      title={`Edit ${label.toLowerCase()}`}
+      aria-label={`Edit ${label.toLowerCase()}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        done.current = false;
+        setText(field === "labor" ? String(Number(current) || 0) : String(Math.round((Number(current) || 0) * 10000) / 100));
+        setEditing(true);
+      }}
+      className="block w-full text-right text-[13px] hover:border-[#9A9080] hover:bg-white"
+      style={{ color: "var(--gf-ink)", border: "1px dashed transparent", borderRadius: "4px", padding: "1px 4px", background: "none", cursor: "text" }}
+    >
+      {figure}
+    </button>
+  );
+}
+
+export default function LineRow({ row, selected, focused, blocked, reportAttached, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenDetails, isFuture, isBilled, expanded, onToggleExpand, onReady, onSendForReview, onCollapse, jobs, onLinkJob, cellEditing = true, selectionEnabled = true }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuUp, setMenuUp] = useState(false);
   const menuRef = useRef(null);
   const menuRefMobile = useRef(null);
+  const rowRef = useRef(null);
+
+  // J / K move the keyboard focus; keep the focused line on screen.
+  useEffect(() => {
+    if (focused && rowRef.current?.scrollIntoView) rowRef.current.scrollIntoView({ block: "nearest" });
+  }, [focused]);
 
   // Flip the menu upward when the trigger sits near the bottom of the viewport,
   // otherwise the popover renders off-screen (clipped at the page bottom).
@@ -108,19 +140,15 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
   }, [menuOpen]);
 
   const fee = computeFeeAmt(row);
+  const labor = computeLaborAmt(row);
   const isProfitSplit = row.fee_type === "profit_split";
-  const displayedAmount = isProfitSplit ? row.sale_price : row.labor_amt;
-  const isCustomFee = row.fee_type !== "profit_split" && Number(row.fee_pct) !== 0.1;
-  const builderName = builderFromName(row.job_name_raw || row.job_name_norm || "");
-  const tile = builderTile(builderName || row.job_name_raw || row.job_name_norm || "?");
-  const initials = builderInitials(builderName || row.job_name_raw || row.job_name_norm || "?");
-
-  // Compact subline: PO · crew · note preview
-  const notePreview = noteTokens(row.note_text);
-  const sublineParts = [row.po_number && `PO ${row.po_number}`, crewName(row.calendar_creator)].filter(Boolean);
-  const subline = reportAttached
-    ? "Report attachment noted"
-    : [sublineParts.join(" · "), notePreview].filter(Boolean).join(" — ") || "—";
+  const jobName = row.job_name_raw || row.job_name_norm || row.line_description;
+  const crew = crewName(row.calendar_creator);
+  const work = reportAttached ? "Report attachment noted" : (noteTokens(row.note_text) || row.line_description || "");
+  const editable = cellEditing && !isBilled && !isProfitSplit && !blocked && !row.sent_for_review;
+  const saveCell = (patch) => onEdit(row.id, patch);
+  const feePctLabel = isProfitSplit ? `Split ${Math.round((row.split_pct ?? 0.5) * 100)}%` : `${Math.round((Number(row.fee_pct) || 0) * 1000) / 10}%`;
+  const isCustomFee = !isProfitSplit && Number(row.fee_pct) !== 0.1;
 
   const handleCheckboxClick = (e) => {
     e.stopPropagation();
@@ -153,207 +181,131 @@ export default function LineRow({ row, selected, blocked, reportAttached, onTogg
     statusInfo = { label: "Ready", dot: "var(--gf-teal-600)", text: "var(--gf-teal-800)" };
   }
 
+  const highlight = selected || expanded;
   const rowStyle = {
-    margin: "4px 10px",
-    border: "1px solid var(--gf-hairline)",
-    borderRadius: "var(--r-row)",
-    backgroundColor: selected || expanded ? "var(--gf-teal-050)" : "var(--gf-card)",
-    boxShadow: selected || expanded ? `inset 2px 0 0 var(--gf-teal-600), var(--shadow-row)` : "var(--shadow-row)",
+    borderBottom: "1px solid var(--gf-hairline)",
+    backgroundColor: highlight ? "var(--gf-teal-050)" : "var(--gf-card)",
+    boxShadow: highlight ? "inset 3px 0 0 var(--gf-teal-600)" : focused ? "inset 3px 0 0 var(--gf-ink-4)" : "none",
+    outline: focused ? "1px solid var(--gf-ink-4)" : "none",
+    outlineOffset: "-1px",
     cursor: "pointer",
-    transition: "background-color .15s, box-shadow .15s",
   };
+  const hoverBg = (e) => { if (!highlight) e.currentTarget.style.backgroundColor = "var(--gf-hover)"; };
+  const leaveBg = (e) => { if (!highlight) e.currentTarget.style.backgroundColor = "var(--gf-card)"; };
 
-  const hoverBg = (e) => { if (!selected && !expanded) { e.currentTarget.style.backgroundColor = "var(--gf-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-row-hover)"; } };
-  const leaveBg = (e) => { if (!selected && !expanded) { e.currentTarget.style.backgroundColor = "var(--gf-card)"; e.currentTarget.style.boxShadow = "var(--shadow-row)"; } };
-
-  const chevronBtn = (
+  const checkbox = (size) => (
     <button
       data-no-open
-      onClick={(e) => { e.stopPropagation(); onToggleExpand(row); }}
-      aria-label={expanded ? "Collapse line" : "Expand line"}
-      aria-expanded={expanded}
-      style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "var(--gf-ink-3)", cursor: "pointer", flexShrink: 0 }}
+      onClick={handleCheckboxClick}
+      aria-label={`Select ${jobName || "invoice line"}`}
+      aria-pressed={selected}
+      style={{ width: size === "lg" ? "36px" : "22px", height: size === "lg" ? "36px" : "22px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--r-check)", border: "none", backgroundColor: "transparent", cursor: "pointer", flexShrink: 0, padding: 0, visibility: selectionEnabled ? "visible" : "hidden" }}
     >
-      <ChevronDown style={{ width: "16px", height: "16px", transition: "transform .15s", transform: expanded ? "rotate(180deg)" : "none" }} />
+      <span aria-hidden="true" style={{ width: size === "lg" ? "20px" : "16px", height: size === "lg" ? "20px" : "16px", borderRadius: "4.5px", border: selected ? "none" : "1.5px solid var(--gf-check)", backgroundColor: selected ? "var(--gf-teal-600)" : "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {selected && <Check style={{ width: "11px", height: "11px", color: "#FFFFFF" }} strokeWidth={3} />}
+      </span>
     </button>
   );
 
+  const menu = (ref, big) => (
+    <div data-no-open ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        data-no-open
+        onClick={toggleMenu}
+        aria-label="Invoice line actions"
+        aria-expanded={menuOpen}
+        style={{ width: big ? "36px" : "26px", height: big ? "36px" : "26px", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "var(--gf-ink-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        <MoreHorizontal style={{ width: "16px", height: "16px" }} />
+      </button>
+      {menuOpen && (
+        <div style={{ position: "absolute", right: 0, ...(menuUp ? { bottom: "100%", marginBottom: "4px" } : { top: "100%" }), zIndex: 30, backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "var(--shadow-float)" }}>
+          <MenuItem icon={ExternalLink} label="Open details" onClick={() => { onOpenDetails(row); setMenuOpen(false); }} />
+          <MenuItem icon={Pencil} label="Edit line" onClick={() => { onToggleExpand(row); setMenuOpen(false); }} />
+          {row.job_id && <MenuItem icon={ExternalLink} label="Open job ↗" onClick={() => { navigate(`/jobs/${row.job_id}`); setMenuOpen(false); }} />}
+          {isBilled ? (
+            <MenuItem label="Reopen line" onClick={() => { onMarkBilled(row.id, false); setMenuOpen(false); }} />
+          ) : (
+            <MenuItem label="Mark billed" onClick={() => { onMarkBilled(row.id, true); setMenuOpen(false); }} />
+          )}
+          <MenuItem label="Set fee to 0% (no charge)" onClick={() => { onEdit(row.id, { fee_pct: 0, manually_adjusted: true }); setMenuOpen(false); }} />
+          <MenuItem icon={Trash2} label="Delete line" danger onClick={() => { onDelete(row.id); setMenuOpen(false); }} />
+        </div>
+      )}
+    </div>
+  );
+
+  const cellText = { fontSize: "12.5px", color: "var(--gf-ink-2)" };
+
   return (
     <>
-      {/* Desktop row */}
+      {/* Desktop grid row */}
       <div
+        ref={rowRef}
+        role="row"
+        aria-selected={selected}
+        data-line-id={row.id}
         onClick={handleRowClick}
         onMouseEnter={hoverBg}
         onMouseLeave={leaveBg}
-        className="hidden sm:flex items-center"
-        style={{ ...rowStyle, height: "52px", padding: "0 16px", gap: "14px", whiteSpace: "nowrap" }}
+        className={`hidden ${UNBILLED_GRID}`}
+        style={{ ...rowStyle, minHeight: "34px", padding: "4px 12px" }}
       >
-        {/* Checkbox */}
+        {checkbox("sm")}
+        <span className="font-mono-num whitespace-nowrap" style={cellText}>{shortDay(row.job_date)}</span>
         <button
           data-no-open
-          onClick={handleCheckboxClick}
-          aria-label={`Select ${row.job_name_raw || row.job_name_norm || "invoice line"}`}
-          aria-pressed={selected}
-          style={{ width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--r-check)", border: "none", backgroundColor: "transparent", cursor: "pointer", flexShrink: 0, visibility: selectionEnabled ? "visible" : "hidden" }}
+          onClick={(e) => { e.stopPropagation(); onToggleExpand(row); }}
+          className="text-left text-[13px] font-semibold leading-snug"
+          style={{ color: "var(--gf-ink)", textDecoration: isBilled ? "line-through" : "none", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, overflowWrap: "anywhere" }}
         >
-          <span aria-hidden="true" style={{ width: "16px", height: "16px", borderRadius: "4.5px", border: selected ? "none" : `1.5px solid var(--gf-check)`, backgroundColor: selected ? "var(--gf-teal-600)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {selected && <Check style={{ width: "11px", height: "11px", color: "#FFFFFF" }} strokeWidth={3} />}
-          </span>
+          {jobName}
         </button>
-
-        {/* Builder monogram tile */}
-        <div style={{ width: "30px", height: "30px", borderRadius: "8px", backgroundColor: tile.bg, color: tile.ink, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 600, flexShrink: 0, letterSpacing: "-0.01em" }}>
-          {initials}
-        </div>
-
-        {/* Job name + meta */}
-        <div className="flex items-baseline gap-2 min-w-0" style={{ flex: "1 1 auto" }}>
-          <button
-            data-no-open
-            onClick={(e) => { e.stopPropagation(); onToggleExpand(row); }}
-            className="text-[14px] font-medium truncate text-left"
-            style={{ color: "var(--gf-ink)", textDecoration: isBilled ? "line-through" : "none", flexShrink: 0, flexBasis: "220px", minWidth: "180px", maxWidth: "280px", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit" }}
-          >
-            {row.job_name_raw || row.job_name_norm || row.line_description}
-          </button>
-          {isCustomFee && (
-            <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 whitespace-nowrap" style={{ backgroundColor: "var(--gf-teal-050)", border: "1px solid var(--gf-teal-halo)", color: "var(--gf-teal-600)", flexShrink: 0 }}>
-              {Math.round((row.fee_pct || 0) * 100)}%
-            </span>
-          )}
-          <span className="text-[12.5px] truncate" style={{ color: reportAttached ? "var(--gf-teal-600)" : "var(--gf-ink-3)", flex: "1 1 0", minWidth: 0 }}>
-            {subline}
-          </span>
-        </div>
-
-        {/* Labor */}
-        <span className="font-mono-num text-[13px] text-right" style={{ color: "var(--gf-ink-3)", whiteSpace: "nowrap", width: "80px", flexShrink: 0 }}>
-          {displayedAmount == null ? "—" : `$${formatMoney(displayedAmount)}`}{isProfitSplit && <span className="block text-[10px]">Job sale · {Math.round((row.split_pct ?? 0.5) * 100)}% split</span>}
-        </span>
-
-        {/* Status */}
-        <div style={{ width: "128px", flexShrink: 0, display: "flex", justifyContent: "flex-end" }}>
-          {statusInfo && <StatusDot {...statusInfo} />}
-        </div>
-
-        {/* Fee */}
-        <span className="font-mono-num-bold text-[14px] text-right" style={{ color: fee === 0 ? "var(--gf-ink-3)" : "var(--gf-ink)", whiteSpace: "nowrap", width: "100px", flexShrink: 0 }}>
-          ${formatMoney(fee)}
-        </span>
-
-        {/* Menu */}
-        <div data-no-open ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
-          <button
-            data-no-open
-            onClick={toggleMenu}
-            aria-label="Invoice line actions"
-            aria-expanded={menuOpen}
-            style={{ width: "28px", height: "28px", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "var(--gf-ink-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
-            <MoreHorizontal style={{ width: "16px", height: "16px" }} />
-          </button>
-          {menuOpen && (
-            <div style={{ position: "absolute", right: 0, ...(menuUp ? { bottom: "100%", marginBottom: "4px" } : { top: "100%" }), zIndex: 30, backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "var(--shadow-float)" }}>
-              <MenuItem icon={ExternalLink} label="Open details" onClick={() => { onOpenDetails(row); setMenuOpen(false); }} />
-              <MenuItem icon={Pencil} label="Edit line" onClick={() => { onToggleExpand(row); setMenuOpen(false); }} />
-              {row.job_id && <MenuItem icon={ExternalLink} label="Open job ↗" onClick={() => { navigate(`/jobs/${row.job_id}`); setMenuOpen(false); }} />}
-              {isBilled ? (
-                <MenuItem label="Reopen line" onClick={() => { onMarkBilled(row.id, false); setMenuOpen(false); }} />
-              ) : (
-                <MenuItem label="Mark billed" onClick={() => { onMarkBilled(row.id, true); setMenuOpen(false); }} />
-              )}
-              <MenuItem label="Set fee to 0% (no charge)" onClick={() => { onEdit(row.id, { fee_pct: 0, manually_adjusted: true }); setMenuOpen(false); }} />
-              <MenuItem icon={Trash2} label="Delete line" danger onClick={() => { onDelete(row.id); setMenuOpen(false); }} />
-            </div>
-          )}
-        </div>
-
-        {/* Chevron */}
-        {chevronBtn}
+        <span className="font-mono-num truncate" style={cellText} title={row.po_number || ""}>{row.po_number || "—"}</span>
+        <span className={`${GRID_WIDE} truncate`} style={cellText}>{crew || "—"}</span>
+        <span className={`${GRID_WIDE} truncate`} style={{ ...cellText, color: reportAttached ? "var(--gf-teal-600)" : "var(--gf-ink-2)" }} title={work}>{work || "—"}</span>
+        <EditCell field="labor" current={labor} display={`$${formatMoney(labor)}`} editable={editable} onSave={saveCell} label="Labor" />
+        {isProfitSplit ? (
+          <span className="text-right text-[11.5px] font-semibold whitespace-nowrap" style={{ color: "var(--gf-teal-800)" }} title={`Job sale $${formatMoney(row.sale_price)}`}>{feePctLabel}</span>
+        ) : (
+          <EditCell field="fee_pct" current={row.fee_pct} display={<span style={{ color: isCustomFee ? "var(--gf-teal-800)" : "var(--gf-ink-2)", fontWeight: isCustomFee ? 700 : 400 }}>{feePctLabel}</span>} editable={editable} onSave={saveCell} label="Fee percent" />
+        )}
+        <span className="font-mono-num-bold text-right text-[13px] whitespace-nowrap" style={{ color: fee === 0 ? "var(--gf-ink-3)" : "var(--gf-ink)" }}>${formatMoney(fee)}</span>
+        <div style={{ minWidth: 0 }}>{statusInfo && <StatusDot {...statusInfo} />}</div>
+        <span className={`${GRID_WIDE} font-mono-num truncate`} style={cellText} title={row.invoice_number ? `Invoice #${row.invoice_number}` : ""}>{row.invoice_number ? `#${row.invoice_number}` : "—"}</span>
+        {menu(menuRef, false)}
       </div>
 
-      {/* Mobile row */}
+      {/* Phone row */}
       <div
         onClick={handleRowClick}
         onMouseEnter={hoverBg}
         onMouseLeave={leaveBg}
-        className="sm:hidden"
-        style={{ ...rowStyle, padding: "12px" }}
+        className="md:hidden"
+        style={{ ...rowStyle, padding: "8px 8px 8px 4px" }}
       >
-        <div className="flex items-center gap-3">
-          {/* Checkbox */}
-          <button
-            data-no-open
-            onClick={handleCheckboxClick}
-            aria-label={`Select ${row.job_name_raw || row.job_name_norm || "invoice line"}`}
-            aria-pressed={selected}
-            style={{ width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--r-check)", border: "none", backgroundColor: "transparent", cursor: "pointer", flexShrink: 0, visibility: selectionEnabled ? "visible" : "hidden" }}
-          >
-            <span aria-hidden="true" style={{ width: "20px", height: "20px", borderRadius: "4.5px", border: selected ? "none" : `1.5px solid var(--gf-check)`, backgroundColor: selected ? "var(--gf-teal-600)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {selected && <Check style={{ width: "13px", height: "13px", color: "#FFFFFF" }} strokeWidth={3} />}
-            </span>
-          </button>
-
-          {/* Builder monogram tile */}
-          <div style={{ width: "34px", height: "34px", borderRadius: "8px", backgroundColor: tile.bg, color: tile.ink, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 600, flexShrink: 0, letterSpacing: "-0.01em" }}>
-            {initials}
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            {/* Line 1: job name + fee */}
-            <div className="flex items-center justify-between gap-2">
+        <div className="flex items-start gap-1.5">
+          {checkbox("lg")}
+          <div className="min-w-0 flex-1 pt-1">
+            <div className="flex items-start justify-between gap-2">
               <button
                 data-no-open
                 onClick={(e) => { e.stopPropagation(); onToggleExpand(row); }}
-                className="text-[14px] font-medium truncate text-left"
-                style={{ color: "var(--gf-ink)", textDecoration: isBilled ? "line-through" : "none", minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit" }}
+                className="min-w-0 text-left text-[14px] font-semibold leading-snug"
+                style={{ color: "var(--gf-ink)", textDecoration: isBilled ? "line-through" : "none", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, overflowWrap: "anywhere" }}
               >
-                {row.job_name_raw || row.job_name_norm || row.line_description}
+                {jobName}
               </button>
-              <span className="font-mono-num-bold text-[14px]" style={{ color: fee === 0 ? "var(--gf-ink-3)" : "var(--gf-ink)", whiteSpace: "nowrap", flexShrink: 0 }}>
-                ${formatMoney(fee)}
-              </span>
+              <span className="font-mono-num-bold text-[14px]" style={{ color: fee === 0 ? "var(--gf-ink-3)" : "var(--gf-ink)", whiteSpace: "nowrap", flexShrink: 0 }}>${formatMoney(fee)}</span>
             </div>
-            {/* Line 2: labor · meta · status */}
-            <div className="flex items-center justify-between gap-2 mt-1">
-              <span className="text-[12px] truncate" style={{ color: "var(--gf-ink-3)", minWidth: 0 }}>
-                <span className="font-mono-num">{displayedAmount == null ? "—" : `$${formatMoney(displayedAmount)}`}{isProfitSplit && <span className="block text-[10px]">Job sale · {Math.round((row.split_pct ?? 0.5) * 100)}% split</span>}</span>
-                {subline !== "—" && <span> · {subline}</span>}
+            <div className="mt-0.5 flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-[12px]" style={{ color: "var(--gf-ink-2)" }}>
+                {[shortDay(row.job_date), `$${formatMoney(labor)} labor`, feePctLabel, row.po_number && `PO ${row.po_number}`, crew].filter(Boolean).join(" · ")}
               </span>
               {statusInfo && <StatusDot {...statusInfo} />}
             </div>
           </div>
-
-          {/* Menu */}
-          <div data-no-open ref={menuRefMobile} style={{ position: "relative", flexShrink: 0 }}>
-            <button
-              data-no-open
-              onClick={toggleMenu}
-              aria-label="Invoice line actions"
-              aria-expanded={menuOpen}
-              style={{ width: "36px", height: "36px", borderRadius: "6px", border: "none", backgroundColor: "transparent", color: "var(--gf-ink-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-            >
-              <MoreHorizontal style={{ width: "18px", height: "18px" }} />
-            </button>
-            {menuOpen && (
-              <div style={{ position: "absolute", right: 0, ...(menuUp ? { bottom: "100%", marginBottom: "4px" } : { top: "100%" }), zIndex: 30, backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "10px", padding: "4px", minWidth: "200px", boxShadow: "var(--shadow-float)" }}>
-                <MenuItem icon={ExternalLink} label="Open details" onClick={() => { onOpenDetails(row); setMenuOpen(false); }} />
-                <MenuItem icon={Pencil} label="Edit line" onClick={() => { onToggleExpand(row); setMenuOpen(false); }} />
-                {row.job_id && <MenuItem icon={ExternalLink} label="Open job ↗" onClick={() => { navigate(`/jobs/${row.job_id}`); setMenuOpen(false); }} />}
-                {isBilled ? (
-                  <MenuItem label="Reopen line" onClick={() => { onMarkBilled(row.id, false); setMenuOpen(false); }} />
-                ) : (
-                  <MenuItem label="Mark billed" onClick={() => { onMarkBilled(row.id, true); setMenuOpen(false); }} />
-                )}
-                <MenuItem label="Set fee to 0% (no charge)" onClick={() => { onEdit(row.id, { fee_pct: 0, manually_adjusted: true }); setMenuOpen(false); }} />
-                <MenuItem icon={Trash2} label="Delete line" danger onClick={() => { onDelete(row.id); setMenuOpen(false); }} />
-              </div>
-            )}
-          </div>
-
-          {/* Chevron */}
-          {chevronBtn}
+          {menu(menuRefMobile, true)}
         </div>
       </div>
 
