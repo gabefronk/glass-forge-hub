@@ -5,11 +5,13 @@ import { computeFeeAmt, computeLaborAmt, formatMoney } from "@/lib/feeMath";
 import { crewName, noteTokens } from "@/lib/feeUI";
 import { shortDay } from "@/lib/invoiceGrid";
 import { STATUS_LABELS } from "@/lib/invoiceMoneyBar";
+import { deliveryRouting } from "@/lib/lineProduct";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import LineInlineExpansion from "./LineInlineExpansion";
 
 // One invoice line (declutter, Oct 24): a flat 40px grid row with one click target. The
-// whole row opens a read panel (Crew, Work, Field report) with Open job, More ▾ and Edit
+// Product cell shows only the product (lineProduct); crew, PO/OE, delivery routing and
+// the full work notes live in the read panel the row opens, with Open job, More ▾ and Edit
 // line; Edit line opens the existing editor (LineInlineExpansion). No per-row menu, chevron
 // or avatar. Status is a dot and a word in the Show vocabulary.
 export const GRID_CLASS = "md:grid md:[grid-template-columns:var(--inv-cols-n)] xl:[grid-template-columns:var(--inv-cols-w)]";
@@ -69,8 +71,9 @@ export default function LineRow({ row, selected, focused, showStatus, onCheck, o
   const isProfitSplit = row.fee_type === "profit_split";
   const jobName = row.job_name_raw || row.job_name_norm || row.line_description;
   const crew = crewName(row.calendar_creator);
-  const note = noteTokens(row.note_text) || row.line_description || "";
-  const work = [crew, note].filter(Boolean).join(" · ");
+  const product = row._product || "—";
+  const routing = deliveryRouting(row);
+  const refs = [row.po_number && `PO ${row.po_number}`, row.oe_number && `OE ${row.oe_number}`].filter(Boolean).join(" · ");
   const status = row._status || "none";
 
   const bg = selected ? "#EEF5F3" : expanded ? "#FAF8F3" : hover ? "#F6F3EC" : "#FFFFFF";
@@ -102,7 +105,7 @@ export default function LineRow({ row, selected, focused, showStatus, onCheck, o
           {jobName}
         </button>
         <span className={`${WIDE_ONLY} truncate`} style={{ ...cell, fontFamily: "var(--font-mono)", fontSize: "13px", color: "#34403F" }}>{row.po_number || ""}</span>
-        <span className={`${WIDE_ONLY} truncate text-[14px]`} style={{ ...cell, color: "#566063" }} title={work}>{work}</span>
+        <span className={`${WIDE_ONLY} truncate text-[14px]`} style={{ ...cell, color: product === "—" ? "#566063" : "#101617" }} title={product}>{product}</span>
         <span className="font-mono-num text-right text-[14px]" style={{ ...cell, color: "#101617" }}>${formatMoney(labor)}</span>
         <span className="font-mono-num-bold text-right text-[14px] font-bold" style={{ ...cell, color: fee === 0 ? "#566063" : "#101617" }}>${formatMoney(fee)}</span>
         {showStatus && <span style={cell}><StatusWord status={status} /></span>}
@@ -118,7 +121,7 @@ export default function LineRow({ row, selected, focused, showStatus, onCheck, o
               <span className="font-mono-num-bold whitespace-nowrap text-[15px] font-bold" style={{ color: "#101617" }}>${formatMoney(fee)}</span>
             </div>
             <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[14px]" style={{ color: "#566063" }}>
-              <span>{[shortDay(row.job_date), `$${formatMoney(labor)} labor`, row.po_number].filter(Boolean).join(" · ")}</span>
+              <span>{[shortDay(row.job_date), `$${formatMoney(labor)} labor`, product !== "—" && product].filter(Boolean).join(" · ")}</span>
               {showStatus && <StatusWord status={status} />}
             </div>
           </div>
@@ -129,6 +132,8 @@ export default function LineRow({ row, selected, focused, showStatus, onCheck, o
         <div className="flex flex-wrap items-start justify-between gap-4 pl-4 md:pl-[118px]" style={{ backgroundColor: "#FAF8F3", paddingTop: "4px", paddingRight: "16px", paddingBottom: "14px", borderBottom: "1px solid #D6CCBA" }}>
           <dl className="grid min-w-0 flex-1 gap-x-5 gap-y-1 pt-2 text-[14px]" style={{ gridTemplateColumns: "max-content minmax(0,1fr)", color: "#101617" }}>
             <dt style={{ color: "#566063" }}>Crew</dt><dd>{crew || "—"}</dd>
+            {refs && <><dt style={{ color: "#566063" }}>PO / OE</dt><dd style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "#34403F" }}>{refs}</dd></>}
+            {routing && <><dt style={{ color: "#566063" }}>Delivery</dt><dd>{routing}</dd></>}
             <dt style={{ color: "#566063" }}>Work</dt><dd style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{String(row.note_text || "").trim() || row.line_description || "—"}</dd>
             <dt style={{ color: "#566063" }}>Field report</dt><dd>{report}{report === "Missing" && <> · <Link data-no-open to="/calendar" className="font-semibold underline" style={{ color: "#0B3F3B" }}>Add it on the calendar</Link></>}</dd>
           </dl>
