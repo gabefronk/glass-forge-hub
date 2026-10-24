@@ -137,9 +137,9 @@ function orderScope(order) {
 // picked scope's quote total) are withheld from the job row - dash plus
 // 'Multiple scopes - see scope rows'. Owner-entered job-level money inputs
 // stay: they ARE job-level. Profit is withheld whenever any input is
-// withheld, since it would recompute from partial coverage. Aggregates are
-// never fabricated by summing scopes (mixed tax treatment, shared-budget
-// overlap). Verified canonical values (card.windows.value etc.) are
+// withheld, since it would recompute from partial coverage. The job row never
+// shows a sum of its scopes; the totals bar adds the scope rows it withholds
+// (purchasingSummary). Verified canonical values (card.windows.value etc.) are
 // untouched; only the display objects change.
 export function applyScopeRollup(card) {
   const scopes = card?.scopes || [];
