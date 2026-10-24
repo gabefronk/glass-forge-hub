@@ -157,6 +157,17 @@
       "default": false,
       "description": "Has BFS been billed for this line?"
     },
+    "invoice_number": {
+      "type": "string",
+      "title": "Invoice Number",
+      "description": "QuickBooks invoice number this line was billed on. Set with billed_to_bfs."
+    },
+    "invoice_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Invoice Date",
+      "description": "Date of the QuickBooks invoice this line was billed on."
+    },
     "paid_to_ya": {
       "type": "boolean",
       "title": "Paid to YA",
