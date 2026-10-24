@@ -22,7 +22,14 @@
 //    paid_at). ETA "Delivered" when received_date set (not past amber).
 //  - Units count only current explicit selected scope (active included budgets).
 //  - Job links are by exact job_id, never inferred from a name.
-import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount, roundMoney, isIgnoredWorkItem, sameVendor, pText } from './purchasingCoreTwin.js';
+//  - The displayed windows estimate (not the verified figure above) is always on
+//    one basis, materials incl tax, as job cost is booked from the supplier bill:
+//    pre-tax PO/order/dealer amounts and budget material get the workbook use tax
+//    (SALES_TAX_RATE), and the budget's labor overhead adder is never included.
+import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount, roundMoney, isIgnoredWorkItem, sameVendor, pText, SALES_TAX_RATE } from './purchasingCoreTwin.js';
+
+const USE_TAX = `${Number((SALES_TAX_RATE * 100).toFixed(2))}% use tax`;
+const plusUseTax = (v) => roundMoney(Number(v) * (1 + SALES_TAX_RATE));
 import { purchasingMatches } from './purchasingMatches.js';
 import { procurementPath } from './procurementRoutes.js';
 import { purchasingText } from './purchasingSearch.js';
@@ -164,6 +171,16 @@ function pickAmount(records, field) {
   return { pick: withAmt[0], alternatives: withAmt.slice(1) };
 }
 
+// PO and vendor order amounts carry no tax field; job cost adds the use tax.
+function poCandidate(pick, rest) {
+  const label = (p) => `PO ${p.ref} + ${USE_TAX}`;
+  return { value: plusUseTax(pick.pick.amount), label: label(pick.pick), alternatives: pick.alternatives.map((a) => ({ value: plusUseTax(a.amount), label: label(a) })), ...rest };
+}
+function orderCandidate(pick, rest) {
+  const label = (o) => `Order ${o.ref} + ${USE_TAX}`;
+  return { value: plusUseTax(pick.pick.amount), label: label(pick.pick), alternatives: pick.alternatives.map((a) => ({ value: plusUseTax(a.amount), label: label(a) })), ...rest };
+}
+
 // POs/orders scoped to ONE budget by EXACT budget_id (never same-job first).
 function scopedRecords(budget, jobPOs, jobOrders) {
   const pos = jobPOs.filter((p) => p.budget_id === budget.id);
@@ -190,26 +207,19 @@ export function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
   // labor overhead into a "windows" number and misled reads.
   if (src.value != null) return { value: src.value, label: src.inferred ? 'Supplier quote total incl tax (confirm)' : 'Supplier quote total incl tax', source: 'source_quote', budgetId: budget.id, alternatives: [], inferred: Boolean(src.inferred) };
   const poPick = pickAmount(scopedPOs, 'amount_dealer');
-  if (poPick.pick) {
-    const alts = poPick.alternatives.map((a) => ({ value: a.amount, label: `PO ${a.ref} dealer amount (no tax verified)` }));
-    return { value: poPick.pick.amount, label: `PO ${poPick.pick.ref} dealer amount (no tax verified)`, source: 'po_dealer', budgetId: budget.id, alternatives: alts };
-  }
+  if (poPick.pick) return poCandidate(poPick, { source: 'po_dealer', budgetId: budget.id });
   const voPick = pickAmount(scopedOrders, 'amount');
-  if (voPick.pick) {
-    const alts = voPick.alternatives.map((a) => ({ value: a.amount, label: `Order ${a.ref} amount (no tax verified)` }));
-    return { value: voPick.pick.amount, label: `Order ${voPick.pick.ref} amount (no tax verified)`, source: 'vendor_order', budgetId: budget.id, alternatives: alts };
-  }
+  if (voPick.pick) return orderCandidate(voPick, { source: 'vendor_order', budgetId: budget.id });
   const q = budget.quote || {};
   const dealer = amount(q.dealer_subtotal) ?? amount(q.dealer_total);
-  if (dealer != null) return { value: Number(dealer), label: 'Dealer price (review)', source: 'dealer_price', budgetId: budget.id, alternatives: [] };
-  // Budget-review figures the owner typed (restored 10/22 after his live
-  // read: the budget must show on the main row). Material incl overhead+tax
-  // from the reviewed budget - the honest label stays, direct records above
-  // always win when they exist.
-  const hasCostInput = ['material_true_cost', 'labor_cost_sub_pay', 'additional_install_material', 'additional_equipment']
-    .some((k) => amount(budget.inputs?.[k]) != null);
-  const cmt = budgetFigures(budget).calculated?.cost_material_tax;
-  if (hasCostInput && cmt != null) return { value: cmt, label: 'Material incl tax (budget, incl. overhead)', source: 'cost_material_tax', budgetId: budget.id, alternatives: [] };
+  if (dealer != null) return { value: plusUseTax(dealer), label: `Dealer price + ${USE_TAX} (review)`, source: 'dealer_price', budgetId: budget.id, alternatives: [] };
+  // Budget-review figures the owner typed (restored 10/22 after his live read:
+  // the budget must show on the main row). Window material + equipment with the
+  // workbook use tax; never cost_material_tax, which carries the labor overhead
+  // adder (labor shows in its own column). Direct records above always win.
+  const material = amount(budget.inputs?.material_true_cost);
+  const equipment = amount(budget.inputs?.additional_equipment);
+  if (material != null || equipment != null) return { value: plusUseTax((material ?? 0) + (equipment ?? 0)), label: `Budget material + ${USE_TAX}`, source: 'cost_material_tax', budgetId: budget.id, alternatives: [] };
   return { value: null, label: 'No cost figure', source: 'none', budgetId: budget.id, alternatives: [] };
 }
 
@@ -225,15 +235,9 @@ export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders 
     if (conflict) return { value: null, label: 'PO conflict — no cost figure', review: true, source: 'po_conflict', budgetId: null, alternatives: [] };
     // PO-only job: no budget, but real POs/orders exist → show the known amount.
     const poPick = pickAmount(jobPOs, 'amount_dealer');
-    if (poPick.pick) {
-      const alts = poPick.alternatives.map((a) => ({ value: a.amount, label: `PO ${a.ref} dealer amount (no tax verified)` }));
-      return { value: poPick.pick.amount, label: `PO ${poPick.pick.ref} dealer amount (no tax verified)`, review: true, source: 'po_dealer', budgetId: null, alternatives: alts };
-    }
+    if (poPick.pick) return { ...poCandidate(poPick, { source: 'po_dealer', budgetId: null }), review: true };
     const voPick = pickAmount(jobOrders, 'amount');
-    if (voPick.pick) {
-      const alts = voPick.alternatives.map((a) => ({ value: a.amount, label: `Order ${a.ref} amount (no tax verified)` }));
-      return { value: voPick.pick.amount, label: `Order ${voPick.pick.ref} amount (no tax verified)`, review: true, source: 'vendor_order', budgetId: null, alternatives: alts };
-    }
+    if (voPick.pick) return { ...orderCandidate(voPick, { source: 'vendor_order', budgetId: null }), review: true };
     return { value: null, label: null, review: false, source: 'empty', budgetId: null, alternatives: [] };
   }
   if (sorted.length === 1) {
