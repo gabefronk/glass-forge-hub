@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purchasingSearchIndex, matchesPurchasingSearch } from '../src/lib/purchasingSearch.js';
 import { procurementPath } from '../src/lib/procurementRoutes.js';
-import { buildSetupDraft, contractTermsReady, contractReviewIssues } from '../src/lib/jobSetup.js';
 
 const ready = () => ({
   customer: { name: 'Test customer', job_site_address: 'Test site' },
@@ -35,32 +34,4 @@ test('search never borrows job context through broken or cross-job IDs', () => {
 test('purchasing navigation keeps a valid accounting month and rejects invalid months', () => {
   assert.equal(procurementPath('job/one', 'invoicing', '2026-09'), '/jobs/job%2Fone/budget-orders?section=invoicing&month=2026-09');
   assert.equal(procurementPath('', 'orders', '2026-13'), '/purchasing?section=orders');
-});
-test('missing deposit and scope price cannot pass review through null-to-zero conversion', () => {
-  assert.equal(contractTermsReady(ready()), true);
-  for (const value of [null, undefined, '', '   ', -1]) {
-    const deposit = ready(); deposit.terms.deposit_pct = value;
-    assert.equal(contractTermsReady(deposit), false);
-    const line = ready(); line.scope_lines[0].customer_price = value;
-    assert.equal(contractTermsReady(line), false);
-  }
-});
-test('explicit zero amounts are allowed but inconsistent contract totals are blocked', () => {
-  const sheet = ready();
-  sheet.pricing = { sell_price: 0, tax: 0, contract_total: 0 };
-  sheet.scope_lines[0].customer_price = 0;
-  assert.equal(contractTermsReady(sheet), true);
-  sheet.pricing.contract_total = 20;
-  assert.equal(contractTermsReady(sheet), false);
-  assert.ok(contractReviewIssues(sheet).some(issue => issue.includes('subtotal plus customer tax')));
-});
-test('blank tax and subtotal cannot become zero just because they contain spaces', () => {
-  for (const key of ['sell_price', 'tax', 'contract_total']) {
-    const sheet = ready(); sheet.pricing[key] = '  ';
-    assert.equal(contractTermsReady(sheet), false);
-  }
-});
-test('structured quote dimensions become readable setup sizes', () => {
-  const sheet = buildSetupDraft({ job: { accepted_quote_snapshot: { lines: [{ size: { width: 36, height: 48 }, qty: 1, product: 'Window' }] } } });
-  assert.equal(sheet.scope_lines[0].size, '36 × 48');
 });

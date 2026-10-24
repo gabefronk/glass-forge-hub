@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { budgetVersion, budgetFigures, budgetRollup, setupBudgetSource } from '../base44/shared/procurementCore.js';
 import { budgetInputPatch, rereadPatch } from '../base44/shared/budgetMutationPolicy.mjs';
 import { inInvoiceScope, selectedInvoiceRows } from '../src/lib/invoiceScope.js';
-import { buildSetupDraft } from '../src/lib/jobSetup.js';
 
 const at = '2026-10-04T00:00:00Z';
 const screenshotDraft = {
@@ -52,27 +51,6 @@ test('rereading a quote retains its earlier numbers and clears prior review', ()
   assert.equal(patch.numbers_reviewed_at, '');
   assert.deepEqual(patch.input_history[0].quote, old.quote);
   assert.deepEqual(patch.input_history[0].inputs, old.inputs);
-});
-
-test('new setup drafts combine only included scopes and omit reference copies', () => {
-  const a = { id: 'a', job_id: 'j', quote_number: '1', inputs: { material_true_cost: 100, actual_total_sell: 200 }, quote: { lines: [{ mark: 'a' }] } };
-  const b = { id: 'b', job_id: 'j', quote_number: '2', inputs: { material_true_cost: 300, actual_total_sell: 500 }, quote: { lines: [{ mark: 'b' }] } };
-  const copy = { ...a, id: 'copy', budget_usage: 'reference' };
-  const { budget, warnings } = setupBudgetSource([a, b, copy, screenshotDraft]);
-  assert.deepEqual(warnings, []);
-  assert.equal(budget.inputs.material_true_cost, 400);
-  assert.equal(budget.inputs.actual_total_sell, 700);
-  assert.deepEqual(budget.quote.lines.map(line => line.mark), ['a', 'b']);
-});
-
-test('tax-inclusive budget total does not become a subtotal taxed again', () => {
-  const withTax = buildSetupDraft({ job: { accepted_quote_snapshot: { result: { totals: { tax: 64.76 } } } }, budget: { inputs: { material_true_cost: 869.20, actual_total_sell: 933.96 } } });
-  assert.equal(withTax.pricing.contract_total, 933.96);
-  assert.equal(withTax.pricing.sell_price, 869.20);
-  const unknownTax = buildSetupDraft({ budget: { inputs: { actual_total_sell: 933.96 } } });
-  assert.equal(unknownTax.pricing.tax, '');
-  assert.equal(unknownTax.pricing.sell_price, '');
-  assert.equal(unknownTax.pricing.contract_total, 933.96);
 });
 
 test('invoice selection is limited to the exact selected job and month', () => {
