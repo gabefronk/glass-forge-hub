@@ -238,8 +238,12 @@ test('calendar: repeated visits for an existing customer + address attach to one
   assert.deepEqual(first.auto_created_jobs, []);
   for (const g of ['g1', 'g2', 'g3', 'g4']) {
     assert.equal(feeFor(db, g).job_id, 'job-a', g);
-    assert.equal(feeFor(db, g).needs_review, false, g);
+    assert.equal(feeFor(db, g).match_confidence, 'high', g);
   }
+  for (const g of ['g1', 'g2', 'g3']) assert.equal(feeFor(db, g).needs_review, false, g);
+  // The PO-matched warranty visit links to the job but is held by the billing audit
+  // (service work with no labor amount), not by the job match.
+  assert.match(feeFor(db, 'g4').pricing_review_reason, /\[Billing audit\] Service work has no labor amount/);
   // Next day: another appointment for the same house.
   db.table('CalendarEvents').push(calEvent('g5', '2026-09-09', 'Pulte Homes - 2154 Jordanelle Ridge Dr.', { address: '2154 Jordanelle Ridge Drive' }));
   await run(calendarHandler, db, WINDOW);
