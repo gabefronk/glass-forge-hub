@@ -5,10 +5,10 @@ import { C } from "@/lib/feeUI";
 import { computeJobBudget, SALES_TAX_RATE } from "../../../base44/shared/jobBudgetMath.js";
 import { budgetVersion } from "../../../base44/shared/procurementCore.js";
 
-// The review step under a Job Budgets row: type the workbook's yellow-cell numbers
-// (material cost, labor cost, labor sell, total sell) and, for rows the drop could not
-// place, pick or create the Hub job. Both call jobBudgetIngest, which rewrites the sheet in
-// Drive, refiles the folder under the job, and refreshes the invoicing cost inputs.
+// The review step under a Job Budgets row: type the budget numbers (material cost,
+// labor cost, labor sell, total sell) and, for rows the drop could not place, pick or
+// create the Hub job. Both call jobBudgetIngest, which refiles the Drive folder under the
+// job and refreshes the invoicing cost inputs. (No budget-sheet copy is written any more.)
 
 const money = (n) => (n === null || n === undefined || n === "" || !Number.isFinite(Number(n)))
   ? "-" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
