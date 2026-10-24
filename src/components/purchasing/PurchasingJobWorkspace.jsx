@@ -1,31 +1,20 @@
-// The one per-job purchasing workspace: expands in place beneath a Purchasing
-// row, and is the whole Budget & Orders page for a job (pages/Procurement.jsx).
-// Reuses the existing native procurement forms (PurchaseOrderForm,
-// BudgetUsageForm, SupplierOrderForm, OrderStatusForm, NumbersEditor,
-// DeleteUnusedQuoteButton) and the shared procurement service validation.
-// Customer invoices live on the job page and job invoicing, not here.
-// Same-job records are filtered by EXACT
-// immutable job id (jobProcurementRecords) — never a name join.
-//
-// Constraints (preview-only):
-//  - Does NOT alter the card's money tiles, cost provenance, budgets or money
-//    calculations. It only displays real records and hosts owner-reviewed forms.
-//  - No autosave on expand. Every mutating form keeps its own review checkbox.
-//  - Quote upload uses the private QuoteDropzone (server-side receipt) bound to
-//    THIS job's id, never the legacy public BudgetOrders upload.
-//  - Editor records are looked up from rec.* (this job only) — an immutable job
-//    lock. SupplierOrderForm is scoped to [job] + rec.pos so a confirmation can
-//    never silently switch jobs. NumbersEditor's legacy public-source re-read is
-//    disabled here (hideRefill); only the private staged refresh is used.
-//  - Related POs switch to the inline orders section (with highlight) instead
-//    of navigating away. Multiple orders on one PO are all shown with their own
-//    payment state, or routed to inline tracking.
-//  - Optional external links (source quote, budget sheet, Drive folder) are
-//    preserved but are not the routine path.
+// The one per-job purchasing workspace: opens in place beneath a Purchasing row,
+// and is the whole Budget & Orders page for a job (pages/Procurement.jsx).
+// Redesign (Gabriel, Oct 24): one page, no section switcher, nothing said twice.
+//   1. Purchase orders & quotes - one line per PO / supplier order with its PO,
+//      quote and order numbers, ETA, supplier payable and supplier payment. Manage
+//      opens that line's real forms (status, confirmation, payment, sales tax, ETA).
+//   2. Budget - each quote budget's cost build-up and price & margin. Edit numbers
+//      is the one place job money is changed (the budget is the source).
+//   3. The private vendor-quote upload.
+// Reuses the existing native procurement forms (PurchaseOrderForm, BudgetUsageForm,
+// SupplierOrderForm, OrderStatusForm, NumbersEditor, DeleteUnusedQuoteButton) and the
+// shared procurement service validation. Same-job records are filtered by EXACT
+// immutable job id (jobProcurementRecords) - never a name join. Editor records are
+// looked up from rec.* (this job only), so a record from another job can never load.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus } from 'lucide-react';
-import { C } from '@/lib/feeUI';
+import { ArrowUpRight, Pencil, Plus } from 'lucide-react';
 import {
   money,
   PurchaseOrderForm, BudgetUsageForm, SupplierOrderForm, OrderStatusForm,
@@ -37,150 +26,53 @@ import PurchasingDates from '@/components/budgets/PurchasingDates';
 import QuoteDropzone from './QuoteDropzone';
 import PrivateSourceButton from './PrivateSourceButton';
 import { activeBudgets, budgetFigures } from '@/lib/purchasingCoreTwin';
-import { statusWithDate, etaText, supplierReplyText } from '@/lib/purchasingDates';
+import { statusWithDate, supplierReplyText } from '@/lib/purchasingDates';
 import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
+import { etaDate } from '@/lib/purchasingSummary';
 import { saveEtaTarget } from '@/lib/etaTarget';
 import { quantityReviewLabel } from '@/lib/quantityReview';
 
-const SECTIONS = [['budgets', 'Quotes & budget'], ['orders', 'POs'], ['tracking', 'Supplier tracking']];
+const INK = '#101617', INK2 = '#566063', INK3 = '#34403F', RULE = '#EEE9E0', EDGE = '#E2DCD1';
+const EYEBROW = 'text-[10px] font-semibold uppercase tracking-[0.12em]';
+const BTN = 'inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[9px] px-3 text-[13px] font-medium no-underline disabled:opacity-60';
+const SEC = { border: `1px solid ${EDGE}`, backgroundColor: '#FFFFFF', color: INK3 };
+const PRI = { border: '1px solid #0B3F3B', backgroundColor: '#0B3F3B', color: '#FFFFFF', fontWeight: 600 };
+const TONES = {
+  ok: { c: '#082F2C', bg: '#E2EEEB', b: '#C7E4D2' },
+  warn: { c: '#6F4E10', bg: '#FAF0DA', b: '#EFDFB7' },
+  bad: { c: '#A43432', bg: '#FCEDEC', b: '#F0C9C5' },
+  plain: { c: INK2, bg: '#F3EFE7', b: EDGE },
+};
 
-// Free-text notes and status history the forms append to a record.
+const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v : ''; } catch { return ''; } };
+const fileHref = (id) => (id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : '');
+const folderHref = (id) => (id ? `https://drive.google.com/drive/folders/${encodeURIComponent(id)}` : '');
+const lineMoney = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' }));
+const pct = (v) => (v == null || !Number.isFinite(Number(v)) ? '—' : `${(Number(v) * 100).toFixed(1)}%`);
+const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+
+function Chip({ tone = 'plain', children }) {
+  const t = TONES[tone] || TONES.plain;
+  return <span className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-[7px] px-2 text-[11.5px] font-semibold" style={{ color: t.c, backgroundColor: t.bg, border: `1px solid ${t.b}` }}>{children}</span>;
+}
+function Ref({ k, v }) {
+  return (
+    <span className="inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-[6px] px-2 text-[11.5px]" style={{ backgroundColor: '#F3EFE7', border: `1px solid ${EDGE}`, color: INK2 }}>
+      {k}<span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: 500, color: INK }}>{v}</span>
+    </span>
+  );
+}
 function NotesHistory({ notes }) {
   if (!notes) return null;
   return (
-    <details className="mt-1.5 text-[11.5px]" style={{ color: C.textSecondary }}>
+    <details className="text-[12px]" style={{ color: INK2 }}>
       <summary className="cursor-pointer font-semibold">Notes & history</summary>
       <p className="mt-1 whitespace-pre-line">{notes}</p>
     </details>
   );
 }
-const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v : ''; } catch { return ''; } };
-const fileHref = (id) => (id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : '');
-const folderHref = (id) => (id ? `https://drive.google.com/drive/folders/${encodeURIComponent(id)}` : '');
 
-const chip = { ok: { t: 'Included scope', c: '#166447', bg: '#EAF5EE', b: '#C7E4D2' }, warn: { t: 'Needs review', c: '#566063', bg: '#F4F1EA', b: '#D3CABB' }, draft: { t: 'Draft', c: '#566063', bg: '#F4F1EA', b: '#D3CABB' }, ref: { t: 'Reference / replaced', c: '#566063', bg: '#F4F1EA', b: '#D3CABB' }, unlinked: { t: 'Needs a job', c: '#566063', bg: '#F4F1EA', b: '#D3CABB' } };
-function budgetChip(b, active) {
-  if (b.status === 'needs_review') return chip.warn;
-  if (!b.job_id) return chip.unlinked;
-  if (active) return chip.ok;
-  if (b.budget_usage === 'draft') return chip.draft;
-  return chip.ref;
-}
-
-function Badge({ tone, children }) {
-  const s = tone === 'ok' ? { c: '#166447', bg: '#EAF5EE', b: '#C7E4D2' } : tone === 'warn' ? { c: '#566063', bg: '#F4F1EA', b: '#D3CABB' } : { c: '#566063', bg: '#F4F1EA', b: '#D3CABB' };
-  return <span className="inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap" style={{ color: s.c, backgroundColor: s.bg, border: `1px solid ${s.b}` }}>{children}</span>;
-}
-
-const linkBtn = 'inline-flex min-h-8 items-center gap-1.5 rounded-[7px] border px-2.5 py-1 text-[11.5px] font-semibold';
-const lineMoney = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' }));
-const pct = (v) => (v == null || !Number.isFinite(Number(v)) ? '—' : `${(Number(v) * 100).toFixed(1)}%`);
-
-// Meaningful cost / sell / labor / markup breakdown from the budget's real
-// inputs and computed figures (existing semantics — no invention).
-function BudgetBreakdown({ budget }) {
-  const fig = budgetFigures(budget);
-  const c = fig.calculated || {};
-  const i = budget.inputs || {};
-  const rows = [
-    ['Material cost', i.material_true_cost, false],
-    ['Labor cost (sub pay)', i.labor_cost_sub_pay, false],
-    // 'Labor sell' hidden for now (Gabriel 10/22: sub pay only).
-    ['Additional install material', i.additional_install_material, false],
-    ['Additional equipment', i.additional_equipment, false],
-    ['Use tax', c.use_tax, false],
-    ['Cost incl overhead + tax', c.cost_material_tax, false],
-    ['Total cost (overhead)', c.total_cost_overhead, false],
-    ['Customer sell', i.actual_total_sell, false],
-    ['Suggested sell', c.suggested_total_sell, false],
-    ['Margin %', c.actual_margin_pct, true],
-  ];
-  return (
-    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11.5px] sm:grid-cols-3" style={{ color: C.text }}>
-      {rows.map(([label, val, isPct]) => (
-        <div key={label} className="flex items-baseline justify-between gap-1">
-          <span style={{ color: C.textSecondary }}>{label}</span>
-          <strong className="tabular-nums">{isPct ? pct(val) : lineMoney(val)}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Real vendor quote line items (if the parsed quote carries them).
-function QuoteLines({ budget }) {
-  const lines = budget.quote?.lines;
-  if (!Array.isArray(lines) || !lines.length) return null;
-  return (
-    <details className="mt-2">
-      <summary className="cursor-pointer text-[11.5px] font-semibold" style={{ color: C.textSecondary }}>Quote line items ({lines.length})</summary>
-      <div className="mt-1.5 overflow-x-auto">
-        <table className="w-full text-[11px] tabular-nums" style={{ color: C.text }}>
-          <thead><tr style={{ color: C.textSecondary }}>{['Kind', 'Description', 'Qty', 'Unit', 'Extended'].map((h) => <th key={h} className="px-1.5 py-1 text-left font-semibold">{h}</th>)}</tr></thead>
-          <tbody>
-            {lines.map((l, idx) => (
-              <tr key={idx} style={{ borderTop: '1px solid #EEE9E0' }}>
-                <td className="px-1.5 py-1">{l.kind || '—'}</td>
-                <td className="px-1.5 py-1">{l.description || l.desc || '—'}</td>
-                <td className="px-1.5 py-1">{l.qty ?? '—'}</td>
-                <td className="px-1.5 py-1">{lineMoney(l.unit_price)}</td>
-                <td className="px-1.5 py-1">{lineMoney(l.extended)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
-  );
-}
-
-function BudgetRow({ budget, job, allBudgets, pos, onEdit, onPreparePO, onShowPO }) {
-  const figures = budgetFigures(budget);
-  const active = activeBudgets(allBudgets.filter((b) => b.job_id === budget.job_id)).some((b) => b.id === budget.id);
-  const c = budgetChip(budget, active);
-  const supplier = budget.vendor || budget.manufacturer || 'Supplier needs review';
-  const subtitle = [supplier, budget.quote_number ? `Quote ${budget.quote_number}` : ''].filter(Boolean).join(' · ');
-  const statusLine = figures.warnings.length ? figures.warnings[0]
-    : budget.budget_usage === 'draft' ? 'Draft — review numbers and your customer price, then include this scope.'
-    : 'Reviewed and ready to include.';
-  const sourceHref = safeHref(budget.source_pdf_url) || fileHref(budget.drive_quote_file_id);
-  const fHref = job?.drive_job_folder_url || folderHref(job?.drive_job_folder_id || budget.drive_job_folder_id);
-  const privateSource = !sourceHref && /^[a-f0-9]{64}$/.test(budget.source_sha256 || '') ? budget.id : null;
-  const related = pos.filter((p) => p.budget_id === budget.id);
-  return (
-    <div className="rounded-[10px] p-3" style={{ border: '1px solid #D3CABB', backgroundColor: '#FAF8F3' }}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="break-words text-[13px] font-bold leading-tight" style={{ color: C.text }}>{budget.title || budget.quote_name || 'Untitled quote'}</p>
-          <p className="mt-0.5 text-[11px]" style={{ color: C.textSecondary }}>{subtitle}</p>
-        </div>
-        <Badge tone={c === chip.ok ? 'ok' : 'warn'}>{c.t}</Badge>
-      </div>
-      <p className="mt-1.5 text-[12px]" style={{ color: C.text }}>Material before tax: <strong>{money(budget.inputs?.material_true_cost)}</strong>{budget.openings_qty > 0 ? <span style={{ color: C.textSecondary }}> · {budget.openings_qty} units</span> : null}{quantityReviewLabel(budget) ? <span style={{ color: '#96490F' }}> · Quantity needs review</span> : null}</p>
-      <p className={`mt-1 text-[11px] ${figures.warnings.length ? 'font-semibold' : ''}`} style={{ color: figures.warnings.length ? '#566063' : C.textSecondary }}>{statusLine}</p>
-      <BudgetBreakdown budget={budget} />
-      <QuoteLines budget={budget} />
-      <div className="mt-1.5 text-[12px]" style={{ color: C.text }}>Cost basis <strong>{money(figures.cost)}</strong></div>
-      {budget.input_history?.length > 0 && (
-        <details className="mt-1.5 text-[11.5px]" style={{ color: C.textSecondary }}>
-          <summary className="cursor-pointer font-semibold">Previous saved inputs ({budget.input_history.length})</summary>
-          {budget.input_history.map((h, i) => <p key={i} className="mt-1">{h.at} · {h.action} · material {money(h.inputs?.material_true_cost)} · customer total {money(h.inputs?.actual_total_sell)}</p>)}
-        </details>
-      )}
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <button type="button" onClick={() => onEdit({ mode: 'numbers', budget_id: budget.id })} className={linkBtn} style={{ borderColor: C.border, color: '#fff', backgroundColor: '#0B3F3B' }}>Review numbers</button>
-        {budget.job_id ? <button type="button" onClick={() => onEdit({ mode: 'usage', budget_id: budget.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Scope / revision</button> : null}
-        {budget.job_id && active && figures.ready && !related.length ? <button type="button" onClick={() => onPreparePO(budget.id)} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Prepare PO</button> : null}
-        {related.map((p) => <button key={p.id} type="button" onClick={() => onShowPO(p.id)} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>PO {p.po_number}</button>)}
-        {!budget.job_id ? <DeleteUnusedQuoteButton budget={budget} onDeleted={onEdit._onSaved} /> : null}
-        {sourceHref ? <a href={sourceHref} target="_blank" rel="noreferrer" className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}><ExternalLink className="h-3.5 w-3.5" />Source</a> : null}
-        {privateSource ? <PrivateSourceButton budgetId={privateSource} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }} /> : null}
-        {budget.drive_budget_xlsx_file_id ? <a href={fileHref(budget.drive_budget_xlsx_file_id)} target="_blank" rel="noreferrer" className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}><ExternalLink className="h-3.5 w-3.5" />Budget sheet</a> : null}
-        {fHref ? <a href={fHref} target="_blank" rel="noreferrer" className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}><ExternalLink className="h-3.5 w-3.5" />Drive</a> : null}
-      </div>
-    </div>
-  );
-}
+// ---------- 1. Purchase orders & quotes ----------
 
 // Marks a PO payable that already includes the supplier's sales tax, so job cost adds no use tax.
 function POSalesTax({ po, onSaved }) {
@@ -200,193 +92,329 @@ function POSalesTax({ po, onSaved }) {
   );
 }
 
-function PORow({ po, budgets, orders, onEdit, onShowOrder, highlight }) {
-  const source = budgets.find((b) => b.id === po.budget_id);
-  const related = orders.filter((o) => o.purchase_order_id === po.id);
-  const highlightStyle = highlight ? { boxShadow: '0 0 0 2px #0B3F3B' } : null;
-  return (
-    <div className="rounded-[10px] p-3" style={{ border: '1px solid #D3CABB', backgroundColor: '#FAF8F3', ...highlightStyle }}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="break-words text-[13px] font-bold leading-tight" style={{ color: C.text }}>{po.po_number || 'PO'}</p>
-          <p className="mt-0.5 text-[11px]" style={{ color: C.textSecondary }}>{po.vendor}{po.vendor_quote_ref ? ` · ${po.vendor_quote_ref}` : ''}</p>
-        </div>
-        <Badge tone={po.status === 'cancelled' ? 'warn' : 'ok'}>{statusWithDate(po)}</Badge>
-      </div>
-      <p className="mt-1.5 text-[12px]" style={{ color: C.text }}>Supplier payable <strong>{money(po.amount_dealer)}</strong>{po.amount_customer != null ? <span style={{ color: C.textSecondary }}> · customer {money(po.amount_customer)}</span> : null}</p>
-      {po.status !== 'cancelled' && <POSalesTax po={po} onSaved={onEdit._onSaved} />}
-      <p className="mt-1 text-[11px]" style={{ color: C.textSecondary }}>{source ? `Source: ${source.title}` : po.purchase_type === 'shop' ? 'Shop purchase' : 'No matching quote'}</p>
-      <PurchasingDates row={po} supplier={related[0] || null} showStatus={false} />
-      <NotesHistory notes={po.notes} />
-      {related.length > 0 && (
-        <div className="mt-1.5 space-y-1">
-          {related.map((o) => {
-            const pay = paymentState(o);
-            return (
-              <div key={o.id} className="flex items-center justify-between gap-2 text-[11.5px]" style={{ color: C.text }}>
-                <span className="min-w-0 truncate">{o.order_number || 'Supplier order'} · {etaText(o)}</span>
-                <span className="flex shrink-0 items-center gap-1.5">
-                  <Badge tone={pay.tone}>{pay.label}</Badge>
-                  <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: o.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Payment</button>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <button type="button" onClick={() => onEdit({ mode: 'po_status', po_id: po.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Record status</button>
-        {related.length === 0
-          ? <button type="button" onClick={() => onEdit({ mode: 'supplier', po_id: po.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Record confirmation</button>
-          : related.length > 1
-            ? <button type="button" onClick={() => onShowOrder(po.id)} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>View in tracking</button>
-            : null}
-      </div>
-    </div>
-  );
-}
-
-function OrderRow({ order, pos, onEdit, onSaved, highlight }) {
-  const po = pos.find((p) => p.id === order.purchase_order_id);
+// One supplier confirmation inside an open PO line: ETA edits in place, payment and details.
+function OrderDetail({ order, onEdit, onSaved }) {
   const pay = paymentState(order);
-  const highlightStyle = highlight ? { boxShadow: '0 0 0 2px #0B3F3B' } : null;
   const [etaBusy, setEtaBusy] = useState(false);
   const [etaError, setEtaError] = useState('');
-  // The ETA edits in place on the real supplier record (same save path as the
-  // board's ETA cell). Received material and reference-only rows stay read-only.
   const etaEditable = Boolean(order.order_number) && order.amount != null && !order.received_date;
   async function saveEta(value) {
     if (etaBusy) return;
     setEtaBusy(true); setEtaError('');
     try {
-      // Same path as the board's ETA cell: this in-place edit writes the real
-      // supplier record and moves its event on Israel's calendar too.
+      // Same path as the grid's ETA cell: writes the supplier record and moves its calendar event.
       const result = await saveEtaTarget({ jobId: order.job_id, order, date: value });
       if (result.error) setEtaError(result.error);
       if (result.saved) await onSaved?.();
     } finally { setEtaBusy(false); }
   }
   return (
-    <div className="rounded-[10px] p-3" style={{ border: '1px solid #D3CABB', backgroundColor: '#FAF8F3', ...highlightStyle }}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="break-words text-[13px] font-bold leading-tight" style={{ color: C.text }}>{order.order_number || 'Supplier order'}</p>
-          <p className="mt-0.5 text-[11px]" style={{ color: C.textSecondary }}>{order.vendor}{po ? ` · ${po.po_number}` : ' · No PO link'}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <Badge tone="ok">{statusWithDate(order)}</Badge>
-          <Badge tone={pay.tone}>{pay.label}</Badge>
-        </div>
+    <div className="flex flex-col gap-2 rounded-[10px] p-3" style={{ border: `1px solid ${RULE}`, backgroundColor: '#FFFFFF' }}>
+      <div className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: INK }}>
+        <span className="font-semibold">Order {order.order_number || '(no number)'}</span>
+        <Chip tone="plain">{statusWithDate(order)}</Chip>
+        <Chip tone={pay.label === 'Paid' ? 'ok' : pay.label === 'Unpaid' ? 'bad' : 'warn'}>Supplier {pay.label.toLowerCase()}</Chip>
       </div>
-      <div className="mt-1.5 grid grid-cols-2 gap-2 text-[12px]" style={{ color: C.text }}>
-        <span>Amount <strong>{money(order.amount)}</strong></span>
-        <span>ETA {etaEditable ? (
-          <input type="date" aria-label={`ETA for supplier order ${order.order_number}`} disabled={etaBusy}
-            value={order.eta_date || ''} onChange={(e) => saveEta(e.target.value)}
-            className="ml-1 rounded-md border px-1 py-0.5 text-[12px] font-semibold"
-            style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff', maxWidth: 140 }} />
-        ) : <strong>{etaText(order)}</strong>}</span>
-        <span>Received <strong>{order.received_date || '—'}</strong></span>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]" style={{ color: INK3 }}>
+        <span>Amount <strong className="tabular-nums" style={{ color: INK }}>{money(order.amount)}</strong></span>
+        <label className="inline-flex items-center gap-1.5">ETA
+          {etaEditable ? (
+            <input type="date" aria-label={`ETA for supplier order ${order.order_number}`} disabled={etaBusy}
+              value={order.eta_date || ''} onChange={(e) => saveEta(e.target.value)}
+              className="h-8 rounded-[7px] border px-1.5 text-[13px] font-semibold" style={{ borderColor: EDGE, color: INK, backgroundColor: '#fff' }} />
+          ) : <strong style={{ color: INK }}>{etaDate(order.eta_date) || 'Not confirmed'}</strong>}
+        </label>
+        <span>Received <strong style={{ color: INK }}>{etaDate(order.received_date) || '—'}</strong></span>
       </div>
-      {order.supplier_eta ? <p className="mt-1 text-[11px]" style={{ color: C.textSecondary }}>{supplierReplyText(null, order)}</p> : null}
-      {!order.purchase_order_id ? <p className="mt-1 text-[11px]" style={{ color: C.textSecondary }}>Legacy reference; confirm its PO link before editing.</p> : null}
-      {etaError ? <p className="mt-1 text-[11px]" style={{ color: '#B42318' }}>{etaError}</p> : null}
+      {order.supplier_eta ? <p className="text-[12px]" style={{ color: INK2 }}>{supplierReplyText(null, order)}</p> : null}
+      {!order.purchase_order_id ? <p className="text-[12px]" style={{ color: INK2 }}>Not linked to a PO yet - link it before editing.</p> : null}
+      {etaError ? <p className="text-[12px] font-semibold" style={{ color: '#A43432' }}>{etaError}</p> : null}
       <NotesHistory notes={order.notes} />
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <button type="button" onClick={() => onEdit({ mode: 'supplier', order_id: order.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Details / link PO</button>
-        <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: order.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Record payment status</button>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: order.id })} className={BTN} style={SEC}>Record supplier payment</button>
+        <button type="button" onClick={() => onEdit({ mode: 'supplier', order_id: order.id })} className={BTN} style={SEC}>Order details / link PO</button>
       </div>
     </div>
   );
 }
 
-export default function PurchasingJobWorkspace({ job, data, section, onSection, onSaved }) {
+// A PO line: the summary is always visible, Manage opens the PO's own actions.
+function POLine({ po, budgets, orders, onEdit, onSaved, open, onToggle }) {
+  const source = budgets.find((b) => b.id === po.budget_id);
+  const related = orders.filter((o) => o.purchase_order_id === po.id);
+  const quote = source?.quote_number || po.vendor_quote_ref || '';
+  const etas = related.map((o) => o.eta_date).filter(Boolean).sort();
+  const pays = related.map(paymentState);
+  const pay = !pays.length ? null : pays.every((p) => p.label === 'Paid') ? 'ok' : 'bad';
+  return (
+    <div style={{ borderTop: `1px solid ${RULE}` }}>
+      <Line supplier={po.vendor} refs={[['PO', po.po_number], ['Quote', quote], ...related.map((o) => ['Order', o.order_number])]}
+        eta={etas[0]} amount={po.amount_dealer} pay={pay} cancelled={po.status === 'cancelled'} open={open} onToggle={onToggle} />
+      {open && (
+        <div className="flex flex-col gap-2.5 px-4 pb-4 pt-1" style={{ backgroundColor: '#FAF8F3' }}>
+          <div className="flex flex-wrap items-center gap-2"><Chip tone="plain">PO {statusWithDate(po)}</Chip>{po.amount_customer != null ? <span className="text-[12.5px]" style={{ color: INK2 }}>Customer amount {money(po.amount_customer)}</span> : null}</div>
+          {po.status !== 'cancelled' && <POSalesTax po={po} onSaved={onSaved} />}
+          <PurchasingDates row={po} supplier={related[0] || null} showStatus={false} />
+          <NotesHistory notes={po.notes} />
+          {related.map((o) => <OrderDetail key={o.id} order={o} onEdit={onEdit} onSaved={onSaved} />)}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => onEdit({ mode: 'po_status', po_id: po.id })} className={BTN} style={SEC}>Record PO status</button>
+            {related.length === 0 ? <button type="button" onClick={() => onEdit({ mode: 'supplier', po_id: po.id })} className={BTN} style={SEC}>Record supplier confirmation</button> : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OrderLine({ order, onEdit, onSaved, open, onToggle }) {
+  const pay = paymentState(order);
+  return (
+    <div style={{ borderTop: `1px solid ${RULE}` }}>
+      <Line supplier={order.vendor} refs={[['Order', order.order_number]]} eta={order.eta_date} amount={order.amount}
+        pay={pay.label === 'Paid' ? 'ok' : pay.label === 'Unpaid' ? 'bad' : null} open={open} onToggle={onToggle} />
+      {open && <div className="px-4 pb-4 pt-1" style={{ backgroundColor: '#FAF8F3' }}><OrderDetail order={order} onEdit={onEdit} onSaved={onSaved} /></div>}
+    </div>
+  );
+}
+
+const LINE_GRID = 'grid items-center gap-3 px-4 py-2.5 [grid-template-columns:minmax(96px,1fr)_minmax(0,2.6fr)_84px_104px_92px] max-[767px]:[grid-template-columns:1fr_auto]';
+function Line({ supplier, refs, eta, amount, pay, cancelled, open, onToggle }) {
+  const shown = refs.filter(([, v]) => v);
+  return (
+    <div className={LINE_GRID}>
+      <span className="truncate text-[13.5px] font-semibold" style={{ color: supplier ? INK : INK2 }}>{supplier || 'Supplier not set'}</span>
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5 max-[767px]:order-3 max-[767px]:col-span-2">
+        {shown.length ? shown.map(([k, v], i) => <Ref key={`${k}${v}${i}`} k={k} v={v} />) : <span className="text-[12.5px]" style={{ color: INK2 }}>No PO or quote number yet</span>}
+        {cancelled ? <Chip tone="plain">Cancelled</Chip> : null}
+        {pay === 'bad' ? <Chip tone="bad">Supplier unpaid</Chip> : pay === 'ok' ? <Chip tone="ok">Supplier paid</Chip> : null}
+      </span>
+      <span className="whitespace-nowrap text-[13px] font-medium max-[767px]:hidden" style={{ color: INK }}>{etaDate(eta) || '—'}</span>
+      <span className="text-right text-[13.5px] font-semibold tabular-nums max-[767px]:hidden" style={{ color: INK }}>{amount == null ? '—' : money(amount)}</span>
+      <span className="text-right">
+        <button type="button" onClick={onToggle} aria-expanded={open} className={BTN} style={{ ...SEC, height: 32 }}>{open ? 'Close' : 'Manage'}</button>
+      </span>
+    </div>
+  );
+}
+
+// ---------- 2. Budget ----------
+
+const chip = { ok: ['Included scope', 'ok'], warn: ['Needs review', 'warn'], draft: ['Draft', 'warn'], ref: ['Reference / replaced', 'plain'], unlinked: ['Needs a job', 'warn'] };
+function budgetChip(b, active) {
+  if (b.status === 'needs_review') return chip.warn;
+  if (!b.job_id) return chip.unlinked;
+  if (active) return chip.ok;
+  if (b.budget_usage === 'draft') return chip.draft;
+  return chip.ref;
+}
+
+// Saved versions that actually differ - identical re-saves are not history.
+function distinctHistory(budget) {
+  const seen = new Set([JSON.stringify(budget.inputs || {})]);
+  return (budget.input_history || []).filter((h) => { const k = JSON.stringify(h.inputs || {}); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
+function QuoteLines({ budget }) {
+  const lines = budget.quote?.lines;
+  if (!Array.isArray(lines) || !lines.length) return null;
+  return (
+    <details>
+      <summary className="cursor-pointer text-[12.5px] font-semibold" style={{ color: INK2 }}>Quote line items ({lines.length})</summary>
+      <div className="mt-1.5 overflow-x-auto">
+        <table className="w-full text-[12px] tabular-nums" style={{ color: INK }}>
+          <thead><tr style={{ color: INK2 }}>{['Kind', 'Description', 'Qty', 'Unit', 'Extended'].map((h) => <th key={h} className="px-1.5 py-1 text-left font-semibold">{h}</th>)}</tr></thead>
+          <tbody>
+            {lines.map((l, idx) => (
+              <tr key={idx} style={{ borderTop: `1px solid ${RULE}` }}>
+                <td className="px-1.5 py-1">{l.kind || '—'}</td>
+                <td className="px-1.5 py-1">{l.description || l.desc || '—'}</td>
+                <td className="px-1.5 py-1">{l.qty ?? '—'}</td>
+                <td className="px-1.5 py-1">{lineMoney(l.unit_price)}</td>
+                <td className="px-1.5 py-1">{lineMoney(l.extended)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
+function CostLine({ label, value, kind }) {
+  const zero = num(value) === 0;
+  const style = kind === 'total' ? { borderTop: '1px solid #CEC6B8', marginTop: 4, paddingTop: 8, fontWeight: 700, color: INK, fontSize: 14.5 }
+    : kind === 'sub' ? { borderTop: '1px dashed #E2DCD1', fontWeight: 600, color: INK } : { color: zero ? '#616A6D' : INK3 };
+  return <div className="flex min-h-[32px] items-center justify-between gap-4 text-[13.5px]" style={style}><span>{label}</span><span className="tabular-nums">{lineMoney(value)}</span></div>;
+}
+
+function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO, onSaved, editorPanel }) {
+  const fig = budgetFigures(budget);
+  const c = fig.calculated || {};
+  const i = budget.inputs || {};
+  const active = activeBudgets(allBudgets.filter((b) => b.job_id === budget.job_id)).some((b) => b.id === budget.id);
+  const [chipText, chipTone] = budgetChip(budget, active);
+  const supplier = budget.vendor || budget.manufacturer || '';
+  const sub = [supplier, budget.quote_number ? `Quote ${budget.quote_number}` : '', budget.openings_qty > 0 ? `${budget.openings_qty} unit${budget.openings_qty === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+  const statusLine = fig.warnings.length ? fig.warnings[0] : budget.budget_usage === 'draft' ? 'Draft - review the numbers and your customer price, then include this scope.' : '';
+  const sourceHref = safeHref(budget.source_pdf_url) || fileHref(budget.drive_quote_file_id);
+  const privateSource = !sourceHref && /^[a-f0-9]{64}$/.test(budget.source_sha256 || '') ? budget.id : null;
+  const fHref = safeHref(job?.drive_job_folder_url) || folderHref(job?.drive_job_folder_id || budget.drive_job_folder_id);
+  const related = pos.filter((p) => p.budget_id === budget.id);
+  const history = distinctHistory(budget);
+  const sell = num(i.actual_total_sell), total = num(c.total_cost_overhead), suggested = num(c.suggested_total_sell);
+  const profit = sell != null && total != null ? sell - total : null;
+  const scale = Math.max(sell || 0, suggested || 0, total || 0) || 1;
+  const under = sell != null && suggested != null && sell < suggested - 0.005;
+  const qty = quantityReviewLabel(budget);
+  return (
+    <div className="flex flex-col gap-3.5 rounded-[12px] p-4" style={{ border: `1px solid ${EDGE}`, backgroundColor: '#FFFFFF' }}>
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="break-words text-[14.5px] font-semibold" style={{ color: INK }}>{budget.title || budget.quote_name || 'Untitled quote'}</span>
+          {sub ? <span className="text-[12.5px]" style={{ color: INK2 }}>{sub}{qty ? <span style={{ color: '#96490F' }}> · Quantity needs review</span> : null}</span> : null}
+        </div>
+        <Chip tone={chipTone}>{chipText}</Chip>
+        {!editing && <button type="button" onClick={() => onEdit({ mode: 'numbers', budget_id: budget.id })} className={BTN} style={PRI}><Pencil className="h-3.5 w-3.5" />Edit numbers</button>}
+      </div>
+      {statusLine ? <p className="rounded-[9px] px-3 py-2 text-[12.5px] font-medium" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>{statusLine}</p> : null}
+      {editing ? editorPanel : (
+        <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+          <div className="flex flex-col">
+            <span className={EYEBROW} style={{ color: INK2, paddingBottom: 4 }}>Cost build-up</span>
+            <CostLine label="Material cost" value={i.material_true_cost} />
+            <CostLine label="Use tax" value={c.use_tax} />
+            <CostLine label="Material with overhead + tax" value={c.cost_material_tax} kind="sub" />
+            <CostLine label="Labor (sub pay)" value={i.labor_cost_sub_pay} />
+            <CostLine label="Additional install material" value={i.additional_install_material} />
+            <CostLine label="Additional equipment" value={i.additional_equipment} />
+            <CostLine label="Total cost with overhead" value={c.total_cost_overhead} kind="total" />
+          </div>
+          <div className="flex flex-col gap-3.5">
+            <span className={EYEBROW} style={{ color: INK2 }}>Price & margin</span>
+            <div className="grid grid-cols-3 gap-2">
+              {[['Customer sell', lineMoney(sell), INK], ['Margin', pct(c.actual_margin_pct), '#082F2C'], ['Suggested', lineMoney(suggested), INK3]].map(([k, v, color]) => (
+                <div key={k} className="flex flex-col gap-0.5 rounded-[10px] p-3" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
+                  <span className="text-[11px] font-medium" style={{ color: INK2 }}>{k}</span>
+                  <span className="text-[17px] font-bold tabular-nums tracking-[-0.02em]" style={{ color }}>{v}</span>
+                </div>
+              ))}
+            </div>
+            {sell != null && total != null && (
+              <div className="flex flex-col gap-2">
+                <div className="flex h-3 overflow-hidden rounded-full" style={{ backgroundColor: '#E2EEEB' }} role="img" aria-label={`Cost ${lineMoney(total)}, profit ${lineMoney(profit)}`}>
+                  <span style={{ width: `${(Math.min(total, sell) / scale) * 100}%`, backgroundColor: '#8C9EAF' }} />
+                  <span style={{ width: `${(Math.max(profit, 0) / scale) * 100}%`, backgroundColor: '#0B3F3B' }} />
+                </div>
+                <div className="flex flex-wrap gap-3.5 text-[12px]" style={{ color: INK2 }}>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#8C9EAF' }} />Cost {lineMoney(total)}</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#0B3F3B' }} />Profit {lineMoney(profit)}</span>
+                </div>
+              </div>
+            )}
+            {under ? <p className="rounded-[9px] px-3 py-2 text-[12.5px]" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>Selling {lineMoney(suggested - sell)} under the suggested price.</p> : null}
+          </div>
+        </div>
+      )}
+      <QuoteLines budget={budget} />
+      {history.length > 0 && (
+        <details className="text-[12.5px]" style={{ color: INK2 }}>
+          <summary className="cursor-pointer font-semibold">Earlier numbers ({history.length})</summary>
+          {history.map((h, idx) => <p key={idx} className="mt-1">{h.at} · material {money(h.inputs?.material_true_cost)} · customer sell {money(h.inputs?.actual_total_sell)}</p>)}
+        </details>
+      )}
+      <div className="flex flex-wrap items-center gap-2 pt-3" style={{ borderTop: `1px solid ${RULE}` }}>
+        {budget.job_id ? <button type="button" onClick={() => onEdit({ mode: 'usage', budget_id: budget.id })} className={BTN} style={SEC}>Scope / revision</button> : null}
+        {budget.job_id && active && fig.ready && !related.length ? <button type="button" onClick={() => onPreparePO(budget.id)} className={BTN} style={SEC}><Plus className="h-3.5 w-3.5" />Prepare PO</button> : null}
+        {!budget.job_id ? <DeleteUnusedQuoteButton budget={budget} onDeleted={onSaved} /> : null}
+        <span className="flex-1" />
+        {sourceHref ? <a href={sourceHref} target="_blank" rel="noreferrer" className={BTN} style={SEC}>Vendor quote PDF<ArrowUpRight className="h-3.5 w-3.5" /></a> : null}
+        {privateSource ? <PrivateSourceButton budgetId={privateSource} label="Vendor quote PDF" className={BTN} style={SEC} /> : null}
+        {fHref ? <a href={fHref} target="_blank" rel="noreferrer" className={BTN} style={SEC}>Drive folder<ArrowUpRight className="h-3.5 w-3.5" /></a> : null}
+      </div>
+    </div>
+  );
+}
+
+// ---------- The workspace ----------
+
+export default function PurchasingJobWorkspace({ job, data, onSaved }) {
   const [editor, setEditor] = useState(null);
-  const [highlightPO, setHighlightPO] = useState(null);
+  const [openLine, setOpenLine] = useState(null);
   const rec = useMemo(() => jobProcurementRecords(data, job.id), [data, job.id]);
   const jobNameById = (id) => (data.jobs || []).find((j) => j.id === id)?.canonical_name || id;
 
   const openEditor = (next) => setEditor({ ...next, key: crypto.randomUUID() });
   const done = (_r, msg) => { setEditor(null); onSaved(msg); };
   const budgetDone = (r) => done(r, `Budget saved. ${r?.warnings?.join(' ') || 'Issued POs, invoices and recorded payments are unchanged.'}`);
-  const preparePO = (budgetId) => { onSection('orders'); openEditor({ mode: 'po', budget_id: budgetId, job_id: job.id }); };
-  // Switch to the inline orders section and highlight the chosen PO (no route).
-  const showPO = (poId) => { onSection('orders'); setHighlightPO(poId); setEditor(null); };
-  // Multiple orders on one PO → route to inline tracking, highlighting its orders.
-  const showOrder = (poId) => { onSection('tracking'); setHighlightPO(poId); setEditor(null); };
+  const preparePO = (budgetId) => openEditor({ mode: 'po', budget_id: budgetId, job_id: job.id });
 
-  // Editor records are looked up from rec.* (this job only) — an immutable job
-  // lock. A record from another job can never be loaded into the inline editor.
   const currentBudget = editor?.budget_id ? rec.budgets.find((b) => b.id === editor.budget_id) : null;
   const currentPO = editor?.po_id ? rec.pos.find((p) => p.id === editor.po_id) : null;
   const currentOrder = editor?.order_id ? rec.orders.find((o) => o.id === editor.order_id) : null;
 
-  const editorPanel = ed => ed && (
-    <div className="mt-2" key={ed.key}>
-      {ed.mode === 'po' && <PurchaseOrderForm job={job} budgets={rec.budgets} initialBudget={currentBudget} onDone={done} onCancel={() => setEditor(null)} />}
-      {ed.mode === 'usage' && currentBudget && <BudgetUsageForm budget={currentBudget} budgets={rec.budgets} onDone={budgetDone} onCancel={() => setEditor(null)} />}
-      {ed.mode === 'numbers' && currentBudget && <NumbersEditor budget={currentBudget} onDone={budgetDone} hideRefill onCancel={() => setEditor(null)} />}
-      {ed.mode === 'supplier' && <SupplierOrderForm jobs={[job]} purchaseOrders={rec.pos} initialJobId={job.id} initialPO={currentPO} order={currentOrder} onDone={done} onCancel={() => setEditor(null)} />}
-      {ed.mode === 'po_status' && currentPO && <OrderStatusForm row={currentPO} onDone={done} onCancel={() => setEditor(null)} />}
-      {ed.mode === 'vendor_status' && currentOrder && <OrderStatusForm row={currentOrder} supplier onDone={done} onCancel={() => setEditor(null)} />}
+  const close = () => setEditor(null);
+  const editorPanel = (ed) => ed && (
+    <div key={ed.key}>
+      {ed.mode === 'po' && <PurchaseOrderForm job={job} budgets={rec.budgets} initialBudget={currentBudget} onDone={done} onCancel={close} />}
+      {ed.mode === 'usage' && currentBudget && <BudgetUsageForm budget={currentBudget} budgets={rec.budgets} onDone={budgetDone} onCancel={close} />}
+      {ed.mode === 'numbers' && currentBudget && <NumbersEditor budget={currentBudget} onDone={budgetDone} hideRefill onCancel={close} />}
+      {ed.mode === 'supplier' && <SupplierOrderForm jobs={[job]} purchaseOrders={rec.pos} initialJobId={job.id} initialPO={currentPO} order={currentOrder} onDone={done} onCancel={close} />}
+      {ed.mode === 'po_status' && currentPO && <OrderStatusForm row={currentPO} onDone={done} onCancel={close} />}
+      {ed.mode === 'vendor_status' && currentOrder && <OrderStatusForm row={currentOrder} supplier onDone={done} onCancel={close} />}
     </div>
   );
 
-  // Pass onSaved into DeleteUnusedQuoteButton via a stable ref-like prop.
-  const editWithSaved = (next) => { openEditor(next); };
-  editWithSaved._onSaved = onSaved;
+  const poIds = new Set(rec.pos.map((p) => p.id));
+  const looseOrders = rec.orders.filter((o) => !o.purchase_order_id || !poIds.has(o.purchase_order_id));
+  const hasLines = rec.pos.length + looseOrders.length > 0;
+  const toggleLine = (key) => setOpenLine((k) => (k === key ? null : key));
+  // Forms that are not about one budget (new PO, supplier confirmations, statuses) open under the list.
+  const listEditor = editor && editor.mode !== 'numbers' && editor.mode !== 'usage' ? editorPanel(editor) : null;
+  const budgetEditor = (b) => (editor && editor.budget_id === b.id && (editor.mode === 'numbers' || editor.mode === 'usage') ? editorPanel(editor) : null);
 
   return (
-    <div className="mt-2 rounded-[12px] p-3" style={{ border: '1px solid #D3CABB', backgroundColor: '#FFFFFF' }}>
-      <label className="inline-flex items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: '#4A5652' }}>Section</span>
-        <select aria-label={`Purchasing section for ${job.canonical_name}`} value={section}
-          onChange={(e) => { onSection(e.target.value); setEditor(null); setHighlightPO(null); }}
-          className="min-h-9 rounded-[7px] border px-2.5 pr-7 text-[12.5px] font-semibold"
-          style={{ borderColor: '#9A9080', color: C.text, backgroundColor: '#fff' }}>
-          {SECTIONS.map(([key, label]) => (
-            <option key={key} value={key}>{label} ({key === 'budgets' ? rec.budgets.length : key === 'orders' ? rec.pos.length : rec.orders.length})</option>
-          ))}
-        </select>
-      </label>
-
-      {editor && !editor.budget_id && editorPanel(editor)}
-
-      <div className="mt-2.5">
-        {section === 'budgets' && (
-          <div className="space-y-2">
-            {rec.budgets.length === 0 ? <p className="text-[12px]" style={{ color: C.textSecondary }}>No quote budgets for this job yet. Add a quote PDF below.</p> : null}
-            {rec.budgets.map((b) => <BudgetRow key={b.id} budget={b} job={job} allBudgets={rec.budgets} pos={rec.pos} onEdit={editWithSaved} onPreparePO={preparePO} onShowPO={showPO} />)}
-            {rec.conflicts.length > 0 && (
-              <details className="rounded-[10px] p-2.5 text-[11.5px]" style={{ border: '1px solid #E8D9B5', backgroundColor: '#FBF4DB', color: '#5C4A10' }} open>
-                <summary className="cursor-pointer font-semibold">{rec.conflicts.length} PO reference conflict{rec.conflicts.length === 1 ? '' : 's'} — review before linking</summary>
-                {rec.conflicts.map((c) => (
-                  <p key={c.number} className="mt-1"><strong>{c.number}</strong> appears against {c.job_ids.map((id, i) => <span key={id}>{i ? ' / ' : ''}<Link className="underline" to={`/jobs/${id}`}>{jobNameById(id)}</Link></span>)}. Original records are kept; nothing is cross-linked automatically.</p>
-                ))}
-              </details>
-            )}
-            <div className="rounded-[10px] p-2" style={{ border: '1px dashed #D3CABB', backgroundColor: '#FAF8F3' }}>
-              <QuoteDropzone jobId={job.id} onDone={onSaved} />
+    <div className="flex flex-col gap-5 p-4 sm:p-5">
+      <section className="flex flex-col gap-2" aria-label="Purchase orders and quotes">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={EYEBROW} style={{ color: INK2 }}>Purchase orders & quotes</span>
+          <span className="flex-1" />
+          <button type="button" onClick={() => openEditor({ mode: 'po', job_id: job.id })} className={BTN} style={{ ...SEC, height: 32 }}><Plus className="h-3.5 w-3.5" />Prepare PO</button>
+          <button type="button" onClick={() => openEditor({ mode: 'supplier', job_id: job.id })} className={BTN} style={{ ...SEC, height: 32 }}><Plus className="h-3.5 w-3.5" />Record confirmation</button>
+        </div>
+        {hasLines ? (
+          <div className="overflow-hidden rounded-[10px]" style={{ border: `1px solid ${RULE}` }}>
+            <div className={`${LINE_GRID} max-[767px]:hidden`} style={{ backgroundColor: '#FAF8F3', paddingTop: 7, paddingBottom: 7 }}>
+              {['Supplier', 'PO · quote · order', 'ETA', 'Supplier payable', ''].map((h, idx) => <span key={idx} className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] ${idx === 3 ? 'text-right' : ''}`} style={{ color: INK2 }}>{h}</span>)}
             </div>
+            {rec.pos.map((p) => <POLine key={p.id} po={p} budgets={rec.budgets} orders={rec.orders} onEdit={openEditor} onSaved={onSaved} open={openLine === `po:${p.id}`} onToggle={() => toggleLine(`po:${p.id}`)} />)}
+            {looseOrders.map((o) => <OrderLine key={o.id} order={o} onEdit={openEditor} onSaved={onSaved} open={openLine === `o:${o.id}`} onToggle={() => toggleLine(`o:${o.id}`)} />)}
           </div>
+        ) : <p className="rounded-[10px] px-3 py-3 text-[13px]" style={{ border: `1px solid ${RULE}`, backgroundColor: '#FAF8F3', color: INK2 }}>No purchase orders or supplier confirmations yet.</p>}
+        {listEditor}
+        {rec.conflicts.length > 0 && (
+          <details className="rounded-[10px] p-2.5 text-[12.5px]" style={{ border: '1px solid #EFDFB7', backgroundColor: '#FAF0DA', color: '#6F4E10' }} open>
+            <summary className="cursor-pointer font-semibold">{rec.conflicts.length} PO reference conflict{rec.conflicts.length === 1 ? '' : 's'} - review before linking</summary>
+            {rec.conflicts.map((c) => (
+              <p key={c.number} className="mt-1"><strong>{c.number}</strong> appears against {c.job_ids.map((id, idx) => <span key={id}>{idx ? ' / ' : ''}<Link className="underline" to={`/jobs/${id}`}>{jobNameById(id)}</Link></span>)}. Original records are kept; nothing is cross-linked automatically.</p>
+            ))}
+          </details>
         )}
-        {section === 'orders' && (
-          <div className="space-y-2">
-            <button type="button" onClick={() => openEditor({ mode: 'po', job_id: job.id })} className={linkBtn} style={{ borderColor: '#0B3F3B', color: '#fff', backgroundColor: '#0B3F3B' }}><Plus className="h-3.5 w-3.5" />Prepare PO</button>
-            {rec.pos.length === 0 ? <p className="text-[12px]" style={{ color: C.textSecondary }}>No purchase orders for this job.</p> : null}
-            {rec.pos.map((p) => <PORow key={p.id} po={p} budgets={rec.budgets} orders={rec.orders} onEdit={editWithSaved} onShowOrder={showOrder} highlight={highlightPO === p.id} />)}
-          </div>
-        )}
-        {section === 'tracking' && (
-          <div className="space-y-2">
-            <button type="button" onClick={() => openEditor({ mode: 'supplier', job_id: job.id })} className={linkBtn} style={{ borderColor: '#0B3F3B', color: '#fff', backgroundColor: '#0B3F3B' }}><Plus className="h-3.5 w-3.5" />Record confirmation</button>
-            {rec.orders.length === 0 ? <p className="text-[12px]" style={{ color: C.textSecondary }}>No supplier confirmations for this job.</p> : null}
-            {rec.orders.map((o) => <OrderRow key={o.id} order={o} pos={rec.pos} onEdit={editWithSaved} onSaved={onSaved} highlight={highlightPO != null && o.purchase_order_id === highlightPO} />)}
-          </div>
-        )}
-      </div>
+      </section>
 
-      {editor && editor.budget_id && editorPanel(editor)}
+      <section className="flex flex-col gap-2" aria-label="Budget">
+        <span className={EYEBROW} style={{ color: INK2 }}>Budget</span>
+        {rec.budgets.length === 0 ? <p className="text-[13px]" style={{ color: INK2 }}>No vendor quote attached yet. Add the supplier quote below to build the cost and margin.</p> : null}
+        {rec.budgets.map((b) => (
+          <BudgetCard key={b.id} budget={b} job={job} allBudgets={rec.budgets} pos={rec.pos} editing={editor?.mode === 'numbers' && editor.budget_id === b.id}
+            onEdit={openEditor} onPreparePO={preparePO} onSaved={onSaved} editorPanel={budgetEditor(b)} />
+        ))}
+        {editor?.mode === 'usage' && currentBudget ? budgetEditor(currentBudget) : null}
+      </section>
+
+      <div className="rounded-[12px] p-2" style={{ border: '1.5px dashed #CEC6B8', backgroundColor: '#FAF8F3' }}>
+        <QuoteDropzone jobId={job.id} onDone={onSaved} />
+      </div>
     </div>
   );
 }
