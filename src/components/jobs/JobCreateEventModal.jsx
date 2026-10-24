@@ -128,7 +128,7 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
       <DialogContent className="flex max-h-[94dvh] w-[calc(100vw-16px)] max-w-[600px] flex-col gap-0 overflow-hidden rounded-[16px] p-0" style={{ backgroundColor: "#F6F2EA" }}>
-        <DialogHeader className="space-y-0.5 px-5 pb-3 pt-4" style={{ backgroundColor: "#fff", borderBottom: `1px solid ${LINE}` }}>
+        <DialogHeader className="space-y-0.5 pl-5 pr-14 pb-3 pt-4" style={{ backgroundColor: "#fff", borderBottom: `1px solid ${LINE}` }}>
           <DialogTitle className="text-[19px] font-bold" style={{ color: INK, letterSpacing: "-0.02em" }}>Add visit{prefill?.stageLabel ? ` · ${prefill.stageLabel}` : ""}</DialogTitle>
           <p className="m-0 text-[13.5px] break-words" style={{ color: MUT }}>{sanitizeText(reviewed?.title || job?.canonical_name || "")}{job?.address ? ` · ${sanitizeText(job.address)}` : ""}</p>
         </DialogHeader>
