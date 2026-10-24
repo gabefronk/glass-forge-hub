@@ -260,7 +260,6 @@ export default function Invoicing() {
     setDetailRow(null);
   }, [feeLines, month, focusedJobId, performAction]);
 
-  const handleAddReport = useCallback(() => { navigate("/calendar"); }, [navigate]);
 
   // Ready: save the edits and clear the review hold so the line shows as Ready
   // (the same Ready status the list already derives via isReady). Replaces the old
