@@ -72,7 +72,7 @@ export default function LineInlineExpansion({ row, jobs, onReady, onDelete, onSe
   const latestReport = reports && reports.length > 0 ? reports[0] : null;
   const reportCount = reports ? reports.length : 0;
   const reportEdited = !!(latestReport && (latestReport.edited_at || latestReport.original_text));
-  const statusLabel = row.billed_to_bfs ? "Billed" : needsReview ? "Review pricing" : fee > 0 ? "Ready" : "—";
+  const statusLabel = row.billed_to_bfs ? `Billed${row.invoice_number ? ` · #${row.invoice_number}` : ""}${row.paid_to_ya ? " · paid" : ""}` : needsReview ? "Review pricing" : fee > 0 ? "Ready" : "—";
   const statusColor = row.billed_to_bfs ? "var(--gf-ink-3)" : needsReview ? "var(--gf-amber-700)" : "var(--gf-teal-800)";
 
   const editedFields = {
