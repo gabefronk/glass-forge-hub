@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
-import PurchasingRowTitle from './PurchasingRowTitle';
+import PurchasingRowTitle, { rowTitle } from './PurchasingRowTitle';
 import DotText from './DotText';
 import EtaCell from './EtaCell';
 import QuoteCell from './QuoteCell';
 import { ScopeTableRows, ScopeMobileBlocks } from './ScopeRow';
 import { refTone } from './PurchasingCard';
-import { MoneyCell, MoneyStat, FieldRow, ACCENT, LINE, HEAD, SHEET_EDGE, HEAD_BG, HEAD_RULE } from './PurchasingCells';
+import { MoneyCell, MoneyStat, FieldRow, ACCENT, LINE, HEAD, SHEET_EDGE, HEAD_BG, HEAD_RULE, INK, CAPTION } from './PurchasingCells';
+import { money } from '@/components/budgets/ProcurementForms';
+import { summarizeCards } from '@/lib/purchasingSummary';
+import { displayDate, etaDistance } from '@/lib/purchasingDates';
 import { PAYMENT_STAGES, PAYMENT_TONES, paymentPatch, paymentStage } from '@/lib/jobPayment';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { base44 } from '@/api/base44Client';
@@ -20,8 +23,9 @@ import { messageOf } from '@/components/budgets/ProcurementForms';
 // expanded. Money is right-aligned so decimals line up; warm rules separate rows.
 // The per-figure caption carries the cost source and tax basis.
 //
-// Below 700px the grid becomes stacked cards (money as a 2x2 stat grid, then
-// labeled Quote / YA PO / ETA rows, then the payment dropdown).
+// Below 700px each job is one compact row (M7, Oct 24, about 100-130px): title,
+// sale and profit, then three status markers (ETA, customer payment, supplier
+// payment). Tapping it opens the job's details and Money workspace full width.
 const COLUMNS = [
   { label: 'Windows', width: '13%', accent: ACCENT.windows, money: true },
   { label: 'Labor & material', width: '12%', accent: ACCENT.rough, money: true },
@@ -148,6 +152,8 @@ function JobRows({ card, data, onEdit, onSaved }) {
         <td className="px-2 py-1.5 align-top" style={cell}>
           <PaymentSelect payKey={row.payKey} busy={row.busy} onChange={(v) => row.savePayment(v)} />
           {row.payError && <span className="mt-1 block text-[10px] font-semibold" style={{ color: '#A43432' }}>{row.payError}</span>}
+          {/* What we owe the supplier on this job (multi-scope jobs show it per scope row). */}
+          {!row.multiScope && card.payables?.items > 0 && <div className="mt-1"><DotText tone={card.payables.tone}>Supplier · {card.payables.label}</DotText></div>}
         </td>
         <td className="px-1.5 py-1.5 text-center align-top" style={cell}><MoneyToggle row={row} jobId={job.id} /></td>
       </tr>
@@ -163,16 +169,52 @@ function JobRows({ card, data, onEdit, onSaved }) {
   );
 }
 
-// Phone: one stacked card per job.
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const denverToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
+// ETA marker for the phone row: same label the ETA cell reads, said in a few characters.
+function etaMarker(label) {
+  if (!label) return { tone: 'gray', text: 'No ETA' };
+  if (label === 'Delivered') return { tone: 'green', text: 'Delivered' };
+  if (ISO_DAY.test(label)) {
+    const d = etaDistance(label, denverToday());
+    return { tone: d?.late ? 'red' : 'blue', text: d ? `ETA ${d.text}` : `ETA ${displayDate(label)}` };
+  }
+  return { tone: 'amber', text: `ETA ${label}` };
+}
+
+const CUSTOMER_TONE = { none: 'red', half_down: 'amber', installed: 'amber', waiting_on_payment: 'amber', paid: 'green' };
+
+// Phone: one compact row per job; tap opens the details and workspace.
 function MobileCard({ card, data, onEdit, onSaved }) {
   const { job, windows, rough, sale, profitDisplay, refs } = card;
   const row = useJobRow(card, data, onSaved);
+  // Same figures the header adds (a multi-scope job adds its scope rows).
+  const figures = summarizeCards([card]);
+  const eta = etaMarker(refs.etaLabel);
+  const customer = paymentStage(row.payKey)?.label || 'Not tracked';
+  const supplier = card.payables?.items ? `Supplier ${card.payables.label.toLowerCase()}` : 'No PO';
   return (
-    <div className="overflow-hidden rounded-[12px] bg-white" style={{ border: `1px solid ${SHEET_EDGE}` }}>
-      <div className="px-4 pb-1.5 pt-2.5" style={{ backgroundColor: '#F3EEE4', borderBottom: `1px solid ${LINE}` }}>
-        <PurchasingRowTitle job={job} onSaved={onSaved} />
-      </div>
-      <div className="px-4 pb-3 pt-2">
+    <div style={{ borderTop: `1px solid ${LINE}` }}>
+      <button type="button" onClick={row.toggle} aria-expanded={row.expanded} aria-controls={`purchasing-row-${job.id}`}
+        className="block w-full px-3 py-2.5 text-left" style={{ backgroundColor: row.expanded ? '#F3EEE4' : '#FFFFFF' }}>
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0 break-words text-[14px] font-extrabold leading-tight" style={{ color: INK }}>{rowTitle(job)}</span>
+          <ChevronDown className="mt-0.5 h-4 w-4 shrink-0" style={{ color: HEAD, transform: row.expanded ? 'rotate(180deg)' : 'none' }} />
+        </span>
+        <span className="mt-1 flex items-baseline gap-3 text-[12px]" style={{ color: CAPTION }}>
+          <span>Sale <strong className="text-[13px] tabular-nums" style={{ color: INK }}>{money(figures.sale)}</strong></span>
+          <span>Profit <strong className="text-[13px] tabular-nums" style={{ color: figures.profit < 0 ? '#A43432' : INK }}>{money(figures.profit)}</strong></span>
+        </span>
+        <span className="mt-1 flex flex-wrap items-start gap-x-3 gap-y-0.5">
+          <DotText tone={eta.tone}>{eta.text}</DotText>
+          <DotText tone={CUSTOMER_TONE[row.payKey] || 'amber'}>{customer}</DotText>
+          <DotText tone={card.payables?.tone || 'gray'}>{supplier}</DotText>
+        </span>
+      </button>
+      {row.expanded && (
+      <div className="px-3 pb-3 pt-2" style={{ backgroundColor: '#FBF9F5', borderTop: `1px solid ${LINE}` }}>
+        <div className="mb-2"><PurchasingRowTitle job={job} onSaved={onSaved} /></div>
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px]" style={{ backgroundColor: LINE, border: `1px solid ${LINE}` }}>
           <MoneyStat label="Windows" display={windows.display} accent={ACCENT.windows} />
           <MoneyStat label="Labor & material" display={rough.display} accent={ACCENT.rough} />
@@ -192,12 +234,12 @@ function MobileCard({ card, data, onEdit, onSaved }) {
           {row.payError && <div className="mt-1 text-[10px] font-semibold" style={{ color: '#A43432' }}>{row.payError}</div>}
         </div>
         {row.multiScope && <ScopeMobileBlocks scopes={card.scopes} job={job} onSaved={onSaved} onOpenTracking={row.openSupplierSection} />}
-        <div className="mt-1 flex justify-end"><MoneyToggle row={row} jobId={job.id} className="min-h-[44px] text-[12px]" /></div>
+        {row.fullJob && data && (
+          <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${LINE}` }}>
+            <Workspace row={row} data={data} onEdit={onEdit} onSaved={onSaved} jobId={job.id} />
+          </div>
+        )}
       </div>
-      {row.expanded && row.fullJob && data && (
-        <div className="px-3 py-3" style={{ borderTop: `1px solid ${LINE}`, backgroundColor: '#FBF9F5' }}>
-          <Workspace row={row} data={data} onEdit={onEdit} onSaved={onSaved} jobId={job.id} />
-        </div>
       )}
     </div>
   );
@@ -222,7 +264,7 @@ export default function PurchasingTable({ cards, data, onEdit, onSaved }) {
           {cards.map((card) => <JobRows key={card.job.id} card={card} data={data} onEdit={() => onEdit(card)} onSaved={onSaved} />)}
         </table>
       </div>
-      <div className="flex flex-col gap-3 min-[700px]:hidden">
+      <div className="-mx-1 overflow-hidden rounded-[12px] bg-white min-[700px]:hidden" style={{ border: `1px solid ${SHEET_EDGE}`, borderTopWidth: 0 }}>
         {cards.map((card) => <MobileCard key={card.job.id} card={card} data={data} onEdit={() => onEdit(card)} onSaved={onSaved} />)}
       </div>
     </>
