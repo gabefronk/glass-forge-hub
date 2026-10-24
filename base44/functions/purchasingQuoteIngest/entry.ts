@@ -6,7 +6,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
 import { handle, QUOTE_SCHEMA, QUOTE_PROMPT } from '../../shared/purchasingQuoteIngestHandle.js';
 
-async function fetchBytes(signedUrl: string, maxBytes: number, redirect: RequestRedirect = 'error') {
+// Signed URLs come from this app's own CreateFileSignedUrl and answer with a redirect to
+// storage, so redirects are followed (refusing them failed every private read-back).
+async function fetchBytes(signedUrl: string, maxBytes: number, redirect: RequestRedirect = 'follow') {
   let failure = 'network';
   const r = await fetch(signedUrl, { signal: AbortSignal.timeout(60000), cache: 'no-store', redirect }).catch((e) => { failure = String(e?.name || 'network').toLowerCase(); return null; });
   if (!r || !r.ok || !r.body) return { error: 'pdf_fetch_failed', reason: r ? `http_${r.status}` : failure };
