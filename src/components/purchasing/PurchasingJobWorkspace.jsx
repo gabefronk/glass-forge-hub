@@ -1,8 +1,9 @@
-// Reusable inline per-job purchasing workspace. Expands IN PLACE beneath a
-// PurchasingCard — no route navigation. Reuses the existing native procurement
-// forms (PurchaseOrderForm, BudgetUsageForm, SupplierOrderForm, OrderStatusForm,
-// InvoiceBridge, NumbersEditor, DeleteUnusedQuoteButton) and the shared
-// procurement service validation. Same-job records are filtered by EXACT
+// The one per-job purchasing workspace: expands in place beneath a Purchasing
+// row, and is the whole Budget & Orders page for a job (pages/Procurement.jsx).
+// Reuses the existing native procurement forms (PurchaseOrderForm,
+// BudgetUsageForm, SupplierOrderForm, OrderStatusForm, NumbersEditor,
+// DeleteUnusedQuoteButton) and the shared procurement service validation.
+// Customer invoices live on the job page and job invoicing, not here. Same-job records are filtered by EXACT
 // immutable job id (jobProcurementRecords) — never a name join.
 //
 // Constraints (preview-only):
@@ -21,22 +22,35 @@
 //  - Optional external links (source quote, budget sheet, Drive folder) are
 //    preserved but are not the routine path.
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ExternalLink, Plus } from 'lucide-react';
 import { C } from '@/lib/feeUI';
 import {
   money,
-  PurchaseOrderForm, BudgetUsageForm, SupplierOrderForm, OrderStatusForm, InvoiceBridge,
+  PurchaseOrderForm, BudgetUsageForm, SupplierOrderForm, OrderStatusForm,
 } from '@/components/budgets/ProcurementForms';
 import { NumbersEditor } from '@/components/budgets/BudgetReviewRow';
 import DeleteUnusedQuoteButton from '@/components/budgets/DeleteUnusedQuoteButton';
+import PurchasingDates from '@/components/budgets/PurchasingDates';
 import QuoteDropzone from './QuoteDropzone';
 import PrivateSourceButton from './PrivateSourceButton';
-import { activeBudgets, budgetFigures, budgetRollup } from '@/lib/purchasingCoreTwin';
-import { statusWithDate, etaText } from '@/lib/purchasingDates';
+import { activeBudgets, budgetFigures } from '@/lib/purchasingCoreTwin';
+import { statusWithDate, etaText, supplierReplyText } from '@/lib/purchasingDates';
 import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
 import { saveEtaTarget } from '@/lib/etaTarget';
 
-const SECTIONS = [['budgets', 'Quotes & budget'], ['orders', 'POs'], ['tracking', 'Supplier tracking'], ['invoicing', 'Invoicing']];
+const SECTIONS = [['budgets', 'Quotes & budget'], ['orders', 'POs'], ['tracking', 'Supplier tracking']];
+
+// Free-text notes and status history the forms append to a record.
+function NotesHistory({ notes }) {
+  if (!notes) return null;
+  return (
+    <details className="mt-1.5 text-[11.5px]" style={{ color: C.textSecondary }}>
+      <summary className="cursor-pointer font-semibold">Notes & history</summary>
+      <p className="mt-1 whitespace-pre-line">{notes}</p>
+    </details>
+  );
+}
 const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v : ''; } catch { return ''; } };
 const fileHref = (id) => (id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : '');
 const folderHref = (id) => (id ? `https://drive.google.com/drive/folders/${encodeURIComponent(id)}` : '');
@@ -144,6 +158,12 @@ function BudgetRow({ budget, job, allBudgets, pos, onEdit, onPreparePO, onShowPO
       <BudgetBreakdown budget={budget} />
       <QuoteLines budget={budget} />
       <div className="mt-1.5 text-[12px]" style={{ color: C.text }}>Cost basis <strong>{money(figures.cost)}</strong></div>
+      {budget.input_history?.length > 0 && (
+        <details className="mt-1.5 text-[11.5px]" style={{ color: C.textSecondary }}>
+          <summary className="cursor-pointer font-semibold">Previous saved inputs ({budget.input_history.length})</summary>
+          {budget.input_history.map((h, i) => <p key={i} className="mt-1">{h.at} · {h.action} · material {money(h.inputs?.material_true_cost)} · customer total {money(h.inputs?.actual_total_sell)}</p>)}
+        </details>
+      )}
       <div className="mt-2 flex flex-wrap gap-1.5">
         <button type="button" onClick={() => onEdit({ mode: 'numbers', budget_id: budget.id })} className={linkBtn} style={{ borderColor: C.border, color: '#fff', backgroundColor: '#0B3F3B' }}>Review numbers</button>
         {budget.job_id ? <button type="button" onClick={() => onEdit({ mode: 'usage', budget_id: budget.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Scope / revision</button> : null}
@@ -174,6 +194,8 @@ function PORow({ po, budgets, orders, onEdit, onShowOrder, highlight }) {
       </div>
       <p className="mt-1.5 text-[12px]" style={{ color: C.text }}>Supplier payable <strong>{money(po.amount_dealer)}</strong>{po.amount_customer != null ? <span style={{ color: C.textSecondary }}> · customer {money(po.amount_customer)}</span> : null}</p>
       <p className="mt-1 text-[11px]" style={{ color: C.textSecondary }}>{source ? `Source: ${source.title}` : po.purchase_type === 'shop' ? 'Shop purchase' : 'No matching quote'}</p>
+      <PurchasingDates row={po} supplier={related[0] || null} showStatus={false} />
+      <NotesHistory notes={po.notes} />
       {related.length > 0 && (
         <div className="mt-1.5 space-y-1">
           {related.map((o) => {
@@ -244,7 +266,10 @@ function OrderRow({ order, pos, onEdit, onSaved, highlight }) {
         ) : <strong>{etaText(order)}</strong>}</span>
         <span>Received <strong>{order.received_date || '—'}</strong></span>
       </div>
+      {order.supplier_eta ? <p className="mt-1 text-[11px]" style={{ color: C.textSecondary }}>{supplierReplyText(null, order)}</p> : null}
+      {!order.purchase_order_id ? <p className="mt-1 text-[11px]" style={{ color: C.textSecondary }}>Legacy reference; confirm its PO link before editing.</p> : null}
       {etaError ? <p className="mt-1 text-[11px]" style={{ color: '#B42318' }}>{etaError}</p> : null}
+      <NotesHistory notes={order.notes} />
       <div className="mt-2 flex flex-wrap gap-1.5">
         <button type="button" onClick={() => onEdit({ mode: 'supplier', order_id: order.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Details / link PO</button>
         <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: order.id })} className={linkBtn} style={{ borderColor: C.border, color: C.text, backgroundColor: '#fff' }}>Record payment status</button>
@@ -257,7 +282,7 @@ export default function PurchasingJobWorkspace({ job, data, section, onSection, 
   const [editor, setEditor] = useState(null);
   const [highlightPO, setHighlightPO] = useState(null);
   const rec = useMemo(() => jobProcurementRecords(data, job.id), [data, job.id]);
-  const rollup = useMemo(() => budgetRollup(rec.budgets), [rec.budgets]);
+  const jobNameById = (id) => (data.jobs || []).find((j) => j.id === id)?.canonical_name || id;
 
   const openEditor = (next) => setEditor({ ...next, key: crypto.randomUUID() });
   const done = (_r, msg) => { setEditor(null); onSaved(msg); };
@@ -308,7 +333,14 @@ export default function PurchasingJobWorkspace({ job, data, section, onSection, 
           <div className="space-y-2">
             {rec.budgets.length === 0 ? <p className="text-[12px]" style={{ color: C.textSecondary }}>No quote budgets for this job yet. Add a quote PDF below.</p> : null}
             {rec.budgets.map((b) => <BudgetRow key={b.id} budget={b} job={job} allBudgets={rec.budgets} pos={rec.pos} onEdit={editWithSaved} onPreparePO={preparePO} onShowPO={showPO} />)}
-            {rec.conflicts.length > 0 && <p className="text-[11.5px] font-semibold" style={{ color: '#566063' }}>{rec.conflicts.length} PO reference conflict(s) — review before linking.</p>}
+            {rec.conflicts.length > 0 && (
+              <details className="rounded-[10px] p-2.5 text-[11.5px]" style={{ border: '1px solid #E8D9B5', backgroundColor: '#FBF4DB', color: '#5C4A10' }} open>
+                <summary className="cursor-pointer font-semibold">{rec.conflicts.length} PO reference conflict{rec.conflicts.length === 1 ? '' : 's'} — review before linking</summary>
+                {rec.conflicts.map((c) => (
+                  <p key={c.number} className="mt-1"><strong>{c.number}</strong> appears against {c.job_ids.map((id, i) => <span key={id}>{i ? ' / ' : ''}<Link className="underline" to={`/jobs/${id}`}>{jobNameById(id)}</Link></span>)}. Original records are kept; nothing is cross-linked automatically.</p>
+                ))}
+              </details>
+            )}
             <div className="rounded-[10px] p-2" style={{ border: '1px dashed #D3CABB', backgroundColor: '#FAF8F3' }}>
               <QuoteDropzone jobId={job.id} onDone={onSaved} />
             </div>
@@ -326,12 +358,6 @@ export default function PurchasingJobWorkspace({ job, data, section, onSection, 
             <button type="button" onClick={() => openEditor({ mode: 'supplier', job_id: job.id })} className={linkBtn} style={{ borderColor: '#0B3F3B', color: '#fff', backgroundColor: '#0B3F3B' }}><Plus className="h-3.5 w-3.5" />Record confirmation</button>
             {rec.orders.length === 0 ? <p className="text-[12px]" style={{ color: C.textSecondary }}>No supplier confirmations for this job.</p> : null}
             {rec.orders.map((o) => <OrderRow key={o.id} order={o} pos={rec.pos} onEdit={editWithSaved} onSaved={onSaved} highlight={highlightPO != null && o.purchase_order_id === highlightPO} />)}
-          </div>
-        )}
-        {section === 'invoicing' && (
-          <div className="space-y-2">
-            <div className="text-[12px]" style={{ color: C.textSecondary }}>Budget rollup · cost {money(rollup.cost)} · customer {money(rollup.sell)} · margin {money(rollup.margin_dollars)} ({rollup.status === 'ready' ? 'reviewed' : 'needs review'})</div>
-            <InvoiceBridge job={job} />
           </div>
         )}
       </div>
