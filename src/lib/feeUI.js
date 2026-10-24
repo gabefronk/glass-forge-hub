@@ -93,7 +93,7 @@ export function statusTag(row) {
 // Invoicing lines grid (M1b, Oct 24). md–xl: check · Date · Job · PO · Labor · Fee % · Fee ·
 // Status · menu. xl+ adds Crew, Work and Invoice (those cells are `hidden xl:block`, so
 // they take no track below xl). The header, day subtotal, line and total rows share it.
-export const UNBILLED_GRID = "md:grid md:grid-cols-[22px_50px_minmax(150px,1fr)_64px_84px_50px_84px_112px_26px] xl:grid-cols-[22px_50px_minmax(170px,1.25fr)_64px_52px_minmax(120px,1fr)_84px_50px_84px_112px_70px_26px] md:gap-x-2 md:items-center";
+export const UNBILLED_GRID = "md:grid md:grid-cols-[22px_50px_minmax(150px,1fr)_64px_84px_50px_84px_112px_26px] xl:grid-cols-[22px_50px_minmax(200px,1.7fr)_64px_52px_minmax(120px,1fr)_84px_50px_84px_112px_70px_26px] md:gap-x-2 md:items-center";
 export const GRID_WIDE = "hidden xl:block";
 export const JOB_GRID = "grid grid-cols-[26px_minmax(190px,1.6fr)_68px_minmax(130px,1.4fr)_96px_52px_82px_minmax(108px,116px)] gap-3";
 
