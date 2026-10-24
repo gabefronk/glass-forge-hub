@@ -418,6 +418,22 @@ export default function Invoicing() {
     clearSelection();
   }, [coveredRows, loading, loadError, monthClosed, applyBulk, clearSelection]);
 
+  // Lines held only for a pricing or job-match review (no billing-check hold, not a profit
+  // split) can be approved in bulk: the same clear-the-hold patch as the editor's Ready,
+  // with today's labor and fee kept as entered.
+  const approvableRows = useMemo(() => {
+    const ids = new Set(billingRows.filter((r) => selectedIds.has(r.id) && needsDecision(r) && !r._billing_review && !r._companion_review && r.fee_type !== "profit_split").map((r) => r.id));
+    return selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId).filter((r) => ids.has(r.id));
+  }, [billingRows, feeLines, selectedIds, month, focusedJobId]);
+
+  const handleApproveSelected = useCallback(() => {
+    if (deleting.current || !approvableRows.length) return;
+    if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before approving lines."); return; }
+    const updates = approvableRows.map((r) => ({ id: r.id, needs_review: false, pricing_review_reason: null, billable: true, manually_adjusted: true, labor_amt: computeLaborAmt(r), fee_amt: computeFeeAmt(r) }));
+    applyBulk(updates, priorState(approvableRows, ["needs_review", "pricing_review_reason", "billable", "manually_adjusted", "labor_amt", "fee_amt"]), `${updates.length} ${updates.length === 1 ? "line" : "lines"} approved`);
+    clearSelection();
+  }, [approvableRows, loading, loadError, monthClosed, applyBulk, clearSelection]);
+
   const register = useMemo(() => {
     const all = invoiceRegister(invoices, feeLines);
     if (!focusedJobId) return all;
@@ -596,6 +612,7 @@ export default function Invoicing() {
         closing={closing}
         onRefresh={handleRunIngest}
         refreshing={runningIngest}
+        onToggleProfit={() => setShowProfit((v) => !v)}
         syncMessage={syncMessage}
         loadError={loadError}
       />
@@ -619,29 +636,23 @@ export default function Invoicing() {
             {unprocessedCount > 0 && !focusedJobId && (
               <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
             )}
-            <InvoiceMoneyBar
-              segments={moneySegments}
-              monthEarnedTotal={heroStats.monthEarnedTotal}
-              monthEarnedCount={heroStats.monthEarnedCount}
-              month={month}
-              notes={(heroStats.scheduledCount > 0 || heroStats.splitReviewCount > 0 || heroStats.noSourceDataCount > 0) && (
-                <p className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-1.5 text-[12px]" style={{ color: "#4A5652" }}>
-                  {heroStats.scheduledCount > 0 && <span>{heroStats.scheduledCount} scheduled {heroStats.scheduledCount === 1 ? "line" : "lines"} not counted until done.</span>}
-                  {heroStats.splitReviewCount > 0 && <span style={{ color: "#6F4E10" }}>{heroStats.splitReviewCount} profit-split {heroStats.splitReviewCount === 1 ? "note needs" : "notes need"} allocation.</span>}
-                  {heroStats.noSourceDataCount > 0 && <span style={{ color: "#A43432" }}>{heroStats.noSourceDataCount} missing source data.</span>}
-                </p>
-              )}
-            />
-            <details className="mt-3"><summary className="min-h-11 cursor-pointer rounded-lg px-3 py-3 text-sm font-medium text-slate-600">Profit & cost details</summary>
-            <JobProfitabilityPanel
-              rows={monthRows.filter((r) => !supersededSet.has(r.id))}
-              jobs={profitabilityInputs.jobs}
-              quotes={profitabilityInputs.quotes}
-              costInputs={profitabilityInputs.costs}
-              reportStatusMap={reportStatusMap}
-              supersededSet={supersededSet}
-            />
-            </details>
+            <InvoiceMoneyBar strip={moneyStrip(moneySegments)} />
+            {showProfit && (
+              <section aria-label="Profit and cost details" className="mt-4 rounded-[12px] bg-white p-4" style={{ border: "1px solid #B3A792" }}>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h2 className="m-0 text-[16px] font-semibold" style={{ color: "#101617" }}>Profit &amp; cost details</h2>
+                  <button type="button" onClick={() => setShowProfit(false)} className="text-[14px] font-semibold underline" style={{ color: "#0B3F3B", background: "none", border: "none", cursor: "pointer" }}>Close</button>
+                </div>
+                <JobProfitabilityPanel
+                  rows={monthRows.filter((r) => !supersededSet.has(r.id))}
+                  jobs={profitabilityInputs.jobs}
+                  quotes={profitabilityInputs.quotes}
+                  costInputs={profitabilityInputs.costs}
+                  reportStatusMap={reportStatusMap}
+                  supersededSet={supersededSet}
+                />
+              </section>
+            )}
             {/* overflow: clip (not hidden) keeps the rounded corners without making this a
                 scroll box, so the lines grid header can stick to the top of the page. */}
             <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid #B3A792", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "clip", position: "relative", marginTop: "16px" }}>
@@ -655,11 +666,6 @@ export default function Invoicing() {
               filter={filter}
               onFilterChange={setFilter}
               filterCounts={filterCounts}
-              sort={sort}
-              onSortChange={setSort}
-              lineCount={filteredRows.length}
-              readyCount={heroStats.readyCount}
-              onSelectAllReady={handleSelectAllReady}
             />
             {view === "invoices" ? (
               <InvoiceRegister register={register} onRecordPayment={handleRecordPayment} onVoid={handleVoidInvoice} />
@@ -673,20 +679,19 @@ export default function Invoicing() {
               />
             ) : (
               <LineList
-                rows={filteredRows.map(r => ({ ...r, _reportBlocked: isReportBlocked(r, reportStatusMap) }))}
+                rows={gridRows}
                 sort={sort}
+                onSortChange={(key) => setSort((s) => nextSort(s, key))}
+                showStatus={filter === "all"}
                 selectedIds={selectedIds}
                 onToggle={toggleRow}
-                onShiftClick={shiftClickRow}
+                onSelectIds={selectIds}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
-                onAddReport={handleAddReport}
                 onMarkBilled={handleMarkBilled}
                 onOpenDetails={setDetailRow}
                 totalLabel={(SHOW.find((s) => s.key === filter)?.label || "All lines") + (search.trim() ? " matching search" : "")}
-                cellEditing={!loadError && !monthClosed}
                 reportAttached={reportAttached}
-                onToggleDay={toggleDay}
                 onClearFilters={() => { setFilter("all"); setSearch(""); }}
                 editRequestId={editRequestId}
                 onEditRequestHandled={clearEditRequest}
@@ -705,17 +710,23 @@ export default function Invoicing() {
         <FloatingActionBar
           disabled={deletingRows}
           selectedCount={selectedIds.size}
-          eligibleCount={loading || loadError || monthClosed ? 0 : selectedReadyInvoiceRows(feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet).length}
           laborCount={loading || loadError || monthClosed ? 0 : selectedLaborFeeRows(feeLines, selectedIds, month, focusedJobId).length}
-          monthLabel={month}
           selectedFee={selectedFee}
+          selectedLabor={selectedLabor}
+          primary={(() => {
+            const blocked = loading || loadError || monthClosed;
+            const ready = blocked ? 0 : selectedReadyInvoiceRows(feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet).length;
+            const covered = blocked ? 0 : coveredRows.length;
+            const approve = blocked ? 0 : approvableRows.length;
+            if (ready) return { label: "Record invoice", count: ready, onClick: handleMarkBilledSelected, title: `Record the QuickBooks invoice for the ready lines · ${month}` };
+            if (covered) return { label: "Mark covered", count: covered, onClick: handleCoveredSelected, title: "Confirm these $0 lines were covered by the original install. They bill nothing." };
+            if (approve) return { label: "Approve", count: approve, onClick: handleApproveSelected, title: "Clear the review hold so these lines are ready to invoice" };
+            return { label: "Record invoice", count: 0, onClick: handleMarkBilledSelected, title: blocked ? "Refresh billing data and use an open month first" : "None of the selected lines are ready" };
+          })()}
           onClear={clearSelection}
           onSetFeePct={handleSetFeePctSelected}
           onDelete={handleDeleteSelected}
           onExport={handleExportSelected}
-          onMarkBilled={handleMarkBilledSelected}
-          coveredCount={loading || loadError || monthClosed ? 0 : coveredRows.length}
-          onCovered={handleCoveredSelected}
         />
       )}
 
