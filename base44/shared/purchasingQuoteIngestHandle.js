@@ -133,7 +133,9 @@ async function rows(fn, query, limit) {
 
 async function fetchVerified(adapter, signedUrl, expectedSha) {
   const res = await adapter.fetchBytes(signedUrl, MAX_PDF_BYTES).catch(() => null);
-  if (!res || res.error) fail(res?.error === 'pdf_too_large' ? 'pdf_too_large' : 'pdf_fetch_failed');
+  // A fixed code plus the HTTP status / network error name only (never the URL).
+  const reason = /^[a-z0-9_]{1,40}$/.test(res?.reason || '') ? `_${res.reason}` : '';
+  if (!res || res.error) fail(res?.error === 'pdf_too_large' ? 'pdf_too_large' : `pdf_fetch_failed${reason}`);
   if (!(res.bytes instanceof Uint8Array) || !res.bytes.length || res.bytes.length > MAX_PDF_BYTES) fail('pdf_fetch_failed');
   if (!ALLOWED_PDF_TYPES.has(String(res.contentType || '').split(';')[0].trim().toLowerCase())) fail('unsupported_mime');
   if (!isPdf(res.bytes)) fail('not_a_pdf');
