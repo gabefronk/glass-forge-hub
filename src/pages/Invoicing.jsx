@@ -14,7 +14,7 @@ import { isReady, isReportBlocked, buildSupersededSet, withCompanions } from "@/
 import InvoiceHeader from "@/components/invoicing/InvoiceHeader";
 import InvoiceMoneyBar from "@/components/invoicing/InvoiceMoneyBar";
 import { moneyBarSegments, needsDecision, isZeroToConfirm, waitingOnReport } from "@/lib/invoiceMoneyBar";
-import InvoiceToolbar from "@/components/invoicing/InvoiceToolbar";
+import InvoiceToolbar, { SHOW } from "@/components/invoicing/InvoiceToolbar";
 import LineList from "@/components/invoicing/LineList";
 import JobsView from "@/components/invoicing/JobsView";
 import FloatingActionBar from "@/components/invoicing/FloatingActionBar";
@@ -650,7 +650,9 @@ export default function Invoicing() {
               supersededSet={supersededSet}
             />
             </details>
-            <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "16px" }}>
+            {/* overflow: clip (not hidden) keeps the rounded corners without making this a
+                scroll box, so the lines grid header can stick to the top of the page. */}
+            <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid #B3A792", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "clip", position: "relative", marginTop: "16px" }}>
             <InvoiceToolbar
               invoicesMode={view === "invoices"}
               search={search}
@@ -688,8 +690,9 @@ export default function Invoicing() {
                 onDelete={handleDelete}
                 onAddReport={handleAddReport}
                 onMarkBilled={handleMarkBilled}
-                onOpenJob={() => {}}
                 onOpenDetails={setDetailRow}
+                totalLabel={(SHOW.find((s) => s.key === filter)?.label || "All lines") + (search.trim() ? " matching search" : "")}
+                cellEditing={!loadError && !monthClosed}
                 reportAttached={reportAttached}
                 onToggleDay={toggleDay}
                 onClearFilters={() => { setFilter("all"); setSearch(""); }}
