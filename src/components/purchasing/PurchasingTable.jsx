@@ -43,6 +43,9 @@ const mono = { fontFamily: 'var(--font-mono)', fontSize: '13px', color: INK3 };
 const orderRef = (card) => [card.brand, card.refs?.mfrOrder || card.refs?.quoteNumber].filter(Boolean).join(' ');
 const dash = <span style={{ color: INK2 }}>—</span>;
 const moneyCell = (v, bold, negative) => (v == null ? dash : <span style={{ fontWeight: bold ? 700 : 400, color: negative ? '#A43432' : INK }}>{money(v)}</span>);
+// A job row shows its own figure unless a multi-scope job withholds it (then the scope
+// rows carry the money and the job row shows one dash), the same rule the header adds by.
+const ownCell = (d, bold) => (d?.suppressed ? dash : moneyCell(d?.value, bold, d?.value < 0));
 
 // Customer payment stage, in the cell: borderless until hover, a dot and the full stage
 // name. Same Jobs.payment_status patch as before; Gabe's stage order.
@@ -141,9 +144,9 @@ function JobRows({ card, data, onEdit, onSaved, today }) {
           <PaymentSelect payKey={row.payKey} busy={row.busy} onChange={(v) => row.savePayment(v)} />
           {row.payError && <span className="block text-[13px] font-semibold" style={{ color: '#A43432' }}>{row.payError}</span>}
         </span>
-        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{multi ? dash : moneyCell(card.windows?.display?.value)}</span>
-        <span className="text-right text-[14px] tabular-nums" style={cell}>{multi ? dash : moneyCell(card.sale?.display?.value, true)}</span>
-        <span className="text-right text-[14px] tabular-nums" style={cell}>{multi ? dash : moneyCell(card.profitDisplay?.value, false, f.profit < 0)}</span>
+        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{ownCell(card.windows?.display)}</span>
+        <span className="text-right text-[14px] tabular-nums" style={cell}>{ownCell(card.sale?.display, true)}</span>
+        <span className="text-right text-[14px] tabular-nums" style={cell}>{ownCell(card.profitDisplay)}</span>
       </div>
       {multi && <ScopeRows scopes={row.scopes} job={job} onSaved={onSaved} onOpenTracking={row.openSupplierSection} />}
       {row.expanded && row.fullJob && data && (
