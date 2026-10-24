@@ -167,10 +167,11 @@ test('buildPurchasingCards: verified canonical preserved separate; display candi
   assert.equal(card.windows.value, null);
   assert.equal(card.windows.status, 'review');
   assert.deepEqual(card.profit, { value: null, tone: 'unknown' }); // verified profit withheld (windows unverified)
-  // No direct cost figure -> owner-typed budget review figure, flagged review
+  // No direct cost figure -> owner-typed budget review figure, flagged review.
+  // Labor comes from the budget (2000), not the older money entry (3000).
   assert.equal(card.windows.display.value, CMT);
   assert.equal(card.windows.display.review, true);
-  assert.equal(card.profitDisplay.value, 4255);
+  assert.equal(card.profitDisplay.value, 5255);
   assert.equal(card.profitDisplay.review, true);
   // No mutation of inputs
   assert.deepEqual({ jobs, budgets, moneyInputs }, before);
@@ -181,7 +182,8 @@ test('buildPurchasingCards: all-verified job — display equals verified, profit
   assert.equal(card.windows.value, 1074.5);
   assert.equal(card.windows.display.value, 1074.5);
   assert.equal(card.windows.display.review, false);
-  assert.equal(card.profitDisplay.value, 13925.5);
+  // Display money comes from the budget (labor 2000), the verified profit still from the older entry.
+  assert.equal(card.profitDisplay.value, 14925.5);
   assert.equal(card.profitDisplay.review, false);
   assert.equal(card.profit.value, 13925.5);
 });
@@ -190,11 +192,10 @@ test('buildPurchasingCards: duplicate money - owner verified withheld, displays 
   const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }, { job_id: 'j1', rough_labor_material: 1, sale_price: 2 }], today: TODAY });
   assert.equal(card.rough.value, null); // verified owner withheld (duplicate)
   assert.equal(card.rough.duplicate, true);
-  assert.equal(card.rough.display.value, 2000); // budget review figure, duplicate-labelled
-  assert.equal(card.rough.display.review, true);
-  assert.match(card.rough.display.label, /duplicate/);
+  assert.equal(card.rough.display.value, 2000); // the budget is the source, so duplicates no longer matter for display
+  assert.equal(card.rough.display.review, false);
   assert.equal(card.sale.display.value, 18000);
-  assert.equal(card.sale.display.review, true);
+  assert.equal(card.sale.display.review, false);
   assert.equal(card.profitDisplay.value, 14925.5);
   assert.deepEqual(card.profit, { value: null, tone: 'unknown' }); // verified profit still withheld
 });
