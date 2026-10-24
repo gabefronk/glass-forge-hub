@@ -19,7 +19,7 @@ const REF_TONES = {
 };
 export function RefChip({ label, value, tone }) {
   if (!tone) {
-    return <span className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: '#8A8F93' }}><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#B8B0A4' }} />{label} {value || '—'}</span>;
+    return <span className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: '#6B7276' }}><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#B8B0A4' }} />{label} {value || '—'}</span>;
   }
   const t = REF_TONES[tone];
   return <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold whitespace-nowrap" style={{ backgroundColor: t.bg, color: t.color, border: `1px solid ${t.border}` }}><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: t.dot }} />{label} {value || '—'}</span>;
@@ -90,14 +90,14 @@ export default function PurchasingCard({ card, onEdit, data, onSaved }) {
       ) : null}
 
       <div className="mt-2.5 flex items-center justify-between gap-2">
-        <button type="button" onClick={onEdit} className="text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>Edit money</button>
+        <button type="button" onClick={onEdit} className="text-[11.5px] font-medium underline" style={{ color: '#6B7276' }}>Edit money</button>
         {next.key === 'job'
           ? <Link to={next.href} className="text-[12.5px] font-semibold underline" style={{ color: '#0B3F3B' }}>{next.label} →</Link>
           : <button type="button" onClick={() => openSection(next.key)} className="text-[12.5px] font-semibold underline" style={{ color: '#0B3F3B' }}>{next.label} →</button>}
       </div>
 
       <button type="button" onClick={toggleMore} aria-expanded={expanded} aria-controls={panelId}
-        className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: '#8A8F93' }}>
+        className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: '#6B7276' }}>
         <ChevronDown className="h-3.5 w-3.5" style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />{expanded ? 'Hide details' : 'More details'}
       </button>
 

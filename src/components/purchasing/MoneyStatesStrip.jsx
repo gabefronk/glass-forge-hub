@@ -8,9 +8,9 @@ function State({ label, state, sub }) {
   const partial = state?.partial ? ' · partial' : '';
   return (
     <div className="min-w-0 flex-1">
-      <div className="text-[9.5px] font-bold uppercase tracking-[0.07em]" style={{ color: '#8A8F93' }}>{label}</div>
+      <div className="text-[10px] font-bold uppercase tracking-[0.07em]" style={{ color: '#6B7276' }}>{label}</div>
       <div className="mt-0.5 text-[13.5px] font-extrabold tabular-nums" style={{ color: '#101617' }}>{money(state?.value)}</div>
-      <div className="text-[9.5px] font-medium leading-tight" style={{ color: '#8A8F93' }}>{(sub || '') + (state?.records > 0 || state?.scopes > 0 ? partial : '')}</div>
+      <div className="text-[10px] font-medium leading-tight" style={{ color: '#6B7276' }}>{(sub || '') + (state?.records > 0 || state?.scopes > 0 ? partial : '')}</div>
     </div>
   );
 }
@@ -43,11 +43,11 @@ export default function MoneyStatesStrip({ states }) {
         <State label="Paid" state={paid} sub={paidSub} />
       </div>
       {req?.records > 0 ? (
-        <p className="mt-1.5 text-[9.5px] font-bold leading-tight" style={{ color: '#34403F' }}>
+        <p className="mt-1.5 text-[10px] font-bold leading-tight" style={{ color: '#34403F' }}>
           Payment requested: {money(req.value)}{req.partial ? ' (partial - some requested amounts unrecorded)' : ''} across {req.records} order{req.records === 1 ? '' : 's'} - a request is not a bill and not a payment.
         </p>
       ) : null}
-      <p className="mt-1.5 text-[9.5px] font-medium leading-tight" style={{ color: '#8A8F93' }}>
+      <p className="mt-1.5 text-[10px] font-medium leading-tight" style={{ color: '#6B7276' }}>
         Stages of the same money - they overlap, never add them. Vendor material only; labor actuals are not tracked here.
       </p>
     </div>
