@@ -152,8 +152,8 @@ export default function YaFeesSidebar() {
         )}
       </nav>
 
-      {/* Unbilled mini card */}
-      {owner && <div className="px-3 pb-3">
+      {/* Unbilled mini card. Hidden on Invoicing ("/"), where the money strip shows it. */}
+      {owner && pathname !== "/" && <div className="px-3 pb-3">
         <div className="rounded-xl px-3.5 py-3" style={{ backgroundColor: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)" }}>
           <div className="text-[11px] font-medium mb-1.5" style={{ color: "var(--gf-sidebar-muted)", letterSpacing: "0.01em" }}>Ready to bill · {monthLabel(currentMonthStr())}</div>
           <div className="flex flex-wrap items-baseline gap-1.5 break-all">
