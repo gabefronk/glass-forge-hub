@@ -21,7 +21,8 @@ const total = (rows, field) => {
 // One rule for a job's money everywhere: the job page headline is the Purchasing row for
 // the job (owner-entered sale and labor first, then the budget; cost on the materials incl
 // tax basis; multi-scope jobs add their scope rows). Records on duplicate job records count
-// toward the primary job. Returns null when the job record is not loaded.
+// toward the primary job. A figure the row shows as a dash is null here, not 0. Returns null
+// when the job record is not loaded.
 export function jobMoneyHeadline(jobId, memberIds = [], { jobs = [], budgets = [], purchaseOrders = [], vendorOrders = [], moneyInputs = [], today = '' } = {}) {
   const job = jobs.find((j) => j.id === jobId);
   if (!job) return null;
@@ -30,8 +31,16 @@ export function jobMoneyHeadline(jobId, memberIds = [], { jobs = [], budgets = [
   const data = { jobs: [job], budgets: toPrimary(budgets), purchase_orders: toPrimary(purchaseOrders), vendor_orders: toPrimary(vendorOrders) };
   const [card] = buildPurchasingCards({ ...data, moneyInputs: moneyInputs.filter((m) => m.job_id === jobId), today });
   if (!card) return null;
-  const totals = summarizeCards([applyScopeRollup({ ...card, scopes: scopesForJob(jobId, data) })]);
-  return { cost: totals.windows, laborMaterial: totals.rough, sale: totals.sale, profit: totals.profit, partial: totals.partialScopes > 0 };
+  const rolled = applyScopeRollup({ ...card, scopes: scopesForJob(jobId, data) });
+  const totals = summarizeCards([rolled]);
+  const shown = (d, value) => (d?.suppressed || d?.value != null ? value : null);
+  return {
+    cost: shown(rolled.windows?.display, totals.windows),
+    laborMaterial: shown(rolled.rough?.display, totals.rough),
+    sale: shown(rolled.sale?.display, totals.sale),
+    profit: shown(rolled.profitDisplay, totals.profit),
+    partial: totals.partialScopes > 0,
+  };
 }
 
 // Keep the client-side owner check in one testable place. Entity RLS is the second
