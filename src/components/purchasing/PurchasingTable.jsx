@@ -43,11 +43,28 @@ const moneyCell = (v, bold, negative) => (v == null ? dash : <span style={{ font
 // none of them has a figure yet - never a made-up $0).
 function jobMoney(card, scopes) {
   const pick = (own, k) => {
-    if (!scopes.length) return own?.suppressed ? null : (own?.value ?? null);
+    if (!own?.suppressed && own?.value != null) return own.value;
+    if (!scopes.length) return null;
     const vals = scopes.map((s) => s[k]?.value).filter((v) => typeof v === 'number' && Number.isFinite(v));
     return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) * 100) / 100 : null;
   };
   return { windows: pick(card.windows?.display, 'windows'), sale: pick(card.sale?.display, 'sale'), profit: pick(card.profitDisplay, 'profit') };
+}
+
+// Names typed in ALL CAPS or all lower case read as noise on the grid; show them in title
+// case (display only - the job record keeps what was typed). Short all-caps words (AMSCO
+// is 5, but ABC, LLC, AV24) stay as they are unless they are plain words like RES.
+const SHORT_WORDS = new Set(['RES', 'LOT', 'THE', 'AND', 'OF']);
+export function tidyName(value) {
+  const s = String(value || '').trim();
+  const caps = !/[a-z]/.test(s) && /[A-Z]{2}/.test(s);
+  const lower = !/[A-Z]/.test(s) && /[a-z]/.test(s);
+  if (!caps && !lower) return s;
+  return s.replace(/[A-Za-z][A-Za-z']*/g, (w) => {
+    if (/\d/.test(w)) return w;
+    if (caps && w.length <= 3 && !SHORT_WORDS.has(w)) return w;
+    return w[0].toUpperCase() + w.slice(1).toLowerCase();
+  });
 }
 
 // Every supplier on the job, once each (a multi-scope job can have two).
@@ -111,8 +128,8 @@ function JobTitle({ job, extra }) {
   const builder = String(job.builder || '').trim();
   return (
     <span className="flex min-w-0 flex-col gap-0.5 text-left">
-      {builder ? <span className="truncate text-[12px] font-medium" style={{ color: INK2 }}>{builder}</span> : null}
-      <span className="job-name truncate text-[14.5px] font-semibold" style={{ color: INK }}>{job.canonical_name || 'Unnamed job'}{extra ? <span className="font-normal" style={{ color: INK2 }}> · {extra}</span> : null}</span>
+      {builder ? <span className="truncate text-[12px] font-medium" style={{ color: INK2 }}>{tidyName(builder)}</span> : null}
+      <span className="job-name truncate text-[14.5px] font-semibold" style={{ color: INK }} title={job.canonical_name}>{tidyName(job.canonical_name) || 'Unnamed job'}{extra ? <span className="font-normal" style={{ color: INK2 }}> · {extra}</span> : null}</span>
     </span>
   );
 }
@@ -187,8 +204,8 @@ function PhoneRow({ card }) {
     <Link to={procurementPath(job.id, 'budgets')} className="flex flex-col gap-1.5 no-underline active:bg-[#F6F3EC]" style={{ padding: '12px 16px', borderTop: `1px solid ${RULE}`, color: INK }}>
       <span className="flex items-start justify-between gap-3">
         <span className="flex min-w-0 flex-col">
-          {builder ? <span className="truncate text-[12.5px] font-medium" style={{ color: INK2 }}>{builder}</span> : null}
-          <span className="min-w-0 text-[16px] font-semibold leading-snug" style={{ overflowWrap: 'anywhere' }}>{job.canonical_name || 'Unnamed job'}</span>
+          {builder ? <span className="truncate text-[12.5px] font-medium" style={{ color: INK2 }}>{tidyName(builder)}</span> : null}
+          <span className="min-w-0 text-[16px] font-semibold leading-snug" style={{ overflowWrap: 'anywhere' }}>{tidyName(job.canonical_name) || 'Unnamed job'}</span>
         </span>
         <span className="whitespace-nowrap pt-0.5 text-[15px] font-bold tabular-nums">{f.sale == null ? '—' : money(f.sale)}</span>
       </span>
