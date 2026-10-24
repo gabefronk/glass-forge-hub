@@ -43,3 +43,13 @@ test('job actual supplier cost follows the same rule per record', () => {
   });
   assert.deepEqual(c, { value: 133148.69, partial: false });
 });
+
+test('a PO or order the owner marked as tax-included gets no use tax, even with no quote match', () => {
+  assert.equal(costWithUseTax(1000, null, { includes_sales_tax: true }), 1000);
+  assert.equal(costWithUseTax(1000, null, { includes_sales_tax: false }), 1074.5);
+  const c = bestWindowsFromBudget(taira, [{ id: 'p1', amount_dealer: 1000, po_number: 'YA-1', includes_sales_tax: true }], []);
+  assert.equal(c.value, 1000);
+  assert.equal(c.label, 'PO YA-1 (supplier tax incl.)');
+  const cost = orderedCost('j1', { purchase_orders: [{ id: 'p1', job_id: 'j1', status: 'ordered', amount_dealer: 1000, includes_sales_tax: true }] });
+  assert.deepEqual(cost, { value: 1000, partial: false });
+});

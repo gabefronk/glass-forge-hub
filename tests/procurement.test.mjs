@@ -183,6 +183,14 @@ test('supplier confirmation history matches its initial status with or without E
     assert.equal(paid.order.paid_at, stamp);
   }
 });
+test('the owner can mark a PO or supplier order as already including sales tax', async () => {
+  const s = store({ PurchaseOrders: [{ ...existingPO, updated_date: 'original' }] });
+  const po = await procurementAction(s.api, { action: 'po_sales_tax', po_id: 'p1', includes_sales_tax: true, expected_updated_date: 'original', request_key: 'po-sales-tax-test-01', review_confirmed: true }, owner, deps);
+  assert.equal(po.purchase_order.includes_sales_tax, true);
+  assert.equal(po.purchase_order.amount_dealer, existingPO.amount_dealer);
+  const order = await procurementAction(s.api, { action: 'save_supplier_order', job_id: 'j1', purchase_order_id: 'p1', order_number: '09-7777', amount: 500, includes_sales_tax: true, review_confirmed: true, request_key: 'supplier-tax-test-01' }, owner, deps);
+  assert.equal(order.order.includes_sales_tax, true);
+});
 test('API handler refuses crew before any private entity read', async () => {
   const handler = createProcurementHandler(() => ({ auth: { me: async () => ({ role: 'user', email: 'crew@example.com' }) }, get asServiceRole() { throw new Error('must not read'); } }));
   const res = await handler(new Request('https://unit.test', { method: 'POST', body: '{}' }));
