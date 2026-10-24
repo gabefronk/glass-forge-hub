@@ -120,7 +120,6 @@ function JobRows({ card, data, onEdit, onSaved, today }) {
   const row = useJobRow(card, data, onSaved);
   const [hover, setHover] = useState(false);
   const multi = row.scopes.length > 1;
-  const f = cardFigures(card);
   const scopesText = `${row.scopes.length} scopes`;
   const eta = multi ? etaRange(row.scopes.map((s) => s.etaLabel), today) : null;
   return (
