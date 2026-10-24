@@ -1,16 +1,10 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { PAYMENT_STAGES, paymentStage, paymentPatch } from "@/lib/jobPayment";
+import { PAYMENT_STAGES, PAYMENT_TONES, paymentStage, paymentPatch } from "@/lib/jobPayment";
 
-const CHIP_TONES = {
-  half_down:        { bg: "#FCEFE0", color: "#96490F", border: "#F1D3B2" },
-  installed:        { bg: "#EAF2FF", color: "#3977CB", border: "#C7D8EF" },
-  sent_for_payment: { bg: "#FFF3DF", color: "#8a6420", border: "#F0DBA8" },
-  waiting_on_payment:{ bg: "#FFF3DF", color: "#34403F", border: "#F0DBA8" },
-  partial:          { bg: "#FFF3DF", color: "#8a6420", border: "#F0DBA8" },
-  paid:             { bg: "#EAF5EE", color: "#166447", border: "#C7E4D2" },
-};
+// Same stage colours as the Purchasing row, so a job reads the same everywhere.
+const CHIP_TONES = Object.fromEntries(Object.entries(PAYMENT_TONES).map(([k, t]) => [k, { bg: t.bg, color: t.text, border: t.border }]));
 
 // Read-only pill used on list rows and purchasing cards so Gabriel can scan
 // which jobs are submitted for payment vs not. Renders nothing when unset.
@@ -23,7 +17,7 @@ export function PaymentStatusChip({ job }) {
       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold whitespace-nowrap"
       style={{ backgroundColor: t.bg, color: t.color, border: `1px solid ${t.border}` }}
     >
-      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: t.color }} />
+      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: PAYMENT_TONES[stage.key]?.dot || t.color }} />
       {stage.label}
     </span>
   );
@@ -49,7 +43,7 @@ export default function PaymentStatusDropdown({ job, onChanged, plain = false })
       await base44.entities.Jobs.update(job.id, patch);
       await onChanged?.();
     } catch (err) {
-      setError(err?.message || "Could not save the payment status.");
+      setError(err?.message || "Could not save the job stage.");
     } finally {
       setBusy(false);
     }
@@ -59,7 +53,7 @@ export default function PaymentStatusDropdown({ job, onChanged, plain = false })
     <span className="inline-flex flex-wrap items-center gap-2">
       <span className="relative inline-flex">
         <select
-          aria-label="Customer payment status"
+          aria-label="Job stage"
           value={active?.key || ""}
           disabled={busy}
           onChange={change}
@@ -69,16 +63,16 @@ export default function PaymentStatusDropdown({ job, onChanged, plain = false })
           style={plain
             ? { color: active ? "#e0c994" : "#a9bdb9", border: 0, textAlignLast: "right" }
             : active
-            ? { backgroundColor: t.color, color: "#FFFFFF", border: `1px solid ${t.color}` }
+            ? { backgroundColor: t.bg, color: t.color, border: `1px solid ${t.border}` }
             : { backgroundColor: "rgba(255,255,255,.09)", color: "#c9d0d1", border: "1px solid rgba(255,255,255,.18)" }}
         >
-          <option value="">{active ? "Clear status" : "Payment status"}</option>
+          <option value="">{active ? "Clear stage" : "Job stage"}</option>
           {active && !PAYMENT_STAGES.some((s) => s.key === active.key)
             ? <option value={active.key}>{active.label}</option>
             : null}
           {PAYMENT_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
-        <ChevronDown className={`pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${plain ? "right-0" : "right-2.5"}`} style={{ color: plain ? (active ? "#e0c994" : "#a9bdb9") : active ? "#FFFFFF" : "#c9d0d1" }} />
+        <ChevronDown className={`pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${plain ? "right-0" : "right-2.5"}`} style={{ color: plain ? (active ? "#e0c994" : "#a9bdb9") : active ? t.color : "#c9d0d1" }} />
       </span>
       {error ? <span role="alert" className="text-[12px] font-semibold" style={{ color: "#f1b9b3" }}>{error}</span> : null}
     </span>
