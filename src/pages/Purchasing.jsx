@@ -1,6 +1,9 @@
-import { headerFigures, applyPurchasingFilter, purchasingFilterCounts, supplierPayables, PURCHASING_FILTERS } from '@/lib/purchasingSummary';
+import { headerFigures, applyPurchasingFilter, purchasingFilterCounts, supplierPayables, sortCards, cardFigures, etaShort, PURCHASING_FILTERS, DEFAULT_PURCHASING_SORT } from '@/lib/purchasingSummary';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, ChevronDown, Check } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { paymentStage } from '@/lib/jobPayment';
+import { rowTitle } from '@/components/purchasing/PurchasingRowTitle';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { isPurchasingMoneyOwner } from '@/lib/purchasingMoneyAccess';
@@ -34,6 +37,7 @@ function PurchasingWorkspace() {
   const [moneyError, setMoneyError] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
+  const [sort, setSort] = useState(DEFAULT_PURCHASING_SORT);
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -92,7 +96,22 @@ function PurchasingWorkspace() {
   }, [data, moneyInputs, today]);
   const searched = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
   const filterCounts = useMemo(() => purchasingFilterCounts(searched, today), [searched, today]);
-  const filtered = useMemo(() => applyPurchasingFilter(searched, filter, today), [searched, filter, today]);
+  const filtered = useMemo(() => sortCards(applyPurchasingFilter(searched, filter, today), sort), [searched, filter, today, sort]);
+  // Clicking the active column header flips it; a new one starts soonest / A-Z / largest.
+  const changeSort = (key) => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: ['windows', 'sale', 'profit'].includes(key) ? 'desc' : 'asc' }));
+  const exportCsv = () => {
+    const cols = ['Job', 'Order', 'PO', 'ETA', 'Payment', 'Windows + tax', 'Sale', 'Est. profit'];
+    const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const body = filtered.map((c) => {
+      const f = cardFigures(c);
+      return [rowTitle(c.job), [c.brand, c.refs?.mfrOrder || c.refs?.quoteNumber].filter(Boolean).join(' '), c.refs?.yaPo, etaShort(c.refs?.etaLabel, today).text, paymentStage(c.paymentStage)?.label || 'Not tracked', f.windows, f.sale, f.profit].map(esc).join(',');
+    });
+    const blob = new Blob([[cols.join(','), ...body].join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `purchasing-${today}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
+  const shownFilters = PURCHASING_FILTERS.filter((f) => f.key === 'all' || f.key === filter || filterCounts[f.key] > 0);
+  const currentFilter = PURCHASING_FILTERS.find((f) => f.key === filter) || PURCHASING_FILTERS[0];
   const figures = useMemo(() => headerFigures(filtered, today), [filtered, today]);
   const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
 
@@ -126,21 +145,32 @@ function PurchasingWorkspace() {
 
   return (
     <PageShell width="max-w-[1280px]">
-      <PurchasingHeader figures={figures} shown={filtered.length} total={cards.length} />
+      <PurchasingHeader figures={figures} onExport={exportCsv} onReload={load} reloading={loading} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="relative flex min-w-0 flex-1 items-center" style={{ minWidth: 220 }}>
-          <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: 'var(--gf-placeholder)' }} />
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search job, quote, PO, supplier" aria-label="Search purchasing" className="min-h-10 w-full rounded-[9px] bg-white pl-[38px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)]" style={{ border: '1px solid var(--gf-check)', color: C.text }} />
+      <div className="flex items-center gap-2 max-[1023px]:flex-wrap">
+        <label className="relative flex min-w-0 items-center max-[1023px]:w-full" style={{ flex: '1 1 260px', maxWidth: 440 }}>
+          <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: '#6B7276' }} />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search jobs, POs, orders" aria-label="Search jobs, POs and orders" className="h-9 w-full rounded-[8px] pl-[36px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)] max-[1023px]:h-11" style={{ border: '1px solid #9A9080', color: '#101617', backgroundColor: '#F4F1EA' }} />
         </label>
-        <label className="inline-flex items-center gap-1.5 max-[699px]:w-full">
-          <span className="text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: 'var(--gf-ink-3)' }}>Show</span>
-          <select aria-label="Show" value={filter} onChange={(e) => setFilter(e.target.value)}
-            className="min-h-10 rounded-[9px] bg-white pl-2.5 pr-7 text-[13px] font-semibold max-[699px]:flex-1" style={{ border: '1px solid var(--gf-check)', color: C.text, cursor: 'pointer' }}>
-            {PURCHASING_FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label} ({filterCounts[f.key] || 0})</option>)}
-          </select>
-        </label>
-        <button type="button" disabled={loading} onClick={load} className="text-[11.5px] font-medium underline disabled:opacity-60 max-[699px]:hidden" style={{ color: C.textSecondary, minHeight: 0 }}>{loading ? 'Reloading…' : 'Reload'}</button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button aria-label={`Show: ${currentFilter.label}`} className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-white pl-3 pr-2.5 text-[14px] max-[1023px]:h-11" style={{ border: '1px solid #9A9080', color: '#101617', cursor: 'pointer' }}>
+              <span style={{ color: '#566063', fontWeight: 500 }}>Show</span>
+              <span style={{ fontWeight: 600 }}>{currentFilter.label}</span>
+              <span className="tabular-nums" style={{ color: '#566063', fontWeight: 500 }}>{filterCounts[currentFilter.key] || 0}</span>
+              <ChevronDown style={{ width: 16, height: 16, color: '#566063' }} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[230px] p-1">
+            {shownFilters.map((f) => (
+              <DropdownMenuItem key={f.key} onSelect={() => setFilter(f.key)} className="flex min-h-9 cursor-pointer items-center gap-2 text-[14px]">
+                <Check style={{ width: 15, height: 15, color: '#0B3F3B', visibility: f.key === filter ? 'visible' : 'hidden' }} />
+                <span className="flex-1" style={{ fontWeight: f.key === filter ? 600 : 400 }}>{f.label}</span>
+                <span className="tabular-nums" style={{ color: '#566063' }}>{filterCounts[f.key] || 0}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {error && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: 'var(--gf-error-bg)', color: 'var(--gf-error)', border: '1px solid var(--gf-error-border)' }}>{error}</p>}
@@ -149,7 +179,7 @@ function PurchasingWorkspace() {
       {filtered.length === 0 ? (
         <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query || filter !== 'all' ? 'No jobs match your search or filter.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
       ) : (
-        <PurchasingTable cards={filtered} data={data} onSaved={load} onEdit={(card) => setEditing({ jobId: card.job.id, jobName: card.job.canonical_name, rough: card.rough.value, sale: card.sale.value })} />
+        <PurchasingTable cards={filtered} data={data} sort={sort} onSort={changeSort} today={today} onSaved={load} onEdit={(card) => setEditing({ jobId: card.job.id, jobName: card.job.canonical_name, rough: card.rough.value, sale: card.sale.value })} />
       )}
 
       <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} onUploaded={load} focusSignal={addQuoteSignal} onReload={load} loading={loading} />
