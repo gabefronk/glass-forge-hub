@@ -26,6 +26,6 @@ test('search never borrows job context through broken or cross-job IDs', () => {
   assert.equal(matchesPurchasingSearch(index.get(wrongJob), ''), true);
 });
 test('purchasing navigation keeps a valid accounting month and rejects invalid months', () => {
-  assert.equal(procurementPath('job/one', 'invoicing', '2026-09'), '/jobs/job%2Fone/budget-orders?section=invoicing&month=2026-09');
+  assert.equal(procurementPath('job/one', 'invoicing', '2026-09'), '/jobs/job%2Fone/budget-orders?section=budgets&month=2026-09'); // retired section falls back
   assert.equal(procurementPath('', 'orders', '2026-13'), '/purchasing?section=orders');
 });

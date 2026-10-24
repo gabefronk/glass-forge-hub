@@ -44,7 +44,7 @@ function store(seed = {}) {
 
 test('job-specific and overview routes preserve context without new jobs', () => {
   assert.equal(procurementPath('j1', 'orders'), '/jobs/j1/budget-orders?section=orders');
-  assert.equal(procurementPath('', 'invoicing'), '/purchasing?section=invoicing');
+  assert.equal(procurementPath('', 'invoicing'), '/purchasing?section=budgets'); // retired section falls back
   assert.equal(procurementPath('j1', 'bad'), '/jobs/j1/budget-orders?section=budgets');
 });
 test('blank is not zero; dates must exist', () => {
