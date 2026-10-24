@@ -108,99 +108,12 @@ test('list: malformed stored amount (string / overflow) withholds that job', asy
   assert.ok(r.body.inputs.every((i) => i.invalid && i.sale_price === null && i.rough_labor_material === null));
 });
 
-test('save: create — exact patch, verified create, exact readback', async () => {
-  const a = mock({ moneyGet: (id) => Promise.resolve({ id, job_id: JOB, rough_labor_material: 5, sale_price: 10 }) });
-  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5, sale_price: 10 }), a);
-  assert.equal(r.status, 200);
-  assert.deepEqual(a.calls.moneyCreate[0][0], { job_id: JOB, rough_labor_material: 5, sale_price: 10 });
-  assert.deepEqual(r.body.input, { id: NEW, job_id: JOB, rough_labor_material: 5, sale_price: 10 });
-  assert.equal(a.calls.jobsGet.length, 2);
-});
-
-test('save: update writes only present keys', async () => {
-  const a = mock({
-    moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB, rough_labor_material: 5, sale_price: 10 }])),
-    moneyGet: (id) => Promise.resolve({ id, job_id: JOB, rough_labor_material: 7, sale_price: 10 }),
-  });
-  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 7 }), a);
-  assert.equal(r.status, 200);
-  assert.deepEqual(a.calls.moneyUpdate[0], [M1, { rough_labor_material: 7 }]);
-});
-
-test('save: null amount written and read back as null', async () => {
-  const a = mock({ moneyGet: (id) => Promise.resolve({ id, job_id: JOB, sale_price: null }) });
-  const r = await handle(req({ action: 'save', job_id: JOB, sale_price: null }), a);
-  assert.equal(r.status, 200);
-  assert.equal(r.body.input.sale_price, null);
-});
-
-const noWrite = (a) => a.calls.moneyCreate.length === 0 && a.calls.moneyUpdate.length === 0;
-const saveFails = [
-  ['missing job', { jobsGet: () => Promise.resolve(null) }, 'job_not_found'],
-  ['merged job', { jobsGet: (id) => Promise.resolve({ id, merged_into: JOB2 }) }, 'job_merged'],
-  ['sample job', { jobsGet: (id) => Promise.resolve({ id, is_sample: true }) }, 'sample_job'],
-  ['job GET returns another id', { jobsGet: () => Promise.resolve({ id: JOB2 }) }, 'job_mismatch'],
-  ['duplicate money rows', { moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB }, { id: M2, job_id: JOB }])) }, 'duplicate_money'],
-  ['filter has more', { moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB }], 'c')) }, 'duplicate_money'],
-  ['filter row for another job', { moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB2 }])) }, 'money_lookup_mismatch'],
-  ['filter row with malformed id', { moneyFilter: () => Promise.resolve(page([{ id: 'm1', job_id: JOB }])) }, 'money_lookup_mismatch'],
-  ['filter throws', { moneyFilter: () => Promise.reject(new Error('x')) }, 'money_lookup_failed'],
-];
-for (const [name, stubs, code] of saveFails) {
-  test(`save fails closed with no write: ${name}`, async () => {
-    const a = mock(stubs);
-    const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a);
-    assert.equal(r.body.error, code);
-    assert.ok(noWrite(a));
-  });
-}
-
-test('save: filter returns a plain array → invalid_page, no write', async () => {
-  const a = mock({ moneyFilter: () => Promise.resolve([]) });
-  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a);
-  assert.equal(r.status, 500);
-  assert.equal(r.body.error, 'invalid_page');
-  assert.ok(noWrite(a));
-});
-
-test('save: job merged between first read and write → job_changed, no write', async () => {
-  let n = 0;
-  const a = mock({ jobsGet: (id) => Promise.resolve(n++ === 0 ? { id } : { id, merged_into: JOB2 }) });
-  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a);
-  assert.equal(r.body.error, 'job_changed');
-  assert.ok(noWrite(a));
-});
-
-test('save: create without matching job_id → create_unverified', async () => {
-  const a = mock({ moneyCreate: () => Promise.resolve({ id: NEW }) });
-  assert.equal((await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a)).body.error, 'create_unverified');
-});
-
-for (const [name, row] of [['value differs', { id: NEW, job_id: JOB, rough_labor_material: 6 }], ['other job', { id: NEW, job_id: JOB2, rough_labor_material: 5 }], ['other id', { id: M1, job_id: JOB, rough_labor_material: 5 }], ['string value', { id: NEW, job_id: JOB, rough_labor_material: '5' }]]) {
-  test(`save: readback ${name} → readback_mismatch`, async () => {
-    const a = mock({ moneyGet: () => Promise.resolve(row) });
-    assert.equal((await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a)).body.error, 'readback_mismatch');
-  });
-}
-
-test('save: readback missing → readback_failed', async () => {
-  const a = mock({ moneyGet: () => Promise.resolve(null) });
-  assert.equal((await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a)).body.error, 'readback_failed');
-});
-
-test('save: update throws raw SDK text → generic save_failed', async () => {
-  const a = mock({ moneyFilter: () => Promise.resolve(page([{ id: M1, job_id: JOB }])), moneyUpdate: () => Promise.reject(new Error('internal sdk detail')) });
-  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5 }), a);
-  assert.equal(r.status, 500);
-  assert.equal(r.body.error, 'save_failed');
-});
-
-test('save: invalid amount / malformed job id → 400 before any read', async () => {
-  for (const body of [{ action: 'save', job_id: JOB, rough_labor_material: -5 }, { action: 'save', job_id: 'j1', rough_labor_material: 5 }]) {
-    const a = mock();
-    assert.equal((await handle(req(body), a)).status, 400);
-    assert.ok(noReads(a));
-  }
+test('save: retired (Oct 24) - the old Edit money write is refused with no reads or writes', async () => {
+  const a = mock();
+  const r = await handle(req({ action: 'save', job_id: JOB, rough_labor_material: 5, sale_price: 10 }), a.adapter);
+  assert.equal(r.status, 400);
+  assert.equal(r.body.error, 'unknown_action');
+  assert.equal(a.calls.moneyCreate.length + a.calls.moneyUpdate.length + a.calls.moneyFilter.length, 0);
 });
 
 test('unknown action → 400, no reads', async () => {

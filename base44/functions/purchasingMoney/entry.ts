@@ -1,5 +1,6 @@
-// Owner-private read/write endpoint for the per-job rough labor/material and
-// sale price (JobMoneyInputs). Authenticates the caller's auth user id BEFORE
+// Owner-private READ-ONLY endpoint for the older per-job rough labor/material and
+// sale price (JobMoneyInputs) - kept only as the fallback for jobs with no budget
+// figure; nothing writes these rows any more (Oct 24). Authenticates the caller's auth user id BEFORE
 // any entity read or write — admin role or email is not enough. Returns only
 // the safe fields. Profit is never stored; it is computed read-only in the UI.
 //
@@ -15,12 +16,7 @@ export default async function (req) {
   const db = base44.asServiceRole.entities;
   const adapter = {
     authMe: () => base44.auth.me(),
-    jobsGet: (id) => db.Jobs.get(id),
     moneyList: (opts) => db.JobMoneyInputs.list(opts),
-    moneyFilter: (q, opts) => db.JobMoneyInputs.filter(q, opts),
-    moneyGet: (id) => db.JobMoneyInputs.get(id),
-    moneyUpdate: (id, patch) => db.JobMoneyInputs.update(id, patch),
-    moneyCreate: (data) => db.JobMoneyInputs.create(data),
   };
   const { status, body } = await handle(req, adapter);
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });

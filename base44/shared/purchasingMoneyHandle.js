@@ -14,12 +14,12 @@
 //    has_more=false needs next_cursor === null; truncated=true is rejected.
 //    Repeated cursors and more than MAX_PAGES pages are rejected.
 //  - Stored rows must carry exact ids; a malformed amount withholds that job.
-//  - save: exact-id job read, exact-match money recheck, a second fresh job
-//    read right before the write (rejects a merge since the first read), then
-//    an exact readback that must equal the id, job and every patched value.
+//  - Read-only since Oct 24: the budget is the job's money source, so the old
+//    "save" (the retired Edit money button) is gone. list stays only as the
+//    fallback for jobs whose sale has no budget yet.
 //  - Errors return fixed safe codes only; raw SDK error text is never returned.
 import {
-  isPurchasingMoneyOwner, validateSavePayload, validateListBody, parseStoredRow, sanitizeInput, isEntityId,
+  isPurchasingMoneyOwner, validateListBody, parseStoredRow, sanitizeInput,
 } from './purchasingMoneyPure.js';
 
 export const LIST_LIMIT = 500;
@@ -77,60 +77,6 @@ async function listMoney(adapter) {
   return { inputs, duplicates: [...duplicates], invalid: [...invalid] };
 }
 
-async function freshJob(adapter, jobId, changedCode) {
-  const job = await adapter.jobsGet(jobId).catch(() => null);
-  if (!job) return changedCode || 'job_not_found';
-  if (job.id !== jobId) return 'job_mismatch';
-  if (job.merged_into) return changedCode || 'job_merged';
-  if (job.is_sample) return changedCode || 'sample_job';
-  return null;
-}
-
-async function saveMoney(adapter, parsed) {
-  const jobId = parsed.job_id;
-  const jobErr = await freshJob(adapter, jobId);
-  if (jobErr) return { error: jobErr };
-
-  // Exact-match recheck of existing money rows for this job.
-  const page = await adapter.moneyFilter({ job_id: jobId }, { sort: '-updated_date', limit: 2 }).catch(() => null);
-  if (!page) return { error: 'money_lookup_failed' };
-  const { items, next } = readPage(page, 2);
-  if (next) return { error: 'duplicate_money' };
-  for (const row of items) {
-    if (!row || !isEntityId(row.id) || row.job_id !== jobId) return { error: 'money_lookup_mismatch' };
-  }
-  if (items.length > 1) return { error: 'duplicate_money' };
-
-  // Second fresh job read right before the write: reject a merge/sample/delete since the first read.
-  const changed = await freshJob(adapter, jobId, 'job_changed');
-  if (changed) return { error: changed };
-
-  // Partial patch: only keys present in the payload are written.
-  const patch = {};
-  if (parsed.hasRough) patch.rough_labor_material = parsed.rough_labor_material;
-  if (parsed.hasSale) patch.sale_price = parsed.sale_price;
-
-  let savedId;
-  if (items.length === 1) {
-    savedId = items[0].id;
-    await adapter.moneyUpdate(savedId, patch);
-  } else {
-    const created = await adapter.moneyCreate({ job_id: jobId, ...patch });
-    if (!created || !isEntityId(created.id) || created.job_id !== jobId) return { error: 'create_unverified' };
-    savedId = created.id;
-  }
-
-  // Exact readback: same id, same job, every patched value stored as sent.
-  const readback = await adapter.moneyGet(savedId).catch(() => null);
-  if (!readback) return { error: 'readback_failed' };
-  const stored = parseStoredRow(readback);
-  if (!stored.ok || stored.row.id !== savedId || stored.row.job_id !== jobId) return { error: 'readback_mismatch' };
-  for (const [key, value] of Object.entries(patch)) {
-    if (stored.row[key] !== value) return { error: 'readback_mismatch' };
-  }
-  return { input: sanitizeInput(stored.row) };
-}
-
 const safeCode = (e, fallback) => (e instanceof SafeError ? e.code : fallback);
 
 export async function handle(req, adapter) {
@@ -148,18 +94,6 @@ export async function handle(req, adapter) {
       return { status: 200, body: await listMoney(adapter) };
     } catch (e) {
       return { status: 500, body: { error: safeCode(e, 'list_failed') } };
-    }
-  }
-
-  if (action === 'save') {
-    const parsed = validateSavePayload(body);
-    if (!parsed.ok) return { status: 400, body: { error: parsed.error } };
-    try {
-      const result = await saveMoney(adapter, parsed);
-      if (result.error) return { status: 409, body: { error: result.error } };
-      return { status: 200, body: { input: result.input } };
-    } catch (e) {
-      return { status: 500, body: { error: safeCode(e, 'save_failed') } };
     }
   }
 
