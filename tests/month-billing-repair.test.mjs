@@ -49,19 +49,24 @@ function entity(initial=[]) {
     bulkCreate:async data=>{const created=data.map((r,i)=>({...r,id:"new-"+(rows.length+i)}));rows.push(...created);return structuredClone(created).reverse();},
     bulkUpdate:async data=>{assert.equal(new Set(data.map(r=>r.id)).size,data.length,"one patch per entity");for(const p of data){const r=rows.find(r=>r.id===p.id);assert.ok(r,"update target exists");Object.assign(r,p);}return data;} };
 }
+// Platform secrets resolve empty, so notifiers (BlueBubbles texts) skip.
+const RUNTIME_STUB = "data:text/javascript;base64," + Buffer.from("export const secrets = { get: () => '' };").toString("base64");
+const stubRuntime = (source) => source.replace(/from ['"]base44:runtime['"]/g, "from " + JSON.stringify(RUNTIME_STUB));
 async function moduleUrl(url) {
-  if (!url.pathname.endsWith(".ts")) return url.href;
+  const isTs = url.pathname.endsWith(".ts");
   let source = await readFile(url, "utf8");
+  if (!isTs && !source.includes("base44:runtime")) return url.href;
+  source = stubRuntime(source);
   for (const match of [...source.matchAll(/from ['"](\.[^'"]+)['"]/g)]) {
     source = source.replace(match[0], "from " + JSON.stringify(await moduleUrl(new URL(match[1], url))));
   }
-  source = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  if (isTs) source = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
   return "data:text/javascript;base64," + Buffer.from(source).toString("base64");
 }
 async function handler(name, client, posts=[]) {
   globalThis.__billingTestClient=client;globalThis.__billingTestPosts=posts;
   const url=new URL("../base44/functions/"+name+"/entry.ts",import.meta.url);
-  let source=await readFile(url,"utf8");
+  let source=stubRuntime(await readFile(url,"utf8"));
   source=source.replace(/import \{ createClientFromRequest \} from [^;]+;/,'const createClientFromRequest = () => globalThis.__billingTestClient;');
   source=source.replace(/import \{ toMs, getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject, filterProjectsByWindow \} from [^;]+;/, 'const getProbuildIdToken=async()=>"test", fetchProbuildProjects=async()=>[{id:"project",name:"test job"}], filterProjectsByWindow=p=>({qualifying:p,stats:{}}), fetchProbuildPostsForProject=async()=>globalThis.__billingTestPosts;');
   for (const match of [...source.matchAll(/from ['"](\.\.\/[^'"]+)['"]/g)]) {
