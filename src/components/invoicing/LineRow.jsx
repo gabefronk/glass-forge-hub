@@ -130,7 +130,7 @@ export default function LineRow({ row, selected, focused, showStatus, onCheck, o
           <dl className="grid min-w-0 flex-1 gap-x-5 gap-y-1 pt-2 text-[14px]" style={{ gridTemplateColumns: "max-content minmax(0,1fr)", color: "#101617" }}>
             <dt style={{ color: "#566063" }}>Crew</dt><dd>{crew || "—"}</dd>
             <dt style={{ color: "#566063" }}>Work</dt><dd style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{[row.line_description, noteTokens(row.note_text)].filter(Boolean).join("\n") || "—"}</dd>
-            <dt style={{ color: "#566063" }}>Field report</dt><dd>{report}</dd>
+            <dt style={{ color: "#566063" }}>Field report</dt><dd>{report}{report === "Missing" && <> · <Link data-no-open to="/calendar" className="font-semibold underline" style={{ color: "#0B3F3B" }}>Add it on the calendar</Link></>}</dd>
           </dl>
           <div data-no-open className="flex items-center gap-2 pt-2">
             {row.job_id && <Link to={`/jobs/${row.job_id}`} className="px-2 text-[14px] font-semibold underline" style={{ color: "#0B3F3B" }}>Open job</Link>}
