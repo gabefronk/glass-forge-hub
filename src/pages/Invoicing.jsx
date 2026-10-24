@@ -26,7 +26,7 @@ import BudgetEstimateNote from "@/components/invoicing/BudgetEstimateNote";
 import NeedsConfirmationList from "@/components/invoicing/NeedsConfirmationList";
 import RecordInvoiceDialog from "@/components/invoicing/RecordInvoiceDialog";
 import InvoiceRegister from "@/components/invoicing/InvoiceRegister";
-import { invoicePatch, reopenPatch, paymentPatch, priorState, invoiceRegister, isCoveredZeroReview } from "@/lib/invoiceRegister";
+import { laborInvoicePlan, linePatches, reopenPatch, paymentLinePatches, priorState, invoiceRegister, isCoveredZeroReview } from "@/lib/invoiceRegister";
 import DateRangeBar from "@/components/invoicing/dashboard/DateRangeBar";
 import DashboardCards from "@/components/invoicing/dashboard/DashboardCards";
 import RevenueSplitPanel from "@/components/invoicing/dashboard/RevenueSplitPanel";
@@ -70,6 +70,7 @@ export default function Invoicing() {
   const [closing, setClosing] = useState(false);
   const [detailRow, setDetailRow] = useState(null);
   const [billRequest, setBillRequest] = useState(null);
+  const [invoices, setInvoices] = useState([]);
   const [editRequestId, setEditRequestId] = useState(null);
   const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [billingEvents, setBillingEvents] = useState([]);
@@ -99,12 +100,13 @@ export default function Invoicing() {
     const stale = () => seq !== loadSeq.current;
     setLoading(true);
     try {
-      const [fl, calEvents, jobs, quotes, costs] = await Promise.all([
+      const [fl, calEvents, jobs, quotes, costs, invs] = await Promise.all([
         base44.entities.FeeLines.list("-job_date", 5000),
         base44.entities.CalendarEvents.list("-event_date", 5000),
         base44.entities.Jobs.list("canonical_name", 5000).catch(() => []),
         base44.entities.QuoteRequests.list("-updated_date", 5000).catch(() => []),
         base44.entities.JobCostInputs?.filter ? base44.entities.JobCostInputs.filter({ month }, "job_name_norm", 5000).catch(() => []) : Promise.resolve([]),
+        base44.entities.Invoices.list("-invoice_date", 2000).catch(() => []),
       ]);
       if (stale()) return;
       const rsm = new Map();
@@ -114,6 +116,7 @@ export default function Invoicing() {
       setReportStatusMap(rsm);
       setBillingEvents(Array.isArray(calEvents) ? calEvents : []);
       setFeeLines(withComputedAmounts(fl));
+      setInvoices(Array.isArray(invs) ? invs : []);
       setProfitabilityInputs({ jobs: Array.isArray(jobs) ? jobs : [], quotes: Array.isArray(quotes) ? quotes : [], costs: Array.isArray(costs) ? costs : [] });
       setLoadError("");
       window.dispatchEvent(new Event("billing-updated"));
@@ -339,15 +342,51 @@ export default function Invoicing() {
     performAction(message, () => {}, () => { apply(prevStates); persistBulk(prevStates, updates); });
   }, [persistBulk, performAction]);
 
-  // Every billing path records the QuickBooks invoice the lines went out on.
-  const confirmBill = useCallback(({ number, date }) => {
+  // Every billing path records the QuickBooks invoice the lines went out on: an Invoices
+  // record (new, or the existing one with that number) plus its id and number on each line.
+  // Returns an error message for the dialog when the invoice cannot be recorded.
+  const confirmBill = useCallback(async ({ number, date, customer }) => {
     const rows = billRequest?.rows || [];
+    if (!rows.length || deleting.current) { setBillRequest(null); return; }
+    const plan = laborInvoicePlan(rows, { number, date, customer }, invoices);
+    if (plan.error) return plan.error;
+    let invoice;
+    try {
+      if (plan.create) {
+        const me = await base44.auth.me().catch(() => null);
+        invoice = await base44.entities.Invoices.create({ ...plan.create, created_by_email: me?.email || "" });
+      } else {
+        await base44.entities.Invoices.update(plan.existing.id, plan.update);
+        invoice = { ...plan.existing, ...plan.update };
+      }
+    } catch (err) {
+      return `The invoice was not recorded. ${err?.message || ""}`.trim();
+    }
+    const undoInvoice = () => (plan.create ? base44.entities.Invoices.delete(invoice.id) : base44.entities.Invoices.update(plan.existing.id, { amount: plan.existing.amount, fee_amount: plan.existing.fee_amount, line_count: plan.existing.line_count }));
+    const restoreInvoices = () => setInvoices((prev) => (plan.create ? prev.filter((i) => i.id !== invoice.id) : prev.map((i) => (i.id === invoice.id ? plan.existing : i))));
+    setInvoices((prev) => (plan.create ? [invoice, ...prev] : prev.map((i) => (i.id === invoice.id ? invoice : i))));
     setBillRequest(null);
-    if (!rows.length || deleting.current) return;
-    const updates = invoicePatch(rows, { number, date });
-    applyBulk(updates, priorState(rows, Object.keys(updates[0]).filter((k) => k !== "id")), `${rows.length} ${rows.length === 1 ? "line" : "lines"} billed on invoice #${number}`);
+    const updates = linePatches(rows, invoice);
+    const prevStates = priorState(rows, Object.keys(updates[0]).filter((k) => k !== "id"));
+    const apply = (patches) => setFeeLines((prev) => prev.map((r) => { const u = patches.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
+    apply(updates);
     clearSelection();
-  }, [billRequest, applyBulk, clearSelection]);
+    try {
+      await base44.entities.FeeLines.bulkUpdate(updates);
+    } catch (err) {
+      apply(prevStates);
+      restoreInvoices();
+      await undoInvoice().catch(() => {});
+      setSyncMessage(`Billing failed; the lines and invoice were restored. ${err?.message || ""}`.trim());
+      return;
+    }
+    performAction(`${rows.length} ${rows.length === 1 ? "line" : "lines"} billed on invoice #${invoice.invoice_number}`, () => {}, async () => {
+      apply(prevStates);
+      restoreInvoices();
+      persistBulk(prevStates, updates);
+      await undoInvoice().catch((e) => setSyncMessage(`Undo could not restore the invoice record. ${e?.message || ""}`.trim()));
+    });
+  }, [billRequest, invoices, clearSelection, performAction, persistBulk]);
 
   const handleMarkBilled = useCallback((id, value = true) => {
     if (deleting.current) return;
@@ -373,14 +412,33 @@ export default function Invoicing() {
     setBillRequest({ rows: selected, label: month });
   }, [feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet, loading, loadError, monthClosed]);
 
-  const handleRecordPayment = useCallback((number, date) => {
+  // Payment is recorded on the invoice and copied to its lines.
+  const handleRecordPayment = useCallback(async (invoiceId, date) => {
     if (deleting.current) return;
-    const rows = feeLines.filter((r) => r.billed_to_bfs && (r.invoice_number || "") === number);
-    const updates = paymentPatch(rows, number, date);
-    if (!updates.length) return;
-    const label = number ? `Invoice #${number}` : "Invoice";
-    applyBulk(updates, priorState(rows, ["paid_to_ya", "paid_date"]), date ? `${label} marked paid` : `${label} payment removed`);
-  }, [feeLines, applyBulk]);
+    const invoice = invoices.find((i) => i.id === invoiceId);
+    if (!invoice) return;
+    const prevPaid = invoice.paid_date || null;
+    const setPaid = (paid) => setInvoices((prev) => prev.map((i) => (i.id === invoiceId ? { ...i, paid_date: paid } : i)));
+    setPaid(date || null);
+    try { await base44.entities.Invoices.update(invoiceId, { paid_date: date || null }); }
+    catch (err) { setPaid(prevPaid); setSyncMessage(`Payment was not saved. ${err?.message || ""}`.trim()); return; }
+    const rows = feeLines.filter((r) => r.invoice_id === invoiceId);
+    const updates = paymentLinePatches(rows, invoiceId, date);
+    const label = `Invoice #${invoice.invoice_number}`;
+    if (updates.length) {
+      applyBulk(updates, priorState(rows, ["paid_to_ya", "paid_date"]), date ? `${label} marked paid` : `${label} payment removed`);
+    } else {
+      performAction(date ? `${label} marked paid` : `${label} payment removed`, () => {}, () => {});
+    }
+  }, [invoices, feeLines, applyBulk, performAction]);
+
+  // An invoice whose lines were all reopened can be voided; it stays for history.
+  const handleVoidInvoice = useCallback(async (invoiceId) => {
+    const voided_at = new Date().toISOString();
+    try { await base44.entities.Invoices.update(invoiceId, { voided_at }); }
+    catch (err) { setSyncMessage(`Invoice was not voided. ${err?.message || ""}`.trim()); return; }
+    setInvoices((prev) => prev.map((i) => (i.id === invoiceId ? { ...i, voided_at } : i)));
+  }, []);
 
   // $0 lines held only to confirm the work was covered by the original install.
   const coveredRows = useMemo(() => {
@@ -396,7 +454,12 @@ export default function Invoicing() {
     clearSelection();
   }, [coveredRows, loading, loadError, monthClosed, applyBulk, clearSelection]);
 
-  const register = useMemo(() => invoiceRegister(feeLines.filter((r) => !focusedJobId || r.job_id === focusedJobId)), [feeLines, focusedJobId]);
+  const register = useMemo(() => {
+    const all = invoiceRegister(invoices, feeLines);
+    if (!focusedJobId) return all;
+    const ids = new Set(feeLines.filter((r) => r.job_id === focusedJobId && r.invoice_id).map((r) => r.invoice_id));
+    return all.filter((i) => ids.has(i.id));
+  }, [invoices, feeLines, focusedJobId]);
 
   const handleSetFeePctSelected = useCallback((pct) => {
     if (deleting.current) return;
@@ -645,7 +708,7 @@ export default function Invoicing() {
               readyCount={heroStats.readyCount}
               onSelectAllReady={handleSelectAllReady}
             />
-            {filter === "billed" && !(view === "dashboard" && !focusedJobId) && <InvoiceRegister register={register} onRecordPayment={handleRecordPayment} />}
+            {filter === "billed" && !(view === "dashboard" && !focusedJobId) && <InvoiceRegister register={register} onRecordPayment={handleRecordPayment} onVoid={handleVoidInvoice} />}
             {view === "dashboard" && !focusedJobId ? (
               <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_340px]" style={{ alignItems: "start" }}>
                 <DashboardLineList
@@ -721,7 +784,7 @@ export default function Invoicing() {
         />
       )}
 
-      <RecordInvoiceDialog request={billRequest} onCancel={() => setBillRequest(null)} onConfirm={confirmBill} />
+      <RecordInvoiceDialog request={billRequest} invoices={invoices} onCancel={() => setBillRequest(null)} onConfirm={confirmBill} />
 
       {detailRow && (
         <LineDetailsDrawer
