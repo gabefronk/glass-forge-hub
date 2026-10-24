@@ -332,6 +332,8 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
         {privateSource ? <PrivateSourceButton budgetId={privateSource} label="Vendor quote PDF" className={BTN} style={SEC} /> : null}
         {fHref ? <a href={fHref} target="_blank" rel="noreferrer" className={BTN} style={SEC}>Drive folder<ArrowUpRight className="h-3.5 w-3.5" /></a> : null}
       </div>
+      {/* Scope / revision opens under the buttons; Edit numbers replaces the figures above. */}
+      {!editing && editorPanel}
     </div>
   );
 }
@@ -409,7 +411,6 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
           <BudgetCard key={b.id} budget={b} job={job} allBudgets={rec.budgets} pos={rec.pos} editing={editor?.mode === 'numbers' && editor.budget_id === b.id}
             onEdit={openEditor} onPreparePO={preparePO} onSaved={onSaved} editorPanel={budgetEditor(b)} />
         ))}
-        {editor?.mode === 'usage' && currentBudget ? budgetEditor(currentBudget) : null}
       </section>
 
       <div className="rounded-[12px] p-2" style={{ border: '1.5px dashed #CEC6B8', backgroundColor: '#FAF8F3' }}>
