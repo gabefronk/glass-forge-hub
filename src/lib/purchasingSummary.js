@@ -147,6 +147,21 @@ export function etaShort(label, today = '') {
   return days > 0 ? { text: `${date} · ${days}d`, late: false } : { text: `${date} · ${-days}d late`, late: true };
 }
 
+// ETA as a plain date, "10/13/26" (Gabriel, Oct 24: the grid shows just the date,
+// no countdown and no late flag). Labels that are not a date ("Delivered") pass through.
+export function etaDate(label) {
+  if (!label) return '';
+  if (!ISO_DAY.test(label)) return label;
+  const [y, m, d] = label.split('-');
+  return `${m}/${d}/${y.slice(2)}`;
+}
+
+// A multi-scope job's ETA as one date: the earliest dated scope, else its first label.
+export function etaEarliest(labels = []) {
+  const dates = labels.filter((l) => ISO_DAY.test(l || '')).sort();
+  return etaDate(dates[0] || labels.find(Boolean) || '');
+}
+
 // A multi-scope job's ETAs as one phrase: "62–63d late", "5–12d", or the single ETA.
 export function etaRange(labels = [], today = '') {
   const dates = labels.filter((l) => ISO_DAY.test(l || ''));
