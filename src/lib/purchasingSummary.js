@@ -90,14 +90,15 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 export function jobFlags(card, today = '') {
   const sale = column(card, 'sale');
   const windows = column(card, 'windows');
-  const sold = sale.missing && !sale.value ? null : sale.value;
+  const sold = sale.value || 0;
   const stage = card?.paymentStage || '';
   const ap = card?.payables || { owed: 0, items: 0, unpaid: 0 };
   const eta = card?.refs?.etaLabel || '';
   const openOrder = ap.items > 0 && eta !== 'Delivered';
-  const hasCost = !windows.missing && (windows.value !== 0 || hasOwnFigure(card, 'windows'));
+  // A $0 cost is treated as missing: it would read as free material (100% margin).
+  const hasCost = !windows.missing && windows.value > 0;
   return {
-    sold: sold ?? 0,
+    sold,
     customerOwes: sold ? round(sold * customerOwedShare(stage)) : 0,
     weOwe: ap.owed || 0,
     open_orders: openOrder,
@@ -107,12 +108,6 @@ export function jobFlags(card, today = '') {
     supplier_unpaid: ap.unpaid > 0,
     missing_cost: !hasCost,
   };
-}
-
-// A single-scope job's own windows figure (a real 0 counts as a figure).
-function hasOwnFigure(card, field) {
-  const own = FIELDS[field].job(card);
-  return !own?.suppressed && num(own?.value) != null;
 }
 
 export const PURCHASING_FILTERS = [
