@@ -2,7 +2,7 @@
 // and the one Show dropdown: every figure and count adds only the rows shown.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { supplierPayables, jobFlags, headerFigures, purchasingFilterCounts, applyPurchasingFilter, customerOwedShare } from '../src/lib/purchasingSummary.js';
+import { supplierPayables, jobFlags, headerFigures, purchasingFilterCounts, applyPurchasingFilter, customerOwedShare, etaShort, etaRange, sortCards, cardFigures } from '../src/lib/purchasingSummary.js';
 
 const TODAY = '2026-10-24';
 const card = (over = {}) => ({
@@ -11,7 +11,7 @@ const card = (over = {}) => ({
   rough: { display: { value: 400 } },
   sale: { display: { value: 'sale' in over ? over.sale : 3000 } },
   profitDisplay: { value: 'profit' in over ? over.profit : 1525.5 },
-  refs: { etaLabel: over.eta ?? null },
+  refs: { etaLabel: over.eta ?? null, quoteNumber: over.quote ?? null, yaPo: over.po ?? null },
   payables: over.payables || { owed: 0, items: 0, unpaid: 0, missing: 0 },
   paymentStage: over.stage || '',
 });
@@ -68,18 +68,36 @@ test('flags: open orders, ETA, deposit, supplier and missing cost', () => {
 
 test('header figures and filter counts add exactly the rows shown', () => {
   const cards = [
-    card({ id: 'a', stage: 'half_down', payables: { owed: 1000, items: 1, unpaid: 1, missing: 0 }, eta: '2026-10-01' }),
-    card({ id: 'b', sale: 2000, profit: -100, stage: 'paid', eta: 'Delivered', payables: { owed: 0, items: 1, unpaid: 0, missing: 0 } }),
-    card({ id: 'c', windows: null, profit: null, payables: { owed: 0, items: 1, unpaid: 1, missing: 1 } }),
+    card({ id: 'a', stage: 'half_down', quote: 'Q1', po: 'YA-1', payables: { owed: 1000, items: 1, unpaid: 1, missing: 0 }, eta: '2026-10-01' }),
+    card({ id: 'b', sale: 2000, profit: -100, stage: 'paid', quote: 'Q2', po: 'YA-2', eta: 'Delivered', payables: { owed: 0, items: 1, unpaid: 0, missing: 0 } }),
+    card({ id: 'c', windows: null, profit: null, stage: 'waiting_on_payment', payables: { owed: 0, items: 1, unpaid: 1, missing: 1 } }),
   ];
   const all = headerFigures(cards, TODAY);
   assert.deepEqual([all.sold, all.customersOwe, all.weOwe, all.profit, all.apMissing], [8000, 4500, 1000, 1425.5, 1]);
   const counts = purchasingFilterCounts(cards, TODAY);
-  assert.deepEqual(counts, { all: 3, open_orders: 2, needs_eta: 1, eta_late: 1, deposit_due: 1, supplier_unpaid: 2, missing_cost: 1 });
+  assert.deepEqual(counts, { all: 3, quoted: 2, po_placed: 2, eta_late: 1, needs_eta: 1, waiting_payment: 1, supplier_unpaid: 2, missing_cost: 1 });
   for (const [key, n] of Object.entries(counts)) assert.equal(applyPurchasingFilter(cards, key, TODAY).length, n, key);
   const unpaid = headerFigures(applyPurchasingFilter(cards, 'supplier_unpaid', TODAY), TODAY);
   assert.deepEqual([unpaid.jobs, unpaid.sold, unpaid.weOwe], [2, 6000, 1000]);
   assert.equal(applyPurchasingFilter(cards, 'nonsense', TODAY).length, 3);
+  const grid = cards.map(cardFigures);
+  assert.equal(grid.reduce((n, f) => n + f.sale, 0), all.sold, 'the Sold figure is the sum of the grid Sale cells');
+  assert.equal(grid.reduce((n, f) => n + f.profit, 0), all.profit);
+});
+
+test('short ETAs, multi-scope ranges and ETA sort order', () => {
+  assert.deepEqual(etaShort('2026-11-09', TODAY), { text: 'Nov 9 · 16d', late: false });
+  assert.deepEqual(etaShort('2026-10-13', TODAY), { text: 'Oct 13 · 11d late', late: true });
+  assert.deepEqual(etaShort('Delivered', TODAY), { text: 'Delivered', late: false });
+  assert.deepEqual(etaShort(null, TODAY), { text: '', late: false });
+  assert.deepEqual(etaRange(['2026-08-22', '2026-08-23'], TODAY), { text: '62–63d late', late: true });
+  assert.deepEqual(etaRange(['2026-08-22', '2026-08-22'], TODAY), { text: 'Aug 22 · 63d late', late: true });
+  const order = sortCards([
+    card({ id: 'del', eta: 'Delivered' }), card({ id: 'none' }), card({ id: 'late', eta: '2026-10-01' }), card({ id: 'soon', eta: '2026-11-01' }),
+  ]).map((c) => c.job.id);
+  assert.deepEqual(order, ['late', 'soon', 'none', 'del']);
+  const bySale = sortCards([card({ id: 'x', sale: 100 }), card({ id: 'y', sale: 900 })], { key: 'sale', dir: 'desc' }).map((c) => c.job.id);
+  assert.deepEqual(bySale, ['y', 'x']);
 });
 
 test('multi-scope jobs add their scope rows to Sold and Est. profit', () => {
