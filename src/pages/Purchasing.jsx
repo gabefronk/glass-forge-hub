@@ -139,7 +139,6 @@ function PurchasingWorkspace() {
           <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: C.textFaint }} />
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search job, quote, PO, supplier" aria-label="Search purchasing" className="min-h-11 w-full rounded-[9px] bg-white pl-[38px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)]" style={{ border: `1px solid ${C.border}`, color: C.text }} />
         </label>
-        <Link to="/purchasing/new-sale" className="inline-flex min-h-11 shrink-0 items-center rounded-[9px] px-4 text-[13.5px] font-bold text-white" style={{ backgroundColor: '#248B88' }}>New sale</Link>
       </div>
 
       {error && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: 'var(--gf-error-bg)', color: 'var(--gf-error)', border: '1px solid var(--gf-error-border)' }}>{error}</p>}
