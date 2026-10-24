@@ -5,7 +5,8 @@ import { ExternalLink, Landmark } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { C } from "@/lib/feeUI";
-import { aggregateJobMoney, canLoadJobMoney } from "@/lib/jobMoneyPanel";
+import { aggregateJobMoney, canLoadJobMoney, jobMoneyHeadline } from "@/lib/jobMoneyPanel";
+import { denverDate } from "@/lib/feeMath";
 import { procurementPath } from "@/lib/procurementRoutes";
 import { ticketLabel } from "@/lib/jobHistory";
 import JobInvoices from "@/components/jobs/JobInvoices";
@@ -51,8 +52,14 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
       base44.entities.VendorOrders.filter(byJob, "-created_date", 500),
       base44.entities.FeeLines.filter(byJob, "-job_date", 5000),
       base44.entities.CalendarEvents.filter(byJob, "-event_date", 5000),
-    ]).then(([budgets, purchaseOrders, vendorOrders, feeLines, calendarEvents]) => {
-      if (active) setState({ loading: false, error: "", data: aggregateJobMoney(ids, { budgets, purchaseOrders, feeLines, calendarEvents, vendorOrders }) });
+      base44.entities.Jobs.filter({ id: jobId }, "-created_date", 1).catch(() => []),
+      // Owner-entered sale / labor (Purchasing "Money"); the headline shows without it.
+      base44.functions.invoke("purchasingMoney", { action: "list" }).then((r) => (r?.data ?? r)?.inputs || []).catch(() => []),
+    ]).then(([budgets, purchaseOrders, vendorOrders, feeLines, calendarEvents, jobs, moneyInputs]) => {
+      if (!active) return;
+      const data = aggregateJobMoney(ids, { budgets, purchaseOrders, feeLines, calendarEvents, vendorOrders });
+      data.headline = jobMoneyHeadline(jobId, ids, { jobs, budgets, purchaseOrders, vendorOrders, moneyInputs, today: denverDate() });
+      setState({ loading: false, error: "", data });
     }).catch(() => {
       if (active) setState({ loading: false, error: "Financial records could not be loaded.", data: null });
     });
@@ -76,8 +83,15 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
       {data && <>
         {data.budgetWarnings?.length > 0 && <p className="rounded-lg bg-amber-50 p-3 text-[12px] text-amber-900">Budget totals need review: {data.budgetWarnings.join(' ')}</p>}
         <div className="grid grid-cols-2 gap-2">
-          <Metric label="Budget cost estimate" value={data.totals.budgetCost} note="Included scopes only; incomplete totals are withheld" />
-          <Metric label="Budget customer sell" value={data.totals.budgetSell} note="Estimate / entered sell, not cash" />
+          {data.headline ? <>
+            <Metric label="Cost · materials incl tax" value={data.headline.cost} note={`Same as the Purchasing row${data.headline.partial ? "; a scope has no figure yet" : ""}`} />
+            <Metric label="Labor & material" value={data.headline.laborMaterial} note="Owner-entered, else budget review" />
+            <Metric label="Sale price" value={data.headline.sale} note="Owner-entered, else budget target sell" />
+            <Metric label="Profit estimate" value={data.headline.profit} note="Sale − cost − labor & material" />
+          </> : <>
+            <Metric label="Budget cost estimate" value={data.totals.budgetCost} note="Included scopes only; incomplete totals are withheld" />
+            <Metric label="Budget customer sell" value={data.totals.budgetSell} note="Estimate / entered sell, not cash" />
+          </>}
           <Metric label="PO dealer amount" value={data.totals.poDealer} note="Ordered amount; not proof of payment" />
           <Metric label="PO customer amount" value={data.totals.poCustomer} note="PO amount; not an invoice receipt" />
           <Metric label="Vendor bills incurred" value={null} note="Not tracked - vendor orders have no invoice/bill field, so actual incurred cost is unknown rather than inferred from order or payment status" />
@@ -87,7 +101,7 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
           <Metric label="Fee share on YA-paid work" value={data.totals.feePaid} note="YA received payment; does not confirm your fee was paid" />
         </div>
 
-        <JobInvoices jobIds={jobIds} jobId={jobId} budgetSell={data.totals.budgetSell} />
+        <JobInvoices jobIds={jobIds} jobId={jobId} budgetSell={data.headline?.sale ?? data.totals.budgetSell} />
 
         <div>
           <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Budget / estimate sources</h3><RecordLink to={procurementPath(jobId)}>Review job budget</RecordLink></div>
