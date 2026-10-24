@@ -6,6 +6,7 @@ import { isPurchaseOrderOwner } from '@/lib/purchaseOrderAccess';
 import PageNotFound from '@/lib/PageNotFound';
 import { C } from '@/lib/feeUI';
 import { PageShell, PageHero, heroBtn, heroPrimary, heroSecondary } from '@/components/PageShell';
+import UnlinkedMoneyRecords from '@/components/jobs/UnlinkedMoneyRecords';
 
 export default function UnlinkedJobRecords() {
   const { user } = useAuth();
@@ -77,7 +78,7 @@ function RepairPage() {
       <PageHero
         eyebrow="Glass Forge · Admin"
         title="Unlinked job records"
-        sub="Calendar events and field reports with no job. Confident matches from invoicing lines can be linked in one step; nothing already linked is ever changed."
+        sub="Money records, calendar events and field reports with no job. Every record should belong to a job so budgets, purchasing and invoices stay in sync; nothing already linked is ever changed."
         actions={<button type="button" disabled={busy} onClick={() => runBackfill(true)} className={`${heroBtn} disabled:opacity-50`} style={heroSecondary}><Link2 className="h-4 w-4" />Check confident links</button>}
       />
       <div className="mt-5 flex flex-col gap-5">
@@ -91,6 +92,7 @@ function RepairPage() {
             <button type="button" disabled={busy || !(preview.calendar_events.linked_now + preview.field_reports.linked_now)} onClick={() => runBackfill(false)} className={`${heroBtn} disabled:opacity-50`} style={heroPrimary}>Link them</button>
           </div>
         )}
+        <UnlinkedMoneyRecords />
         <div className="grid gap-5 xl:grid-cols-2">
           {section('Field reports', data.field_reports || [])}
           {section('Calendar events', data.calendar_events || [])}
