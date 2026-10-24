@@ -73,8 +73,9 @@ test('the register lists labor billing invoices with live line totals, open firs
   assert.deepEqual(register.map((i) => [i.number, i.status]), [['1042', 'open'], ['1050', 'paid']]);
   assert.deepEqual(register[0].months, ['2026-09', '2026-10']);
   assert.equal(register[0].labor, 500, 'live lines win over the stored total');
-  assert.equal(register[1].labor, 100, 'stored totals stand in when lines are not loaded');
+  assert.equal(register[1].lineCount, 0, 'an invoice whose lines were reopened shows 0 lines');
   assert.deepEqual(openInvoiceTotals(register), { count: 1, labor: 500 });
+  assert.equal(invoiceRegister(invoices).find((i) => i.number === '1050').labor, 100, 'stored totals stand in when lines are not loaded');
 });
 
 test('a job shows its customer invoices and what is still owed', () => {
