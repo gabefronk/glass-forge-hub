@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, ChevronDown } from "lucide-react";
 import { computeFeeAmt, computeLaborAmt, formatMoney } from "@/lib/feeMath";
-import { crewName, noteTokens } from "@/lib/feeUI";
+import { crewName } from "@/lib/feeUI";
 import { shortDay } from "@/lib/invoiceGrid";
 import { STATUS_LABELS } from "@/lib/invoiceMoneyBar";
 import { deliveryRouting } from "@/lib/lineProduct";
