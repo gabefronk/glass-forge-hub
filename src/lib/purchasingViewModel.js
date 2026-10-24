@@ -228,7 +228,7 @@ export function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
 // ONE deterministic budget (pickDisplayBudget) — the same budget rough/sale use
 // (card.chosenBudget) — so the three tiles never disagree on scope. Multiple
 // scopes → one candidate + alternatives. PO-only job (no budget) falls back to
-// the job's PO amount (no tax verified). Conflict → po_conflict label.
+// the job's PO amount plus use tax. Conflict → po_conflict label.
 export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders = [], { conflict = false } = {}) {
   const sorted = sortedDisplayPool(jobBudgets);
   if (!sorted.length) {
