@@ -241,7 +241,6 @@ export default function JobDetail() {
                   ? <PaymentStatusDropdown job={job} plain onChanged={() => loadAll({ quiet: true })} />
                   : (job.payment_status ? <PaymentStatusChip job={job} /> : null)}
                 onAddVisit={JOB_CREATE_ENABLED && isJobCalendarOwner(user) ? () => setShowCreateEvent(true) : null}
-                setupHref={owner ? `/jobs/${id}/setup` : null}
                 budgetHref={owner ? procurementPath(id) : null}
                 menuExtra={(JOB_REPORT_EMAIL_ENABLED || owner || isAgentCenterOwner(user)) ? (
                   <>
@@ -277,7 +276,6 @@ export default function JobDetail() {
             extra={
               <>
                 {JOB_CREATE_ENABLED && isJobCalendarOwner(user) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
-                {owner ? <Link to={`/jobs/${id}/setup`} className={heroLinkClass} style={heroLinkStyle}>Setup sheet</Link> : null}
                 {owner ? <Link to={procurementPath(id)} className={heroLinkClass} style={heroLinkStyle}>Budget & Orders</Link> : null}
                 {(owner || isAgentCenterOwner(user)) ? <DeleteJobButton job={job} onDeleted={() => navigate("/jobs")} className={heroLinkClass} style={{ backgroundColor: "rgba(164,52,50,.16)", color: "#f1b9b3", border: "1px solid rgba(241,185,179,.3)" }} /> : null}
               </>
