@@ -136,7 +136,7 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
         <span className="font-mono-num-bold text-right text-[13px]" style={{ color: "var(--gf-ink)" }}>${formatMoney(total.labor)}</span>
         <span />
         <span className="font-mono-num-bold text-right text-[13px]" style={{ color: "var(--gf-ink)" }}>${formatMoney(total.fee)}</span>
-        <span className="hidden text-[11px] font-medium lg:block" style={{ color: "var(--gf-ink-2)" }}>J / K move · X selects</span>
+        <span><span className="hidden text-[11px] font-medium lg:inline" style={{ color: "var(--gf-ink-2)" }}>J / K move · X selects</span></span>
         <span className={GRID_WIDE} />
         <span />
       </div>
