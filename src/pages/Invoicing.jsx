@@ -1,4 +1,4 @@
-import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
+import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
 import { refreshMonth } from "@/lib/refreshMonth";
 import { invoicingStats } from "@/lib/invoicingStats";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
@@ -10,7 +10,7 @@ import { validMonth } from "../../base44/shared/procurementCore.js";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
 import { computeFeeAmt, computeLaborAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
-import { isReady, isMatchBlocked, isReportBlocked, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
+import { isReady, isReportBlocked, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import InvoiceHeader from "@/components/invoicing/InvoiceHeader";
 import InvoiceMoneyBar from "@/components/invoicing/InvoiceMoneyBar";
 import { moneyBarSegments, needsDecision, isZeroToConfirm, waitingOnReport } from "@/lib/invoiceMoneyBar";
