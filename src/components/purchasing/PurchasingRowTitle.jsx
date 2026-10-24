@@ -18,7 +18,9 @@ const clean = (s) => String(s || "").replace(/\s+/g, " ").trim();
 // in place. Enter saves, Escape cancels. A renamed job keeps its old name as an alias (renameJob), so
 // past visits and files still match it - which is why the full record is read
 // before saving instead of patching the trimmed card record.
-export default function PurchasingRowTitle({ job, onSaved }) {
+// compact: the Purchasing row already shows the name, so the open row shows a small
+// "Rename" button instead of repeating it.
+export default function PurchasingRowTitle({ job, onSaved, compact = false }) {
   const [editing, setEditing] = useState(false);
   const [builder, setBuilder] = useState("");
   const [name, setName] = useState("");
@@ -51,6 +53,14 @@ export default function PurchasingRowTitle({ job, onSaved }) {
       setSaving(false);
     }
   };
+
+  if (!editing && compact) {
+    return (
+      <button type="button" onClick={start} aria-label={`Rename ${rowTitle(job)}`}
+        className="inline-flex h-9 items-center rounded-[9px] border bg-white px-3 text-[13px] font-medium hover:bg-[#F6F3EC]"
+        style={{ borderColor: "#E2DCD1", color: "#34403F" }}>Rename</button>
+    );
+  }
 
   if (!editing) {
     return (
