@@ -26,11 +26,6 @@ import NeedsConfirmationList from "@/components/invoicing/NeedsConfirmationList"
 import RecordInvoiceDialog from "@/components/invoicing/RecordInvoiceDialog";
 import InvoiceRegister from "@/components/invoicing/InvoiceRegister";
 import { laborInvoicePlan, linePatches, reopenPatch, paymentLinePatches, priorState, invoiceRegister, isCoveredZeroReview } from "@/lib/invoiceRegister";
-import DateRangeBar from "@/components/invoicing/dashboard/DateRangeBar";
-import DashboardCards from "@/components/invoicing/dashboard/DashboardCards";
-import RevenueSplitPanel from "@/components/invoicing/dashboard/RevenueSplitPanel";
-import DashboardLineList from "@/components/invoicing/dashboard/DashboardLineList";
-import { resolveDashboardRange, dashboardData, inDashboardRange, dashboardMonthGroups } from "@/lib/invoiceDashboard";
 import { useAuth } from "@/lib/AuthContext";
 
 export default function Invoicing() {
@@ -44,21 +39,15 @@ export default function Invoicing() {
   const changeMonth = value => { setMonth(value); const p = new URLSearchParams(params); p.set('month', value); setParams(p); };
   const [feeLines, setFeeLines] = useState([]);
   const [loading, setLoading] = useState(true);
-  // One-time default: everyone lands on the new Dashboard once; after that their
-  // stored choice wins (flag set on the first persist below).
-  const [view, setView] = useState(() =>
-    localStorage.getItem("inv_view_migrated") === "1"
-      ? localStorage.getItem("inv_view") || "dashboard"
-      : "dashboard"
-  );
+  // Lines, Jobs or Invoices; the last choice is remembered. (The old Dashboard view was
+  // retired Oct 24: its cards repeated the money bar.)
+  const [view, setView] = useState(() => {
+    const stored = localStorage.getItem("inv_view");
+    return ["lines", "jobs", "invoices"].includes(stored) ? stored : "lines";
+  });
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(() => localStorage.getItem("inv_sort") || "date");
-  const [hideZeros, setHideZeros] = useState(() => localStorage.getItem("inv_hideZeros") === "true");
-  // The Dashboard range follows the header month unless a different range is picked.
-  const [dashPreset, setDashPreset] = useState("this_month");
-  const [dashCustom, setDashCustom] = useState({ start: "", end: "" });
-  const [dashIncludeDrafts, setDashIncludeDrafts] = useState(() => localStorage.getItem("inv_dash_inc_drafts") !== "false");
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [undo, setUndo] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -85,18 +74,8 @@ export default function Invoicing() {
   const [deletingRows, setDeletingRows] = useState(false);
 
   useEffect(() => { setSelectedIds(new Set()); setDetailRow(null); setUndo(null); lastClickedIndex.current = null; clearTimeout(undoTimer.current); }, [month, focusedJobId]);
-  useEffect(() => { if (focusedJobId && view === "dashboard") setView("lines"); }, [focusedJobId, view]);
-  useEffect(() => { localStorage.setItem("inv_view", view); localStorage.setItem("inv_view_migrated", "1"); }, [view]);
+  useEffect(() => { localStorage.setItem("inv_view", view); }, [view]);
   useEffect(() => { localStorage.setItem("inv_sort", sort); }, [sort]);
-  useEffect(() => { localStorage.setItem("inv_hideZeros", String(hideZeros)); }, [hideZeros]);
-  useEffect(() => {
-    if (month === currentMonthStr()) { setDashPreset("this_month"); return; }
-    const [yy, mm] = month.split("-").map(Number);
-    const last = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
-    setDashCustom({ start: `${month}-01`, end: `${month}-${String(last).padStart(2, "0")}` });
-    setDashPreset("custom");
-  }, [month]);
-  useEffect(() => { localStorage.setItem("inv_dash_inc_drafts", String(dashIncludeDrafts)); }, [dashIncludeDrafts]);
   useEffect(() => { localStorage.setItem("inv_reportAttached", JSON.stringify([...reportAttached])); }, [reportAttached]);
 
   // Ignore responses from an older load (e.g. after quickly switching months).
@@ -165,7 +144,6 @@ export default function Invoicing() {
     else if (filter === "zero_confirm") rows = rows.filter(isZeroToConfirm);
     else if (filter === "needs_report") rows = rows.filter((r) => waitingOnReport(r, reportStatusMap));
     else if (filter === "billed") rows = rows.filter((r) => r.billed_to_bfs);
-    if (hideZeros) rows = rows.filter((r) => computeFeeAmt(r) !== 0 || isMatchBlocked(r) || r.fee_type === "profit_split");
     if (search.trim()) {
       const q = search.toLowerCase();
       rows = rows.filter((r) =>
@@ -175,7 +153,7 @@ export default function Invoicing() {
       );
     }
     return rows;
-  }, [monthRows, filter, hideZeros, search, reportStatusMap, supersededSet]);
+  }, [monthRows, filter, search, reportStatusMap, supersededSet]);
 
   // Counted over the rows the lists show (superseded and folded twins are hidden).
   const filterCounts = useMemo(() => {
@@ -192,20 +170,6 @@ export default function Invoicing() {
 
   const heroStats = useMemo(() => invoicingStats(monthRows, reportStatusMap, supersededSet), [monthRows, reportStatusMap, supersededSet]);
 
-  // Dashboard view: same FeeLines rows over a date range instead of one month.
-  const dashToday = denverDate();
-  const dashRange = useMemo(() => resolveDashboardRange(dashPreset, dashToday, dashCustom.start, dashCustom.end), [dashPreset, dashCustom.start, dashCustom.end, dashToday]);
-  const dashData = useMemo(() => dashboardData(billingRows, { range: dashRange, reportStatusMap, supersededSet, today: dashToday, includeDrafts: dashIncludeDrafts }), [billingRows, dashRange, reportStatusMap, supersededSet, dashToday, dashIncludeDrafts]);
-  const dashGroups = useMemo(() => {
-    let rows = billingRows.filter((r) => inDashboardRange(r, dashRange) && !(r.customer_collection_state && r.customer_collection_state !== "paid") && !supersededSet.has(r.id) && !r._companion_folded);
-    if (hideZeros) rows = rows.filter((r) => computeFeeAmt(r) !== 0 || isMatchBlocked(r) || r.fee_type === "profit_split");
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      rows = rows.filter((r) => [r.line_description, r.job_name_raw, r.job_name_norm, r.po_number, r.oe_number, r.note_text].filter(Boolean).some((s) => s.toLowerCase().includes(q)));
-    }
-    return dashboardMonthGroups(rows);
-  }, [billingRows, dashRange, supersededSet, hideZeros, search]);
-  const dashLineCount = useMemo(() => dashGroups.reduce((n, g) => n + g.rows.length, 0), [dashGroups]);
 
   const selectedFee = useMemo(() => {
     return monthRows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + (computeFeeAmt(r) || 0), 0);
@@ -613,7 +577,7 @@ export default function Invoicing() {
   const currentMonth = currentMonthStr();
   const isPast = month < currentMonth;
   const isFutureM = month > currentMonth;
-  const showEmptyState = view !== "dashboard" && monthRows.length === 0 && (isPast || isFutureM);
+  const showEmptyState = monthRows.length === 0 && (isPast || isFutureM);
 
   if (loading) {
     return (
@@ -660,21 +624,6 @@ export default function Invoicing() {
           </div>
         ) : (
           <>
-            {view === "dashboard" && !focusedJobId && (
-              <>
-                <DateRangeBar
-                  preset={dashPreset}
-                  onPresetChange={setDashPreset}
-                  onCustomChange={(start, end) => setDashCustom({ start, end })}
-                  rangeLabel={dashRange.label}
-                  rangeStart={dashRange.start}
-                  rangeEnd={dashRange.end}
-                />
-                <DashboardCards buckets={dashData.buckets} rangeLabel={dashRange.label} />
-              </>
-            )}
-            {!(view === "dashboard" && !focusedJobId) && (
-              <>
             {unprocessedCount > 0 && !focusedJobId && (
               <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
             )}
@@ -683,8 +632,6 @@ export default function Invoicing() {
               monthEarnedTotal={heroStats.monthEarnedTotal}
               monthEarnedCount={heroStats.monthEarnedCount}
               month={month}
-              active={view === "invoices" ? "invoices_open" : filter}
-              onSelect={(s) => { if (s.invoices) setView("invoices"); else { if (view === "invoices") setView("lines"); setFilter(s.key); } }}
               notes={(heroStats.scheduledCount > 0 || heroStats.splitReviewCount > 0 || heroStats.noSourceDataCount > 0) && (
                 <p className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-1.5 text-[12px]" style={{ color: "#4A5652" }}>
                   {heroStats.scheduledCount > 0 && <span>{heroStats.scheduledCount} scheduled {heroStats.scheduledCount === 1 ? "line" : "lines"} not counted until done.</span>}
@@ -703,11 +650,9 @@ export default function Invoicing() {
               supersededSet={supersededSet}
             />
             </details>
-              </>
-            )}
             <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "16px" }}>
             <InvoiceToolbar
-              dashboardMode={(view === "dashboard" && !focusedJobId) || view === "invoices"}
+              invoicesMode={view === "invoices"}
               search={search}
               onSearchChange={setSearch}
               searchRef={searchRef}
@@ -718,34 +663,12 @@ export default function Invoicing() {
               filterCounts={filterCounts}
               sort={sort}
               onSortChange={setSort}
-              hideZeros={hideZeros}
-              onHideZerosChange={() => setHideZeros(!hideZeros)}
-              lineCount={view === "dashboard" && !focusedJobId ? dashLineCount : filteredRows.length}
+              lineCount={filteredRows.length}
               readyCount={heroStats.readyCount}
               onSelectAllReady={handleSelectAllReady}
             />
             {view === "invoices" ? (
               <InvoiceRegister register={register} onRecordPayment={handleRecordPayment} onVoid={handleVoidInvoice} />
-            ) : view === "dashboard" && !focusedJobId ? (
-              <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_340px]" style={{ alignItems: "start" }}>
-                <DashboardLineList
-                  groups={dashGroups}
-                  onOpenDetails={setDetailRow}
-                  reportStatusMap={reportStatusMap}
-                  supersededSet={supersededSet}
-                  today={dashToday}
-                />
-                <RevenueSplitPanel
-                  split={dashData.split}
-                  rangeLabel={dashRange.label}
-                  includeDrafts={dashIncludeDrafts}
-                  onIncludeDraftsChange={setDashIncludeDrafts}
-                  manuallyAdjusted={dashData.manuallyAdjusted}
-                  onReview={() => setView("lines")}
-                  onViewSplitByJob={() => setView("jobs")}
-                  onPartnerStatements={handleExportPdf}
-                />
-              </div>
             ) : view === "jobs" ? (
               <JobsView
                 rows={filteredRows}
@@ -769,7 +692,7 @@ export default function Invoicing() {
                 onOpenDetails={setDetailRow}
                 reportAttached={reportAttached}
                 onToggleDay={toggleDay}
-                onClearFilters={() => { setFilter("all"); setSearch(""); setHideZeros(false); }}
+                onClearFilters={() => { setFilter("all"); setSearch(""); }}
                 editRequestId={editRequestId}
                 onEditRequestHandled={clearEditRequest}
                 onReady={handleReady}
