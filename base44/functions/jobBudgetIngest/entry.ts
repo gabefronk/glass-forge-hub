@@ -1,5 +1,4 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
-import { unzipSync, zipSync, strFromU8, strToU8 } from 'npm:fflate@0.8.3';
 import { computeJobBudget } from '../../shared/jobBudgetMath.js';
 import { parseAmscoQuoteText, normalizeVendorQuote, quoteMatchTokens } from '../../shared/vendorQuoteParse.js';
 import { normalizeCustomer } from '../../shared/jobIdentity.js';
