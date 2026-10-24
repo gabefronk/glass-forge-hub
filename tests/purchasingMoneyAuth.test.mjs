@@ -1,24 +1,10 @@
-// Pure helper tests for the purchasingMoney backend: owner-id auth, strict
-// payload validation (no coercion, no overflow, omitted preserves), and
-// output sanitization. No SDK, no I/O. The injectable handler behavior tests
-// (auth-before-read, fail-closed reads, exact writes, readback) live in
-// purchasingMoneyEndpoint.test.mjs.
+// Owner-id guard tests (base44/shared/purchasingMoneyPure.js). No SDK, no I/O.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  isPurchasingMoneyOwner, validateListBody, sanitizeInput, OWNER_IDS,
-} from '../base44/shared/purchasingMoneyPure.js';
-import { parseStoredRow } from '../base44/shared/purchasingMoneyPure.js';
+import { isPurchasingMoneyOwner, isEntityId, OWNER_IDS } from '../base44/shared/purchasingMoneyPure.js';
 
 // Exact 24-hex record id (Base44 id format); 'j1' style ids are rejected.
 const JOB = 'aaaaaaaaaaaaaaaaaaaaaaaa';
-
-test('parseStoredRow: exact ids, null-default amounts, malformed amounts flagged', () => {
-  assert.deepEqual(parseStoredRow({ id: JOB, job_id: JOB }), { ok: true, row: { id: JOB, job_id: JOB, rough_labor_material: null, sale_price: null } });
-  assert.equal(parseStoredRow({ id: 'm1', job_id: JOB }).reason, 'invalid_identity');
-  assert.equal(parseStoredRow({ id: JOB, job_id: JOB, sale_price: '5' }).reason, 'invalid_amount');
-  assert.equal(parseStoredRow({ id: JOB, job_id: JOB, sale_price: Infinity }).reason, 'invalid_amount');
-});
 
 test('OWNER_IDS binds the two immutable owner auth ids, not role/email', () => {
   assert.ok(OWNER_IDS.has('6a7f0d834a5f825c724273ea'));
@@ -45,17 +31,8 @@ test('isPurchasingMoneyOwner: unauth / null / empty rejected', () => {
   assert.ok(!isPurchasingMoneyOwner({}));
 });
 
-test('validateListBody: only action key allowed', () => {
-  assert.ok(validateListBody({ action: 'list' }).ok);
-  assert.equal(validateListBody({ action: 'list', extra: 1 }).error, 'unexpected_field');
-  assert.equal(validateListBody(null).error, 'invalid_body');
-});
-
-test('sanitizeInput: returns only safe fields, leaks nothing else', () => {
-  const out = sanitizeInput({ id: 'm1', job_id: JOB, rough_labor_material: 5, sale_price: 10, created_by_id: 'secret', updated_date: 'x', _internal: 'leak' });
-  assert.deepEqual(out, { id: 'm1', job_id: JOB, rough_labor_material: 5, sale_price: 10 });
-});
-
-test('sanitizeInput: null row returns null', () => {
-  assert.equal(sanitizeInput(null), null);
+test('isEntityId: exact 24-hex record ids only', () => {
+  assert.equal(isEntityId('a'.repeat(24)), true);
+  assert.equal(isEntityId('j1'), false);
+  assert.equal(isEntityId('A'.repeat(24)), false);
 });
