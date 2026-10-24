@@ -253,10 +253,13 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
   const c = fig.calculated || {};
   const i = budget.inputs || {};
   const active = activeBudgets(allBudgets.filter((b) => b.job_id === budget.job_id)).some((b) => b.id === budget.id);
-  const [chipText, chipTone] = budgetChip(budget, active);
+  // A job-money budget (no vendor quote yet, e.g. the Oct 24 move off the old money table):
+  // sale and labor only - its windows cost comes from the PO, so no margin math is shown.
+  const noQuote = num(i.material_true_cost) == null && !budget.quote_number && !budget.quote;
+  const [chipText, chipTone] = noQuote ? ['Job money · no vendor quote', 'plain'] : budgetChip(budget, active);
   const supplier = budget.vendor || budget.manufacturer || '';
   const sub = [supplier, budget.quote_number ? `Quote ${budget.quote_number}` : '', budget.openings_qty > 0 ? `${budget.openings_qty} unit${budget.openings_qty === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
-  const statusLine = fig.warnings.length ? fig.warnings[0] : budget.budget_usage === 'draft' ? 'Draft - review the numbers and your customer price, then include this scope.' : '';
+  const statusLine = noQuote ? '' : fig.warnings.length ? fig.warnings[0] : budget.budget_usage === 'draft' ? 'Draft - review the numbers and your customer price, then include this scope.' : '';
   const sourceHref = safeHref(budget.source_pdf_url) || fileHref(budget.drive_quote_file_id);
   const privateSource = !sourceHref && /^[a-f0-9]{64}$/.test(budget.source_sha256 || '') ? budget.id : null;
   const fHref = safeHref(job?.drive_job_folder_url) || folderHref(job?.drive_job_folder_id || budget.drive_job_folder_id);
@@ -278,7 +281,19 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
         {!editing && <button type="button" onClick={() => onEdit({ mode: 'numbers', budget_id: budget.id })} className={BTN} style={PRI}><Pencil className="h-3.5 w-3.5" />Edit numbers</button>}
       </div>
       {statusLine ? <p className="rounded-[9px] px-3 py-2 text-[12.5px] font-medium" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>{statusLine}</p> : null}
-      {editing ? editorPanel : (
+      {editing ? editorPanel : noQuote ? (
+        <div className="flex flex-col gap-3">
+          <div className="grid max-w-[460px] grid-cols-2 gap-2">
+            {[['Customer sell', lineMoney(i.actual_total_sell)], ['Labor (sub pay)', lineMoney(i.labor_cost_sub_pay)]].map(([k, v]) => (
+              <div key={k} className="flex flex-col gap-0.5 rounded-[10px] p-3" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
+                <span className="text-[11px] font-medium" style={{ color: INK2 }}>{k}</span>
+                <span className="text-[17px] font-bold tabular-nums tracking-[-0.02em]">{v}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[12.5px]" style={{ color: INK2 }}>No vendor quote on this job, so its windows cost comes from the PO above. Drop the supplier quote below to see the full cost build-up and margin.</p>
+        </div>
+      ) : (
         <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           <div className="flex flex-col">
             <span className={EYEBROW} style={{ color: INK2, paddingBottom: 4 }}>Cost build-up</span>
