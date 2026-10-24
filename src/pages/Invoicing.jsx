@@ -14,7 +14,8 @@ import { Receipt } from "lucide-react";
 import { computeFeeAmt, computeLaborAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 import { isReady, isMatchBlocked, isReportBlocked, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import InvoiceHeader from "@/components/invoicing/InvoiceHeader";
-import InvoiceSummary from "@/components/invoicing/InvoiceSummary";
+import InvoiceMoneyBar from "@/components/invoicing/InvoiceMoneyBar";
+import { moneyBarSegments, needsDecision, isZeroToConfirm, waitingOnReport } from "@/lib/invoiceMoneyBar";
 import InvoiceToolbar from "@/components/invoicing/InvoiceToolbar";
 import LineList from "@/components/invoicing/LineList";
 import JobsView from "@/components/invoicing/JobsView";
@@ -56,7 +57,8 @@ export default function Invoicing() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(() => localStorage.getItem("inv_sort") || "date");
   const [hideZeros, setHideZeros] = useState(() => localStorage.getItem("inv_hideZeros") === "true");
-  const [dashPreset, setDashPreset] = useState(() => localStorage.getItem("inv_dash_preset") || "this_month");
+  // The Dashboard range follows the header month unless a different range is picked.
+  const [dashPreset, setDashPreset] = useState("this_month");
   const [dashCustom, setDashCustom] = useState({ start: "", end: "" });
   const [dashIncludeDrafts, setDashIncludeDrafts] = useState(() => localStorage.getItem("inv_dash_inc_drafts") !== "false");
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -89,7 +91,13 @@ export default function Invoicing() {
   useEffect(() => { localStorage.setItem("inv_view", view); localStorage.setItem("inv_view_migrated", "1"); }, [view]);
   useEffect(() => { localStorage.setItem("inv_sort", sort); }, [sort]);
   useEffect(() => { localStorage.setItem("inv_hideZeros", String(hideZeros)); }, [hideZeros]);
-  useEffect(() => { localStorage.setItem("inv_dash_preset", dashPreset); }, [dashPreset]);
+  useEffect(() => {
+    if (month === currentMonthStr()) { setDashPreset("this_month"); return; }
+    const [yy, mm] = month.split("-").map(Number);
+    const last = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+    setDashCustom({ start: `${month}-01`, end: `${month}-${String(last).padStart(2, "0")}` });
+    setDashPreset("custom");
+  }, [month]);
   useEffect(() => { localStorage.setItem("inv_dash_inc_drafts", String(dashIncludeDrafts)); }, [dashIncludeDrafts]);
   useEffect(() => { localStorage.setItem("inv_reportAttached", JSON.stringify([...reportAttached])); }, [reportAttached]);
 
@@ -155,8 +163,9 @@ export default function Invoicing() {
   const filteredRows = useMemo(() => {
     let rows = monthRows.filter((r) => !supersededSet.has(r.id));
     if (filter === "ready") rows = rows.filter((r) => isReady(r, reportStatusMap, supersededSet));
-    else if (filter === "needs_review") rows = rows.filter(isMatchBlocked);
-    else if (filter === "needs_report") rows = rows.filter((r) => isReportBlocked(r, reportStatusMap));
+    else if (filter === "needs_review") rows = rows.filter(needsDecision);
+    else if (filter === "zero_confirm") rows = rows.filter(isZeroToConfirm);
+    else if (filter === "needs_report") rows = rows.filter((r) => waitingOnReport(r, reportStatusMap));
     else if (filter === "billed") rows = rows.filter((r) => r.billed_to_bfs);
     if (hideZeros) rows = rows.filter((r) => computeFeeAmt(r) !== 0 || isMatchBlocked(r) || r.fee_type === "profit_split");
     if (search.trim()) {
@@ -176,8 +185,9 @@ export default function Invoicing() {
     return {
       all: shown.length,
       ready: shown.filter((r) => isReady(r, reportStatusMap, supersededSet)).length,
-      needs_review: shown.filter(isMatchBlocked).length,
-      needs_report: shown.filter((r) => isReportBlocked(r, reportStatusMap)).length,
+      needs_review: shown.filter(needsDecision).length,
+      zero_confirm: shown.filter(isZeroToConfirm).length,
+      needs_report: shown.filter((r) => waitingOnReport(r, reportStatusMap)).length,
       billed: shown.filter((r) => r.billed_to_bfs).length,
     };
   }, [monthRows, reportStatusMap, supersededSet]);
@@ -460,6 +470,7 @@ export default function Invoicing() {
     const ids = new Set(feeLines.filter((r) => r.job_id === focusedJobId && r.invoice_id).map((r) => r.invoice_id));
     return all.filter((i) => ids.has(i.id));
   }, [invoices, feeLines, focusedJobId]);
+  const moneySegments = useMemo(() => moneyBarSegments(monthRows, reportStatusMap, supersededSet, register), [monthRows, reportStatusMap, supersededSet, register]);
 
   const handleSetFeePctSelected = useCallback((pct) => {
     if (deleting.current) return;
@@ -669,14 +680,21 @@ export default function Invoicing() {
             {unprocessedCount > 0 && !focusedJobId && (
               <UnprocessedEventsBanner count={unprocessedCount} onRun={handleRunIngest} running={runningIngest} />
             )}
-            <SheetCard icon={Receipt} tile={TILE.teal} title={focusedJobId ? 'This job / this month' : 'This month'} sub="the total is what is done and reported — nothing counts until it is" className="mt-4" bodyClassName="px-5 max-[699px]:px-4">
-              <InvoiceSummary
-                {...heroStats}
-                month={month}
-                onFilterBlocked={() => setFilter("needs_report")}
-                onFilterMatchBlocked={() => setFilter("needs_review")}
-              />
-            </SheetCard>
+            <InvoiceMoneyBar
+              segments={moneySegments}
+              monthEarnedTotal={heroStats.monthEarnedTotal}
+              monthEarnedCount={heroStats.monthEarnedCount}
+              month={month}
+              active={view === "invoices" ? "invoices_open" : filter}
+              onSelect={(s) => { if (s.invoices) setView("invoices"); else { if (view === "invoices") setView("lines"); setFilter(s.key); } }}
+              notes={(heroStats.scheduledCount > 0 || heroStats.splitReviewCount > 0 || heroStats.noSourceDataCount > 0) && (
+                <p className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-1.5 text-[12px]" style={{ color: "#4A5652" }}>
+                  {heroStats.scheduledCount > 0 && <span>{heroStats.scheduledCount} scheduled {heroStats.scheduledCount === 1 ? "line" : "lines"} not counted until done.</span>}
+                  {heroStats.splitReviewCount > 0 && <span style={{ color: "#6F4E10" }}>{heroStats.splitReviewCount} profit-split {heroStats.splitReviewCount === 1 ? "note needs" : "notes need"} allocation.</span>}
+                  {heroStats.noSourceDataCount > 0 && <span style={{ color: "#A43432" }}>{heroStats.noSourceDataCount} missing source data.</span>}
+                </p>
+              )}
+            />
             <details className="mt-3"><summary className="min-h-11 cursor-pointer rounded-lg px-3 py-3 text-sm font-medium text-slate-600">Profit & cost details</summary>
             <JobProfitabilityPanel
               rows={monthRows.filter((r) => !supersededSet.has(r.id))}
@@ -691,7 +709,7 @@ export default function Invoicing() {
             )}
             <div style={{ backgroundColor: "var(--gf-card)", border: "1px solid var(--gf-border)", borderRadius: "var(--r-card)", boxShadow: "var(--shadow-card)", overflow: "hidden", position: "relative", marginTop: "16px" }}>
             <InvoiceToolbar
-              dashboardMode={view === "dashboard" && !focusedJobId}
+              dashboardMode={(view === "dashboard" && !focusedJobId) || view === "invoices"}
               search={search}
               onSearchChange={setSearch}
               searchRef={searchRef}
@@ -708,8 +726,9 @@ export default function Invoicing() {
               readyCount={heroStats.readyCount}
               onSelectAllReady={handleSelectAllReady}
             />
-            {filter === "billed" && !(view === "dashboard" && !focusedJobId) && <InvoiceRegister register={register} onRecordPayment={handleRecordPayment} onVoid={handleVoidInvoice} />}
-            {view === "dashboard" && !focusedJobId ? (
+            {view === "invoices" ? (
+              <InvoiceRegister register={register} onRecordPayment={handleRecordPayment} onVoid={handleVoidInvoice} />
+            ) : view === "dashboard" && !focusedJobId ? (
               <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_340px]" style={{ alignItems: "start" }}>
                 <DashboardLineList
                   groups={dashGroups}
