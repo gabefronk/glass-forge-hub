@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { invoiceInputError, invoicePatch, reopenPatch, paymentPatch, priorState, invoiceRegister, openInvoiceTotals, isCoveredZeroReview } from '../src/lib/invoiceRegister.js';
 
-const line = (id, extra = {}) => ({ id, invoice_month: '2026-09', job_date: '2026-09-10', billable: true, fee_type: 'labor_pct', labor_amt: 100, fee_pct: 0.1, ...extra });
+// Labor comes from the calendar amount, as computeLaborAmt reads it for unadjusted lines.
+const line = (id, extra = {}) => {
+  const row = { id, invoice_month: '2026-09', job_date: '2026-09-10', billable: true, fee_type: 'labor_pct', labor_amt: 100, fee_pct: 0.1, ...extra };
+  return { ...row, calendar_labor_amt: row.labor_amt };
+};
 
 test('an invoice needs a QuickBooks number and a real date', () => {
   assert.match(invoiceInputError({ number: ' ', date: '2026-10-01' }), /invoice number/);
@@ -56,7 +60,7 @@ test('the register groups billed lines by invoice across months, open invoices f
 });
 
 test('only $0 covered-work audit holds qualify for the bulk "covered, no charge" action', () => {
-  const covered = '[audit] '.slice(0, 0) + 'Work was reported without a separate labor charge. Confirm it is covered by the original install, or record the additional hours/material rate or approved price.';
+  const covered = 'Work was reported without a separate labor charge. Confirm it is covered by the original install, or record the additional hours/material rate or approved price.';
   assert.equal(isCoveredZeroReview(line('a', { labor_amt: 0, _billing_review: covered })), true);
   assert.equal(isCoveredZeroReview(line('b', { labor_amt: 150, _billing_review: covered })), false, 'priced lines need a real decision');
   assert.equal(isCoveredZeroReview(line('c', { labor_amt: 0, _billing_review: 'Service work has no labor amount or explicit no-charge decision.' })), false, 'service work may be billable');
