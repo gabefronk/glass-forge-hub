@@ -255,6 +255,23 @@ function canaryPacket() {
   return { protocol_version: QUEUE_VERSION, task_type: "synthetic_canary", plan_key: "synthetic-supplied-facts-v1", identity: { job_id: "synthetic_queue_canary", canonical_name: "Synthetic queue verification", verification: "synthetic_test", supplied_constraints: {} }, purpose: "eta", date_scope: { mode: "synthetic" }, prepared_run_id: "synthetic-v1", verified_facts: ["Synthetic item A quantity is 2.", "Synthetic item B quantity is 3."], source_references: [{ source_key: "synthetic:A", source_type: "synthetic", source_id: "A" }, { source_key: "synthetic:B", source_type: "synthetic", source_id: "B" }], source_checks: [], research_steps: [], instructions: "This is a synthetic connection test, not a real job. Use only the two supplied quantities. Return status draft_ready, summary stating the total quantity is 5, draft_reply as a short test summary, both exact supplied source keys, missing_sources as an empty array, and zero messages_sent/source_records_changed/external_lookups. Do not use tools to contact anyone, browse, read unrelated files, or call another model. The wrapper will add the real local_job_id and model.", capabilities: { supplied_sources_only: true, external_lookups: false, send: false, source_mutation: false } };
 }
 
+// base44/shared/knowledgePersistence.mjs
+var delay = (ms) => new Promise((r) => setTimeout(r, ms));
+var statusOf = (e) => [e?.status, e?.response?.status].find(Number.isInteger) || 0;
+var transient = (e) => [429, 408, 500, 502, 503, 504].includes(statusOf(e)) || ["TypeError", "TimeoutError", "AbortError"].includes(e?.name);
+async function retryBuildRead(work, { sleep = delay, onRetry = async () => {
+} } = {}) {
+  for (let i = 0; ; i++) {
+    try {
+      return await work();
+    } catch (e) {
+      if (!transient(e) || i >= 4) throw e;
+      await onRetry(e, i);
+      await sleep(1e3 * 2 ** i);
+    }
+  }
+}
+
 // base44/shared/jobContextCore.mjs
 var str = (v) => typeof v === "string" ? v.trim() : "";
 var norm = (v) => str(v).normalize("NFKC").toLowerCase().replace(/[\u2010-\u2015]/g, "-").replace(/\s+/g, " ");
@@ -387,7 +404,7 @@ var JOB_DOCUMENT_SCHEMA = {
 async function allKnowledgeRows(entity, selected, query = {}) {
   const result = [], seen = /* @__PURE__ */ new Set();
   for (let skip = 0; skip < 5e4; skip += 500) {
-    const page = await entity.filter(query, "id", 500, skip, selected);
+    const page = await retryBuildRead(() => entity.filter(query, "id", 500, skip, selected));
     if (!Array.isArray(page)) throw Error("Invalid source page");
     for (const row of page) {
       if (!row.id || seen.has(row.id)) throw Error("Source pagination repeated or missing IDs");
