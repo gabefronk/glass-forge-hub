@@ -208,7 +208,10 @@ test('message-only fill is an isolated single-field update; original_text/edit m
   assert.equal(feeAfter.labor_amt, 0, 'fee labor not changed');
   assert.equal(db.frBulkUpdateCalls.length, 0, 'message not bundled into a bulkUpdate');
   assert.equal(db.frUpdateCalls.length, 1, 'one isolated update call');
-  assert.deepEqual(db.frUpdateCalls[0].data, { message: LATE_TEXT }, 'update data is exactly {message}');
+  // The fill also seeds the source baseline (sourceNoteFollowthrough empty_fill patch).
+  const { source_baseline_at, ...fill } = db.frUpdateCalls[0].data;
+  assert.ok(!Number.isNaN(Date.parse(source_baseline_at)), 'baseline timestamp recorded');
+  assert.deepEqual(fill, { message: LATE_TEXT, source_message_baseline: LATE_TEXT }, 'update data is exactly {message} plus its source baseline');
 });
 
 test('duplicate existing reports for same post_id -> ambiguous skip, no arbitrary overwrite', async () => {
@@ -324,6 +327,7 @@ test('LIMITATION: no atomic CAS in the SDK; message write is an isolated update 
   assert.equal(db.frUpdateCalls.length, 1, 'message written via isolated update');
   const data = db.frUpdateCalls[0].data;
   assert.ok(!('revision' in data) && !('if_not_exists' in data) && !('condition' in data) && !('if_match' in data), 'no CAS/conditional token in the update');
-  assert.deepEqual(data, { message: LATE_TEXT }, 'update is a single-field {message} write');
+  assert.deepEqual(Object.keys(data).sort(), ['message', 'source_baseline_at', 'source_message_baseline'], 'update is the {message} write plus its source baseline');
+  assert.equal(data.message, LATE_TEXT);
   assert.equal(db.frBulkUpdateCalls.length, 0, 'message not bundled into the photo/job bulk patch');
 });
