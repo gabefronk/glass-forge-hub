@@ -177,4 +177,3 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
   );
 }
 
-const jobLine = (j) => [j.canonical_name, j.builder, j.address].filter(Boolean).join(" · ");

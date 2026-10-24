@@ -162,4 +162,3 @@ export function OrderStatusForm({ row, supplier = false, onDone, onCancel }) {
   </fieldset></form></FormPanel>;
 }
 
-const routeNames = { bfs_installed_sale: 'BFS installed sale', bfs_supply_ya_install: 'BFS supplies · YA installs', bfs_to_ya_turnkey: 'BFS-to-YA turnkey', direct_manufacturer_turnkey: 'Direct customer · YA sale & install' };
