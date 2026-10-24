@@ -90,8 +90,8 @@ export default function PurchasingSummaryBar({ totals, shown, total, eta, paymen
               <Total value={totals.rough} accent={ACCENT.rough} />
               <Total value={totals.sale} accent={ACCENT.sale} />
               <Total value={totals.profit} accent={ACCENT.profit} negative={totals.profit < 0} />
-              <Count value={totals.quotes} label="quotes" />
-              <Count value={totals.pos} label="POs" />
+              <Count value={totals.quotes} label="jobs quoted" />
+              <Count value={totals.pos} label="jobs with a PO" />
               <td className="px-2 py-3.5 align-middle" style={{ borderLeft: `1px solid ${DIVIDER}` }}>
                 <FilterSelect label="Filter by ETA" value={eta} onChange={onEta}>
                   {ETA_FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
@@ -117,7 +117,7 @@ export default function PurchasingSummaryBar({ totals, shown, total, eta, paymen
           <TotalStat label="Profit" value={totals.profit} accent={ACCENT.profit} negative={totals.profit < 0} />
         </div>
         <div className="mt-2 text-[12px] font-semibold" style={{ color: SOFT }}>
-          {totals.quotes} quotes · {totals.pos} POs
+          {totals.quotes} jobs quoted · {totals.pos} jobs with a PO
         </div>
         <div className="mt-2.5 flex flex-col gap-2">
           <FilterSelect label="Filter by ETA" value={eta} onChange={onEta}>
