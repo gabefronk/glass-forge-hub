@@ -46,6 +46,9 @@ test('supplier payables stay at the raw PO amount and drop once every order is p
 
 test('customers owe the sale less what the payment stage says was collected', () => {
   assert.deepEqual(['', 'half_down', 'installed', 'waiting_on_payment', 'paid'].map(customerOwedShare), [1, 0.5, 1, 1, 0]);
+  // Gabriel, Oct 24: owed from Ordered on; a job only sent to the customer is not sold yet.
+  assert.deepEqual(['sent_to_customer', 'ordered', 'delivered', 'billed', 'waiting_on_check'].map(customerOwedShare), [0, 1, 1, 1, 1]);
+  assert.equal(jobFlags(card({ stage: 'waiting_on_check' })).waiting_payment, true);
   assert.equal(jobFlags(card({ stage: 'half_down' })).customerOwes, 1500);
   assert.equal(jobFlags(card({ stage: 'paid' })).customerOwes, 0);
   assert.equal(jobFlags(card({ sale: null })).customerOwes, 0);
