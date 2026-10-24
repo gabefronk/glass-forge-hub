@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { paymentStage } from '@/lib/jobPayment';
-import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { isPurchasingMoneyOwner } from '@/lib/purchasingMoneyAccess';
 import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
