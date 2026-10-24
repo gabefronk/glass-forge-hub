@@ -68,15 +68,17 @@ export function priorState(rows, keys) {
 
 export const invoiceStatus = (inv) => (inv.voided_at ? 'void' : inv.paid_date ? 'paid' : 'open');
 
-// Labor billing invoices with their current lines: open first, newest first.
-export function invoiceRegister(invoices, lines = []) {
+// Labor billing invoices, open first, newest first. With the lines loaded, totals are live
+// (an invoice whose lines were all reopened shows 0 lines and can be voided); without them
+// (lines = null) the totals stored when the invoice was recorded stand in.
+export function invoiceRegister(invoices, lines = null) {
   const byInvoice = new Map();
-  for (const r of lines) if (r.billed_to_bfs && r.invoice_id) (byInvoice.get(r.invoice_id) || byInvoice.set(r.invoice_id, []).get(r.invoice_id)).push(r);
+  for (const r of lines || []) if (r.billed_to_bfs && r.invoice_id) (byInvoice.get(r.invoice_id) || byInvoice.set(r.invoice_id, []).get(r.invoice_id)).push(r);
   return liveInvoices(invoices)
     .filter((i) => i.kind === 'labor_billing')
     .map((i) => {
       const rows = byInvoice.get(i.id) || [];
-      const t = rows.length ? lineTotals(rows) : { labor: i.amount || 0, fee: i.fee_amount || 0, count: i.line_count || 0 };
+      const t = lines ? lineTotals(rows) : { labor: i.amount || 0, fee: i.fee_amount || 0, count: i.line_count || 0 };
       return {
         id: i.id, number: i.invoice_number, date: i.invoice_date, customer: i.customer_name || '',
         months: [...new Set(rows.map((r) => r.invoice_month).filter(Boolean))].sort(),
