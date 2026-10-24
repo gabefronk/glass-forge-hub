@@ -2,13 +2,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'npm:fflate@0.8.3';
 import { computeJobBudget } from '../../shared/jobBudgetMath.js';
 import { parseAmscoQuoteText, normalizeVendorQuote, quoteMatchTokens } from '../../shared/vendorQuoteParse.js';
-import { buildBudgetCsv, fillBudgetXlsx } from '../../shared/jobBudgetSheet.js';
-import { BUDGET_TEMPLATE_XLSX_B64 } from '../../shared/jobBudgetTemplateXlsx.js';
 import { normalizeCustomer } from '../../shared/jobIdentity.js';
 import { denverDate } from '../../shared/billingCore.js';
 import { fetchCompleteEntity, matchJobTokens } from '../../shared/jobCatalog.js';
 import { validateLaborEntry, laborMargin, buildCostInputPatch, summarizeJobCosts } from '../../shared/jobLaborEntry.js';
-import { validateBudgetInputs, newJobFromBudget, linkedBudgetPatch, sheetValuesFor } from '../../shared/jobBudgetReview.js';
+import { validateBudgetInputs, newJobFromBudget, linkedBudgetPatch } from '../../shared/jobBudgetReview.js';
 import { budgetRollup, budgetVersion, estimatePatch, poRefs } from '../../shared/procurementCore.js';
 import { withProcurementLock, procurementError } from '../../shared/procurementLock.mjs';
 import { assertBudgetVersion, budgetInputPatch, rereadPatch } from '../../shared/budgetMutationPolicy.mjs';
@@ -175,18 +173,6 @@ async function moveFile(token, fileId, toParentId) {
   return moved.id;
 }
 
-// The filled workbook + CSV for a budget row, written over the existing Drive files.
-async function writeBudgetSheets(token, record, budget, job, folderId) {
-  const stamp = denverDate();
-  const values = sheetValuesFor(record, job, stamp);
-  const base = cleanName(`${record.quote_name || record.job_name || 'quote'} - ${record.manufacturer || record.vendor || 'vendor'} ${record.quote_number || ''}`.trim(), 'quote');
-  const xlsxBytes = fillBudgetXlsx(Uint8Array.from(atob(BUDGET_TEMPLATE_XLSX_B64), (c) => c.charCodeAt(0)), values, budget, { unzipSync, zipSync, strFromU8, strToU8 });
-  const csvBytes = strToU8(buildBudgetCsv({ quote: record.quote || {}, budget, fields: { builder: values.builder, sales_rep: values.sales_rep, date: stamp } }));
-  const xlsxUp = await replaceOrUpload(token, record.drive_budget_xlsx_file_id, `Window Budget Sheet - ${base}.xlsx`, xlsxBytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', folderId);
-  const csvUp = await replaceOrUpload(token, record.drive_budget_csv_file_id, `Window Budget Sheet - ${base}.csv`, csvBytes, 'text/csv', folderId);
-  return { drive_budget_xlsx_file_id: xlsxUp?.id, drive_budget_csv_file_id: csvUp?.id };
-}
-
 // This month's JobCostInputs row for the job, refreshed from ALL of the job's budgets (a
 // base quote plus an add-on quote add up); `current` is the row being saved, with its new
 // numbers, in place of whatever the database still holds for it.
@@ -292,18 +278,6 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
   const stamp = denverDate();
   const base = cleanName(`${quote.quote_name || jobName} - ${quote.manufacturer || quote.vendor || 'vendor'} ${quote.quote_number || ''}`.trim(), 'quote');
   const quoteUp = pdfBytes ? await uploadFile(accessToken, `${base}.pdf`, pdfBytes, 'application/pdf', folder.id) : null;
-  const xlsxBytes = fillBudgetXlsx(
-    Uint8Array.from(atob(BUDGET_TEMPLATE_XLSX_B64), (c) => c.charCodeAt(0)),
-    {
-      sales_rep: quote.quoted_by || '', date_iso: stamp,
-      builder, manufacturer: quote.manufacturer || quote.vendor || '',
-      openings_qty: quote.openings_qty || null,
-    },
-    budget,
-    { unzipSync, zipSync, strFromU8, strToU8 },
-  );
-  const xlsxUp = await uploadFile(accessToken, `Window Budget Sheet - ${base}.xlsx`, xlsxBytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', folder.id);
-  const csvUp = await uploadFile(accessToken, `Window Budget Sheet - ${base}.csv`, strToU8(buildBudgetCsv({ quote, budget, fields: { builder, sales_rep: quote.quoted_by, date: stamp } })), 'text/csv', folder.id);
 
   // 5. Records.
   const title = `${quote.quote_name || jobName} (${quote.manufacturer || quote.vendor || 'vendor'}${quote.quote_number ? ' ' + quote.quote_number : ''})`;
@@ -323,7 +297,7 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
     autofill: autofillRecord(fill),
     source_pdf_url: file_url || undefined, source_pdf_name: file_name || undefined,
     drive_job_folder_id: folder.id, drive_job_folder_path: folder.path,
-    drive_quote_file_id: quoteUp?.id, drive_budget_xlsx_file_id: xlsxUp?.id, drive_budget_csv_file_id: csvUp?.id,
+    drive_quote_file_id: quoteUp?.id,
     glass_eta_status: 'waiting',
     created_by_email: userEmail,
   }); } catch {
@@ -346,7 +320,7 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
     match_reason: matched ? undefined : match.reason,
     computed: budget,
     inputs: fill.inputs, filled: fill.filled, notes: fill.notes,
-    drive: { folder_path: folder.path, folder_id: folder.id, quote_file_id: quoteUp?.id, budget_xlsx_file_id: xlsxUp?.id, budget_csv_file_id: csvUp?.id },
+    drive: { folder_path: folder.path, folder_id: folder.id, quote_file_id: quoteUp?.id },
     cost_inputs_month: costInput?.id ? denverDate().slice(0, 7) : null,
     budget_usage: 'draft',
     next_step: 'Review the numbers, then include this scope in the job budget. No purchase or invoice was created.',
@@ -356,7 +330,7 @@ async function processQuote(base44, db, core, accessToken, body, userEmail) {
 // Re-read a budget row's quote PDF and refill its numbers (rows dropped before autofill, or
 // after the install sheet changes). Overwrites the row's inputs; keeps its job link and files.
 async function refillBudget(base44, db, core, record, userEmail) {
-  if (!record.source_pdf_url) return { error: 'this budget has no quote PDF to read' };
+  if (!record.source_pdf_url) return { error: 'This quote PDF is stored privately. Use Refresh from quote on the Purchasing page.' };
   const quote = await extractQuote(core, { file_url: record.source_pdf_url });
   const hints = fileNameHints(record.source_pdf_name);
   const name = budgetNameFor(quote, hints);
@@ -377,10 +351,6 @@ async function refillBudget(base44, db, core, record, userEmail) {
     const byPo = await matchByPo(db, quote.customer_po);
     if (byPo) patch.job_match = { ...(record.job_match || {}), po_suggestion: byPo };
   }
-  try {
-    const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
-    if (accessToken && record.drive_job_folder_id) Object.assign(patch, await writeBudgetSheets(accessToken, { ...record, ...patch }, budget, job, record.drive_job_folder_id));
-  } catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 200)}`); }
   const saved = await db.JobBudgets.updateMany({ id: record.id, updated_date: record.updated_date }, { $set: patch });
   if (saved.updated !== 1) throw procurementError(409, 'The budget changed during extraction. Reload before applying new values.');
   const updated = await db.JobBudgets.get(record.id);
@@ -426,13 +396,6 @@ export default async function jobBudgetIngest(req) {
     const saved = await db.JobBudgets.updateMany({ id: record.id, updated_date: record.updated_date }, { $set: patch });
     if (saved.updated !== 1) throw procurementError(409, 'The budget changed before save. Reload.');
     const warnings = [];
-    try {
-      const { accessToken } = await base44.asServiceRole.connectors.getConnection('googledrive');
-      if (accessToken && record.drive_job_folder_id) Object.assign(patch, await writeBudgetSheets(accessToken, record, budget, job, record.drive_job_folder_id));
-      else warnings.push('Drive sheet not rewritten: no folder on this budget.');
-    } catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 200)}`); }
-    const filePatch = Object.fromEntries(Object.entries(patch).filter(([key]) => key.startsWith('drive_')));
-    if (Object.keys(filePatch).length) await db.JobBudgets.update(record.id, filePatch);
     const updated = await db.JobBudgets.get(record.id);
     let costInput = null;
     if (job) { try { costInput = await upsertCostInputs(db, job, updated); } catch (e) { warnings.push(`Estimate link not refreshed: ${String(e?.message || e).slice(0, 200)}`); } }
@@ -496,8 +459,6 @@ export default async function jobBudgetIngest(req) {
         for (const id of [record.drive_quote_file_id, record.drive_budget_xlsx_file_id, record.drive_budget_csv_file_id]) {
           try { await moveFile(accessToken, id, folder.id); } catch (e) { warnings.push(`Drive move failed: ${String(e?.message || e).slice(0, 160)}`); }
         }
-        try { Object.assign(record, await writeBudgetSheets(accessToken, { ...record, ...linkedBudgetPatch(job, user.email, folder) }, budget, job, folder.id)); }
-        catch (e) { warnings.push(`Drive sheet not rewritten: ${String(e?.message || e).slice(0, 160)}`); }
       } else warnings.push('Drive not connected: files stay where they are.');
     } catch (e) { warnings.push(`Drive: ${String(e?.message || e).slice(0, 160)}`); }
     const patch = { ...linkedBudgetPatch(job, user.email, folder), inputs: inputsOf(record), computed: budget, drive_budget_xlsx_file_id: record.drive_budget_xlsx_file_id, drive_budget_csv_file_id: record.drive_budget_csv_file_id,
