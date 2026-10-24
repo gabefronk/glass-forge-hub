@@ -43,7 +43,7 @@ test('money strip: ready, one needs-attention count, open invoices; ties to the 
   const rows = [
     line('a', '2026-10-01', 300), line('b', '2026-10-02', 450),
     line('c', '2026-10-02', 80, { billed_to_bfs: true }),
-    line('d', '2026-10-02', 120, { needs_review: true, manually_adjusted: false, fee_amt: null }),
+    line('d', '2026-10-02', 120, { needs_review: true, manually_adjusted: false, fee_amt: null, calendar_labor_amt: 120 }),
   ];
   const segments = moneyBarSegments(rows, new Map(), new Set(), [{ status: 'open', labor: 80, fee: 8 }]);
   const strip = moneyStrip(segments);
