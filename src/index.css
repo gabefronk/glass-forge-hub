@@ -71,14 +71,15 @@
     --gf-hover: #F6F3EC;
     --gf-border: #D3CABB;
     --gf-border-2: #E0DACF;
-    --gf-hairline: #EEE9E0;
-    --gf-hairline-2: #F3EFE7;
-    --gf-check: #CEC6B8;
+    /* Density & contrast pass (Oct 24): rules and control edges that read on white. */
+    --gf-hairline: #D6CCBA;
+    --gf-hairline-2: #E4DCCC;
+    --gf-check: #9A9080;
     --gf-ink: #101617;
     --gf-ink-2: #566063;
     --gf-ink-3: #616A6D;
     --gf-ink-4: #34403F;
-    --gf-placeholder: #8A8F93;
+    --gf-placeholder: #6B7276;
     --gf-teal-600: #0B3F3B;
     --gf-teal-500: #10524C;
     --gf-teal-700: #093431;
