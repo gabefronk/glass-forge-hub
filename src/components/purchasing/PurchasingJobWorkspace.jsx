@@ -39,6 +39,7 @@ import { activeBudgets, budgetFigures } from '@/lib/purchasingCoreTwin';
 import { statusWithDate, etaText, supplierReplyText } from '@/lib/purchasingDates';
 import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
 import { saveEtaTarget } from '@/lib/etaTarget';
+import { quantityReviewLabel } from '@/lib/quantityReview';
 
 const SECTIONS = [['budgets', 'Quotes & budget'], ['orders', 'POs'], ['tracking', 'Supplier tracking']];
 
@@ -154,7 +155,7 @@ function BudgetRow({ budget, job, allBudgets, pos, onEdit, onPreparePO, onShowPO
         </div>
         <Badge tone={c === chip.ok ? 'ok' : 'warn'}>{c.t}</Badge>
       </div>
-      <p className="mt-1.5 text-[12px]" style={{ color: C.text }}>Material before tax: <strong>{money(budget.inputs?.material_true_cost)}</strong>{budget.openings_qty > 0 ? <span style={{ color: C.textSecondary }}> · {budget.openings_qty} units</span> : null}</p>
+      <p className="mt-1.5 text-[12px]" style={{ color: C.text }}>Material before tax: <strong>{money(budget.inputs?.material_true_cost)}</strong>{budget.openings_qty > 0 ? <span style={{ color: C.textSecondary }}> · {budget.openings_qty} units</span> : null}{quantityReviewLabel(budget) ? <span style={{ color: '#96490F' }}> · Quantity needs review</span> : null}</p>
       <p className={`mt-1 text-[11px] ${figures.warnings.length ? 'font-semibold' : ''}`} style={{ color: figures.warnings.length ? '#566063' : C.textSecondary }}>{statusLine}</p>
       <BudgetBreakdown budget={budget} />
       <QuoteLines budget={budget} />
