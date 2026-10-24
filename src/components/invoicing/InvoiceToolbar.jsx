@@ -3,8 +3,9 @@ import { Search, ChevronDown } from "lucide-react";
 const FILTERS = [
   { key: "all", label: "All" },
   { key: "ready", label: "Ready" },
-  { key: "needs_review", label: "Needs review" },
-  { key: "needs_report", label: "Needs a report" },
+  { key: "needs_review", label: "Needs decision" },
+  { key: "zero_confirm", label: "$0 to confirm" },
+  { key: "needs_report", label: "Waiting on report" },
   { key: "billed", label: "Billed" },
 ];
 
@@ -65,7 +66,7 @@ export default function InvoiceToolbar({ search, onSearchChange, searchRef, view
       <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
         {/* Lines / Jobs segmented toggle */}
         <div style={{ display: "inline-flex", backgroundColor: "var(--gf-field)", borderRadius: "var(--r-control)", padding: "3px", flexShrink: 0, border: "1px solid var(--gf-border)" }}>
-          {["dashboard", "lines", "jobs"].map((v) => (
+          {["dashboard", "lines", "jobs", "invoices"].map((v) => (
             <button
               key={v}
               onClick={() => onViewChange(v)}
