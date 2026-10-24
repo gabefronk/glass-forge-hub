@@ -12,7 +12,7 @@ const BRANDS = [
   ['Pella', /\bpella\b/i],
   ['Andersen', /\bander[sz][eo]n\b/i],
   ['Jeld-Wen', /\bjeld[\s-]?wen\b/i],
-  ['Windor', /\bwin[\s-]?door?\b/i],
+  ['Windor', /\bwin[\s-]?doo?r\b/i],
   ['Nu Vista', /\bnu[\s-]?vista\b/i],
   ['Bonelli', /\bbonell?i\b/i],
   ['Marvin', /\bmarvin\b/i],
@@ -35,7 +35,7 @@ const WORK = [
   ['Trip charge', /\btrip\s*charg/i],
   ['Hardware', /\bhardware\b|\bhandles?\b/i],
   ['Door', /\bdoors?\b/i],
-  ['Service', /\bservice\b|\bwarrant|\bwty\b|\binvestigat|\badjust|\brepair|\bfix(ed)?\b/i],
+  ['Service', /\bservice\b|\bwarrant|\bwty\b|\binvestigat|\bad?just|\brepair|\bfix(ed)?\b/i],
 ];
 
 const first = (list, text) => (list.find(([, re]) => re.test(text)) || [null])[0];
