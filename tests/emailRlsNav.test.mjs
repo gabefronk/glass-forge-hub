@@ -40,28 +40,10 @@ test('EmailRelay, EmailMailbox and EmailAgentRun RLS are id-based owner-only on 
   assertOwnerRls('EmailAgentRun');
 });
 
-test('canViewInboxAgents is id-based owner-only (not role/email-based)', async () => {
-  const { canViewInboxAgents } = await import('../src/lib/inboxAgents.js');
-  for (const id of OWNER_IDS) assert.equal(canViewInboxAgents({ id, role: 'admin' }), true, `owner id ${id} allowed`);
-  assert.equal(canViewInboxAgents({ id: 'other', role: 'admin' }), false, 'non-owner admin denied');
-  assert.equal(canViewInboxAgents({ role: 'admin' }), false, 'no id denied');
-  assert.equal(canViewInboxAgents({ role: 'manager' }), false);
-  assert.equal(canViewInboxAgents(null), false);
-});
-
-test('Inbox Agents nav link is gated by isEmailOwner (emailOwnerOnly) in both sidebars, not the shared owner gate', () => {
+// The Inbox Agents feature was retired (owner Oct 24); its tables stay, owner-only, for history.
+test('the retired Inbox Agents page and nav links are gone from both sidebars', () => {
   const sidebar = readFileSync(join(ROOT, 'src/components/YaFeesSidebar.jsx'), 'utf8');
   const mobile = readFileSync(join(ROOT, 'src/components/MobileBottomNav.jsx'), 'utf8');
-  // both import isEmailOwner from the id-based owner module
-  assert.match(sidebar, /import \{ isEmailOwner \} from "@\/lib\/ownerAccess"/);
-  assert.match(mobile, /import \{ isEmailOwner \} from "@\/lib\/ownerAccess"/);
-  // the Inbox Agents item carries the emailOwnerOnly flag in both
-  assert.match(sidebar, /\{ label: "Inbox Agents"[^}]*emailOwnerOnly: true[^}]*\}/);
-  assert.match(mobile, /\{ label: "Inbox Agents"[^}]*emailOwnerOnly: true[^}]*\}/);
-  // both filter the admin list with isEmailOwner for emailOwnerOnly items
-  assert.match(sidebar, /ADMIN_ITEMS\.filter\(\(item\) => !item\.emailOwnerOnly \|\| isEmailOwner\(user\)\)/);
-  assert.match(mobile, /ADMIN_NAV\.filter\(\(item\) => !item\.emailOwnerOnly \|\| emailOwner\)/);
-  // the shared isAgentCenterOwner helper is untouched (still present, still email-based)
-  assert.match(sidebar, /isAgentCenterOwner/);
-  assert.match(mobile, /isAgentCenterOwner/);
+  const app = readFileSync(join(ROOT, 'src/App.jsx'), 'utf8');
+  for (const src of [sidebar, mobile, app]) assert.ok(!/inbox-agents|InboxAgents/.test(src));
 });
