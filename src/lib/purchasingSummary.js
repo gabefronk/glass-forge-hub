@@ -3,22 +3,43 @@
 // display values the table renders), so the bar always ties to the rows below.
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-const sum = (cards, pick) => cards.reduce((s, c) => s + (num(pick(c)) ?? 0), 0);
+const round = (n) => Math.round(n * 100) / 100;
+
+// Each money column: a job row's own figure, or, when a multi-scope job row
+// withholds it (applyScopeRollup), the figures its scope rows show. Scope rows
+// never overlap (each PO and order belongs to one scope) and share one cost
+// basis (materials incl tax), so adding them ties the bar to the rows below.
+const FIELDS = {
+  windows: { job: (c) => c.windows?.display, scope: (s) => s.windows },
+  rough: { job: (c) => c.rough?.display, scope: (s) => s.rough },
+  sale: { job: (c) => c.sale?.display, scope: (s) => s.sale },
+  profit: { job: (c) => c.profitDisplay, scope: (s) => s.profit },
+};
+
+function column(card, field) {
+  const f = FIELDS[field];
+  const own = f.job(card);
+  if (!own?.suppressed) return { value: num(own?.value) ?? 0, missing: false };
+  const values = (card.scopes || []).map((s) => num(f.scope(s)?.value));
+  return { value: values.reduce((n, v) => n + (v ?? 0), 0), missing: !values.length || values.some((v) => v == null) };
+}
 
 export function summarizeCards(cards = []) {
-  return {
-    jobs: cards.length,
-    windows: sum(cards, (c) => c.windows?.display?.value),
-    rough: sum(cards, (c) => c.rough?.display?.value),
-    sale: sum(cards, (c) => c.sale?.display?.value),
-    profit: sum(cards, (c) => c.profitDisplay?.value),
-    quotes: cards.filter((c) => c.refs?.quoteNumber).length,
-    pos: cards.filter((c) => c.refs?.yaPo).length,
-    // Jobs whose roll-up row withholds multi-scope money: the totals then
-    // exclude those amounts, so the bar must say it is partial.
-    partialScopes: cards.filter((c) =>
-      [c.windows?.display, c.rough?.display, c.sale?.display, c.profitDisplay].some((d) => d?.suppressed)).length,
-  };
+  const totals = { jobs: cards.length };
+  const incomplete = new Set();
+  for (const field of Object.keys(FIELDS)) {
+    totals[field] = round(cards.reduce((n, c) => {
+      const col = column(c, field);
+      if (col.missing) incomplete.add(c);
+      return n + col.value;
+    }, 0));
+  }
+  totals.quotes = cards.filter((c) => c.refs?.quoteNumber).length;
+  totals.pos = cards.filter((c) => c.refs?.yaPo).length;
+  // Multi-scope jobs with a scope row that has no figure for a column: the
+  // bar then says it is partial instead of reading as a complete total.
+  totals.partialScopes = incomplete.size;
+  return totals;
 }
 
 // ETA filter buckets, read from the same refs the ETA cell shows.
