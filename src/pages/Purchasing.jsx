@@ -144,7 +144,7 @@ function PurchasingWorkspace() {
   }
 
   return (
-    <PageShell width="max-w-[1280px]">
+    <PageShell width="max-w-[1440px]">
       <PurchasingHeader figures={figures} onExport={exportCsv} onReload={load} reloading={loading} />
 
       <div className="flex items-center gap-2 max-[1023px]:flex-wrap">
