@@ -8,6 +8,7 @@ import { C } from "@/lib/feeUI";
 import { aggregateJobMoney, canLoadJobMoney } from "@/lib/jobMoneyPanel";
 import { procurementPath } from "@/lib/procurementRoutes";
 import { ticketLabel } from "@/lib/jobHistory";
+import JobInvoices from "@/components/jobs/JobInvoices";
 
 const money = (value) => value === null || value === undefined
   ? "—"
@@ -63,6 +64,7 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
   if (!owner) return null;
 
   const data = state.data;
+  const jobIds = [...new Set([jobId, ...memberKey.split(",").filter(Boolean)])];
   return <section aria-label="Owner money panel" className="mt-5 overflow-hidden rounded-[14px] card-shadow" style={{ background: C.card, border: `1px solid ${C.border}` }}>
     <div className="px-4 py-3" style={{ background: C.headerBg, borderBottom: `1px solid ${C.border}` }}>
       <div className="flex items-center gap-2"><Landmark className="h-4 w-4" style={{ color: C.accentText }} /><h2 className="font-heading text-[16px] font-bold" style={{ color: C.text }}>Money · owner only</h2></div>
@@ -84,6 +86,8 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
           <Metric label="Fees recorded" value={data.totals.feeRecorded} note="FeeLines using invoicing math" />
           <Metric label="Fee share on YA-paid work" value={data.totals.feePaid} note="YA received payment; does not confirm your fee was paid" />
         </div>
+
+        <JobInvoices jobIds={jobIds} jobId={jobId} budgetSell={data.totals.budgetSell} />
 
         <div>
           <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Budget / estimate sources</h3><RecordLink to={procurementPath(jobId)}>Review job budget</RecordLink></div>
