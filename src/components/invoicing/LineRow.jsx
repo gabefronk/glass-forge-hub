@@ -129,7 +129,7 @@ export default function LineRow({ row, selected, focused, showStatus, onCheck, o
         <div className="flex flex-wrap items-start justify-between gap-4 pl-4 md:pl-[118px]" style={{ backgroundColor: "#FAF8F3", paddingTop: "4px", paddingRight: "16px", paddingBottom: "14px", borderBottom: "1px solid #D6CCBA" }}>
           <dl className="grid min-w-0 flex-1 gap-x-5 gap-y-1 pt-2 text-[14px]" style={{ gridTemplateColumns: "max-content minmax(0,1fr)", color: "#101617" }}>
             <dt style={{ color: "#566063" }}>Crew</dt><dd>{crew || "—"}</dd>
-            <dt style={{ color: "#566063" }}>Work</dt><dd style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{[row.line_description, noteTokens(row.note_text)].filter(Boolean).join("\n") || "—"}</dd>
+            <dt style={{ color: "#566063" }}>Work</dt><dd style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{String(row.note_text || "").trim() || row.line_description || "—"}</dd>
             <dt style={{ color: "#566063" }}>Field report</dt><dd>{report}{report === "Missing" && <> · <Link data-no-open to="/calendar" className="font-semibold underline" style={{ color: "#0B3F3B" }}>Add it on the calendar</Link></>}</dd>
           </dl>
           <div data-no-open className="flex items-center gap-2 pt-2">
