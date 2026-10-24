@@ -35,42 +35,7 @@ export const finiteNonneg = (v) =>
 
 const validAmount = (v) => v === null || (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_MONEY);
 
-export const ALLOWED_SAVE_FIELDS = new Set([
-  'action', 'job_id', 'rough_labor_material', 'sale_price',
-]);
 export const ALLOWED_LIST_FIELDS = new Set(['action']);
-
-// Validate a save payload BEFORE any entity read. A money key that is OMITTED
-// is preserved on the existing row — it never wipes. A key that IS present may
-// be null (withhold) or a finite nonneg number within MAX_MONEY after rounding.
-// Rejects extra fields, missing/malformed job_id (exact 24-hex id), malformed
-// amounts and overflow.
-export function validateSavePayload(body) {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return { error: 'invalid_body' };
-  }
-  for (const key of Object.keys(body)) {
-    if (!ALLOWED_SAVE_FIELDS.has(key)) return { error: 'unexpected_field', field: key };
-  }
-  const { job_id } = body;
-  if (typeof job_id !== 'string' || !job_id.trim()) return { error: 'missing_job' };
-  if (!isEntityId(job_id.trim())) return { error: 'invalid_job_id' };
-  const hasRough = Object.prototype.hasOwnProperty.call(body, 'rough_labor_material');
-  const hasSale = Object.prototype.hasOwnProperty.call(body, 'sale_price');
-  if (!hasRough && !hasSale) return { error: 'no_fields' };
-  let rlm, sp;
-  if (hasRough) {
-    if (!finiteNonneg(body.rough_labor_material)) return { error: 'invalid_rough_labor_material' };
-    rlm = body.rough_labor_material === null ? null : roundMoney(body.rough_labor_material);
-    if (!validAmount(rlm)) return { error: 'invalid_rough_labor_material' };
-  }
-  if (hasSale) {
-    if (!finiteNonneg(body.sale_price)) return { error: 'invalid_sale_price' };
-    sp = body.sale_price === null ? null : roundMoney(body.sale_price);
-    if (!validAmount(sp)) return { error: 'invalid_sale_price' };
-  }
-  return { ok: true, job_id: job_id.trim(), hasRough, hasSale, rough_labor_material: rlm, sale_price: sp };
-}
 
 // List body must carry only `action`. Strict keys on every action.
 export function validateListBody(body) {
