@@ -37,6 +37,11 @@ test('supplier payables stay at the raw PO amount and drop once every order is p
   assert.deepEqual([ap.items, ap.unpaid, ap.missing, ap.label], [3, 2, 0, 'Partial']);
   assert.equal(supplierPayables('j3', data).label, null);
   assert.equal(supplierPayables('j1', { purchase_orders: [{ id: 'p', job_id: 'j1', status: 'ordered' }] }).missing, 1);
+  const noPoAmount = supplierPayables('j1', {
+    purchase_orders: [{ id: 'p', job_id: 'j1', status: 'ordered', amount_dealer: null }],
+    vendor_orders: [{ id: 'o', job_id: 'j1', purchase_order_id: 'p', status: 'eta_set', amount: 132074.19 }],
+  });
+  assert.deepEqual([noPoAmount.owed, noPoAmount.missing], [132074.19, 0], 'a PO with no amount falls back to its supplier order');
 });
 
 test('customers owe the sale less what the payment stage says was collected', () => {
@@ -87,4 +92,6 @@ test('multi-scope jobs add their scope rows to Sold and Est. profit', () => {
   const f = headerFigures([multi], TODAY);
   assert.deepEqual([f.sold, f.profit, f.customersOwe], [750, 450, 750]);
   assert.equal(jobFlags(multi, TODAY).missing_cost, false);
+  const zeroScope = { ...multi, scopes: [{ windows: { value: 0 }, sale: { value: 458.78 } }, multi.scopes[1]] };
+  assert.equal(jobFlags(zeroScope, TODAY).missing_cost, true, 'a $0 scope cost counts as missing');
 });
