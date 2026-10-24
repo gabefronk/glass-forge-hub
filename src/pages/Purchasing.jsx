@@ -29,10 +29,8 @@ export default function Purchasing() {
 
 function PurchasingWorkspace() {
   const [data, setData] = useState(null);
-  const [moneyInputs, setMoneyInputs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [moneyError, setMoneyError] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState(DEFAULT_PURCHASING_SORT);
@@ -41,24 +39,11 @@ function PurchasingWorkspace() {
 
   const load = useCallback(async () => {
     const v = ++loadSeq.current;
-    setLoading(true); setError(''); setMoneyError('');
+    setLoading(true); setError('');
     try {
       const overview = await purchasingRequest({ action: 'overview' });
-      // Money list: surface backend errors — no silent empty fallback. A
-      // failure withholds money tiles and shows a visible warning, but the
-      // job cards still render from the procurement overview.
-      let money = [];
-      try {
-        const moneyRes = await base44.functions.invoke('purchasingMoney', { action: 'list' });
-        const r = moneyRes?.data ?? moneyRes;
-        if (!r || !Array.isArray(r.inputs)) throw new Error('invalid_money_response');
-        money = r.inputs;
-      } catch (e) {
-        if (v === loadSeq.current) setMoneyError('Money data unavailable: ' + messageOf(e));
-      }
       if (v !== loadSeq.current) return;
       setData(overview);
-      setMoneyInputs(money);
     } catch (e) {
       if (v === loadSeq.current) setError(messageOf(e));
     } finally {
@@ -73,7 +58,7 @@ function PurchasingWorkspace() {
     if (!data) return [];
     const built = buildPurchasingCards({
       jobs: data.jobs, budgets: data.budgets, purchase_orders: data.purchase_orders,
-      vendor_orders: data.vendor_orders, moneyInputs, conflicts: data.conflicts, today,
+      vendor_orders: data.vendor_orders, conflicts: data.conflicts, today,
     });
     // Each job also carries its scopes: the board adds one row per scope when a
     // job holds more than one (a second budget, a reorder PO, an order with no
@@ -88,7 +73,7 @@ function PurchasingWorkspace() {
       payables: supplierPayables(card.job.id, data),
       paymentStage: jobsById.get(card.job.id)?.payment_status || '',
     }));
-  }, [data, moneyInputs, today]);
+  }, [data, today]);
   const searched = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
   const filterCounts = useMemo(() => purchasingFilterCounts(searched, today), [searched, today]);
   const filtered = useMemo(() => sortCards(applyPurchasingFilter(searched, filter, today), sort), [searched, filter, today, sort]);
@@ -150,7 +135,6 @@ function PurchasingWorkspace() {
       </div>
 
       {error && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: 'var(--gf-error-bg)', color: 'var(--gf-error)', border: '1px solid var(--gf-error-border)' }}>{error}</p>}
-      {moneyError && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: '#FFF3DF', color: '#89511A', border: '1px solid #F0DBA8' }}>{moneyError}</p>}
 
       {filtered.length === 0 ? (
         <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query || filter !== 'all' ? 'No jobs match your search or filter.' : 'No purchasing activity yet. Add a quote to begin.'}</p>

@@ -112,14 +112,12 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
       base44.entities.FeeLines.filter(byJob, "-job_date", 5000),
       base44.entities.CalendarEvents.filter(byJob, "-event_date", 5000),
       base44.entities.Jobs.filter({ id: jobId }, "-created_date", 1).catch(() => []),
-      // Owner-entered sale / labor (Purchasing "Money"); the figures show without it.
-      base44.functions.invoke("purchasingMoney", { action: "list" }).then((r) => (r?.data ?? r)?.inputs || []).catch(() => []),
       base44.entities.Invoices.filter(byJob, "invoice_date", 200),
       base44.entities.JobCostInputs.filter(byJob, "month", 500).catch(() => []),
-    ]).then(([budgets, purchaseOrders, vendorOrders, feeLines, calendarEvents, jobs, moneyInputs, jobInvoices, costInputs]) => {
+    ]).then(([budgets, purchaseOrders, vendorOrders, feeLines, calendarEvents, jobs, jobInvoices, costInputs]) => {
       if (!active) return;
       setInvoices(Array.isArray(jobInvoices) ? jobInvoices : []);
-      setState({ loading: false, error: "", raw: { ids, budgets, purchaseOrders, vendorOrders, feeLines, calendarEvents, jobs, moneyInputs, costInputs } });
+      setState({ loading: false, error: "", raw: { ids, budgets, purchaseOrders, vendorOrders, feeLines, calendarEvents, jobs, costInputs } });
     }).catch(() => {
       if (active) setState({ loading: false, error: "Financial records could not be loaded.", raw: null });
     });
