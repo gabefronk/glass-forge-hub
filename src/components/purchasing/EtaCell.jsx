@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import DotText from './DotText';
 import { pickDisplayBudget } from '@/lib/purchasingViewModel';
 import { isLiveBudget } from '@/lib/purchasingCoreTwin';
-import { displayDate } from '@/lib/purchasingDates';
+import { displayDate, etaDistance } from '@/lib/purchasingDates';
 import { saveEtaTarget } from '@/lib/etaTarget';
 
 // The ETA cell: clicking it picks a date in place - no form to fill in.
@@ -14,8 +14,15 @@ import { saveEtaTarget } from '@/lib/etaTarget';
 // received) is written in the Money workspace, so the cell opens that instead.
 // A scope row passes its own etaTarget (its budget or its one pending order) and
 // no `data`, so the cell never falls back to the job's aggregate records.
-const LINE = '#E2E8F0';
+const LINE = '#D6CCBA';
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const denverToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
+// The date plus how far away it is: "11/9/2026 · 17d", or "· 23d late" in red.
+function EtaText({ date }) {
+  const d = etaDistance(date, denverToday());
+  return <>{displayDate(date)}{d ? <span className="ml-1 font-bold" style={{ color: d.late ? '#A43432' : '#4A5652' }}>· {d.text}</span> : null}</>;
+}
 
 function jobEtaTarget(job, data) {
   // Reference-only rows (PO-reconciliation placeholders with no supplier order
@@ -68,7 +75,7 @@ export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier, 
       <button type="button" onClick={onOpenSupplier}
         title={etaLabel ? "Open this job's supplier dates" : 'Record the supplier ETA for this job'}
         className="cursor-pointer rounded-md px-1 py-0.5 hover:bg-stone-100">
-        <DotText tone={etaLabel ? 'blue' : 'gray'}>{ISO_DAY.test(etaLabel || '') ? displayDate(etaLabel) : etaLabel}</DotText>
+        <DotText tone={etaLabel ? 'blue' : 'gray'}>{ISO_DAY.test(etaLabel || '') ? <EtaText date={etaLabel} /> : etaLabel}</DotText>
       </button>
     );
   }
@@ -84,7 +91,7 @@ export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier, 
       ) : (
         <button type="button" disabled={busy} title="Pick the supplier ETA" onClick={openPicker}
           className="cursor-pointer rounded-md px-1 py-0.5 hover:bg-stone-100">
-          <DotText tone="blue">{date ? displayDate(date) : 'Set ETA'}</DotText>
+          {date ? <DotText tone="blue"><EtaText date={date} /></DotText> : <span className="rounded-md px-1.5 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: '#F3EEE4', color: '#4A5652', border: `1px dashed ${LINE}` }}>Set ETA</span>}
         </button>
       )}
       <input ref={inputRef} type="date" aria-label="Supplier ETA" tabIndex={-1}
