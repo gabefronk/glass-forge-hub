@@ -13,6 +13,14 @@ export function displayDate(value) {
   // Gabriel 10/22: dates read month/day/year (11/02/2026) everywhere.
   return new Date(value + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'numeric', day: 'numeric', year: 'numeric' });
 }
+// How far an ETA is from today, for the ETA cell: "17d", "today", "23d late".
+// Both dates are Denver calendar days (YYYY-MM-DD), compared without time zones.
+export function etaDistance(eta, today) {
+  if (!validDate(eta) || !validDate(today)) return null;
+  const days = Math.round((Date.parse(eta + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 86400000);
+  if (days === 0) return { text: 'today', late: false };
+  return days > 0 ? { text: `${days}d`, late: false } : { text: `${-days}d late`, late: true };
+}
 function recordedDay(value) {
   // Require a timestamp with timezone; a date-only string must never shift a day.
   if (typeof value !== 'string' || !/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return '';
