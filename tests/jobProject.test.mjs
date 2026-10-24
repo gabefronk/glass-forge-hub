@@ -8,9 +8,10 @@ const { jobProject, orderedCost } = await import('../src/lib/jobProject.js');
 const { jobMoneyHeadline } = await import('../src/lib/jobMoneyPanel.js');
 
 const job = { id: 'j1', canonical_name: 'Perry Res', payment_status: 'half_down' };
-const po = { id: 'po1', job_id: 'j1', po_number: 'YA-0010', status: 'ordered', amount_dealer: 1000 };
-const money = { job_id: 'j1', rough_labor_material: 200, sale_price: 2000 };
-const base = { jobs: [job], purchaseOrders: [po], moneyInputs: [money], today: '2026-10-24' };
+const po = { id: 'po1', job_id: 'j1', po_number: 'YA-0010', status: 'ordered', amount_dealer: 1000, budget_id: 'b1' };
+// Job money lives on the budget: sale 2000, labor 200, the cost comes from its PO.
+const budget = { id: 'b1', job_id: 'j1', budget_usage: 'included', numbers_reviewed_at: '2026-10-24', inputs: { material_true_cost: null, labor_cost_sub_pay: 200, actual_total_sell: 2000 } };
+const base = { jobs: [job], budgets: [budget], purchaseOrders: [po], today: '2026-10-24' };
 const row = (p, key) => p.rows.find((r) => r.key === key);
 
 test('the estimate column is the job headline, so it matches the Purchasing row', () => {
@@ -99,7 +100,7 @@ test('actual labor and material come from job cost inputs; profit actual needs e
 
 test('a job with no cost figure shows dashes, not zeros', () => {
   const bare = { id: 'j2', canonical_name: 'Bare' };
-  const p = jobProject('j2', [], { jobs: [bare], moneyInputs: [{ job_id: 'j2', sale_price: 5000 }], today: '2026-10-24' });
+  const p = jobProject('j2', [], { jobs: [bare], budgets: [{ id: 'b2', job_id: 'j2', budget_usage: 'included', inputs: { actual_total_sell: 5000 } }], today: '2026-10-24' });
   assert.equal(row(p, 'income').estimate, 5000);
   assert.equal(row(p, 'windows').estimate, null);
   assert.equal(row(p, 'cost').estimate, null);

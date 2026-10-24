@@ -100,45 +100,31 @@ test('windowsDisplayCandidate: customer_total / actual_total_sell never used as 
   assert.notEqual(d.value, 18000);
 });
 
-test('roughDisplayCandidate: the budget wins over the older money entry (Oct 24: budget is the source)', () => {
-  const d = roughDisplayCandidate(reviewedBudget(), 3000, false);
+test('roughDisplayCandidate: labor + install material come from the budget (Oct 24: budget is the source)', () => {
+  const d = roughDisplayCandidate(reviewedBudget());
   assert.equal(d.value, 2000);
   assert.equal(d.review, false);
   assert.equal(d.source, 'budget_inputs');
 });
 
-test('roughDisplayCandidate: the older money entry only fills a budget with no labor figure, flagged', () => {
-  const d = roughDisplayCandidate({ inputs: { actual_total_sell: 18000 } }, 0, false);
-  assert.equal(d.value, 0);
-  assert.equal(d.review, true);
-  assert.equal(d.source, 'owner');
-});
-
 test('roughDisplayCandidate: budget labor/material shows unflagged', () => {
-  const d = roughDisplayCandidate(reviewedBudget(), null, false);
+  const d = roughDisplayCandidate(reviewedBudget());
   assert.equal(d.value, 2000);
   assert.equal(d.review, false);
   assert.equal(d.source, 'budget_inputs');
 });
 
 test('roughDisplayCandidate: genuinely missing (no budget labor) → dash', () => {
-  const d = roughDisplayCandidate({ inputs: { actual_total_sell: 18000 } }, null, false);
+  const d = roughDisplayCandidate({ inputs: { actual_total_sell: 18000 } });
   assert.equal(d.value, null);
   assert.equal(d.review, false);
 });
 
-test('saleDisplayCandidate: the budget customer sell wins over the older money entry', () => {
-  const d = saleDisplayCandidate(reviewedBudget(), 17500, false);
+test('saleDisplayCandidate: the budget customer sell is the sale', () => {
+  const d = saleDisplayCandidate(reviewedBudget());
   assert.equal(d.value, 18000);
   assert.equal(d.review, false);
   assert.equal(d.source, 'budget_inputs');
-});
-
-test('saleDisplayCandidate: no budget sell -> older money entry, flagged (computed suggestion never shown)', () => {
-  const d = saleDisplayCandidate({ inputs: {} }, 18000, false);
-  assert.equal(d.value, 18000);
-  assert.equal(d.review, true);
-  assert.equal(d.source, 'owner');
 });
 
 test('profitDisplayCalc: flag propagates when any input is a candidate', () => {
@@ -160,44 +146,30 @@ test('profitDisplayCalc: dash when any display input absent', () => {
 test('buildPurchasingCards: verified canonical preserved separate; display candidate added; no storage mutation', () => {
   const jobs = [{ id: 'j1', canonical_name: 'A' }];
   const budgets = [reviewedBudget({}, { quote: null })];
-  const moneyInputs = [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }];
-  const before = JSON.parse(JSON.stringify({ jobs, budgets, moneyInputs }));
-  const [card] = buildPurchasingCards({ jobs, budgets, moneyInputs, today: TODAY });
+  const before = JSON.parse(JSON.stringify({ jobs, budgets }));
+  const [card] = buildPurchasingCards({ jobs, budgets, today: TODAY });
   // Verified canonical unchanged (separate)
   assert.equal(card.windows.value, null);
   assert.equal(card.windows.status, 'review');
   assert.deepEqual(card.profit, { value: null, tone: 'unknown' }); // verified profit withheld (windows unverified)
-  // No direct cost figure -> owner-typed budget review figure, flagged review.
-  // Labor comes from the budget (2000), not the older money entry (3000).
+  // No direct cost figure -> owner-typed budget review figure, flagged review. Labor 2000 from the budget.
   assert.equal(card.windows.display.value, CMT);
   assert.equal(card.windows.display.review, true);
   assert.equal(card.profitDisplay.value, 5255);
   assert.equal(card.profitDisplay.review, true);
   // No mutation of inputs
-  assert.deepEqual({ jobs, budgets, moneyInputs }, before);
+  assert.deepEqual({ jobs, budgets }, before);
 });
 
 test('buildPurchasingCards: all-verified job — display equals verified, profit unflagged', () => {
-  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }], today: TODAY });
+  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], today: TODAY });
   assert.equal(card.windows.value, 1074.5);
   assert.equal(card.windows.display.value, 1074.5);
   assert.equal(card.windows.display.review, false);
-  // Display money comes from the budget (labor 2000), the verified profit still from the older entry.
+  // Sale 18000 and labor 2000 from the budget: 18000 - 1074.50 - 2000.
   assert.equal(card.profitDisplay.value, 14925.5);
   assert.equal(card.profitDisplay.review, false);
-  assert.equal(card.profit.value, 13925.5);
-});
-
-test('buildPurchasingCards: duplicate money - owner verified withheld, displays dash with duplicate flag', () => {
-  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }, { job_id: 'j1', rough_labor_material: 1, sale_price: 2 }], today: TODAY });
-  assert.equal(card.rough.value, null); // verified owner withheld (duplicate)
-  assert.equal(card.rough.duplicate, true);
-  assert.equal(card.rough.display.value, 2000); // the budget is the source, so duplicates no longer matter for display
-  assert.equal(card.rough.display.review, false);
-  assert.equal(card.sale.display.value, 18000);
-  assert.equal(card.sale.display.review, false);
-  assert.equal(card.profitDisplay.value, 14925.5);
-  assert.deepEqual(card.profit, { value: null, tone: 'unknown' }); // verified profit still withheld
+  assert.equal(card.profit.value, 14925.5);
 });
 
 test('pickDisplayBudget: deterministic — verified source quote beats cost-only budget', () => {
@@ -226,7 +198,7 @@ test('windowsDisplayCandidate: PO-only job with multiple POs → deterministic p
 });
 
 test('buildPurchasingCards: PO-only job (no budget) does not crash; shows PO amount candidate; chosenBudget null', () => {
-  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [], purchase_orders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 }], moneyInputs: [], today: TODAY });
+  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [], purchase_orders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 }], today: TODAY });
   assert.equal(card.windows.display.value, withTax(933.96));
   assert.equal(card.rough.display.value, null);
   assert.equal(card.sale.display.value, null);
@@ -234,15 +206,15 @@ test('buildPurchasingCards: PO-only job (no budget) does not crash; shows PO amo
 });
 
 test('roughDisplayCandidate: labor-only budget figure shows (his typed sub pay)', () => {
-  const d = roughDisplayCandidate({ inputs: { labor_cost_sub_pay: 2000 } }, null, false);
+  const d = roughDisplayCandidate({ inputs: { labor_cost_sub_pay: 2000 } });
   assert.equal(d.value, 2000);
   assert.equal(d.review, false);
   assert.equal(d.source, 'budget_inputs');
 });
 
-test('saleDisplayCandidate: budget review target sell 0 stays 0 (a real typed 0); owner 0 still shows unflagged', () => {
-  assert.equal(saleDisplayCandidate({ inputs: { actual_total_sell: 0 } }, null, false).value, 0);
-  assert.equal(saleDisplayCandidate({ inputs: {} }, 0, false).value, 0);
+test('saleDisplayCandidate: budget target sell 0 stays 0 (a real typed 0); no sell is a dash', () => {
+  assert.equal(saleDisplayCandidate({ inputs: { actual_total_sell: 0 } }).value, 0);
+  assert.equal(saleDisplayCandidate({ inputs: {} }).value, null);
 });
 
 test('windowsDisplayCandidate: unreviewed draft with a verified supplier quote shows the printed total, flagged review', () => {

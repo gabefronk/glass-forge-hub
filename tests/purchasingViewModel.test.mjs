@@ -284,12 +284,12 @@ test('buildPurchasingCards: excludes merged, sample, ignored, inactive jobs', ()
     { id: 'j1', canonical_name: 'Alpha' }, { id: 'j2', canonical_name: 'Beta', merged_into: 'j1' },
     { id: 'j3', canonical_name: 'Gamma', is_sample: true }, { id: 'j4', canonical_name: 'Renta' }, { id: 'j5', canonical_name: 'Delta' },
   ];
-  const names = buildPurchasingCards({ jobs, budgets: [reviewedBudget()], moneyInputs: [{ job_id: 'j5', rough_labor_material: 100 }], today: TODAY }).map((c) => c.job.canonical_name);
+  const names = buildPurchasingCards({ jobs, budgets: [reviewedBudget(), { ...reviewedBudget(), id: 'b5', job_id: 'j5' }], today: TODAY }).map((c) => c.job.canonical_name);
   assert.deepEqual(names, ['Alpha', 'Delta']);
 });
 
-test('buildPurchasingCards: windows from source quote; profit = 18000 − 1074.50 − 3000 = 13925.50', () => {
-  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }], today: TODAY });
+test('buildPurchasingCards: windows from source quote; profit = 18000 − 1074.50 − 3000 = 13925.50 (sale and labor from the budget)', () => {
+  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget({ labor_cost_sub_pay: 3000 })], today: TODAY });
   assert.equal(card.windows.value, 1074.5);
   assert.equal(card.windows.provenance, 'source_quote');
   assert.equal(card.profit.value, 13925.5);
@@ -300,7 +300,7 @@ test('buildPurchasingCards: PO amount_dealer never fills windows; legacy budget 
   const [card] = buildPurchasingCards({
     jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget({}, { quote: null })],
     purchase_orders: [{ ...linkedPO, amount_dealer: 933.96, budget_id: 'b1' }],
-    moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }], today: TODAY,
+    today: TODAY,
   });
   assert.equal(card.windows.value, null);
   assert.equal(card.windows.status, 'review');
@@ -308,7 +308,7 @@ test('buildPurchasingCards: PO amount_dealer never fills windows; legacy budget 
 });
 
 test('buildPurchasingCards: conflict job withholds windows AND profit', () => {
-  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }], conflicts: [{ number: 'YA-1', job_ids: ['j1', 'j2'] }], today: TODAY });
+  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], conflicts: [{ number: 'YA-1', job_ids: ['j1', 'j2'] }], today: TODAY });
   assert.equal(card.windows.status, 'withheld');
   assert.deepEqual(card.profit, { value: null, tone: 'unknown' });
   assert.equal(card.conflict, true);
@@ -322,13 +322,6 @@ test('buildPurchasingCards: units count only active included scope', () => {
 test('buildPurchasingCards: cancelled PO + its vendor order create no card', () => {
   const cards = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], purchase_orders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'cancelled' }], vendor_orders: [{ job_id: 'j1', order_number: '1', status: 'ordered', purchase_order_id: 'po1' }], today: TODAY });
   assert.equal(cards.length, 0);
-});
-
-test('buildPurchasingCards: duplicate job money inputs withhold', () => {
-  const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [reviewedBudget()], moneyInputs: [{ job_id: 'j1', rough_labor_material: 3000, sale_price: 18000 }, { job_id: 'j1', rough_labor_material: 1, sale_price: 2 }], today: TODAY });
-  assert.equal(card.rough.value, null);
-  assert.equal(card.rough.duplicate, true);
-  assert.deepEqual(card.profit, { value: null, tone: 'unknown' });
 });
 
 test('unlinkedEntities: shop POs and unlinked quotes surfaced', () => {
