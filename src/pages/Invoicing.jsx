@@ -24,6 +24,9 @@ import LineDetailsDrawer from "@/components/invoicing/LineDetailsDrawer";
 import JobProfitabilityPanel from "@/components/invoicing/JobProfitabilityPanel";
 import BudgetEstimateNote from "@/components/invoicing/BudgetEstimateNote";
 import NeedsConfirmationList from "@/components/invoicing/NeedsConfirmationList";
+import RecordInvoiceDialog from "@/components/invoicing/RecordInvoiceDialog";
+import InvoiceRegister from "@/components/invoicing/InvoiceRegister";
+import { invoicePatch, reopenPatch, paymentPatch, priorState, invoiceRegister, isCoveredZeroReview } from "@/lib/invoiceRegister";
 import DateRangeBar from "@/components/invoicing/dashboard/DateRangeBar";
 import DashboardCards from "@/components/invoicing/dashboard/DashboardCards";
 import RevenueSplitPanel from "@/components/invoicing/dashboard/RevenueSplitPanel";
@@ -66,6 +69,7 @@ export default function Invoicing() {
   const [monthClosed, setMonthClosed] = useState(null);
   const [closing, setClosing] = useState(false);
   const [detailRow, setDetailRow] = useState(null);
+  const [billRequest, setBillRequest] = useState(null);
   const [editRequestId, setEditRequestId] = useState(null);
   const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [billingEvents, setBillingEvents] = useState([]);
@@ -327,14 +331,37 @@ export default function Invoicing() {
     }
   }, [feeLines]);
 
+  // Applies a bulk patch optimistically with an undo that restores the prior values.
+  const applyBulk = useCallback((updates, prevStates, message) => {
+    const apply = (patches) => setFeeLines((prev) => prev.map((r) => { const u = patches.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
+    apply(updates);
+    persistBulk(updates, prevStates);
+    performAction(message, () => {}, () => { apply(prevStates); persistBulk(prevStates, updates); });
+  }, [persistBulk, performAction]);
+
+  // Every billing path records the QuickBooks invoice the lines went out on.
+  const confirmBill = useCallback(({ number, date }) => {
+    const rows = billRequest?.rows || [];
+    setBillRequest(null);
+    if (!rows.length || deleting.current) return;
+    const updates = invoicePatch(rows, { number, date });
+    applyBulk(updates, priorState(rows, Object.keys(updates[0]).filter((k) => k !== "id")), `${rows.length} ${rows.length === 1 ? "line" : "lines"} billed on invoice #${number}`);
+    clearSelection();
+  }, [billRequest, applyBulk, clearSelection]);
+
   const handleMarkBilled = useCallback((id, value = true) => {
     if (deleting.current) return;
     const row = feeLines.find((r) => r.id === id);
     if (!row) return;
-    const prev = { billed_to_bfs: row.billed_to_bfs, manually_adjusted: !!row.manually_adjusted };
-    handleEdit(id, { billed_to_bfs: value });
-    performAction(value ? "Line marked billed" : "Line reopened", () => {}, () => handleEdit(id, prev));
-  }, [feeLines, handleEdit, performAction]);
+    if (!value) {
+      const patch = reopenPatch();
+      applyBulk([{ id, ...patch }], priorState([row], Object.keys(patch)), "Line reopened");
+      return;
+    }
+    const display = billingRows.find((r) => r.id === id);
+    if (!display || !isReady(display, reportStatusMap, supersededSet)) { setSyncMessage("This line is not ready to bill. Resolve its review or report hold first."); return; }
+    setBillRequest({ rows: [row], label: row.job_name_norm || row.job_name_raw || "" });
+  }, [feeLines, billingRows, reportStatusMap, supersededSet, applyBulk]);
 
   const handleMarkBilledSelected = useCallback(() => {
     if (deleting.current) return;
@@ -343,16 +370,33 @@ export default function Invoicing() {
     const skipped = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId).length - selected.length;
     if (skipped) setSyncMessage(`${skipped} selected lines were skipped because they are not ready to bill. Review their status first.`);
     if (!selected.length) return;
-    const updates = selected.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
-    const prevStates = selected.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs, manually_adjusted: !!r.manually_adjusted }));
-    setFeeLines((prev) => prev.map((r) => { const u = updates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-    persistBulk(updates, prevStates);
-    performAction(`${selected.length} lines marked billed`, () => {}, () => {
-      setFeeLines((prev) => prev.map((r) => { const u = prevStates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-      persistBulk(prevStates, updates);
-    });
+    setBillRequest({ rows: selected, label: month });
+  }, [feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet, loading, loadError, monthClosed]);
+
+  const handleRecordPayment = useCallback((number, date) => {
+    if (deleting.current) return;
+    const rows = feeLines.filter((r) => r.billed_to_bfs && (r.invoice_number || "") === number);
+    const updates = paymentPatch(rows, number, date);
+    if (!updates.length) return;
+    const label = number ? `Invoice #${number}` : "Invoice";
+    applyBulk(updates, priorState(rows, ["paid_to_ya", "paid_date"]), date ? `${label} marked paid` : `${label} payment removed`);
+  }, [feeLines, applyBulk]);
+
+  // $0 lines held only to confirm the work was covered by the original install.
+  const coveredRows = useMemo(() => {
+    const ids = new Set(billingRows.filter((r) => selectedIds.has(r.id) && isCoveredZeroReview(r)).map((r) => r.id));
+    return selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId).filter((r) => ids.has(r.id));
+  }, [billingRows, feeLines, selectedIds, month, focusedJobId]);
+
+  const handleCoveredSelected = useCallback(() => {
+    if (deleting.current || !coveredRows.length) return;
+    if (loading || loadError || monthClosed) { setSyncMessage("Refresh billing data and use an open month before confirming lines."); return; }
+    const updates = coveredRows.map((r) => ({ id: r.id, manually_adjusted: true }));
+    applyBulk(updates, priorState(coveredRows, ["manually_adjusted"]), `${updates.length} $0 ${updates.length === 1 ? "line" : "lines"} confirmed as covered, no charge`);
     clearSelection();
-  }, [feeLines, billingRows, selectedIds, month, focusedJobId, reportStatusMap, supersededSet, loading, loadError, monthClosed, performAction, clearSelection, persistBulk]);
+  }, [coveredRows, loading, loadError, monthClosed, applyBulk, clearSelection]);
+
+  const register = useMemo(() => invoiceRegister(feeLines.filter((r) => !focusedJobId || r.job_id === focusedJobId)), [feeLines, focusedJobId]);
 
   const handleSetFeePctSelected = useCallback((pct) => {
     if (deleting.current) return;
@@ -397,7 +441,7 @@ export default function Invoicing() {
   const handleExportSelected = useCallback(() => {
     const selected = selectedInvoiceRows(feeLines, selectedIds, month, focusedJobId);
     if (!selected.length) return;
-    const cols = ["job_date", "job_name_norm", "line_description", "labor_amt", "fee_pct", "fee_amt", "billable", "source", "billed_to_bfs"];
+    const cols = ["job_date", "job_name_norm", "line_description", "labor_amt", "fee_pct", "fee_amt", "billable", "source", "billed_to_bfs", "invoice_number", "invoice_date", "paid_date"];
     const header = cols.join(",");
     const body = selected.map((r) => cols.map((c) => { const v = r[c]; if (v == null) return ""; const s = String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(",")).join("\n");
     const blob = new Blob([header + "\n" + body], { type: "text/csv" });
@@ -410,17 +454,11 @@ export default function Invoicing() {
 
   const handleBillJob = useCallback((job) => {
     if (deleting.current) return;
-    const lines = job.lines.filter(isLineReady);
+    const readyIds = new Set(job.lines.filter(isLineReady).map((r) => r.id));
+    const lines = feeLines.filter((r) => readyIds.has(r.id));
     if (!lines.length) return;
-    const updates = lines.map((r) => ({ id: r.id, billed_to_bfs: true, manually_adjusted: true }));
-    const prevStates = lines.map((r) => ({ id: r.id, billed_to_bfs: r.billed_to_bfs, manually_adjusted: !!r.manually_adjusted }));
-    setFeeLines((prev) => prev.map((r) => { const u = updates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-    persistBulk(updates, prevStates);
-    performAction(`Job "${job.name}" billed (${lines.length} ready ${lines.length === 1 ? "line" : "lines"})`, () => {}, () => {
-      setFeeLines((prev) => prev.map((r) => { const u = prevStates.find((u) => u.id === r.id); return u ? { ...r, ...u } : r; }));
-      persistBulk(prevStates, updates);
-    });
-  }, [performAction, persistBulk, isLineReady]);
+    setBillRequest({ rows: lines, label: job.name });
+  }, [feeLines, isLineReady]);
 
   const handleExportJob = useCallback((job) => {
     const cols = ["job_date", "line_description", "labor_amt", "fee_pct", "fee_amt", "billed_to_bfs"];
@@ -607,6 +645,7 @@ export default function Invoicing() {
               readyCount={heroStats.readyCount}
               onSelectAllReady={handleSelectAllReady}
             />
+            {filter === "billed" && !(view === "dashboard" && !focusedJobId) && <InvoiceRegister register={register} onRecordPayment={handleRecordPayment} />}
             {view === "dashboard" && !focusedJobId ? (
               <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_340px]" style={{ alignItems: "start" }}>
                 <DashboardLineList
@@ -677,8 +716,12 @@ export default function Invoicing() {
           onDelete={handleDeleteSelected}
           onExport={handleExportSelected}
           onMarkBilled={handleMarkBilledSelected}
+          coveredCount={loading || loadError || monthClosed ? 0 : coveredRows.length}
+          onCovered={handleCoveredSelected}
         />
       )}
+
+      <RecordInvoiceDialog request={billRequest} onCancel={() => setBillRequest(null)} onConfirm={confirmBill} />
 
       {detailRow && (
         <LineDetailsDrawer
