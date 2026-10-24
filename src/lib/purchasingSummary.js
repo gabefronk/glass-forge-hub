@@ -49,9 +49,10 @@ const rawAmount = (v) => (v === null || v === undefined || v === '' || !Number.i
 
 // What we owe suppliers on one job, at the raw PO amount (payables never carry
 // the use tax; job cost does). Each live PO is owed until every supplier order
-// under it is marked paid; a supplier order with no PO is owed at its own
-// amount until paid. Cancelled POs and orders under them are excluded, as on
-// the rows. `missing` counts unpaid records with no amount.
+// under it is marked paid; a PO with no amount falls back to its unpaid
+// supplier orders' amounts (also pre-tax). A supplier order with no PO is owed
+// at its own amount until paid. Cancelled POs and orders under them are
+// excluded, as on the rows. `missing` counts unpaid records with no amount.
 export function supplierPayables(jobId, { purchase_orders = [], vendor_orders = [] } = {}) {
   const cancelled = new Set(purchase_orders.filter((p) => p.status === 'cancelled').map((p) => p.id));
   const pos = purchase_orders.filter((p) => p.job_id === jobId && p.status !== 'cancelled');
@@ -62,7 +63,9 @@ export function supplierPayables(jobId, { purchase_orders = [], vendor_orders = 
   for (const po of pos) {
     items += 1;
     const linked = orders.filter((o) => o.purchase_order_id === po.id);
-    if (!(linked.length && linked.every(isOrderPaid))) add(rawAmount(po.amount_dealer));
+    if (linked.length && linked.every(isOrderPaid)) continue;
+    const fromOrders = linked.filter((o) => !isOrderPaid(o)).map((o) => rawAmount(o.amount));
+    add(rawAmount(po.amount_dealer) ?? (fromOrders.length && fromOrders.every((v) => v != null) ? fromOrders.reduce((n, v) => n + v, 0) : null));
   }
   for (const o of orders) {
     if (o.purchase_order_id && poIds.has(o.purchase_order_id)) continue;
@@ -89,14 +92,16 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 // `card.paymentStage` from the job's payment_status (attached by the page).
 export function jobFlags(card, today = '') {
   const sale = column(card, 'sale');
-  const windows = column(card, 'windows');
   const sold = sale.value || 0;
   const stage = card?.paymentStage || '';
   const ap = card?.payables || { owed: 0, items: 0, unpaid: 0 };
   const eta = card?.refs?.etaLabel || '';
   const openOrder = ap.items > 0 && eta !== 'Delivered';
   // A $0 cost is treated as missing: it would read as free material (100% margin).
-  const hasCost = !windows.missing && windows.value > 0;
+  // A multi-scope job needs a cost on every scope row.
+  const own = card?.windows?.display;
+  const costs = own?.suppressed ? (card.scopes || []).map((s) => num(s.windows?.value)) : [num(own?.value)];
+  const hasCost = costs.length > 0 && costs.every((v) => v > 0);
   return {
     sold,
     customerOwes: sold ? round(sold * customerOwedShare(stage)) : 0,
