@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { formatMoney } from "@/lib/feeMath";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
-export default function FloatingActionBar({ selectedCount, selectedFee, onClear, onSetFeePct, onDelete, onExport, onMarkBilled, disabled = false, eligibleCount = selectedCount, laborCount = selectedCount, monthLabel = '' }) {
+export default function FloatingActionBar({ selectedCount, selectedFee, onClear, onSetFeePct, onDelete, onExport, onMarkBilled, onCovered, coveredCount = 0, disabled = false, eligibleCount = selectedCount, laborCount = selectedCount, monthLabel = '' }) {
   const [feeMenuOpen, setFeeMenuOpen] = useState(false);
 
   return (
@@ -50,6 +50,12 @@ export default function FloatingActionBar({ selectedCount, selectedFee, onClear,
       <button onClick={onExport} className="min-h-9 rounded-lg px-3 text-[12px] font-medium whitespace-nowrap" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)", cursor: "pointer" }}>
         Export CSV
       </button>
+
+      {coveredCount > 0 && (
+        <button disabled={disabled} onClick={onCovered} title="Confirm these $0 lines were covered by the original install. They leave Needs review and bill nothing." className="min-h-9 rounded-lg px-3 text-[12px] font-medium whitespace-nowrap" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.06)", color: "var(--gf-sidebar-text-on)", cursor: "pointer" }}>
+          Covered, no charge ({coveredCount})
+        </button>
+      )}
 
       <button disabled={disabled || !eligibleCount} title={monthLabel ? `Mark ready lines billed · ${monthLabel}` : undefined} onClick={onMarkBilled} className="min-h-9 rounded-lg px-3.5 text-[12px] font-semibold whitespace-nowrap flex items-center gap-1.5" style={{ border: "none", backgroundColor: "var(--gf-brass-400)", color: "var(--gf-on-brass)", cursor: "pointer" }}>
         Mark {eligibleCount} billed
