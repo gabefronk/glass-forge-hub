@@ -19,13 +19,13 @@ import { autofillBudget, budgetNameFor, fileNameHints, GLASS_LABOR_COST_EACH } f
 //   2. Compute the cost basis + margins with the same math as his Window Budget Sheet
 //      workbook (shared/jobBudgetMath.js, verified against the real template).
 //   3. Match the quote to a Hub job (conservative: one confident match or needs_review).
-//   4. File in Drive: find-or-create Glass Forge Jobs/<Builder>/<Job>, upload the quote
-//      PDF, a filled copy of his workbook, and a CSV summary.
+//   4. File in Drive: find-or-create Glass Forge Jobs/<Builder>/<Job> and upload the quote
+//      PDF. (The Window Budget Sheet workbook + CSV copies were retired Oct 24 - the
+//      budget on the Purchasing row is the budget.)
 //   5. Create the JobBudgets record and, on a confident job match, upsert this month's
 //      JobCostInputs so the Invoicing page profitability picks it up.
 // After the drop (the review step, shared/jobBudgetReview.js):
-//   set_inputs  type the yellow-cell numbers -> recompute, rewrite the sheet + CSV in
-//               place, refresh JobCostInputs when the row has a job.
+//   set_inputs  type the numbers -> recompute, refresh JobCostInputs when the row has a job.
 //   link_job    pick a Hub job (or create one from the quote) -> move the Drive files
 //               into Glass Forge Jobs/<Builder>/<Job>, mark filed, upsert JobCostInputs.
 //

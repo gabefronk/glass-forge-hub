@@ -87,17 +87,3 @@ export function linkedBudgetPatch(job, byEmail, folder) {
     drive_job_folder_id: folder.id, drive_job_folder_path: folder.path,
   };
 }
-
-// Header cells for fillBudgetXlsx: the job (when linked) wins over what the PDF said.
-export function sheetValuesFor(budget = {}, job, dateIso) {
-  const out = {
-    sales_rep: budget.quoted_by || '',
-    date_iso: dateIso,
-    builder: (job && job.builder) || budget.builder || '',
-    manufacturer: budget.manufacturer || budget.vendor || '',
-    openings_qty: budget.openings_qty || null,
-  };
-  const address = clean((job && job.address) || budget.quote?.lot_or_address);
-  if (address) out.address = address;
-  return out;
-}

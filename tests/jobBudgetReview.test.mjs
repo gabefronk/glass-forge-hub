@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sheetValuesFor, sumBudgetInputs } from '../base44/shared/jobBudgetReview.js';
+import { validateBudgetInputs, reviewCostInputPatch, newJobFromBudget, linkedBudgetPatch, sumBudgetInputs } from '../base44/shared/jobBudgetReview.js';
 
 test('sumBudgetInputs: a job with two quotes adds them up; the row being saved replaces its stored copy', () => {
   const stored = [
@@ -56,10 +56,3 @@ test('linkedBudgetPatch: filed, pointed at the job, match reason names who chose
   });
 });
 
-test('sheetValuesFor: workbook header cells from the budget row and, when linked, the job', () => {
-  const budget = { builder: 'AMMON CABIN', quoted_by: 'Gabriel Fronk', manufacturer: 'Andersen', openings_qty: 37, quote: { lot_or_address: 'Highway 150' } };
-  assert.deepEqual(sheetValuesFor(budget, null, '2026-09-26'), { sales_rep: 'Gabriel Fronk', date_iso: '2026-09-26', builder: 'AMMON CABIN', manufacturer: 'Andersen', openings_qty: 37, address: 'Highway 150' });
-  const withJob = sheetValuesFor(budget, { canonical_name: 'Ammon Cabin', builder: 'Jodi & Ammon', address: '123 Highway 150, Evanston, WY' }, '2026-09-26');
-  assert.equal(withJob.builder, 'Jodi & Ammon');
-  assert.equal(withJob.address, '123 Highway 150, Evanston, WY');
-});
