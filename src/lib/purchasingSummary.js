@@ -1,3 +1,5 @@
+import { PAYMENT_STAGES } from './jobPayment.js';
+
 // Totals + filters for the Purchasing summary bar. Pure: no React, no SDK.
 // Totals add only figures that are actually showing on the rows (the same
 // display values the table renders), so the bar always ties to the rows below.
@@ -78,11 +80,12 @@ export function supplierPayables(jobId, { purchase_orders = [], vendor_orders = 
   return { owed: round(owed), items, unpaid, missing, label, tone: !items ? 'gray' : !unpaid ? 'green' : 'amber' };
 }
 
-// Share of the sale still owed by the customer at each payment stage. There is
-// no customer payment ledger yet (no customer invoices recorded), so the stage
-// is the evidence: half down means half collected, full payment means none
-// owed, every other stage (or none) means the whole sale is still owed.
-const OWED_SHARE = { paid: 0, half_down: 0.5, partial: 0.5 };
+// Share of the sale still owed by the customer at each job stage. There is no
+// customer payment ledger yet (no customer invoices recorded), so the stage is
+// the evidence (Gabriel, Oct 24): a job only sent to the customer is not sold
+// yet, half down means half collected, paid means none owed, and every other
+// stage (or none set) means the whole sale is still owed.
+const OWED_SHARE = { sent_to_customer: 0, paid: 0, half_down: 0.5, partial: 0.5 };
 export const customerOwedShare = (stage) => (stage in OWED_SHARE ? OWED_SHARE[stage] : 1);
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -111,7 +114,7 @@ export function jobFlags(card, today = '') {
     open_orders: openOrder,
     needs_eta: openOrder && !eta,
     eta_late: ISO_DAY.test(eta) && Boolean(today) && eta < today,
-    waiting_payment: stage === 'waiting_on_payment',
+    waiting_payment: stage === 'waiting_on_payment' || stage === 'waiting_on_check',
     deposit_due: Boolean(sold) && !stage,
     supplier_unpaid: ap.unpaid > 0,
     missing_cost: !hasCost,
@@ -125,7 +128,7 @@ export const PURCHASING_FILTERS = [
   { key: 'po_placed', label: 'PO placed' },
   { key: 'eta_late', label: 'ETA late' },
   { key: 'needs_eta', label: 'Needs ETA' },
-  { key: 'waiting_payment', label: 'Waiting on payment' },
+  { key: 'waiting_payment', label: 'Waiting on payment or check' },
   { key: 'supplier_unpaid', label: 'Supplier unpaid' },
   { key: 'missing_cost', label: 'Missing cost' },
 ];
@@ -160,7 +163,7 @@ export function etaRange(labels = [], today = '') {
 // (earliest first), then other labels, then no ETA, then Delivered.
 export const PURCHASING_SORTS = ['job', 'eta', 'payment', 'windows', 'sale', 'profit'];
 export const DEFAULT_PURCHASING_SORT = { key: 'eta', dir: 'asc' };
-const STAGE_ORDER = ['', 'half_down', 'installed', 'paid', 'waiting_on_payment'];
+const STAGE_ORDER = ['', ...PAYMENT_STAGES.map((s) => s.key)];
 function etaKey(card) {
   const labels = card?.scopes?.length > 1 ? card.scopes.map((s) => s.etaLabel) : [card?.refs?.etaLabel];
   const dates = labels.filter((l) => ISO_DAY.test(l || '')).sort();
