@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react';
+import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import PurchasingRowTitle from './PurchasingRowTitle';
@@ -7,27 +7,33 @@ import EtaCell from './EtaCell';
 import QuoteCell from './QuoteCell';
 import { ScopeTableRows, ScopeMobileBlocks } from './ScopeRow';
 import { refTone } from './PurchasingCard';
-import { MoneyCell, MoneyStat, FieldRow, ACCENT, LINE, HEAD } from './PurchasingCells';
+import { MoneyCell, MoneyStat, FieldRow, ACCENT, LINE, HEAD, SHEET_EDGE, HEAD_BG, HEAD_RULE } from './PurchasingCells';
 import { PAYMENT_STAGES, PAYMENT_TONES, paymentPatch, paymentStage } from '@/lib/jobPayment';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { base44 } from '@/api/base44Client';
 import { messageOf } from '@/components/budgets/ProcurementForms';
 
-// Spreadsheet-style purchasing table - one row of figures per job, with the
-// job name on its own line directly above (10/22 layout pass per Gabriel).
-// No status column, no review tags or sublabels under the money; the quote
-// cell reads "Supplier - quote #"; the PO cell is just the YA number. Fits
-// the page width - no horizontal scroll. Money stays big, charcoal, tabular.
+// Spreadsheet-style purchasing grid (density pass, Oct 24): ONE table with one
+// sticky header for every job, instead of a card and a repeated header per job.
+// Each job is a group of rows: its name band (the builder - job title Gabriel
+// asked for on 10/22), its figures, any scope rows, and the Money workspace when
+// expanded. Money is right-aligned so decimals line up; warm rules separate rows.
+// The per-figure caption carries the cost source and tax basis.
 //
-// 10/22 mobile pass: below 700px the nine-column table collapses into a
-// stacked card (money as a 2x2 stat grid, then labeled Quote / YA PO / ETA
-// rows, then the payment dropdown). The desktop table is untouched and still
-// renders at >=700px. One expanded Money workspace serves both layouts.
-// The windows column heading stays neutral: some figures are verified
-// tax-inclusive supplier totals, others are PO/order amounts with no tax
-// field. The per-figure caption carries the tax status; the heading asserts
-// nothing the unverified figures cannot back.
-const HEADERS = ['Windows', 'Labor & material', 'Sale price', 'Profit', 'Quote', 'YA PO', 'ETA', 'Payments', 'Actions'];
+// Below 700px the grid becomes stacked cards (money as a 2x2 stat grid, then
+// labeled Quote / YA PO / ETA rows, then the payment dropdown).
+const COLUMNS = [
+  { label: 'Windows', width: '13%', accent: ACCENT.windows, money: true },
+  { label: 'Labor & material', width: '12%', accent: ACCENT.rough, money: true },
+  { label: 'Sale price', width: '12%', accent: ACCENT.sale, money: true },
+  { label: 'Profit', width: '11%', accent: ACCENT.profit, money: true },
+  { label: 'Quote', width: '13%' },
+  { label: 'YA PO', width: '9%' },
+  { label: 'ETA', width: '11%' },
+  { label: 'Payments', width: '13%' },
+  { label: '', width: '6%' },
+];
+const MONEY_LINK = '#0B3F3B';
 
 // One row of the payment dropdown: tinted + dotted along the red → green ramp so
 // the list reads as a scale at a glance.
@@ -42,18 +48,19 @@ function StageItem({ value, label }) {
 }
 
 // Customer payment stage dropdown - shared by the desktop table cell and the
-// mobile card so both write the same Jobs.payment_status patch.
+// mobile card so both write the same Jobs.payment_status patch. The label wraps
+// instead of being cut off.
 function PaymentSelect({ payKey, busy, onChange }) {
   const payTone = PAYMENT_TONES[payKey] || PAYMENT_TONES.none;
   const payLabel = paymentStage(payKey)?.label || 'Not tracked';
   return (
     <Select disabled={busy} value={payKey} onValueChange={(v) => onChange(v === 'none' ? '' : v)}>
       <SelectTrigger aria-label="Customer payment status"
-        className="h-auto w-full gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold shadow-none"
+        className="h-auto w-full gap-1 rounded-md border px-1.5 py-1 text-left text-[11px] font-semibold leading-tight shadow-none"
         style={{ borderColor: payTone.border, color: payTone.text, backgroundColor: payTone.bg }}>
-        <span className="flex min-w-0 flex-1 items-center gap-1.5">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: payTone.dot }} />
-          <span className="truncate">{payLabel}</span>
+        <span className="flex min-w-0 flex-1 items-start gap-1.5">
+          <span className="mt-[4px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: payTone.dot }} />
+          <span className="whitespace-normal break-words">{payLabel}</span>
         </span>
       </SelectTrigger>
       <SelectContent className="min-w-[15rem]">
@@ -64,8 +71,9 @@ function PaymentSelect({ payKey, busy, onChange }) {
   );
 }
 
-function Row({ card, data, onEdit, onSaved, zebra }) {
-  const { job, windows, rough, sale, profitDisplay, refs, supplier } = card;
+// Row state shared by the desktop rows and the mobile card of one job.
+function useJobRow(card, data, onSaved) {
+  const { job } = card;
   const [expanded, setExpanded] = useState(false);
   const [section, setSection] = useState('budgets');
   const [busy, setBusy] = useState(false);
@@ -82,65 +90,89 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
       await onSaved?.();
     } catch (e) { setPayError(messageOf(e)); } finally { setBusy(false); }
   }
-  const rowBg = zebra ? '#F8FAFC' : '#FFFFFF';
-  const payKey = fullJob?.payment_status || 'none';
-  const toggle = () => setExpanded((e) => { if (!e) setSection('budgets'); return !e; });
-  // When the ETA cannot be written straight from the cell, clicking it opens the
-  // row's supplier section instead of doing nothing.
-  const openSupplierSection = () => { setExpanded(true); setSection('tracking'); };
-  // A job with more than one scope (a second budget, a reorder PO, a supplier
-  // confirmation with no PO) lists each scope on its own row under this one, so
-  // a second order keeps its own quote, PO, ETA and supplier payment. One scope
-  // renders exactly the row above and nothing more.
-  const multiScope = (card.scopes || []).length > 1;
+  return {
+    fullJob, expanded, section, setSection, busy, payError, savePayment,
+    payKey: fullJob?.payment_status || 'none',
+    toggle: () => setExpanded((e) => { if (!e) setSection('budgets'); return !e; }),
+    // When the ETA cannot be written straight from the cell, clicking it opens
+    // the row's supplier section instead of doing nothing.
+    openSupplierSection: () => { setExpanded(true); setSection('tracking'); },
+    // A job with more than one scope (a second budget, a reorder PO, a supplier
+    // confirmation with no PO) lists each scope on its own row under this one.
+    multiScope: (card.scopes || []).length > 1,
+  };
+}
 
+function MoneyToggle({ row, jobId, className = '' }) {
   return (
-    <Fragment>
-      <div className="px-4 pb-1.5 pt-2.5" style={{ backgroundColor: '#E6F1ED', borderBottom: '1px solid #8FB9AF' }}>
+    <button type="button" onClick={row.toggle} aria-expanded={row.expanded} aria-controls={`purchasing-row-${jobId}`}
+      className={`inline-flex items-center gap-1 text-[11.5px] font-semibold underline ${className}`} style={{ color: MONEY_LINK }}>
+      Money<ChevronDown className="h-3.5 w-3.5" style={{ transform: row.expanded ? 'rotate(180deg)' : 'none' }} />
+    </button>
+  );
+}
+
+function Workspace({ row, data, onEdit, onSaved, jobId }) {
+  return (
+    <div id={`purchasing-row-${jobId}`}>
+      <div className="mb-2 flex justify-end">
+        <button type="button" onClick={onEdit} className="text-[11.5px] font-semibold underline" style={{ color: MONEY_LINK }}>Edit money</button>
+      </div>
+      <PurchasingJobWorkspace job={row.fullJob} data={data} section={row.section} onSection={row.setSection} onSaved={onSaved} />
+    </div>
+  );
+}
+
+// Desktop: one <tbody> per job inside the shared table.
+function JobRows({ card, data, onEdit, onSaved }) {
+  const { job, windows, rough, sale, profitDisplay, refs } = card;
+  const row = useJobRow(card, data, onSaved);
+  const cell = { borderLeft: `1px solid ${LINE}` };
+  return (
+    <tbody>
+      <tr>
+        <td colSpan={COLUMNS.length} className="px-3 pb-1 pt-2" style={{ backgroundColor: '#F3EEE4', borderTop: `1px solid ${SHEET_EDGE}` }}>
+          <PurchasingRowTitle job={job} onSaved={onSaved} />
+        </td>
+      </tr>
+      <tr style={{ borderTop: `1px solid ${LINE}` }}>
+        <MoneyCell display={windows.display} divider />
+        <MoneyCell display={rough.display} />
+        <MoneyCell display={sale.display} />
+        <MoneyCell display={profitDisplay} tone={profitDisplay?.tone} />
+        <td className="px-2 py-1.5 text-center align-top" style={cell}><QuoteCell card={card} onSaved={onSaved} /></td>
+        <td className="px-2 py-1.5 text-center align-top" style={cell}><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
+        <td className="px-2 py-1.5 text-center align-top" style={cell}>
+          <EtaCell job={job} data={data} etaLabel={refs.etaLabel} onSaved={onSaved} onOpenSupplier={row.openSupplierSection} />
+        </td>
+        <td className="px-2 py-1.5 align-top" style={cell}>
+          <PaymentSelect payKey={row.payKey} busy={row.busy} onChange={(v) => row.savePayment(v)} />
+          {row.payError && <span className="mt-1 block text-[10px] font-semibold" style={{ color: '#A43432' }}>{row.payError}</span>}
+        </td>
+        <td className="px-1.5 py-1.5 text-center align-top" style={cell}><MoneyToggle row={row} jobId={job.id} /></td>
+      </tr>
+      {row.multiScope && <ScopeTableRows scopes={card.scopes} job={job} onSaved={onSaved} onOpenTracking={row.openSupplierSection} />}
+      {row.expanded && row.fullJob && data && (
+        <tr>
+          <td colSpan={COLUMNS.length} className="px-3 py-3" style={{ borderTop: `1px solid ${LINE}`, backgroundColor: '#FBF9F5' }}>
+            <Workspace row={row} data={data} onEdit={onEdit} onSaved={onSaved} jobId={job.id} />
+          </td>
+        </tr>
+      )}
+    </tbody>
+  );
+}
+
+// Phone: one stacked card per job.
+function MobileCard({ card, data, onEdit, onSaved }) {
+  const { job, windows, rough, sale, profitDisplay, refs } = card;
+  const row = useJobRow(card, data, onSaved);
+  return (
+    <div className="overflow-hidden rounded-[12px] bg-white" style={{ border: `1px solid ${SHEET_EDGE}` }}>
+      <div className="px-4 pb-1.5 pt-2.5" style={{ backgroundColor: '#F3EEE4', borderBottom: `1px solid ${LINE}` }}>
         <PurchasingRowTitle job={job} onSaved={onSaved} />
       </div>
-      <div className="max-[699px]:hidden">
-        <table className="w-full border-collapse text-left" style={{ tableLayout: 'fixed' }}>
-          <colgroup>
-            <col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '11%' }} />
-            <col style={{ width: '13%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '6%' }} />
-          </colgroup>
-          <thead>
-            <tr style={{ backgroundColor: '#F1F5F4' }}>
-              {HEADERS.map((h, hi) => (
-                <th key={h} className="px-2 py-2 text-center text-[10.5px] font-bold uppercase tracking-[0.07em]" style={{ color: HEAD, backgroundColor: '#F1F5F4', borderLeft: hi === 0 ? undefined : `1px solid ${LINE}` }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr style={{ backgroundColor: rowBg }}>
-              <MoneyCell display={windows.display} accent={ACCENT.windows} divider />
-              <MoneyCell display={rough.display} accent={ACCENT.rough} />
-              <MoneyCell display={sale.display} accent={ACCENT.sale} />
-              <MoneyCell display={profitDisplay} accent={ACCENT.profit} tone={profitDisplay?.tone} />
-              <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><QuoteCell card={card} onSaved={onSaved} /></td>
-              <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></td>
-              <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
-                <EtaCell job={job} data={data} etaLabel={refs.etaLabel} onSaved={onSaved} onOpenSupplier={openSupplierSection} />
-              </td>
-              <td className="px-2.5 py-2 align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
-                <div className="flex flex-col items-start gap-1">
-                  <PaymentSelect payKey={payKey} busy={busy} onChange={(v) => savePayment(v)} />
-                  {payError && <span className="text-[10px] font-semibold" style={{ color: '#A43432' }}>{payError}</span>}
-                </div>
-              </td>
-              <td className="px-2 py-2 text-center align-top" style={{ borderLeft: `1px solid ${LINE}` }}>
-                <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={`purchasing-row-${job.id}`}
-                  className="inline-flex items-center gap-1 text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>
-                  Money<ChevronDown className="h-3.5 w-3.5" style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />
-                </button>
-              </td>
-            </tr>
-            {multiScope && <ScopeTableRows scopes={card.scopes} job={job} onSaved={onSaved} onOpenTracking={openSupplierSection} />}
-          </tbody>
-        </table>
-      </div>
-      <div className="px-4 pb-3 pt-1 min-[700px]:hidden" style={{ backgroundColor: rowBg }}>
+      <div className="px-4 pb-3 pt-2">
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px]" style={{ backgroundColor: LINE, border: `1px solid ${LINE}` }}>
           <MoneyStat label="Windows" display={windows.display} accent={ACCENT.windows} />
           <MoneyStat label="Labor & material" display={rough.display} accent={ACCENT.rough} />
@@ -151,42 +183,48 @@ function Row({ card, data, onEdit, onSaved, zebra }) {
           <FieldRow label="Quote"><QuoteCell card={card} onSaved={onSaved} /></FieldRow>
           <FieldRow label="YA PO"><DotText tone={refTone(refs.poStatus) || 'gray'}>{refs.yaPo}</DotText></FieldRow>
           <FieldRow label="ETA">
-            <EtaCell job={job} data={data} etaLabel={refs.etaLabel} onSaved={onSaved} onOpenSupplier={openSupplierSection} />
+            <EtaCell job={job} data={data} etaLabel={refs.etaLabel} onSaved={onSaved} onOpenSupplier={row.openSupplierSection} />
           </FieldRow>
         </div>
         <div className="mt-2.5">
           <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.07em]" style={{ color: HEAD }}>Payments</div>
-          <PaymentSelect payKey={payKey} busy={busy} onChange={(v) => savePayment(v)} />
-          {payError && <div className="mt-1 text-[10px] font-semibold" style={{ color: '#A43432' }}>{payError}</div>}
+          <PaymentSelect payKey={row.payKey} busy={row.busy} onChange={(v) => row.savePayment(v)} />
+          {row.payError && <div className="mt-1 text-[10px] font-semibold" style={{ color: '#A43432' }}>{row.payError}</div>}
         </div>
-        {multiScope && <ScopeMobileBlocks scopes={card.scopes} job={job} onSaved={onSaved} onOpenTracking={openSupplierSection} />}
-        <div className="mt-1 flex justify-end">
-          <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={`purchasing-row-${job.id}`}
-            className="inline-flex min-h-[44px] items-center gap-1 text-[12px] font-medium underline" style={{ color: '#8A8F93' }}>
-            Money<ChevronDown className="h-3.5 w-3.5" style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />
-          </button>
-        </div>
+        {row.multiScope && <ScopeMobileBlocks scopes={card.scopes} job={job} onSaved={onSaved} onOpenTracking={row.openSupplierSection} />}
+        <div className="mt-1 flex justify-end"><MoneyToggle row={row} jobId={job.id} className="min-h-[44px] text-[12px]" /></div>
       </div>
-      {expanded && fullJob && data && (
-        <div id={`purchasing-row-${job.id}`} className="px-3 py-3" style={{ backgroundColor: rowBg, borderTop: `1px solid ${LINE}` }}>
-          <div className="mb-2 flex justify-end">
-            <button type="button" onClick={onEdit} className="text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>Edit money</button>
-          </div>
-          <PurchasingJobWorkspace job={fullJob} data={data} section={section} onSection={setSection} onSaved={onSaved} />
+      {row.expanded && row.fullJob && data && (
+        <div className="px-3 py-3" style={{ borderTop: `1px solid ${LINE}`, backgroundColor: '#FBF9F5' }}>
+          <Workspace row={row} data={data} onEdit={onEdit} onSaved={onSaved} jobId={job.id} />
         </div>
       )}
-    </Fragment>
+    </div>
   );
 }
 
 export default function PurchasingTable({ cards, data, onEdit, onSaved }) {
   return (
-    <div className="flex flex-col gap-4">
-      {cards.map((card, i) => (
-        <div key={card.job.id} className="overflow-hidden rounded-[16px] bg-white" style={{ border: `1px solid ${LINE}`, boxShadow: '0 1px 2px rgba(10,29,31,.05)' }}>
-          <Row card={card} data={data} zebra={i % 2 === 1} onEdit={() => onEdit(card)} onSaved={onSaved} />
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="max-[699px]:hidden rounded-[12px] bg-white" style={{ border: `1px solid ${SHEET_EDGE}` }}>
+        <table className="w-full border-collapse text-left" style={{ tableLayout: 'fixed' }}>
+          <colgroup>{COLUMNS.map((c, i) => <col key={i} style={{ width: c.width }} />)}</colgroup>
+          <thead>
+            <tr>
+              {COLUMNS.map((c, i) => (
+                <th key={i} scope="col" className={`sticky top-0 z-10 px-2.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.07em] ${c.money ? 'text-right' : 'text-center'}`}
+                  style={{ color: HEAD, backgroundColor: HEAD_BG, borderBottom: `2px solid ${HEAD_RULE}`, borderLeft: i === 0 ? undefined : `1px solid ${LINE}`, boxShadow: c.accent ? `inset 0 3px 0 ${c.accent}` : undefined, borderTopLeftRadius: i === 0 ? 12 : undefined, borderTopRightRadius: i === COLUMNS.length - 1 ? 12 : undefined }}>
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          {cards.map((card) => <JobRows key={card.job.id} card={card} data={data} onEdit={() => onEdit(card)} onSaved={onSaved} />)}
+        </table>
+      </div>
+      <div className="flex flex-col gap-3 min-[700px]:hidden">
+        {cards.map((card) => <MobileCard key={card.job.id} card={card} data={data} onEdit={() => onEdit(card)} onSaved={onSaved} />)}
+      </div>
+    </>
   );
 }
