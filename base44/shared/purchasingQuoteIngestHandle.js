@@ -277,7 +277,9 @@ async function privatizeSource(adapter, p, user) {
   if (budget.deleted_at) fail('budget_deleted');
   const url = String(budget.source_pdf_url || '');
   if (!PUBLIC_SOURCE.test(url)) fail('no_public_source');
-  const res = await adapter.fetchBytes(url, MAX_PDF_BYTES).catch(() => null);
+  // The public-file URL answers with a redirect to storage, so it gets its own fetch that
+  // follows redirects (only ever called with the exact URL shape checked above).
+  const res = await (adapter.fetchPublic || adapter.fetchBytes)(url, MAX_PDF_BYTES).catch(() => null);
   if (!res || res.error || !(res.bytes instanceof Uint8Array) || !res.bytes.length) fail(res?.error === 'pdf_too_large' ? 'pdf_too_large' : 'pdf_fetch_failed');
   if (!isPdf(res.bytes)) fail('not_a_pdf');
   const sha = await sha256Hex(res.bytes);

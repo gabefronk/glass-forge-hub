@@ -6,8 +6,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
 import { handle, QUOTE_SCHEMA, QUOTE_PROMPT } from '../../shared/purchasingQuoteIngestHandle.js';
 
-async function fetchBytes(signedUrl: string, maxBytes: number) {
-  const r = await fetch(signedUrl, { signal: AbortSignal.timeout(60000), cache: 'no-store', redirect: 'error' }).catch(() => null);
+async function fetchBytes(signedUrl: string, maxBytes: number, redirect: RequestRedirect = 'error') {
+  const r = await fetch(signedUrl, { signal: AbortSignal.timeout(60000), cache: 'no-store', redirect }).catch(() => null);
   if (!r || !r.ok || !r.body) return { error: 'pdf_fetch_failed' };
   if (Number(r.headers.get('content-length') || 0) > maxBytes) return { error: 'pdf_too_large' };
   const reader = r.body.getReader();
@@ -47,6 +47,8 @@ export default async function (req: Request) {
     uploadPrivate: (bytes: Uint8Array, name: string) => core.UploadPrivateFile({ file: new File([bytes], name, { type: 'application/pdf' }) }),
     signUrl: (file_uri: string, expires_in: number) => core.CreateFileSignedUrl({ file_uri, expires_in }),
     fetchBytes,
+    // Older public quote files redirect to storage; only privatize_source uses this.
+    fetchPublic: (url: string, maxBytes: number) => fetchBytes(url, maxBytes, 'follow'),
     invokeReader: (signedUrl: string) => core.InvokeLLM({ prompt: QUOTE_PROMPT, response_json_schema: QUOTE_SCHEMA, file_urls: [signedUrl], add_context_from_internet: false }),
   };
   const { status, body } = await handle(req, adapter);
