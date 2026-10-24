@@ -7,11 +7,11 @@ import { moneyBarSegments } from '../src/lib/invoiceMoneyBar.js';
 
 const line = (id, job_date, labor, extra = {}) => ({ id, job_date, labor_amt: labor, fee_pct: 0.1, manually_adjusted: true, fee_amt: Math.round(labor * 10) / 100, billable: true, ...extra });
 
-test('date sort groups by day, oldest first, each with its subtotal', () => {
+test('date sort groups by day, oldest first (undated first, as before), each with its subtotal', () => {
   const rows = [line('a', '2026-10-03', 350), line('b', '2026-10-01', 200), line('c', '2026-10-03', 125.5), line('d', null, 40)];
   const groups = groupLines(rows, 'date');
-  assert.deepEqual(groups.map((g) => g.date), ['2026-10-01', '2026-10-03', '—']);
-  assert.deepEqual(groups.map((g) => [g.count, g.labor, g.fee]), [[1, 200, 20], [2, 475.5, 47.55], [1, 40, 4]]);
+  assert.deepEqual(groups.map((g) => g.date), ['—', '2026-10-01', '2026-10-03']);
+  assert.deepEqual(groups.map((g) => [g.count, g.labor, g.fee]), [[1, 40, 4], [1, 200, 20], [2, 475.5, 47.55]]);
   const total = lineSums(rows);
   assert.deepEqual([total.count, total.labor, total.fee], [4, 715.5, 71.55]);
   assert.equal(groups.reduce((n, g) => n + g.fee, 0).toFixed(2), total.fee.toFixed(2), 'day subtotals add up to the total row');
