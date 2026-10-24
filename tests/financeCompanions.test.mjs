@@ -124,8 +124,12 @@ function invoicingView(rows, events) {
   const billingRows = withCompanions(withComputedAmounts(rows), events);
   const superseded = buildSupersededSet(billingRows, events);
   const visible = billingRows.filter((r) => !superseded.has(r.id));
-  return { billingRows, superseded, visible, stats: invoicingStats(billingRows, RSM, superseded) };
+  const reportStatus = new Map([...RSM, ...events.map((e) => [e.google_event_id, e.report_status])]);
+  return { billingRows, superseded, visible, stats: invoicingStats(billingRows, reportStatus, superseded) };
 }
+// A visit with no field-report status is held (isReportBlocked, 2026-10-04), so
+// lines that should bill need their CalendarEvent reported.
+const reported = (...rows) => rows.filter((r) => r.calendar_event_id).map((r) => ({ google_event_id: r.calendar_event_id, report_status: 'ok', matched_post_ids: [] }));
 
 test('each calendar labor line is shown and billed; its $0 ProBuild twin is folded into it', () => {
   const { billingRows, superseded, visible, stats } = invoicingView(ROWS, EVENTS);
@@ -179,7 +183,8 @@ test('a priced ProBuild line beside calendar notes labor is held, not counted tw
   const calToll = cal('cal-toll-72', 'ev-toll-72', 'job-toll-72', '2026-09-15', 1000);
   // 6aaa44df... after the "2 man vinyl hours" fill: $200.
   const pb = twin('6aaa44df2f4c4298172393f1', 'job-toll-72', '2026-09-15', { man_hours: 2, service_material: 'vinyl', service_rate: 100, labor_amt: 200, fee_amt: 20 });
-  const held = invoicingView([calToll, pb], []);
+  const events = reported(calToll);
+  const held = invoicingView([calToll, pb], events);
   const row = held.billingRows.find((r) => r.id === pb.id);
   assert.match(row._companion_review, /Calendar labor \(\$1000 on 2026-09-15\)/);
   assert.equal(isMatchBlocked(row), true);
@@ -187,10 +192,10 @@ test('a priced ProBuild line beside calendar notes labor is held, not counted tw
   assert.equal(held.stats.readyTotal, 100, 'only the calendar line is ready');
   assert.equal(held.stats.matchBlockedTotal, 20, 'the held line is visible in Needs review');
   // Once someone confirms (manual adjustment), both bill.
-  const confirmed = invoicingView([calToll, { ...pb, manually_adjusted: true }], []);
+  const confirmed = invoicingView([calToll, { ...pb, manually_adjusted: true }], events);
   assert.equal(confirmed.stats.readyTotal, 120);
   // Month close holds it too.
-  return closeMonth([calToll, pb], []).then((snap) => assert.equal(snap.invoiced_subtotal, 100));
+  return closeMonth([calToll, pb], events).then((snap) => assert.equal(snap.invoiced_subtotal, 100));
 });
 
 test('complementary lines are not held: trip-charge calendar amount, merged-hours calendar line', () => {
@@ -198,7 +203,7 @@ test('complementary lines are not held: trip-charge calendar amount, merged-hour
   const hours = twin('pb-hours', 'job-a', '2026-09-10', { man_hours: 2, service_material: 'vinyl', labor_amt: 200 });
   const merged = cal('cal-merged', 'ev-merged', 'job-b', '2026-09-10', null, { source: 'both', probuild_post_id: 'post-merged', man_hours: 3, labor_amt: 300, note_text: 'Visit', calendar_note_text: 'Visit' });
   const other = twin('pb-other', 'job-b', '2026-09-11', { man_hours: 1, service_material: 'vinyl', labor_amt: 100 });
-  const { stats, billingRows } = invoicingView([trip, hours, merged, other], []);
+  const { stats, billingRows } = invoicingView([trip, hours, merged, other], reported(trip, merged));
   assert.equal(billingRows.some((r) => r._companion_review), false);
   assert.equal(stats.readyTotal, 67.5);
 });
@@ -215,7 +220,7 @@ test('manual, billed, reviewed and unrelated lines are never folded', () => {
   ];
   const zeroCal = cal('cal-zero', 'ev-zero', 'job-z', '2026-09-10', null, { labor_amt: 0, note_text: 'Punch list', calendar_note_text: 'Punch list' });
   const zeroTwin = twin('pb-zero', 'job-z', '2026-09-10');
-  const { superseded, visible, stats } = invoicingView([calLine, ...keep, zeroCal, zeroTwin], []);
+  const { superseded, visible, stats } = invoicingView([calLine, ...keep, zeroCal, zeroTwin], reported(calLine, zeroCal));
   for (const r of [...keep, zeroTwin]) assert.equal(superseded.has(r.id), false, r.id);
   assert.equal(visible.length, 8);
   assert.equal(stats.readyTotal, 120, 'the calendar line still bills once');
