@@ -100,23 +100,24 @@ test('windowsDisplayCandidate: customer_total / actual_total_sell never used as 
   assert.notEqual(d.value, 18000);
 });
 
-test('roughDisplayCandidate: owner-entered value shown, not review', () => {
+test('roughDisplayCandidate: the budget wins over the older money entry (Oct 24: budget is the source)', () => {
   const d = roughDisplayCandidate(reviewedBudget(), 3000, false);
-  assert.equal(d.value, 3000);
+  assert.equal(d.value, 2000);
   assert.equal(d.review, false);
+  assert.equal(d.source, 'budget_inputs');
+});
+
+test('roughDisplayCandidate: the older money entry only fills a budget with no labor figure, flagged', () => {
+  const d = roughDisplayCandidate({ inputs: { actual_total_sell: 18000 } }, 0, false);
+  assert.equal(d.value, 0);
+  assert.equal(d.review, true);
   assert.equal(d.source, 'owner');
 });
 
-test('roughDisplayCandidate: owner-entered 0 stays 0 (not dash, not invented)', () => {
-  const d = roughDisplayCandidate(reviewedBudget(), 0, false);
-  assert.equal(d.value, 0);
-  assert.equal(d.review, false);
-});
-
-test('roughDisplayCandidate: absent owner -> owner-typed budget review labor/material, flagged review', () => {
+test('roughDisplayCandidate: budget labor/material shows unflagged', () => {
   const d = roughDisplayCandidate(reviewedBudget(), null, false);
   assert.equal(d.value, 2000);
-  assert.equal(d.review, true);
+  assert.equal(d.review, false);
   assert.equal(d.source, 'budget_inputs');
 });
 
@@ -126,18 +127,18 @@ test('roughDisplayCandidate: genuinely missing (no budget labor) → dash', () =
   assert.equal(d.review, false);
 });
 
-test('saleDisplayCandidate: owner-entered value shown, not review', () => {
-  const d = saleDisplayCandidate(reviewedBudget(), 18000, false);
+test('saleDisplayCandidate: the budget customer sell wins over the older money entry', () => {
+  const d = saleDisplayCandidate(reviewedBudget(), 17500, false);
   assert.equal(d.value, 18000);
   assert.equal(d.review, false);
-  assert.equal(d.source, 'owner');
+  assert.equal(d.source, 'budget_inputs');
 });
 
-test('saleDisplayCandidate: absent owner -> owner-typed budget target sell, flagged review (computed suggestion never shown)', () => {
-  const d = saleDisplayCandidate(reviewedBudget(), null, false);
+test('saleDisplayCandidate: no budget sell -> older money entry, flagged (computed suggestion never shown)', () => {
+  const d = saleDisplayCandidate({ inputs: {} }, 18000, false);
   assert.equal(d.value, 18000);
   assert.equal(d.review, true);
-  assert.equal(d.source, 'budget_inputs');
+  assert.equal(d.source, 'owner');
 });
 
 test('profitDisplayCalc: flag propagates when any input is a candidate', () => {
@@ -231,10 +232,10 @@ test('buildPurchasingCards: PO-only job (no budget) does not crash; shows PO amo
   assert.equal(card.chosenBudget, null);
 });
 
-test('roughDisplayCandidate: labor-only budget review figure shows (his typed sub pay)', () => {
+test('roughDisplayCandidate: labor-only budget figure shows (his typed sub pay)', () => {
   const d = roughDisplayCandidate({ inputs: { labor_cost_sub_pay: 2000 } }, null, false);
   assert.equal(d.value, 2000);
-  assert.equal(d.review, true);
+  assert.equal(d.review, false);
   assert.equal(d.source, 'budget_inputs');
 });
 
