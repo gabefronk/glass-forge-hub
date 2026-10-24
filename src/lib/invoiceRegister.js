@@ -20,7 +20,7 @@ export function invoicePatch(rows, { number, date }) {
 }
 
 // Reopening a line takes it off its invoice and clears any payment recorded against it.
-export function reopenPatch(row) {
+export function reopenPatch() {
   return { billed_to_bfs: false, invoice_number: null, invoice_date: null, paid_to_ya: false, paid_date: null };
 }
 
