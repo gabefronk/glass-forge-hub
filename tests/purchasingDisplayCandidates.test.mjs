@@ -35,7 +35,7 @@ test('windowsDisplayCandidate: no direct records -> owner-typed budget review fi
   const d = windowsDisplayCandidate([reviewedBudget({}, { quote: null })], [], []);
   assert.equal(d.value, CMT);
   assert.equal(d.source, 'cost_material_tax');
-  assert.match(d.label, /budget/);
+  assert.equal(d.label, 'Budget material + 7.45% use tax');
   assert.equal(d.review, true);
 });
 
