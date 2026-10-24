@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import MoneyTiles from './MoneyTiles';
+import MoneyStatesStrip from './MoneyStatesStrip';
 import { PaymentStatusChip } from '@/components/jobs/JobPaymentStatus';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import { sectionForNextKey } from '@/lib/purchasingViewModel';
@@ -31,7 +32,7 @@ export const etaTone = (lbl) => (lbl ? 'blue' : null);
 // workspace region. The next-action opens the correct inline section (not a
 // route) for budgets/orders/tracking; 'job' stays an external Open-job Link.
 export default function PurchasingCard({ card, onEdit, data, onSaved }) {
-  const { job, windows, rough, sale, profitDisplay, refs, next, supplier, units, conflict, chosenBudget } = card;
+  const { job, windows, rough, sale, profitDisplay, refs, next, supplier, units, conflict, chosenBudget, states } = card;
   const [expanded, setExpanded] = useState(false);
   const [section, setSection] = useState('budgets');
   const moneyDup = rough.duplicate || sale.duplicate;
@@ -69,6 +70,8 @@ export default function PurchasingCard({ card, onEdit, data, onSaved }) {
       </div>
 
       <div className="mt-2.5"><MoneyTiles windows={windows.display} rough={rough.display} sale={sale.display} profit={profitDisplay} /></div>
+
+      <MoneyStatesStrip states={states} />
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">
         <RefChip label="Quote" value={refs.quoteNumber} tone={refTone(refs.quoteStatus)} />

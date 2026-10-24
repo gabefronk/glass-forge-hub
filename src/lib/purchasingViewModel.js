@@ -26,6 +26,7 @@ import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount, round
 import { purchasingMatches } from './purchasingMatches.js';
 import { procurementPath } from './procurementRoutes.js';
 import { purchasingText } from './purchasingSearch.js';
+import { moneyStatesForJob } from './purchasingMoneyStates.js';
 
 const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v : ''; } catch { return ''; } };
 const fileHref = (id) => (id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : '');
@@ -480,6 +481,7 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     const profitDisp = profitDisplayCalc(winDisplay, roughDisplay, saleDisplay);
 
     const refs = refsForJob(job.id, { budgets, purchaseOrders: purchase_orders, vendorOrders: vendor_orders, today });
+    const states = moneyStatesForJob(job.id, { budgets, purchaseOrders: purchase_orders, vendorOrders: vendor_orders });
     const next = nextActionForJob(job.id, { budgets, purchaseOrders: purchase_orders, vendorOrders: vendor_orders, conflicts, today });
 
     const activeBs = activeBudgets(jobBudgets);
@@ -516,7 +518,7 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
       profit,
       profitDisplay: profitDisp,
       chosenBudget: pickBudget ? { id: pickBudget.id, title: pickBudget.title || pickBudget.quote_name || 'Budget' } : null,
-      refs, next, files, supplier, brand, units, conflict: isConflict, search,
+      refs, next, files, supplier, brand, units, conflict: isConflict, search, states,
       // The budget the Quote cell reads its brand + number from (edited in place).
       quoteBudgetId: fileBudget?.id || null,
       quoteManufacturer: fileBudget?.manufacturer || '',

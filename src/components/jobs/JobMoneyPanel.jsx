@@ -47,10 +47,11 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
     Promise.all([
       base44.entities.JobBudgets.filter(byJob, "-created_date", 200),
       base44.entities.PurchaseOrders.filter(byJob, "-created_date", 500),
+      base44.entities.VendorOrders.filter(byJob, "-created_date", 500),
       base44.entities.FeeLines.filter(byJob, "-job_date", 5000),
       base44.entities.CalendarEvents.filter(byJob, "-event_date", 5000),
-    ]).then(([budgets, purchaseOrders, feeLines, calendarEvents]) => {
-      if (active) setState({ loading: false, error: "", data: aggregateJobMoney(ids, { budgets, purchaseOrders, feeLines, calendarEvents }) });
+    ]).then(([budgets, purchaseOrders, vendorOrders, feeLines, calendarEvents]) => {
+      if (active) setState({ loading: false, error: "", data: aggregateJobMoney(ids, { budgets, purchaseOrders, feeLines, calendarEvents, vendorOrders }) });
     }).catch(() => {
       if (active) setState({ loading: false, error: "Financial records could not be loaded.", data: null });
     });
@@ -77,6 +78,8 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
           <Metric label="Budget customer sell" value={data.totals.budgetSell} note="Estimate / entered sell, not cash" />
           <Metric label="PO dealer amount" value={data.totals.poDealer} note="Ordered amount; not proof of payment" />
           <Metric label="PO customer amount" value={data.totals.poCustomer} note="PO amount; not an invoice receipt" />
+          <Metric label="Vendor bills incurred" value={data.totals.voIncurred} note="Vendor bills received, paid or not; unpaid bills still count" />
+          <Metric label="Vendor payments recorded" value={data.totals.voPaid} note="Settled vendor orders; a stage of the incurred figure, never added to it" />
           <Metric label="Fees recorded" value={data.totals.feeRecorded} note="FeeLines using invoicing math" />
           <Metric label="Fee share on YA-paid work" value={data.totals.feePaid} note="YA received payment; does not confirm your fee was paid" />
         </div>
@@ -97,6 +100,15 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
             <div style={{ color: C.textMuted }}>Dealer {money(row.amount_dealer)} · customer {money(row.amount_customer)} · {statusWithDate(row)}</div>
             <div className="mt-1 font-medium" style={{ color: C.amber }}>PO status does not indicate payment.</div>
           </div>) : <p className="text-[11px]" style={{ color: C.textMuted }}>No linked PurchaseOrders records.</p>}
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold" style={{ color: C.text }}>Vendor order sources</h3><RecordLink to={procurementPath(jobId, 'tracking')}>Job order tracking</RecordLink></div>
+          {data.vendorOrders.length ? data.vendorOrders.map((row) => <div key={row.id} className="mb-2 rounded-lg p-2.5 text-[11px]" style={{ border: `1px solid ${C.rowBorder}` }}>
+            <div className="font-semibold" style={{ color: C.text }}>{row.order_number || row.title || row.id} · {row.vendor || "Vendor not recorded"}</div>
+            <div style={{ color: C.textMuted }}>Owed {money(row.amount)} · {row.status || "no status"}{row.paid_at ? ` · paid ${date(row.paid_at)}` : ""}</div>
+            <div className="mt-1 font-medium" style={{ color: C.amber }}>A bill is incurred when received, whether or not it is paid yet.</div>
+          </div>) : <p className="text-[11px]" style={{ color: C.textMuted }}>No linked VendorOrders records.</p>}
         </div>
 
         <div>
