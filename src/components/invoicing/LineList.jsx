@@ -1,12 +1,35 @@
 import { isFutureRow } from "@/lib/feeMath";
 import { useEffect, useMemo, useState } from "react";
-import { computeFeeAmt } from "@/lib/feeMath";
+import { formatMoney } from "@/lib/feeMath";
 import { isMatchBlocked } from "@/lib/invoicingFilters";
+import { UNBILLED_GRID, GRID_WIDE } from "@/lib/feeUI";
+import { groupLines, lineSums } from "@/lib/invoiceGrid";
 import DayHeader from "./DayHeader";
 import LineRow from "./LineRow";
 
-export default function LineList({ rows, sort, selectedIds, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenJob, onOpenDetails, reportAttached, onToggleDay, onClearFilters, editRequestId, onEditRequestHandled, onReady, onSendForReview, jobs, onLinkJob }) {
+// Invoicing lines as one ruled grid (M1b, Oct 24): a sticky column header matching the
+// Purchasing grid (warm #E9E2D4 band, 2px #34403F rule), day subtotal rows, and a total
+// row for whatever the Show filter and search leave on screen. Keys: J / K move between
+// lines, X selects the focused line.
+const HEAD_BG = "#E9E2D4", HEAD_RULE = "#34403F", HEAD_INK = "#0B3F3B";
+const COLUMNS = [
+  { label: "" },
+  { label: "Date" },
+  { label: "Job" },
+  { label: "PO" },
+  { label: "Crew", wide: true },
+  { label: "Work", wide: true },
+  { label: "Labor", right: true },
+  { label: "Fee %", right: true },
+  { label: "Fee", right: true },
+  { label: "Status" },
+  { label: "Invoice", wide: true },
+  { label: "" },
+];
+
+export default function LineList({ rows, sort, selectedIds, onToggle, onShiftClick, onEdit, onDelete, onAddReport, onMarkBilled, onOpenDetails, reportAttached, onToggleDay, onClearFilters, editRequestId, onEditRequestHandled, onReady, onSendForReview, jobs, onLinkJob, totalLabel = "All lines", cellEditing = true }) {
   const [expandedId, setExpandedId] = useState(null);
+  const [focusId, setFocusId] = useState(null);
   // The drawer's Edit button asks a row to open its inline expansion.
   useEffect(() => {
     if (!editRequestId) return;
@@ -15,23 +38,27 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
   }, [editRequestId, onEditRequestHandled]);
   const toggleExpand = (row) => setExpandedId((prev) => (prev === row.id ? null : row.id));
   const collapse = () => setExpandedId(null);
-  const grouped = useMemo(() => {
-    if (sort === "fee") {
-      return [{ date: null, rows: [...rows].sort((a, b) => computeFeeAmt(b) - computeFeeAmt(a)) }];
-    }
-    const groups = {};
-    for (const r of rows) {
-      const d = r.job_date || "—";
-      if (!groups[d]) groups[d] = [];
-      groups[d].push(r);
-    }
-    return Object.entries(groups)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, rs]) => ({ date, rows: rs }));
-  }, [rows, sort]);
+  const grouped = useMemo(() => groupLines(rows, sort), [rows, sort]);
+  const total = useMemo(() => lineSums(rows), [rows]);
+  const maxDayFee = Math.max(...grouped.map((g) => g.fee), 0);
+  const order = useMemo(() => grouped.flatMap((g) => g.rows.map((r) => r.id)), [grouped]);
 
-  const dayFees = grouped.map((g) => g.rows.reduce((s, r) => s + (computeFeeAmt(r) || 0), 0));
-  const maxDayFee = Math.max(...dayFees, 0);
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.target?.closest?.("input, textarea, select, [contenteditable='true'], [role='dialog']")) return;
+      const key = e.key.toLowerCase();
+      if (key !== "j" && key !== "k" && key !== "x") return;
+      if (!order.length) return;
+      e.preventDefault();
+      if (key === "x") { if (focusId && order.includes(focusId)) onToggle(focusId); return; }
+      const at = order.indexOf(focusId);
+      const next = at === -1 ? 0 : Math.min(order.length - 1, Math.max(0, at + (key === "j" ? 1 : -1)));
+      setFocusId(order[next]);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [order, focusId, onToggle]);
 
   if (rows.length === 0) {
     return (
@@ -44,26 +71,26 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
     );
   }
 
+  const totalBand = { backgroundColor: HEAD_BG, borderTop: `2px solid ${HEAD_RULE}` };
+  const lines = `${total.count} ${total.count === 1 ? "line" : "lines"}`;
+
   return (
-    <div style={{ position: "relative", paddingBottom: "8px" }}>
-      {/* Desktop column headers */}
-      <div className="hidden sm:flex items-center" style={{ height: "26px", padding: "0 16px", gap: "14px", borderBottom: "1px solid var(--gf-hairline)", backgroundColor: "var(--gf-card-band)" }}>
-        <div style={{ width: "28px", flexShrink: 0 }} />
-        <div style={{ width: "30px", flexShrink: 0 }} />
-        <span className="text-[11px] font-semibold uppercase" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", flex: "1 1 auto" }}>Job</span>
-        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "80px", flexShrink: 0 }}>Labor / sale</span>
-        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "128px", flexShrink: 0 }}>Status</span>
-        <span className="text-[11px] font-semibold uppercase text-right" style={{ color: "var(--gf-ink-3)", letterSpacing: "0.06em", width: "100px", flexShrink: 0 }}>Fee</span>
-        <div style={{ width: "28px", flexShrink: 0 }} />
+    <div role="table" aria-label="Invoice lines" style={{ position: "relative" }}>
+      {/* Sticky column header */}
+      <div role="row" className={`hidden ${UNBILLED_GRID}`} style={{ position: "sticky", top: 0, zIndex: 5, minHeight: "30px", padding: "0 12px", backgroundColor: HEAD_BG, borderBottom: `2px solid ${HEAD_RULE}` }}>
+        {COLUMNS.map((c, i) => (
+          <span key={i} role="columnheader" className={`${c.wide ? GRID_WIDE : ""} text-[10.5px] font-bold uppercase tracking-[0.07em] ${c.right ? "text-right" : ""}`} style={{ color: HEAD_INK, whiteSpace: "nowrap" }}>{c.label}</span>
+        ))}
       </div>
-      {grouped.map((group, gi) => (
-        <div key={group.date || "all"}>
+      {grouped.map((group) => (
+        <div key={group.date || "all"} role="rowgroup">
           {group.date && sort === "date" && (
             <DayHeader
               date={group.date}
-              lineCount={group.rows.length}
-              dayFee={dayFees[gi]}
-              isLargest={dayFees[gi] === maxDayFee && maxDayFee > 0}
+              lineCount={group.count}
+              dayLabor={group.labor}
+              dayFee={group.fee}
+              isLargest={group.fee === maxDayFee && maxDayFee > 0 && grouped.length > 1}
               allSelected={group.rows.length > 0 && group.rows.every((r) => selectedIds.has(r.id))}
               onSelectDay={() => onToggleDay(group.rows)}
             />
@@ -73,18 +100,17 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
               key={row.id}
               row={row}
               selected={selectedIds.has(row.id)}
+              focused={focusId === row.id}
               blocked={isMatchBlocked(row) || row._reportBlocked}
               reportAttached={reportAttached.has(row.id)}
               isFuture={isFutureRow(row)}
               isBilled={!!row.billed_to_bfs}
-              isZero={Number(row.labor_amt) === 0}
               onToggle={onToggle}
               onShiftClick={onShiftClick}
               onEdit={onEdit}
               onDelete={onDelete}
               onAddReport={onAddReport}
               onMarkBilled={onMarkBilled}
-              onOpenJob={onOpenJob}
               onOpenDetails={onOpenDetails}
               expanded={expandedId === row.id}
               onToggleExpand={toggleExpand}
@@ -93,10 +119,33 @@ export default function LineList({ rows, sort, selectedIds, onToggle, onShiftCli
               onCollapse={collapse}
               jobs={jobs}
               onLinkJob={onLinkJob}
+              cellEditing={cellEditing}
             />
           ))}
         </div>
       ))}
+      {/* Total row: follows the Show filter and search */}
+      <div role="row" className={`hidden ${UNBILLED_GRID}`} style={{ ...totalBand, minHeight: "34px", padding: "4px 12px" }}>
+        <span />
+        <span className="whitespace-nowrap text-[12.5px] font-bold" style={{ color: "var(--gf-ink)", gridColumn: "span 2" }}>
+          Total · {totalLabel} <span className="font-medium" style={{ color: "var(--gf-ink-2)" }}>· {lines}</span>
+        </span>
+        <span />
+        <span className={GRID_WIDE} />
+        <span className={GRID_WIDE} />
+        <span className="font-mono-num-bold text-right text-[13px]" style={{ color: "var(--gf-ink)" }}>${formatMoney(total.labor)}</span>
+        <span />
+        <span className="font-mono-num-bold text-right text-[13px]" style={{ color: "var(--gf-ink)" }}>${formatMoney(total.fee)}</span>
+        <span className="hidden text-[11px] font-medium lg:block" style={{ color: "var(--gf-ink-2)" }}>J / K move · X selects</span>
+        <span className={GRID_WIDE} />
+        <span />
+      </div>
+      <div className="flex items-center gap-2 md:hidden" style={{ ...totalBand, minHeight: "40px", padding: "4px 12px" }}>
+        <span className="text-[12.5px] font-bold" style={{ color: "var(--gf-ink)" }}>Total · {lines}</span>
+        <span style={{ flex: "1 1 0%" }} />
+        <span className="font-mono-num text-[12px]" style={{ color: "var(--gf-ink-2)" }}>${formatMoney(total.labor)} labor</span>
+        <span className="font-mono-num-bold text-[13px]" style={{ color: "var(--gf-ink)" }}>${formatMoney(total.fee)}</span>
+      </div>
     </div>
   );
 }
