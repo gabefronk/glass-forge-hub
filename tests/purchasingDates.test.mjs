@@ -63,3 +63,12 @@ test('received and explicitly cancelled orders have no pending ETA entry', () =>
   assert.equal(received.find(e => e.purchasing_label === 'Received').event_date, '2026-10-05');
   assert.equal(purchasingCalendarEvents({ ...data, purchase_orders: [{ ...po, status: 'cancelled' }] }).some(e => e.purchasing_label === 'ETA'), false);
 });
+
+test('ETA distance reads as days ahead, today, or days late (Denver calendar days)', async () => {
+  const { etaDistance } = await import('../src/lib/purchasingDates.js');
+  assert.deepEqual(etaDistance('2026-11-09', '2026-10-23'), { text: '17d', late: false });
+  assert.deepEqual(etaDistance('2026-10-24', '2026-10-24'), { text: 'today', late: false });
+  assert.deepEqual(etaDistance('2026-09-30', '2026-10-23'), { text: '23d late', late: true });
+  assert.equal(etaDistance('', '2026-10-23'), null);
+  assert.equal(etaDistance('Delivered', '2026-10-23'), null);
+});
