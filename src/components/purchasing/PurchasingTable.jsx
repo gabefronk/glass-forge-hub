@@ -1,70 +1,74 @@
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronRight, ArrowUpRight } from 'lucide-react';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
-import PurchasingRowTitle, { rowTitle } from './PurchasingRowTitle';
+import PurchasingRowTitle from './PurchasingRowTitle';
 import EtaCell from './EtaCell';
-import QuoteCell from './QuoteCell';
 import { money } from '@/components/budgets/ProcurementForms';
-import { cardFigures, etaRange, etaShort } from '@/lib/purchasingSummary';
+import { cardFigures, etaDate, etaEarliest } from '@/lib/purchasingSummary';
 import { procurementPath } from '@/lib/procurementRoutes';
 import { PAYMENT_STAGES, PAYMENT_TONES, paymentPatch, paymentStage } from '@/lib/jobPayment';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { base44 } from '@/api/base44Client';
 import { messageOf } from '@/components/budgets/ProcurementForms';
 
-// Purchasing as one flat grid (declutter, Oct 24): Job · Order · PO · ETA · Payment ·
-// Windows + tax · Sale · Est. profit, one sticky header, 40px ruled rows, money
-// right-aligned with no captions (the basis is in the header's hover title). Clicking a
-// job opens its details and Money workspace under the row. A multi-scope job shows
-// "N scopes" and a dash in each money cell, with one 36px row per scope under it. Columns
-// drop out as the screen narrows: Order below 1536px, PO and Windows below 1280px. Below
-// 1024px each job is one ~110px row that links to the job's Budget & Orders page.
-const INK = '#101617', INK2 = '#566063', INK3 = '#34403F', RULE = '#D6CCBA';
-const GRID = 'lg:grid lg:[grid-template-columns:var(--pc-l)] xl:[grid-template-columns:var(--pc-x)] 2xl:[grid-template-columns:var(--pc-2)]';
-const XL = 'hidden xl:block', XXL = 'hidden 2xl:block';
+// Purchasing grid (redesign, Oct 24): Builder / Job · Supplier · ETA · Job stage ·
+// Windows + tax · Sale · Est. profit. One clean line per job - the builder sits above the
+// job name, the supplier column names only the supplier, ETA is just the date. PO, order
+// and quote numbers live in the open row, not on the grid. Clicking a job opens its
+// purchase orders, budget and quote upload under the row. A multi-scope job shows the sum
+// of its scopes; the open row lists each scope. Supplier and Windows drop out below
+// 1280px. Below 1024px each job is one row that links to the job's Budget & Orders page.
+const INK = '#101617', INK2 = '#566063', INK3 = '#34403F', RULE = '#EEE9E0', EDGE = '#E2DCD1';
+const GRID = 'lg:grid lg:[grid-template-columns:var(--pc-l)] xl:[grid-template-columns:var(--pc-x)]';
+const XL = 'hidden xl:block';
 const VARS = {
-  '--pc-l': 'minmax(200px,1fr) 132px 176px 124px 116px',
-  '--pc-x': 'minmax(200px,1fr) 92px 132px 176px 132px 124px 116px',
-  '--pc-2': '260px minmax(128px,1fr) 92px 132px 176px 132px 124px 116px',
+  '--pc-l': '40px minmax(200px,1fr) 104px 200px 120px 116px',
+  '--pc-x': '40px minmax(220px,1.6fr) minmax(120px,1fr) 104px 200px 124px 120px 116px',
 };
 const COLUMNS = [
-  { label: 'Job', sort: 'job' },
-  { label: 'Order', cls: XXL },
-  { label: 'PO', cls: XL },
+  { label: '', key: 'chev' },
+  { label: 'Builder / Job', sort: 'job' },
+  { label: 'Supplier', cls: XL },
   { label: 'ETA', sort: 'eta' },
-  { label: 'Payment', sort: 'payment' },
+  { label: 'Job stage', sort: 'payment' },
   { label: 'Windows + tax', sort: 'windows', right: true, cls: XL, title: 'Window and door material including the 7.45% use tax' },
   { label: 'Sale', sort: 'sale', right: true },
   { label: 'Est. profit', sort: 'profit', right: true, title: 'Sale less windows + tax less labor & material' },
 ];
 const cell = { padding: '0 10px', minWidth: 0 };
-const mono = { fontFamily: 'var(--font-mono)', fontSize: '13px', color: INK3 };
-
-const orderRef = (card) => [card.brand, card.refs?.mfrOrder || card.refs?.quoteNumber].filter(Boolean).join(' ');
 const dash = <span style={{ color: INK2 }}>—</span>;
-const moneyCell = (v, bold, negative) => (v == null ? dash : <span style={{ fontWeight: bold ? 700 : 400, color: negative ? '#A43432' : INK }}>{money(v)}</span>);
-// A job row shows its own figure unless a multi-scope job withholds it (then the scope
-// rows carry the money and the job row shows one dash), the same rule the header adds by.
-const ownCell = (d, bold) => (d?.suppressed ? dash : moneyCell(d?.value, bold, d?.value < 0));
+const moneyCell = (v, bold, negative) => (v == null ? dash : <span style={{ fontWeight: bold ? 700 : 500, color: negative ? '#A43432' : bold ? INK : INK3 }}>{money(v)}</span>);
+// Figures as the grid shows them: a job's own, or the sum of its scopes.
+const figure = (v, any) => (any ? v : null);
 
-// Customer payment stage, in the cell: borderless until hover, a dot and the full stage
-// name. Same Jobs.payment_status patch as before; Gabe's stage order.
-function PaymentSelect({ payKey, busy, onChange }) {
-  const tone = PAYMENT_TONES[payKey] || PAYMENT_TONES.none;
-  const label = paymentStage(payKey)?.label || 'Not tracked';
+// Every supplier on the job, once each (a multi-scope job can have two).
+export function supplierText(card) {
+  const names = [];
+  const add = (n) => { const t = String(n || '').trim(); if (t && !names.some((x) => x.toLowerCase() === t.toLowerCase())) names.push(t); };
+  (card.scopes || []).forEach((s) => add(s.quoteCard?.brand));
+  add(card.brand || card.supplier);
+  return names.join(', ');
+}
+
+// Job stage, in the cell: a tinted pill in the stage's colour; picking one saves to the
+// job (the same Jobs.payment_status field the job page reads).
+function StageSelect({ stageKey, busy, onChange, label }) {
+  const tone = PAYMENT_TONES[stageKey] || PAYMENT_TONES.none;
+  const stage = paymentStage(stageKey);
   return (
-    <Select disabled={busy} value={payKey} onValueChange={(v) => onChange(v === 'none' ? '' : v)}>
-      <SelectTrigger aria-label="Customer payment status" className="h-9 w-full gap-1 rounded-[8px] border border-transparent bg-transparent px-2 text-left text-[14px] shadow-none hover:border-[#9A9080] focus:ring-0">
-        <span className="flex min-w-0 flex-1 items-center gap-2" style={{ color: payKey === 'none' ? INK2 : INK }}>
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
-          <span className="whitespace-nowrap">{label}</span>
+    <Select disabled={busy} value={stage ? stageKey : ''} onValueChange={onChange}>
+      <SelectTrigger aria-label={`Job stage for ${label}`} className="h-8 w-full gap-1.5 rounded-[7px] px-2.5 text-left text-[12.5px] font-semibold shadow-none focus:ring-2 focus:ring-[#10524C] focus:ring-offset-1 [&>svg]:opacity-70"
+        style={{ backgroundColor: tone.bg, color: tone.text, border: `1px ${stage ? 'solid' : 'dashed'} ${stage ? tone.border : '#CEC6B8'}` }}>
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} />
+          <span className="truncate">{stage?.label || 'Set stage'}</span>
         </span>
       </SelectTrigger>
-      <SelectContent className="min-w-[15rem]">
-        <SelectItem value="none" className="text-[14px]">Not tracked</SelectItem>
+      <SelectContent className="min-w-[13rem]">
         {PAYMENT_STAGES.map((st) => (
-          <SelectItem key={st.key} value={st.key} className="text-[14px]">
-            <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: (PAYMENT_TONES[st.key] || PAYMENT_TONES.none).dot }} />{st.label}
+          <SelectItem key={st.key} value={st.key} className="text-[13.5px]">
+            <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: st.key === 'paid' ? '#0B3F3B' : (PAYMENT_TONES[st.key] || PAYMENT_TONES.none).dot }} />{st.label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -75,88 +79,86 @@ function PaymentSelect({ payKey, busy, onChange }) {
 function useJobRow(card, data, onSaved) {
   const { job } = card;
   const [expanded, setExpanded] = useState(false);
-  const [section, setSection] = useState('budgets');
   const [busy, setBusy] = useState(false);
-  const [payError, setPayError] = useState('');
+  const [stageError, setStageError] = useState('');
   const fullJob = data?.jobs?.find((j) => j.id === job.id) || job;
-  async function savePayment(key) {
-    if (busy) return;
-    setBusy(true); setPayError('');
+  async function saveStage(key) {
+    if (busy || !key || key === fullJob?.payment_status) return;
+    setBusy(true); setStageError('');
     try {
-      const patch = key ? paymentPatch(fullJob, key) : { payment_status: null, payment_status_at: null };
-      await base44.entities.Jobs.update(job.id, patch);
+      await base44.entities.Jobs.update(job.id, paymentPatch(fullJob, key));
       await onSaved?.();
-    } catch (e) { setPayError(messageOf(e)); } finally { setBusy(false); }
+    } catch (e) { setStageError(messageOf(e)); } finally { setBusy(false); }
   }
   return {
-    fullJob, expanded, section, setSection, busy, payError, savePayment,
-    payKey: fullJob?.payment_status || 'none',
-    toggle: () => setExpanded((e) => { if (!e) setSection('budgets'); return !e; }),
-    openSupplierSection: () => { setExpanded(true); setSection('tracking'); },
+    fullJob, expanded, busy, stageError, saveStage,
+    stageKey: fullJob?.payment_status || '',
+    toggle: () => setExpanded((e) => !e),
+    open: () => setExpanded(true),
     scopes: (card.scopes || []).length > 1 ? card.scopes : [],
   };
 }
 
-function ScopeRows({ scopes, job, onSaved, onOpenTracking }) {
-  return scopes.map((s) => {
-    const sup = s.payment?.label && s.payment.label !== '—' ? `Supplier · ${s.payment.label}` : '';
-    return (
-      <div key={s.key} role="row" className={`items-center ${GRID}`} style={{ minHeight: '36px', backgroundColor: '#FAF8F3', borderBottom: `1px solid ${RULE}`, color: INK3 }}>
-        <span className="truncate text-[14px]" style={{ ...cell, paddingLeft: '40px' }} title={s.label}>{s.label || 'Scope'}</span>
-        <span className={`${XXL} truncate`} style={{ ...cell, ...mono }}>{[s.quoteCard?.brand, s.quoteCard?.refs?.quoteNumber].filter(Boolean).join(' ')}</span>
-        <span className={`${XL} truncate`} style={{ ...cell, ...mono }}>{s.poNumber || ''}</span>
-        <span style={cell}><EtaCell compact job={job} etaTarget={s.etaTarget} etaLabel={s.etaLabel} onSaved={onSaved} onOpenSupplier={onOpenTracking} /></span>
-        <span className="truncate text-[14px]" style={cell}>{sup}</span>
-        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(s.windows?.value)}</span>
-        <span className="text-right text-[14px] tabular-nums" style={cell}>{moneyCell(s.sale?.value, true)}</span>
-        <span className="text-right text-[14px] tabular-nums" style={cell}>{moneyCell(s.profit?.value, false, s.profit?.value < 0)}</span>
-      </div>
-    );
-  });
+function JobTitle({ job, extra }) {
+  const builder = String(job.builder || '').trim();
+  return (
+    <span className="flex min-w-0 flex-col gap-0.5 text-left">
+      {builder ? <span className="truncate text-[12px] font-medium" style={{ color: INK2 }}>{builder}</span> : null}
+      <span className="job-name truncate text-[14.5px] font-semibold" style={{ color: INK }}>{job.canonical_name || 'Unnamed job'}{extra ? <span className="font-normal" style={{ color: INK2 }}> · {extra}</span> : null}</span>
+    </span>
+  );
 }
 
-function JobRows({ card, data, onEdit, onSaved, today }) {
+function JobRows({ card, data, onSaved }) {
   const { job, refs } = card;
   const row = useJobRow(card, data, onSaved);
-  const [hover, setHover] = useState(false);
   const multi = row.scopes.length > 1;
-  const scopesText = `${row.scopes.length} scopes`;
-  const eta = multi ? etaRange(row.scopes.map((s) => s.etaLabel), today) : null;
+  const f = cardFigures(card);
+  const hasMoney = (k) => (multi ? row.scopes.some((s) => s[k]?.value != null) : card[k === 'profit' ? 'profitDisplay' : k]?.display?.value != null || (k === 'profit' && card.profitDisplay?.value != null));
+  const supplier = supplierText(card);
+  const label = [job.builder, job.canonical_name].filter(Boolean).join(' - ');
+  const panelId = `purchasing-row-${job.id}`;
   return (
     <>
-      <div role="row" className={`items-center ${GRID}`} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-        style={{ minHeight: '40px', borderBottom: `1px solid ${RULE}`, backgroundColor: row.expanded ? '#FAF8F3' : hover ? '#F6F3EC' : '#FFFFFF' }}>
-        <span style={cell}>
-          <button type="button" onClick={row.toggle} aria-expanded={row.expanded} aria-controls={`purchasing-row-${job.id}`}
-            className="text-left text-[14px] font-semibold" style={{ color: INK, background: 'none', border: 'none', padding: '8px 0', cursor: 'pointer', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
-            {rowTitle(job)}{multi && <span className="2xl:hidden" style={{ color: INK2, fontWeight: 400 }}> · {scopesText}</span>}
+      <div role="row" className={`group items-center ${GRID} ${row.expanded ? 'bg-[#EEF5F3]' : 'bg-white hover:bg-[#F6F3EC]'}`}
+        style={{ minHeight: '60px', borderTop: `1px solid ${RULE}`, transition: 'background-color .12s' }}>
+        <span style={{ ...cell, padding: '0 0 0 12px' }}>
+          <button type="button" onClick={row.toggle} aria-expanded={row.expanded} aria-controls={panelId} aria-label={`${row.expanded ? 'Close' : 'Open'} ${label}`}
+            className="flex h-7 w-7 items-center justify-center rounded-[7px] hover:bg-[#E2DCD1] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#10524C]" style={{ color: INK2 }}>
+            <ChevronRight className="h-4 w-4" style={{ transform: row.expanded ? 'rotate(90deg)' : 'none', transition: 'transform .18s' }} />
           </button>
         </span>
-        <span className={`${XXL} truncate`} style={{ ...cell, ...mono }}>{multi ? scopesText : orderRef(card)}</span>
-        <span className={`${XL} truncate`} style={{ ...cell, ...mono }}>{refs.yaPo || ''}</span>
+        <span style={cell}>
+          <button type="button" onClick={row.toggle} aria-expanded={row.expanded} aria-controls={panelId}
+            className="flex w-full min-w-0 py-2 [&:hover_.job-name]:underline [&:hover_.job-name]:underline-offset-[3px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#10524C] focus-visible:rounded-[4px]"
+            style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+            <JobTitle job={job} extra={multi ? `${row.scopes.length} scopes` : ''} />
+          </button>
+        </span>
+        <span className={`${XL} truncate text-[13.5px] font-medium`} style={{ ...cell, color: supplier ? INK : INK2 }} title={supplier}>{supplier || '—'}</span>
         <span style={cell}>
           {multi
-            ? <span className="whitespace-nowrap text-[14px]" style={{ color: eta.late ? '#A43432' : INK, fontWeight: eta.late ? 600 : 400 }}>{eta.text || '—'}</span>
-            : <EtaCell compact job={job} data={data} etaLabel={refs.etaLabel} onSaved={onSaved} onOpenSupplier={row.openSupplierSection} />}
+            ? <span className="whitespace-nowrap text-[14px] font-medium" style={{ color: INK }}>{etaEarliest(row.scopes.map((s) => s.etaLabel)) || '—'}</span>
+            : <EtaCell compact job={job} data={data} etaLabel={refs.etaLabel} onSaved={onSaved} onOpenSupplier={row.open} />}
         </span>
-        <span style={{ ...cell, padding: '0 4px' }}>
-          <PaymentSelect payKey={row.payKey} busy={row.busy} onChange={(v) => row.savePayment(v)} />
-          {row.payError && <span className="block text-[13px] font-semibold" style={{ color: '#A43432' }}>{row.payError}</span>}
+        <span style={{ ...cell, padding: '0 8px' }}>
+          <StageSelect stageKey={row.stageKey} busy={row.busy} onChange={row.saveStage} label={label} />
+          {row.stageError && <span role="alert" className="mt-1 block text-[12px] font-semibold" style={{ color: '#A43432' }}>{row.stageError}</span>}
         </span>
-        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{ownCell(card.windows?.display)}</span>
-        <span className="text-right text-[14px] tabular-nums" style={cell}>{ownCell(card.sale?.display, true)}</span>
-        <span className="text-right text-[14px] tabular-nums" style={cell}>{ownCell(card.profitDisplay)}</span>
+        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(figure(f.windows, hasMoney('windows')))}</span>
+        <span className="text-right text-[14px] tabular-nums" style={cell}>{moneyCell(figure(f.sale, hasMoney('sale')), true)}</span>
+        <span className="text-right text-[14px] tabular-nums" style={{ ...cell, paddingRight: '20px' }}>{moneyCell(figure(f.profit, hasMoney('profit')), false, f.profit < 0)}</span>
       </div>
-      {multi && <ScopeRows scopes={row.scopes} job={job} onSaved={onSaved} onOpenTracking={row.openSupplierSection} />}
       {row.expanded && row.fullJob && data && (
-        <div id={`purchasing-row-${job.id}`} style={{ backgroundColor: '#FAF8F3', borderBottom: `1px solid ${RULE}`, padding: '10px 16px 16px' }}>
-          <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-[14px]">
-            <PurchasingRowTitle job={job} onSaved={onSaved} />
-            <span className="inline-flex items-center gap-2"><span style={{ color: INK2 }}>Quote</span><QuoteCell card={card} onSaved={onSaved} /></span>
-            <span className="flex-1" />
-            <button type="button" onClick={onEdit} className="text-[14px] font-semibold" style={{ height: '36px', borderRadius: '9px', border: 'none', backgroundColor: '#0B3F3B', color: '#FFFFFF', padding: '0 14px', cursor: 'pointer' }}>Edit money</button>
+        <div id={panelId} style={{ backgroundColor: '#EEF5F3', padding: '2px 20px 20px 52px' }}>
+          <div className="overflow-hidden rounded-[12px] bg-white" style={{ border: `1px solid ${EDGE}`, boxShadow: '0 1px 2px rgba(21,24,26,.05), 0 3px 8px -3px rgba(21,24,26,.10)' }}>
+            <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-2.5" style={{ backgroundColor: '#FAF8F3', borderBottom: `1px solid ${RULE}` }}>
+              <PurchasingRowTitle job={job} onSaved={onSaved} compact />
+              <Link to={`/jobs/${encodeURIComponent(job.id)}`} className="inline-flex h-9 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold no-underline hover:brightness-95"
+                style={{ backgroundColor: '#E2EEEB', color: '#082F2C', border: '1px solid #C7E4D2' }}>Open in Jobs<ArrowUpRight className="h-3.5 w-3.5" /></Link>
+            </div>
+            <PurchasingJobWorkspace job={row.fullJob} data={data} onSaved={onSaved} />
           </div>
-          <PurchasingJobWorkspace job={row.fullJob} data={data} section={row.section} onSection={row.setSection} onSaved={onSaved} />
         </div>
       )}
     </>
@@ -164,44 +166,51 @@ function JobRows({ card, data, onEdit, onSaved, today }) {
 }
 
 // Phone and tablet: one row per job, the whole row a link to the job's Budget & Orders.
-const BADGE = 'inline-flex h-[26px] items-center whitespace-nowrap rounded-[6px] px-2 text-[13px] font-semibold';
-function PhoneRow({ card, today }) {
+const BADGE = 'inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 text-[13px] font-semibold';
+function PhoneRow({ card }) {
   const { job, refs } = card;
   const scopes = (card.scopes || []).length > 1 ? card.scopes : [];
   const f = cardFigures(card);
-  const eta = scopes.length ? etaRange(scopes.map((s) => s.etaLabel), today) : etaShort(refs.etaLabel, today);
-  const stage = card.paymentStage || '';
-  const paid = stage === 'paid';
-  const line2 = scopes.length ? `${scopes.length} ${card.brand ? `${card.brand} ` : ''}scopes` : [orderRef(card), refs.yaPo].filter(Boolean).join(' · ');
+  const eta = scopes.length ? etaEarliest(scopes.map((s) => s.etaLabel)) : etaDate(refs.etaLabel);
+  const stage = paymentStage(card.paymentStage);
+  const tone = PAYMENT_TONES[card.paymentStage] || PAYMENT_TONES.none;
+  const supplier = supplierText(card);
+  const builder = String(job.builder || '').trim();
   return (
-    <Link to={procurementPath(job.id, 'budgets')} className="flex flex-col gap-1.5" style={{ padding: '12px 16px', borderBottom: `1px solid ${RULE}`, color: INK, textDecoration: 'none' }}>
+    <Link to={procurementPath(job.id, 'budgets')} className="flex flex-col gap-1.5 no-underline active:bg-[#F6F3EC]" style={{ padding: '12px 16px', borderTop: `1px solid ${RULE}`, color: INK }}>
       <span className="flex items-start justify-between gap-3">
-        <span className="min-w-0 text-[16px] font-semibold leading-snug" style={{ overflowWrap: 'anywhere' }}>{rowTitle(job)}</span>
-        <span className="whitespace-nowrap text-[15px] font-bold tabular-nums">{money(f.sale)}</span>
+        <span className="flex min-w-0 flex-col">
+          {builder ? <span className="truncate text-[12.5px] font-medium" style={{ color: INK2 }}>{builder}</span> : null}
+          <span className="min-w-0 text-[16px] font-semibold leading-snug" style={{ overflowWrap: 'anywhere' }}>{job.canonical_name || 'Unnamed job'}</span>
+        </span>
+        <span className="whitespace-nowrap pt-0.5 text-[15px] font-bold tabular-nums">{money(f.sale)}</span>
       </span>
       <span className="flex items-baseline justify-between gap-3">
-        <span className="min-w-0 truncate" style={mono}>{line2 || '—'}</span>
+        <span className="min-w-0 truncate text-[13.5px]" style={{ color: INK3 }}>{supplier || 'Supplier not set'}{scopes.length ? ` · ${scopes.length} scopes` : ''}</span>
         <span className="whitespace-nowrap text-[14px] tabular-nums" style={{ color: f.profit < 0 ? '#A43432' : INK2 }}>{money(f.profit)}</span>
       </span>
       <span className="flex flex-wrap gap-1.5">
-        <span className={BADGE} style={eta.late ? { backgroundColor: '#FCEDEC', color: '#A43432' } : { backgroundColor: '#F3EFE7', color: INK3 }}>{eta.text ? `ETA ${eta.text}` : 'No ETA'}</span>
-        <span className={BADGE} style={paid ? { backgroundColor: '#E2EEEB', color: '#082F2C' } : stage ? { backgroundColor: '#FAF0DA', color: '#6F4E10' } : { backgroundColor: '#F3EFE7', color: INK3 }}>{paymentStage(stage)?.label || 'Not tracked'}</span>
+        <span className={BADGE} style={{ backgroundColor: '#F3EFE7', color: INK3 }}>{eta ? `ETA ${eta}` : 'No ETA'}</span>
+        <span className={BADGE} style={{ backgroundColor: tone.bg, color: tone.text, border: `1px solid ${stage ? tone.border : '#E2DCD1'}` }}>
+          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tone.dot }} />{stage?.label || 'No stage'}
+        </span>
       </span>
     </Link>
   );
 }
 
-export default function PurchasingTable({ cards, data, onEdit, onSaved, sort, onSort, today }) {
+export default function PurchasingTable({ cards, data, onSaved, sort, onSort }) {
   return (
     <>
-      <div role="table" aria-label="Purchasing jobs" className="hidden rounded-[12px] bg-white lg:block" style={{ ...VARS, border: '1px solid #B3A792', overflow: 'clip' }}>
-        <div role="row" className={`items-center ${GRID}`} style={{ position: 'sticky', top: 0, zIndex: 5, minHeight: '36px', backgroundColor: '#E9E2D4', borderBottom: '2px solid #34403F' }}>
+      <div role="table" aria-label="Purchasing jobs" className="hidden rounded-[12px] bg-white lg:block"
+        style={{ ...VARS, border: `1px solid ${EDGE}`, overflow: 'clip', boxShadow: '0 1px 2px rgba(21,24,26,.04), 0 16px 40px -28px rgba(21,24,26,.25)' }}>
+        <div role="row" className={`items-center ${GRID}`} style={{ position: 'sticky', top: 0, zIndex: 5, minHeight: '42px', backgroundColor: '#FAF8F3', borderBottom: `1px solid ${EDGE}` }}>
           {COLUMNS.map((c) => {
             const active = c.sort && sort?.key === c.sort;
-            const text = <span className="text-[11.5px] font-semibold uppercase tracking-[0.06em]" style={{ color: INK3 }}>{c.label}</span>;
+            const text = <span className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: active ? INK : INK2 }}>{c.label}</span>;
             return (
-              <span key={c.label} role="columnheader" title={c.title} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
-                className={`${c.cls || ''} ${c.right ? 'text-right' : ''}`} style={{ ...cell, whiteSpace: 'nowrap' }}>
+              <span key={c.key || c.label} role="columnheader" title={c.title} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                className={`${c.cls || ''} ${c.right ? 'text-right' : ''}`} style={{ ...cell, whiteSpace: 'nowrap', paddingRight: c.label === 'Est. profit' ? '20px' : cell.padding.split(' ')[1] }}>
                 {c.sort ? (
                   <button type="button" onClick={() => onSort(c.sort)} className={`inline-flex items-center gap-1 ${c.right ? 'flex-row-reverse' : ''}`} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
                     {text}<span aria-hidden="true" style={{ fontSize: '9px', color: INK3, visibility: active ? 'visible' : 'hidden' }}>{sort?.dir === 'asc' ? '▲' : '▼'}</span>
@@ -211,10 +220,10 @@ export default function PurchasingTable({ cards, data, onEdit, onSaved, sort, on
             );
           })}
         </div>
-        {cards.map((card) => <Fragment key={card.job.id}><JobRows card={card} data={data} today={today} onEdit={() => onEdit(card)} onSaved={onSaved} /></Fragment>)}
+        {cards.map((card) => <Fragment key={card.job.id}><JobRows card={card} data={data} onSaved={onSaved} /></Fragment>)}
       </div>
-      <div className="overflow-hidden rounded-[12px] bg-white lg:hidden" style={{ border: '1px solid #B3A792' }}>
-        {cards.map((card) => <PhoneRow key={card.job.id} card={card} today={today} />)}
+      <div className="overflow-hidden rounded-[12px] bg-white lg:hidden" style={{ border: `1px solid ${EDGE}`, marginTop: '-1px' }}>
+        {cards.map((card) => <PhoneRow key={card.job.id} card={card} />)}
       </div>
     </>
   );
