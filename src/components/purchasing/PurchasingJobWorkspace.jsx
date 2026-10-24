@@ -29,6 +29,7 @@ import { C } from '@/lib/feeUI';
 import {
   money,
   PurchaseOrderForm, BudgetUsageForm, SupplierOrderForm, OrderStatusForm,
+  SalesTaxBox, purchasingRequest, messageOf,
 } from '@/components/budgets/ProcurementForms';
 import { NumbersEditor } from '@/components/budgets/BudgetReviewRow';
 import DeleteUnusedQuoteButton from '@/components/budgets/DeleteUnusedQuoteButton';
@@ -181,6 +182,24 @@ function BudgetRow({ budget, job, allBudgets, pos, onEdit, onPreparePO, onShowPO
   );
 }
 
+// Marks a PO payable that already includes the supplier's sales tax, so job cost adds no use tax.
+function POSalesTax({ po, onSaved }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  async function toggle(checked) {
+    setBusy(true); setError('');
+    try {
+      await purchasingRequest({ action: 'po_sales_tax', po_id: po.id, includes_sales_tax: checked, expected_updated_date: po.updated_date, request_key: crypto.randomUUID(), review_confirmed: true });
+      await onSaved?.(checked ? `${po.po_number} marked as including sales tax.` : `${po.po_number} now gets the use tax.`);
+    } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
+  }
+  return (
+    <>
+      <SalesTaxBox checked={po.includes_sales_tax === true} disabled={busy || po.amount_dealer == null} onChange={toggle} />
+      {error && <p className="mt-1 text-[13px] font-semibold" style={{ color: '#A43432' }}>{error}</p>}
+    </>
+  );
+}
+
 function PORow({ po, budgets, orders, onEdit, onShowOrder, highlight }) {
   const source = budgets.find((b) => b.id === po.budget_id);
   const related = orders.filter((o) => o.purchase_order_id === po.id);
@@ -195,6 +214,7 @@ function PORow({ po, budgets, orders, onEdit, onShowOrder, highlight }) {
         <Badge tone={po.status === 'cancelled' ? 'warn' : 'ok'}>{statusWithDate(po)}</Badge>
       </div>
       <p className="mt-1.5 text-[12px]" style={{ color: C.text }}>Supplier payable <strong>{money(po.amount_dealer)}</strong>{po.amount_customer != null ? <span style={{ color: C.textSecondary }}> · customer {money(po.amount_customer)}</span> : null}</p>
+      {po.status !== 'cancelled' && <POSalesTax po={po} onSaved={onEdit._onSaved} />}
       <p className="mt-1 text-[11px]" style={{ color: C.textSecondary }}>{source ? `Source: ${source.title}` : po.purchase_type === 'shop' ? 'Shop purchase' : 'No matching quote'}</p>
       <PurchasingDates row={po} supplier={related[0] || null} showStatus={false} />
       <NotesHistory notes={po.notes} />
