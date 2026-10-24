@@ -5,8 +5,8 @@ import DayHeader from "./DayHeader";
 import LineRow, { GRID_CLASS, WIDE_ONLY, CheckBox } from "./LineRow";
 
 // Invoicing lines as one flat grid (declutter, Oct 24). Columns: ☐ 44 · Date 64 · Job (as
-// wide as the longest name, min 240) · PO 92 · Work (the only column that truncates) ·
-// Labor 108 · Fee 96 · Status 160 (only under Show = All lines). Below 1280px PO and Work
+// wide as the longest name, min 240) · PO 92 · Product (the only column that truncates) ·
+// Labor 108 · Fee 96 · Status 160 (only under Show = All lines). Below 1280px PO and Product
 // drop out and job names may wrap. Sticky header; click Date, Job, Labor or Fee to sort.
 // The header checkbox selects every line in the current filter; shift-click selects a
 // range. Day subtotal rows appear when sorted by date, and a total row follows the filter.
@@ -17,7 +17,7 @@ const COLS = [
   { key: "date", label: "Date", sort: "date" },
   { key: "job", label: "Job", sort: "job" },
   { key: "po", label: "PO", wide: true },
-  { key: "work", label: "Work", wide: true },
+  { key: "work", label: "Product", wide: true },
   { key: "labor", label: "Labor", sort: "labor", right: true },
   { key: "fee", label: "Fee", sort: "fee", right: true },
   { key: "status", label: "Status", status: true },
