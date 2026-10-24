@@ -3,6 +3,9 @@ import { withComputedAmounts } from "./feeMath.js";
 import { isOrderPaid, isPaymentRequested } from "./purchasingMoneyStates.js";
 import { withCompanions, buildSupersededSet } from "./invoicingFilters.js";
 import { isAgentCenterOwner } from "./agentCenterAccess.js";
+import { buildPurchasingCards } from "./purchasingViewModel.js";
+import { scopesForJob, applyScopeRollup } from "./purchasingScopes.js";
+import { summarizeCards } from "./purchasingSummary.js";
 
 const amount = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -14,6 +17,22 @@ const total = (rows, field) => {
   const values = rows.map((row) => amount(row[field])).filter((value) => value !== null);
   return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
 };
+
+// One rule for a job's money everywhere: the job page headline is the Purchasing row for
+// the job (owner-entered sale and labor first, then the budget; cost on the materials incl
+// tax basis; multi-scope jobs add their scope rows). Records on duplicate job records count
+// toward the primary job. Returns null when the job record is not loaded.
+export function jobMoneyHeadline(jobId, memberIds = [], { jobs = [], budgets = [], purchaseOrders = [], vendorOrders = [], moneyInputs = [], today = '' } = {}) {
+  const job = jobs.find((j) => j.id === jobId);
+  if (!job) return null;
+  const ids = new Set([jobId, ...memberIds]);
+  const toPrimary = (rows) => rows.filter((r) => ids.has(r.job_id)).map((r) => ({ ...r, job_id: jobId }));
+  const data = { jobs: [job], budgets: toPrimary(budgets), purchase_orders: toPrimary(purchaseOrders), vendor_orders: toPrimary(vendorOrders) };
+  const [card] = buildPurchasingCards({ ...data, moneyInputs: moneyInputs.filter((m) => m.job_id === jobId), today });
+  if (!card) return null;
+  const totals = summarizeCards([applyScopeRollup({ ...card, scopes: scopesForJob(jobId, data) })]);
+  return { cost: totals.windows, laborMaterial: totals.rough, sale: totals.sale, profit: totals.profit, partial: totals.partialScopes > 0 };
+}
 
 // Keep the client-side owner check in one testable place. Entity RLS is the second
 // boundary; this check prevents a crew browser from making a financial request at all.
