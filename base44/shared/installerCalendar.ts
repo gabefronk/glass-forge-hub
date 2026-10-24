@@ -1,4 +1,4 @@
-// Shared installer-calendar push logic used by backfillInstallerCalendar and
+// Shared installer-calendar push logic used by
 // syncGoogleCalendarEvents. pushCalendarEvent has its own copy for app-
 // authored events; this module handles google-sourced events.
 
