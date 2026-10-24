@@ -228,7 +228,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
           {/* Material, long distance and hours price the visit, so they sit together. */}
           <section aria-label="Charge" className="space-y-3 rounded-[12px] p-3" style={{ backgroundColor: CARD, border: `1px solid ${EDGE}` }}>
             <p className="text-[12.5px]" style={{ color: MUT }}>These set what the visit is charged.</p>
-            <div className="grid grid-cols-2 items-end gap-2.5">
+            <div className="grid grid-cols-2 items-start gap-2.5">
               <label className="block">
                 <Label as="span">Material</Label>
                 <select value={material} onChange={(e) => setMaterial(e.target.value)} className="min-h-[48px] w-full rounded-[12px] px-3 text-[15px] focus:outline-none" style={fieldStyle}>
