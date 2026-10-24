@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, Mail, LogOut } from "lucide-react";
+import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft, Library, X, DollarSign, Mountain, LogOut } from "lucide-react";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { base44 } from "@/api/base44Client";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, TrendingUp, MessageSquare, Unlink, FileText, Bug } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug } from "lucide-react";
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
 // labels because five slots share the phone width.
