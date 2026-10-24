@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { resolveFieldReport } from "@/lib/fieldReports";
 import { sanitizeText } from "@/lib/jobsSanitize";
+import { titleCase } from "@/lib/displayName";
 import { isVideoUrl } from "@/lib/fileLinks";
 import { Loader2, X, Camera, Image as ImageIcon } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
@@ -178,7 +179,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
         <div className="flex items-start gap-3 px-4 pb-3 pt-2.5 sm:px-5 sm:pt-4" style={{ borderBottom: `1px solid ${LINE}`, backgroundColor: CARD }}>
           <div className="min-w-0 flex-1">
             <h3 className="font-heading text-[19px] font-bold" style={{ color: INK, letterSpacing: "-0.02em" }}>Field report</h3>
-            <p className="text-[13.5px] break-words" style={{ color: MUT }}>{sanitizeText(jobName || "")}</p>
+            <p className="text-[13.5px] break-words" style={{ color: MUT }}>{titleCase(sanitizeText(jobName || ""))}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ border: `1px solid ${EDGE}`, color: INK, backgroundColor: CARD }}><X className="h-4 w-4" /></button>
         </div>
