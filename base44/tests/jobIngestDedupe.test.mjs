@@ -16,6 +16,7 @@ import { createJobIndex, canonicalJob } from '../shared/jobIdentity.js';
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 
 const STUBS = {
+  runtime: "export const secrets = { get: () => '' };",
   sdk: 'export const createClientFromRequest = () => globalThis.__testBase44;',
   probuild: `export const toMs = (v) => (v ? Date.parse(v) : null);
     export const getProbuildIdToken = async () => 'token';
@@ -28,6 +29,8 @@ const stubPlugin = {
   setup(b) {
     b.onResolve({ filter: /^npm:@base44\/sdk/ }, () => ({ path: 'sdk', namespace: 'stub' }));
     b.onResolve({ filter: /probuildApi\.ts$/ }, () => ({ path: 'probuild', namespace: 'stub' }));
+    // Platform secrets resolve empty, so notifiers (BlueBubbles texts) skip.
+    b.onResolve({ filter: /^base44:runtime$/ }, () => ({ path: 'runtime', namespace: 'stub' }));
     b.onLoad({ filter: /.*/, namespace: 'stub' }, (a) => ({ contents: STUBS[a.path], loader: 'js' }));
   },
 };
