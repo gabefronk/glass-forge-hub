@@ -136,14 +136,19 @@
     "payment_status": {
       "type": "string",
       "enum": [
+        "sent_to_customer",
+        "ordered",
         "half_down",
+        "delivered",
         "installed",
-        "sent_for_payment",
+        "billed",
+        "waiting_on_check",
         "waiting_on_payment",
-        "partial",
-        "paid"
+        "paid",
+        "sent_for_payment",
+        "partial"
       ],
-      "description": "Gabriel's one-tap customer-payment tracking: half down paid, job installed, full payment received (paid), waiting on payment. sent_for_payment and partial are retired but kept so older jobs still read correctly. Null means not tracked yet. Set from the job page payment buttons."
+      "description": "Job stage (shown as Job stage; the field keeps its old name): sent to customer, ordered, half down paid, delivered, installed, billed, waiting on check, waiting on payment, paid. sent_for_payment and partial are retired but kept so older jobs still read correctly. Null means no stage set yet. Set from the Purchasing row and the job page."
     },
     "payment_status_at": {
       "type": "string",
