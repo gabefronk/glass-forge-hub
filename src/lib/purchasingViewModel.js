@@ -262,17 +262,17 @@ export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders 
 // budget labor_cost_sub_pay + additional_install_material as an estimate. A
 // real 0 stays 0; a missing component is NOT inferred as 0 — a partial estimate
 // names the available component. No budget → dash (never crashes on null).
+// The budget is the one source of a job's money (Gabriel, Oct 24): the figures
+// he types in Edit numbers on the budget win. The older per-job money entry
+// (JobMoneyInputs, the retired "Edit money" button) only fills in a job whose
+// budget has no figure yet. Computed sheet math never shows.
 export function roughDisplayCandidate(budget, ownerValue, duplicate) {
-  // The owner-entered money input wins. After it, the figures he typed into
-  // the budget review (labor sub pay + additional install material) - also
-  // owner-entered, just stored on the budget. Computed sheet math never shows.
-  if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Owner-entered', review: false, source: 'owner' };
-  if (!budget) return { value: null, label: null, review: false, source: 'none' };
-  const labor = amount(budget.inputs?.labor_cost_sub_pay);
-  const mat = amount(budget.inputs?.additional_install_material);
+  const labor = budget ? amount(budget.inputs?.labor_cost_sub_pay) : null;
+  const mat = budget ? amount(budget.inputs?.additional_install_material) : null;
   if (labor != null || mat != null) {
-    return { value: roundMoney((labor ?? 0) + (mat ?? 0)), label: duplicate ? 'From budget review - duplicate owner entries' : 'From budget review', review: true, source: 'budget_inputs' };
+    return { value: roundMoney((labor ?? 0) + (mat ?? 0)), label: 'From budget', review: false, source: 'budget_inputs' };
   }
+  if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Older money entry', review: true, source: 'owner' };
   return { value: null, label: duplicate ? 'Duplicate owner entries - fix to show' : null, review: Boolean(duplicate), source: 'none' };
 }
 
@@ -281,12 +281,9 @@ export function roughDisplayCandidate(budget, ownerValue, duplicate) {
 // suggested_total_sell when the target is missing. Legacy empty → unknown
 // (dash), never invented. No budget → dash (never crashes on null).
 export function saleDisplayCandidate(budget, ownerValue, duplicate) {
-  // The owner-entered sale price wins. After it, the target sell he typed in
-  // the budget review. The computed suggested sell never shows.
-  if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Owner-entered', review: false, source: 'owner' };
-  if (!budget) return { value: null, label: null, review: false, source: 'none' };
-  const sell = amount(budget.inputs?.actual_total_sell);
-  if (sell != null) return { value: Number(sell), label: duplicate ? 'From budget review - duplicate owner entries' : 'From budget review', review: true, source: 'budget_inputs' };
+  const sell = budget ? amount(budget.inputs?.actual_total_sell) : null;
+  if (sell != null) return { value: Number(sell), label: 'From budget', review: false, source: 'budget_inputs' };
+  if (ownerValue != null && !duplicate) return { value: ownerValue, label: 'Older money entry', review: true, source: 'owner' };
   return { value: null, label: duplicate ? 'Duplicate owner entries - fix to show' : null, review: Boolean(duplicate), source: 'none' };
 }
 
