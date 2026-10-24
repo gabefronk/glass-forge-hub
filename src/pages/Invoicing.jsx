@@ -14,6 +14,7 @@ import InvoiceHeader from "@/components/invoicing/InvoiceHeader";
 import InvoiceMoneyBar from "@/components/invoicing/InvoiceMoneyBar";
 import { moneyBarSegments, moneyStrip, lineStatus, needsDecision, isZeroToConfirm, waitingOnReport } from "@/lib/invoiceMoneyBar";
 import { nextSort, normalizeSort } from "@/lib/invoiceGrid";
+import { lineProduct, quotesByJob } from "@/lib/lineProduct";
 import InvoiceToolbar, { SHOW } from "@/components/invoicing/InvoiceToolbar";
 import LineList from "@/components/invoicing/LineList";
 import JobsView from "@/components/invoicing/JobsView";
@@ -66,6 +67,8 @@ export default function Invoicing() {
   const [reportStatusMap, setReportStatusMap] = useState(new Map());
   const [billingEvents, setBillingEvents] = useState([]);
   const [profitabilityInputs, setProfitabilityInputs] = useState({ jobs: [], quotes: [], costs: [] });
+  // Supplier quotes on file per job, for the Product column (brand + quantity).
+  const [jobQuotes, setJobQuotes] = useState(() => new Map());
   const [reportAttached, setReportAttached] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("inv_reportAttached") || "[]")); } catch { return new Set(); }
   });
@@ -87,13 +90,14 @@ export default function Invoicing() {
     const stale = () => seq !== loadSeq.current;
     setLoading(true);
     try {
-      const [fl, calEvents, jobs, quotes, costs, invs] = await Promise.all([
+      const [fl, calEvents, jobs, quotes, costs, invs, budgets] = await Promise.all([
         base44.entities.FeeLines.list("-job_date", 5000),
         base44.entities.CalendarEvents.list("-event_date", 5000),
         base44.entities.Jobs.list("canonical_name", 5000).catch(() => []),
         base44.entities.QuoteRequests.list("-updated_date", 5000).catch(() => []),
         base44.entities.JobCostInputs?.filter ? base44.entities.JobCostInputs.filter({ month }, "job_name_norm", 5000).catch(() => []) : Promise.resolve([]),
         base44.entities.Invoices.list("-invoice_date", 2000).catch(() => []),
+        base44.entities.JobBudgets?.list ? base44.entities.JobBudgets.list("-updated_date", 2000).catch(() => []) : Promise.resolve([]),
       ]);
       if (stale()) return;
       const rsm = new Map();
@@ -104,6 +108,7 @@ export default function Invoicing() {
       setBillingEvents(Array.isArray(calEvents) ? calEvents : []);
       setFeeLines(withComputedAmounts(fl));
       setInvoices(Array.isArray(invs) ? invs : []);
+      setJobQuotes(quotesByJob(Array.isArray(budgets) ? budgets : []));
       setProfitabilityInputs({ jobs: Array.isArray(jobs) ? jobs : [], quotes: Array.isArray(quotes) ? quotes : [], costs: Array.isArray(costs) ? costs : [] });
       setLoadError("");
       window.dispatchEvent(new Event("billing-updated"));
@@ -178,7 +183,7 @@ export default function Invoicing() {
   }, [monthRows, selectedIds]);
 
   // Lines as the grid shows them: each carries its status word and report hold.
-  const gridRows = useMemo(() => filteredRows.map((r) => ({ ...r, _reportBlocked: isReportBlocked(r, reportStatusMap), _status: lineStatus(r, reportStatusMap, supersededSet) })), [filteredRows, reportStatusMap, supersededSet]);
+  const gridRows = useMemo(() => filteredRows.map((r) => ({ ...r, _reportBlocked: isReportBlocked(r, reportStatusMap), _status: lineStatus(r, reportStatusMap, supersededSet), _product: lineProduct(r, jobQuotes.get(r.job_id)) })), [filteredRows, reportStatusMap, supersededSet, jobQuotes]);
 
   const performAction = useCallback((message, doFn, undoFn) => {
     doFn();
