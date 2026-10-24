@@ -285,7 +285,11 @@ async function privatizeSource(adapter, p, user) {
   const fetchPublic = adapter.fetchPublic || adapter.fetchBytes;
   let res = await fetchPublic(publicMediaUrl(url), MAX_PDF_BYTES).catch(() => null);
   if (!res || res.error) res = await fetchPublic(url, MAX_PDF_BYTES).catch(() => null);
-  if (!res || res.error || !(res.bytes instanceof Uint8Array) || !res.bytes.length) fail(res?.error === 'pdf_too_large' ? 'pdf_too_large' : 'pdf_fetch_failed');
+  if (!res || res.error || !(res.bytes instanceof Uint8Array) || !res.bytes.length) {
+    // A fixed code plus the HTTP status / network error name only (never a URL).
+    const reason = /^[a-z0-9_]{1,40}$/.test(res?.reason || '') ? `_${res.reason}` : '';
+    fail(res?.error === 'pdf_too_large' ? 'pdf_too_large' : `pdf_fetch_failed${reason}`);
+  }
   if (!isPdf(res.bytes)) fail('not_a_pdf');
   const sha = await sha256Hex(res.bytes);
   if (budget.source_sha256 && budget.source_sha256 !== sha) fail('source_changed');

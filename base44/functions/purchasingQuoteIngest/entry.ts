@@ -7,8 +7,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
 import { handle, QUOTE_SCHEMA, QUOTE_PROMPT } from '../../shared/purchasingQuoteIngestHandle.js';
 
 async function fetchBytes(signedUrl: string, maxBytes: number, redirect: RequestRedirect = 'error') {
-  const r = await fetch(signedUrl, { signal: AbortSignal.timeout(60000), cache: 'no-store', redirect }).catch(() => null);
-  if (!r || !r.ok || !r.body) return { error: 'pdf_fetch_failed' };
+  let failure = 'network';
+  const r = await fetch(signedUrl, { signal: AbortSignal.timeout(60000), cache: 'no-store', redirect }).catch((e) => { failure = String(e?.name || 'network').toLowerCase(); return null; });
+  if (!r || !r.ok || !r.body) return { error: 'pdf_fetch_failed', reason: r ? `http_${r.status}` : failure };
   if (Number(r.headers.get('content-length') || 0) > maxBytes) return { error: 'pdf_too_large' };
   const reader = r.body.getReader();
   const parts: Uint8Array[] = [];
