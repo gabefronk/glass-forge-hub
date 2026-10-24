@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { resolveFieldReport } from "@/lib/fieldReports";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { isVideoUrl } from "@/lib/fileLinks";
-import { Camera, Loader2, X, Film } from "lucide-react";
+import { Loader2, X, Film } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
 
 const PENDING = ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"];
