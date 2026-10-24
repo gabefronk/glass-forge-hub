@@ -1,5 +1,4 @@
-import PurchasingSummaryBar from '@/components/purchasing/PurchasingSummaryBar';
-import { summarizeCards, applySummaryFilters } from '@/lib/purchasingSummary';
+import { headerFigures, applyPurchasingFilter, purchasingFilterCounts, supplierPayables, PURCHASING_FILTERS } from '@/lib/purchasingSummary';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -34,8 +33,7 @@ function PurchasingWorkspace() {
   const [error, setError] = useState('');
   const [moneyError, setMoneyError] = useState('');
   const [query, setQuery] = useState('');
-  const [etaFilter, setEtaFilter] = useState('all');
-  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -82,21 +80,21 @@ function PurchasingWorkspace() {
     // job holds more than one (a second budget, a reorder PO, an order with no
     // PO). Multi-scope job rows then withhold scope-derived money via
     // applyScopeRollup so the roll-up can never read as a job total.
-    return built.map((card) => applyScopeRollup({ ...card, scopes: scopesForJob(card.job.id, data) }));
+    // The header figures and the filter also read what we owe suppliers (raw PO
+    // amounts) and the customer payment stage, so each card carries both.
+    const jobsById = new Map((data.jobs || []).map((j) => [j.id, j]));
+    return built.map((card) => applyScopeRollup({
+      ...card,
+      scopes: scopesForJob(card.job.id, data),
+      payables: supplierPayables(card.job.id, data),
+      paymentStage: jobsById.get(card.job.id)?.payment_status || '',
+    }));
   }, [data, moneyInputs, today]);
-  const jobsById = useMemo(() => new Map((data?.jobs || []).map((j) => [j.id, j])), [data]);
-  const filtered = useMemo(
-    () => applySummaryFilters(cards.filter((c) => cardMatchesSearch(c, query)), { eta: etaFilter, payment: paymentFilter }, { jobsById, today }),
-    [cards, query, etaFilter, paymentFilter, jobsById, today],
-  );
-  const totals = useMemo(() => summarizeCards(filtered), [filtered]);
+  const searched = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
+  const filterCounts = useMemo(() => purchasingFilterCounts(searched, today), [searched, today]);
+  const filtered = useMemo(() => applyPurchasingFilter(searched, filter, today), [searched, filter, today]);
+  const figures = useMemo(() => headerFigures(filtered, today), [filtered, today]);
   const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
-  const counts = useMemo(() => ({
-    jobs: cards.length,
-    budgets: data?.budgets?.length || 0,
-    orders: data?.purchase_orders?.length || 0,
-    tracking: data?.vendor_orders?.length || 0,
-  }), [cards, data]);
 
   const saveMoney = async (payload) => {
     if (!editing) return;
@@ -128,28 +126,28 @@ function PurchasingWorkspace() {
 
   return (
     <PageShell width="max-w-[1280px]">
-      <PurchasingHeader counts={counts} />
-      <div className="flex justify-end max-[699px]:hidden">
-        <button type="button" disabled={loading} onClick={load} className="text-[11.5px] font-medium underline disabled:opacity-60" style={{ color: C.textSecondary, minHeight: 0 }}>{loading ? 'Reloading…' : 'Reload'}</button>
-      </div>
+      <PurchasingHeader figures={figures} shown={filtered.length} total={cards.length} />
 
-      <div className="flex items-center gap-2">
-        <label className="relative flex min-w-0 flex-1 items-center">
-          <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: C.textFaint }} />
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search job, quote, PO, supplier" aria-label="Search purchasing" className="min-h-11 w-full rounded-[9px] bg-white pl-[38px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)]" style={{ border: `1px solid ${C.border}`, color: C.text }} />
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="relative flex min-w-0 flex-1 items-center" style={{ minWidth: 220 }}>
+          <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: 'var(--gf-placeholder)' }} />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search job, quote, PO, supplier" aria-label="Search purchasing" className="min-h-10 w-full rounded-[9px] bg-white pl-[38px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)]" style={{ border: '1px solid var(--gf-check)', color: C.text }} />
         </label>
+        <label className="inline-flex items-center gap-1.5 max-[699px]:w-full">
+          <span className="text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: 'var(--gf-ink-3)' }}>Show</span>
+          <select aria-label="Show" value={filter} onChange={(e) => setFilter(e.target.value)}
+            className="min-h-10 rounded-[9px] bg-white pl-2.5 pr-7 text-[13px] font-semibold max-[699px]:flex-1" style={{ border: '1px solid var(--gf-check)', color: C.text, cursor: 'pointer' }}>
+            {PURCHASING_FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label} ({filterCounts[f.key] || 0})</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={loading} onClick={load} className="text-[11.5px] font-medium underline disabled:opacity-60 max-[699px]:hidden" style={{ color: C.textSecondary, minHeight: 0 }}>{loading ? 'Reloading…' : 'Reload'}</button>
       </div>
 
       {error && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: 'var(--gf-error-bg)', color: 'var(--gf-error)', border: '1px solid var(--gf-error-border)' }}>{error}</p>}
       {moneyError && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: '#FFF3DF', color: '#89511A', border: '1px solid #F0DBA8' }}>{moneyError}</p>}
 
-      {cards.length > 0 && (
-        <PurchasingSummaryBar totals={totals} shown={filtered.length} total={cards.length}
-          eta={etaFilter} payment={paymentFilter} onEta={setEtaFilter} onPayment={setPaymentFilter} />
-      )}
-
       {filtered.length === 0 ? (
-        <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query || etaFilter !== 'all' || paymentFilter !== 'all' ? 'No jobs match your search or filters.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
+        <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query || filter !== 'all' ? 'No jobs match your search or filter.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
       ) : (
         <PurchasingTable cards={filtered} data={data} onSaved={load} onEdit={(card) => setEditing({ jobId: card.job.id, jobName: card.job.canonical_name, rough: card.rough.value, sale: card.sale.value })} />
       )}
