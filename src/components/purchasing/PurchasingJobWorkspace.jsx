@@ -318,15 +318,17 @@ export default function PurchasingJobWorkspace({ job, data, section, onSection, 
 
   return (
     <div className="mt-2 rounded-[12px] p-3" style={{ border: '1px solid #D3CABB', backgroundColor: '#FFFFFF' }}>
-      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={`Purchasing sections for ${job.canonical_name}`}>
-        {SECTIONS.map(([key, label]) => (
-          <button key={key} role="tab" aria-selected={section === key} type="button" onClick={() => { onSection(key); setEditor(null); setHighlightPO(null); }}
-            className="inline-flex min-h-8 items-center rounded-[7px] px-2.5 py-1 text-[11.5px] font-semibold"
-            style={section === key ? { backgroundColor: '#0B3F3B', color: '#fff', border: '1px solid #0B3F3B' } : { backgroundColor: '#FAF8F3', color: C.text, border: `1px solid ${C.border}` }}>
-            {label}{key === 'budgets' ? ` (${rec.budgets.length})` : key === 'orders' ? ` (${rec.pos.length})` : key === 'tracking' ? ` (${rec.orders.length})` : ''}
-          </button>
-        ))}
-      </div>
+      <label className="inline-flex items-center gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: '#4A5652' }}>Section</span>
+        <select aria-label={`Purchasing section for ${job.canonical_name}`} value={section}
+          onChange={(e) => { onSection(e.target.value); setEditor(null); setHighlightPO(null); }}
+          className="min-h-9 rounded-[7px] border px-2.5 pr-7 text-[12.5px] font-semibold"
+          style={{ borderColor: '#9A9080', color: C.text, backgroundColor: '#fff' }}>
+          {SECTIONS.map(([key, label]) => (
+            <option key={key} value={key}>{label} ({key === 'budgets' ? rec.budgets.length : key === 'orders' ? rec.pos.length : rec.orders.length})</option>
+          ))}
+        </select>
+      </label>
 
       {editor && !editor.budget_id && editorPanel(editor)}
 
