@@ -1,6 +1,5 @@
 import { isIgnoredWorkItem } from "../../base44/shared/billingCore.js";
 import { refreshMonth } from "@/lib/refreshMonth";
-import { invoicingStats } from "@/lib/invoicingStats";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { procurementPath } from "@/lib/procurementRoutes";
@@ -13,7 +12,8 @@ import { computeFeeAmt, computeLaborAmt, currentMonthStr, withComputedAmounts } 
 import { isReady, isReportBlocked, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import InvoiceHeader from "@/components/invoicing/InvoiceHeader";
 import InvoiceMoneyBar from "@/components/invoicing/InvoiceMoneyBar";
-import { moneyBarSegments, needsDecision, isZeroToConfirm, waitingOnReport } from "@/lib/invoiceMoneyBar";
+import { moneyBarSegments, moneyStrip, lineStatus, needsDecision, isZeroToConfirm, waitingOnReport } from "@/lib/invoiceMoneyBar";
+import { nextSort, normalizeSort } from "@/lib/invoiceGrid";
 import InvoiceToolbar, { SHOW } from "@/components/invoicing/InvoiceToolbar";
 import LineList from "@/components/invoicing/LineList";
 import JobsView from "@/components/invoicing/JobsView";
@@ -47,7 +47,9 @@ export default function Invoicing() {
   });
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState(() => localStorage.getItem("inv_sort") || "date");
+  // Column-header sort ({ key, dir }); default Fee, largest first.
+  const [sort, setSort] = useState(() => { try { return normalizeSort(JSON.parse(localStorage.getItem("inv_sort2") || "null")); } catch { return normalizeSort(null); } });
+  const [showProfit, setShowProfit] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [undo, setUndo] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -75,7 +77,7 @@ export default function Invoicing() {
 
   useEffect(() => { setSelectedIds(new Set()); setDetailRow(null); setUndo(null); lastClickedIndex.current = null; clearTimeout(undoTimer.current); }, [month, focusedJobId]);
   useEffect(() => { localStorage.setItem("inv_view", view); }, [view]);
-  useEffect(() => { localStorage.setItem("inv_sort", sort); }, [sort]);
+  useEffect(() => { localStorage.setItem("inv_sort2", JSON.stringify(sort)); }, [sort]);
   useEffect(() => { localStorage.setItem("inv_reportAttached", JSON.stringify([...reportAttached])); }, [reportAttached]);
 
   // Ignore responses from an older load (e.g. after quickly switching months).
@@ -168,12 +170,15 @@ export default function Invoicing() {
     };
   }, [monthRows, reportStatusMap, supersededSet]);
 
-  const heroStats = useMemo(() => invoicingStats(monthRows, reportStatusMap, supersededSet), [monthRows, reportStatusMap, supersededSet]);
-
-
   const selectedFee = useMemo(() => {
     return monthRows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + (computeFeeAmt(r) || 0), 0);
   }, [monthRows, selectedIds]);
+  const selectedLabor = useMemo(() => {
+    return monthRows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + (computeLaborAmt(r) || 0), 0);
+  }, [monthRows, selectedIds]);
+
+  // Lines as the grid shows them: each carries its status word and report hold.
+  const gridRows = useMemo(() => filteredRows.map((r) => ({ ...r, _reportBlocked: isReportBlocked(r, reportStatusMap), _status: lineStatus(r, reportStatusMap, supersededSet) })), [filteredRows, reportStatusMap, supersededSet]);
 
   const performAction = useCallback((message, doFn, undoFn) => {
     doFn();
@@ -189,28 +194,15 @@ export default function Invoicing() {
 
   const toggleRow = useCallback((id) => {
     setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-    lastClickedIndex.current = filteredRows.findIndex((r) => r.id === id);
-  }, [filteredRows]);
+  }, []);
 
-  const shiftClickRow = useCallback((id) => {
-    const currentIndex = filteredRows.findIndex((r) => r.id === id);
-    if (lastClickedIndex.current === null || currentIndex === -1) { toggleRow(id); return; }
-    const start = Math.min(lastClickedIndex.current, currentIndex);
-    const end = Math.max(lastClickedIndex.current, currentIndex);
-    setSelectedIds((prev) => { const next = new Set(prev); for (let i = start; i <= end; i++) next.add(filteredRows[i].id); return next; });
-  }, [filteredRows, toggleRow]);
-
-  const toggleDay = useCallback((dayRows) => {
-    const allSelected = dayRows.every((r) => selectedIds.has(r.id));
-    setSelectedIds((prev) => { const next = new Set(prev); if (allSelected) dayRows.forEach((r) => next.delete(r.id)); else dayRows.forEach((r) => next.add(r.id)); return next; });
-  }, [selectedIds]);
+  // Header checkbox, day checkbox and shift-click ranges: select (or clear) a set of lines.
+  const selectIds = useCallback((ids, select) => {
+    setSelectedIds((prev) => { const next = new Set(prev); for (const id of ids) { if (select) next.add(id); else next.delete(id); } return next; });
+  }, []);
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
   const clearEditRequest = useCallback(() => setEditRequestId(null), []);
-
-  const handleSelectAllReady = useCallback(() => {
-    setSelectedIds(new Set(monthRows.filter((r) => isReady(r, reportStatusMap, supersededSet)).map((r) => r.id)));
-  }, [monthRows, reportStatusMap, supersededSet]);
 
   const handleEdit = useCallback(async (id, patch) => {
     if (deleting.current) return;
