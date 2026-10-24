@@ -68,7 +68,7 @@ export default function PurchasingSummaryBar({ totals, shown, total, eta, paymen
       </div>
       {totals.partialScopes > 0 && (
         <div className="px-4 pb-1 text-[11.5px] font-medium" style={{ color: SOFT }}>
-          Partial - excludes multi-scope amounts (itemized on the scope rows below); not a complete job total.
+          Partial - {totals.partialScopes} multi-scope {totals.partialScopes === 1 ? 'job has' : 'jobs have'} a scope row with no figure yet; those amounts are missing from the totals.
         </div>
       )}
       <div className="max-[699px]:hidden">
