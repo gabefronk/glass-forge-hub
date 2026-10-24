@@ -92,6 +92,8 @@ export function validateIngestBody(body) {
 // upload writes. Only that exact public-file URL shape for this app is ever fetched.
 export const PUBLIC_SOURCE = /^https:\/\/base44\.app\/api\/apps\/[a-f0-9]{24}\/files\/mp\/public\/[a-f0-9]{24}\/[A-Za-z0-9._-]+\.pdf$/;
 
+export const publicMediaUrl = (url) => url.replace(/^https:\/\/base44\.app\/api\/apps\/[a-f0-9]{24}\/files\/mp\/public\//, 'https://media.base44.com/files/public/');
+
 export function validateBudgetBody(body, { refresh = false } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'invalid_body' };
   const allowed = new Set(refresh ? ['action', 'budget_id', 'expected_version', 'review_confirmed'] : ['action', 'budget_id']);
@@ -277,9 +279,12 @@ async function privatizeSource(adapter, p, user) {
   if (budget.deleted_at) fail('budget_deleted');
   const url = String(budget.source_pdf_url || '');
   if (!PUBLIC_SOURCE.test(url)) fail('no_public_source');
-  // The public-file URL answers with a redirect to storage, so it gets its own fetch that
-  // follows redirects (only ever called with the exact URL shape checked above).
-  const res = await (adapter.fetchPublic || adapter.fetchBytes)(url, MAX_PDF_BYTES).catch(() => null);
+  // The public-file URL answers with a 302 to the same file on media.base44.com; fetch that
+  // address directly (a function cannot reliably fetch its own platform's API host), then
+  // fall back to the original URL.
+  const fetchPublic = adapter.fetchPublic || adapter.fetchBytes;
+  let res = await fetchPublic(publicMediaUrl(url), MAX_PDF_BYTES).catch(() => null);
+  if (!res || res.error) res = await fetchPublic(url, MAX_PDF_BYTES).catch(() => null);
   if (!res || res.error || !(res.bytes instanceof Uint8Array) || !res.bytes.length) fail(res?.error === 'pdf_too_large' ? 'pdf_too_large' : 'pdf_fetch_failed');
   if (!isPdf(res.bytes)) fail('not_a_pdf');
   const sha = await sha256Hex(res.bytes);

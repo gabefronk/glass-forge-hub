@@ -2,7 +2,7 @@
 // provider calls, no record writes: every adapter method is an in-memory mock.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handle, scrubSigned, validStoredUri, sha256Hex, REVIEW_TTL } from '../base44/shared/purchasingQuoteIngestHandle.js';
+import { handle, scrubSigned, validStoredUri, sha256Hex, REVIEW_TTL, publicMediaUrl } from '../base44/shared/purchasingQuoteIngestHandle.js';
 
 const OWNER = { id: '6a7f0d834a5f825c724273ea', email: 'o@x.com' };
 const OTHER_ADMIN = { id: 'aaaaaaaaaaaaaaaaaaaaaaaa', role: 'admin', email: 'a@x.com' };
@@ -279,4 +279,8 @@ test('privatize_source: refuses anything but this app\'s public-file URL, owner 
   const r = await handle(req({ action: 'privatize_source', budget_id: BUDGET }), changed.adapter);
   assert.equal(r.body.error, 'source_changed');
   assert.ok(!changed.calls.includes('uploadPrivate'));
+});
+
+test('privatize_source: reads the public file from its media.base44.com address', () => {
+  assert.equal(publicMediaUrl(PUBLIC_URL), 'https://media.base44.com/files/public/6a7f0d7a4a5f825c724273e9/22dab6efe_SANDY-AMSCO.pdf');
 });
