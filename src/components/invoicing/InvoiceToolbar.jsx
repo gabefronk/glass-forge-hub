@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 // One control per choice (Oct 24): Show, View and Sort are dropdowns instead of rows
 // of buttons. Show uses the same buckets as the money bar (invoiceMoneyBar.js), so a
 // filter's count always matches the lines it lists.
-const SHOW = [
+export const SHOW = [
   { key: "all", label: "All lines" },
   { key: "ready", label: "Ready to invoice" },
   { key: "needs_review", label: "Needs decision" },
