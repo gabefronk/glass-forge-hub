@@ -27,6 +27,7 @@
 //    pre-tax PO/order/dealer amounts and budget material get the workbook use tax
 //    (SALES_TAX_RATE), and the budget's labor overhead adder is never included.
 import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount, roundMoney, isIgnoredWorkItem, sameVendor, pText, SALES_TAX_RATE } from './purchasingCoreTwin.js';
+import { costWithUseTax, supplierTaxIncluded } from './useTax.js';
 
 const USE_TAX = `${Number((SALES_TAX_RATE * 100).toFixed(2))}% use tax`;
 const plusUseTax = (v) => roundMoney(Number(v) * (1 + SALES_TAX_RATE));
@@ -171,15 +172,14 @@ function pickAmount(records, field) {
   return { pick: withAmt[0], alternatives: withAmt.slice(1) };
 }
 
-// PO and vendor order amounts carry no tax field; job cost adds the use tax.
-function poCandidate(pick, rest) {
-  const label = (p) => `PO ${p.ref} + ${USE_TAX}`;
-  return { value: plusUseTax(pick.pick.amount), label: label(pick.pick), alternatives: pick.alternatives.map((a) => ({ value: plusUseTax(a.amount), label: label(a) })), ...rest };
+// PO and vendor order amounts carry no tax field. Job cost adds the use tax unless the
+// amount is the supplier's taxed quote total on this budget (costWithUseTax).
+function supplierCandidate(kind, pick, rest, budget = null) {
+  const one = (p) => ({ value: costWithUseTax(p.amount, budget), label: supplierTaxIncluded(p.amount, budget) ? `${kind} ${p.ref} (supplier tax incl.)` : `${kind} ${p.ref} + ${USE_TAX}` });
+  return { ...one(pick.pick), alternatives: pick.alternatives.map(one), ...rest };
 }
-function orderCandidate(pick, rest) {
-  const label = (o) => `Order ${o.ref} + ${USE_TAX}`;
-  return { value: plusUseTax(pick.pick.amount), label: label(pick.pick), alternatives: pick.alternatives.map((a) => ({ value: plusUseTax(a.amount), label: label(a) })), ...rest };
-}
+const poCandidate = (pick, rest, budget) => supplierCandidate('PO', pick, rest, budget);
+const orderCandidate = (pick, rest, budget) => supplierCandidate('Order', pick, rest, budget);
 
 // POs/orders scoped to ONE budget by EXACT budget_id (never same-job first).
 function scopedRecords(budget, jobPOs, jobOrders) {
@@ -207,9 +207,9 @@ export function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
   // labor overhead into a "windows" number and misled reads.
   if (src.value != null) return { value: src.value, label: src.inferred ? 'Supplier quote total incl tax (confirm)' : 'Supplier quote total incl tax', source: 'source_quote', budgetId: budget.id, alternatives: [], inferred: Boolean(src.inferred) };
   const poPick = pickAmount(scopedPOs, 'amount_dealer');
-  if (poPick.pick) return poCandidate(poPick, { source: 'po_dealer', budgetId: budget.id });
+  if (poPick.pick) return poCandidate(poPick, { source: 'po_dealer', budgetId: budget.id }, budget);
   const voPick = pickAmount(scopedOrders, 'amount');
-  if (voPick.pick) return orderCandidate(voPick, { source: 'vendor_order', budgetId: budget.id });
+  if (voPick.pick) return orderCandidate(voPick, { source: 'vendor_order', budgetId: budget.id }, budget);
   const q = budget.quote || {};
   const dealer = amount(q.dealer_subtotal) ?? amount(q.dealer_total);
   if (dealer != null) return { value: plusUseTax(dealer), label: `Dealer price + ${USE_TAX} (review)`, source: 'dealer_price', budgetId: budget.id, alternatives: [] };
