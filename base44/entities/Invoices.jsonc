@@ -1,0 +1,111 @@
+{
+  "name": "Invoices",
+  "type": "object",
+  "properties": {
+    "invoice_number": {
+      "type": "string",
+      "title": "Invoice Number",
+      "description": "QuickBooks invoice number. Unique per invoice; the Hub never generates one."
+    },
+    "invoice_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Invoice Date",
+      "description": "Date on the QuickBooks invoice."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "labor_billing",
+        "deposit",
+        "balance",
+        "progress",
+        "other"
+      ],
+      "title": "Kind",
+      "description": "labor_billing: monthly install/service labor lines billed to BFS (lines are FeeLines carrying this invoice_id). deposit/balance/progress/other: a customer invoice on one job."
+    },
+    "customer_name": {
+      "type": "string",
+      "title": "Customer",
+      "description": "Who the invoice is addressed to, as in QuickBooks (e.g. BFS, a builder, a homeowner)."
+    },
+    "job_id": {
+      "type": "string",
+      "title": "Job",
+      "description": "The job a customer invoice belongs to. Empty for labor billing, which spans jobs through its lines."
+    },
+    "budget_id": {
+      "type": "string",
+      "title": "Budget",
+      "description": "Optional budget (scope) a customer invoice bills against."
+    },
+    "amount": {
+      "type": "number",
+      "title": "Amount",
+      "description": "Invoice total. For labor billing, the labor total of its lines when recorded."
+    },
+    "fee_amount": {
+      "type": "number",
+      "title": "Fee Amount",
+      "description": "Labor billing only: the fee total of its lines when recorded."
+    },
+    "line_count": {
+      "type": "number",
+      "title": "Line Count",
+      "description": "Labor billing only: number of FeeLines on the invoice when recorded."
+    },
+    "paid_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Paid Date",
+      "description": "Date payment was received, from QuickBooks. Empty while the invoice is open."
+    },
+    "payment_reference": {
+      "type": "string",
+      "title": "Payment Reference",
+      "description": "Optional check, ACH or QuickBooks payment reference."
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "voided_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Voided At",
+      "description": "Set when the invoice is voided; its lines are reopened. Voided invoices stay for history."
+    },
+    "created_by_email": {
+      "type": "string",
+      "title": "Created By"
+    }
+  },
+  "required": [
+    "invoice_number",
+    "invoice_date",
+    "kind"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
