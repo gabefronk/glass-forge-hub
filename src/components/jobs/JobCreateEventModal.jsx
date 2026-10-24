@@ -268,10 +268,10 @@ export default function JobCreateEventModal({ job, user, open, onOpenChange, onC
         <div className="space-y-2 px-5 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))]" style={{ backgroundColor: "#fff", borderTop: `1px solid ${EDGE}` }}>
           {step === "form" && summary ? <p className="m-0 text-center text-[13.5px] font-semibold" style={{ color: MUT }}>{summary}</p> : null}
           <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" className="min-h-[44px]" onClick={close}>Close</Button>
+            {step !== "review" && <Button variant="ghost" className="min-h-[44px]" onClick={close}>Close</Button>}
             {step === "form" && <Button className="min-h-[44px] flex-1 sm:flex-none" style={{ backgroundColor: TEAL }} onClick={goReview}>Review visit</Button>}
             {step === "review" && <Button variant="ghost" className="min-h-[44px]" disabled={busy} onClick={() => setStep("form")}>Back to edit</Button>}
-            {step === "review" && <Button className="min-h-[44px]" style={{ backgroundColor: TEAL }} onClick={send} disabled={busy}>{busy ? "Creating…" : "Add to calendar"}</Button>}
+            {step === "review" && <Button className="min-h-[44px] flex-1 sm:flex-none" style={{ backgroundColor: TEAL }} onClick={send} disabled={busy}>{busy ? "Creating…" : "Add to calendar"}</Button>}
             {step === "locked" && <Button className="min-h-[44px]" onClick={send} disabled={busy}>{busy ? "Retrying…" : "Retry same request"}</Button>}
           </div>
         </div>
