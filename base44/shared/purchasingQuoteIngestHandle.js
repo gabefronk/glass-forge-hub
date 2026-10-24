@@ -24,7 +24,7 @@ import { autofillBudget, budgetNameFor, fileNameHints } from './jobBudgetAutofil
 import { computeJobBudget } from './jobBudgetMath.js';
 
 export { QUOTE_SCHEMA, QUOTE_PROMPT };
-// Same proven body ceiling the app already uses for base64 uploads (salesTrackerImport, 7,000,000 chars).
+// Proven body ceiling for base64 uploads (7,000,000 chars).
 export const MAX_PDF_BYTES = 5 * 1024 * 1024;
 export const MAX_BASE64_CHARS = 7000000;
 export const READER_TTL = 300;
