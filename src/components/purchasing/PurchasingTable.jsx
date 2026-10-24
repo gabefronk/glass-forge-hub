@@ -264,7 +264,7 @@ export default function PurchasingTable({ cards, data, onEdit, onSaved }) {
           {cards.map((card) => <JobRows key={card.job.id} card={card} data={data} onEdit={() => onEdit(card)} onSaved={onSaved} />)}
         </table>
       </div>
-      <div className="-mx-1 overflow-hidden rounded-[12px] bg-white min-[700px]:hidden" style={{ border: `1px solid ${SHEET_EDGE}`, borderTopWidth: 0 }}>
+      <div className="overflow-hidden rounded-[12px] bg-white min-[700px]:hidden" style={{ border: `1px solid ${SHEET_EDGE}`, borderTopWidth: 0 }}>
         {cards.map((card) => <MobileCard key={card.job.id} card={card} data={data} onEdit={() => onEdit(card)} onSaved={onSaved} />)}
       </div>
     </>
