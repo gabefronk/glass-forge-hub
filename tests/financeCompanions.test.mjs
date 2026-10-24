@@ -220,9 +220,15 @@ test('manual, billed, reviewed and unrelated lines are never folded', () => {
   ];
   const zeroCal = cal('cal-zero', 'ev-zero', 'job-z', '2026-09-10', null, { labor_amt: 0, note_text: 'Punch list', calendar_note_text: 'Punch list' });
   const zeroTwin = twin('pb-zero', 'job-z', '2026-09-10');
-  const { superseded, visible, stats } = invoicingView([calLine, ...keep, zeroCal, zeroTwin], reported(calLine, zeroCal));
+  const { billingRows, superseded, visible, stats } = invoicingView([calLine, ...keep, zeroCal, zeroTwin], reported(calLine, zeroCal));
   for (const r of [...keep, zeroTwin]) assert.equal(superseded.has(r.id), false, r.id);
   assert.equal(visible.length, 8);
   assert.equal(stats.readyTotal, 120, 'the calendar line still bills once');
-  assert.equal(stats.matchBlockedCount, 1, 'the open quantity question stays in review');
+  const blocked = billingRows.filter((r) => !r.billed_to_bfs && isMatchBlocked(r));
+  assert.ok(blocked.some((r) => r.id === 'pb-question' && /not explicit/.test(r.pricing_review_reason)), 'the open quantity question stays in review');
+  // The other held lines are $0 work the billing audit asks someone to confirm, not folds.
+  for (const r of blocked.filter((r) => r.id !== 'pb-question')) {
+    assert.ok(r._billing_review, r.id);
+    assert.equal(Number(r.labor_amt) || 0, 0, r.id);
+  }
 });
