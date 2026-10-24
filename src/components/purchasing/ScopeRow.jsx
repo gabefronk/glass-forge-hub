@@ -22,7 +22,7 @@ function ScopeEta({ scope, job, onSaved, onOpenTracking }) {
 // row separator is its own full-width divider row (DIVIDER), so it runs edge to
 // edge instead of stopping at the money columns.
 const CELL = { borderLeft: `1px solid ${LINE}` };
-const ROW = { backgroundColor: '#FCFDFC' };
+const ROW = { backgroundColor: '#FBF9F5' };
 
 // One-pixel divider between the job row and its scopes, and between each scope.
 // A single spanning cell keeps the line continuous across every column (the
@@ -31,7 +31,7 @@ const ACCENT_WINDOWS = '#3977CB';
 
 const DIVIDER = (
   <tr aria-hidden="true">
-    <td colSpan={9} style={{ height: 0, padding: 0, borderTop: `1px solid ${LINE}`, backgroundColor: '#FCFDFC' }} />
+    <td colSpan={9} style={{ height: 0, padding: 0, borderTop: `1px solid ${LINE}`, backgroundColor: '#FBF9F5' }} />
   </tr>
 );
 
@@ -41,25 +41,26 @@ export function ScopeTableRows({ scopes, job, onSaved, onOpenTracking }) {
       {DIVIDER}
       {scope.label ? (
         <tr>
-          <td colSpan={9} className="px-2.5 pt-1.5" style={{ ...CELL, backgroundColor: '#FCFDFC', borderLeft: `3px solid ${ACCENT_WINDOWS}` }}>
-            <span className="text-[10px] font-bold uppercase tracking-[0.05em]" style={{ color: '#5E6B66' }}>Scope</span>{' '}
-            <span className="text-[11px] font-medium" style={{ color: '#33403B' }}>{scope.label}</span>
+          <td colSpan={9} className="px-2.5 pt-1.5" style={{ ...CELL, backgroundColor: '#FBF9F5', borderLeft: `3px solid ${ACCENT_WINDOWS}` }}>
+            <span className="text-[10px] font-bold uppercase tracking-[0.05em]" style={{ color: '#4A5652' }}>Scope</span>{' '}
+            <span className="text-[11.5px] font-semibold" style={{ color: '#26322E' }}>{scope.label}</span>
           </td>
         </tr>
       ) : null}
       <tr style={ROW}>
-        <MoneyCell display={scope.windows} accent={ACCENT.windows} divider />
-        <MoneyCell display={scope.rough} accent={ACCENT.rough} />
-        <MoneyCell display={scope.sale} accent={ACCENT.sale} />
-        <MoneyCell display={scope.profit} accent={ACCENT.profit} tone={scope.profit?.tone} />
-        <td className="px-2 py-2 text-center align-top" style={CELL}><QuoteCell card={scope.quoteCard} onSaved={onSaved} /></td>
-        <td className="px-2 py-2 text-center align-top" style={CELL}><DotText tone={refTone(scope.poStatus) || 'gray'}>{scope.poNumber}</DotText></td>
-        <td className="px-2 py-2 text-center align-top" style={CELL}>
+        <MoneyCell display={scope.windows} divider />
+        <MoneyCell display={scope.rough} />
+        <MoneyCell display={scope.sale} />
+        <MoneyCell display={scope.profit} tone={scope.profit?.tone} />
+        <td className="px-2 py-1.5 text-center align-top" style={CELL}><QuoteCell card={scope.quoteCard} onSaved={onSaved} /></td>
+        <td className="px-2 py-1.5 text-center align-top" style={CELL}><DotText tone={refTone(scope.poStatus) || 'gray'}>{scope.poNumber}</DotText></td>
+        <td className="px-2 py-1.5 text-center align-top" style={CELL}>
           <ScopeEta scope={scope} job={job} onSaved={onSaved} onOpenTracking={onOpenTracking} />
         </td>
-        <td className="px-2.5 py-2 align-top" style={CELL}><DotText tone={scope.payment.tone}>{scope.payment.label}</DotText></td>
-        <td className="px-2 py-2 text-center align-top" style={CELL}>
-          <button type="button" onClick={onOpenTracking} className="rounded-md px-1 py-0.5 text-[11.5px] font-medium underline" style={{ color: '#8A8F93' }}>Track</button>
+        {/* Supplier payment for this scope (what we owe), not the customer's payment stage. */}
+        <td className="px-2 py-1.5 align-top" style={CELL}><DotText tone={scope.payment.tone}>{scope.payment.label === '—' || !scope.payment.label ? '—' : `Supplier · ${scope.payment.label}`}</DotText></td>
+        <td className="px-1.5 py-1.5 text-center align-top" style={CELL}>
+          <button type="button" onClick={onOpenTracking} className="rounded-md px-1 py-0.5 text-[11.5px] font-semibold underline" style={{ color: '#0B3F3B' }}>Track</button>
         </td>
       </tr>
     </Fragment>
@@ -70,7 +71,7 @@ export function ScopeMobileBlocks({ scopes, job, onSaved, onOpenTracking }) {
   return (
     <div className="mt-2.5 flex flex-col gap-2">
       {scopes.map((scope) => (
-        <div key={scope.key} className="overflow-hidden rounded-[10px]" style={{ border: `1px solid ${LINE}`, backgroundColor: '#FCFDFC' }}>
+        <div key={scope.key} className="overflow-hidden rounded-[10px]" style={{ border: `1px solid ${LINE}`, backgroundColor: '#FBF9F5' }}>
           {scope.label ? (
             <div className="px-3 py-1.5" style={{ borderLeft: `3px solid ${ACCENT_WINDOWS}`, borderBottom: `1px solid ${LINE}` }}>
               <span className="text-[10px] font-bold uppercase tracking-[0.05em]" style={{ color: '#5E6B66' }}>Scope</span>{' '}
