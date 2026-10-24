@@ -3,7 +3,8 @@
 // Reuses the existing native procurement forms (PurchaseOrderForm,
 // BudgetUsageForm, SupplierOrderForm, OrderStatusForm, NumbersEditor,
 // DeleteUnusedQuoteButton) and the shared procurement service validation.
-// Customer invoices live on the job page and job invoicing, not here. Same-job records are filtered by EXACT
+// Customer invoices live on the job page and job invoicing, not here.
+// Same-job records are filtered by EXACT
 // immutable job id (jobProcurementRecords) — never a name join.
 //
 // Constraints (preview-only):
