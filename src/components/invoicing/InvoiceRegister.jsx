@@ -8,6 +8,8 @@ const STATUS = {
   paid: { label: "Paid", color: "var(--gf-teal-800)" },
 };
 const day = (iso) => (iso ? new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", month: "numeric", day: "numeric", year: "numeric" }) : "—");
+// Days an open invoice has been outstanding, as QuickBooks shows it.
+const ageDays = (iso, today) => (iso ? Math.max(0, Math.round((Date.parse(today + "T12:00:00Z") - Date.parse(iso + "T12:00:00Z")) / 86400000)) : null);
 
 // Accounts receivable at a glance: every QuickBooks invoice the Hub has billed lines on,
 // across months, with what is still owed. Payment dates come from QuickBooks.
@@ -15,8 +17,9 @@ export default function InvoiceRegister({ register, onRecordPayment, onVoid }) {
   const [paying, setPaying] = useState(null);
   const [payDate, setPayDate] = useState(denverDate());
   const open = openInvoiceTotals(register);
+  const today = denverDate();
   if (!register.length) {
-    return <div className="px-4 py-3 text-[13px]" style={{ color: "var(--gf-ink-3)", borderBottom: "1px solid var(--gf-border)" }}>No invoices recorded yet. Select ready lines and choose Mark billed to record the QuickBooks invoice they went out on.</div>;
+    return <div className="px-4 py-6 text-[13px]" style={{ color: "#4A5652" }}>No invoices recorded yet. In Lines, select ready lines and choose Mark billed to record the QuickBooks invoice they went out on.</div>;
   }
   return (
     <div style={{ borderBottom: "1px solid var(--gf-border)" }}>
@@ -29,7 +32,7 @@ export default function InvoiceRegister({ register, onRecordPayment, onVoid }) {
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide" style={{ color: "var(--gf-ink-3)" }}>
               <th className="px-4 py-1.5 font-medium">Invoice</th><th className="px-2 py-1.5 font-medium">Date</th><th className="px-2 py-1.5 font-medium">Customer</th><th className="px-2 py-1.5 font-medium">Lines</th>
-              <th className="px-2 py-1.5 text-right font-medium">Labor</th><th className="px-2 py-1.5 text-right font-medium">Fee</th><th className="px-2 py-1.5 font-medium">Status</th><th className="px-4 py-1.5" />
+              <th className="px-2 py-1.5 text-right font-medium">Labor</th><th className="px-2 py-1.5 text-right font-medium">Fee</th><th className="px-2 py-1.5 text-right font-medium">Age</th><th className="px-2 py-1.5 font-medium">Status</th><th className="px-4 py-1.5" />
             </tr>
           </thead>
           <tbody>
@@ -41,6 +44,7 @@ export default function InvoiceRegister({ register, onRecordPayment, onVoid }) {
                 <td className="px-2 py-2">{inv.lineCount}{inv.months.length > 1 ? ` · ${inv.months.join(", ")}` : ""}</td>
                 <td className="px-2 py-2 text-right font-mono-num-bold">${formatMoney(inv.labor)}</td>
                 <td className="px-2 py-2 text-right font-mono-num-bold">${formatMoney(inv.fee)}</td>
+                <td className="px-2 py-2 text-right tabular-nums" style={{ color: inv.status === "open" && ageDays(inv.date, today) > 30 ? "#A43432" : "#4A5652" }}>{inv.status === "open" && inv.date ? `${ageDays(inv.date, today)}d` : "—"}</td>
                 <td className="px-2 py-2" style={{ color: STATUS[inv.status].color }}>{STATUS[inv.status].label}{inv.status === "paid" && inv.paidDate ? ` ${day(inv.paidDate)}` : ""}</td>
                 <td className="px-4 py-2 text-right whitespace-nowrap">
                   {inv.lineCount === 0 && inv.status === "open" ? (
