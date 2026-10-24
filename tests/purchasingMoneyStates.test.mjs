@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { moneyStatesForJob, hasMoneyStates, isOrderBilled, isOrderPaid, paymentEvidence } from '../src/lib/purchasingMoneyStates.js';
+import { moneyStatesForJob, hasMoneyStates, isPaymentRequested, isOrderPaid, paymentEvidence } from '../src/lib/purchasingMoneyStates.js';
 
 const JOB = 'job-1';
 
@@ -30,26 +30,25 @@ test('committed sums open PO dealer amounts and excludes cancelled POs', () => {
   assert.equal(s.committed.records, 2);
 });
 
-test('an unpaid vendor bill counts as incurred; placed-but-unbilled orders do not', () => {
-  assert.equal(isOrderBilled(vo({ status: 'ach_link_received' })), true);
-  assert.equal(isOrderBilled(vo({ status: 'ordered' })), false);
-  assert.equal(isOrderBilled(vo({ status: 'eta_set' })), false);
-
+test('incurred actual is never inferred from status, links, or settlement - it stays unknown', () => {
   const s = moneyStatesForJob(JOB, {
-    vendorOrders: [vo({ status: 'ach_link_received', amount: 500 }), vo({ id: 'vo2', status: 'ordered', amount: 700 })],
+    vendorOrders: [
+      vo({ status: 'ach_link_received', amount: 500 }),
+      vo({ id: 'vo2', status: 'ordered', amount: 700 }),
+      vo({ id: 'vo3', status: 'paid', amount: 300, paid_at: '2026-10-15' }),
+    ],
   });
-  assert.equal(s.incurred.value, 500);
-  assert.equal(s.incurred.records, 1);
-  assert.equal(s.paid.value, null);
+  assert.equal(s.incurred.value, null);
+  assert.equal(s.incurred.tracked, false);
+  assert.equal(s.paid.value, 300);
 });
 
-test('paid is a stage of the same money, counted in incurred too, never summed as extra', () => {
+test('paid is payment evidence only; it never invents an incurred figure', () => {
   const s = moneyStatesForJob(JOB, {
     vendorOrders: [vo({ status: 'paid', amount: 300, paid_at: '2026-10-20' })],
   });
-  assert.equal(s.incurred.value, 300);
   assert.equal(s.paid.value, 300);
-  assert.ok(s.incurred.value !== s.incurred.value + s.paid.value);
+  assert.equal(s.incurred.value, null);
   assert.equal(isOrderPaid(vo({ status: 'reconciled' })), true);
   assert.equal(isOrderPaid(vo({ status: 'ordered', paid_at: '2026-10-20' })), true);
 });
@@ -71,8 +70,9 @@ test('missing amounts never fabricate a zero total; partial coverage is flagged'
   });
   assert.equal(s.committed.value, 100);
   assert.equal(s.committed.partial, true);
+  assert.equal(s.paymentRequested.value, null);
+  assert.equal(s.paymentRequested.records, 1);
   assert.equal(s.incurred.value, null);
-  assert.equal(s.incurred.records, 1);
 });
 
 test('a real 0 amount stays 0, not a dash', () => {
@@ -89,10 +89,20 @@ test('records from other jobs never leak in', () => {
   assert.equal(hasMoneyStates(s), false);
 });
 
-test('billing evidence requires an ACH link, ach status/timestamp, or settlement - not an order confirmation', () => {
-  assert.equal(isOrderBilled(vo({ status: 'ordered', ach_link: 'https://pay.example/x' })), true);
-  assert.equal(isOrderBilled(vo({ status: 'ordered', ach_link_received_at: '2026-10-15T05:14:21Z' })), true);
-  assert.equal(isOrderBilled(vo({ status: 'eta_set', amount: 19841.95 })), false);
+test('payment-requested indicator: ACH link present and not yet paid; never a bill', () => {
+  assert.equal(isPaymentRequested(vo({ status: 'ordered', ach_link: 'https://pay.example/x' })), true);
+  assert.equal(isPaymentRequested(vo({ status: 'ach_link_received', ach_link_received_at: '2026-10-15T05:14:21Z' })), true);
+  assert.equal(isPaymentRequested(vo({ status: 'eta_set' })), false);
+  assert.equal(isPaymentRequested(vo({ status: 'paid', ach_link: 'https://pay.example/x', paid_at: '2026-10-15' })), false);
+
+  const s = moneyStatesForJob(JOB, {
+    vendorOrders: [
+      vo({ status: 'ach_link_received', amount: 500 }),
+      vo({ id: 'vo2', status: 'eta_set', amount: 700 }),
+    ],
+  });
+  assert.equal(s.paymentRequested.value, 500);
+  assert.equal(s.paymentRequested.records, 1);
 });
 
 test('payment evidence is processor-marked unless reconciled', () => {

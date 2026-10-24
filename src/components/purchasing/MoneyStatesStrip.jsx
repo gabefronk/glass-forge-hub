@@ -15,19 +15,21 @@ function State({ label, state, sub }) {
   );
 }
 
-// The four QBO-style job-money stages, shown side by side and never summed:
-// the same dollars move Estimated -> Committed -> Incurred -> Paid, so the
-// figures overlap by design. The bases differ on purpose and say so:
-// estimated = reviewed budget (material incl tax + labor); committed = open
-// PO dealer amounts (pre-tax, material only); incurred = vendor bills with
-// positive billing evidence (ACH payment link / invoice), unpaid included;
-// paid = orders marked settled (processor-marked unless reconciled).
+// Job money stages, side by side and never summed: the same dollars move
+// Estimated -> Committed -> Incurred -> Paid, so figures overlap by design.
+// Estimated = reviewed budget (material incl tax + labor). Committed = open
+// PO dealer amounts (pre-tax, material only). Incurred is UNKNOWN: vendor
+// orders carry no invoice/bill field, so actual cost incurred is not tracked
+// and never inferred from order or payment status. Paid = orders marked
+// settled (processor-marked unless reconciled). A "payment requested" line
+// appears only when a vendor sent an ACH link not yet marked paid.
 export default function MoneyStatesStrip({ states }) {
   if (!hasMoneyStates(states)) return null;
   const est = states.estimated;
   const com = states.committed;
   const inc = states.incurred;
   const paid = states.paid;
+  const req = states.paymentRequested;
   const paidSub = !paid.records ? 'none settled'
     : paid.reconciled === paid.records
       ? `${paid.records} reconciled`
@@ -37,9 +39,14 @@ export default function MoneyStatesStrip({ states }) {
       <div className="flex gap-2">
         <State label="Estimated" state={est} sub={est?.scopes > 0 ? (est.status === 'ready' ? `budget: material + labor` : 'budget needs review') : 'no budget'} />
         <State label="Committed" state={com} sub={com.records ? `${com.records} PO${com.records === 1 ? '' : 's'}, dealer pre-tax` : 'no POs'} />
-        <State label="Incurred" state={inc} sub={inc.records ? `${inc.records} vendor bill${inc.records === 1 ? '' : 's'}, paid or not` : 'no bills yet'} />
+        <State label="Incurred" state={inc} sub="unknown - no bill records" />
         <State label="Paid" state={paid} sub={paidSub} />
       </div>
+      {req?.records > 0 ? (
+        <p className="mt-1.5 text-[9.5px] font-bold leading-tight" style={{ color: '#34403F' }}>
+          Payment requested: {money(req.value)}{req.partial ? ' (partial - some requested amounts unrecorded)' : ''} across {req.records} order{req.records === 1 ? '' : 's'} - a request is not a bill and not a payment.
+        </p>
+      ) : null}
       <p className="mt-1.5 text-[9.5px] font-medium leading-tight" style={{ color: '#8A8F93' }}>
         Stages of the same money - they overlap, never add them. Vendor material only; labor actuals are not tracked here.
       </p>

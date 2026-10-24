@@ -78,8 +78,9 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
           <Metric label="Budget customer sell" value={data.totals.budgetSell} note="Estimate / entered sell, not cash" />
           <Metric label="PO dealer amount" value={data.totals.poDealer} note="Ordered amount; not proof of payment" />
           <Metric label="PO customer amount" value={data.totals.poCustomer} note="PO amount; not an invoice receipt" />
-          <Metric label="Vendor bills incurred" value={data.totals.voIncurred} note="Bills with positive billing evidence (ACH link / invoice), paid or not; vendor material only, not labor or full job cost" />
-          <Metric label="Vendor payments recorded" value={data.totals.voPaid} note="A stage of the incurred figure, never added to it; processor-marked unless the order is reconciled" />
+          <Metric label="Vendor bills incurred" value={null} note="Not tracked - vendor orders have no invoice/bill field, so actual incurred cost is unknown rather than inferred from order or payment status" />
+          <Metric label="Vendor payment requested" value={data.totals.voPaymentRequested} note="ACH payment links not yet marked paid; a request is not a bill and not a payment" />
+          <Metric label="Vendor payments recorded" value={data.totals.voPaid} note="Processor-marked unless the order is reconciled; not added to any other figure" />
           <Metric label="Fees recorded" value={data.totals.feeRecorded} note="FeeLines using invoicing math" />
           <Metric label="Fee share on YA-paid work" value={data.totals.feePaid} note="YA received payment; does not confirm your fee was paid" />
         </div>
@@ -107,7 +108,7 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
           {data.vendorOrders.length ? data.vendorOrders.map((row) => <div key={row.id} className="mb-2 rounded-lg p-2.5 text-[11px]" style={{ border: `1px solid ${C.rowBorder}` }}>
             <div className="font-semibold" style={{ color: C.text }}>{row.order_number || row.title || row.id} · {row.vendor || "Vendor not recorded"}</div>
             <div style={{ color: C.textMuted }}>Owed {money(row.amount)} · {row.status || "no status"}{row.paid_at ? ` · paid ${date(row.paid_at)}` : ""}</div>
-            <div className="mt-1 font-medium" style={{ color: C.amber }}>A bill is incurred when received, whether or not it is paid yet.</div>
+            <div className="mt-1 font-medium" style={{ color: C.amber }}>Status and payment marks do not establish incurred cost.</div>
           </div>) : <p className="text-[11px]" style={{ color: C.textMuted }}>No linked VendorOrders records.</p>}
         </div>
 

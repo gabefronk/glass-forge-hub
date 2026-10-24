@@ -1,6 +1,6 @@
 import { activeBudgets, budgetFigures, budgetRollup } from "../../base44/shared/procurementCore.js";
 import { withComputedAmounts } from "./feeMath.js";
-import { isOrderBilled, isOrderPaid } from "./purchasingMoneyStates.js";
+import { isOrderPaid, isPaymentRequested } from "./purchasingMoneyStates.js";
 import { withCompanions, buildSupersededSet } from "./invoicingFilters.js";
 import { isAgentCenterOwner } from "./agentCenterAccess.js";
 
@@ -44,13 +44,14 @@ export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], fe
   const audited = withCompanions(computed, calendarEvents);
   const excluded = buildSupersededSet(audited, calendarEvents);
   const linkedFeeLines = audited.filter(row => ids.has(row.job_id) && !excluded.has(row.id));
-  // Vendor/material actuals: a vendor bill counts as incurred the moment the
-  // vendor asks for money (ACH link received) or it is settled - unpaid bills
-  // still count. Paid is a separate stage, never added to incurred. Vendor
-  // orders whose linked PO is cancelled are excluded everywhere.
+  // Vendor/material money. Incurred actual is NOT computable: vendor orders
+  // have no invoice/bill field, and an ACH link or paid mark is not bill
+  // evidence - so only payment-requested and paid indicators surface, never
+  // an invented actual. Vendor orders whose linked PO is cancelled are
+  // excluded everywhere.
   const cancelledPOIds = new Set(linkedPurchaseOrders.filter(row => row.status === 'cancelled').map(row => row.id));
   const linkedVendorOrders = vendorOrders.filter(row => ids.has(row.job_id) && !(row.purchase_order_id && cancelledPOIds.has(row.purchase_order_id)));
-  const billedOrders = linkedVendorOrders.filter(isOrderBilled);
+  const requestedOrders = linkedVendorOrders.filter(isPaymentRequested);
   const paidOrders = linkedVendorOrders.filter(isOrderPaid);
 
   return {
@@ -64,7 +65,7 @@ export function aggregateJobMoney(jobId, { budgets = [], purchaseOrders = [], fe
       budgetSell: estimate.sell,
       poDealer: total(activePurchaseOrders, "amount_dealer"),
       poCustomer: total(activePurchaseOrders, "amount_customer"),
-      voIncurred: total(billedOrders, "amount"),
+      voPaymentRequested: total(requestedOrders, "amount"),
       voPaid: total(paidOrders, "amount"),
       feeRecorded: total(linkedFeeLines, "fee_amt"),
       feeBilled: linkedFeeLines.length ? (total(linkedFeeLines.filter((row) => row.billed_to_bfs), "fee_amt") ?? 0) : null,
