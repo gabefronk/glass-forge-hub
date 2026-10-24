@@ -284,3 +284,17 @@ test('privatize_source: refuses anything but this app\'s public-file URL, owner 
 test('privatize_source: reads the public file from its media.base44.com address', () => {
   assert.equal(publicMediaUrl(PUBLIC_URL), 'https://media.base44.com/files/public/6a7f0d7a4a5f825c724273e9/22dab6efe_SANDY-AMSCO.pdf');
 });
+
+test('privatize_source: owner-supplied bytes are used as-is, still checked against the stored sha', async () => {
+  const { adapter, store, calls } = mock();
+  store.budgets.push(oldBudget());
+  const r = await handle(req({ action: 'privatize_source', budget_id: BUDGET, file_base64: B64 }), adapter);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.ok(!calls.includes('fetchBytes') || calls.filter((c) => c === 'fetchBytes').length === 1); // only the signed read-back
+  const wrong = mock();
+  wrong.store.budgets.push(oldBudget({ source_sha256: 'f'.repeat(64) }));
+  assert.equal((await handle(req({ action: 'privatize_source', budget_id: BUDGET, file_base64: B64 }), wrong.adapter)).body.error, 'source_changed');
+  const notPdf = mock();
+  notPdf.store.budgets.push(oldBudget());
+  assert.equal((await handle(req({ action: 'privatize_source', budget_id: BUDGET, file_base64: Buffer.from('hello!').toString('base64') }), notPdf.adapter)).status, 400);
+});

@@ -94,6 +94,23 @@ export const PUBLIC_SOURCE = /^https:\/\/base44\.app\/api\/apps\/[a-f0-9]{24}\/f
 
 export const publicMediaUrl = (url) => url.replace(/^https:\/\/base44\.app\/api\/apps\/[a-f0-9]{24}\/files\/mp\/public\//, 'https://media.base44.com/files/public/');
 
+// privatize_source may carry the PDF bytes the owner's own browser read from that same
+// public link (the function host cannot always fetch it). Same base64/size/magic checks
+// as an upload; bytes are still checked against the budget's stored sha when it has one.
+export function validatePrivatizeBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'invalid_body' };
+  for (const k of Object.keys(body)) if (!['action', 'budget_id', 'file_base64'].includes(k)) return { error: 'unexpected_field' };
+  if (!isEntityId(body.budget_id)) return { error: 'invalid_budget_id' };
+  if (body.file_base64 == null) return { ok: true, budget_id: body.budget_id, bytes: null };
+  const b64 = body.file_base64;
+  if (typeof b64 !== 'string' || !b64 || b64.length > MAX_BASE64_CHARS || b64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) return { error: 'invalid_file' };
+  let bytes;
+  try { bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); } catch { return { error: 'invalid_file' }; }
+  if (!bytes.length || bytes.length > MAX_PDF_BYTES) return { error: bytes.length ? 'pdf_too_large' : 'invalid_file' };
+  if (!isPdf(bytes)) return { error: 'not_a_pdf' };
+  return { ok: true, budget_id: body.budget_id, bytes };
+}
+
 export function validateBudgetBody(body, { refresh = false } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'invalid_body' };
   const allowed = new Set(refresh ? ['action', 'budget_id', 'expected_version', 'review_confirmed'] : ['action', 'budget_id']);
@@ -283,7 +300,7 @@ async function privatizeSource(adapter, p, user) {
   // address directly (a function cannot reliably fetch its own platform's API host), then
   // fall back to the original URL.
   const fetchPublic = adapter.fetchPublic || adapter.fetchBytes;
-  let res = await fetchPublic(publicMediaUrl(url), MAX_PDF_BYTES).catch(() => null);
+  let res = p.bytes ? { bytes: p.bytes, contentType: 'application/pdf' } : await fetchPublic(publicMediaUrl(url), MAX_PDF_BYTES).catch(() => null);
   if (!res || res.error) res = await fetchPublic(url, MAX_PDF_BYTES).catch(() => null);
   if (!res || res.error || !(res.bytes instanceof Uint8Array) || !res.bytes.length) {
     // A fixed code plus the HTTP status / network error name only (never a URL).
@@ -334,6 +351,6 @@ export async function handle(req, adapter) {
   if (action === 'refresh') return run(validateBudgetBody(body, { refresh: true }), (p) => refresh(adapter, p), 'refresh_failed');
   // The explicit owner click is the only response that carries a (60s) signed URL.
   if (action === 'sign_source') return run(validateBudgetBody(body), (p) => signSource(adapter, p), 'sign_failed', false);
-  if (action === 'privatize_source') return run(validateBudgetBody(body), (p) => privatizeSource(adapter, p, user), 'privatize_failed');
+  if (action === 'privatize_source') return run(validatePrivatizeBody(body), (p) => privatizeSource(adapter, p, user), 'privatize_failed');
   return { status: 400, body: { error: 'unknown_action' } };
 }
