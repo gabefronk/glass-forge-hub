@@ -4,6 +4,7 @@ import { pickDisplayBudget } from '@/lib/purchasingViewModel';
 import { isLiveBudget } from '@/lib/purchasingCoreTwin';
 import { displayDate, etaDistance } from '@/lib/purchasingDates';
 import { saveEtaTarget } from '@/lib/etaTarget';
+import { etaShort } from '@/lib/purchasingSummary';
 
 // The ETA cell: clicking it picks a date in place - no form to fill in.
 //   - A job with ONE pending supplier confirmation keeps its ETA on that order
@@ -24,6 +25,12 @@ function EtaText({ date }) {
   return <>{displayDate(date)}{d ? <span className="ml-1 font-bold" style={{ color: d.late ? '#A43432' : '#4A5652' }}>· {d.text}</span> : null}</>;
 }
 
+// Compact grid form (declutter, Oct 24): "Nov 9 · 16d", late in red, no dot.
+function EtaWords({ label, empty = '—' }) {
+  const e = etaShort(label, denverToday());
+  return <span className="whitespace-nowrap text-[14px]" style={{ color: e.late ? '#A43432' : e.text ? '#101617' : '#566063', fontWeight: e.late ? 600 : 400 }}>{e.text || empty}</span>;
+}
+
 function jobEtaTarget(job, data) {
   // Reference-only rows (PO-reconciliation placeholders with no supplier order
   // number) are not real orders: they never get a picker or block one.
@@ -37,7 +44,7 @@ function jobEtaTarget(job, data) {
   return budget ? { budgetId: budget.id, date: budget.glass_eta_date || '' } : null;
 }
 
-export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier, etaTarget }) {
+export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier, etaTarget, compact = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   // showPicker() is refused inside the preview's cross-origin iframe (SecurityError).
@@ -75,13 +82,13 @@ export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier, 
       <button type="button" onClick={onOpenSupplier}
         title={etaLabel ? "Open this job's supplier dates" : 'Record the supplier ETA for this job'}
         className="cursor-pointer rounded-md px-1 py-0.5 hover:bg-stone-100">
-        <DotText tone={etaLabel ? 'blue' : 'gray'}>{ISO_DAY.test(etaLabel || '') ? <EtaText date={etaLabel} /> : etaLabel}</DotText>
+        {compact ? <EtaWords label={etaLabel} /> : <DotText tone={etaLabel ? 'blue' : 'gray'}>{ISO_DAY.test(etaLabel || '') ? <EtaText date={etaLabel} /> : etaLabel}</DotText>}
       </button>
     );
   }
 
   return (
-    <div className="relative flex flex-col items-center gap-1">
+    <div className={`relative flex flex-col gap-1 ${compact ? 'items-start' : 'items-center'}`}>
       {manual ? (
         <input type="date" aria-label="Supplier ETA" disabled={busy}
           value={date}
@@ -91,14 +98,14 @@ export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier, 
       ) : (
         <button type="button" disabled={busy} title="Pick the supplier ETA" onClick={openPicker}
           className="cursor-pointer rounded-md px-1 py-0.5 hover:bg-stone-100">
-          {date ? <DotText tone="blue"><EtaText date={date} /></DotText> : <span className="rounded-md px-1.5 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: '#F3EEE4', color: '#4A5652', border: `1px dashed ${LINE}` }}>Set ETA</span>}
+          {compact ? <EtaWords label={date} empty="Set ETA" /> : date ? <DotText tone="blue"><EtaText date={date} /></DotText> : <span className="rounded-md px-1.5 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: '#F3EEE4', color: '#4A5652', border: `1px dashed ${LINE}` }}>Set ETA</span>}
         </button>
       )}
       <input ref={inputRef} type="date" aria-label="Supplier ETA" tabIndex={-1}
         value={date}
         onChange={(e) => save(e.target.value)}
         style={{ position: 'absolute', left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} />
-      {error && <span className="text-[10px] font-semibold" style={{ color: '#A43432' }}>{error}</span>}
+      {error && <span className="text-[13px] font-semibold" style={{ color: '#A43432' }}>{error}</span>}
     </div>
   );
 }
