@@ -30,6 +30,10 @@ export function FormPanel({ title, children }) {
 }
 function ErrorLine({ error }) { return error ? <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p> : null; }
 function Review({ checked, onChange, children }) { return <label className="my-4 flex items-start gap-2 text-sm text-slate-700"><input className="mt-1" type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />{children}</label>; }
+// Use tax is added to job cost only when the supplier didn't charge sales tax (src/lib/useTax.js).
+export function SalesTaxBox({ checked, onChange, disabled = false }) {
+  return <label className="mt-3 flex items-start gap-2 text-sm text-slate-700"><input className="mt-1" type="checkbox" checked={checked} disabled={disabled} onChange={e => onChange(e.target.checked)} />Amount already includes sales tax (no use tax added)</label>;
+}
 function Buttons({ busy, enabled = true, label, onCancel }) {
   return <div className="mt-3 flex flex-wrap gap-2"><button type="submit" disabled={busy || !enabled} className={buttonClass} style={primaryStyle}>{busy ? 'Saving...' : label}</button><button type="button" disabled={busy} onClick={onCancel} className={buttonClass} style={secondaryStyle}>Cancel</button></div>;
 }
@@ -76,6 +80,7 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
       <Field disabled={shop} label="Customer amount for this PO scope (optional)" type="number" value={form.amount_customer} onChange={v => set('amount_customer', v)} hint="Leave blank when the customer price belongs to the whole job, not this order." />
       <Field label="Reason for an additional PO for the same quote (when needed)" value={form.additional_order_reason || ''} onChange={v => set('additional_order_reason', v)} />
     </div>
+    <SalesTaxBox checked={form.includes_sales_tax === true} onChange={v => set('includes_sales_tax', v)} />
     {source && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Budget customer total: <strong>{money(source.inputs?.actual_total_sell)}</strong> (context only). {prepareBudgetPO(source).supplier_hint}</p>}
     <label className="mt-3 block text-xs font-semibold text-slate-600">Scope / ordering notes<textarea className="mt-1 min-h-20 w-full rounded-lg border p-3 text-sm" value={form.notes} onChange={e => set('notes', e.target.value)} /></label>
     {amount(form.amount_dealer) === 0 && <Review checked={zero} onChange={setZero}>The supplier payable is intentionally zero.</Review>}
@@ -106,7 +111,7 @@ export function BudgetUsageForm({ budget, budgets, onDone, onCancel }) {
 
 export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', initialPO, order, onDone, onCancel }) {
   const sourceVersion = useRef(order?.updated_date);
-  const [form, setForm] = useState(() => ({ job_id: order?.job_id || initialPO?.job_id || initialJobId, purchase_order_id: order?.purchase_order_id || initialPO?.id || '', order_number: order?.order_number || '', amount: order?.amount ?? '', eta_date: order?.eta_date || '', received_date: order?.received_date || '', notes: order?.notes || '' }));
+  const [form, setForm] = useState(() => ({ job_id: order?.job_id || initialPO?.job_id || initialJobId, purchase_order_id: order?.purchase_order_id || initialPO?.id || '', order_number: order?.order_number || '', amount: order?.amount ?? '', includes_sales_tax: order?.includes_sales_tax === true, eta_date: order?.eta_date || '', received_date: order?.received_date || '', notes: order?.notes || '' }));
   const [reviewed, setReviewed] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const key = useRef(crypto.randomUUID());
   const set = (name, value) => { setForm(f => ({ ...f, [name]: value, ...(name === 'job_id' ? { purchase_order_id: '' } : {}) })); setReviewed(false); };
@@ -138,6 +143,7 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
       <Field label="Supplier ETA" type="date" value={form.eta_date} onChange={v => set('eta_date', v)} />
       {order ? <Field label="Received date (only when received)" type="date" value={form.received_date} onChange={v => set('received_date', v)} /> : null}
     </div>
+    <SalesTaxBox checked={form.includes_sales_tax === true} onChange={v => set('includes_sales_tax', v)} />
     <Field label="Notes" value={form.notes} onChange={v => set('notes', v)} />
     <Review checked={reviewed} onChange={setReviewed}>These details come from the supplier confirmation. Record them only; do not place an order or change the installation calendar.</Review>
     <ErrorLine error={error} /><Buttons busy={busy} enabled={reviewed && !!form.job_id && !!form.purchase_order_id} label="Save supplier confirmation" onCancel={onCancel} />
