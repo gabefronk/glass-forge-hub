@@ -5,7 +5,7 @@ import PurchasingJobWorkspace from './PurchasingJobWorkspace';
 import PurchasingRowTitle from './PurchasingRowTitle';
 import EtaCell from './EtaCell';
 import { money } from '@/components/budgets/ProcurementForms';
-import { cardFigures, etaDate, etaEarliest } from '@/lib/purchasingSummary';
+import { etaDate, etaEarliest } from '@/lib/purchasingSummary';
 import { procurementPath } from '@/lib/procurementRoutes';
 import { PAYMENT_STAGES, PAYMENT_TONES, paymentPatch, paymentStage } from '@/lib/jobPayment';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -39,8 +39,16 @@ const COLUMNS = [
 const cell = { padding: '0 10px', minWidth: 0 };
 const dash = <span style={{ color: INK2 }}>—</span>;
 const moneyCell = (v, bold, negative) => (v == null ? dash : <span style={{ fontWeight: bold ? 700 : 500, color: negative ? '#A43432' : bold ? INK : INK3 }}>{money(v)}</span>);
-// Figures as the grid shows them: a job's own, or the sum of its scopes.
-const figure = (v, any) => (any ? v : null);
+// Figures as the grid shows them: a job's own, or the sum of its scopes (a dash when
+// none of them has a figure yet - never a made-up $0).
+function jobMoney(card, scopes) {
+  const pick = (own, k) => {
+    if (!scopes.length) return own?.suppressed ? null : (own?.value ?? null);
+    const vals = scopes.map((s) => s[k]?.value).filter((v) => typeof v === 'number' && Number.isFinite(v));
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) * 100) / 100 : null;
+  };
+  return { windows: pick(card.windows?.display, 'windows'), sale: pick(card.sale?.display, 'sale'), profit: pick(card.profitDisplay, 'profit') };
+}
 
 // Every supplier on the job, once each (a multi-scope job can have two).
 export function supplierText(card) {
@@ -113,8 +121,7 @@ function JobRows({ card, data, onSaved }) {
   const { job, refs } = card;
   const row = useJobRow(card, data, onSaved);
   const multi = row.scopes.length > 1;
-  const f = cardFigures(card);
-  const hasMoney = (k) => (multi ? row.scopes.some((s) => s[k]?.value != null) : card[k === 'profit' ? 'profitDisplay' : k]?.display?.value != null || (k === 'profit' && card.profitDisplay?.value != null));
+  const f = jobMoney(card, row.scopes);
   const supplier = supplierText(card);
   const label = [job.builder, job.canonical_name].filter(Boolean).join(' - ');
   const panelId = `purchasing-row-${job.id}`;
@@ -145,9 +152,9 @@ function JobRows({ card, data, onSaved }) {
           <StageSelect stageKey={row.stageKey} busy={row.busy} onChange={row.saveStage} label={label} />
           {row.stageError && <span role="alert" className="mt-1 block text-[12px] font-semibold" style={{ color: '#A43432' }}>{row.stageError}</span>}
         </span>
-        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(figure(f.windows, hasMoney('windows')))}</span>
-        <span className="text-right text-[14px] tabular-nums" style={cell}>{moneyCell(figure(f.sale, hasMoney('sale')), true)}</span>
-        <span className="text-right text-[14px] tabular-nums" style={{ ...cell, paddingRight: '20px' }}>{moneyCell(figure(f.profit, hasMoney('profit')), false, f.profit < 0)}</span>
+        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(f.windows)}</span>
+        <span className="text-right text-[14px] tabular-nums" style={cell}>{moneyCell(f.sale, true)}</span>
+        <span className="text-right text-[14px] tabular-nums" style={{ ...cell, paddingRight: '20px' }}>{moneyCell(f.profit, false, f.profit < 0)}</span>
       </div>
       {row.expanded && row.fullJob && data && (
         <div id={panelId} style={{ backgroundColor: '#EEF5F3', padding: '2px 20px 20px 52px' }}>
@@ -170,7 +177,7 @@ const BADGE = 'inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap round
 function PhoneRow({ card }) {
   const { job, refs } = card;
   const scopes = (card.scopes || []).length > 1 ? card.scopes : [];
-  const f = cardFigures(card);
+  const f = jobMoney(card, scopes);
   const eta = scopes.length ? etaEarliest(scopes.map((s) => s.etaLabel)) : etaDate(refs.etaLabel);
   const stage = paymentStage(card.paymentStage);
   const tone = PAYMENT_TONES[card.paymentStage] || PAYMENT_TONES.none;
@@ -183,11 +190,11 @@ function PhoneRow({ card }) {
           {builder ? <span className="truncate text-[12.5px] font-medium" style={{ color: INK2 }}>{builder}</span> : null}
           <span className="min-w-0 text-[16px] font-semibold leading-snug" style={{ overflowWrap: 'anywhere' }}>{job.canonical_name || 'Unnamed job'}</span>
         </span>
-        <span className="whitespace-nowrap pt-0.5 text-[15px] font-bold tabular-nums">{money(f.sale)}</span>
+        <span className="whitespace-nowrap pt-0.5 text-[15px] font-bold tabular-nums">{f.sale == null ? '—' : money(f.sale)}</span>
       </span>
       <span className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 truncate text-[13.5px]" style={{ color: INK3 }}>{supplier || 'Supplier not set'}{scopes.length ? ` · ${scopes.length} scopes` : ''}</span>
-        <span className="whitespace-nowrap text-[14px] tabular-nums" style={{ color: f.profit < 0 ? '#A43432' : INK2 }}>{money(f.profit)}</span>
+        <span className="whitespace-nowrap text-[14px] tabular-nums" style={{ color: f.profit < 0 ? '#A43432' : INK2 }}>{f.profit == null ? '' : `Profit ${money(f.profit)}`}</span>
       </span>
       <span className="flex flex-wrap gap-1.5">
         <span className={BADGE} style={{ backgroundColor: '#F3EFE7', color: INK3 }}>{eta ? `ETA ${eta}` : 'No ETA'}</span>
@@ -210,7 +217,7 @@ export default function PurchasingTable({ cards, data, onSaved, sort, onSort }) 
             const text = <span className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: active ? INK : INK2 }}>{c.label}</span>;
             return (
               <span key={c.key || c.label} role="columnheader" title={c.title} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
-                className={`${c.cls || ''} ${c.right ? 'text-right' : ''}`} style={{ ...cell, whiteSpace: 'nowrap', paddingRight: c.label === 'Est. profit' ? '20px' : cell.padding.split(' ')[1] }}>
+                className={`${c.cls || ''} ${c.right ? 'text-right' : ''}`} style={{ ...cell, whiteSpace: 'nowrap', paddingRight: c.label === 'Est. profit' ? '20px' : '10px' }}>
                 {c.sort ? (
                   <button type="button" onClick={() => onSort(c.sort)} className={`inline-flex items-center gap-1 ${c.right ? 'flex-row-reverse' : ''}`} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
                     {text}<span aria-hidden="true" style={{ fontSize: '9px', color: INK3, visibility: active ? 'visible' : 'hidden' }}>{sort?.dir === 'asc' ? '▲' : '▼'}</span>
