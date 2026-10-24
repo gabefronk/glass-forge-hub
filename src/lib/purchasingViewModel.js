@@ -258,10 +258,6 @@ export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders 
   return { value: pickC.value, label: conflict ? `PO conflict — ${baseLabel}` : baseLabel, review: true, source: conflict ? 'po_conflict' : 'multiple_scopes', budgetId: pickC.budgetId, alternatives };
 }
 
-// Rough labor/material display: owner-entered (verified) when present; else
-// budget labor_cost_sub_pay + additional_install_material as an estimate. A
-// real 0 stays 0; a missing component is NOT inferred as 0 — a partial estimate
-// names the available component. No budget → dash (never crashes on null).
 // The budget is the one source of a job's money (Gabriel, Oct 24): the figures
 // he types in Edit numbers on the budget win. The older per-job money entry
 // (JobMoneyInputs, the retired "Edit money" button) only fills in a job whose
@@ -276,10 +272,6 @@ export function roughDisplayCandidate(budget, ownerValue, duplicate) {
   return { value: null, label: duplicate ? 'Duplicate owner entries - fix to show' : null, review: Boolean(duplicate), source: 'none' };
 }
 
-// Sale price display: owner-entered (verified) when present; else budget
-// actual_total_sell (explicit, including 0) as an estimate, or the computed
-// suggested_total_sell when the target is missing. Legacy empty → unknown
-// (dash), never invented. No budget → dash (never crashes on null).
 export function saleDisplayCandidate(budget, ownerValue, duplicate) {
   const sell = budget ? amount(budget.inputs?.actual_total_sell) : null;
   if (sell != null) return { value: Number(sell), label: 'From budget', review: false, source: 'budget_inputs' };
