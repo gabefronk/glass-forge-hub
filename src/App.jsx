@@ -22,7 +22,6 @@ import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import OAuthConsent from '@/pages/OAuthConsent';
-import SalesTracker from '@/pages/SalesTracker';
 import AdminAgentCenter from "@/pages/AdminAgentCenter";
 import BrandsSpecs from "@/pages/BrandsSpecs";
 import ProbuildDailyPreview from "@/pages/ProbuildDailyPreview";
@@ -43,7 +42,6 @@ import SupplierEtaLinks from '@/pages/SupplierEtaLinks';
 import Summit from '@/pages/Summit';
 import UnlinkedJobRecords from '@/pages/UnlinkedJobRecords';
 import JobSetup from '@/pages/JobSetup';
-import InboxAgents from '@/pages/InboxAgents';
 import { isWindowQuotesOnly } from '@/lib/agentCenterAccess';
 // Add page imports here
 
@@ -92,9 +90,7 @@ const AuthenticatedApp = () => {
           <Route path="/dashboard" element={<QuotesOnlyRedirect><Dashboard /></QuotesOnlyRedirect>} />
           <Route path="/operations/overview" element={<QuotesOnlyRedirect><CompanyOverview /></QuotesOnlyRedirect>} />
           <Route path="/todos" element={<QuotesOnlyRedirect><Navigate to="/dashboard?view=all" replace /></QuotesOnlyRedirect>} />
-          <Route path="/inbox-agents" element={<QuotesOnlyRedirect><InboxAgents /></QuotesOnlyRedirect>} />
           <Route path="/window-quotes" element={<WindowQuotes />} />
-          <Route path="/sales-tracker" element={<QuotesOnlyRedirect><SalesTracker /></QuotesOnlyRedirect>} />
           <Route path="/admin/agents" element={<QuotesOnlyRedirect><AdminAgentCenter /></QuotesOnlyRedirect>} />
           <Route path="/system-map" element={<QuotesOnlyRedirect><SystemMap /></QuotesOnlyRedirect>} />
           <Route path="/admin/probuild-daily" element={<QuotesOnlyRedirect><ProbuildDailyPreview /></QuotesOnlyRedirect>} />
