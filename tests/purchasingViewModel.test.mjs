@@ -364,3 +364,17 @@ test('sourceQuoteInclTax: own quote never counts as cost even with the display r
   const own = { ...supplierQuote, bill_to: null, quoted_by: 'gabrielfronk' };
   assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: own }, { allowInferredRecipient: true }).value, null);
 });
+
+test('buildPurchasingCards: a typed Customer total above $0 puts a job on Purchasing; typed figures win', () => {
+  const jobs = [
+    { id: 'lab', canonical_name: 'install - bryan lairen', manual_budget_cost: 300, manual_customer_total: 600 },
+    { id: 'shop', canonical_name: 'SHOWROOM RAILING', manual_budget_cost: 1029.69, manual_customer_total: 0 },
+    { id: 'j1', canonical_name: 'Quoted', manual_budget_cost: 2918.86, manual_customer_total: 4500 },
+  ];
+  const cards = buildPurchasingCards({ jobs, budgets: [reviewedBudget({ labor_cost_sub_pay: 675 })], today: TODAY });
+  assert.deepEqual(cards.map((c) => c.job.id).sort(), ['j1', 'lab'], 'a $0 typed total is not a sale');
+  const lab = cards.find((c) => c.job.id === 'lab');
+  assert.deepEqual([lab.windows.display.value, lab.rough.display.value, lab.sale.display.value, lab.profitDisplay.value], [300, 0, 600, 300]);
+  const quoted = cards.find((c) => c.job.id === 'j1');
+  assert.deepEqual([quoted.windows.display.value, quoted.rough.display.value, quoted.sale.display.value, quoted.profitDisplay.value], [2918.86, 0, 4500, 1581.14], 'typed cost and total win over the quote figures');
+});
