@@ -190,8 +190,8 @@ export function purchasingFilterCounts(cards = [], today = '') {
 
 // Header figures over exactly the rows shown. Sold and Est. profit are the Sale
 // price and Profit columns (summarizeCards). Job cost is windows plus labor &
-// material on the same rows, so Sold - Job cost = Est. profit; the page shows it as
-// a negative number (money out). Customers owe adds each job's figure from jobFlags.
+// material on the same rows (a row with no sale still adds its cost); the page shows it
+// as a negative number (money out). Customers owe adds each job's figure from jobFlags.
 export function headerFigures(cards = [], today = '') {
   const totals = summarizeCards(cards);
   let customersOwe = 0;
