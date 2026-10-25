@@ -33,7 +33,7 @@ export default function PurchasingHeader({ figures, onExport, onReload, reloadin
         <div className="grid grid-cols-4 max-[1023px]:order-last max-[1023px]:w-full max-[1023px]:grid-cols-2 max-[1023px]:overflow-hidden max-[1023px]:rounded-[10px]" style={{ borderColor: DIVIDER }}>
           <Figure label="Sold" value={figures.sold} title={`Total sale price of the ${figures.jobs} jobs shown (the Sale column)`} />
           <Figure label="Customers owe" value={figures.customersOwe} title="Sale less payments by stage: half down owes half, full payment owes nothing, any other stage owes the whole sale" />
-          <Figure label="Job cost" value={figures.cost ? -figures.cost : 0} title={`Windows plus labor & material on the jobs shown; Sold less Job cost is Est. profit${partial ? `. Partial: ${partial}` : ''}`} />
+          <Figure label="Job cost" value={figures.cost ? -figures.cost : 0} title={`Windows plus labor & material on the jobs shown, as money out. A job with no sale yet adds its cost here but no Est. profit${partial ? `. Partial: ${partial}` : ''}`} />
           <Figure label="Est. profit" value={figures.profit} title={`The Est. profit column${partial ? `. Partial: ${partial}` : ''}`} color="#E0C994" />
         </div>
         <DropdownMenu>
