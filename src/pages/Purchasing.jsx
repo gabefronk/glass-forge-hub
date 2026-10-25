@@ -1,4 +1,4 @@
-import { headerFigures, applyPurchasingFilter, purchasingFilterCounts, sortCards, cardFigures, etaDate, etaEarliest, PURCHASING_FILTERS, DEFAULT_PURCHASING_SORT } from '@/lib/purchasingSummary';
+import { isSold, headerFigures, applyPurchasingFilter, purchasingFilterCounts, sortCards, cardFigures, etaDate, etaEarliest, PURCHASING_FILTERS, DEFAULT_PURCHASING_SORT } from '@/lib/purchasingSummary';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -71,7 +71,11 @@ function PurchasingWorkspace() {
       paymentStage: jobsById.get(card.job.id)?.payment_status || '',
     }));
   }, [data, today]);
-  const searched = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
+  // Quotes with no stage (or only Sent to customer) are not sold yet: they get their own
+  // section below and stay out of the header figures, the Show counts and the export.
+  const matched = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
+  const searched = useMemo(() => matched.filter(isSold), [matched]);
+  const notSold = useMemo(() => sortCards(matched.filter((c) => !isSold(c)), sort), [matched, sort]);
   const filterCounts = useMemo(() => purchasingFilterCounts(searched, today), [searched, today]);
   const filtered = useMemo(() => sortCards(applyPurchasingFilter(searched, filter, today), sort), [searched, filter, today, sort]);
   // Clicking the active column header flips it; a new one starts soonest / A-Z / largest.
@@ -137,6 +141,15 @@ function PurchasingWorkspace() {
         <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query || filter !== 'all' ? 'No jobs match your search or filter.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
       ) : (
         <PurchasingTable cards={filtered} data={data} sort={sort} onSort={changeSort} today={today} onSaved={load} />
+      )}
+
+      {notSold.length > 0 && (
+        <section aria-label="Not sold yet" className="flex flex-col gap-2">
+          <h2 className="m-0 text-[17px] font-bold" style={{ color: '#101617' }} title="Quotes with no stage or Sent to customer. Not counted in Sold, Customers owe, Job cost or Est. profit. Set a stage such as Ordered to move a job up.">
+            Not sold yet <span className="tabular-nums" style={{ color: '#566063', fontWeight: 500 }}>{notSold.length}</span>
+          </h2>
+          <PurchasingTable cards={notSold} data={data} sort={sort} onSort={changeSort} today={today} onSaved={load} />
+        </section>
       )}
 
       <UnlinkedReview unlinkedQuotes={unlinked.unlinkedQuotes} shopPOs={unlinked.shopPOs} onUploaded={load} focusSignal={addQuoteSignal} onReload={load} loading={loading} />

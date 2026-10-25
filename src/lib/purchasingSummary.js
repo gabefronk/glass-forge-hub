@@ -56,6 +56,11 @@ export const customerOwedShare = (stage) => (stage in OWED_SHARE ? OWED_SHARE[st
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+// A job with no stage, or only Sent to customer, is a quote that is not sold yet (Gabe,
+// Oct 25): it sits in its own section and is left out of every figure and count.
+export const NOT_SOLD_STAGES = ['', 'sent_to_customer'];
+export const isSold = (card) => !NOT_SOLD_STAGES.includes(card?.paymentStage || '');
+
 // Per-job facts the header and the filter both read, so a count and a figure
 // can never disagree. `card.paymentStage` is the job's payment_status (attached by
 // the page). Suppliers are paid up front (Gabe, Oct 25): there are no payables.

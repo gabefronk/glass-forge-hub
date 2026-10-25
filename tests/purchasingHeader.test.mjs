@@ -3,7 +3,7 @@
 // front (Gabe, Oct 25), so there is no supplier payables figure or filter.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { jobFlags, headerFigures, purchasingFilterCounts, applyPurchasingFilter, customerOwedShare, etaShort, etaRange, sortCards, cardFigures, PURCHASING_FILTERS } from '../src/lib/purchasingSummary.js';
+import { isSold, jobFlags, headerFigures, purchasingFilterCounts, applyPurchasingFilter, customerOwedShare, etaShort, etaRange, sortCards, cardFigures, PURCHASING_FILTERS } from '../src/lib/purchasingSummary.js';
 import * as summary from '../src/lib/purchasingSummary.js';
 
 const TODAY = '2026-10-24';
@@ -96,4 +96,10 @@ test('multi-scope jobs add their scope rows to Sold and Est. profit', () => {
   assert.equal(jobFlags(multi, TODAY).missing_cost, false);
   const zeroScope = { ...multi, scopes: [{ windows: { value: 0 }, sale: { value: 458.78 } }, multi.scopes[1]] };
   assert.equal(jobFlags(zeroScope, TODAY).missing_cost, true, 'a $0 scope cost counts as missing');
+});
+
+test('no stage or Sent to customer is not sold yet; any later stage is sold', () => {
+  assert.equal(isSold(card()), false);
+  assert.equal(isSold(card({ stage: 'sent_to_customer' })), false);
+  for (const stage of ['ordered', 'half_down', 'delivered', 'installed', 'billed', 'waiting_on_check', 'waiting_on_payment', 'paid']) assert.equal(isSold(card({ stage })), true, stage);
 });
