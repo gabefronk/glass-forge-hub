@@ -838,9 +838,8 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
   return (
     <section className="relative z-[3] rounded-[14px]" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
       {corner ? <div className="absolute right-3 top-3">{corner}</div> : null}
-      <div className="px-7 pt-7 pb-4 max-[699px]:px-4 max-[699px]:pt-5">
-        <div className="flex flex-wrap items-stretch gap-6 max-[699px]:gap-4">
-          <div className="min-w-[240px] flex-1">
+      <div className="flex flex-wrap items-start gap-x-6 gap-y-4 px-6 pt-5 pb-4 max-[699px]:px-4 max-[699px]:pt-4">
+          <div className="min-w-[260px] flex-1 max-[699px]:min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               {alert}
               {eyebrow ? <span className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>{eyebrow}</span> : null}
@@ -860,14 +859,15 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
             <JobAddress job={job} onEditAddress={onEditAddress} />
             <JobInfo snap={snap} folder={folder} />
           </div>
-          <div className="flex w-[300px] max-w-full shrink-0 flex-col gap-2 max-[899px]:w-full">
-            <SuperBox jobId={job.id} jobContacts={jobContacts} events={events} />
-            <HomeownerBox job={job} jobContacts={jobContacts} />
+          <div className="grid w-[380px] max-w-full shrink-0 gap-2 max-[1100px]:w-full max-[1100px]:grid-cols-2 max-[699px]:grid-cols-1">
+            <SuperBox compact jobId={job.id} jobContacts={jobContacts} events={events} />
+            <HomeownerBox compact job={job} jobContacts={jobContacts} />
           </div>
-        </div>
+      </div>
 
-        <div className="mt-3 flex flex-col gap-2.5 rounded-[12px] py-2.5 pl-4 pr-2.5 max-[699px]:pl-3" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)" }}>
-          <div className="flex w-full min-w-0 flex-none flex-wrap items-center gap-2.5">
+      {/* Footer bar: where the job stands on the left, the actions on the right. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-b-[14px] px-6 py-3 max-[699px]:px-4" style={{ backgroundColor: "rgba(255,255,255,.05)", borderTop: "1px solid rgba(255,255,255,.09)" }}>
+          <div className="flex min-w-0 flex-1 basis-[320px] flex-wrap items-center gap-2.5">
             {proj ? (
               <>
                 <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.2)", color: BRASS_LT }}>Next visit</span>
@@ -886,12 +886,11 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
               </>
             )}
           </div>
-          <div className="hero-actions flex w-full min-w-0 flex-wrap items-center gap-2">
+          <div className="hero-actions flex min-w-0 flex-wrap items-center gap-2">
             <button type="button" onClick={onFieldReport} className={HERO_BTN} style={{ backgroundColor: BRASS, color: "#1d160a" }}><Camera className="h-[15px] w-[15px]" />Field report</button>
             <FilesMenu folder={folder} plans={plans} events={events} />
             {extra}
           </div>
-        </div>
       </div>
     </section>
   );
