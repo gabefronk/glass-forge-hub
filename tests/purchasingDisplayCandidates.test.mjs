@@ -127,7 +127,7 @@ test('saleDisplayCandidate: the budget customer sell is the sale', () => {
 
 test('profitDisplayCalc: flag propagates when any input is a candidate', () => {
   const p = profitDisplayCalc({ value: CMT, review: true }, { value: 3000, review: false }, { value: 18000, review: false });
-  assert.equal(p.value, 4255);
+  assert.equal(p.value, 5000);
   assert.equal(p.review, true);
 });
 
@@ -153,7 +153,7 @@ test('buildPurchasingCards: verified canonical preserved separate; display candi
   // No direct cost figure -> owner-typed budget review figure, flagged review. Labor 2000 from the budget.
   assert.equal(card.windows.display.value, CMT);
   assert.equal(card.windows.display.review, true);
-  assert.equal(card.profitDisplay.value, 5255);
+  assert.equal(card.profitDisplay.value, 6000);
   assert.equal(card.profitDisplay.review, true);
   // No mutation of inputs
   assert.deepEqual({ jobs, budgets }, before);

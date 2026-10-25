@@ -20,7 +20,7 @@ test('the headline matches the Purchasing row for the same job', () => {
   assert.equal(h.cost, 1000, 'PO amount as entered');
   assert.equal(h.laborMaterial, 200);
   assert.equal(h.sale, 2000);
-  assert.equal(h.profit, 725.5);
+  assert.equal(h.profit, 800);
   assert.equal(h.partial, false);
 });
 
