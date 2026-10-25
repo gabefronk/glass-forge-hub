@@ -551,15 +551,13 @@ export default async function jobBudgetIngest(req) {
     const order = body.order_id ? await db.VendorOrders.get(body.order_id).catch(() => null) : null;
     if (!order) return Response.json({ error: 'order not found' }, { status: 404 });
     const next = body.status;
-    const chain = ['ordered', 'eta_set', 'ach_link_received', 'paid', 'reconciled'];
+    // Suppliers are paid up front (Gabe, Oct 25): no payment-link, paid or reconcile step.
+    const chain = ['ordered', 'eta_set'];
     if (!chain.includes(next)) return Response.json({ error: 'bad status' }, { status: 400 });
     const patch = {
       status: next,
       status_history: stampHistory(order, next, user.email, body.note),
     };
-    if (next === 'ach_link_received' && body.ach_link) patch.ach_link = body.ach_link;
-    if (next === 'paid') { patch.paid_at = new Date().toISOString(); if (body.paid_reference) patch.paid_reference = body.paid_reference; }
-    if (next === 'reconciled') { patch.reconciled_at = new Date().toISOString(); if (body.reconcile_note) patch.reconcile_note = body.reconcile_note; }
     if (body.eta_date) patch.eta_date = body.eta_date;
     const updated = await db.VendorOrders.update(order.id, patch);
     return Response.json({ status: 'ok', order_id: updated.id, order_status: updated.status });

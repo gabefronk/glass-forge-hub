@@ -81,7 +81,7 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
       <Field disabled={shop} label="Source quote / budget" value={form.budget_id} onChange={selectBudget}><option value="">Manual PO (no budget source)</option>{eligible.map(b => <option value={b.id} key={b.id}>{b.title}{b.budget_usage === 'draft' ? ' (draft - review numbers)' : ''}</option>)}</Field>
       <Field label="Supplier" value={form.vendor} onChange={v => set('vendor', v)} />
       <Field label="Supplier quote / reference" value={form.vendor_quote_ref} onChange={v => set('vendor_quote_ref', v)} />
-      <Field label="Supplier payable for this PO" type="number" value={form.amount_dealer} onChange={v => { set('amount_dealer', v); setZero(false); }} hint="Review supplier tax and freight. This is not the whole-job budget cost." />
+      <Field label="Supplier cost for this PO" type="number" value={form.amount_dealer} onChange={v => { set('amount_dealer', v); setZero(false); }} hint="Review supplier tax and freight. This is not the whole-job budget cost." />
       <Field disabled={shop} label="Customer amount for this PO scope (optional)" type="number" value={form.amount_customer} onChange={v => set('amount_customer', v)} hint="Leave blank when the customer price belongs to the whole job, not this order." />
       <Field label="Reason for an additional PO for the same quote (when needed)" value={form.additional_order_reason || ''} onChange={v => set('additional_order_reason', v)} />
     </div>
@@ -155,18 +155,20 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
 
 export function OrderStatusForm({ row, supplier = false, onDone, onCancel }) {
   const sourceVersion = useRef(row.updated_date);
-  const [status, setStatus] = useState(row.status || 'issued'), [note, setNote] = useState('');
+  // Suppliers are paid up front (Gabe, Oct 25): a supplier order only moves Ordered -> ETA received.
+  const SUPPLIER_STATES = ['ordered', 'eta_set'];
+  const [status, setStatus] = useState(supplier && !SUPPLIER_STATES.includes(row.status) ? 'eta_set' : (row.status || 'issued')), [note, setNote] = useState('');
   const [reviewed, setReviewed] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const key = useRef(crypto.randomUUID());
-  const options = supplier ? [['ordered', 'Unpaid / ordered'], ['eta_set', 'Unpaid / ETA received'], ['ach_link_received', 'Payment link received (unpaid)'], ['paid', 'Paid - payment verified'], ['reconciled', 'Reconciled']] : [['issued', 'Issued - not sent'], ['emailed', 'Sent to supplier'], ['ordered', 'Ordered'], ['confirmed', 'Supplier confirmed'], ['received', 'Received'], ['cancelled', 'Cancelled (retain number)']];
+  const options = supplier ? [['ordered', 'Ordered'], ['eta_set', 'ETA received']] : [['issued', 'Issued - not sent'], ['emailed', 'Sent to supplier'], ['ordered', 'Ordered'], ['confirmed', 'Supplier confirmed'], ['received', 'Received'], ['cancelled', 'Cancelled (retain number)']];
   async function submit(e) {
     e.preventDefault(); if (busy || !reviewed) return; setBusy(true); setError('');
     try { const r = await purchasingRequest({ action: supplier ? 'vendor_status' : 'po_status', po_id: supplier ? undefined : row.id, order_id: supplier ? row.id : undefined, status, note, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true }); onDone(r, r.message); }
     catch (e2) { setError(messageOf(e2)); } finally { setBusy(false); }
   }
   return <FormPanel title={`Record status - ${row.po_number || row.title}`}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
-    <div className="grid gap-3 sm:grid-cols-2"><Field label="Recorded status" value={status} onChange={v => { setStatus(v); setReviewed(false); }}>{options.map(([v, label]) => <option key={v} value={v}>{label}</option>)}</Field><Field label="Evidence / payment reference / reason" value={note} onChange={v => { setNote(v); setReviewed(false); }} /></div>
-    <Review checked={reviewed} onChange={setReviewed}>I verified this status. This records a fact only; it does not send money, email a supplier or bill the customer.</Review>
+    <div className="grid gap-3 sm:grid-cols-2"><Field label="Recorded status" value={status} onChange={v => { setStatus(v); setReviewed(false); }}>{options.map(([v, label]) => <option key={v} value={v}>{label}</option>)}</Field><Field label="Evidence / reference / reason" value={note} onChange={v => { setNote(v); setReviewed(false); }} /></div>
+    <Review checked={reviewed} onChange={setReviewed}>I verified this status. This records a fact only; it does not email a supplier or bill the customer.</Review>
     <ErrorLine error={error} /><Buttons busy={busy} enabled={reviewed && note.trim().length >= 3} label="Save recorded status" onCancel={onCancel} />
   </fieldset></form></FormPanel>;
 }

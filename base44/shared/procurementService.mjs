@@ -6,7 +6,9 @@ import { assertOwner, getPurchasingJob, issuePurchaseOrder } from './purchaseOrd
 import { isPurchasingMoneyOwner } from './purchasingMoneyPure.js';
 
 const PO_STATES = ['issued', 'emailed', 'ordered', 'confirmed', 'received', 'cancelled'];
-const PAYMENT_STATES = ['ordered', 'eta_set', 'ach_link_received', 'paid', 'reconciled'];
+// Suppliers are paid up front (Gabe, Oct 25): a supplier order is Ordered or ETA received;
+// there is no payment, payment-link or reconcile step. Old records keep their status.
+const SUPPLIER_ORDER_STATES = ['ordered', 'eta_set'];
 const stampHistory = (row, status, by, note, at) => [...(row.status_history || []), { status, at, by, note }];
 async function saveCurrent(entity, row, expected, patch) {
   if (!expected || row.updated_date !== expected) throw fail(409, 'This record changed. Refresh before saving.');
@@ -140,12 +142,10 @@ export async function procurementAction(api, body, user, deps = {}) {
     }
     if (action === 'vendor_status') {
       const row = await api.VendorOrders.get(text(body.order_id));
-      if (!row || !PAYMENT_STATES.includes(body.status)) throw fail(400, 'Invalid supplier order or payment status.');
-      if (text(body.note).length < 3) throw fail(400, 'Enter the payment reference or reason for the change.');
+      if (!row || !SUPPLIER_ORDER_STATES.includes(body.status)) throw fail(400, 'Choose Ordered or ETA received for this supplier order.');
+      if (text(body.note).length < 3) throw fail(400, 'Enter the evidence or reason for the change.');
       const patch = { status: body.status, status_history: stampHistory(row, body.status, user.email, text(body.note), now()) };
-      if (body.status === 'paid') { patch.paid_at = now(); patch.paid_reference = text(body.note); }
-      if (body.status === 'reconciled') { patch.reconciled_at = now(); patch.reconcile_note = text(body.note); }
-      return { ok: true, order: await saveCurrent(api.VendorOrders, row, body.expected_updated_date, patch), message: 'Payment status recorded only. No money was sent.' };
+      return { ok: true, order: await saveCurrent(api.VendorOrders, row, body.expected_updated_date, patch), message: 'Supplier order status recorded.' };
     }
     if (action === 'sync_estimate') {
       const preview = await estimatePreview(api, body);
