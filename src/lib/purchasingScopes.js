@@ -1,7 +1,7 @@
 // Per-scope rows for the Purchasing board. A job holding more than one scope —
 // a second quote budget, a reorder PO, a supplier order with no PO — lists each
 // scope on its own row under the job's roll-up row, so a second order keeps its
-// own quote, PO, ETA and supplier payment instead of hiding behind "Multiple".
+// own quote, PO and ETA instead of hiding behind "Multiple".
 //
 // Display only: nothing here writes, sums across scopes, or changes the job's
 // own roll-up figures. Every figure comes from the scope's own records, using
@@ -18,23 +18,13 @@
 import { isLiveBudget, budgetFigures, pText } from './purchasingCoreTwin.js';
 import {
   bestWindowsFromBudget, windowsDisplayCandidate, roughDisplayCandidate,
-  saleDisplayCandidate, profitDisplayCalc, paymentState, quoteBrandLabel,
+  saleDisplayCandidate, profitDisplayCalc, quoteBrandLabel,
 } from './purchasingViewModel.js';
 
 // PO statuses that mean the vendor accepted / material is in hand.
 const CONFIRMED_PO_STATUS = ['ordered', 'confirmed', 'received'];
 const NONE = { value: null, label: null, review: false, source: 'none' };
 const EMPTY_QUOTE_CARD = { refs: { quoteNumber: null, quoteStatus: null }, brand: '', quoteBudgetId: null, quoteManufacturer: '', quoteRawNumber: '' };
-
-// Supplier payment across this scope's orders — same semantics as paymentState
-// (paid/reconciled or paid_at), never labelling an unknown as unpaid.
-function paymentFor(orders) {
-  if (!orders.length) return { label: null, tone: 'gray' };
-  const paid = orders.filter((o) => ['paid', 'reconciled'].includes(o.status) || Boolean(o.paid_at));
-  if (paid.length === orders.length) return { label: 'Paid', tone: 'green' };
-  if (paid.length) return { label: 'Partial', tone: 'amber' };
-  return paymentState(orders[0]).label === 'Unknown' ? { label: 'Unknown', tone: 'gray' } : { label: 'Unpaid', tone: 'amber' };
-}
 
 // The scope's ETA is the ETA of ITS records: one pending supplier order keeps
 // the date on that order (the cell writes to the supplier record), otherwise the
@@ -85,7 +75,6 @@ function budgetScope(budget, pos, orders) {
     quoteCard: budgetQuoteCard(budget),
     poNumber: poNumbers.length > 1 ? 'Multiple' : (poNumbers[0] || null),
     poStatus: poTone(pos),
-    payment: paymentFor(orders),
     etaTarget: eta.target,
     etaLabel: eta.label,
   };
@@ -103,7 +92,6 @@ function poScope(po, orders, quoteCard = EMPTY_QUOTE_CARD, extraLabel = '') {
     quoteCard,
     poNumber: po.po_number || null,
     poStatus: poTone([po]),
-    payment: paymentFor(orders),
     etaTarget: eta.target,
     etaLabel: eta.label,
   };
@@ -121,7 +109,6 @@ function orderScope(order) {
     quoteCard: EMPTY_QUOTE_CARD,
     poNumber: null,
     poStatus: null,
-    payment: paymentFor([order]),
     etaTarget: eta.target,
     etaLabel: eta.label,
   };

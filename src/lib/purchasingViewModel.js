@@ -37,13 +37,10 @@ const fileHref = (id) => (id ? `https://drive.google.com/file/d/${encodeURICompo
 
 // PO statuses that mean the vendor accepted / material is in hand.
 const CONFIRMED_PO_STATUS = ['ordered', 'confirmed', 'received'];
-// VendorOrder statuses that mean payment is complete.
-const PAID_VO_STATUS = ['paid', 'reconciled'];
 
 const activePOs = (pos, jobId) => pos.filter((p) => p.job_id === jobId && p.status !== 'cancelled');
 const isVendorOrderCancelled = (o, pos) => Boolean(o.purchase_order_id && pos.some((p) => p.id === o.purchase_order_id && p.status === 'cancelled'));
 const activeVendorOrders = (orders, pos) => orders.filter((o) => o.job_id && !isVendorOrderCancelled(o, pos));
-const isOrderPaid = (o) => PAID_VO_STATUS.includes(o.status) || Boolean(o.paid_at);
 
 // Window-only, tax-inclusive source value. The budget's cost_material_tax is
 // NOT used: it includes the labor-driven overhead adder before tax, so
