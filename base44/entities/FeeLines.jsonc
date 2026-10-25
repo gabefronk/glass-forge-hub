@@ -19,6 +19,11 @@
       "type": "number",
       "description": "Unconfirmed split from source notes; excluded from totals until allocated."
     },
+    "purchasing_split_job_id": {
+      "type": "string",
+      "title": "Purchasing Split Job",
+      "description": "Set only on the one 50/50 profit-split line the Hub writes when a Purchasing job (sold outside BFS) is marked Paid. Holds that job's id; the Hub keeps the line's sale, cost and fee in step with the Purchasing row until it is billed."
+    },
     "job_id": {
       "type": "string",
       "title": "Job Id",
@@ -197,7 +202,8 @@
         "calendar",
         "probuild",
         "both",
-        "sheet-import"
+        "sheet-import",
+        "purchasing"
       ],
       "title": "Source"
     },
