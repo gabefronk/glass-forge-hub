@@ -282,9 +282,9 @@ function NoteCard({ note, currentUser, authUser, onChanged, onPhotoClick, servic
   );
 }
 
-// A folded list above the timeline, newest day first: "Notes & texts" (every note, text, call
-// and email) and "Job folder files", so the visits and field reports below stay the focus.
-// Each entry inside still opens on its own.
+// "Notes & texts" (every note, text, call and email) and "Job files" (saved to the job folder)
+// open from buttons in the filter row, newest day first, so the field reports and visits are
+// the first thing in History. Each entry inside still opens on its own.
 const plural = (word, n) => (n === 1 ? word : /y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`);
 function noteSummary(items) {
   const tally = new Map();
@@ -296,27 +296,29 @@ function noteSummary(items) {
 }
 const monthName = (date, today) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", ...(today.slice(0, 4) === date.slice(0, 4) ? {} : { year: "numeric" }), timeZone: "UTC" });
 
-function HistoryDrawer({ icon: Icon, tone = "blue", title, summary, days, today, open, onToggle, renderDay }) {
-  const count = days.reduce((n, d) => n + d.items.length, 0);
+const countItems = (days) => days.reduce((n, d) => n + d.items.length, 0);
+
+function DrawerToggle({ icon: Icon, label, count, open, onClick }) {
   if (!count) return null;
-  const [tileBg, tileInk] = TONES[tone] || TONES.neutral;
-  const latest = dayStamp(days[0].date, today);
+  return (
+    <button type="button" aria-expanded={open} onClick={onClick} className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]"
+      style={open ? { backgroundColor: C.text, color: "#fff", border: `1px solid ${C.text}` } : { backgroundColor: "#fff", color: C.text, border: "1px solid #e2dcd1" }}>
+      <Icon className="h-3.5 w-3.5" style={{ color: open ? "#fff" : "#0b3f3b" }} />{label}<span style={{ opacity: 0.65 }}>{count}</span>
+      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+    </button>
+  );
+}
+
+function DrawerPanel({ title, summary, days, today, onClose, renderDay }) {
+  if (!days.length) return null;
   return (
     <section className="mb-4 rounded-[14px] bg-white" style={{ border: "1px solid #d3cabb", boxShadow: "0 1px 2px rgba(10,29,31,.06),0 8px 18px -12px rgba(10,29,31,.22)" }}>
-      <button type="button" aria-expanded={open} onClick={onToggle} className={`flex w-full min-w-0 items-center gap-3 px-[18px] py-3 text-left hover:bg-black/[0.02] ${open ? "rounded-t-[14px]" : "rounded-[14px]"}`}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]" style={{ backgroundColor: tileBg, color: tileInk }}><Icon className="h-4 w-4" /></span>
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-x-2">
-            <span className="text-[15px] font-bold" style={{ color: C.text }}>{title}</span>
-            <span className="rounded-full px-2 py-px text-[12px] font-semibold" style={{ backgroundColor: "#f1eee7", color: "#34403f" }}>{count}</span>
-          </span>
-          <span className="block truncate text-[12.5px]" style={{ color: "#616a6d" }}>{summary} · latest {latest.rel ? latest.rel.toLowerCase() : `${latest.mo} ${latest.day}`}</span>
-        </span>
-        <span className="shrink-0 text-[12.5px] font-semibold" style={{ color: "#0b3f3b" }}>{open ? "Hide" : "Show all"}</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} style={{ color: "#0b3f3b" }} />
-      </button>
-      {open ? (
-        <div className="max-h-[560px] overflow-y-auto border-t px-[18px] pb-2" style={{ borderColor: "#eee9e0" }}>
+      <div className="flex items-center gap-3 rounded-t-[14px] border-b px-[18px] py-2.5" style={{ borderColor: "#eee9e0", backgroundColor: "#faf8f3" }}>
+        <span className="min-w-0 flex-1 truncate text-[13px]" style={{ color: "#616a6d" }}><b className="text-[14px]" style={{ color: C.text }}>{title}</b> · {summary}</span>
+        <button type="button" onClick={onClose} className="shrink-0 text-[12.5px] font-semibold hover:underline" style={{ color: "#0b3f3b" }}>Close</button>
+      </div>
+      {(
+        <div className="max-h-[560px] overflow-y-auto px-[18px] pb-2">
           {days.map(({ date, items: dayItems }, di) => {
             const s = dayStamp(date, today);
             const newMonth = di === 0 || days[di - 1].date.slice(0, 7) !== date.slice(0, 7);
@@ -334,7 +336,7 @@ function HistoryDrawer({ icon: Icon, tone = "blue", title, summary, days, today,
             );
           })}
         </div>
-      ) : null}
+      )}
     </section>
   );
 }
@@ -356,10 +358,11 @@ function ServiceEntry({ item, onServiceChanged }) {
 // Milestones filter and the "Up next" card. Optional; without it the feed is unchanged.
 // serviceItems (job page): the job's service items. Each shows under the field report that
 // raised it; one logged without a report gets its own entry on the day it was logged.
-export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, authUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged, onScheduleNext = null}) {
+export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, authUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged, onScheduleNext = null, upNextInHeader = false }) {
   const [showForm, setShowForm] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [filesOpen, setFilesOpen] = useState(false);
+  // Which drawer is open under the filter row: "notes", "files" or null.
+  const [drawer, setDrawer] = useState(null);
+  const toggleDrawer = (key) => setDrawer((d) => (d === key ? null : key));
   const [filter, setFilter] = useState("all");
   // currentUser is the author STRING (email) for legacy note form/delete behavior.
   // authUser is the auth user OBJECT — the owner-ID gate (canEditHistoryText) needs .id.
@@ -487,25 +490,30 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         })}
       </div>
       {ledger ? (
+        <>
+        <DrawerToggle icon={MessageSquare} label="Notes & texts" count={countItems(noteDays)} open={drawer === "notes"} onClick={() => toggleDrawer("notes")} />
+        <DrawerToggle icon={FileText} label="Job files" count={countItems(fileDays)} open={drawer === "files"} onClick={() => toggleDrawer("files")} />
         <button type="button" onClick={() => setShowForm((v) => !v)} className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold whitespace-nowrap min-h-[34px]" style={{ backgroundColor: "#f4f1ea", color: C.text, border: "1px solid #e2dcd1" }}>
           <Plus className="h-3.5 w-3.5" style={{ color: "#0b3f3b" }} />Log interaction
         </button>
+        </>
       ) : null}
       </div>
 
       {showForm ? (
         <div className="mb-3">
-          <JobNoteForm jobId={jobId} author={currentUser} onSaved={() => { setShowForm(false); setNotesOpen(true); onChanged(); }} onCancel={() => setShowForm(false)} />
+          <JobNoteForm jobId={jobId} author={currentUser} onSaved={() => { setShowForm(false); setDrawer("notes"); onChanged(); }} onCancel={() => setShowForm(false)} />
         </div>
       ) : null}
 
       {ledger ? (
         <div>
-          {(filter === "all" || filter === "milestones") ? <UpNextCard next={progress?.next} onSchedule={onScheduleNext} /> : null}
-          <HistoryDrawer icon={MessageSquare} tone="blue" title="Notes & texts" summary={noteSummary(noteDays.flatMap((d) => d.items))} days={noteDays} today={today} open={notesOpen} onToggle={() => setNotesOpen((v) => !v)}
-            renderDay={(items, date) => items.map((it, i) => renderItem(it, i, items, date))} />
-          <HistoryDrawer icon={FileText} tone="neutral" title="Job folder files" summary={plural("file", fileDays.reduce((n, d) => n + d.items.length, 0)) + " saved to the job folder"} days={fileDays} today={today} open={filesOpen} onToggle={() => setFilesOpen((v) => !v)}
-            renderDay={(items, date) => groupFiles(items).map((it, i, dayItems) => renderItem(it, i, dayItems, date))} />
+          {drawer === "notes" ? <DrawerPanel title="Notes & texts" summary={noteSummary(noteDays.flatMap((d) => d.items))} days={noteDays} today={today} onClose={() => setDrawer(null)}
+            renderDay={(items, date) => items.map((it, i) => renderItem(it, i, items, date))} /> : null}
+          {drawer === "files" ? <DrawerPanel title="Job files" summary={`${countItems(fileDays)} saved to the job folder`} days={fileDays} today={today} onClose={() => setDrawer(null)}
+            renderDay={(items, date) => groupFiles(items).map((it, i, dayItems) => renderItem(it, i, dayItems, date))} /> : null}
+          {/* Desktop shows "Up next" in the job header's status bar; the phone keeps it here. */}
+          {!upNextInHeader && (filter === "all" || filter === "milestones") ? <UpNextCard next={progress?.next} onSchedule={onScheduleNext} /> : null}
           {reportDays.length === 0 && !showForm ? (
             <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter !== "all" ? "Nothing of this type yet." : noteDays.length || fileDays.length ? "No visits or field reports yet." : "No activity recorded yet."}</div>
           ) : null}
