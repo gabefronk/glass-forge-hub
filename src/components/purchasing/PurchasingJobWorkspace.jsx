@@ -3,7 +3,7 @@
 // Redesign (Gabriel, Oct 24): one page, no section switcher, nothing said twice.
 //   1. Purchase orders & quotes - one line per PO / supplier order with its PO,
 //      quote and order numbers, ETA, supplier payable and supplier payment. Manage
-//      opens that line's real forms (status, confirmation, payment, sales tax, ETA).
+//      opens that line's real forms (status, confirmation, payment, ETA).
 //   2. Budget - each quote budget's cost build-up and price & margin. Edit numbers
 //      is the one place job money is changed (the budget is the source).
 //   3. The private vendor-quote upload.
@@ -18,7 +18,7 @@ import { ArrowUpRight, Pencil, Plus } from 'lucide-react';
 import {
   money,
   PurchaseOrderForm, BudgetUsageForm, SupplierOrderForm, OrderStatusForm,
-  SalesTaxBox, purchasingRequest, messageOf,
+  purchasingRequest, messageOf,
 } from '@/components/budgets/ProcurementForms';
 import { NumbersEditor } from '@/components/budgets/BudgetReviewRow';
 import DeleteUnusedQuoteButton from '@/components/budgets/DeleteUnusedQuoteButton';
@@ -31,7 +31,6 @@ import { activeBudgets, budgetFigures } from '@/lib/purchasingCoreTwin';
 import { statusWithDate } from '@/lib/purchasingDates';
 import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
 import { etaDate } from '@/lib/purchasingSummary';
-import { quoteChargesTax } from '@/lib/useTax';
 import { saveEtaTarget } from '@/lib/etaTarget';
 import { quantityReviewLabel } from '@/lib/quantityReview';
 
@@ -77,6 +76,110 @@ function NotesHistory({ notes }) {
 
 // ---------- 1. Purchase orders & quotes ----------
 
+
+function OrderDetail({ order, onEdit, onSaved }) {
+  const pay = paymentState(order);
+  const [etaBusy, setEtaBusy] = useState(false);
+  const [etaError, setEtaError] = useState('');
+  const etaEditable = Boolean(order.order_number) && order.amount != null && !order.received_date;
+  async function saveEta(value) {
+    if (etaBusy) return;
+    setEtaBusy(true); setEtaError('');
+    try {
+      // Same path as the grid's ETA cell: writes the supplier record and moves its calendar event.
+      const result = await saveEtaTarget({ jobId: order.job_id, order, date: value });
+      if (result.error) setEtaError(result.error);
+      if (result.saved) await onSaved?.();
+    } finally { setEtaBusy(false); }
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-[10px] p-3" style={{ border: `1px solid ${RULE}`, backgroundColor: '#FFFFFF' }}>
+      <div className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: INK }}>
+        <span className="font-semibold">Order {order.order_number || '(no number)'}</span>
+        <Chip tone="plain">{statusWithDate(order)}</Chip>
+        <Chip tone={pay.label === 'Paid' ? 'ok' : pay.label === 'Unpaid' ? 'bad' : 'warn'}>Supplier {pay.label.toLowerCase()}</Chip>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]" style={{ color: INK3 }}>
+        <span>Amount <strong className="tabular-nums" style={{ color: INK }}>{money(order.amount)}</strong></span>
+        <label className="inline-flex items-center gap-1.5">ETA
+          {etaEditable ? (
+            <input type="date" aria-label={`ETA for supplier order ${order.order_number}`} disabled={etaBusy}
+              value={order.eta_date || ''} onChange={(e) => saveEta(e.target.value)}
+              className="h-8 rounded-[7px] border px-1.5 text-[13px] font-semibold" style={{ borderColor: EDGE, color: INK, backgroundColor: '#fff' }} />
+          ) : <strong style={{ color: INK }}>{etaDate(order.eta_date) || 'Not confirmed'}</strong>}
+        </label>
+        <span>Received <strong style={{ color: INK }}>{etaDate(order.received_date) || '—'}</strong></span>
+      </div>
+      {!order.purchase_order_id ? <p className="text-[12px]" style={{ color: INK2 }}>Not linked to a PO yet - link it before editing.</p> : null}
+      {etaError ? <p className="text-[12px] font-semibold" style={{ color: '#A43432' }}>{etaError}</p> : null}
+      <NotesHistory notes={order.notes} />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: order.id })} className={BTN} style={SEC}>Record supplier payment</button>
+        <button type="button" onClick={() => onEdit({ mode: 'supplier', order_id: order.id })} className={BTN} style={SEC}>Order details / link PO</button>
+      </div>
+    </div>
+  );
+}
+
+// A PO line: the summary is always visible, Manage opens the PO's own actions.
+function POLine({ po, budgets, orders, onEdit, onSaved, open, onToggle }) {
+  const source = budgets.find((b) => b.id === po.budget_id);
+  const related = orders.filter((o) => o.purchase_order_id === po.id);
+  const quote = source?.quote_number || po.vendor_quote_ref || '';
+  const etas = related.map((o) => o.eta_date).filter(Boolean).sort();
+  const pays = related.map(paymentState);
+  const pay = !pays.length ? null : pays.every((p) => p.label === 'Paid') ? 'ok' : 'bad';
+  return (
+    <div style={{ borderTop: `1px solid ${RULE}` }}>
+      <Line supplier={po.vendor} refs={[['PO', po.po_number], ['Quote', quote], ...related.map((o) => ['Order', o.order_number])]}
+        eta={etas[0]} amount={po.amount_dealer} pay={pay} cancelled={po.status === 'cancelled'} open={open} onToggle={onToggle} />
+      {open && (
+        <div className="flex flex-col gap-2.5 px-4 pb-4 pt-1" style={{ backgroundColor: '#FAF8F3' }}>
+          <div className="flex flex-wrap items-center gap-2"><Chip tone="plain">PO {statusWithDate(po)}</Chip>{po.amount_customer != null ? <span className="text-[12.5px]" style={{ color: INK2 }}>Customer amount {money(po.amount_customer)}</span> : null}</div>
+          <PurchasingDates row={po} supplier={related[0] || null} showStatus={false} />
+          <NotesHistory notes={po.notes} />
+          {related.map((o) => <OrderDetail key={o.id} order={o} onEdit={onEdit} onSaved={onSaved} />)}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => onEdit({ mode: 'po_status', po_id: po.id })} className={BTN} style={SEC}>Record PO status</button>
+            {related.length === 0 ? <button type="button" onClick={() => onEdit({ mode: 'supplier', po_id: po.id })} className={BTN} style={SEC}>Record supplier confirmation</button> : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OrderLine({ order, onEdit, onSaved, open, onToggle }) {
+  const pay = paymentState(order);
+  return (
+    <div style={{ borderTop: `1px solid ${RULE}` }}>
+      <Line supplier={order.vendor} refs={[['Order', order.order_number]]} eta={order.eta_date} amount={order.amount}
+        pay={pay.label === 'Paid' ? 'ok' : pay.label === 'Unpaid' ? 'bad' : null} open={open} onToggle={onToggle} />
+      {open && <div className="px-4 pb-4 pt-1" style={{ backgroundColor: '#FAF8F3' }}><OrderDetail order={order} onEdit={onEdit} onSaved={onSaved} /></div>}
+    </div>
+  );
+}
+
+const LINE_GRID = 'grid items-center gap-3 px-4 py-2.5 [grid-template-columns:minmax(96px,1fr)_minmax(0,2.6fr)_84px_104px_92px] max-[767px]:[grid-template-columns:1fr_auto]';
+function Line({ supplier, refs, eta, amount, pay, cancelled, open, onToggle }) {
+  const shown = refs.filter(([, v]) => v);
+  return (
+    <div className={LINE_GRID}>
+      <span className="truncate text-[13.5px] font-semibold" style={{ color: supplier ? INK : INK2 }}>{supplier || 'Supplier not set'}</span>
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5 max-[767px]:order-3 max-[767px]:col-span-2">
+        {shown.length ? shown.map(([k, v], i) => <Ref key={`${k}${v}${i}`} k={k} v={v} />) : <span className="text-[12.5px]" style={{ color: INK2 }}>No PO or quote number yet</span>}
+        {cancelled ? <Chip tone="plain">Cancelled</Chip> : null}
+        {pay === 'bad' ? <Chip tone="bad">Supplier unpaid</Chip> : pay === 'ok' ? <Chip tone="ok">Supplier paid</Chip> : null}
+      </span>
+      <span className="whitespace-nowrap text-[13px] font-medium max-[767px]:hidden" style={{ color: INK }}>{etaDate(eta) || '—'}</span>
+      <span className="text-right text-[13.5px] font-semibold tabular-nums max-[767px]:hidden" style={{ color: INK }}>{amount == null ? '—' : money(amount)}</span>
+      <span className="text-right">
+        <button type="button" onClick={onToggle} aria-expanded={open} className={BTN} style={{ ...SEC, height: 32 }}>{open ? 'Close' : 'Manage'}</button>
+      </span>
+    </div>
+  );
+}
+
 // ---------- 2. Budget ----------
 
 const chip = { ok: ['Included scope', 'ok'], warn: ['Needs review', 'warn'], draft: ['Draft', 'warn'], ref: ['Reference / replaced', 'plain'], unlinked: ['Needs a job', 'warn'] };
@@ -119,47 +222,6 @@ function QuoteLines({ budget }) {
         </table>
       </div>
     </details>
-  );
-}
-
-// The tax toggle on a quote (Gabriel, Oct 24): did the supplier charge sales tax? Yes =
-// the quote total already carries tax, no use tax added. No = you owe the use tax. With
-// nothing picked it follows the quote's own tax line, and says what it found.
-function TaxToggle({ budget, onSaved }) {
-  const [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const override = budget.supplier_tax_included;
-  const charged = quoteChargesTax(budget);
-  const q = budget.quote || {};
-  const lines = Array.isArray(q.tax_lines) ? q.tax_lines.filter((t) => t.amount != null) : [];
-  const found = lines.length ? `Quote shows ${lines.map((t) => `${t.label || 'tax'}${t.rate_pct != null ? ` ${t.rate_pct}%` : ''} ${money(t.amount)}`).join(', ')}`
-    : num(q.customer_tax) > 0 ? `Quote shows tax ${money(q.customer_tax)}`
-    : num(q.customer_tax) === 0 ? 'Quote shows $0.00 tax' : 'No tax line found on the quote';
-  async function set(value) {
-    if (busy || value === (override ?? null)) return;
-    setBusy(true); setError('');
-    try {
-      await purchasingRequest({ action: 'budget_sales_tax', budget_id: budget.id, supplier_tax_included: value, expected_updated_date: budget.updated_date, request_key: crypto.randomUUID(), review_confirmed: true });
-      await onSaved?.(value === true ? 'Marked: supplier charged sales tax. No use tax added.' : value === false ? 'Marked: no sales tax charged. Use tax added.' : 'Tax now follows the quote.');
-    } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
-  }
-  const opt = (on) => ({ border: `1px solid ${on ? '#0B3F3B' : EDGE}`, backgroundColor: on ? '#0B3F3B' : '#FFFFFF', color: on ? '#FFFFFF' : INK3 });
-  return (
-    <div className="flex flex-col gap-1.5 rounded-[10px] px-3 py-2.5" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="flex-1 text-[13px] font-semibold" style={{ color: INK }}>Supplier charged sales tax?</span>
-        <div role="group" aria-label="Supplier charged sales tax" className="inline-flex gap-1">
-          {[[true, 'Yes'], [false, 'No']].map(([v, label]) => (
-            <button key={label} type="button" disabled={busy} aria-pressed={charged === v} onClick={() => set(v)}
-              className="h-8 min-w-[52px] rounded-[8px] px-3 text-[13px] font-semibold disabled:opacity-60" style={opt(charged === v)}>{label}</button>
-          ))}
-        </div>
-      </div>
-      <span className="text-[12px]" style={{ color: INK2 }}>
-        {found}. {charged === true ? 'Total already includes tax - no use tax added.' : charged === false ? 'You owe the use tax on this quote.' : 'Pick Yes or No.'}
-        {override === true || override === false ? <> <button type="button" disabled={busy} onClick={() => set(null)} className="font-semibold underline underline-offset-2" style={{ color: '#0B3F3B' }}>Follow the quote</button></> : null}
-      </span>
-      {error ? <span role="alert" className="text-[12px] font-semibold" style={{ color: '#A43432' }}>{error}</span> : null}
-    </div>
   );
 }
 
@@ -230,13 +292,11 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
           <div className="flex flex-col">
             <span className={EYEBROW} style={{ color: INK2, paddingBottom: 4 }}>Cost build-up</span>
             <CostLine label="Material cost" value={i.material_true_cost} />
-            <CostLine label={quoteChargesTax(budget) === true ? 'Sales tax (charged by supplier)' : 'Use tax (you owe)'} value={c.use_tax} />
-            <CostLine label="Material with overhead + tax" value={c.cost_material_tax} kind="sub" />
+            <CostLine label="Material with overhead" value={c.cost_material_tax} kind="sub" />
             <CostLine label="Labor (sub pay)" value={i.labor_cost_sub_pay} />
             <CostLine label="Additional install material" value={i.additional_install_material} />
             <CostLine label="Additional equipment" value={i.additional_equipment} />
             <CostLine label="Total cost with overhead" value={c.total_cost_overhead} kind="total" />
-            {budget.quote ? <div className="mt-3"><TaxToggle budget={budget} onSaved={onSaved} /></div> : null}
           </div>
           <div className="flex flex-col gap-3.5">
             <span className={EYEBROW} style={{ color: INK2 }}>Price & margin</span>
