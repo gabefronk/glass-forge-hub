@@ -500,9 +500,16 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
 
 // No-job entities (shop POs, unlinked quotes) are not tied to a job card.
 // Surfaced in a quiet review section so they are never silently lost.
-export function unlinkedEntities({ budgets = [], purchase_orders = [] } = {}) {
+// Shop POs are cost only (no job, no customer): each carries `paid` from its supplier
+// orders, newest first.
+export function unlinkedEntities({ budgets = [], purchase_orders = [], vendor_orders = [] } = {}) {
   const unlinkedQuotes = budgets.filter((b) => isLiveBudget(b) && !b.job_id);
-  const shopPOs = purchase_orders.filter((p) => p.purchase_type === 'shop' && p.status !== 'cancelled');
+  const shopPOs = purchase_orders.filter((p) => p.purchase_type === 'shop' && p.status !== 'cancelled')
+    .map((p) => {
+      const orders = vendor_orders.filter((o) => o.purchase_order_id === p.id);
+      return { ...p, paid: orders.length > 0 && orders.every(isOrderPaid) };
+    })
+    .sort((a, b) => String(b.created_date || '').localeCompare(String(a.created_date || '')));
   return { unlinkedQuotes, shopPOs };
 }
 
