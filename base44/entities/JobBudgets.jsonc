@@ -127,10 +127,6 @@
       "description": "Normalized vendor quote extraction (parse source, bill/ship to, totals, tax_lines).",
       "type": "object"
     },
-    "supplier_tax_included": {
-      "type": "boolean",
-      "description": "Owner's tax toggle on the quote: true = the supplier charged sales tax (no use tax added), false = no sales tax charged (use tax added). Unset = follow the quote's own tax line."
-    },
     "quote_name": {
       "type": "string"
     },

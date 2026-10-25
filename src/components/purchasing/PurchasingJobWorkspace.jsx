@@ -76,7 +76,6 @@ function NotesHistory({ notes }) {
 
 // ---------- 1. Purchase orders & quotes ----------
 
-
 function OrderDetail({ order, onEdit, onSaved }) {
   const pay = paymentState(order);
   const [etaBusy, setEtaBusy] = useState(false);

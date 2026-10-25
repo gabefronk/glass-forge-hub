@@ -41,7 +41,7 @@ export async function issuePurchaseOrder(api, body, user, deps = {}) {
   const payload = {
     job_id: cleanField(body.job_id, 100), budget_id: cleanField(body.budget_id, 100),
     vendor: cleanField(body.vendor), vendor_quote_ref: cleanField(body.vendor_quote_ref),
-    amount_dealer: payable, amount_customer: customer, includes_sales_tax: body.includes_sales_tax === true,
+    amount_dealer: payable, amount_customer: customer,
     notes: cleanField(body.notes, 4000), additional_order_reason: cleanField(body.additional_order_reason, 1000),
     setup_sheet_id: cleanField(body.setup_sheet_id, 100),
   };
@@ -101,7 +101,7 @@ export async function issuePurchaseOrder(api, body, user, deps = {}) {
     const row = {
       po_number, status: 'issued', purchase_type: shop ? 'shop' : 'job', job_id: job.id, job_name: job.canonical_name || job.name || '',
       builder: job.builder || '', customer_name: job.customer_name || '', vendor: payload.vendor,
-      vendor_quote_ref: payload.vendor_quote_ref, amount_dealer: payable, includes_sales_tax: payload.includes_sales_tax,
+      vendor_quote_ref: payload.vendor_quote_ref, amount_dealer: payable,
       ...(customer !== null ? { amount_customer: customer } : {}),
       notes: payload.notes, additional_order_reason: payload.additional_order_reason,
       created_by_email: user.email, owner_reviewed_at: stamp, request_key: key, request_fingerprint: fingerprint,

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
-import { computeJobBudget, SALES_TAX_RATE } from "../../../base44/shared/jobBudgetMath.js";
+import { computeJobBudget } from "../../../base44/shared/jobBudgetMath.js";
 import { budgetVersion } from "../../../base44/shared/procurementCore.js";
 
 // The review step under a Job Budgets row: type the budget numbers (material cost,
@@ -169,9 +169,8 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
         <button type="button" onClick={() => setMore(true)} className="self-start text-[12px] font-semibold" style={{ color: C.accentText }}>+ Additional install material / equipment</button>
       )}
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-[13px]" style={{ color: C.textSecondary }}>
-        <span className="w-full text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: C.textMuted }}>Preview · after tax, overhead and labor</span>
+        <span className="w-full text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: C.textMuted }}>Preview · after overhead and labor</span>
         <span>Total cost <b style={{ color: C.text }}>{money(preview.total_cost_overhead)}</b></span>
-        <span>Use tax (auto {(SALES_TAX_RATE * 100).toFixed(2)}%) <b style={{ color: C.text }}>{money(preview.use_tax)}</b></span>
         <span>Margin <b style={{ color: (preview.actual_margin_pct ?? 0) >= 0.3 ? C.accentText : C.amber }}>{pct(num(form.material_true_cost) === 0 && !zeroConfirmed ? null : preview.actual_margin_pct)}</b></span>
       </div>
       {error ? <p role="alert" className="m-0 text-[12.5px] font-medium" style={{ color: C.amber }}>{error}</p> : null}

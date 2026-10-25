@@ -51,7 +51,7 @@ function EstimateTable({ project }) {
       </div>
       {project.rows.map((row) => (
         <div key={row.key} role="row" className={row.total ? "font-bold" : ""} style={{ ...TABLE, minHeight: 40, borderBottom: `1px solid ${RULE}`, background: row.total ? "#FAF8F3" : undefined }}>
-          <span role="cell" className="px-2.5" title={row.key === "windows" ? "Materials including the 7.45% use tax" : undefined}>{row.label}</span>
+          <span role="cell" className="px-2.5" title={row.key === "windows" ? "Window and door material cost as entered" : undefined}>{row.label}</span>
           <span role="cell" className="px-2.5 text-right tabular-nums" title={row.estimatePartial ? partialTitle : undefined} style={row.estimatePartial ? { background: "#FAF0DA" } : undefined}>{money(row.estimate)}</span>
           <span role="cell" className="px-2.5 text-right tabular-nums" title={row.actualPartial ? missingTitle : undefined} style={row.actualPartial ? { background: "#FAF0DA" } : undefined}>{money(row.actual)}</span>
           <span role="cell" className="px-2.5 text-right tabular-nums" style={{ color: varianceColor(row) }}>{signed(row.variance)}</span>
@@ -163,7 +163,7 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
         <Figure label="Invoiced" value={money(project.invoiced)} title="Customer invoices recorded for this job, voided ones left out" />
         <Figure label="Received" value={money(project.received)} title="Customer invoices marked paid" />
         <Figure label="Customer owes" value={money(project.customerOwes)} title={owesTitle} />
-        <Figure label="We owe suppliers" value={money(project.weOwe)} title={`Unpaid POs at the raw PO amount, before the 7.45% use tax${project.weOweMissing ? `. ${project.weOweMissing} unpaid record(s) have no amount` : ""}`} />
+        <Figure label="We owe suppliers" value={money(project.weOwe)} title={`Unpaid POs at the PO amount${project.weOweMissing ? `. ${project.weOweMissing} unpaid record(s) have no amount` : ""}`} />
         <Figure label="Est. profit" value={money(project.rows.find((r) => r.key === "profit").estimate)} title="The Purchasing Est. profit column: sale less windows + tax less labor & material" color={(project.rows.find((r) => r.key === "profit").estimate ?? 0) < 0 ? RED : "#0B3F3B"} />
         <Figure label="Margin" value={pct(project.margin.estimate)} title="Est. profit as a share of the contract" />
       </div>

@@ -32,7 +32,7 @@ const COLUMNS = [
   { label: 'Supplier', cls: XL },
   { label: 'ETA', sort: 'eta' },
   { label: 'Job stage', sort: 'payment' },
-  { label: 'Windows + tax', sort: 'windows', right: true, cls: XL, title: 'Window and door material including the 7.45% use tax' },
+  { label: 'Windows', sort: 'windows', right: true, cls: XL, title: 'Window and door material cost as entered' },
   { label: 'Sale', sort: 'sale', right: true },
   { label: 'Est. profit', sort: 'profit', right: true, title: 'Sale less windows + tax less labor & material' },
 ];

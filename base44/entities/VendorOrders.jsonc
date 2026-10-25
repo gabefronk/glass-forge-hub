@@ -35,10 +35,6 @@
       "type": "number",
       "description": "Order total owed to the vendor."
     },
-    "includes_sales_tax": {
-      "type": "boolean",
-      "description": "Owner marked amount as already including the supplier's sales tax, so job cost adds no use tax."
-    },
     "payment_route": {
       "type": "string",
       "enum": [

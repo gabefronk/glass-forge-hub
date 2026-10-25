@@ -2,8 +2,8 @@
 // yellow cells so Gabe only fixes what the PDF can't tell us. Pure, no I/O; shared by
 // jobBudgetIngest (drop + refill) and the Numbers editor (to show where each number came from).
 //
-//   material_true_cost  dealer cost printed on the quote, else the quote's pre-tax subtotal
-//                       when the quote is a vendor's price to us (BTB / YA / WTS / BFS order).
+//   material_true_cost  dealer cost printed on the quote, else the quote's subtotal plus any
+//                       sales tax it prints, when the quote is a vendor's price to us (BTB / YA / WTS / BFS order).
 //                       A quote Gabe prepared for his customer carries no cost -> left blank.
 //   labor_cost_sub_pay  2026 BFS Window Master Install Price Sheet sub-pay by opening size and
 //   labor_sell_price    material (installCatalog.js); glass-only panes use the glass rate
@@ -120,7 +120,8 @@ export function autofillBudget(quote = {}, { fileName = '', glassEach = GLASS_LA
   else if (!ours) {
     const sub = pos(quote.customer_sub_total) ?? pos(quote.net_total)
       ?? (pos(quote.actual_total_sell) !== null ? roundMoney(pos(quote.actual_total_sell) - (n(quote.customer_tax) || 0)) : null);
-    if (sub !== null) { material = sub; sources.material_true_cost = 'Quote subtotal before tax (the vendor\'s price to you)'; }
+    const tax = n(quote.customer_tax) || 0;
+    if (sub !== null) { material = tax > 0 ? roundMoney(sub + tax) : sub; sources.material_true_cost = tax > 0 ? 'Quote total with the supplier\'s sales tax (what you pay)' : 'Quote subtotal (the vendor\'s price to you)'; }
   }
   if (material === null) notes.push(ours ? 'This is your quote to the customer, so it has no dealer cost — type the material cost.' : 'No cost found on the quote — type the material cost.');
 
