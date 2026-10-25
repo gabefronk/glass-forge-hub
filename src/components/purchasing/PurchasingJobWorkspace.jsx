@@ -205,7 +205,9 @@ function Line({ supplier, refs, eta, amount, pay, cancelled, open, onToggle }) {
 
 const chip = { ok: ['Included scope', 'ok'], warn: ['Needs review', 'warn'], draft: ['Draft', 'warn'], ref: ['Reference / replaced', 'plain'], unlinked: ['Needs a job', 'warn'] };
 function budgetChip(b, active) {
-  if (b.status === 'needs_review') return chip.warn;
+  // "Needs review" is settled once the numbers on a quote that is on a job have been
+  // reviewed and saved (the save also clears it on the record).
+  if (b.status === 'needs_review' && !(b.job_id && b.numbers_reviewed_at)) return chip.warn;
   if (!b.job_id) return chip.unlinked;
   if (active) return chip.ok;
   if (b.budget_usage === 'draft') return chip.draft;
