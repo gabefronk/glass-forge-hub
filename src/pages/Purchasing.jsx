@@ -93,7 +93,7 @@ function PurchasingWorkspace() {
   const shownFilters = PURCHASING_FILTERS.filter((f) => f.key === 'all' || f.key === filter || filterCounts[f.key] > 0);
   const currentFilter = PURCHASING_FILTERS.find((f) => f.key === filter) || PURCHASING_FILTERS[0];
   const figures = useMemo(() => headerFigures(filtered, today), [filtered, today]);
-  const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
+  const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders, vendor_orders: data.vendor_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
 
   if (loading && !data) {
     return (
