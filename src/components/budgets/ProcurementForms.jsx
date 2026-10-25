@@ -35,8 +35,11 @@ function Buttons({ busy, enabled = true, label, onCancel }) {
 }
 
 export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCancel }) {
-  const shop = !job;
-  const jobName = job?.canonical_name || 'Shop purchase';
+  // Started from a job, the PO can still be a shop / overhead buy (showroom, tools, stock):
+  // that saves it with no job, budget or customer amount, so it never reads as a sale.
+  const [purpose, setPurpose] = useState(job ? 'job' : 'shop');
+  const shop = purpose === 'shop';
+  const jobName = shop ? 'Shop purchase' : job.canonical_name;
   // Uploaded quotes land as draft budgets (numbers unreviewed). Offer them here too -
   // clearly labeled - so an upload auto-fills the PO instead of forcing a Manual PO.
   const eligible = useMemo(() => {
@@ -47,6 +50,11 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
     return [...active, ...drafts];
   }, [budgets, job]);
   const [form, setForm] = useState(() => { const source = initialBudget || (eligible.length === 1 ? eligible[0] : null); return source ? prepareBudgetPO(source).form : { job_id: job?.id || '', budget_id: '', vendor: '', vendor_quote_ref: '', amount_dealer: '', amount_customer: '', notes: '', budget_version: '' }; });
+  function choosePurpose(next) {
+    setPurpose(next);
+    setForm(f => next === 'shop' ? { ...f, job_id: '', budget_id: '', budget_version: '', amount_customer: '' } : { ...f, job_id: job.id });
+    setReviewed(false); setError('');
+  }
   const [reviewed, setReviewed] = useState(false), [zero, setZero] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const key = useRef(crypto.randomUUID());
@@ -67,7 +75,8 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
     finally { setBusy(false); }
   }
   return <FormPanel title={`Prepare PO \u00b7 ${jobName}`}><form onSubmit={submit}><fieldset disabled={busy} className="min-w-0 border-0 p-0">
-    {shop && <p className="mb-3 text-sm text-slate-600">Shop purchase: supplies, packaging or stock. No job will be created. Enter item quantities, prices and any customer references in the scope notes.</p>}
+    {job && <div className="mb-3 grid gap-3 sm:grid-cols-2"><Field label="Purchase for" value={purpose} onChange={choosePurpose}><option value="job">This job (customer work)</option><option value="shop">Shop or overhead (no customer)</option></Field></div>}
+    {shop && <p className="mb-3 text-sm text-slate-600">Shop purchase: showroom, tools, supplies, packaging or stock. Saved with no job and no customer amount, so it counts as a cost and never as a sale. Describe the items and purpose in the scope notes.</p>}
     <div className="grid gap-3 sm:grid-cols-2">
       <Field disabled={shop} label="Source quote / budget" value={form.budget_id} onChange={selectBudget}><option value="">Manual PO (no budget source)</option>{eligible.map(b => <option value={b.id} key={b.id}>{b.title}{b.budget_usage === 'draft' ? ' (draft - review numbers)' : ''}</option>)}</Field>
       <Field label="Supplier" value={form.vendor} onChange={v => set('vendor', v)} />
