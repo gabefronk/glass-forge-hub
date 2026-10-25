@@ -83,13 +83,17 @@ export function parseAmscoQuoteText(text) {
   };
 }
 
-// Normalize any extraction source (deterministic parse or LLM JSON) into the
-// shape jobBudgetIngest and the JobBudgets entity store.
 // Tax lines as printed (label, rate, amount); their sum stands in for customer_tax when
 // the reader found tax lines but no single tax total.
+const taxText = (v) => (v === undefined || v === null ? null : String(v).trim().slice(0, 120) || null);
+const taxMoney = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(String(v).replace(/[$,%\s]/g, ''));
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+};
 function taxLines(list) {
   return Array.isArray(list) ? list.slice(0, 20).filter((t) => t && typeof t === 'object')
-    .map((t) => ({ label: clean(t.label), rate_pct: money(t.rate_pct), amount: money(t.amount) }))
+    .map((t) => ({ label: taxText(t.label), rate_pct: taxMoney(t.rate_pct), amount: taxMoney(t.amount) }))
     .filter((t) => t.label || t.amount != null) : [];
 }
 function taxLineSum(list) {
@@ -97,6 +101,8 @@ function taxLineSum(list) {
   return amounts.length ? Math.round(amounts.reduce((a, b) => a + b, 0) * 100) / 100 : null;
 }
 
+// Normalize any extraction source (deterministic parse or LLM JSON) into the
+// shape jobBudgetIngest and the JobBudgets entity store.
 export function normalizeVendorQuote(raw = {}) {
   const clean = (v) => (v === undefined || v === null ? null : String(v).trim() || null);
   const money = (v) => {
