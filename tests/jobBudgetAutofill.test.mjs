@@ -78,6 +78,16 @@ test("Gabe's own quote: sell is the total, cost left for him", () => {
   assert.ok(f.notes.some((t) => /material cost/.test(t)));
 });
 
+test('a supplier quote billed to YA Windows is cost, even with Gabe named on it', () => {
+  const q = normalizeVendorQuote({ vendor: 'Frameless Hardware Company', manufacturer: 'Frameless Hardware Company', quote_name: 'Showroom Railing', quote_number: 'C-48791', quoted_by: 'Gabriel Fronk',
+    bill_to: 'Israel Yedra, Y A Windows And Doors, 1138 S 1300 W, Salt Lake City, Utah, 84104', price_levels: 'single',
+    customer_sub_total: 958.3, customer_tax: 71.39, customer_total: 1029.69, actual_total_sell: 1029.69,
+    lines: [{ qty: 1, kind: 'part', description: 'FHC AR Bottom Rail BRG20MB', extended: 138.84 }] });
+  const f = autofillBudget(q, { fileName: 'Showroom Railing.pdf' });
+  assert.equal(f.inputs.material_true_cost, 1029.69, 'what we pay, with the supplier tax');
+  assert.equal(f.inputs.actual_total_sell, 0, 'no customer sell');
+});
+
 test('unpriced lines are called out, parts are skipped', () => {
   const l = laborFromLines([{ qty: 1, kind: 'window', description: 'Picture' }, { qty: 4, kind: 'part', description: 'Mull kit' }], { material: 'vinyl' });
   assert.equal(l.priced, 0);
