@@ -74,7 +74,8 @@ export function customerLabel(job = {}) {
 export function buildPaymentPrompt({ key, job = {}, budgets = [], sale, received = 0, receivedFrom = 'stage', amount }) {
   const k = requestKind(key);
   const scope = scopeLine(job, budgets);
-  const what = `${scope}, supply and install, ${job.canonical_name}`;
+  const hasQuote = budgets.some((b) => b.job_id === job.id && !b.deleted_at && b.budget_usage !== 'reference');
+  const what = hasQuote ? `${scope}, supply and install, ${job.canonical_name}` : String(job.canonical_name);
   const desc = key === 'half'
     ? `Half down (50% deposit) on ${what}. Contract ${fmt(sale)}.`
     : key === 'final'

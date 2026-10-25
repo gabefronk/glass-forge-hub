@@ -53,6 +53,6 @@ test('a labor-only job with no quote uses its name; a named customer wins', () =
   assert.equal(scopeLine(job, []), 'install - bryan lairen');
   assert.equal(customerLabel(job), 'Bryan Lairen');
   const p = buildPaymentPrompt({ key: 'full', job, budgets: [], sale: 600, received: 0, amount: 600 });
-  assert.match(p, /Payment in full for install - bryan lairen, supply and install/);
+  assert.match(p, /Payment in full for install - bryan lairen\. Contract \$600\.00\./);
   assert.match(p, /Already received: \$0\.00/);
 });
