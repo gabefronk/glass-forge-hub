@@ -29,7 +29,7 @@ import { autofillBudget, budgetNameFor, fileNameHints, GLASS_LABOR_COST_EACH } f
 //   link_job    pick a Hub job (or create one from the quote) -> move the Drive files
 //               into Glass Forge Jobs/<Builder>/<Job>, mark filed, upsert JobCostInputs.
 //
-// Also owns VendorOrders (the unpaid-jobs tracker): upsert_order, advance_order_status
+// Also owns VendorOrders (supplier orders; suppliers are paid up front): upsert_order, advance_order_status
 // and set_glass_eta. The glass-ETA chain (Steve text/email -> update -> notify) calls
 // set_glass_eta; notification drafting is a separate step by design.
 
