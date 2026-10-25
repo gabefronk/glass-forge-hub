@@ -2,8 +2,9 @@
 // and is the whole Budget & Orders page for a job (pages/Procurement.jsx).
 // Redesign (Gabriel, Oct 24): one page, no section switcher, nothing said twice.
 //   1. Purchase orders & quotes - one line per PO / supplier order with its PO,
-//      quote and order numbers, ETA, supplier payable and supplier payment. Manage
-//      opens that line's real forms (status, confirmation, payment, ETA).
+//      quote and order numbers, ETA and cost (money out; suppliers are paid up front,
+//      so there is no payment tracking). Manage opens that line's forms (status,
+//      confirmation, ETA).
 //   2. Budget - each quote budget's cost build-up and price & margin. Edit numbers
 //      is the one place job money is changed (the budget is the source).
 //   3. The private vendor-quote upload.
@@ -28,7 +29,7 @@ import RemoveQuoteButton from './RemoveQuoteButton';
 import { duplicateOf, replacedByQuote } from '@/lib/quoteDuplicates';
 import { activeBudgets, budgetFigures } from '@/lib/purchasingCoreTwin';
 import { statusWithDate } from '@/lib/purchasingDates';
-import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
+import { jobProcurementRecords } from '@/lib/purchasingViewModel';
 import { etaDate } from '@/lib/purchasingSummary';
 import { saveEtaTarget } from '@/lib/etaTarget';
 import { quantityReviewLabel } from '@/lib/quantityReview';
@@ -76,7 +77,6 @@ function NotesHistory({ notes }) {
 // ---------- 1. Purchase orders & quotes ----------
 
 function OrderDetail({ order, onEdit, onSaved }) {
-  const pay = paymentState(order);
   const [etaBusy, setEtaBusy] = useState(false);
   const [etaError, setEtaError] = useState('');
   const etaEditable = Boolean(order.order_number) && order.amount != null && !order.received_date;
@@ -95,10 +95,9 @@ function OrderDetail({ order, onEdit, onSaved }) {
       <div className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: INK }}>
         <span className="font-semibold">Order {order.order_number || '(no number)'}</span>
         <Chip tone="plain">{statusWithDate(order)}</Chip>
-        <Chip tone={pay.label === 'Paid' ? 'ok' : pay.label === 'Unpaid' ? 'bad' : 'warn'}>Supplier {pay.label.toLowerCase()}</Chip>
       </div>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]" style={{ color: INK3 }}>
-        <span>Amount <strong className="tabular-nums" style={{ color: INK }}>{money(order.amount)}</strong></span>
+        <span>Cost <strong className="tabular-nums" style={{ color: INK }}>{order.amount == null || order.amount === '' ? '—' : money(-order.amount)}</strong></span>
         <label className="inline-flex items-center gap-1.5">ETA
           {etaEditable ? (
             <input type="date" aria-label={`ETA for supplier order ${order.order_number}`} disabled={etaBusy}
@@ -112,7 +111,7 @@ function OrderDetail({ order, onEdit, onSaved }) {
       {etaError ? <p className="text-[12px] font-semibold" style={{ color: '#A43432' }}>{etaError}</p> : null}
       <NotesHistory notes={order.notes} />
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: order.id })} className={BTN} style={SEC}>Record supplier payment</button>
+        <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: order.id })} className={BTN} style={SEC}>Record order status</button>
         <button type="button" onClick={() => onEdit({ mode: 'supplier', order_id: order.id })} className={BTN} style={SEC}>Order details / link PO</button>
       </div>
     </div>
@@ -125,12 +124,10 @@ function POLine({ po, budgets, orders, onEdit, onSaved, open, onToggle }) {
   const related = orders.filter((o) => o.purchase_order_id === po.id);
   const quote = source?.quote_number || po.vendor_quote_ref || '';
   const etas = related.map((o) => o.eta_date).filter(Boolean).sort();
-  const pays = related.map(paymentState);
-  const pay = !pays.length ? null : pays.every((p) => p.label === 'Paid') ? 'ok' : 'bad';
   return (
     <div style={{ borderTop: `1px solid ${RULE}` }}>
       <Line supplier={po.vendor} refs={[['PO', po.po_number], ['Quote', quote], ...related.map((o) => ['Order', o.order_number])]}
-        eta={etas[0]} amount={po.amount_dealer} pay={pay} cancelled={po.status === 'cancelled'} open={open} onToggle={onToggle} />
+        eta={etas[0]} amount={po.amount_dealer} cancelled={po.status === 'cancelled'} open={open} onToggle={onToggle} />
       {open && (
         <div className="flex flex-col gap-2.5 px-4 pb-4 pt-1" style={{ backgroundColor: '#FAF8F3' }}>
           <div className="flex flex-wrap items-center gap-2"><Chip tone="plain">PO {statusWithDate(po)}</Chip>{po.amount_customer != null ? <span className="text-[12.5px]" style={{ color: INK2 }}>Customer amount {money(po.amount_customer)}</span> : null}</div>
@@ -148,18 +145,17 @@ function POLine({ po, budgets, orders, onEdit, onSaved, open, onToggle }) {
 }
 
 function OrderLine({ order, onEdit, onSaved, open, onToggle }) {
-  const pay = paymentState(order);
   return (
     <div style={{ borderTop: `1px solid ${RULE}` }}>
       <Line supplier={order.vendor} refs={[['Order', order.order_number]]} eta={order.eta_date} amount={order.amount}
-        pay={pay.label === 'Paid' ? 'ok' : pay.label === 'Unpaid' ? 'bad' : null} open={open} onToggle={onToggle} />
+        open={open} onToggle={onToggle} />
       {open && <div className="px-4 pb-4 pt-1" style={{ backgroundColor: '#FAF8F3' }}><OrderDetail order={order} onEdit={onEdit} onSaved={onSaved} /></div>}
     </div>
   );
 }
 
 const LINE_GRID = 'grid items-center gap-3 px-4 py-2.5 [grid-template-columns:minmax(96px,1fr)_minmax(0,2.6fr)_84px_104px_92px] max-[767px]:[grid-template-columns:1fr_auto]';
-function Line({ supplier, refs, eta, amount, pay, cancelled, open, onToggle }) {
+function Line({ supplier, refs, eta, amount, cancelled, open, onToggle }) {
   const shown = refs.filter(([, v]) => v);
   return (
     <div className={LINE_GRID}>
@@ -167,10 +163,9 @@ function Line({ supplier, refs, eta, amount, pay, cancelled, open, onToggle }) {
       <span className="flex min-w-0 flex-wrap items-center gap-1.5 max-[767px]:order-3 max-[767px]:col-span-2">
         {shown.length ? shown.map(([k, v], i) => <Ref key={`${k}${v}${i}`} k={k} v={v} />) : <span className="text-[12.5px]" style={{ color: INK2 }}>No PO or quote number yet</span>}
         {cancelled ? <Chip tone="plain">Cancelled</Chip> : null}
-        {pay === 'bad' ? <Chip tone="bad">Supplier unpaid</Chip> : pay === 'ok' ? <Chip tone="ok">Supplier paid</Chip> : null}
       </span>
       <span className="whitespace-nowrap text-[13px] font-medium max-[767px]:hidden" style={{ color: INK }}>{etaDate(eta) || '—'}</span>
-      <span className="text-right text-[13.5px] font-semibold tabular-nums max-[767px]:hidden" style={{ color: INK }}>{amount == null ? '—' : money(amount)}</span>
+      <span className="text-right text-[13.5px] font-semibold tabular-nums max-[767px]:hidden" style={{ color: INK }}>{amount == null || amount === '' ? '—' : money(-amount)}</span>
       <span className="text-right">
         <button type="button" onClick={onToggle} aria-expanded={open} className={BTN} style={{ ...SEC, height: 32 }}>{open ? 'Close' : 'Manage'}</button>
       </span>
@@ -395,7 +390,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
         {hasLines ? (
           <div className="overflow-hidden rounded-[10px]" style={{ border: `1px solid ${RULE}` }}>
             <div className={`${LINE_GRID} max-[767px]:hidden`} style={{ backgroundColor: '#FAF8F3', paddingTop: 7, paddingBottom: 7 }}>
-              {['Supplier', 'PO · quote · order', 'ETA', 'Supplier payable', ''].map((h, idx) => <span key={idx} className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] ${idx === 3 ? 'text-right' : ''}`} style={{ color: INK2 }}>{h}</span>)}
+              {['Supplier', 'PO · quote · order', 'ETA', 'Cost', ''].map((h, idx) => <span key={idx} className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] ${idx === 3 ? 'text-right' : ''}`} style={{ color: INK2 }}>{h}</span>)}
             </div>
             {rec.pos.map((p) => <POLine key={p.id} po={p} budgets={rec.budgets} orders={rec.orders} onEdit={openEditor} onSaved={onSaved} open={openLine === `po:${p.id}`} onToggle={() => toggleLine(`po:${p.id}`)} />)}
             {looseOrders.map((o) => <OrderLine key={o.id} order={o} onEdit={openEditor} onSaved={onSaved} open={openLine === `o:${o.id}`} onToggle={() => toggleLine(`o:${o.id}`)} />)}
