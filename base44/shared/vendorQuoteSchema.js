@@ -20,7 +20,19 @@ export const QUOTE_SCHEMA = {
     dealer_subtotal: { type: ['number', 'null'], description: 'Only when price_levels is dealer_and_customer: the dealer cost subtotal before tax (e.g. "Dealer Sub")' },
     net_total: { type: ['number', 'null'], description: 'Single price level: the total the bill-to account pays before tax (sum of NET/extended prices, Sub Total, Balance Due before tax). Never the LIST price.' },
     customer_sub_total: { type: ['number', 'null'], description: 'Customer price subtotal before tax, if printed' },
-    customer_tax: { type: ['number', 'null'] },
+    customer_tax: { type: ['number', 'null'], description: 'Sales tax charged on this quote: the SUM of every tax line printed (state, county, city, "Sales Tax", "Tax"). Use 0 only when a tax line is printed showing 0.00. Use null when no tax line is printed anywhere.' },
+    tax_lines: {
+      type: 'array',
+      description: 'Every tax line printed anywhere on the quote (totals box, summary, or a line item), exactly as printed. Empty when there is none.',
+      items: {
+        type: 'object',
+        properties: {
+          label: { type: ['string', 'null'], description: 'As printed, e.g. "Sales Tax", "UT State Tax", "Tax 7.45%"' },
+          rate_pct: { type: ['number', 'null'], description: 'Tax rate in percent if printed, e.g. 7.45' },
+          amount: { type: ['number', 'null'], description: 'Tax amount in dollars as printed' },
+        },
+      },
+    },
     customer_total: { type: ['number', 'null'], description: 'Grand TOTAL including tax as printed' },
     lines: {
       type: 'array',
@@ -48,7 +60,11 @@ Price levels: AMSCO "Dealer Total Pricing" quotes print a dealer cost AND a cust
 Studio, BFS order acknowledgements) print ONE price level -> "single": put the pre-tax total in net_total
 and customer_sub_total, the grand total in customer_total. A LIST PRICE column is not a price level; NET
 is the price. Count every window, door and glass unit for openings_qty. Use null for anything not
-printed; never guess.`;
+printed; never guess.
+TAX: look for a sales tax line anywhere - the totals box, a summary, or a separate line item ("Sales Tax",
+"Tax", "State/County/City Tax", a percentage like 7.45%). List each one in tax_lines with its amount and
+rate, and put their sum in customer_tax. A tax line is never a window/door/glass line item. If no tax line
+is printed, leave tax_lines empty and customer_tax null - do not write 0 unless 0.00 is printed.`;
 
 // The quote fields the old schema used, filled from the richer extraction.
 export function legacyTotals(q) {

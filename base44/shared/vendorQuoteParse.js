@@ -85,6 +85,18 @@ export function parseAmscoQuoteText(text) {
 
 // Normalize any extraction source (deterministic parse or LLM JSON) into the
 // shape jobBudgetIngest and the JobBudgets entity store.
+// Tax lines as printed (label, rate, amount); their sum stands in for customer_tax when
+// the reader found tax lines but no single tax total.
+function taxLines(list) {
+  return Array.isArray(list) ? list.slice(0, 20).filter((t) => t && typeof t === 'object')
+    .map((t) => ({ label: clean(t.label), rate_pct: money(t.rate_pct), amount: money(t.amount) }))
+    .filter((t) => t.label || t.amount != null) : [];
+}
+function taxLineSum(list) {
+  const amounts = taxLines(list).map((t) => t.amount).filter((v) => v != null);
+  return amounts.length ? Math.round(amounts.reduce((a, b) => a + b, 0) * 100) / 100 : null;
+}
+
 export function normalizeVendorQuote(raw = {}) {
   const clean = (v) => (v === undefined || v === null ? null : String(v).trim() || null);
   const money = (v) => {
@@ -120,7 +132,8 @@ export function normalizeVendorQuote(raw = {}) {
     material_true_cost: money(raw.material_true_cost),
     actual_total_sell: money(raw.actual_total_sell),
     customer_sub_total: money(raw.customer_sub_total),
-    customer_tax: money(raw.customer_tax),
+    customer_tax: money(raw.customer_tax) ?? taxLineSum(raw.tax_lines),
+    tax_lines: taxLines(raw.tax_lines),
     customer_total: money(raw.customer_total),
     dealer_subtotal: money(raw.dealer_subtotal),
     net_total: money(raw.net_total),
