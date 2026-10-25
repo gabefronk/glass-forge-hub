@@ -5,10 +5,11 @@ import { useAuth } from '@/lib/AuthContext';
 import { isPurchaseOrderOwner } from '@/lib/purchaseOrderAccess';
 import { procurementPath } from '@/lib/procurementRoutes';
 import { C } from '@/lib/feeUI';
-import { PageShell, PageHero, HeroStat } from '@/components/PageShell';
+import { PageShell, PageHero } from '@/components/PageShell';
 import PageNotFound from '@/lib/PageNotFound';
 import PurchasingJobWorkspace from '@/components/purchasing/PurchasingJobWorkspace';
-import { buttonClass, secondaryStyle, money, percent, purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
+import BudgetSummaryStats from '@/components/purchasing/BudgetSummaryStats';
+import { buttonClass, secondaryStyle, purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
 import { budgetRollup, isLiveBudget } from '../../base44/shared/procurementCore.js';
 
 // Budget & Orders for one job: the same purchasing workspace a Purchasing row expands,
@@ -66,12 +67,7 @@ function JobBudgetOrders({ jobId }) {
       </div>
     </div>
     <PageHero eyebrow="Glass Forge / purchasing" title="Budget & Orders" sub={job.canonical_name}>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <HeroStat label="Budget cost" value={money(rollup.cost)} sub={`${rollup.count} included scopes`} />
-        <HeroStat label="Customer total" value={money(rollup.sell)} sub="Budget estimate, not an invoice" />
-        <HeroStat label="Margin dollars" value={money(rollup.margin_dollars)} />
-        <HeroStat label="Margin" value={percent(rollup.margin_pct)} sub={rollup.status === 'ready' ? 'Based on included scopes' : 'Review incomplete or duplicate costs'} />
-      </div>
+      <BudgetSummaryStats job={job} rollup={rollup} disabled={loading || Boolean(job?.merged_into || job?.is_sample)} onSaved={onSaved} />
     </PageHero>
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">{error} Records may be incomplete. Editing is disabled until Refresh succeeds.</p>}
     {job.merged_into && <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">This is a merged job record. <Link className="underline" to={procurementPath(job.merged_into, section)}>Open the current job's Budget & Orders</Link>. No job links have been changed.</p>}
