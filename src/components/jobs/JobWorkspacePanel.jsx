@@ -192,6 +192,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
           progress={progress}
           alert={<ServiceMarker open={service.open} />}
           upcoming={upcoming}
+          onScheduleNext={isJobCalendarOwner(me) ? (next) => { setScheduleStage(next); setShowCreateEvent(true); } : null}
           extra={
             <>
               {JOB_CREATE_ENABLED && isJobCalendarOwner(me) ? <button type="button" onClick={() => setShowCreateEvent(true)} className={heroLinkClass} style={heroLinkStyle}>Add visit</button> : null}
@@ -211,6 +212,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
             <JobActivityFeed
               onScheduleNext={(next) => { setScheduleStage(next); setShowCreateEvent(true); }}
               ledger
+              upNextInHeader
               jobId={jobId}
               events={calEvents}
               rows={rows}

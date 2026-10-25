@@ -269,6 +269,7 @@ export default function JobDetail() {
             progress={progress}
             alert={<ServiceMarker open={service.open} />}
             upcoming={upcoming}
+            onScheduleNext={isJobCalendarOwner(user) ? (next) => { setScheduleStage(next); setShowCreateEvent(true); } : null}
             payment={owner
               ? <PaymentStatusDropdown job={job} onChanged={() => loadAll({ quiet: true })} />
               : (job.payment_status ? <PaymentStatusChip job={job} /> : null)}
@@ -294,6 +295,7 @@ export default function JobDetail() {
               <JobActivityFeed
                 onScheduleNext={(next) => { setScheduleStage(next); setShowCreateEvent(true); }}
                 ledger
+                upNextInHeader={!isPhone}
                 jobId={id}
                 events={calEvents}
                 rows={rows}
