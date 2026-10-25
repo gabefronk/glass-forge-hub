@@ -150,6 +150,14 @@
       ],
       "description": "Job stage (shown as Job stage; the field keeps its old name): sent to customer, ordered, half down paid, delivered, installed, billed, waiting on check, waiting on payment, paid. sent_for_payment and partial are retired but kept so older jobs still read correctly. Null means no stage set yet. Set from the Purchasing row and the job page."
     },
+    "manual_budget_cost": {
+      "type": "number",
+      "description": "Budget cost Gabriel typed on the job's Budget & Orders page. Display only there: it wins over the quote roll-up in that page's summary and changes no other figure. Null means use the quotes."
+    },
+    "manual_customer_total": {
+      "type": "number",
+      "description": "Customer total Gabriel typed on the job's Budget & Orders page. Display only there: it wins over the quote roll-up in that page's summary and changes no other figure. Null means use the quotes."
+    },
     "payment_status_at": {
       "type": "string",
       "format": "date-time",
