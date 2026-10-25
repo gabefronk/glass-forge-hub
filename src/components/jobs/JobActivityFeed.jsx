@@ -282,46 +282,53 @@ function NoteCard({ note, currentUser, authUser, onChanged, onPhotoClick, servic
   );
 }
 
-// Back-to-back days that hold only notes, texts or calls fold into one bar, so the visits
-// and field reports below are a short scroll away. Each entry still opens on its own.
+// Every note, text, call and email on the job in one drawer, newest day first, so the
+// visits and field reports below stay the focus. Each entry still opens on its own.
 const plural = (word, n) => (n === 1 ? word : /y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`);
+const monthName = (date, today) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", ...(today.slice(0, 4) === date.slice(0, 4) ? {} : { year: "numeric" }), timeZone: "UTC" });
 
-function QuietRun({ days, today, renderItem }) {
-  const [open, setOpen] = useState(false);
+function NotesDrawer({ days, today, open, onToggle, renderItem }) {
   const items = days.flatMap((d) => d.items);
+  if (!items.length) return null;
   const tally = new Map();
   for (const it of items) {
-    const t = it.kind === "note" ? noteKind(it.note).title.toLowerCase() : "reschedule";
+    const t = noteKind(it.note).title.toLowerCase();
     tally.set(t, (tally.get(t) || 0) + 1);
   }
   const summary = [...tally].map(([t, n]) => `${n} ${plural(t, n)}`).join(" · ");
-  const short = (d) => { const s = dayStamp(d, today); return `${s.mo} ${s.day}`; };
-  const label = (d) => { const s = dayStamp(d, today); return s.rel || `${s.wd}, ${s.mo} ${s.day}`; };
-  const newest = days[0].date, oldest = days[days.length - 1].date;
-  const when = newest === oldest ? label(newest) : `${short(oldest)} – ${short(newest)}`;
-  const lead = items.find((it) => it.kind === "note");
+  const latest = dayStamp(days[0].date, today);
   return (
-    <section className="mb-3.5 rounded-[14px]" style={{ backgroundColor: "#fbfaf7", border: "1px solid #d3cabb", boxShadow: "0 1px 2px rgba(10,29,31,.05)" }}>
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex w-full min-w-0 items-center gap-3 rounded-[14px] px-[18px] py-2.5 text-left hover:bg-black/[0.02]">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px]" style={{ backgroundColor: "#f1eee7", color: "#34403f" }}><StickyNote className="h-[15px] w-[15px]" /></span>
+    <section className="mb-4 rounded-[14px] bg-white" style={{ border: "1px solid #d3cabb", boxShadow: "0 1px 2px rgba(10,29,31,.06),0 8px 18px -12px rgba(10,29,31,.22)" }}>
+      <button type="button" aria-expanded={open} onClick={onToggle} className={`flex w-full min-w-0 items-center gap-3 px-[18px] py-3 text-left hover:bg-black/[0.02] ${open ? "rounded-t-[14px]" : "rounded-[14px]"}`}>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]" style={{ backgroundColor: "#e7edf2", color: "#34506a" }}><MessageSquare className="h-4 w-4" /></span>
         <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-[14px] font-bold" style={{ color: C.text }}>{summary}</span>
-            <span className="text-[12.5px] font-medium" style={{ color: "#616a6d" }}>{when}</span>
+          <span className="flex flex-wrap items-center gap-x-2">
+            <span className="text-[15px] font-bold" style={{ color: C.text }}>Notes &amp; texts</span>
+            <span className="rounded-full px-2 py-px text-[12px] font-semibold" style={{ backgroundColor: "#f1eee7", color: "#34403f" }}>{items.length}</span>
           </span>
-          {!open && lead ? <span className="block truncate text-[13px]" style={{ color: C.textMuted }}>{notePreview(lead.note)}</span> : null}
+          <span className="block truncate text-[12.5px]" style={{ color: "#616a6d" }}>{summary} · latest {latest.rel ? latest.rel.toLowerCase() : `${latest.mo} ${latest.day}`}</span>
         </span>
-        <span className="shrink-0 text-[12px] font-semibold" style={{ color: "#0b3f3b" }}>{open ? "Hide" : "Show"}</span>
+        <span className="shrink-0 text-[12.5px] font-semibold" style={{ color: "#0b3f3b" }}>{open ? "Hide" : "Show all"}</span>
         <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} style={{ color: "#0b3f3b" }} />
       </button>
       {open ? (
-        <div className="border-t px-[18px] pb-3 pt-2" style={{ borderColor: "#eee9e0" }}>
-          {days.map(({ date, items: dayItems }) => (
-            <div key={date} className="mt-2 first:mt-0">
-              {days.length > 1 ? <div className="mb-0.5 text-[10.5px] font-bold uppercase tracking-[.12em]" style={{ color: "#566063" }}>{label(date)}</div> : null}
-              <div className="flex flex-col gap-1">{dayItems.map((it, i) => renderItem(it, i, dayItems, date))}</div>
-            </div>
-          ))}
+        <div className="max-h-[560px] overflow-y-auto border-t px-[18px] pb-2" style={{ borderColor: "#eee9e0" }}>
+          {days.map(({ date, items: dayItems }, di) => {
+            const s = dayStamp(date, today);
+            const newMonth = di === 0 || days[di - 1].date.slice(0, 7) !== date.slice(0, 7);
+            return (
+              <div key={date}>
+                {newMonth ? <div className="pb-1 pt-3 text-[11px] font-bold uppercase tracking-[.14em]" style={{ color: "#3e5a55" }}>{monthName(date, today)}</div> : null}
+                <div className="flex gap-4 border-t py-2" style={{ borderColor: newMonth ? "transparent" : "#f1ede5" }}>
+                  <div className="w-[58px] shrink-0 pt-1 leading-tight">
+                    <span className="block text-[10.5px] font-semibold uppercase tracking-[.1em]" style={{ color: s.rel ? "#10524c" : "#566063" }}>{s.rel || s.wd}</span>
+                    <span className="block text-[13px] font-bold" style={{ color: C.text }}>{s.mo} {s.day}</span>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">{dayItems.map((it, i) => renderItem(it, i, dayItems, date))}</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </section>
@@ -347,6 +354,7 @@ function ServiceEntry({ item, onServiceChanged }) {
 // raised it; one logged without a report gets its own entry on the day it was logged.
 export default function JobActivityFeed({ jobId, events, rows, notes, fieldReports, files, live, currentUser, authUser, onChanged, onPhotoClick, openFormKey = 0, title = "Job history", ledger = false, dedupe = null, progress = null, serviceItems = null, onServiceChanged, onScheduleNext = null}) {
   const [showForm, setShowForm] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   // currentUser is the author STRING (email) for legacy note form/delete behavior.
   // authUser is the auth user OBJECT — the owner-ID gate (canEditHistoryText) needs .id.
@@ -382,7 +390,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   const noteServices = (note) => servicesByNote[note.id] || [];
   const notePointers = (note) => pointersByNote[note.id] || [];
   const visitServices = (ev) => (ev?.id && servicesByVisit[ev.id]) || [];
-  const quietItem = (it) => it.kind === "change" || (it.kind === "note" && isQuietNote(it.note, noteServices(it.note), notePointers(it.note)));
+  const drawerItem = (it) => it.kind === "note" && isQuietNote(it.note, noteServices(it.note), notePointers(it.note));
   const days = useMemo(() => {
     let base = groupHistoryByDay(entries, filter === "milestones" ? "all" : filter);
     if (filter === "all" && looseServices.length) {
@@ -416,14 +424,15 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
   // If a live reload leaves no stage days, drop back to All instead of a hidden filter.
   useEffect(() => { if (filter === "milestones" && !milestoneCount) setFilter("all"); }, [filter, milestoneCount]);
 
-  // Ledger: past days with only quiet entries (no visit, report, file or stage) join the
-  // quiet days next to them in the same month and show as one folded QuietRun.
-  const segments = [];
+  // Ledger: notes, texts, calls and emails move to the Notes & texts drawer (still by day);
+  // the day cards keep visits, field reports, photos, files and stages.
+  const noteDays = [];
+  const reportDays = [];
   for (const d of days) {
-    const quiet = d.items.length > 0 && d.date <= today && !stageDays?.[d.date] && d.items.every(quietItem);
-    const last = segments[segments.length - 1];
-    if (quiet && last?.quiet && last.days[0].date.slice(0, 7) === d.date.slice(0, 7)) last.days.push(d);
-    else segments.push({ quiet, days: [d] });
+    const notesHere = d.items.filter(drawerItem);
+    const rest = notesHere.length ? d.items.filter((it) => !drawerItem(it)) : d.items;
+    if (notesHere.length) noteDays.push({ date: d.date, items: notesHere });
+    if (rest.length || stageDays?.[d.date]) reportDays.push(rest === d.items ? d : { ...d, items: rest });
   }
   const renderItem = (it, i, dayItems, date) => {
     if (it.kind === "stage") return <StageOnlyEntry key={`s-${date}`} stages={it.stages} />;
@@ -476,30 +485,25 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
 
       {showForm ? (
         <div className="mb-3">
-          <JobNoteForm jobId={jobId} author={currentUser} onSaved={() => { setShowForm(false); onChanged(); }} onCancel={() => setShowForm(false)} />
+          <JobNoteForm jobId={jobId} author={currentUser} onSaved={() => { setShowForm(false); setNotesOpen(true); onChanged(); }} onCancel={() => setShowForm(false)} />
         </div>
       ) : null}
 
       {ledger ? (
         <div>
           {(filter === "all" || filter === "milestones") ? <UpNextCard next={progress?.next} onSchedule={onScheduleNext} /> : null}
-          {days.length === 0 && !showForm ? (
-            <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter === "all" ? "No activity recorded yet." : "Nothing of this type yet."}</div>
+          {filter === "all" ? <NotesDrawer days={noteDays} today={today} open={notesOpen} onToggle={() => setNotesOpen((v) => !v)} renderItem={renderItem} /> : null}
+          {reportDays.length === 0 && !showForm ? (
+            <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter !== "all" ? "Nothing of this type yet." : noteDays.length ? "No visits or field reports yet." : "No activity recorded yet."}</div>
           ) : null}
-          {segments.map(({ quiet, days: segDays }, si) => {
-            const date = segDays[0].date;
-            const prev = si ? segments[si - 1].days : null;
-            const rule = !prev || prev[prev.length - 1].date.slice(0, 7) !== date.slice(0, 7) ? <MonthRule date={date} today={today} /> : null;
-            if (quiet) return <div key={`q-${date}`}>{rule}<QuietRun days={segDays} today={today} renderItem={renderItem} /></div>;
-            return (
-              <div key={date}>
-                {rule}
-                <DayCard date={date} today={today} stages={stageDays?.[date]}>
-                  {groupFiles(segDays[0].items).map((it, i, dayItems) => renderItem(it, i, dayItems, date))}
-                </DayCard>
-              </div>
-            );
-          })}
+          {reportDays.map(({ date, items }, di) => (
+            <div key={date}>
+              {di === 0 || reportDays[di - 1].date.slice(0, 7) !== date.slice(0, 7) ? <MonthRule date={date} today={today} /> : null}
+              <DayCard date={date} today={today} stages={stageDays?.[date]}>
+                {groupFiles(items).map((it, i, dayItems) => renderItem(it, i, dayItems, date))}
+              </DayCard>
+            </div>
+          ))}
         </div>
       ) : (
       <div className="space-y-5">
