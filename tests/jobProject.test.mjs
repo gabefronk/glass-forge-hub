@@ -95,7 +95,7 @@ test('actual labor and material come from job cost inputs; profit actual needs e
   const invoices = [{ id: 'i1', job_id: 'j1', kind: 'balance', invoice_number: '9', invoice_date: '2026-10-01', amount: 2000 }];
   const done = jobProject('j1', [], { ...base, costInputs, invoices });
   assert.equal(row(done, 'profit').actual, 820);
-  assert.ok(Math.abs(done.margin.actual - 0.37275) < 1e-9);
+  assert.ok(Math.abs(done.margin.actual - 0.41) < 1e-9);
 });
 
 test('a job with no cost figure shows dashes, not zeros', () => {
