@@ -2,7 +2,13 @@ import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, FileText } from 'lucide-react';
 import { C } from '@/lib/feeUI';
+import { money } from '@/components/budgets/ProcurementForms';
+import { statusLabel } from '@/lib/purchasingDates';
 import QuoteDropzone from './QuoteDropzone';
+
+// Shop purchases are overhead: cost only, never in Sold or Est. profit.
+const SHOP_GRID = { display: 'grid', gridTemplateColumns: '80px 96px minmax(140px,220px) minmax(0,1fr) 120px 112px', alignItems: 'center' };
+const shopDay = (iso) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}/${iso.slice(2, 4)}` : '—');
 
 // Quiet review section for no-job entities (shop POs, unlinked quotes) so they
 // are never silently lost behind the one-card-per-job loop. Collapsed by
@@ -44,12 +50,31 @@ export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [], onUp
         )}
         {shopPOs.length > 0 && (
           <div>
-            <p className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide" style={{ color: C.textSecondary }}><Package className="mr-1 inline h-3.5 w-3.5" />Shop purchases ({shopPOs.length})</p>
-            <ul className="space-y-1">
+            <h3 className="m-0 mb-1.5 text-[15px] font-bold" style={{ color: C.text }} title="Overhead bought for the shop or showroom. Cost only: not in Sold, Customers owe or Est. profit."><Package className="mr-1.5 inline h-4 w-4" />Shop purchases</h3>
+            <div role="table" aria-label="Shop purchases" className="overflow-x-auto text-[14px]" style={{ color: C.text }}>
+              <div role="row" className="text-[11.5px] font-semibold uppercase" style={{ ...SHOP_GRID, height: 36, background: '#E9E2D4', borderBottom: '2px solid #34403F', color: '#34403F', letterSpacing: '0.06em' }}>
+                <span role="columnheader" className="px-2.5">Date</span>
+                <span role="columnheader" className="px-2.5">PO</span>
+                <span role="columnheader" className="px-2.5">Supplier</span>
+                <span role="columnheader" className="px-2.5">Items</span>
+                <span role="columnheader" className="px-2.5">Status</span>
+                <span role="columnheader" className="px-2.5 text-right">Amount</span>
+              </div>
               {shopPOs.map((p) => (
-                <li key={p.id}><Link to="/purchasing" className="text-[12.5px] font-medium underline" style={{ color: '#0B3F3B' }}>{p.po_number || p.id}</Link>{p.vendor ? <span style={{ color: C.textSecondary }}> · {p.vendor}</span> : null}</li>
+                <div key={p.id} role="row" title={p.notes || undefined} style={{ ...SHOP_GRID, minHeight: 40, borderBottom: '1px solid #D6CCBA' }}>
+                  <span role="cell" className="px-2.5 tabular-nums">{shopDay(String(p.created_date || '').slice(0, 10))}</span>
+                  <span role="cell" className="px-2.5" style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#34403F' }}>{p.po_number || '—'}</span>
+                  <span role="cell" className="truncate px-2.5">{p.vendor || '—'}</span>
+                  <span role="cell" className="truncate px-2.5">{p.vendor_quote_ref || '—'}</span>
+                  <span role="cell" className="inline-flex items-center gap-2 px-2.5"><span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: p.paid ? '#0B3F3B' : '#C08B2E' }} />{p.paid ? 'Paid' : statusLabel(p.status)}</span>
+                  <span role="cell" className="px-2.5 text-right tabular-nums">{money(p.amount_dealer)}</span>
+                </div>
               ))}
-            </ul>
+              <div role="row" className="font-bold" style={{ ...SHOP_GRID, minHeight: 40, background: '#FAF8F3', borderBottom: '1px solid #D6CCBA' }}>
+                <span role="cell" className="px-2.5" style={{ gridColumn: '1 / 6' }}>Total</span>
+                <span role="cell" className="px-2.5 text-right tabular-nums">{money(Math.round(shopPOs.reduce((n, p) => n + (Number(p.amount_dealer) || 0), 0) * 100) / 100)}</span>
+              </div>
+            </div>
           </div>
         )}
         {!hasAny && <p className="text-[12px]" style={{ color: C.textSecondary }}>No unlinked quotes or shop purchases.</p>}
