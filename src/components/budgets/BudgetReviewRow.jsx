@@ -75,7 +75,9 @@ function fromBudget(b) {
 export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill = false }) {
   const [form, setForm] = useState(() => fromBudget(budget));
   const [version, setVersion] = useState(() => budgetVersion(budget));
-  const [reviewed, setReviewed] = useState(false);
+  // Saving is the review (Gabriel, Oct 25): no separate "I reviewed" tick box.
+  const reviewed = true;
+  const setReviewed = () => {};
   const [zeroConfirmed, setZeroConfirmed] = useState(false);
   const [fill, setFill] = useState(() => budget.autofill || null);
   // Import notes are about the numbers as first read. Once the numbers have been reviewed and
@@ -168,15 +170,15 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
         <button type="button" onClick={() => setMore(true)} className="self-start text-[12px] font-semibold" style={{ color: C.accentText }}>+ Additional install material / equipment</button>
       )}
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-[13px]" style={{ color: C.textSecondary }}>
-        <span>Cost basis <b style={{ color: C.text }}>{money(preview.total_cost_overhead)}</b></span>
+        <span className="w-full text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: C.textMuted }}>Preview · after tax, overhead and labor</span>
+        <span>Total cost <b style={{ color: C.text }}>{money(preview.total_cost_overhead)}</b></span>
         <span>Use tax (auto {(SALES_TAX_RATE * 100).toFixed(2)}%) <b style={{ color: C.text }}>{money(preview.use_tax)}</b></span>
         <span>Margin <b style={{ color: (preview.actual_margin_pct ?? 0) >= 0.3 ? C.accentText : C.amber }}>{pct(num(form.material_true_cost) === 0 && !zeroConfirmed ? null : preview.actual_margin_pct)}</b></span>
       </div>
       {error ? <p role="alert" className="m-0 text-[12.5px] font-medium" style={{ color: C.amber }}>{error}</p> : null}
       {num(form.material_true_cost) === 0 && <label className="flex items-start gap-2 text-[13px]" style={{ color: C.amber }}><input type="checkbox" checked={zeroConfirmed} onChange={e => { setZeroConfirmed(e.target.checked); setReviewed(false); }} />Zero material cost is intentional, not a missing supplier price.</label>}
-      <label className="flex items-start gap-2 text-[13px]" style={{ color: C.text }}><input type="checkbox" checked={reviewed} onChange={e => setReviewed(e.target.checked)} />I reviewed the material, labor, extras and customer sell for this scope.</label>
       <div className="flex items-center gap-2">
-        <button type="button" disabled={busy || refilling || !reviewed || (num(form.material_true_cost) === 0 && !zeroConfirmed)} onClick={save} className={smallBtn} style={btnPrimary}>{busy ? "Saving…" : "Save reviewed numbers"}</button>
+        <button type="button" disabled={busy || refilling || !reviewed || (num(form.material_true_cost) === 0 && !zeroConfirmed)} onClick={save} className={smallBtn} style={btnPrimary}>{busy ? "Saving…" : "Save numbers"}</button>
         <button type="button" disabled={busy} onClick={onCancel} className={smallBtn} style={btnGhost}>Cancel</button>
       </div>
     </div>
