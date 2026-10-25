@@ -28,6 +28,7 @@ import RecordInvoiceDialog from "@/components/invoicing/RecordInvoiceDialog";
 import InvoiceRegister from "@/components/invoicing/InvoiceRegister";
 import { laborInvoicePlan, linePatches, reopenPatch, paymentLinePatches, priorState, invoiceRegister, isCoveredZeroReview } from "@/lib/invoiceRegister";
 import { useAuth } from "@/lib/AuthContext";
+import { planSplitLines, isHeldForPurchasing } from "@/lib/purchasingSplit";
 
 export default function Invoicing() {
   const navigate = useNavigate();
@@ -90,7 +91,7 @@ export default function Invoicing() {
     const stale = () => seq !== loadSeq.current;
     setLoading(true);
     try {
-      const [fl, calEvents, jobs, quotes, costs, invs, budgets] = await Promise.all([
+      let [fl, calEvents, jobs, quotes, costs, invs, budgets, pos, vos, closes] = await Promise.all([
         base44.entities.FeeLines.list("-job_date", 5000),
         base44.entities.CalendarEvents.list("-event_date", 5000),
         base44.entities.Jobs.list("canonical_name", 5000).catch(() => []),
@@ -98,15 +99,38 @@ export default function Invoicing() {
         base44.entities.JobCostInputs?.filter ? base44.entities.JobCostInputs.filter({ month }, "job_name_norm", 5000).catch(() => []) : Promise.resolve([]),
         base44.entities.Invoices.list("-invoice_date", 2000).catch(() => []),
         base44.entities.JobBudgets?.list ? base44.entities.JobBudgets.list("-updated_date", 2000).catch(() => []) : Promise.resolve([]),
+        base44.entities.PurchaseOrders.list("-created_date", 2000).catch(() => null),
+        base44.entities.VendorOrders.list("-created_date", 2000).catch(() => null),
+        base44.entities.MonthCloseSnapshot.list("-created_date", 100).catch(() => []),
       ]);
       if (stale()) return;
+      // Purchasing jobs (sold outside BFS, Gabe Oct 25): their own lines are held off
+      // Invoicing, and a Paid job gets one 50/50 profit-split line, kept in step here.
+      let heldJobIds = new Set();
+      if (Array.isArray(pos) && Array.isArray(vos) && Array.isArray(jobs)) {
+        const purchasing = { jobs, budgets: Array.isArray(budgets) ? budgets : [], purchase_orders: pos, vendor_orders: vos };
+        const closedMonths = (Array.isArray(closes) ? closes : []).map((c) => c.month).filter(Boolean);
+        const plan = planSplitLines(purchasing, Array.isArray(fl) ? fl : [], { closedMonths });
+        heldJobIds = plan.jobIds;
+        if (plan.creates.length || plan.updates.length || plan.deletes.length) {
+          try {
+            for (const row of plan.creates) await base44.entities.FeeLines.create(row);
+            for (const { id, ...patch } of plan.updates) await base44.entities.FeeLines.update(id, patch);
+            for (const id of plan.deletes) await base44.entities.FeeLines.delete(id);
+            fl = await base44.entities.FeeLines.list("-job_date", 5000);
+            if (stale()) return;
+          } catch (err) {
+            if (!stale()) setLoadError(`Purchasing profit-split lines could not be updated. ${err?.message || ""}`.trim());
+          }
+        }
+      }
       const rsm = new Map();
       for (const e of (Array.isArray(calEvents) ? calEvents : [])) {
         if (e.google_event_id) rsm.set(e.google_event_id, e.report_status);
       }
       setReportStatusMap(rsm);
       setBillingEvents(Array.isArray(calEvents) ? calEvents : []);
-      setFeeLines(withComputedAmounts(fl));
+      setFeeLines(withComputedAmounts((Array.isArray(fl) ? fl : []).filter((r) => !isHeldForPurchasing(r, heldJobIds))));
       setInvoices(Array.isArray(invs) ? invs : []);
       setJobQuotes(quotesByJob(Array.isArray(budgets) ? budgets : []));
       setProfitabilityInputs({ jobs: Array.isArray(jobs) ? jobs : [], quotes: Array.isArray(quotes) ? quotes : [], costs: Array.isArray(costs) ? costs : [] });
