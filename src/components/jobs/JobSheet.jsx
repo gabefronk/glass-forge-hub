@@ -839,58 +839,58 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
     <section className="relative z-[3] rounded-[14px]" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
       {corner ? <div className="absolute right-3 top-3">{corner}</div> : null}
       <div className="flex flex-wrap items-start gap-x-6 gap-y-4 px-6 pt-5 pb-4 max-[699px]:px-4 max-[699px]:pt-4">
-          <div className="min-w-[260px] flex-1 max-[699px]:min-w-0">
-            <div className="flex flex-wrap items-center gap-2.5">
-              {alert}
-              {eyebrow ? <span className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>{eyebrow}</span> : null}
-              <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.14)", color: BRASS_LT, border: "1px solid rgba(224,201,148,.35)" }}>
-                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "currentColor" }} />{status.label}
+        <div className="min-w-[260px] flex-1 max-[699px]:min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {alert}
+            {eyebrow ? <span className="text-[11px] font-semibold tracking-[.12em]" style={{ color: "#8f999b" }}>{eyebrow}</span> : null}
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.14)", color: BRASS_LT, border: "1px solid rgba(224,201,148,.35)" }}>
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "currentColor" }} />{status.label}
+            </span>
+            {progress?.current ? (
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(47,158,95,.16)", color: "#a8e6c1", border: "1px solid rgba(120,210,160,.3)" }}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#46c27e", boxShadow: "0 0 0 3px rgba(70,194,126,.25)" }} />Stage {progress.current.n} of 7 · {progress.current.label}
               </span>
-              {progress?.current ? (
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(47,158,95,.16)", color: "#a8e6c1", border: "1px solid rgba(120,210,160,.3)" }}>
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#46c27e", boxShadow: "0 0 0 3px rgba(70,194,126,.25)" }} />Stage {progress.current.n} of 7 · {progress.current.label}
-                </span>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <JobTitle job={job} onRename={onRename} headingLevel={headingLevel} />
-              {payment}
-            </div>
-            <JobAddress job={job} onEditAddress={onEditAddress} />
-            <JobInfo snap={snap} folder={folder} />
+            ) : null}
           </div>
-          <div className="grid w-[380px] max-w-full shrink-0 gap-2 max-[1100px]:w-full max-[1100px]:grid-cols-2 max-[699px]:grid-cols-1">
-            <SuperBox compact jobId={job.id} jobContacts={jobContacts} events={events} />
-            <HomeownerBox compact job={job} jobContacts={jobContacts} />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <JobTitle job={job} onRename={onRename} headingLevel={headingLevel} />
+            {payment}
           </div>
+          <JobAddress job={job} onEditAddress={onEditAddress} />
+          <JobInfo snap={snap} folder={folder} />
+        </div>
+        <div className="grid w-[380px] max-w-full shrink-0 gap-2 max-[1100px]:w-full max-[1100px]:grid-cols-2 max-[699px]:grid-cols-1">
+          <SuperBox compact jobId={job.id} jobContacts={jobContacts} events={events} />
+          <HomeownerBox compact job={job} jobContacts={jobContacts} />
+        </div>
       </div>
 
       {/* Footer bar: where the job stands on the left, the actions on the right. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-b-[14px] px-6 py-3 max-[699px]:px-4" style={{ backgroundColor: "rgba(255,255,255,.05)", borderTop: "1px solid rgba(255,255,255,.09)" }}>
-          <div className="flex min-w-0 flex-1 basis-[320px] flex-wrap items-center gap-2.5">
-            {proj ? (
-              <>
-                <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.2)", color: BRASS_LT }}>Next visit</span>
-                <span className="shrink-0 font-mono-num text-[14px] font-semibold whitespace-nowrap" style={{ color: HERO_INK }}>{proj.line}</span>
-                <p className="m-0 min-w-0 flex-1 text-[14.5px] font-semibold leading-[20px] max-[699px]:w-full max-[699px]:flex-none" style={{ color: HERO_INK }}>
-                  {proj.expandable && heroExpanded ? proj.purposeFull : proj.purposePreview}
-                  {proj.expandable ? <button type="button" onClick={() => setHeroExpanded((v) => !v)} className="ml-1.5 text-[12px] font-semibold hover:underline" style={{ color: BRASS_LT }}>{heroExpanded ? "Show less" : "Show more"}</button> : null}
-                </p>
-              </>
-            ) : (
-              <>
-                <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: chipBg, color: chipInk }}>{snap.step.tag}</span>
-                <p className="m-0 min-w-0 flex-1 text-[15px] font-semibold leading-[21px]" style={{ color: HERO_INK }}>
-                  {lead}{rest.length ? <span className="font-medium" style={{ color: HERO_MUTED }}> {rest.join(" ")}</span> : null}
-                </p>
-              </>
-            )}
-          </div>
-          <div className="hero-actions flex min-w-0 flex-wrap items-center gap-2">
-            <button type="button" onClick={onFieldReport} className={HERO_BTN} style={{ backgroundColor: BRASS, color: "#1d160a" }}><Camera className="h-[15px] w-[15px]" />Field report</button>
-            <FilesMenu folder={folder} plans={plans} events={events} />
-            {extra}
-          </div>
+        <div className="flex min-w-0 flex-1 basis-[320px] flex-wrap items-center gap-2.5">
+          {proj ? (
+            <>
+              <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.2)", color: BRASS_LT }}>Next visit</span>
+              <span className="shrink-0 font-mono-num text-[14px] font-semibold whitespace-nowrap" style={{ color: HERO_INK }}>{proj.line}</span>
+              <p className="m-0 min-w-0 flex-1 text-[14.5px] font-semibold leading-[20px] max-[699px]:w-full max-[699px]:flex-none" style={{ color: HERO_INK }}>
+                {proj.expandable && heroExpanded ? proj.purposeFull : proj.purposePreview}
+                {proj.expandable ? <button type="button" onClick={() => setHeroExpanded((v) => !v)} className="ml-1.5 text-[12px] font-semibold hover:underline" style={{ color: BRASS_LT }}>{heroExpanded ? "Show less" : "Show more"}</button> : null}
+              </p>
+            </>
+          ) : (
+            <>
+              <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: chipBg, color: chipInk }}>{snap.step.tag}</span>
+              <p className="m-0 min-w-0 flex-1 text-[15px] font-semibold leading-[21px]" style={{ color: HERO_INK }}>
+                {lead}{rest.length ? <span className="font-medium" style={{ color: HERO_MUTED }}> {rest.join(" ")}</span> : null}
+              </p>
+            </>
+          )}
+        </div>
+        <div className="hero-actions flex min-w-0 flex-wrap items-center gap-2">
+          <button type="button" onClick={onFieldReport} className={HERO_BTN} style={{ backgroundColor: BRASS, color: "#1d160a" }}><Camera className="h-[15px] w-[15px]" />Field report</button>
+          <FilesMenu folder={folder} plans={plans} events={events} />
+          {extra}
+        </div>
       </div>
     </section>
   );

@@ -230,8 +230,6 @@ function groupFiles(items) {
   return out;
 }
 
-// services: service items raised by this report — shown right under it (one record of the issue).
-// pointers: items first reported here that are now tracked on their service visit.
 // What a note is called in the history. Notes logged from a customer text thread read as
 // "Text", not "Note"; one with photos or a completion is a field report.
 function noteKind(note) {
@@ -263,6 +261,8 @@ function FoldedEntry({ icon: Icon, tone, title, meta, preview, children }) {
   );
 }
 
+// services: service items raised by this report — shown right under it (one record of the issue).
+// pointers: items first reported here that are now tracked on their service visit.
 function NoteCard({ note, currentUser, authUser, onChanged, onPhotoClick, services = [], pointers = [], onServiceChanged }) {
   const { title, icon, tone } = noteKind(note);
   const meta = joinMeta(crewName(note.author) || note.author, photoCount(note.attachments?.length));
