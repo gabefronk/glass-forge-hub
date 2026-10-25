@@ -46,40 +46,6 @@ export function summarizeCards(cards = []) {
 
 // --- Header figures and the one filter dropdown (M2, Oct 24) ---
 
-const isOrderPaid = (o) => ['paid', 'reconciled'].includes(o?.status) || Boolean(o?.paid_at);
-const rawAmount = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-
-// What we owe suppliers on one job, at the raw PO amount (payables never carry
-// the use tax; job cost does). Each live PO is owed until every supplier order
-// under it is marked paid; a PO with no amount falls back to its unpaid
-// supplier orders' amounts (also pre-tax). A supplier order with no PO is owed
-// at its own amount until paid. Cancelled POs and orders under them are
-// excluded, as on the rows. `missing` counts unpaid records with no amount.
-export function supplierPayables(jobId, { purchase_orders = [], vendor_orders = [] } = {}) {
-  const cancelled = new Set(purchase_orders.filter((p) => p.status === 'cancelled').map((p) => p.id));
-  const pos = purchase_orders.filter((p) => p.job_id === jobId && p.status !== 'cancelled');
-  const orders = vendor_orders.filter((o) => o.job_id === jobId && !(o.purchase_order_id && cancelled.has(o.purchase_order_id)));
-  const poIds = new Set(pos.map((p) => p.id));
-  let owed = 0, items = 0, unpaid = 0, missing = 0;
-  const add = (value) => { unpaid += 1; if (value == null) missing += 1; else owed += value; };
-  for (const po of pos) {
-    items += 1;
-    const linked = orders.filter((o) => o.purchase_order_id === po.id);
-    if (linked.length && linked.every(isOrderPaid)) continue;
-    const fromOrders = linked.filter((o) => !isOrderPaid(o)).map((o) => rawAmount(o.amount));
-    add(rawAmount(po.amount_dealer) ?? (fromOrders.length && fromOrders.every((v) => v != null) ? fromOrders.reduce((n, v) => n + v, 0) : null));
-  }
-  for (const o of orders) {
-    if (o.purchase_order_id && poIds.has(o.purchase_order_id)) continue;
-    // Reference-only placeholders (no PO, number or amount) are not payables.
-    if (!o.purchase_order_id && rawAmount(o.amount) == null && !String(o.order_number || '').trim()) continue;
-    items += 1;
-    if (!isOrderPaid(o)) add(rawAmount(o.amount));
-  }
-  const label = !items ? null : !unpaid ? 'Paid' : unpaid < items ? 'Partial' : 'Unpaid';
-  return { owed: round(owed), items, unpaid, missing, label, tone: !items ? 'gray' : !unpaid ? 'green' : 'amber' };
-}
-
 // Share of the sale still owed by the customer at each job stage. There is no
 // customer payment ledger yet (no customer invoices recorded), so the stage is
 // the evidence (Gabriel, Oct 24): a job only sent to the customer is not sold
@@ -91,15 +57,14 @@ export const customerOwedShare = (stage) => (stage in OWED_SHARE ? OWED_SHARE[st
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 // Per-job facts the header and the filter both read, so a count and a figure
-// can never disagree. `card.payables` comes from supplierPayables and
-// `card.paymentStage` from the job's payment_status (attached by the page).
+// can never disagree. `card.paymentStage` is the job's payment_status (attached by
+// the page). Suppliers are paid up front (Gabe, Oct 25): there are no payables.
 export function jobFlags(card, today = '') {
   const sale = column(card, 'sale');
   const sold = sale.value || 0;
   const stage = card?.paymentStage || '';
-  const ap = card?.payables || { owed: 0, items: 0, unpaid: 0 };
   const eta = card?.refs?.etaLabel || '';
-  const openOrder = ap.items > 0 && eta !== 'Delivered';
+  const openOrder = Boolean(card?.refs?.yaPo || card?.refs?.mfrOrder) && eta !== 'Delivered';
   // A $0 cost is treated as missing: it would read as free material (100% margin).
   // A multi-scope job needs a cost on every scope row.
   const own = card?.windows?.display;
@@ -108,7 +73,6 @@ export function jobFlags(card, today = '') {
   return {
     sold,
     customerOwes: sold ? round(sold * customerOwedShare(stage)) : 0,
-    weOwe: ap.owed || 0,
     quoted: Boolean(card?.refs?.quoteNumber),
     po_placed: Boolean(card?.refs?.yaPo),
     open_orders: openOrder,
@@ -116,7 +80,6 @@ export function jobFlags(card, today = '') {
     eta_late: ISO_DAY.test(eta) && Boolean(today) && eta < today,
     waiting_payment: stage === 'waiting_on_payment' || stage === 'waiting_on_check',
     deposit_due: Boolean(sold) && !stage,
-    supplier_unpaid: ap.unpaid > 0,
     missing_cost: !hasCost,
   };
 }
@@ -129,7 +92,6 @@ export const PURCHASING_FILTERS = [
   { key: 'eta_late', label: 'ETA late' },
   { key: 'needs_eta', label: 'Needs ETA' },
   { key: 'waiting_payment', label: 'Waiting on payment or check' },
-  { key: 'supplier_unpaid', label: 'Supplier unpaid' },
   { key: 'missing_cost', label: 'Missing cost' },
 ];
 
@@ -227,16 +189,12 @@ export function purchasingFilterCounts(cards = [], today = '') {
 }
 
 // Header figures over exactly the rows shown. Sold and Est. profit are the Sale
-// price and Profit columns (summarizeCards); Customers owe and We owe suppliers
-// add each shown job's own figure from jobFlags.
+// price and Profit columns (summarizeCards). Job cost is windows plus labor &
+// material on the same rows, so Sold - Job cost = Est. profit; the page shows it as
+// a negative number (money out). Customers owe adds each job's figure from jobFlags.
 export function headerFigures(cards = [], today = '') {
   const totals = summarizeCards(cards);
-  let customersOwe = 0, weOwe = 0, apMissing = 0;
-  for (const c of cards) {
-    const flags = jobFlags(c, today);
-    customersOwe += flags.customerOwes;
-    weOwe += flags.weOwe;
-    apMissing += c?.payables?.missing || 0;
-  }
-  return { jobs: cards.length, sold: totals.sale, customersOwe: round(customersOwe), weOwe: round(weOwe), profit: totals.profit, partialScopes: totals.partialScopes, apMissing };
+  let customersOwe = 0;
+  for (const c of cards) customersOwe += jobFlags(c, today).customerOwes;
+  return { jobs: cards.length, sold: totals.sale, customersOwe: round(customersOwe), cost: round(totals.windows + totals.rough), profit: totals.profit, partialScopes: totals.partialScopes };
 }

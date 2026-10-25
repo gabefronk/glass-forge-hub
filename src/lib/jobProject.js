@@ -3,15 +3,15 @@
 //  - Estimate is the job's Purchasing row (jobMoneyHeadline), so the two screens never disagree.
 //  - Actual is what has been recorded against the job: customer invoices (Invoices), supplier
 //    POs and orders at their entered amounts, and JobCostInputs labor and material.
-//  - Payables and job cost both use the PO amount as entered (no use tax added).
+//  - Job cost uses the PO amount as entered (no use tax added). Suppliers are paid up front,
+//    so there are no payables (Gabe, Oct 25).
 // Records filed under duplicate job records count toward the primary job.
 import { jobMoneyHeadline } from './jobMoneyPanel.js';
 import { jobInvoiceSummary } from './invoiceRegister.js';
-import { supplierPayables, customerOwedShare } from './purchasingSummary.js';
+import { customerOwedShare } from './purchasingSummary.js';
 
 const round = (n) => Math.round(n * 100) / 100;
 const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-const isOrderPaid = (o) => ['paid', 'reconciled'].includes(o?.status) || Boolean(o?.paid_at);
 // Both parts known → their sum; either unknown → null (a dash, never a guess).
 const add = (a, b) => (a == null || b == null ? null : round(a + b));
 const less = (a, b) => (a == null || b == null ? null : round(a - b));
@@ -20,7 +20,7 @@ const ratio = (part, whole) => (part == null || !whole ? null : part / whole);
 
 // Supplier cost recorded so far: each live PO at its dealer amount as entered (a PO with no
 // amount falls back to its supplier orders), plus supplier orders with no PO.
-// Paid or not, it is cost. `partial` means a PO or order has no amount.
+// `partial` means a PO or order has no amount.
 export function orderedCost(jobId, { purchase_orders = [], vendor_orders = [], budgets = [] } = {}) {
   const cancelled = new Set(purchase_orders.filter((p) => p.status === 'cancelled').map((p) => p.id));
   const pos = purchase_orders.filter((p) => p.job_id === jobId && p.status !== 'cancelled');
@@ -60,7 +60,6 @@ export function jobProject(jobId, memberIds = [], { jobs = [], budgets = [], pur
 
   const billed = jobInvoiceSummary(toPrimary(invoices), jobId);
   const supplier = orderedCost(jobId, records);
-  const payables = supplierPayables(jobId, records);
   const labor = laborActual(toPrimary(costInputs));
 
   const income = billed.list.length ? billed.invoiced : null;
@@ -79,8 +78,6 @@ export function jobProject(jobId, memberIds = [], { jobs = [], budgets = [], pur
     invoices: billed.list,
     customerOwes,
     customerOwesFrom: billed.list.length ? 'invoices' : 'stage',
-    weOwe: payables.owed,
-    weOweMissing: payables.missing,
     rows: [
       line('income', 'Income', head.sale, income),
       line('windows', 'Windows + tax', head.cost, supplier.value, { cost: true, estimatePartial: head.partial, actualPartial: supplier.partial }),
