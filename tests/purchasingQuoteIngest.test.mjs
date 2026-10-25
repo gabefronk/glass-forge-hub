@@ -237,7 +237,7 @@ test('sale: supplier rep single-price quote fills cost, never the sale', async (
   const r = await handle(req(ingestBody()), adapter);
   assert.equal(r.status, 200);
   assert.equal(r.body.inputs.actual_total_sell, 0);
-  assert.equal(r.body.inputs.material_true_cost, 67.03);
+  assert.equal(r.body.inputs.material_true_cost, 72.02); // subtotal + the quote's printed tax
 });
 
 test('sale: two-price supplier quote puts the printed customer total on the budget', async () => {

@@ -27,7 +27,7 @@ test("aggregates only linked source records and keeps estimate, PO, billed, and 
     ],
   });
 
-  assert.equal(result.totals.budgetCost, 1074.5);
+  assert.equal(result.totals.budgetCost, 1000);
   assert.equal(result.totals.budgetSell, 2000);
   assert.equal(result.totals.poDealer, 700);
   assert.equal(result.totals.poCustomer, 1200);

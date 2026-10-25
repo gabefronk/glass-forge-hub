@@ -6,20 +6,20 @@ import { computeJobBudget, excelSerialToIso, isoToExcelSerial } from "../base44/
 // (Amsco quote 3517590): every workbook output must match the template's formulas.
 test("workbook replication: BAXTER / Amsco 3517590 matches the filled sheet", () => {
   const b = computeJobBudget({ material_true_cost: 1256.98, actual_total_sell: 2411.81 });
-  assert.equal(b.use_tax, 93.65);                    // C20 = 1256.98 * 0.0745
-  assert.equal(b.cost_material_tax, 1350.63);        // B21
-  assert.equal(b.sell_material_tax_target, 1929.46); // B22 = C21 / (1 - 0.30)
-  assert.equal(b.total_cost_overhead, 1350.63);      // B27
-  assert.equal(b.actual_margin_pct, 0.44);           // B29
+  // No use tax (Gabriel, Oct 24 2026): the material cost already carries the tax.
+  assert.equal(b.use_tax, undefined);
+  assert.equal(b.cost_material_tax, 1256.98);        // B21
+  assert.equal(b.sell_material_tax_target, 1795.69); // B22 = C21 / (1 - 0.30)
+  assert.equal(b.total_cost_overhead, 1256.98);      // B27
+  assert.equal(b.actual_margin_pct, 0.4788);         // B29
   assert.equal(b.overhead_adder, 0);                 // B16 with no labor cost
 });
 
 test("desired margins drive target sells", () => {
   const b = computeJobBudget({ material_true_cost: 1000, labor_cost_sub_pay: 500 });
-  // B16 = 500/0.74 - 500 = 175.68 -> B17 = 1000 + 35.14 = 1035.14; + 74.50 use tax = 1109.64;
-  // target sell = 1109.64 / 0.70
+  // B16 = 500/0.74 - 500 = 175.68 -> B17 = 1000 + 35.14 = 1035.14; target sell = 1035.14 / 0.70
   assert.equal(b.overhead_adder, 175.68);
-  assert.equal(b.sell_material_tax_target, 1585.19);
+  assert.equal(b.sell_material_tax_target, 1478.76);
   assert.equal(b.labor_target_sell, 684.93); // 500 / 0.73
   assert.equal(b.actual_margin_pct, null);   // no actual sell -> no margin
 });
@@ -29,12 +29,12 @@ test("labor cost (sub pay, C24) feeds the overhead adder (B16) and the total cos
   // B16 = 740/0.74 - 740 = 260; B17 = 1000 + 260*0.2 = 1052
   assert.equal(b.overhead_adder, 260);
   assert.equal(b.budget_cost_total_material, 1052);
-  // B27 = B21 + C24 + (260 - 208) = (1052+74.5) + 740 + 52
-  assert.equal(b.total_cost_overhead, 1918.5);
+  // B27 = B21 + C24 + (260 - 208) = 1052 + 740 + 52
+  assert.equal(b.total_cost_overhead, 1844);
   assert.equal(b.labor_cost_sub_pay, 740);
   assert.equal(b.labor_sell_price, 1200);
   assert.equal(b.labor_target_sell, 1013.7); // 740 / 0.73
-  assert.equal(b.actual_margin_pct, 0.3605); // 1 - 1918.5 / 3000
+  assert.equal(b.actual_margin_pct, 0.3853); // 1 - 1844 / 3000
   // the sell price never changes the cost side
   const same = computeJobBudget({ material_true_cost: 1000, labor_cost_sub_pay: 740, actual_total_sell: 3000 });
   assert.equal(same.total_cost_overhead, b.total_cost_overhead);

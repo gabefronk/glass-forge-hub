@@ -22,20 +22,18 @@ const reviewedBudget = (over = {}, opts = {}) => ({
   inputs: { material_true_cost: 10000, labor_cost_sub_pay: 2000, actual_total_sell: 18000, ...over },
 });
 // cost_material_tax for reviewedBudget inputs:
-//   The displayed cost is window material + equipment with use tax, never the budget's
-//   cost_material_tax (10885.54, which adds the 140.54 labor overhead adder):
-//   10000 * 1.0745 = 10745.00
-const CMT = 10745;
-// Pre-tax PO/order/dealer amounts display with the 7.45% workbook use tax.
-const withTax = (n) => Math.round(n * 1.0745 * 100) / 100;
+//   The displayed cost is window material + equipment as entered (no use tax), never the
+//   budget's cost_material_tax, which adds the labor overhead adder: 10000.
+const CMT = 10000;
+// PO/order/dealer amounts display as entered (no use tax added, Oct 24 2026).
 // b2: material 5000, labor 1000 → overhead 351.351; material+overhead*keep = 5070.2702; tax 372.50; cmt = 5442.77
 const CMT_B2 = 5442.77;
 
-test('windowsDisplayCandidate: no direct records -> owner-typed budget review figure (material incl tax), flagged review', () => {
+test('windowsDisplayCandidate: no direct records -> owner-typed budget review figure (material as entered), flagged review', () => {
   const d = windowsDisplayCandidate([reviewedBudget({}, { quote: null })], [], []);
   assert.equal(d.value, CMT);
   assert.equal(d.source, 'cost_material_tax');
-  assert.equal(d.label, 'Budget material + 7.45% use tax');
+  assert.equal(d.label, 'Budget material');
   assert.equal(d.review, true);
 });
 
@@ -59,9 +57,9 @@ test('windowsDisplayCandidate: multiple scopes -> deterministic candidate + alte
   const d = windowsDisplayCandidate([b1, b2], pos, []);
   assert.equal(d.source, 'multiple_scopes');
   assert.equal(d.review, true);
-  assert.equal(d.value, withTax(100)); // b1's scoped PO picked on id tiebreak (same score)
+  assert.equal(d.value, 100); // b1's scoped PO picked on id tiebreak (same score)
   assert.equal(d.alternatives.length, 1);
-  assert.equal(d.alternatives[0].value, withTax(200));
+  assert.equal(d.alternatives[0].value, 200);
 });
 
 test('windowsDisplayCandidate: conflict shows candidate with po_conflict provenance + review flag', () => {
@@ -80,23 +78,23 @@ test('windowsDisplayCandidate: conflict with no cost figure → dash + po_confli
   assert.equal(d.review, true);
 });
 
-test('windowsDisplayCandidate: PO amount_dealer is a candidate (labelled, plus use tax) when no budget cost figure', () => {
+test('windowsDisplayCandidate: PO amount_dealer is a candidate (labelled) when no budget cost figure', () => {
   const b = { id: 'b1', job_id: 'j1', budget_usage: 'included', numbers_reviewed_at: '2026-10-01', inputs: {}, quote: null };
   const d = windowsDisplayCandidate([b], [{ id: 'po1', job_id: 'j1', budget_id: 'b1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 }], []);
-  assert.equal(d.value, withTax(933.96));
+  assert.equal(d.value, 933.96);
   assert.equal(d.source, 'po_dealer');
   assert.equal(d.review, true);
-  assert.equal(d.label, 'PO YA-1 + 7.45% use tax');
+  assert.equal(d.label, 'PO YA-1');
 });
 
 test('windowsDisplayCandidate: customer_total / actual_total_sell never used as supplier cost; dealer price labelled dealer', () => {
   const b = { id: 'b1', job_id: 'j1', budget_usage: 'included', numbers_reviewed_at: '2026-10-01', inputs: { actual_total_sell: 18000 }, quote: { price_levels: 'dealer_and_customer', dealer_subtotal: 869.2, customer_tax: 64.76, customer_total: 933.96 } };
   const d = windowsDisplayCandidate([b], [], []);
-  // dealer_subtotal plus use tax; never actual_total_sell 18000. (Here the fixture's customer
+  // dealer_subtotal as entered; never actual_total_sell 18000. (Here the fixture's customer
   // total happens to be the same dealer amount plus the same 7.45%.)
-  assert.equal(d.value, withTax(869.2));
+  assert.equal(d.value, 869.2);
   assert.equal(d.source, 'dealer_price');
-  assert.equal(d.label, 'Dealer price + 7.45% use tax (review)');
+  assert.equal(d.label, 'Dealer price (review)');
   assert.notEqual(d.value, 18000);
 });
 
@@ -178,12 +176,12 @@ test('pickDisplayBudget: deterministic — verified source quote beats cost-only
   assert.equal(pickDisplayBudget([costOnly, verified]).id, 'b1');
 });
 
-test('windowsDisplayCandidate: PO-only job (no budget) falls back to PO dealer amount plus use tax', () => {
+test('windowsDisplayCandidate: PO-only job (no budget) falls back to PO dealer amount', () => {
   const d = windowsDisplayCandidate([], [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 }], []);
-  assert.equal(d.value, withTax(933.96));
+  assert.equal(d.value, 933.96);
   assert.equal(d.source, 'po_dealer');
   assert.equal(d.review, true);
-  assert.match(d.label, /use tax/);
+  assert.equal(d.label, 'PO YA-1');
   assert.equal(d.budgetId, null);
 });
 
@@ -192,14 +190,14 @@ test('windowsDisplayCandidate: PO-only job with multiple POs → deterministic p
     { id: 'po2', job_id: 'j1', po_number: 'YA-2', status: 'ordered', amount_dealer: 500 },
     { id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 },
   ], []);
-  assert.equal(d.value, withTax(933.96)); // po1 picked on id tiebreak
+  assert.equal(d.value, 933.96); // po1 picked on id tiebreak
   assert.equal(d.alternatives.length, 1);
-  assert.equal(d.alternatives[0].value, withTax(500));
+  assert.equal(d.alternatives[0].value, 500);
 });
 
 test('buildPurchasingCards: PO-only job (no budget) does not crash; shows PO amount candidate; chosenBudget null', () => {
   const [card] = buildPurchasingCards({ jobs: [{ id: 'j1', canonical_name: 'A' }], budgets: [], purchase_orders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', amount_dealer: 933.96 }], today: TODAY });
-  assert.equal(card.windows.display.value, withTax(933.96));
+  assert.equal(card.windows.display.value, 933.96);
   assert.equal(card.rough.display.value, null);
   assert.equal(card.sale.display.value, null);
   assert.equal(card.chosenBudget, null);
@@ -223,7 +221,7 @@ test('windowsDisplayCandidate: unreviewed draft with a verified supplier quote s
   assert.equal(d.value, 1074.5);
   assert.equal(d.source, 'source_quote');
   assert.equal(d.review, true);
-  assert.match(d.label, /Supplier quote total incl tax/);
+  assert.match(d.label, /Supplier quote total/);
 });
 
 test('windowsDisplayCandidate: rep-issued supplier quote (bill_to missing) shows the printed total, always flagged review', () => {

@@ -17,7 +17,7 @@ test('the headline matches the Purchasing row for the same job', () => {
   const h = jobMoneyHeadline('j1', [], inputs);
   const [card] = buildPurchasingCards({ jobs: [job], budgets: [budget], purchase_orders: [po], today: '2026-10-24' });
   assert.equal(h.cost, card.windows.display.value);
-  assert.equal(h.cost, 1074.5, 'PO amount plus 7.45% use tax');
+  assert.equal(h.cost, 1000, 'PO amount as entered');
   assert.equal(h.laborMaterial, 200);
   assert.equal(h.sale, 2000);
   assert.equal(h.profit, 725.5);
@@ -26,7 +26,7 @@ test('the headline matches the Purchasing row for the same job', () => {
 
 test('records filed under a duplicate job record count toward the primary job', () => {
   const h = jobMoneyHeadline('j1', ['dup'], { jobs: [job], purchaseOrders: [{ ...po, job_id: 'dup', budget_id: null }], today: '2026-10-24' });
-  assert.equal(h.cost, 1074.5);
+  assert.equal(h.cost, 1000);
 });
 
 test('no job record means no headline', () => {

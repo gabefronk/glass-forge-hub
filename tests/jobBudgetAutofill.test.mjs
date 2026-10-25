@@ -45,7 +45,7 @@ test('WTS glass-only quote fills cost; labor sub pay and sell left for the owner
 test('old-schema Agren extraction (studio quote, no lines) still fills', () => {
   const q = normalizeVendorQuote({ vendor: 'BTB HOME IMPROVEMENTS', manufacturer: 'AMSCO WINDOWS', quote_name: 'AGREN RES', quoted_by: 'israelyedra', openings_qty: 1, actual_total_sell: 83.97, customer_sub_total: 78.15, customer_tax: 5.82 });
   const f = autofillBudget(q, { fileName: 'AGREN - GLASS REPLACEMENT - AMSCO STUDIO.pdf' });
-  assert.equal(f.inputs.material_true_cost, 78.15); // what Gabe typed
+  assert.equal(f.inputs.material_true_cost, 83.97); // 78.15 + the 5.82 tax the quote prints
   // Labor is typed by Gabriel (sub pay), never auto-filled.
   assert.equal(f.inputs.labor_cost_sub_pay, 0);
   assert.equal(f.inputs.labor_sell_price, 0);

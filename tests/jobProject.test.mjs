@@ -21,13 +21,13 @@ test('the estimate column is the job headline, so it matches the Purchasing row'
   assert.equal(row(p, 'windows').estimate, h.cost);
   assert.equal(row(p, 'labor').estimate, h.laborMaterial);
   assert.equal(row(p, 'profit').estimate, h.profit);
-  assert.equal(row(p, 'cost').estimate, 1274.5);
+  assert.equal(row(p, 'cost').estimate, 1200);
   assert.ok(Math.abs(p.margin.estimate - 0.36275) < 1e-9);
 });
 
-test('supplier cost so far is the PO amount plus use tax; payables stay at the raw amount', () => {
+test('supplier cost so far and payables are both the PO amount as entered', () => {
   const p = jobProject('j1', [], base);
-  assert.equal(row(p, 'windows').actual, 1074.5);
+  assert.equal(row(p, 'windows').actual, 1000);
   assert.equal(p.weOwe, 1000);
 });
 
@@ -39,7 +39,7 @@ test('a PO with no amount falls back to its supplier orders, and orders with no 
       { id: 'o2', job_id: 'j1', amount: 100, order_number: '09-1', status: 'ordered' },
     ],
   });
-  assert.deepEqual(c, { value: 644.7, partial: false });
+  assert.deepEqual(c, { value: 600, partial: false });
 });
 
 test('cancelled POs and their orders are left out; an amount-less PO makes the figure partial', () => {
@@ -51,7 +51,7 @@ test('cancelled POs and their orders are left out; an amount-less PO makes the f
     ],
     vendor_orders: [{ id: 'o', job_id: 'j1', purchase_order_id: 'x', amount: 900 }],
   });
-  assert.deepEqual(c, { value: 107.45, partial: true });
+  assert.deepEqual(c, { value: 100, partial: true });
   assert.deepEqual(orderedCost('j1', { purchase_orders: [], vendor_orders: [] }), { value: null, partial: false });
 });
 
@@ -89,7 +89,7 @@ test('actual labor and material come from job cost inputs; profit actual needs e
   const noIncome = jobProject('j1', [], { ...base, costInputs });
   assert.equal(row(noIncome, 'labor').actual, 180);
   assert.equal(row(noIncome, 'labor').variance, -20);
-  assert.equal(row(noIncome, 'cost').actual, 1254.5);
+  assert.equal(row(noIncome, 'cost').actual, 1180);
   assert.equal(row(noIncome, 'profit').actual, null, 'no income recorded yet');
 
   const invoices = [{ id: 'i1', job_id: 'j1', kind: 'balance', invoice_number: '9', invoice_date: '2026-10-01', amount: 2000 }];

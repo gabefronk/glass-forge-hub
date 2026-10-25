@@ -51,8 +51,8 @@ test('a reorder (two POs on one budget) → one row per PO, its own payable and 
   });
   assert.equal(scopes.length, 2);
   assert.deepEqual(scopes.map((s) => s.poNumber), ['YA-0002', 'YA-0007']);
-  // Job cost on the materials-incl-tax basis: each PO amount plus the 7.45% use tax.
-  assert.deepEqual(scopes.map((s) => s.windows.value), [537.25, 322.35]);
+  // Job cost is each PO amount as entered (no use tax added).
+  assert.deepEqual(scopes.map((s) => s.windows.value), [500, 300]);
   // Each row edits ITS pending order, so the two ETAs never overwrite each other.
   assert.deepEqual(scopes.map((s) => s.etaTarget.order.id), ['v1', 'v2']);
   assert.deepEqual(scopes.map((s) => s.etaTarget.date), ['2026-10-22', '2026-10-27']);
@@ -71,7 +71,7 @@ test('a supplier order with no PO and no budget → its own row', () => {
   assert.equal(scopes.length, 2);
   assert.equal(scopes[1].key, 'order:v9');
   assert.equal(scopes[1].label, 'Order 09-9 · AMSCO');
-  assert.equal(scopes[1].windows.value, 214.9); // order amount plus 7.45% use tax
+  assert.equal(scopes[1].windows.value, 200); // order amount as entered
   assert.equal(scopes[1].etaTarget.order.id, 'v9');
   assert.equal(scopes[1].poNumber, null);
 });
