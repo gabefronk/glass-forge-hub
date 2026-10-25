@@ -8,9 +8,21 @@ import { SALES_TAX_RATE } from './purchasingCoreTwin.js';
 const round = (n) => Math.round(n * 100) / 100;
 const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 
+// Did the supplier charge sales tax on this quote? The owner's toggle on the quote
+// (budget.supplier_tax_included) wins; otherwise the quote's own tax line decides:
+// tax above zero = charged, 0.00 = not charged, no tax line = unknown (null).
+export function quoteChargesTax(budget) {
+  if (budget?.supplier_tax_included === true) return true;
+  if (budget?.supplier_tax_included === false) return false;
+  const tax = num(budget?.quote?.customer_tax);
+  return tax == null ? null : tax > 0;
+}
+
 export function supplierTaxIncluded(amount, budget, record = null) {
   const a = num(amount);
   if (a != null && record?.includes_sales_tax === true) return true;
+  if (budget?.supplier_tax_included === false) return false;
+  if (budget?.supplier_tax_included === true) return a != null && num(budget?.quote?.customer_total) != null && Math.abs(a - num(budget.quote.customer_total)) <= 0.01;
   const total = num(budget?.quote?.customer_total);
   const tax = num(budget?.quote?.customer_tax);
   return a != null && total != null && tax != null && tax > 0 && Math.abs(a - total) <= 0.01;

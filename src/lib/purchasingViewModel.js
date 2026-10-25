@@ -27,7 +27,7 @@
 //    pre-tax PO/order/dealer amounts and budget material get the workbook use tax
 //    (SALES_TAX_RATE), and the budget's labor overhead adder is never included.
 import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount, roundMoney, isIgnoredWorkItem, sameVendor, pText, SALES_TAX_RATE } from './purchasingCoreTwin.js';
-import { costWithUseTax, supplierTaxIncluded } from './useTax.js';
+import { costWithUseTax, supplierTaxIncluded, quoteChargesTax } from './useTax.js';
 
 const USE_TAX = `${Number((SALES_TAX_RATE * 100).toFixed(2))}% use tax`;
 const plusUseTax = (v) => roundMoney(Number(v) * (1 + SALES_TAX_RATE));
@@ -94,14 +94,21 @@ export function sourceQuoteInclTax(budget, { allowInferredRecipient = false } = 
   if (!lines.length) return no('scope_unproven');
   if (lines.some((l) => l?.kind === 'part')) return no('mixed_scope');
   if (lines.some((l) => !UNIT_KINDS.includes(l?.kind) || !printed(l?.extended))) return no('scope_unproven');
-  if (!printed(q.customer_tax)) return { value: null, reason: 'tax_absent' };
+  // Tax (Gabriel, Oct 24): the owner's toggle on the quote wins; else the quote's own tax
+  // line. A supplier that charged sales tax -> the printed total is the cost. No tax
+  // charged (a 0.00 tax line, or the toggle set to No) -> the pre-tax total plus the use
+  // tax he owes. No tax line and no toggle -> unknown, so no figure from the quote.
+  const override = budget?.supplier_tax_included;
+  const taxPrinted = printed(q.customer_tax);
+  if (!taxPrinted && override !== true && override !== false) return { value: null, reason: 'tax_absent' };
   if (!printed(q.customer_total)) return { value: null, reason: 'total_absent' };
   const sub = printed(q.net_total) ? q.net_total : printed(q.customer_sub_total) ? q.customer_sub_total : null;
   if (sub == null) return { value: null, reason: 'subtotal_absent' };
-  if (Math.abs(sub + q.customer_tax - q.customer_total) > 0.01) return { value: null, reason: 'totals_do_not_reconcile' };
+  if (Math.abs(sub + (taxPrinted ? q.customer_tax : 0) - q.customer_total) > 0.01) return { value: null, reason: 'totals_do_not_reconcile' };
   const lineSum = lines.reduce((s, l) => s + l.extended, 0);
   if (Math.abs(lineSum - sub) > 0.01) return no('scope_unproven');
-  return { value: roundMoney(q.customer_total), reason: null, inferred: !recipientProven };
+  const charged = quoteChargesTax(budget) === true;
+  return { value: roundMoney(charged ? q.customer_total : sub * (1 + SALES_TAX_RATE)), reason: null, inferred: !recipientProven, useTaxAdded: !charged };
 }
 
 // Tile 1 — Windows incl tax. Single active reviewed scope with a verified
@@ -205,7 +212,10 @@ export function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
   // unreviewed, and recipient-inferred figures are always flagged). The
   // overhead-loaded budget math (cost_material_tax) is never shown: it mixed
   // labor overhead into a "windows" number and misled reads.
-  if (src.value != null) return { value: src.value, label: src.inferred ? 'Supplier quote total incl tax (confirm)' : 'Supplier quote total incl tax', source: 'source_quote', budgetId: budget.id, alternatives: [], inferred: Boolean(src.inferred) };
+  if (src.value != null) {
+    const base = src.useTaxAdded ? `Supplier quote + ${USE_TAX}` : 'Supplier quote total incl tax';
+    return { value: src.value, label: src.inferred ? `${base} (confirm)` : base, source: 'source_quote', budgetId: budget.id, alternatives: [], inferred: Boolean(src.inferred) };
+  }
   const poPick = pickAmount(scopedPOs, 'amount_dealer');
   if (poPick.pick) return poCandidate(poPick, { source: 'po_dealer', budgetId: budget.id }, budget);
   const voPick = pickAmount(scopedOrders, 'amount');

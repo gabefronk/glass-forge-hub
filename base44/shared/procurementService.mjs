@@ -98,6 +98,16 @@ export async function procurementAction(api, body, user, deps = {}) {
       });
       return { ok: true, purchase_order: updated, message: 'Status recorded only. No order or email was sent.' };
     }
+    if (action === 'budget_sales_tax') {
+      // The owner's tax toggle on a quote: true = the supplier charged sales tax (no use tax),
+      // false = no sales tax charged (use tax added), null = follow the quote's tax line.
+      const row = await api.JobBudgets.get(text(body.budget_id));
+      if (!row || !isLiveBudget(row)) throw fail(404, 'Quote not found.');
+      const value = body.supplier_tax_included;
+      if (![true, false, null].includes(value)) throw fail(400, 'Choose yes, no or follow the quote.');
+      const updated = await saveCurrent(api.JobBudgets, row, body.expected_updated_date, { supplier_tax_included: value });
+      return { ok: true, budget: updated };
+    }
     if (action === 'po_sales_tax') {
       const row = await api.PurchaseOrders.get(text(body.po_id));
       if (!row) throw fail(404, 'Purchase order not found.');
