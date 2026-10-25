@@ -16,6 +16,9 @@ export function budgetInputPatch(record, body, userEmail, at) {
   if (v.material_true_cost === 0 && body.zero_cost_confirmed !== true) throw procurementError(400, 'Confirm that zero material cost is intentional, not a missing supplier price.');
   return {
     inputs: v, computed: computeJobBudget(v), numbers_reviewed_at: at, numbers_reviewed_by: userEmail,
+    // A reviewed save settles the import's "Needs review" on a quote that is already on a job
+    // (an unlinked quote keeps it until it is linked).
+    ...(record.status === 'needs_review' && record.job_id ? { status: 'filed' } : {}),
     input_history: [...(record.input_history || []), { at, by: userEmail, action: 'reviewed numbers', inputs: record.inputs || {}, computed: record.computed || {}, previous_reviewed_at: record.numbers_reviewed_at || '' }],
   };
 }
