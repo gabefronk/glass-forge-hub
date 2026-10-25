@@ -34,8 +34,11 @@ function Figure({ label, value, title, color = INK, first = false }) {
   );
 }
 
-// A variance is bad when a cost runs over or income and profit come in under.
-const varianceColor = (row) => (row.variance == null || row.variance === 0 ? INK : (row.cost ? row.variance > 0 : row.variance < 0) ? RED : INK);
+// Costs are money out, so they read as negative numbers (Gabe, Oct 25). With costs negative,
+// every row reads the same way: a negative variance is bad (a cost ran over, or income or
+// profit came in under).
+const shown = (row, v) => (v == null ? null : row.cost ? -v : v);
+const varianceColor = (v) => (v != null && v < 0 ? RED : INK);
 const signed = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${money(v)}`);
 
 function EstimateTable({ project }) {
@@ -52,9 +55,9 @@ function EstimateTable({ project }) {
       {project.rows.map((row) => (
         <div key={row.key} role="row" className={row.total ? "font-bold" : ""} style={{ ...TABLE, minHeight: 40, borderBottom: `1px solid ${RULE}`, background: row.total ? "#FAF8F3" : undefined }}>
           <span role="cell" className="px-2.5" title={row.key === "windows" ? "Window and door material cost as entered" : undefined}>{row.label}</span>
-          <span role="cell" className="px-2.5 text-right tabular-nums" title={row.estimatePartial ? partialTitle : undefined} style={row.estimatePartial ? { background: "#FAF0DA" } : undefined}>{money(row.estimate)}</span>
-          <span role="cell" className="px-2.5 text-right tabular-nums" title={row.actualPartial ? missingTitle : undefined} style={row.actualPartial ? { background: "#FAF0DA" } : undefined}>{money(row.actual)}</span>
-          <span role="cell" className="px-2.5 text-right tabular-nums" style={{ color: varianceColor(row) }}>{signed(row.variance)}</span>
+          <span role="cell" className="px-2.5 text-right tabular-nums" title={row.estimatePartial ? partialTitle : undefined} style={row.estimatePartial ? { background: "#FAF0DA" } : undefined}>{money(shown(row, row.estimate))}</span>
+          <span role="cell" className="px-2.5 text-right tabular-nums" title={row.actualPartial ? missingTitle : undefined} style={row.actualPartial ? { background: "#FAF0DA" } : undefined}>{money(shown(row, row.actual))}</span>
+          <span role="cell" className="px-2.5 text-right tabular-nums" style={{ color: varianceColor(shown(row, row.variance)) }}>{signed(shown(row, row.variance))}</span>
         </div>
       ))}
       <div role="row" style={{ ...TABLE, minHeight: 40, borderBottom: `1px solid ${RULE}` }}>
@@ -163,7 +166,7 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
         <Figure label="Invoiced" value={money(project.invoiced)} title="Customer invoices recorded for this job, voided ones left out" />
         <Figure label="Received" value={money(project.received)} title="Customer invoices marked paid" />
         <Figure label="Customer owes" value={money(project.customerOwes)} title={owesTitle} />
-        <Figure label="We owe suppliers" value={money(project.weOwe)} title={`Unpaid POs at the PO amount${project.weOweMissing ? `. ${project.weOweMissing} unpaid record(s) have no amount` : ""}`} />
+        <Figure label="Job cost" value={money(shown({ cost: true }, project.rows.find((r) => r.key === "cost").estimate))} title="Windows plus labor & material (the Purchasing row), shown as money out" />
         <Figure label="Est. profit" value={money(project.rows.find((r) => r.key === "profit").estimate)} title="The Purchasing Est. profit column: sale less windows + tax less labor & material" color={(project.rows.find((r) => r.key === "profit").estimate ?? 0) < 0 ? RED : "#0B3F3B"} />
         <Figure label="Margin" value={pct(project.margin.estimate)} title="Est. profit as a share of the contract" />
       </div>
