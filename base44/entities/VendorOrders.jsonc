@@ -93,7 +93,7 @@
     },
     "eta_reviewed_at": {
       "type": "string",
-      "description": "Timestamp of an explicit owner ETA correction; newer supplier responses supersede it."
+      "description": "When the owner last changed this ETA."
     },
     "eta_date": {
       "type": "string",

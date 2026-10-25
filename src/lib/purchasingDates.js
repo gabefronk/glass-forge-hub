@@ -70,7 +70,7 @@ export function purchasingCalendarEvents(data = {}) {
     const reference = [po?.po_number || supplier?.po_name, row.vendor].filter(Boolean).join(' · ');
     const common = { source: 'purchasing', job_id: row.job_id || '', job_name: purchasingJobName(row, data.jobs),
       address: job?.address || '', po_number: po?.po_number || supplier?.po_name || '', report_required: false,
-      purchasing: item, purchasing_summary: reference + ' · ' + statusWithDate(row) + ' · ETA ' + etaText(supplier, po) };
+      purchasing: item, purchasing_summary: reference + ' · ' + statusWithDate(row) + ' · ETA ' + etaText(supplier) };
     const add = (id, date, label) => { if (validDate(date)) events.push({ ...common, id: 'purchasing:' + id, event_date: date, purchasing_label: label }); };
     const timing = statusDate(row);
     const ordered = originalOrderDate(po || row);
