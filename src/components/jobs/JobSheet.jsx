@@ -819,7 +819,9 @@ function JobInfo({ snap, folder }) {
 
 // progress (optional): jobProgress() from jobStages — shows a small "Stage n of 7" chip.
 // alert (optional): a node shown first in the chip row by the job name — the red service-item marker.
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, onEditAddress = null, extra, headingLevel = "h1", progress = null, alert = null, upcoming = null, payment = null, corner = null }) {
+// onScheduleNext (optional): "Pick a date" on the status bar's "Up next" stage, when that stage
+// isn't on the calendar yet.
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, onEditAddress = null, extra, headingLevel = "h1", progress = null, alert = null, upcoming = null, payment = null, corner = null, onScheduleNext = null }) {
   // The builder already leads most job names ("Bangerter Homes - Gomez Res"); only add it
   // to the eyebrow when the title doesn't carry it.
   const builderText = sanitizeText(job.builder || "");
@@ -885,6 +887,15 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
               </p>
             </>
           )}
+          {progress?.next && !progress.next.booked ? (
+            <span className="inline-flex max-w-full items-center gap-2 rounded-[9px] py-1 pl-2.5 pr-1 text-[13px]" style={{ border: "1px dashed rgba(224,201,148,.45)", color: HERO_MUTED }}>
+              <span className="shrink-0 whitespace-nowrap text-[10.5px] font-semibold uppercase tracking-[.12em]" style={{ color: BRASS_LT }}>Up next</span>
+              <span className="min-w-0 truncate font-semibold" style={{ color: HERO_INK }}>{progress.next.label}</span>
+              {onScheduleNext
+                ? <button type="button" onClick={() => onScheduleNext(progress.next)} className="h-7 shrink-0 rounded-[7px] px-2.5 text-[12px] font-bold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>Pick a date</button>
+                : <span className="shrink-0 pr-1.5 text-[12px]">not on the calendar yet</span>}
+            </span>
+          ) : null}
         </div>
         <div className="hero-actions flex min-w-0 flex-wrap items-center gap-2">
           <button type="button" onClick={onFieldReport} className={HERO_BTN} style={{ backgroundColor: BRASS, color: "#1d160a" }}><Camera className="h-[15px] w-[15px]" />Field report</button>
