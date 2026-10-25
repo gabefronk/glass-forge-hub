@@ -7,8 +7,9 @@ import { budgetSummary, parseDollars } from '@/lib/budgetSummary';
 
 // The Budget & Orders summary (Gabriel, Oct 24). Budget cost and Customer total are
 // typed straight into the box and saved on the job (manual_budget_cost /
-// manual_customer_total); a typed number wins over the quote roll-up, which stays
-// visible underneath as "From quotes". Margin dollars and Margin % follow from the two.
+// manual_customer_total). A typed number is his own estimate (Oct 25): it is labelled
+// "My estimate" and the budget's own figure (the included quotes) sits beside it.
+// Margin dollars and Margin % follow from the two, with the budget's margin beside them.
 // Nothing needs a vendor quote, a verified checkbox or a status record. Display only:
 // these numbers change nothing on Purchasing, invoicing or any other page.
 const BOX = { backgroundColor: 'rgba(207,227,218,.08)', border: '1px solid rgba(207,227,218,.18)' };
@@ -66,13 +67,13 @@ function EditableStat({ label, field, value, quote, emptySub, job, disabled, onS
       {error ? <div role="alert" className="mt-0.5 text-[11.5px] font-semibold" style={{ color: '#f3a29a' }}>{error}</div> : null}
       {manual && quote != null ? (
         <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[11.5px]" style={{ color: HERO_MUTED }}>
-          <span>From quotes: {money(quote)}</span>
+          <span>My estimate · Budget {money(quote)}</span>
           {Number(job[field]) !== quote ? (
-            <button type="button" disabled={disabled || busy} onClick={() => save(quote)} className="font-semibold underline underline-offset-2 disabled:opacity-60" style={{ color: '#e0c994' }}>Use quote total</button>
+            <button type="button" disabled={disabled || busy} onClick={() => save(null)} className="font-semibold underline underline-offset-2 disabled:opacity-60" style={{ color: '#e0c994' }}>Use budget</button>
           ) : null}
         </div>
       ) : manual ? (
-        <div className="mt-0.5 text-[11.5px]" style={{ color: HERO_MUTED }}>Entered by hand</div>
+        <div className="mt-0.5 text-[11.5px]" style={{ color: HERO_MUTED }}>My estimate</div>
       ) : emptySub ? (
         <div className="mt-0.5 text-[11.5px] break-words" style={{ color: HERO_MUTED }}>{emptySub}</div>
       ) : null}
@@ -89,7 +90,7 @@ export default function BudgetSummaryStats({ job, rollup, disabled, onSaved }) {
         emptySub={`${rollup.count} included scope${rollup.count === 1 ? '' : 's'}`} />
       <EditableStat label="Customer total" field="manual_customer_total" value={s.sell} quote={s.quoteSell} job={job} disabled={disabled} onSaved={onSaved}
         emptySub="Budget estimate, not an invoice" />
-      <HeroStat label="Margin dollars" value={money(s.marginDollars)} />
+      <HeroStat label="Margin dollars" value={money(s.marginDollars)} sub={s.anyManual && s.quoteMarginDollars != null ? `On my estimate · Budget ${money(s.quoteMarginDollars)}` : undefined} />
       <div className="min-w-[120px] rounded-[12px] px-3.5 py-2.5" style={BOX}>
         <div className={LABEL} style={{ color: '#9fc3b6' }}>MARGIN</div>
         <div className="mt-0.5 flex items-center gap-2 text-[20px] font-bold tabular-nums" style={{ color: toneColor, letterSpacing: '-0.02em' }}>
@@ -97,7 +98,10 @@ export default function BudgetSummaryStats({ job, rollup, disabled, onSaved }) {
           {percent(s.marginPct)}
         </div>
         {s.anyManual ? (
-          s.tone ? <div className="mt-0.5 text-[11.5px]" style={{ color: HERO_MUTED }}>{s.tone === 'green' ? 'Healthy (25%+)' : s.tone === 'amber' ? 'Thin (15–25%)' : 'Low (under 15%)'}</div> : null
+          <div className="mt-0.5 text-[11.5px]" style={{ color: HERO_MUTED }}>
+            {s.tone ? (s.tone === 'green' ? 'Healthy (25%+)' : s.tone === 'amber' ? 'Thin (15–25%)' : 'Low (under 15%)') : 'On my estimate'}
+            {s.quoteMarginPct != null ? ` · Budget ${percent(s.quoteMarginPct)}` : ''}
+          </div>
         ) : (
           <div className="mt-0.5 text-[11.5px]" style={{ color: HERO_MUTED }}>{s.reviewWarning ? 'Review incomplete or duplicate costs' : 'Based on included scopes'}</div>
         )}
