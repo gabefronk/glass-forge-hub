@@ -1,4 +1,5 @@
 import { MoreHorizontal } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { money } from '@/components/budgets/ProcurementForms';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
@@ -18,6 +19,7 @@ function Figure({ label, value, title, color = TITLE }) {
 }
 
 export default function PurchasingHeader({ figures, onExport, onReload, reloading }) {
+  const navigate = useNavigate();
   const partial = [
     figures.partialScopes > 0 && `${figures.partialScopes} multi-scope job(s) have a scope with no figure`,
     figures.apMissing > 0 && `${figures.apMissing} unpaid supplier record(s) have no amount`,
@@ -40,6 +42,7 @@ export default function PurchasingHeader({ figures, onExport, onReload, reloadin
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[220px] p-1">
+            <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" onSelect={() => navigate('/purchasing/supplier-eta')}>Supplier ETA links</DropdownMenuItem>
             <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" onSelect={onExport}>Export shown jobs (CSV)</DropdownMenuItem>
             <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" disabled={reloading} onSelect={onReload}>{reloading ? 'Reloading…' : 'Reload'}</DropdownMenuItem>
           </DropdownMenuContent>
