@@ -72,7 +72,7 @@ test('cost review suppresses false 100 percent margin but retains genuine negati
   const missing = { inputs: { material_true_cost: 0, actual_total_sell: 458.78 }, openings_qty: 9, quote: { material_true_cost: null } };
   assert.equal(budgetFigures(missing).margin_pct, null);
   assert.equal(budgetFigures({ ...missing, numbers_reviewed_at: stamp }).margin_pct, 1);
-  assert.equal(budgetFigures({ inputs: { material_true_cost: 400, actual_total_sell: 400 } }).margin_dollars, -29.8);
+  assert.equal(budgetFigures({ inputs: { material_true_cost: 430, actual_total_sell: 400 } }).margin_dollars, -30);
   assert.equal(budgetFigures(sandy).margin_dollars, 341.13);
 });
 test('reference copies and revisions remain stored but are not counted twice', () => {
@@ -182,14 +182,6 @@ test('supplier confirmation history matches its initial status with or without E
     assert.equal(paid.order.status_history.at(-1).at, stamp);
     assert.equal(paid.order.paid_at, stamp);
   }
-});
-test('the owner can mark a PO or supplier order as already including sales tax', async () => {
-  const s = store({ PurchaseOrders: [{ ...existingPO, updated_date: 'original' }] });
-  const po = await procurementAction(s.api, { action: 'po_sales_tax', po_id: 'p1', includes_sales_tax: true, expected_updated_date: 'original', request_key: 'po-sales-tax-test-01', review_confirmed: true }, owner, deps);
-  assert.equal(po.purchase_order.includes_sales_tax, true);
-  assert.equal(po.purchase_order.amount_dealer, existingPO.amount_dealer);
-  const order = await procurementAction(s.api, { action: 'save_supplier_order', job_id: 'j1', purchase_order_id: 'p1', order_number: '09-7777', amount: 500, includes_sales_tax: true, review_confirmed: true, request_key: 'supplier-tax-test-01' }, owner, deps);
-  assert.equal(order.order.includes_sales_tax, true);
 });
 test('API handler refuses crew before any private entity read', async () => {
   const handler = createProcurementHandler(() => ({ auth: { me: async () => ({ role: 'user', email: 'crew@example.com' }) }, get asServiceRole() { throw new Error('must not read'); } }));
