@@ -1,8 +1,10 @@
-// Purchasing header figures (Sold, Customers owe, We owe suppliers, Est. profit)
-// and the one Show dropdown: every figure and count adds only the rows shown.
+// Purchasing header figures (Sold, Customers owe, Job cost, Est. profit) and the one
+// Show dropdown: every figure and count adds only the rows shown. Suppliers are paid up
+// front (Gabe, Oct 25), so there is no supplier payables figure or filter.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { supplierPayables, jobFlags, headerFigures, purchasingFilterCounts, applyPurchasingFilter, customerOwedShare, etaShort, etaRange, sortCards, cardFigures } from '../src/lib/purchasingSummary.js';
+import { jobFlags, headerFigures, purchasingFilterCounts, applyPurchasingFilter, customerOwedShare, etaShort, etaRange, sortCards, cardFigures, PURCHASING_FILTERS } from '../src/lib/purchasingSummary.js';
+import * as summary from '../src/lib/purchasingSummary.js';
 
 const TODAY = '2026-10-24';
 const card = (over = {}) => ({
@@ -11,37 +13,16 @@ const card = (over = {}) => ({
   rough: { display: { value: 400 } },
   sale: { display: { value: 'sale' in over ? over.sale : 3000 } },
   profitDisplay: { value: 'profit' in over ? over.profit : 1525.5 },
-  refs: { etaLabel: over.eta ?? null, quoteNumber: over.quote ?? null, yaPo: over.po ?? null },
-  payables: over.payables || { owed: 0, items: 0, unpaid: 0, missing: 0 },
+  refs: { etaLabel: over.eta ?? null, quoteNumber: over.quote ?? null, yaPo: over.po ?? null, mfrOrder: over.order ?? null },
   paymentStage: over.stage || '',
 });
 
-test('supplier payables stay at the raw PO amount and drop once every order is paid', () => {
-  const data = {
-    purchase_orders: [
-      { id: 'p1', job_id: 'j1', status: 'ordered', amount_dealer: 1000 },
-      { id: 'p2', job_id: 'j1', status: 'issued', amount_dealer: 250 },
-      { id: 'p3', job_id: 'j1', status: 'cancelled', amount_dealer: 9999 },
-      { id: 'p4', job_id: 'j2', status: 'ordered', amount_dealer: 5000 },
-    ],
-    vendor_orders: [
-      { id: 'o1', job_id: 'j1', purchase_order_id: 'p1', status: 'paid', amount: 1074.5 },
-      { id: 'o2', job_id: 'j1', purchase_order_id: 'p2', status: 'eta_set', amount: 268.63 },
-      { id: 'o3', job_id: 'j1', purchase_order_id: 'p3', status: 'ordered', amount: 50 },
-      { id: 'o4', job_id: 'j1', status: 'ordered', amount: 80, order_number: 'X-1' },
-      { id: 'o5', job_id: 'j1', status: 'ordered' },
-    ],
-  };
-  const ap = supplierPayables('j1', data);
-  assert.equal(ap.owed, 330, 'p2 at its PO amount (no tax) + the unlinked order; p1 is paid; p3 is cancelled');
-  assert.deepEqual([ap.items, ap.unpaid, ap.missing, ap.label], [3, 2, 0, 'Partial']);
-  assert.equal(supplierPayables('j3', data).label, null);
-  assert.equal(supplierPayables('j1', { purchase_orders: [{ id: 'p', job_id: 'j1', status: 'ordered' }] }).missing, 1);
-  const noPoAmount = supplierPayables('j1', {
-    purchase_orders: [{ id: 'p', job_id: 'j1', status: 'ordered', amount_dealer: null }],
-    vendor_orders: [{ id: 'o', job_id: 'j1', purchase_order_id: 'p', status: 'eta_set', amount: 132074.19 }],
-  });
-  assert.deepEqual([noPoAmount.owed, noPoAmount.missing], [132074.19, 0], 'a PO with no amount falls back to its supplier order');
+test('no supplier payables anywhere: no export, no figure, no filter', () => {
+  assert.equal(summary.supplierPayables, undefined);
+  assert.ok(!PURCHASING_FILTERS.some((f) => f.key === 'supplier_unpaid'));
+  const flags = jobFlags(card({ po: 'YA-1' }), TODAY);
+  assert.ok(!('weOwe' in flags) && !('supplier_unpaid' in flags));
+  assert.ok(!('weOwe' in headerFigures([card()], TODAY)));
 });
 
 test('customers owe the sale less what the payment stage says was collected', () => {
@@ -54,14 +35,14 @@ test('customers owe the sale less what the payment stage says was collected', ()
   assert.equal(jobFlags(card({ sale: null })).customerOwes, 0);
 });
 
-test('flags: open orders, ETA, deposit, supplier and missing cost', () => {
-  const openNoEta = jobFlags(card({ payables: { owed: 1, items: 1, unpaid: 1 } }), TODAY);
-  assert.equal(openNoEta.open_orders, true);
+test('flags: open orders, ETA, deposit and missing cost', () => {
+  const openNoEta = jobFlags(card({ po: 'YA-1' }), TODAY);
+  assert.equal(openNoEta.open_orders, true, 'a PO or supplier order is an open order until delivered');
   assert.equal(openNoEta.needs_eta, true);
-  assert.equal(openNoEta.supplier_unpaid, true);
   assert.equal(openNoEta.deposit_due, true);
-  const delivered = jobFlags(card({ eta: 'Delivered', stage: 'half_down', payables: { owed: 0, items: 1, unpaid: 0 } }), TODAY);
-  assert.deepEqual([delivered.open_orders, delivered.needs_eta, delivered.supplier_unpaid, delivered.deposit_due], [false, false, false, false]);
+  assert.equal(jobFlags(card(), TODAY).open_orders, false, 'no PO or order yet');
+  const delivered = jobFlags(card({ order: 'X-1', eta: 'Delivered', stage: 'half_down' }), TODAY);
+  assert.deepEqual([delivered.open_orders, delivered.needs_eta, delivered.deposit_due], [false, false, false]);
   assert.equal(jobFlags(card({ eta: '2026-10-01' }), TODAY).eta_late, true);
   assert.equal(jobFlags(card({ eta: '2026-11-01' }), TODAY).eta_late, false);
   assert.equal(jobFlags(card({ windows: null }), TODAY).missing_cost, true);
@@ -71,17 +52,17 @@ test('flags: open orders, ETA, deposit, supplier and missing cost', () => {
 
 test('header figures and filter counts add exactly the rows shown', () => {
   const cards = [
-    card({ id: 'a', stage: 'half_down', quote: 'Q1', po: 'YA-1', payables: { owed: 1000, items: 1, unpaid: 1, missing: 0 }, eta: '2026-10-01' }),
-    card({ id: 'b', sale: 2000, profit: -100, stage: 'paid', quote: 'Q2', po: 'YA-2', eta: 'Delivered', payables: { owed: 0, items: 1, unpaid: 0, missing: 0 } }),
-    card({ id: 'c', windows: null, profit: null, stage: 'waiting_on_payment', payables: { owed: 0, items: 1, unpaid: 1, missing: 1 } }),
+    card({ id: 'a', stage: 'half_down', quote: 'Q1', po: 'YA-1', eta: '2026-10-01' }),
+    card({ id: 'b', sale: 2000, profit: -100, stage: 'paid', quote: 'Q2', po: 'YA-2', eta: 'Delivered' }),
+    card({ id: 'c', windows: null, profit: null, stage: 'waiting_on_payment', order: 'X-9' }),
   ];
   const all = headerFigures(cards, TODAY);
-  assert.deepEqual([all.sold, all.customersOwe, all.weOwe, all.profit, all.apMissing], [8000, 4500, 1000, 1425.5, 1]);
+  assert.deepEqual([all.sold, all.customersOwe, all.cost, all.profit], [8000, 4500, 3349, 1425.5], 'Job cost is the Windows plus labor & material on the rows shown');
   const counts = purchasingFilterCounts(cards, TODAY);
-  assert.deepEqual(counts, { all: 3, quoted: 2, po_placed: 2, eta_late: 1, needs_eta: 1, waiting_payment: 1, supplier_unpaid: 2, missing_cost: 1 });
+  assert.deepEqual(counts, { all: 3, quoted: 2, po_placed: 2, eta_late: 1, needs_eta: 1, waiting_payment: 1, missing_cost: 1 });
   for (const [key, n] of Object.entries(counts)) assert.equal(applyPurchasingFilter(cards, key, TODAY).length, n, key);
-  const unpaid = headerFigures(applyPurchasingFilter(cards, 'supplier_unpaid', TODAY), TODAY);
-  assert.deepEqual([unpaid.jobs, unpaid.sold, unpaid.weOwe], [2, 6000, 1000]);
+  const late = headerFigures(applyPurchasingFilter(cards, 'eta_late', TODAY), TODAY);
+  assert.deepEqual([late.jobs, late.sold, late.cost], [1, 3000, 1474.5]);
   assert.equal(applyPurchasingFilter(cards, 'nonsense', TODAY).length, 3);
   const grid = cards.map(cardFigures);
   assert.equal(grid.reduce((n, f) => n + f.sale, 0), all.sold, 'the Sold figure is the sum of the grid Sale cells');

@@ -25,10 +25,10 @@ test('the estimate column is the job headline, so it matches the Purchasing row'
   assert.ok(Math.abs(p.margin.estimate - 0.4) < 1e-9);
 });
 
-test('supplier cost so far and payables are both the PO amount as entered', () => {
+test('supplier cost so far is the PO amount as entered; there are no payables', () => {
   const p = jobProject('j1', [], base);
   assert.equal(row(p, 'windows').actual, 1000);
-  assert.equal(p.weOwe, 1000);
+  assert.ok(!('weOwe' in p), 'suppliers are paid up front');
 });
 
 test('a PO with no amount falls back to its supplier orders, and orders with no PO count on their own', () => {
