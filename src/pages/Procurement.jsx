@@ -52,7 +52,9 @@ function JobBudgetOrders({ jobId }) {
   const job = current.jobs.find((j) => j.id === jobId);
   const rollup = useMemo(() => budgetRollup(current.budgets.filter((b) => b.job_id === jobId)), [current.budgets, jobId]);
   const changeSection = (tab) => { const p = new URLSearchParams(params); p.set('section', tab); setParams(p); };
-  const onSaved = (message) => { setNotice(message || 'Saved.'); load(true); };
+  // Only text is ever shown as the notice; a form handing back its result object must not
+  // crash the page (React can't render an object).
+  const onSaved = (message) => { setNotice(typeof message === 'string' && message ? message : 'Saved.'); load(true); };
 
   if (loading && !data) return <PageShell><p className="rounded-xl border bg-white p-5 text-sm">Loading budgets, orders and supplier tracking...</p></PageShell>;
   if (data && !job) return <PageShell><article className="rounded-xl border bg-white p-5" style={{ borderColor: C.border }}><h1 className="text-xl font-bold">Job not found</h1><p className="my-3 text-sm">No job was created or changed. Open the existing job from Jobs.</p><Link to="/jobs" className={buttonClass} style={secondaryStyle}>Back to Jobs</Link></article></PageShell>;
