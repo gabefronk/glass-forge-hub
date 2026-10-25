@@ -21,6 +21,7 @@ function EditableStat({ label, field, value, quote, emptySub, job, disabled, onS
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef(null);
+  const cancelled = useRef(false);
   const manual = job?.[field] != null && job[field] !== '';
   useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
 
@@ -36,6 +37,8 @@ function EditableStat({ label, field, value, quote, emptySub, job, disabled, onS
     } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
   }
   function commit() {
+    // Escape closes the box; the blur that follows must not save.
+    if (cancelled.current) { cancelled.current = false; return; }
     const next = parseDollars(text);
     if (next === undefined) { setError('Type a dollar amount, like 12480.50'); return; }
     save(next);
@@ -48,12 +51,12 @@ function EditableStat({ label, field, value, quote, emptySub, job, disabled, onS
         <input ref={inputRef} autoFocus inputMode="decimal" aria-label={label} value={text} disabled={busy}
           onChange={(e) => { setText(e.target.value); setError(''); }}
           onBlur={commit}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { setEditing(false); setError(''); } }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { cancelled.current = true; setEditing(false); setError(''); } }}
           placeholder="Leave blank to use quotes"
           className="mt-1 h-10 w-full min-w-0 rounded-[8px] px-2.5 text-[18px] font-bold tabular-nums outline-none focus:ring-2 focus:ring-[#e0c994]"
           style={{ backgroundColor: 'rgba(255,255,255,.1)', color: HERO_INK, border: '1px solid rgba(255,255,255,.28)' }} />
       ) : (
-        <button type="button" disabled={disabled} onClick={() => { setText(value != null ? String(value) : ''); setEditing(true); }}
+        <button type="button" disabled={disabled} onClick={() => { cancelled.current = false; setText(value != null ? String(value) : ''); setEditing(true); }}
           aria-label={`Edit ${label.toLowerCase()}`} title={`Tap to type the ${label.toLowerCase()}`}
           className="group -mx-1 mt-0.5 flex min-h-10 items-center gap-2 rounded-[8px] px-1 text-left hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#e0c994] disabled:cursor-default disabled:hover:bg-transparent">
           <span className="text-[20px] font-bold tabular-nums [overflow-wrap:anywhere]" style={{ color: HERO_INK, letterSpacing: '-0.02em' }}>{money(value)}</span>
