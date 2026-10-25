@@ -5,9 +5,7 @@
 // billingCore.js. Do not let these drift.
 
 // --- from jobBudgetMath.js ---
-export const SALES_TAX_RATE = 0.0745;
 export const BUDGET_DEFAULTS = Object.freeze({
-  tax_rate: SALES_TAX_RATE,
   material_margin: 0.30,
   labor_margin: 0.27,
   labor_overhead_factor: 0.74,
@@ -16,7 +14,6 @@ export const BUDGET_DEFAULTS = Object.freeze({
 export const roundMoney = (n) => Math.round((Number(n) + Number.EPSILON * Math.max(1, Math.abs(Number(n)))) * 100) / 100;
 const _num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 export function computeJobBudget(inputs = {}, opts = {}) {
-  const taxRate = _num(opts.tax_rate ?? BUDGET_DEFAULTS.tax_rate);
   const matMargin = _num(opts.material_margin ?? BUDGET_DEFAULTS.material_margin);
   const labMargin = _num(opts.labor_margin ?? BUDGET_DEFAULTS.labor_margin);
   const materialTrueCost = _num(inputs.material_true_cost);
@@ -28,8 +25,7 @@ export function computeJobBudget(inputs = {}, opts = {}) {
   const actualTotalSell = _num(inputs.actual_total_sell);
   const overheadAdder = overheadAdderIn !== 0 ? overheadAdderIn : (laborCostSubPay ? (laborCostSubPay / BUDGET_DEFAULTS.labor_overhead_factor) - laborCostSubPay : 0);
   const budgetCostTotalMaterial = materialTrueCost + overheadAdder * BUDGET_DEFAULTS.overhead_keep_pct;
-  const useTax = (materialTrueCost + addlInstallMatl + addlEquipment) * taxRate;
-  const costMaterialTax = budgetCostTotalMaterial + addlInstallMatl + addlEquipment + useTax;
+  const costMaterialTax = budgetCostTotalMaterial + addlInstallMatl + addlEquipment;
   const sellMaterialTax = matMargin < 1 ? costMaterialTax / (1 - matMargin) : null;
   const laborTargetSell = labMargin < 1 ? laborCostSubPay / (1 - labMargin) : null;
   const totalCost = costMaterialTax + laborCostSubPay + (overheadAdder - overheadAdder * 0.8);
@@ -41,7 +37,6 @@ export function computeJobBudget(inputs = {}, opts = {}) {
     additional_equipment: roundMoney(addlEquipment),
     overhead_adder: roundMoney(overheadAdder),
     budget_cost_total_material: roundMoney(budgetCostTotalMaterial),
-    use_tax: roundMoney(useTax),
     cost_material_tax: roundMoney(costMaterialTax),
     sell_material_tax_target: sellMaterialTax === null ? null : roundMoney(sellMaterialTax),
     labor_cost_sub_pay: roundMoney(laborCostSubPay),
@@ -51,7 +46,7 @@ export function computeJobBudget(inputs = {}, opts = {}) {
     actual_total_sell: roundMoney(actualTotalSell),
     actual_margin_pct: actualMarginPct === null ? null : Math.round(actualMarginPct * 10000) / 10000,
     suggested_total_sell: roundMoney(suggestedTotalSell),
-    tax_rate: taxRate, material_margin: matMargin, labor_margin: labMargin,
+    material_margin: matMargin, labor_margin: labMargin,
   };
 }
 

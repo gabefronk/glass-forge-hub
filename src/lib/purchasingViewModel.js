@@ -23,14 +23,10 @@
 //  - Units count only current explicit selected scope (active included budgets).
 //  - Job links are by exact job_id, never inferred from a name.
 //  - The displayed windows estimate (not the verified figure above) is always on
-//    one basis, materials incl tax, as job cost is booked from the supplier bill:
-//    pre-tax PO/order/dealer amounts and budget material get the workbook use tax
-//    (SALES_TAX_RATE), and the budget's labor overhead adder is never included.
-import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount, roundMoney, isIgnoredWorkItem, sameVendor, pText, SALES_TAX_RATE } from './purchasingCoreTwin.js';
-import { costWithUseTax, supplierTaxIncluded, quoteChargesTax } from './useTax.js';
-
-const USE_TAX = `${Number((SALES_TAX_RATE * 100).toFixed(2))}% use tax`;
-const plusUseTax = (v) => roundMoney(Number(v) * (1 + SALES_TAX_RATE));
+//    one basis, materials as billed: PO/order/dealer amounts and budget material are
+//    taken as entered, no use tax added (Gabriel, Oct 24 2026), and the budget's
+//    labor overhead adder is never included.
+import { activeBudgets, budgetFigures, budgetRollup, isLiveBudget, amount, roundMoney, isIgnoredWorkItem, sameVendor, pText } from './purchasingCoreTwin.js';
 import { purchasingMatches } from './purchasingMatches.js';
 import { procurementPath } from './procurementRoutes.js';
 import { purchasingText } from './purchasingSearch.js';
@@ -94,21 +90,15 @@ export function sourceQuoteInclTax(budget, { allowInferredRecipient = false } = 
   if (!lines.length) return no('scope_unproven');
   if (lines.some((l) => l?.kind === 'part')) return no('mixed_scope');
   if (lines.some((l) => !UNIT_KINDS.includes(l?.kind) || !printed(l?.extended))) return no('scope_unproven');
-  // Tax (Gabriel, Oct 24): the owner's toggle on the quote wins; else the quote's own tax
-  // line. A supplier that charged sales tax -> the printed total is the cost. No tax
-  // charged (a 0.00 tax line, or the toggle set to No) -> the pre-tax total plus the use
-  // tax he owes. No tax line and no toggle -> unknown, so no figure from the quote.
-  const override = budget?.supplier_tax_included;
+  // Tax (Gabriel, Oct 24): no use tax is ever added. The supplier's printed total is the cost.
   const taxPrinted = printed(q.customer_tax);
-  if (!taxPrinted && override !== true && override !== false) return { value: null, reason: 'tax_absent' };
   if (!printed(q.customer_total)) return { value: null, reason: 'total_absent' };
   const sub = printed(q.net_total) ? q.net_total : printed(q.customer_sub_total) ? q.customer_sub_total : null;
   if (sub == null) return { value: null, reason: 'subtotal_absent' };
   if (Math.abs(sub + (taxPrinted ? q.customer_tax : 0) - q.customer_total) > 0.01) return { value: null, reason: 'totals_do_not_reconcile' };
   const lineSum = lines.reduce((s, l) => s + l.extended, 0);
   if (Math.abs(lineSum - sub) > 0.01) return no('scope_unproven');
-  const charged = quoteChargesTax(budget) === true;
-  return { value: roundMoney(charged ? q.customer_total : sub * (1 + SALES_TAX_RATE)), reason: null, inferred: !recipientProven, useTaxAdded: !charged };
+  return { value: roundMoney(q.customer_total), reason: null, inferred: !recipientProven };
 }
 
 // Tile 1 — Windows incl tax. Single active reviewed scope with a verified
@@ -172,21 +162,20 @@ export function pickDisplayBudget(jobBudgets = []) { return sortedDisplayPool(jo
 // double-counts. A real 0 is a valid amount (kept); null/empty is absent.
 function pickAmount(records, field) {
   const withAmt = records
-    .map((r) => ({ id: r.id, amount: amount(r[field]), ref: r.po_number || r.order_number || r.id, includes_sales_tax: r.includes_sales_tax === true }))
+    .map((r) => ({ id: r.id, amount: amount(r[field]), ref: r.po_number || r.order_number || r.id }))
     .filter((x) => x.amount != null);
   if (!withAmt.length) return { pick: null, alternatives: [] };
   withAmt.sort((a, b) => String(a.id).localeCompare(String(b.id)));
   return { pick: withAmt[0], alternatives: withAmt.slice(1) };
 }
 
-// PO and vendor order amounts carry no tax field. Job cost adds the use tax unless the
-// amount is the supplier's taxed quote total on this budget (costWithUseTax).
-function supplierCandidate(kind, pick, rest, budget = null) {
-  const one = (p) => ({ value: costWithUseTax(p.amount, budget, p), label: supplierTaxIncluded(p.amount, budget, p) ? `${kind} ${p.ref} (supplier tax incl.)` : `${kind} ${p.ref} + ${USE_TAX}` });
+// PO and vendor order amounts are job cost as entered (no use tax added).
+function supplierCandidate(kind, pick, rest) {
+  const one = (p) => ({ value: roundMoney(p.amount), label: `${kind} ${p.ref}` });
   return { ...one(pick.pick), alternatives: pick.alternatives.map(one), ...rest };
 }
-const poCandidate = (pick, rest, budget) => supplierCandidate('PO', pick, rest, budget);
-const orderCandidate = (pick, rest, budget) => supplierCandidate('Order', pick, rest, budget);
+const poCandidate = (pick, rest) => supplierCandidate('PO', pick, rest);
+const orderCandidate = (pick, rest) => supplierCandidate('Order', pick, rest);
 
 // POs/orders scoped to ONE budget by EXACT budget_id (never same-job first).
 function scopedRecords(budget, jobPOs, jobOrders) {
@@ -213,23 +202,23 @@ export function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
   // overhead-loaded budget math (cost_material_tax) is never shown: it mixed
   // labor overhead into a "windows" number and misled reads.
   if (src.value != null) {
-    const base = src.useTaxAdded ? `Supplier quote + ${USE_TAX}` : 'Supplier quote total incl tax';
+    const base = 'Supplier quote total';
     return { value: src.value, label: src.inferred ? `${base} (confirm)` : base, source: 'source_quote', budgetId: budget.id, alternatives: [], inferred: Boolean(src.inferred) };
   }
   const poPick = pickAmount(scopedPOs, 'amount_dealer');
-  if (poPick.pick) return poCandidate(poPick, { source: 'po_dealer', budgetId: budget.id }, budget);
+  if (poPick.pick) return poCandidate(poPick, { source: 'po_dealer', budgetId: budget.id });
   const voPick = pickAmount(scopedOrders, 'amount');
-  if (voPick.pick) return orderCandidate(voPick, { source: 'vendor_order', budgetId: budget.id }, budget);
+  if (voPick.pick) return orderCandidate(voPick, { source: 'vendor_order', budgetId: budget.id });
   const q = budget.quote || {};
   const dealer = amount(q.dealer_subtotal) ?? amount(q.dealer_total);
-  if (dealer != null) return { value: plusUseTax(dealer), label: `Dealer price + ${USE_TAX} (review)`, source: 'dealer_price', budgetId: budget.id, alternatives: [] };
+  if (dealer != null) return { value: roundMoney(dealer), label: 'Dealer price (review)', source: 'dealer_price', budgetId: budget.id, alternatives: [] };
   // Budget-review figures the owner typed (restored 10/22 after his live read:
-  // the budget must show on the main row). Window material + equipment with the
-  // workbook use tax; never cost_material_tax, which carries the labor overhead
+  // the budget must show on the main row). Window material + equipment as entered;
+  // never cost_material_tax, which carries the labor overhead
   // adder (labor shows in its own column). Direct records above always win.
   const material = amount(budget.inputs?.material_true_cost);
   const equipment = amount(budget.inputs?.additional_equipment);
-  if (material != null || equipment != null) return { value: plusUseTax((material ?? 0) + (equipment ?? 0)), label: `Budget material + ${USE_TAX}`, source: 'cost_material_tax', budgetId: budget.id, alternatives: [] };
+  if (material != null || equipment != null) return { value: roundMoney((material ?? 0) + (equipment ?? 0)), label: 'Budget material', source: 'cost_material_tax', budgetId: budget.id, alternatives: [] };
   return { value: null, label: 'No cost figure', source: 'none', budgetId: budget.id, alternatives: [] };
 }
 
@@ -238,7 +227,7 @@ export function bestWindowsFromBudget(budget, scopedPOs, scopedOrders) {
 // ONE deterministic budget (pickDisplayBudget) — the same budget rough/sale use
 // (card.chosenBudget) — so the three tiles never disagree on scope. Multiple
 // scopes → one candidate + alternatives. PO-only job (no budget) falls back to
-// the job's PO amount plus use tax. Conflict → po_conflict label.
+// the job's PO amount. Conflict → po_conflict label.
 export function windowsDisplayCandidate(jobBudgets = [], jobPOs = [], jobOrders = [], { conflict = false } = {}) {
   const sorted = sortedDisplayPool(jobBudgets);
   if (!sorted.length) {
