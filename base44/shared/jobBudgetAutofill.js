@@ -103,7 +103,10 @@ export function laborFromLines(lines = [], { material = 'vinyl', glassEach = GLA
   return out;
 }
 
-export const isOurQuote = (q = {}) => /gabriel|\bgabe\b|fronk|glass\s*forge/i.test(String(q.quoted_by || '') + ' ' + String(q.prepared_by || ''));
+// A quote billed to YA Windows or Glass Forge is a supplier's price to us, even when Gabe's
+// name is on it as the person who asked for it (FHC showroom railing, Oct 25): its total is cost.
+export const isBilledToUs = (q = {}) => /glass\s*forge|\by\.?\s?a\.?\s+windows/i.test(String(q.bill_to || ''));
+export const isOurQuote = (q = {}) => !isBilledToUs(q) && /gabriel|\bgabe\b|fronk|glass\s*forge/i.test(String(q.quoted_by || '') + ' ' + String(q.prepared_by || ''));
 
 // The budget inputs plus where each came from.
 // Returns { inputs, sources: {field: text}, notes: [text], hints, install_material, labor }.
