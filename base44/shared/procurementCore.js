@@ -36,7 +36,7 @@ export function prepareBudgetPO(budget) {
   const draft = budget.budget_usage === 'draft';
   return {
     form: { job_id: budget.job_id, budget_id: budget.id, vendor: text(budget.vendor || budget.manufacturer), vendor_quote_ref: text(budget.quote_number), amount_dealer: supplierTotal === null ? '' : String(supplierTotal), amount_customer: '', notes: scope, budget_version: budgetVersion(budget) },
-    supplier_hint: (supplierTotal === null ? 'Enter the supplier payable after reviewing tax, freight and the source quote.' : 'Printed supplier total; verify tax and freight before issuing.') + (draft ? ' Draft quote - numbers are not reviewed yet.' : ''),
+    supplier_hint: (supplierTotal === null ? 'Enter the supplier cost after reviewing tax, freight and the source quote.' : 'Printed supplier total; verify tax and freight before issuing.') + (draft ? ' Draft quote - numbers are not reviewed yet.' : ''),
     budget_sell: amount(budget.inputs?.actual_total_sell),
     draft,
   };

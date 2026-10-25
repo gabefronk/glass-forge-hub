@@ -36,7 +36,7 @@ export async function issuePurchaseOrder(api, body, user, deps = {}) {
   if (body.status && body.status !== 'issued') throw fail(400, 'New POs start as issued. Supplier confirmation is recorded separately.');
   const payable = amount(body.amount_dealer);
   const customer = amount(body.amount_customer);
-  if (payable === null || payable < 0 || (payable === 0 && body.zero_amount_confirmed !== true)) throw fail(400, 'Enter the reviewed supplier payable, including any applicable tax and freight.');
+  if (payable === null || payable < 0 || (payable === 0 && body.zero_amount_confirmed !== true)) throw fail(400, 'Enter the reviewed supplier cost, including any applicable tax and freight.');
   if (text(body.amount_customer) && (customer === null || customer < 0)) throw fail(400, 'The optional customer amount must be a valid nonnegative amount for this PO scope.');
   const payload = {
     job_id: cleanField(body.job_id, 100), budget_id: cleanField(body.budget_id, 100),
