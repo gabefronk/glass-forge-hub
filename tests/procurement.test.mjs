@@ -59,7 +59,7 @@ test('legacy Sandy PO matches only one same-job, same-reference, same-supplier q
   assert.equal(budgetForPO({ ...existingPO, budget_id: 'wrong' }, [sandy]).budget, null);
   assert.equal(budgetForPO({ ...existingPO, budget_id: 'b1', job_id: 'other' }, [sandy]).budget, null);
 });
-test('PO form never copies whole-job budget cost or total retail sell into supplier payable', () => {
+test('PO form never copies whole-job budget cost or total retail sell into supplier cost', () => {
   const prepared = prepareBudgetPO(sandy);
   assert.equal(prepared.form.amount_dealer, ''); assert.equal(prepared.form.amount_customer, ''); assert.equal(prepared.budget_sell, 600);
   const single = { ...sandy, quote: { price_levels: 'single', customer_total: 116.3, quoted_by: 'supplier' } };
