@@ -31,6 +31,7 @@ import { activeBudgets, budgetFigures } from '@/lib/purchasingCoreTwin';
 import { statusWithDate, supplierReplyText } from '@/lib/purchasingDates';
 import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
 import { etaDate } from '@/lib/purchasingSummary';
+import { quoteChargesTax } from '@/lib/useTax';
 import { saveEtaTarget } from '@/lib/etaTarget';
 import { quantityReviewLabel } from '@/lib/quantityReview';
 
@@ -243,6 +244,47 @@ function QuoteLines({ budget }) {
   );
 }
 
+// The tax toggle on a quote (Gabriel, Oct 24): did the supplier charge sales tax? Yes =
+// the quote total already carries tax, no use tax added. No = you owe the use tax. With
+// nothing picked it follows the quote's own tax line, and says what it found.
+function TaxToggle({ budget, onSaved }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const override = budget.supplier_tax_included;
+  const charged = quoteChargesTax(budget);
+  const q = budget.quote || {};
+  const lines = Array.isArray(q.tax_lines) ? q.tax_lines.filter((t) => t.amount != null) : [];
+  const found = lines.length ? `Quote shows ${lines.map((t) => `${t.label || 'tax'}${t.rate_pct != null ? ` ${t.rate_pct}%` : ''} ${money(t.amount)}`).join(', ')}`
+    : num(q.customer_tax) > 0 ? `Quote shows tax ${money(q.customer_tax)}`
+    : num(q.customer_tax) === 0 ? 'Quote shows $0.00 tax' : 'No tax line found on the quote';
+  async function set(value) {
+    if (busy || value === (override ?? null)) return;
+    setBusy(true); setError('');
+    try {
+      await purchasingRequest({ action: 'budget_sales_tax', budget_id: budget.id, supplier_tax_included: value, expected_updated_date: budget.updated_date, request_key: crypto.randomUUID(), review_confirmed: true });
+      await onSaved?.(value === true ? 'Marked: supplier charged sales tax. No use tax added.' : value === false ? 'Marked: no sales tax charged. Use tax added.' : 'Tax now follows the quote.');
+    } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
+  }
+  const opt = (on) => ({ border: `1px solid ${on ? '#0B3F3B' : EDGE}`, backgroundColor: on ? '#0B3F3B' : '#FFFFFF', color: on ? '#FFFFFF' : INK3 });
+  return (
+    <div className="flex flex-col gap-1.5 rounded-[10px] px-3 py-2.5" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex-1 text-[13px] font-semibold" style={{ color: INK }}>Supplier charged sales tax?</span>
+        <div role="group" aria-label="Supplier charged sales tax" className="inline-flex gap-1">
+          {[[true, 'Yes'], [false, 'No']].map(([v, label]) => (
+            <button key={label} type="button" disabled={busy} aria-pressed={charged === v} onClick={() => set(v)}
+              className="h-8 min-w-[52px] rounded-[8px] px-3 text-[13px] font-semibold disabled:opacity-60" style={opt(charged === v)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <span className="text-[12px]" style={{ color: INK2 }}>
+        {found}. {charged === true ? 'Total already includes tax - no use tax added.' : charged === false ? 'You owe the use tax on this quote.' : 'Pick Yes or No.'}
+        {override === true || override === false ? <> <button type="button" disabled={busy} onClick={() => set(null)} className="font-semibold underline underline-offset-2" style={{ color: '#0B3F3B' }}>Follow the quote</button></> : null}
+      </span>
+      {error ? <span role="alert" className="text-[12px] font-semibold" style={{ color: '#A43432' }}>{error}</span> : null}
+    </div>
+  );
+}
+
 function CostLine({ label, value, kind }) {
   const zero = num(value) === 0;
   const style = kind === 'total' ? { borderTop: '1px solid #CEC6B8', marginTop: 4, paddingTop: 8, fontWeight: 700, color: INK, fontSize: 14.5 }
@@ -310,12 +352,13 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
           <div className="flex flex-col">
             <span className={EYEBROW} style={{ color: INK2, paddingBottom: 4 }}>Cost build-up</span>
             <CostLine label="Material cost" value={i.material_true_cost} />
-            <CostLine label="Use tax" value={c.use_tax} />
+            <CostLine label={quoteChargesTax(budget) === true ? 'Sales tax (charged by supplier)' : 'Use tax (you owe)'} value={c.use_tax} />
             <CostLine label="Material with overhead + tax" value={c.cost_material_tax} kind="sub" />
             <CostLine label="Labor (sub pay)" value={i.labor_cost_sub_pay} />
             <CostLine label="Additional install material" value={i.additional_install_material} />
             <CostLine label="Additional equipment" value={i.additional_equipment} />
             <CostLine label="Total cost with overhead" value={c.total_cost_overhead} kind="total" />
+            {budget.quote ? <div className="mt-3"><TaxToggle budget={budget} onSaved={onSaved} /></div> : null}
           </div>
           <div className="flex flex-col gap-3.5">
             <span className={EYEBROW} style={{ color: INK2 }}>Price & margin</span>
