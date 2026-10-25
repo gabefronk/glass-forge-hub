@@ -286,18 +286,8 @@ export function profitDisplayCalc(windowsDisp, roughDisp, saleDisp) {
   return { value: p, tone: p > 0 ? 'positive' : p < 0 ? 'negative' : 'zero', review };
 }
 
-// Payment tri-state for a single vendor order, same semantics as refsForJob:
-// Paid (paid/reconciled status or paid_at), Unpaid (recorded but not paid),
-// Unknown (nothing recorded). Never blindly labels an unknown status Unpaid.
-export function paymentState(o) {
-  const paid = ['paid', 'reconciled'].includes(o?.status) || Boolean(o?.paid_at);
-  if (paid) return { label: 'Paid', tone: 'ok' };
-  const hasAmount = o?.amount != null && o.amount !== '' && Number(o.amount) !== 0;
-  if (!o?.status && !o?.paid_at && !hasAmount) return { label: 'Unknown', tone: 'warn' };
-  return { label: 'Unpaid', tone: 'warn' };
-}
-
-// Reference quiet line — Quote# / Mfr order# / YA PO / ETA / Payment.
+// Reference quiet line — Quote# / Mfr order# / YA PO / ETA. Suppliers are paid up
+// front (Gabe, Oct 25), so there is no supplier payment state.
 // green = confirmed/complete, amber = needs action, none = not present.
 // Aggregates ALL active records; "Multiple" when distinct values conflict.
 export function refsForJob(jobId, { budgets = [], purchaseOrders = [], vendorOrders = [], today = '' } = {}) {
@@ -348,23 +338,15 @@ export function refsForJob(jobId, { budgets = [], purchaseOrders = [], vendorOrd
   else if (etaDates.length > 1) { etaLabel = 'Multiple'; etaStatus = 'amber'; }
   else { etaLabel = etaDates[0]; etaStatus = (etaMissing || (today && etaDates[0] < today)) ? 'amber' : 'green'; }
 
-  // Payment — actual schema: paid/reconciled status or paid_at. Mixed → attention.
-  const paidOrders = orders.filter(isOrderPaid);
-  const payment = !orders.length ? 'none'
-    : paidOrders.length === orders.length ? 'green'
-    : 'amber';
-  const paymentLabel = !orders.length ? null
-    : paidOrders.length === orders.length ? 'Paid'
-    : paidOrders.length > 0 ? 'Partial' : 'Unpaid';
-
   return {
     quoteNumber, quoteStatus, quoteDraft, yaPo, poStatus, mfrOrder, mfrStatus,
-    etaLabel, etaStatus, payment, paymentLabel,
+    etaLabel, etaStatus,
   };
 }
 
 // Next action from the real purchasing workflow. No dead invoicing placeholder.
-// ordered → eta_set → ach_link_received → paid → reconciled.
+// quote → PO → supplier confirmation → ETA. Suppliers are paid up front, so there
+// is no payment or reconcile step.
 export function nextActionForJob(jobId, { budgets = [], purchaseOrders = [], vendorOrders = [], conflicts = [], today = '' } = {}) {
   const pos = activePOs(purchaseOrders, jobId);
   const jobBudgets = budgets.filter((b) => b.job_id === jobId && isLiveBudget(b));
@@ -387,13 +369,6 @@ export function nextActionForJob(jobId, { budgets = [], purchaseOrders = [], ven
   const needsETA = orders.filter((o) => !o.received_date && !o.eta_date);
   const overdue = orders.filter((o) => !o.received_date && o.eta_date && today && o.eta_date < today);
   if (needsETA.length || overdue.length) return { label: 'Record ETA', href: procurementPath(jobId, 'tracking'), key: 'tracking' };
-
-  // Payment only when NOT already paid and progressed past ordering.
-  const needsPayment = orders.filter((o) => !isOrderPaid(o) && (o.status === 'eta_set' || o.status === 'ach_link_received' || o.received_date || o.ach_link));
-  if (needsPayment.length) return { label: 'Record payment', href: procurementPath(jobId, 'tracking'), key: 'tracking' };
-
-  const needsReconcile = orders.filter((o) => isOrderPaid(o) && o.status !== 'reconciled' && !o.reconciled_at);
-  if (needsReconcile.length) return { label: 'Reconcile', href: procurementPath(jobId, 'tracking'), key: 'tracking' };
 
   return { label: 'Open job', href: `/jobs/${encodeURIComponent(jobId)}`, key: 'job' };
 }
@@ -500,15 +475,10 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
 
 // No-job entities (shop POs, unlinked quotes) are not tied to a job card.
 // Surfaced in a quiet review section so they are never silently lost.
-// Shop POs are cost only (no job, no customer): each carries `paid` from its supplier
-// orders, newest first.
-export function unlinkedEntities({ budgets = [], purchase_orders = [], vendor_orders = [] } = {}) {
+// Shop POs are cost only (no job, no customer), newest first.
+export function unlinkedEntities({ budgets = [], purchase_orders = [] } = {}) {
   const unlinkedQuotes = budgets.filter((b) => isLiveBudget(b) && !b.job_id);
   const shopPOs = purchase_orders.filter((p) => p.purchase_type === 'shop' && p.status !== 'cancelled')
-    .map((p) => {
-      const orders = vendor_orders.filter((o) => o.purchase_order_id === p.id);
-      return { ...p, paid: orders.length > 0 && orders.every(isOrderPaid) };
-    })
     .sort((a, b) => String(b.created_date || '').localeCompare(String(a.created_date || '')));
   return { unlinkedQuotes, shopPOs };
 }
