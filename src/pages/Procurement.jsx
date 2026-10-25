@@ -66,7 +66,6 @@ function JobBudgetOrders({ jobId }) {
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
       <Link to={`/jobs/${job.id}`} className="inline-flex items-center gap-1 font-semibold" style={{ color: C.text }}><ArrowLeft size={15} />Back to job</Link>
       <div className="flex flex-wrap gap-2">
-        <Link to="/purchasing/supplier-eta" className={buttonClass} style={secondaryStyle}>Supplier ETA link</Link>
         <button disabled={loading} onClick={() => load()} className={buttonClass} style={secondaryStyle}><RefreshCw size={15} />Refresh</button>
       </div>
     </div>
