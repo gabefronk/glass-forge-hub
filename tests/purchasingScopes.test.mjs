@@ -152,7 +152,9 @@ test('multi-scope: scope-derived money withheld from the job row, profit too', (
     sale: { value: 3271.38, label: 'From budget review', review: true, source: 'budget_inputs' },
     profit: { value: 1410.89, tone: 'positive', review: true },
   });
-  card.scopes = [scopeStub('a'), scopeStub('b')];
+  // Two quote budgets: each scope row carries its own cost, labor and sale.
+  const own = (v) => ({ windows: { value: v }, rough: { value: 0 }, sale: { value: v * 2 } });
+  card.scopes = [{ ...scopeStub('a'), ...own(1860.49) }, { ...scopeStub('b'), ...own(8388.62) }];
   const out = applyScopeRollup(card);
   assert.equal(out.windows.display.value, null);
   assert.equal(out.windows.display.label, 'Multiple scopes - see scope rows');
@@ -179,6 +181,24 @@ test('multi-scope: owner-entered job-level money stays; profit still withheld (w
   assert.equal(out.rough.display.source, 'owner');
   assert.equal(out.sale.display.value, 24341.56);
   assert.equal(out.profitDisplay.value, null);
+});
+
+test('reorder: one budget split into PO rows keeps its sale and labor on the job row; profit uses the summed PO costs', () => {
+  const card = cardStub({
+    win: { value: 20550.26, label: 'Budget material', review: false, source: 'cost_material_tax', alternatives: [] },
+    rough: { value: 0, label: 'From budget review', review: false, source: 'budget_inputs' },
+    sale: { value: 24341.56, label: 'From budget review', review: false, source: 'budget_inputs' },
+    profit: { value: 3791.3, tone: 'positive', review: false },
+  });
+  const po = (label, v) => ({ ...scopeStub(label), windows: { value: v, review: false }, rough: { value: null }, sale: { value: null } });
+  card.scopes = [po('PO YA-0011', 19841.95), po('PO YA-0015', 708.31)];
+  const out = applyScopeRollup(card);
+  assert.equal(out.windows.display.value, null); // the PO rows carry the cost
+  assert.equal(out.sale.display.value, 24341.56);
+  assert.equal(out.rough.display.value, 0);
+  assert.equal(out.profitDisplay.value, 3791.3); // 24341.56 - 0 - (19841.95 + 708.31)
+  card.scopes[1].windows.value = null;
+  assert.equal(applyScopeRollup(card).profitDisplay.value, null); // a PO without an amount: no guessed profit
 });
 
 test('single-scope and no-scope cards pass through untouched', () => {

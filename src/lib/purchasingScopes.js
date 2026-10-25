@@ -136,8 +136,9 @@ function orderScope(order) {
 // scope, scope-derived figures (budget-review figures, PO/order amounts, the
 // picked scope's quote total) are withheld from the job row - dash plus
 // 'Multiple scopes - see scope rows'. Owner-entered job-level money inputs
-// stay: they ARE job-level. Profit is withheld whenever any input is
-// withheld, since it would recompute from partial coverage. The job row never
+// stay: they ARE job-level, and so does a figure no scope row carries. Profit is
+// withheld when sale or labor is withheld; with only the cost split across scope
+// rows it is the job sale less labor less the scope rows' summed cost. The job row never
 // shows a sum of its scopes; the totals bar adds the scope rows it withholds
 // (purchasingSummary). Verified canonical values (card.windows.value etc.) are
 // untouched; only the display objects change.
@@ -148,14 +149,27 @@ export function applyScopeRollup(card) {
   const suppress = (d) => (d && d.value != null && d.source !== 'owner'
     ? { ...d, value: null, alternatives: [], label: MULTI_LABEL, review: true, suppressed: true }
     : d);
-  const windows = suppress(card.windows?.display);
-  const rough = suppress(card.rough?.display);
-  const sale = suppress(card.sale?.display);
-  const anySuppressed = [windows, rough, sale].some((d) => d?.suppressed);
+  // A column no scope row carries (a reorder: one budget split into PO rows, which
+  // leave the quote's sale and labor to the job row) stays on the job row - it is
+  // the whole job's figure, not one scope's.
+  const carried = (k) => scopes.some((sc) => sc[k]?.value != null);
+  const withhold = (d, k) => (carried(k) ? suppress(d) : d);
+  const windows = withhold(card.windows?.display, 'windows');
+  const rough = withhold(card.rough?.display, 'rough');
+  const sale = withhold(card.sale?.display, 'sale');
   const prev = card.profitDisplay;
-  const profitDisplay = anySuppressed && prev?.value != null
-    ? { ...prev, value: null, tone: 'unknown', review: true, label: MULTI_LABEL, suppressed: true }
-    : prev;
+  let profitDisplay = prev;
+  if (rough?.suppressed || sale?.suppressed) {
+    if (prev?.value != null) profitDisplay = { ...prev, value: null, tone: 'unknown', review: true, label: MULTI_LABEL, suppressed: true };
+  } else if (windows?.suppressed) {
+    // Sale and labor are job-level; cost is the sum of the scope rows (every row needs one).
+    const costs = scopes.map((sc) => sc.windows?.value);
+    const whole = costs.every((v) => typeof v === 'number' && Number.isFinite(v));
+    const review = scopes.some((sc) => sc.windows?.review);
+    profitDisplay = whole
+      ? profitDisplayCalc({ value: Math.round(costs.reduce((x, y) => x + y, 0) * 100) / 100, review }, rough, sale)
+      : (prev?.value != null ? { ...prev, value: null, tone: 'unknown', review: true, label: MULTI_LABEL, suppressed: true } : prev);
+  }
   return {
     ...card,
     windows: { ...card.windows, display: windows },
