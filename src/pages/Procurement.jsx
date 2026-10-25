@@ -47,6 +47,8 @@ function JobBudgetOrders({ jobId }) {
   }, []);
   useEffect(() => { load(); return () => { loadSeq.current++; }; }, [load]);
   useEffect(() => { setNotice(''); }, [jobId]);
+  // The saved message fades on its own after a few seconds.
+  useEffect(() => { if (!notice) return undefined; const t = setTimeout(() => setNotice(''), 5000); return () => clearTimeout(t); }, [notice]);
 
   const current = data || emptyData;
   const job = current.jobs.find((j) => j.id === jobId);
