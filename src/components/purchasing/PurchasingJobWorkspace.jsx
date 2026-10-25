@@ -397,7 +397,7 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
       <div className="flex flex-wrap items-center gap-2 pt-3" style={{ borderTop: `1px solid ${RULE}` }}>
         {budget.job_id ? <button type="button" onClick={() => onEdit({ mode: 'usage', budget_id: budget.id })} className={BTN} style={SEC}>Scope / revision</button> : null}
         {budget.job_id && active && fig.ready && !related.length ? <button type="button" onClick={() => onPreparePO(budget.id)} className={BTN} style={SEC}><Plus className="h-3.5 w-3.5" />Prepare PO</button> : null}
-        {!budget.job_id ? <DeleteUnusedQuoteButton budget={budget} onDeleted={onSaved} /> : null}
+        {!budget.job_id ? <DeleteUnusedQuoteButton budget={budget} onDeleted={(_r, msg) => onSaved?.(msg)} /> : null}
         {budget.job_id && !related.length ? <RemoveQuoteButton budget={budget} duplicate={Boolean(dupe)} className={BTN} style={SEC} onRemoved={onSaved} /> : null}
         <span className="flex-1" />
         {sourceHref ? <a href={sourceHref} target="_blank" rel="noreferrer" className={BTN} style={SEC}>Vendor quote PDF<ArrowUpRight className="h-3.5 w-3.5" /></a> : null}
@@ -486,7 +486,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
       </section>
 
       <div className="rounded-[12px] p-2" style={{ border: '1.5px dashed #CEC6B8', backgroundColor: '#FAF8F3' }}>
-        <QuoteDropzone jobId={job.id} onDone={onSaved} />
+        <QuoteDropzone jobId={job.id} onDone={(r) => onSaved?.(r?.duplicate ? `Already on this job: ${r.title || 'that quote'}.` : `Quote uploaded: ${r?.title || 'vendor quote'}. Check its numbers and tax below.`)} />
       </div>
     </div>
   );
