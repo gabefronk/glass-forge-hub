@@ -46,3 +46,48 @@ export function unusedQuoteDeletionPatch(row, sources, body, actor, at) {
     }],
   };
 }
+
+// Removing a quote that IS on a job (Gabriel, Oct 24: "I need a way to delete
+// duplicates"). Same reversible removal as above, for a duplicate upload or a stale
+// draft. Protected: anything that points at THIS record (a PO built from it, a supplier
+// order, accounting, a setup sheet, a later revision). A PO or order that only quotes the
+// same quote NUMBER is fine as long as another live quote on the job keeps that number.
+export function jobQuoteRemovalBlockers(row, sources = {}) {
+  if (!text(row?.id)) return ['Quote not found.'];
+  const required = ['budgets', 'purchaseOrders', 'vendorOrders', 'costInputs', 'setupSheets'];
+  if (required.some(key => !Array.isArray(sources[key]))) return ['Linked records have not been completely checked.'];
+  if (!text(row.job_id)) return ['This quote is not on a job. Use Delete unused quote instead.'];
+  const blockers = [];
+  if (sources.purchaseOrders.some(p => containsId(p, row.id))) blockers.push('A purchase order was built from this quote. Keep it, or remove the other copy instead.');
+  if (sources.vendorOrders.some(o => containsId(o, row.id))) blockers.push('A supplier order points at this quote.');
+  if (sources.costInputs.some(c => containsId(c, row.id))) blockers.push('Accounting records point at this quote.');
+  if (sources.setupSheets.some(s => containsId(s, row.id))) blockers.push('A job setup sheet points at this quote.');
+  if (sources.budgets.some(b => b.id !== row.id && containsId({ replaces_budget_id: b.replaces_budget_id, link_history: b.link_history }, row.id))) blockers.push('Another quote references this version.');
+  const quote = text(row.quote_number).toUpperCase();
+  const keptElsewhere = quote && sources.budgets.some(b => b.id !== row.id && b.job_id === row.job_id && !text(b.deleted_at) && text(b.quote_number).toUpperCase() === quote);
+  if (quote && !keptElsewhere) {
+    if (sources.purchaseOrders.some(p => p.job_id === row.job_id && exactQuote(p.vendor_quote_ref, quote))) blockers.push('A purchase order uses this quote number and no other copy of it is on the job.');
+    if (sources.vendorOrders.some(o => o.job_id === row.job_id && (exactQuote(o.quote_number, quote) || exactQuote(o.vendor_quote_ref, quote)))) blockers.push('A supplier order uses this quote number and no other copy of it is on the job.');
+  }
+  return blockers;
+}
+
+export function jobQuoteRemovalPatch(row, sources, body, actor, at) {
+  if (body.review_confirmed !== true) throw procurementError(400, 'Confirm removing this quote.');
+  if (!body.expected_version || body.expected_version !== budgetVersion(row)) throw procurementError(409, 'This quote changed. Refresh before removing it.');
+  if (text(row?.deleted_at)) throw procurementError(409, 'This quote is already removed.');
+  const blockers = jobQuoteRemovalBlockers(row, sources);
+  if (blockers.length) throw procurementError(409, blockers.join(' '));
+  return {
+    deleted_at: at,
+    deleted_by: text(actor),
+    deletion_reason: text(body.reason).slice(0, 500) || 'Duplicate or stale quote removed from the job by owner.',
+    deletion_request_key: text(body.request_key),
+    budget_usage: 'reference',
+    link_history: [...(row.link_history || []), {
+      at, by: text(actor), action: 'remove quote from job',
+      previous_budget_usage: row.budget_usage ?? null,
+      note: 'Removed from the job\'s active quotes. Original values and files retained for recovery. No linked records changed.',
+    }],
+  };
+}

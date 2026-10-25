@@ -1,7 +1,7 @@
 import { projectSupplierEtas, effectiveSupplierEta } from './supplierEtaCore.mjs';
 import { fetchCompleteEntity } from './jobCatalog.js';
 import { text, amount, budgetVersion, budgetRollup, activeBudgets, referenceConflicts, sameVendor, validMonth, validDate, estimatePatch, isLiveBudget } from './procurementCore.js';
-import { unusedQuoteDeletionPatch } from './unusedQuoteDeletion.mjs';
+import { unusedQuoteDeletionPatch, jobQuoteRemovalPatch } from './unusedQuoteDeletion.mjs';
 import { procurementError as fail, requestKey, withProcurementLock } from './procurementLock.mjs';
 import { assertOwner, getPurchasingJob, issuePurchaseOrder } from './purchaseOrderService.mjs';
 import { isPurchasingMoneyOwner } from './purchasingMoneyPure.js';
@@ -50,7 +50,7 @@ export async function procurementAction(api, body, user, deps = {}) {
   reviewRequired(body);
   const key = requestKey(body.request_key);
   return withProcurementLock(api, key, async lock => {
-    if (action === 'delete_unused_quote') {
+    if (action === 'delete_unused_quote' || action === 'remove_job_quote') {
       const [budgets, purchaseOrders, vendorOrders, costInputs, setupSheets] = await Promise.all([
         fetchCompleteEntity(api.JobBudgets), fetchCompleteEntity(api.PurchaseOrders),
         fetchCompleteEntity(api.VendorOrders), fetchCompleteEntity(api.JobCostInputs), fetchCompleteEntity(api.JobSetupSheets),
@@ -58,10 +58,11 @@ export async function procurementAction(api, body, user, deps = {}) {
       const row = budgets.find(b => b.id === text(body.budget_id));
       if (!row) throw fail(404, 'Quote not found.');
       if (!isLiveBudget(row)) return { ok: true, deleted: true, already_deleted: true, budget_id: row.id };
-      const patch = unusedQuoteDeletionPatch(row, { budgets, purchaseOrders, vendorOrders, costInputs, setupSheets }, body, user.email, now());
+      const sources = { budgets, purchaseOrders, vendorOrders, costInputs, setupSheets };
+      const patch = action === 'remove_job_quote' ? jobQuoteRemovalPatch(row, sources, body, user.email, now()) : unusedQuoteDeletionPatch(row, sources, body, user.email, now());
       const updated = await saveCurrent(api.JobBudgets, row, row.updated_date, patch);
       if (isLiveBudget(updated)) throw fail(503, 'Quote removal could not be verified. Refresh before trying again.');
-      return { ok: true, deleted: true, budget_id: updated.id, message: 'Unused quote deleted from the active list. Jobs, POs, invoices and Drive files were not changed.' };
+      return { ok: true, deleted: true, budget_id: updated.id, message: action === 'remove_job_quote' ? 'Quote removed from the job. POs, orders, invoices and files were not changed.' : 'Unused quote deleted from the active list. Jobs, POs, invoices and Drive files were not changed.' };
     }
     if (action === 'budget_usage') {
       const all = await fetchCompleteEntity(api.JobBudgets);
