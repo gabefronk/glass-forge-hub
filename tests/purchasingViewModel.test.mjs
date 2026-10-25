@@ -334,6 +334,17 @@ test('unlinkedEntities: shop POs and unlinked quotes surfaced', () => {
   assert.deepEqual(u.shopPOs.map((p) => p.id), ['p1']);
 });
 
+test('unlinkedEntities: shop POs are newest first and paid only when every supplier order is paid', () => {
+  const u = unlinkedEntities({
+    purchase_orders: [
+      { id: 'old', purchase_type: 'shop', status: 'ordered', created_date: '2026-10-05' },
+      { id: 'new', purchase_type: 'shop', status: 'issued', created_date: '2026-10-25' },
+    ],
+    vendor_orders: [{ id: 'o1', purchase_order_id: 'new', status: 'paid' }, { id: 'o2', purchase_order_id: 'old', status: 'ordered' }],
+  });
+  assert.deepEqual(u.shopPOs.map((p) => [p.id, p.paid]), [['new', true], ['old', false]]);
+});
+
 test('cardMatchesSearch: finds the correct card by name, not cards[0]', () => {
   const cards = buildPurchasingCards({
     jobs: [{ id: 'j2', canonical_name: 'Aaa-First' }, { id: 'j1', canonical_name: 'Aria-Belle' }],
