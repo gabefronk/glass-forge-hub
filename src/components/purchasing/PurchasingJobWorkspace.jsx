@@ -28,7 +28,7 @@ import PrivateSourceButton from './PrivateSourceButton';
 import RemoveQuoteButton from './RemoveQuoteButton';
 import { duplicateOf, replacedByQuote } from '@/lib/quoteDuplicates';
 import { activeBudgets, budgetFigures } from '@/lib/purchasingCoreTwin';
-import { statusWithDate, supplierReplyText } from '@/lib/purchasingDates';
+import { statusWithDate } from '@/lib/purchasingDates';
 import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
 import { etaDate } from '@/lib/purchasingSummary';
 import { quoteChargesTax } from '@/lib/useTax';
@@ -129,7 +129,6 @@ function OrderDetail({ order, onEdit, onSaved }) {
         </label>
         <span>Received <strong style={{ color: INK }}>{etaDate(order.received_date) || '—'}</strong></span>
       </div>
-      {order.supplier_eta ? <p className="text-[12px]" style={{ color: INK2 }}>{supplierReplyText(null, order)}</p> : null}
       {!order.purchase_order_id ? <p className="text-[12px]" style={{ color: INK2 }}>Not linked to a PO yet - link it before editing.</p> : null}
       {etaError ? <p className="text-[12px] font-semibold" style={{ color: '#A43432' }}>{etaError}</p> : null}
       <NotesHistory notes={order.notes} />

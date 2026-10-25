@@ -1,4 +1,3 @@
-import { projectSupplierEtas, effectiveSupplierEta } from './supplierEtaCore.mjs';
 import { fetchCompleteEntity } from './jobCatalog.js';
 import { text, amount, budgetVersion, budgetRollup, activeBudgets, referenceConflicts, sameVendor, validMonth, validDate, estimatePatch, isLiveBudget } from './procurementCore.js';
 import { unusedQuoteDeletionPatch, jobQuoteRemovalPatch } from './unusedQuoteDeletion.mjs';
@@ -45,7 +44,7 @@ export async function procurementAction(api, body, user, deps = {}) {
       fetchCompleteEntity(api.JobBudgets), fetchCompleteEntity(api.PurchaseOrders),
       fetchCompleteEntity(api.VendorOrders), fetchCompleteEntity(api.Jobs),
     ]);
-    return projectSupplierEtas({ budgets: budgets.filter(isLiveBudget), purchase_orders, vendor_orders, jobs, conflicts: referenceConflicts(purchase_orders, vendor_orders, jobs) });
+    return { budgets: budgets.filter(isLiveBudget), purchase_orders, vendor_orders, jobs, conflicts: referenceConflicts(purchase_orders, vendor_orders, jobs) };
   }
   reviewRequired(body);
   const key = requestKey(body.request_key);
@@ -143,7 +142,7 @@ export async function procurementAction(api, body, user, deps = {}) {
         if (Object.entries(payload).some(([k, v]) => (existing[k] ?? '') !== v)) throw fail(409, 'This save key already recorded different supplier details. Refresh.');
         return { ok: true, order: existing, duplicate: true };
       }
-      if (text(body.eta_date) !== effectiveSupplierEta(po, existing).date) payload.eta_reviewed_at = now();
+      if (text(body.eta_date) !== text(existing?.eta_date)) payload.eta_reviewed_at = now();
       if (existing) return { ok: true, order: await saveCurrent(api.VendorOrders, existing, body.expected_updated_date, payload) };
       try {
         const created = await api.VendorOrders.create({ ...payload, request_key: key, created_by_email: user.email,

@@ -1,4 +1,3 @@
-import { effectiveSupplierEta } from '../../base44/shared/supplierEtaCore.mjs';
 import { validDate, supplierForPO, referenceConflicts } from '../../base44/shared/procurementCore.js';
 import { isIgnoredWorkItem } from '../../base44/shared/billingCore.js';
 
@@ -46,11 +45,8 @@ export function originalOrderDate(row) {
   const dates = [...new Set((row?.status_history || []).map(h => h.source?.original_order_date).filter(validDate))];
   return dates.length === 1 ? dates[0] : '';
 }
-export const etaText = (supplier, po) => { const eta = effectiveSupplierEta(po, supplier); return eta.response === 'pending' ? 'Awaiting supplier ETA' : displayDate(eta.date) || 'Not confirmed'; };
-export function supplierReplyText(po, supplier) {
-  const eta = effectiveSupplierEta(po, supplier);
-  return eta.responded_at ? (eta.response === 'owner' ? 'Owner reviewed ETA' : eta.response === 'pending' ? 'Supplier replied: still pending' : 'Supplier supplied ETA') + ' · ' + displayDate(recordedDay(eta.responded_at)) : 'No supplier-link response yet';
-}
+const etaDate = supplier => validDate(supplier?.eta_date) ? supplier.eta_date : '';
+export const etaText = supplier => displayDate(etaDate(supplier)) || 'Not confirmed';
 
 // Each supplier may supply timing to only one PO, with conflicts withheld.
 export function purchasingRows(data = {}) {
@@ -80,11 +76,9 @@ export function purchasingCalendarEvents(data = {}) {
     const ordered = originalOrderDate(po || row);
     if (row.status !== 'ordered' || timing.date !== ordered) add(key + ':status', timing.date, statusLabel(row.status) + ' recorded');
     if (ordered) add(key + ':ordered', ordered, 'Ordered');
-    const eta = effectiveSupplierEta(po, supplier);
     const cancelled = (data.purchase_orders || []).some(p => p.id === supplier?.purchase_order_id && p.status === 'cancelled');
     // One derived entry per PO (or unpaired supplier); corrections move the same entry.
-    if (!validDate(supplier?.received_date) && !cancelled && !['cancelled', 'received'].includes(po?.status)) add(key + ':eta', eta.date, 'ETA');
-    if (eta.responded_at) add(key + ':reply', recordedDay(eta.responded_at), eta.response === 'pending' ? 'ETA pending response' : 'ETA response');
+    if (!validDate(supplier?.received_date) && !cancelled && !['cancelled', 'received'].includes(po?.status)) add(key + ':eta', etaDate(supplier), 'ETA');
     if (supplier) add('supplier:' + supplier.id + ':received', supplier.received_date, 'Received');
   }
   return events;
