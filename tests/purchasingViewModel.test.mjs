@@ -30,12 +30,23 @@ const reviewedBudget = (over = {}, opts = {}) => ({
 });
 
 test('sourceQuoteInclTax: printed subtotal + tax reconcile → printed total', () => {
-  assert.deepEqual(sourceQuoteInclTax({ ...AMSCO, quote: supplierQuote }), { value: 1074.5, reason: null, inferred: false });
+  assert.deepEqual(sourceQuoteInclTax({ ...AMSCO, quote: supplierQuote }), { value: 1074.5, reason: null, inferred: false, useTaxAdded: false });
 });
 
-test('sourceQuoteInclTax: explicit zero tax is valid (500 + 0 = 500)', () => {
+test('sourceQuoteInclTax: a 0.00 tax line means no sales tax was charged, so the use tax is added (500 -> 537.25)', () => {
   const q = { ...supplierQuote, lines: [{ kind: 'window', extended: 500 }], net_total: 500, customer_tax: 0, customer_total: 500 };
-  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: q }).value, 500);
+  const r = sourceQuoteInclTax({ ...AMSCO, quote: q });
+  assert.equal(r.value, 537.25);
+  assert.equal(r.useTaxAdded, true);
+});
+
+test('sourceQuoteInclTax: the owner\'s tax toggle wins over the quote', () => {
+  const zero = { ...supplierQuote, lines: [{ kind: 'window', extended: 500 }], net_total: 500, customer_tax: 0, customer_total: 500 };
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, supplier_tax_included: true, quote: zero }).value, 500);
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, supplier_tax_included: false, quote: supplierQuote }).value, 1074.5);
+  const noLine = { ...zero, customer_tax: null };
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, quote: noLine }).reason, 'tax_absent');
+  assert.equal(sourceQuoteInclTax({ ...AMSCO, supplier_tax_included: false, quote: noLine }).value, 537.25);
 });
 
 test('sourceQuoteInclTax: Taira-shaped single quote (126085.15 + 5989.04 = 132074.19) with proven issuer/recipient/scope', () => {
