@@ -25,6 +25,8 @@ import DeleteUnusedQuoteButton from '@/components/budgets/DeleteUnusedQuoteButto
 import PurchasingDates from '@/components/budgets/PurchasingDates';
 import QuoteDropzone from './QuoteDropzone';
 import PrivateSourceButton from './PrivateSourceButton';
+import RemoveQuoteButton from './RemoveQuoteButton';
+import { duplicateOf, replacedByQuote } from '@/lib/quoteDuplicates';
 import { activeBudgets, budgetFigures } from '@/lib/purchasingCoreTwin';
 import { statusWithDate, supplierReplyText } from '@/lib/purchasingDates';
 import { jobProcurementRecords, paymentState } from '@/lib/purchasingViewModel';
@@ -256,16 +258,26 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
   // A job-money budget (no vendor quote yet, e.g. the Oct 24 move off the old money table):
   // sale and labor only - its windows cost comes from the PO, so no margin math is shown.
   const noQuote = num(i.material_true_cost) == null && !budget.quote_number && !budget.quote;
-  const [chipText, chipTone] = noQuote ? ['Job money · no vendor quote', 'plain'] : budgetChip(budget, active);
+  // A second copy of the same quote, or a job-money placeholder a real quote has replaced:
+  // flagged, with a Remove button below (the server re-checks nothing still uses it).
+  const dupe = duplicateOf(budget, allBudgets);
+  const stale = replacedByQuote(budget, allBudgets);
+  const [chipText, chipTone] = dupe ? ['Possible duplicate', 'warn'] : stale ? ['Replaced by vendor quote', 'plain'] : noQuote ? ['Job money · no vendor quote', 'plain'] : budgetChip(budget, active);
+  // No customer price typed yet: say that once, instead of a $0 sell, a negative margin
+  // and an "under the suggested price" warning.
+  const noSell = !(num(i.actual_total_sell) > 0);
+  const warnings = fig.warnings.filter((w) => !(noSell && /customer sell/i.test(w)));
   const supplier = budget.vendor || budget.manufacturer || '';
   const sub = [supplier, budget.quote_number ? `Quote ${budget.quote_number}` : '', budget.openings_qty > 0 ? `${budget.openings_qty} unit${budget.openings_qty === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
-  const statusLine = noQuote ? '' : fig.warnings.length ? fig.warnings[0] : budget.budget_usage === 'draft' ? 'Draft - review the numbers and your customer price, then include this scope.' : '';
+  const statusLine = dupe ? `Same quote as “${dupe.title || dupe.quote_number}”. Keep the right copy and remove the other.`
+    : stale ? 'A vendor quote is now on this job. Remove this placeholder once that quote has your customer price.'
+    : noQuote ? '' : warnings.length ? warnings[0] : budget.budget_usage === 'draft' ? 'Draft - review the numbers and your customer price, then include this scope.' : '';
   const sourceHref = safeHref(budget.source_pdf_url) || fileHref(budget.drive_quote_file_id);
   const privateSource = !sourceHref && /^[a-f0-9]{64}$/.test(budget.source_sha256 || '') ? budget.id : null;
   const fHref = safeHref(job?.drive_job_folder_url) || folderHref(job?.drive_job_folder_id || budget.drive_job_folder_id);
   const related = pos.filter((p) => p.budget_id === budget.id);
   const history = distinctHistory(budget);
-  const sell = num(i.actual_total_sell), total = num(c.total_cost_overhead), suggested = num(c.suggested_total_sell);
+  const sell = noSell ? null : num(i.actual_total_sell), total = num(c.total_cost_overhead), suggested = num(c.suggested_total_sell);
   const profit = sell != null && total != null ? sell - total : null;
   const scale = Math.max(sell || 0, suggested || 0, total || 0) || 1;
   const under = sell != null && suggested != null && sell < suggested - 0.005;
@@ -308,7 +320,7 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
           <div className="flex flex-col gap-3.5">
             <span className={EYEBROW} style={{ color: INK2 }}>Price & margin</span>
             <div className="grid grid-cols-3 gap-2">
-              {[['Customer sell', lineMoney(sell), INK], ['Margin', pct(c.actual_margin_pct), '#082F2C'], ['Suggested', lineMoney(suggested), INK3]].map(([k, v, color]) => (
+              {[['Customer sell', noSell ? 'Not set' : lineMoney(sell), noSell ? INK2 : INK], ['Margin', noSell ? '—' : pct(c.actual_margin_pct), '#082F2C'], ['Suggested', lineMoney(suggested), INK3]].map(([k, v, color]) => (
                 <div key={k} className="flex flex-col gap-0.5 rounded-[10px] p-3" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
                   <span className="text-[11px] font-medium" style={{ color: INK2 }}>{k}</span>
                   <span className="text-[17px] font-bold tabular-nums tracking-[-0.02em]" style={{ color }}>{v}</span>
@@ -327,6 +339,7 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
                 </div>
               </div>
             )}
+            {noSell ? <p className="text-[12.5px]" style={{ color: INK2 }}>No customer price yet. Use Edit numbers to add what you're charging and the margin fills in.</p> : null}
             {under ? <p className="rounded-[9px] px-3 py-2 text-[12.5px]" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>Selling {lineMoney(suggested - sell)} under the suggested price.</p> : null}
           </div>
         </div>
@@ -342,6 +355,7 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
         {budget.job_id ? <button type="button" onClick={() => onEdit({ mode: 'usage', budget_id: budget.id })} className={BTN} style={SEC}>Scope / revision</button> : null}
         {budget.job_id && active && fig.ready && !related.length ? <button type="button" onClick={() => onPreparePO(budget.id)} className={BTN} style={SEC}><Plus className="h-3.5 w-3.5" />Prepare PO</button> : null}
         {!budget.job_id ? <DeleteUnusedQuoteButton budget={budget} onDeleted={onSaved} /> : null}
+        {budget.job_id && !related.length ? <RemoveQuoteButton budget={budget} duplicate={Boolean(dupe)} className={BTN} style={SEC} onRemoved={onSaved} /> : null}
         <span className="flex-1" />
         {sourceHref ? <a href={sourceHref} target="_blank" rel="noreferrer" className={BTN} style={SEC}>Vendor quote PDF<ArrowUpRight className="h-3.5 w-3.5" /></a> : null}
         {privateSource ? <PrivateSourceButton budgetId={privateSource} label="Vendor quote PDF" className={BTN} style={SEC} /> : null}
