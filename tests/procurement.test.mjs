@@ -178,9 +178,12 @@ test('supplier confirmation history matches its initial status with or without E
     assert.equal(response.order.status, eta_date ? 'eta_set' : 'ordered');
     assert.equal(response.order.status_history.at(-1).status, response.order.status);
     assert.equal(response.order.status_history.at(-1).at, stamp);
-    const paid = await procurementAction(s.api, { action: 'vendor_status', order_id: response.order.id, status: 'paid', note: 'ACH receipt reviewed', expected_updated_date: response.order.updated_date, request_key: 'supplier-paid-test-01', review_confirmed: true }, owner, deps);
-    assert.equal(paid.order.status_history.at(-1).at, stamp);
-    assert.equal(paid.order.paid_at, stamp);
+    // Suppliers are paid up front (Gabe, Oct 25): there is no paid or reconcile status.
+    await assert.rejects(procurementAction(s.api, { action: 'vendor_status', order_id: response.order.id, status: 'paid', note: 'ACH receipt reviewed', expected_updated_date: response.order.updated_date, request_key: 'supplier-paid-test-01', review_confirmed: true }, owner, deps), /Ordered or ETA received/);
+    const eta = await procurementAction(s.api, { action: 'vendor_status', order_id: response.order.id, status: 'eta_set', note: 'Supplier confirmed the ETA', expected_updated_date: response.order.updated_date, request_key: 'supplier-eta-test-01', review_confirmed: true }, owner, deps);
+    assert.equal(eta.order.status, 'eta_set');
+    assert.equal(eta.order.status_history.at(-1).at, stamp);
+    assert.equal(eta.order.paid_at, undefined);
   }
 });
 test('API handler refuses crew before any private entity read', async () => {
