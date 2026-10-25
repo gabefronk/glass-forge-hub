@@ -504,7 +504,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
           {(filter === "all" || filter === "milestones") ? <UpNextCard next={progress?.next} onSchedule={onScheduleNext} /> : null}
           <HistoryDrawer icon={MessageSquare} tone="blue" title="Notes & texts" summary={noteSummary(noteDays.flatMap((d) => d.items))} days={noteDays} today={today} open={notesOpen} onToggle={() => setNotesOpen((v) => !v)}
             renderDay={(items, date) => items.map((it, i) => renderItem(it, i, items, date))} />
-          <HistoryDrawer icon={FileText} tone="neutral" title="Job folder files" summary={`${fileDays.reduce((n, d) => n + d.items.length, 0)} saved to the job folder`} days={fileDays} today={today} open={filesOpen} onToggle={() => setFilesOpen((v) => !v)}
+          <HistoryDrawer icon={FileText} tone="neutral" title="Job folder files" summary={plural("file", fileDays.reduce((n, d) => n + d.items.length, 0)) + " saved to the job folder"} days={fileDays} today={today} open={filesOpen} onToggle={() => setFilesOpen((v) => !v)}
             renderDay={(items, date) => groupFiles(items).map((it, i, dayItems) => renderItem(it, i, dayItems, date))} />
           {reportDays.length === 0 && !showForm ? (
             <div className="py-10 text-center text-[13px]" style={{ color: C.textMuted }}>{filter !== "all" ? "Nothing of this type yet." : noteDays.length || fileDays.length ? "No visits or field reports yet." : "No activity recorded yet."}</div>
