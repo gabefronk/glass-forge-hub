@@ -174,7 +174,8 @@ test('multi-scope: owner-entered job-level money stays; profit still withheld (w
     sale: { value: 24341.56, label: 'Owner-entered', review: false, source: 'owner' },
     profit: { value: 4499.61, tone: 'positive', review: true },
   });
-  card.scopes = [scopeStub('PO YA-0015'), scopeStub('PO YA-0011')];
+  // PO YA-0011 has no amount yet, so the cost (and so profit) is only partial.
+  card.scopes = [{ ...scopeStub('PO YA-0015'), windows: { value: 708.31 } }, { ...scopeStub('PO YA-0011'), windows: { value: null } }];
   const out = applyScopeRollup(card);
   assert.equal(out.windows.display.value, null);
   assert.equal(out.rough.display.value, 0);
