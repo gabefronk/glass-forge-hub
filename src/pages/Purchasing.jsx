@@ -82,7 +82,7 @@ function PurchasingWorkspace() {
     const body = filtered.map((c) => {
       const f = cardFigures(c);
       const eta = (c.scopes || []).length > 1 ? etaEarliest(c.scopes.map((s) => s.etaLabel)) : etaDate(c.refs?.etaLabel);
-      return [c.job.builder || '', c.job.canonical_name || '', supplierText(c), eta, paymentStage(c.paymentStage)?.label || '', f.windows == null ? null : -f.windows, f.sale, f.profit].map(esc).join(',');
+      return [c.job.builder || '', c.job.canonical_name || '', supplierText(c), eta, paymentStage(c.paymentStage)?.label || '', f.windows == null ? null : 0 - f.windows, f.sale, f.profit].map(esc).join(',');
     });
     const blob = new Blob([[cols.join(','), ...body].join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

@@ -169,7 +169,7 @@ function JobRows({ card, data, onSaved }) {
           <StageSelect stageKey={row.stageKey} busy={row.busy} onChange={row.saveStage} label={label} />
           {row.stageError && <span role="alert" className="mt-1 block text-[12px] font-semibold" style={{ color: '#A43432' }}>{row.stageError}</span>}
         </span>
-        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(f.windows == null ? null : -f.windows)}</span>
+        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(f.windows == null ? null : 0 - f.windows)}</span>
         <span className="text-right text-[14px] tabular-nums" style={cell}>{moneyCell(f.sale, true)}</span>
         <span className="text-right text-[14px] tabular-nums" style={{ ...cell, paddingRight: '20px' }}>{moneyCell(f.profit, false, f.profit < 0)}</span>
       </div>

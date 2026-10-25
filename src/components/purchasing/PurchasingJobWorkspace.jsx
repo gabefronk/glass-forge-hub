@@ -97,7 +97,7 @@ function OrderDetail({ order, onEdit, onSaved }) {
         <Chip tone="plain">{statusWithDate(order)}</Chip>
       </div>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]" style={{ color: INK3 }}>
-        <span>Cost <strong className="tabular-nums" style={{ color: INK }}>{order.amount == null || order.amount === '' ? '—' : money(-order.amount)}</strong></span>
+        <span>Cost <strong className="tabular-nums" style={{ color: INK }}>{order.amount == null || order.amount === '' ? '—' : money(0 - Number(order.amount))}</strong></span>
         <label className="inline-flex items-center gap-1.5">ETA
           {etaEditable ? (
             <input type="date" aria-label={`ETA for supplier order ${order.order_number}`} disabled={etaBusy}
@@ -165,7 +165,7 @@ function Line({ supplier, refs, eta, amount, cancelled, open, onToggle }) {
         {cancelled ? <Chip tone="plain">Cancelled</Chip> : null}
       </span>
       <span className="whitespace-nowrap text-[13px] font-medium max-[767px]:hidden" style={{ color: INK }}>{etaDate(eta) || '—'}</span>
-      <span className="text-right text-[13.5px] font-semibold tabular-nums max-[767px]:hidden" style={{ color: INK }}>{amount == null || amount === '' ? '—' : money(-amount)}</span>
+      <span className="text-right text-[13.5px] font-semibold tabular-nums max-[767px]:hidden" style={{ color: INK }}>{amount == null || amount === '' ? '—' : money(0 - Number(amount))}</span>
       <span className="text-right">
         <button type="button" onClick={onToggle} aria-expanded={open} className={BTN} style={{ ...SEC, height: 32 }}>{open ? 'Close' : 'Manage'}</button>
       </span>

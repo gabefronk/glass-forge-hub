@@ -67,12 +67,12 @@ export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [], onUp
                   <span role="cell" className="truncate px-2.5">{p.vendor || '—'}</span>
                   <span role="cell" className="truncate px-2.5">{p.vendor_quote_ref || '—'}</span>
                   <span role="cell" className="px-2.5">{statusLabel(p.status)}</span>
-                  <span role="cell" className="px-2.5 text-right tabular-nums">{p.amount_dealer == null ? '—' : money(-p.amount_dealer)}</span>
+                  <span role="cell" className="px-2.5 text-right tabular-nums">{p.amount_dealer == null ? '—' : money(0 - Number(p.amount_dealer))}</span>
                 </div>
               ))}
               <div role="row" className="font-bold" style={{ ...SHOP_GRID, minHeight: 40, background: '#FAF8F3', borderBottom: '1px solid #D6CCBA' }}>
                 <span role="cell" className="px-2.5" style={{ gridColumn: '1 / 6' }}>Total</span>
-                <span role="cell" className="px-2.5 text-right tabular-nums">{money(-Math.round(shopPOs.reduce((n, p) => n + (Number(p.amount_dealer) || 0), 0) * 100) / 100)}</span>
+                <span role="cell" className="px-2.5 text-right tabular-nums">{money(0 - Math.round(shopPOs.reduce((n, p) => n + (Number(p.amount_dealer) || 0), 0) * 100) / 100)}</span>
               </div>
             </div>
           </div>

@@ -37,7 +37,8 @@ function Figure({ label, value, title, color = INK, first = false }) {
 // Costs are money out, so they read as negative numbers (Gabe, Oct 25). With costs negative,
 // every row reads the same way: a negative variance is bad (a cost ran over, or income or
 // profit came in under).
-const shown = (row, v) => (v == null ? null : row.cost ? -v : v);
+// 0 - v (not -v) so a zero stays $0.00, never -$0.00.
+const shown = (row, v) => (v == null ? null : row.cost ? 0 - v : v);
 const varianceColor = (v) => (v != null && v < 0 ? RED : INK);
 const signed = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${money(v)}`);
 
