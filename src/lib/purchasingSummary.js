@@ -157,7 +157,7 @@ const SORT_VALUE = {
   job: (c) => `${c.job?.builder || ''} ${c.job?.canonical_name || ''}`.trim().toLowerCase(),
   eta: etaKey,
   payment: (c) => STAGE_ORDER.indexOf(c.paymentStage || ''),
-  windows: (c) => column(c, 'windows').value,
+  windows: (c) => column(c, 'windows').value + column(c, 'rough').value,
   sale: (c) => column(c, 'sale').value,
   profit: (c) => column(c, 'profit').value,
 };
@@ -175,7 +175,7 @@ export function sortCards(cards = [], sort = DEFAULT_PURCHASING_SORT) {
 // One job's own figures as the grid shows them (a multi-scope job adds its scope rows).
 export function cardFigures(card) {
   const t = summarizeCards([card]);
-  return { windows: t.windows, sale: t.sale, profit: t.profit };
+  return { windows: t.windows, cost: Math.round((t.windows + t.rough) * 100) / 100, sale: t.sale, profit: t.profit };
 }
 
 export function applyPurchasingFilter(cards = [], key = 'all', today = '') {

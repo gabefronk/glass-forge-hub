@@ -32,9 +32,9 @@ const COLUMNS = [
   { label: 'Supplier', cls: XL },
   { label: 'ETA', sort: 'eta' },
   { label: 'Job stage', sort: 'payment' },
-  { label: 'Windows', sort: 'windows', right: true, cls: XL, title: 'Window and door cost as entered, shown as money out' },
+  { label: 'Cost', sort: 'windows', right: true, cls: XL, title: 'Job cost: windows plus labor & material (or the typed Budget cost), shown as money out. Sale less Cost is Est. profit' },
   { label: 'Sale', sort: 'sale', right: true },
-  { label: 'Est. profit', sort: 'profit', right: true, title: 'Sale less windows + tax less labor & material' },
+  { label: 'Est. profit', sort: 'profit', right: true, title: 'Sale less Cost' },
 ];
 const cell = { padding: '0 10px', minWidth: 0 };
 const dash = <span style={{ color: INK2 }}>—</span>;
@@ -48,7 +48,10 @@ function jobMoney(card, scopes) {
     const vals = scopes.map((s) => s[k]?.value).filter((v) => typeof v === 'number' && Number.isFinite(v));
     return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) * 100) / 100 : null;
   };
-  return { windows: pick(card.windows?.display, 'windows'), sale: pick(card.sale?.display, 'sale'), profit: pick(card.profitDisplay, 'profit') };
+  const windows = pick(card.windows?.display, 'windows');
+  const rough = pick(card.rough?.display, 'rough');
+  // Cost is the whole job cost: windows plus labor & material.
+  return { windows, cost: windows == null ? null : Math.round((windows + (rough ?? 0)) * 100) / 100, sale: pick(card.sale?.display, 'sale'), profit: pick(card.profitDisplay, 'profit') };
 }
 
 // Names typed in ALL CAPS or all lower case read as noise on the grid; show them in title
@@ -169,7 +172,7 @@ function JobRows({ card, data, onSaved }) {
           <StageSelect stageKey={row.stageKey} busy={row.busy} onChange={row.saveStage} label={label} />
           {row.stageError && <span role="alert" className="mt-1 block text-[12px] font-semibold" style={{ color: '#A43432' }}>{row.stageError}</span>}
         </span>
-        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(f.windows == null ? null : 0 - f.windows)}</span>
+        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(f.cost == null ? null : 0 - f.cost)}</span>
         <span className="text-right text-[14px] tabular-nums" style={cell}>{moneyCell(f.sale, true)}</span>
         <span className="text-right text-[14px] tabular-nums" style={{ ...cell, paddingRight: '20px' }}>{moneyCell(f.profit, false, f.profit < 0)}</span>
       </div>

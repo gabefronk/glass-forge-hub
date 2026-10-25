@@ -394,6 +394,9 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
   for (const b of budgets) if (b.job_id && isLiveBudget(b)) activeJobIds.add(b.job_id);
   for (const p of purchase_orders) if (p.job_id && p.status !== 'cancelled') activeJobIds.add(p.job_id);
   for (const o of vendor_orders) if (o.job_id && !isVendorOrderCancelled(o, purchase_orders)) activeJobIds.add(o.job_id);
+  // A job with a typed Customer total above $0 on Budget & Orders is a sale too, even with no
+  // quote or PO yet (a labor-only install, Gabe Oct 25).
+  for (const j of jobs) if (amount(j.manual_customer_total) > 0) activeJobIds.add(j.id);
 
   const cards = [];
   for (const job of jobs) {
@@ -414,9 +417,20 @@ export function buildPurchasingCards({ jobs = [], budgets = [], purchase_orders 
     const jobActivePOs = jobPOs.filter((p) => p.status !== 'cancelled');
     const jobActiveOrders = activeVendorOrders(vendor_orders.filter((o) => o.job_id === job.id), purchase_orders);
     const pickBudget = pickDisplayBudget(jobBudgets);
-    const winDisplay = windowsDisplayCandidate(jobBudgets, jobActivePOs, jobActiveOrders, { conflict: isConflict });
-    const roughDisplay = roughDisplayCandidate(pickBudget);
-    const saleDisplay = saleDisplayCandidate(pickBudget);
+    let winDisplay = windowsDisplayCandidate(jobBudgets, jobActivePOs, jobActiveOrders, { conflict: isConflict });
+    let roughDisplay = roughDisplayCandidate(pickBudget);
+    let saleDisplay = saleDisplayCandidate(pickBudget);
+    // Typed Budget cost / Customer total (Budget & Orders boxes) win over the quote figures, so
+    // the row matches that page (Gabe, Oct 25). The typed cost is the whole job cost: it sits in
+    // the windows slot with labor & material at 0, so Cost and Est. profit add up the same way.
+    // Source 'owner' keeps a multi-scope roll-up from withholding them.
+    const typedSell = amount(job.manual_customer_total);
+    const typedCost = amount(job.manual_budget_cost);
+    if (typedSell != null) saleDisplay = { value: typedSell, label: 'Typed customer total', review: false, source: 'owner' };
+    if (typedCost != null) {
+      winDisplay = { value: typedCost, label: 'Typed budget cost', review: false, source: 'owner', budgetId: null, alternatives: [] };
+      roughDisplay = { value: 0, label: 'In the typed budget cost', review: false, source: 'owner' };
+    }
     const rough = roughDisplay.value;
     const sale = saleDisplay.value;
     const profit = isConflict ? { value: null, tone: 'unknown' } : computeProfit(win.value, rough, sale);

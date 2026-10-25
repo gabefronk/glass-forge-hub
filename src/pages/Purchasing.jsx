@@ -81,12 +81,12 @@ function PurchasingWorkspace() {
   // Clicking the active column header flips it; a new one starts soonest / A-Z / largest.
   const changeSort = (key) => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: ['windows', 'sale', 'profit'].includes(key) ? 'desc' : 'asc' }));
   const exportCsv = () => {
-    const cols = ['Builder', 'Job', 'Supplier', 'ETA', 'Job stage', 'Windows (cost)', 'Sale', 'Est. profit'];
+    const cols = ['Builder', 'Job', 'Supplier', 'ETA', 'Job stage', 'Cost', 'Sale', 'Est. profit'];
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const body = filtered.map((c) => {
       const f = cardFigures(c);
       const eta = (c.scopes || []).length > 1 ? etaEarliest(c.scopes.map((s) => s.etaLabel)) : etaDate(c.refs?.etaLabel);
-      return [c.job.builder || '', c.job.canonical_name || '', supplierText(c), eta, paymentStage(c.paymentStage)?.label || '', f.windows == null ? null : 0 - f.windows, f.sale, f.profit].map(esc).join(',');
+      return [c.job.builder || '', c.job.canonical_name || '', supplierText(c), eta, paymentStage(c.paymentStage)?.label || '', f.cost == null ? null : 0 - f.cost, f.sale, f.profit].map(esc).join(',');
     });
     const blob = new Blob([[cols.join(','), ...body].join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
