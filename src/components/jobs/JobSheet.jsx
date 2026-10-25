@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase, Camera, ChevronDown, Pencil, ClipboardCheck, ExternalLink, FileText, Home, MapPin, MessageSquare, Phone, HardHat, UserPlus } from "lucide-react";
+import { Briefcase, Camera, ChevronDown, Pencil, ClipboardCheck, ExternalLink, FileText, Home, Mail, MapPin, MessageSquare, Phone, HardHat, UserPlus } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
 import { sanitizeText } from "@/lib/jobsSanitize";
 import { titleCase } from "@/lib/displayName";
@@ -54,6 +54,42 @@ export function LiveMark({ live }) {
 
 const BOX_SHELL = "w-full rounded-[12px] p-3 pb-2.5";
 const BOX_STYLE = { background: "linear-gradient(150deg,rgba(207,227,218,.16),rgba(207,227,218,.06))", border: "1px solid rgba(207,227,218,.22)" };
+
+// compact (desktop hero): a contact on one line: avatar, who and phone, then call / text
+// buttons. The phone header keeps the full cards.
+const ICON_BTN = "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px]";
+const ICON_SEC = { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.14)" };
+const LINE_LINK = "h-9 shrink-0 px-1 text-[12.5px] font-semibold hover:underline disabled:opacity-60";
+
+function ContactLine({ avatar, label, name, muted = false, sub = null, children }) {
+  return (
+    <div className="flex min-h-[60px] items-center gap-3 rounded-[12px] px-3 py-2" style={BOX_STYLE}>
+      {avatar}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[10px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>{label}</div>
+        <div className="truncate text-[15px] font-bold leading-[1.3]" style={{ color: muted ? HERO_MUTED : HERO_INK, letterSpacing: "-0.01em" }}>{name}</div>
+        {sub ? <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 text-[12px]" style={{ color: "#9aa6a8" }}>{sub}</div> : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+const Avatar = ({ children, bg, ink }) => <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-extrabold" style={{ backgroundColor: bg, color: ink }}>{children}</span>;
+
+function ReachButtons({ person }) {
+  const name = sanitizeText(person.name);
+  if (person.phone) {
+    return (
+      <>
+        <a href={`tel:${digits(person.phone)}`} className={ICON_BTN} style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Call ${name}`} aria-label={`Call ${name}`}><Phone className="h-4 w-4" /></a>
+        <a href={`sms:${digits(person.phone)}`} className={ICON_BTN} style={ICON_SEC} title={`Text ${name}`} aria-label={`Text ${name}`}><MessageSquare className="h-4 w-4" style={{ color: BRASS_LT }} /></a>
+      </>
+    );
+  }
+  if (person.email) return <a href={`mailto:${person.email}`} className={ICON_BTN} style={{ backgroundColor: "#cfe3da", color: "#082f2c" }} title={`Email ${name}`} aria-label={`Email ${name}`}><Mail className="h-4 w-4" /></a>;
+  return null;
+}
 
 const FIELD = "h-[34px] w-full min-w-0 rounded-[8px] px-2.5 text-[13.5px] outline-none focus:ring-2";
 const FIELD_STYLE = { backgroundColor: "rgba(255,255,255,.08)", color: HERO_INK, border: "1px solid rgba(255,255,255,.16)", "--tw-ring-color": "rgba(224,201,148,.5)" };
@@ -169,7 +205,7 @@ function SuperForm({ initial, onSave, onCancel, choices = [], builderName = "" }
   );
 }
 
-export function SuperBox({ jobId, jobContacts, events }) {
+export function SuperBox({ jobId, jobContacts, events, compact = false }) {
   const jobSuper = useJobSuper(jobId);
   const view = jobContacts?.view?.job?.id === jobId ? jobContacts.view : null;
   const person = useMemo(() => pickSuper({ saved: jobSuper.saved, view, events }), [jobSuper.saved, view, events]);
@@ -181,6 +217,10 @@ export function SuperBox({ jobId, jobContacts, events }) {
   const shell = BOX_SHELL;
   const shellStyle = BOX_STYLE;
   const label = person?.role && person.role !== "superintendent" ? (ROLE_LABELS[person.role] || "Contact").toUpperCase() : "SUPER";
+  const tagText = person?.source === "notes" ? ` · FROM ${person.day ? day(person.day).toUpperCase() : "CALENDAR"} NOTES`
+    : person?.source === "suggestion" ? " · SUGGESTED"
+    : person?.source === "builder" ? ` · ${sanitizeText(view?.job?.builder || "BUILDER").toUpperCase()}'S SUPER` : "";
+  const labelNode = <>{label}{tagText ? <span style={{ color: "#8f999b" }}>{tagText}</span> : null}</>;
   const save = async (contact) => {
     await jobSuper.save(contact);
     setEditing(false);
@@ -204,6 +244,42 @@ export function SuperBox({ jobId, jobContacts, events }) {
       finally { setSaving(false); }
     };
     const builderName = sanitizeText(view?.job?.builder || "the builder");
+    const optionGroups = groups.map(([label, list]) => (
+      <optgroup key={label} label={label}>
+        {list.map((c) => <option key={idOf(c)} value={idOf(c)}>{[sanitizeText(c.name), c.title || ROLE_LABELS[c.role] || "", c.phone].filter(Boolean).join(" · ")}</option>)}
+      </optgroup>
+    ));
+    const onPick = (e) => { const c = choices.find((x) => idOf(x) === e.target.value); if (c) pick(c); };
+    if (compact) {
+      return (
+        <ContactLine
+          avatar={<Avatar bg="rgba(207,227,218,.18)" ink="#cfe3da"><HardHat className="h-4 w-4" /></Avatar>}
+          label="SUPER"
+          muted
+          name={jobSuper.loading && jobContacts?.phase === "loading" ? "Looking…" : saving ? "Saving…" : "Not on file yet"}
+          sub={quick[0] || error ? (
+            <>
+              {quick[0] ? <button type="button" disabled={saving} onClick={() => pick(quick[0])} className="min-w-0 truncate font-semibold hover:underline disabled:opacity-60" style={{ color: BRASS_LT }}>Use {sanitizeText(quick[0].name)}</button> : null}
+              {error ? <span role="alert" style={{ color: "#f1b9b3" }}>{error}</span> : null}
+            </>
+          ) : null}
+        >
+          {choices.length > 0 ? (
+            <label className="relative block">
+              <span className="sr-only">Pick a super from {builderName}</span>
+              <select value="" disabled={saving} onChange={onPick} className="h-9 w-[124px] appearance-none rounded-[9px] pl-2.5 pr-7 text-[12.5px] font-semibold outline-none focus:ring-2 disabled:opacity-60" style={{ ...FIELD_STYLE, backgroundColor: "#cfe3da", color: "#082f2c", border: "1px solid rgba(207,227,218,.5)" }}>
+                <option value="">Pick super ({choices.length})</option>
+                {optionGroups}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: "#082f2c" }} />
+            </label>
+          ) : null}
+          {choices.length > 0
+            ? <button type="button" onClick={() => setEditing(true)} className={ICON_BTN} style={ICON_SEC} title="Someone not listed" aria-label="Add someone not listed"><UserPlus className="h-3.5 w-3.5" style={{ color: BRASS_LT }} /></button>
+            : <button type="button" onClick={() => setEditing(true)} className={`${ICON_BTN} w-auto gap-1.5 px-3 text-[13px] font-semibold`} style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}><UserPlus className="h-3.5 w-3.5" />Add super</button>}
+        </ContactLine>
+      );
+    }
     return (
       <div className={shell} style={shellStyle}>
         <div className="flex items-center gap-3">
@@ -233,16 +309,12 @@ export function SuperBox({ jobId, jobContacts, events }) {
             <select
               value=""
               disabled={saving}
-              onChange={(e) => { const c = choices.find((x) => idOf(x) === e.target.value); if (c) pick(c); }}
+              onChange={onPick}
               className="h-[40px] w-full appearance-none rounded-[9px] pl-3 pr-9 text-[13.5px] font-semibold outline-none focus:ring-2 disabled:opacity-60"
               style={{ ...FIELD_STYLE, backgroundColor: "#cfe3da", color: "#082f2c", border: "1px solid rgba(207,227,218,.5)" }}
             >
               <option value="">Pick a super from {builderName} ({choices.length})</option>
-              {groups.map(([label, list]) => (
-                <optgroup key={label} label={label}>
-                  {list.map((c) => <option key={idOf(c)} value={idOf(c)}>{[sanitizeText(c.name), c.title || ROLE_LABELS[c.role] || "", c.phone].filter(Boolean).join(" · ")}</option>)}
-                </optgroup>
-              ))}
+              {optionGroups}
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "#082f2c" }} />
           </label>
@@ -262,13 +334,33 @@ export function SuperBox({ jobId, jobContacts, events }) {
     finally { setSaving(false); }
   };
 
+  if (compact) {
+    return (
+      <ContactLine
+        avatar={<Avatar bg="#cfe3da" ink="#082f2c">{initials(person.name)}</Avatar>}
+        label={labelNode}
+        name={sanitizeText(person.name) || "Unknown"}
+        sub={(
+          <>
+            {person.phone ? <span className="font-mono-num">{person.phone}</span> : person.email ? <span className="min-w-0 truncate">{person.email}</span> : null}
+            {person.source !== "linked" ? <button type="button" disabled={saving} onClick={confirm} className="font-semibold hover:underline disabled:opacity-60" style={{ color: BRASS_LT }}>{saving ? "Saving…" : "Save as super"}</button> : null}
+            {error ? <span role="alert" style={{ color: "#f1b9b3" }}>{error}</span> : null}
+          </>
+        )}
+      >
+        <ReachButtons person={person} />
+        <button type="button" onClick={() => setEditing(true)} className={LINE_LINK} style={{ color: "#9fc3b6" }}>{person.source === "linked" ? "Change" : "Edit"}</button>
+      </ContactLine>
+    );
+  }
+
   return (
     <div className={shell} style={shellStyle}>
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-extrabold" style={{ backgroundColor: "#cfe3da", color: "#082f2c" }}>{initials(person.name)}</span>
         <div className="min-w-0 flex-1">
           <div className="text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>
-            {label}{person.source === "notes" ? <span style={{ color: "#8f999b" }}> · FROM {person.day ? day(person.day).toUpperCase() : "CALENDAR"} NOTES</span> : person.source === "suggestion" ? <span style={{ color: "#8f999b" }}> · SUGGESTED</span> : person.source === "builder" ? <span style={{ color: "#8f999b" }}> · {sanitizeText(view?.job?.builder || "BUILDER").toUpperCase()}&apos;S SUPER</span> : null}
+            {labelNode}
           </div>
           <div className="break-words text-[17px] font-bold leading-[1.25]" style={{ color: HERO_INK, letterSpacing: "-0.01em" }}>{sanitizeText(person.name) || "Unknown"}</div>
         </div>
@@ -360,7 +452,7 @@ function HomeownerForm({ initial, canRemove, onSave, onRemove, onCancel }) {
   );
 }
 
-export function HomeownerBox({ job, jobContacts }) {
+export function HomeownerBox({ job, jobContacts, compact = false }) {
   const jobId = job?.id;
   const homeowner = useJobHomeowner(jobId);
   const view = jobContacts?.view?.job?.id === jobId ? jobContacts.view : null;
@@ -376,6 +468,19 @@ export function HomeownerBox({ job, jobContacts }) {
 
   if (editing) {
     return <div className={BOX_SHELL} style={BOX_STYLE}><HomeownerForm initial={person} canRemove={person?.source === "linked"} onSave={save} onRemove={remove} onCancel={() => setEditing(false)} /></div>;
+  }
+  if (!person && compact) {
+    return (
+      <ContactLine
+        avatar={<Avatar bg="rgba(207,227,218,.18)" ink="#cfe3da"><Home className="h-4 w-4" /></Avatar>}
+        label="HOMEOWNER"
+        muted
+        name={homeowner.loading ? "Looking…" : "Not on file yet"}
+        sub={homeowner.error ? <span role="alert" style={{ color: "#f1b9b3" }}>{homeowner.error}</span> : null}
+      >
+        <button type="button" onClick={() => setEditing(true)} className={`${ICON_BTN} w-auto gap-1.5 px-3 text-[13px] font-semibold`} style={ICON_SEC}><UserPlus className="h-3.5 w-3.5" style={{ color: BRASS_LT }} />Add</button>
+      </ContactLine>
+    );
   }
   if (!person) {
     return (
@@ -399,6 +504,25 @@ export function HomeownerBox({ job, jobContacts }) {
     try { await save({ contactKey: person.key }); } catch (e) { setError(e.message || "Could not save."); } finally { setSaving(false); }
   };
   const tag = person.source === "suggestion" ? " · SUGGESTED" : person.source === "job" ? " · FROM JOB RECORD" : "";
+  if (compact) {
+    return (
+      <ContactLine
+        avatar={<Avatar bg="#e0c994" ink="#1d160a">{initials(person.name)}</Avatar>}
+        label={<>HOMEOWNER{tag ? <span style={{ color: "#8f999b" }}>{tag}</span> : null}</>}
+        name={<>{sanitizeText(person.name) || "Unknown"}{person.note ? <span className="text-[12.5px] font-medium" style={{ color: HERO_MUTED }}> ({sanitizeText(person.note)})</span> : null}</>}
+        sub={(
+          <>
+            {person.phone ? <span className="font-mono-num">{person.phone}</span> : person.email ? <span className="min-w-0 truncate">{person.email}</span> : person.source === "job" ? <span>No phone on file</span> : null}
+            {person.source === "suggestion" ? <button type="button" disabled={saving} onClick={confirm} className="font-semibold hover:underline disabled:opacity-60" style={{ color: BRASS_LT }}>{saving ? "Saving…" : "Save as homeowner"}</button> : null}
+            {error ? <span role="alert" style={{ color: "#f1b9b3" }}>{error}</span> : null}
+          </>
+        )}
+      >
+        <ReachButtons person={person} />
+        {showHomeownerEdit(person) ? <button type="button" onClick={() => setEditing(true)} className={LINE_LINK} style={{ color: person.source === "job" ? BRASS_LT : "#9fc3b6" }}>{homeownerEditLabel(person)}</button> : null}
+      </ContactLine>
+    );
+  }
   return (
     <div className={BOX_SHELL} style={BOX_STYLE}>
       <div className="flex items-center gap-3">
@@ -673,7 +797,7 @@ function JobInfo({ snap, folder }) {
       : <span key="f" style={{ opacity: 0.6 }}>{folder?.loading ? "Checking…" : "Not linked"}</span>],
   ];
   return (
-    <div className="mt-3">
+    <div className="mt-1.5">
       <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="inline-flex max-w-full items-center gap-2.5 rounded-[9px] px-3 py-1.5 text-[13px] font-semibold" style={{ backgroundColor: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.14)", color: HERO_INK }}>
         Job info
         {hint ? <span className="min-w-0 truncate font-mono text-[12px] font-normal" style={{ color: HERO_MUTED }}>{hint}</span> : null}
