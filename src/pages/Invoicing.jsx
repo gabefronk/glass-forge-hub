@@ -107,6 +107,7 @@ export default function Invoicing() {
       // Purchasing jobs (sold outside BFS, Gabe Oct 25): their own lines are held off
       // Invoicing, and a Paid job gets one 50/50 profit-split line, kept in step here.
       let heldJobIds = new Set();
+      let splitError = "";
       if (Array.isArray(pos) && Array.isArray(vos) && Array.isArray(jobs)) {
         const purchasing = { jobs, budgets: Array.isArray(budgets) ? budgets : [], purchase_orders: pos, vendor_orders: vos };
         const closedMonths = (Array.isArray(closes) ? closes : []).map((c) => c.month).filter(Boolean);
@@ -120,7 +121,7 @@ export default function Invoicing() {
             fl = await base44.entities.FeeLines.list("-job_date", 5000);
             if (stale()) return;
           } catch (err) {
-            if (!stale()) setLoadError(`Purchasing profit-split lines could not be updated. ${err?.message || ""}`.trim());
+            splitError = `Purchasing profit-split lines could not be updated. ${err?.message || ""}`.trim();
           }
         }
       }
@@ -134,7 +135,7 @@ export default function Invoicing() {
       setInvoices(Array.isArray(invs) ? invs : []);
       setJobQuotes(quotesByJob(Array.isArray(budgets) ? budgets : []));
       setProfitabilityInputs({ jobs: Array.isArray(jobs) ? jobs : [], quotes: Array.isArray(quotes) ? quotes : [], costs: Array.isArray(costs) ? costs : [] });
-      setLoadError("");
+      setLoadError(splitError);
       window.dispatchEvent(new Event("billing-updated"));
       const feeEventIds = new Set((Array.isArray(fl) ? fl : []).map((f) => f.calendar_event_id).filter(Boolean));
       // A profit-split event is billable even with $0 labor (fee from sale price − cost),
