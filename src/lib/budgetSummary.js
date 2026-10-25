@@ -42,6 +42,8 @@ export function budgetSummary(job = {}, rollup = {}) {
   return {
     cost, sell, marginDollars, marginPct, tone: marginTone(marginPct), anyManual,
     manualCost, manualSell, quoteCost, quoteSell,
+    // The budget's own margin, shown beside a typed estimate so the two can be compared.
+    quoteMarginDollars: num(rollup?.margin_dollars), quoteMarginPct: num(rollup?.margin_pct),
     reviewWarning: !anyManual && rollup?.status !== 'ready',
   };
 }
