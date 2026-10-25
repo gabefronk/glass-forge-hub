@@ -78,6 +78,11 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
   const [reviewed, setReviewed] = useState(false);
   const [zeroConfirmed, setZeroConfirmed] = useState(false);
   const [fill, setFill] = useState(() => budget.autofill || null);
+  // Import notes are about the numbers as first read. Once the numbers have been reviewed and
+  // saved after that, the notes are history, not open warnings - show them only until then
+  // (or right after a fresh re-read of the quote).
+  const [freshRead, setFreshRead] = useState(false);
+  const notesOpen = Boolean(fill?.notes?.length) && (freshRead || !budget.numbers_reviewed_at || (fill?.at && fill.at > budget.numbers_reviewed_at));
   const [touched, setTouched] = useState({});
   const [more, setMore] = useState(() => num(form.additional_install_material) > 0 || num(form.additional_equipment) > 0);
   const [busy, setBusy] = useState(false);
@@ -100,6 +105,7 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
       if (data.budget) setVersion(budgetVersion(data.budget));
       setReviewed(false); setZeroConfirmed(false);
       setFill({ sources: data.sources || {}, notes: data.notes || [] });
+      setFreshRead(true);
       setTouched({});
       onRefilled?.(data);
     } catch (e) { setError(e?.response?.data?.error || e?.message || "Could not read the quote."); }
@@ -123,7 +129,7 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
   return (
     <div className="flex flex-col gap-3 rounded-[12px] p-4" style={{ border: `1px solid ${C.border}`, backgroundColor: C.card }}>
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="m-0 text-[12.5px] flex-1 min-w-[240px]" style={{ color: C.textMuted }}>The yellow cells of the Window Budget Sheet{fill ? ", filled from the quote and your install price sheet — fix anything that's off" : ""}. Saving keeps the previous inputs in history and updates the working budget and Drive sheets. Invoice amounts, actual costs and issued POs are not changed.</p>
+        <p className="m-0 text-[12.5px] flex-1 min-w-[240px]" style={{ color: C.textMuted }}>{fill ? "Yellow boxes were filled from the quote — fix anything that's off. " : ""}Saving updates this budget, the job's Purchasing row and this month's invoicing estimate. Earlier numbers are kept; POs, invoices and payments don't change.</p>
         {budget.source_pdf_url && !hideRefill ? (
           <button type="button" disabled={busy || refilling} onClick={refill} className={smallBtn} style={btnGhost} title="Read the quote PDF again and fill every box it can">
             <RefreshCw className={`h-3.5 w-3.5${refilling ? " animate-spin" : ""}`} />{refilling ? "Reading quote…" : fill ? "Re-read quote" : "Fill from quote"}
@@ -140,11 +146,11 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
               <span className="text-[11px] font-normal leading-snug" style={{ color: touched[k] ? C.textFaint : C.textSecondary }}>
                 {touched[k] ? "Edited — was " : "Auto · "}{touched[k] ? sources[k].toLowerCase() : sources[k]}
               </span>
-            ) : fill ? <span className="text-[11px] font-normal" style={{ color: C.amber }}>Not on the quote — type it</span> : null}
+            ) : fill && !String(form[k] ?? '').trim() ? <span className="text-[11px] font-normal" style={{ color: C.amber }}>Not on the quote — type it</span> : null}
           </label>
         ))}
       </div>
-      {fill?.notes?.length ? (
+      {notesOpen ? (
         <ul className="m-0 pl-4 text-[12px] flex flex-col gap-0.5" style={{ color: C.amber }}>
           {fill.notes.map((t, i) => <li key={i}>{t}</li>)}
         </ul>
