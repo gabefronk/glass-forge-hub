@@ -6,7 +6,7 @@ import { money } from '@/components/budgets/ProcurementForms';
 import { statusLabel } from '@/lib/purchasingDates';
 import QuoteDropzone from './QuoteDropzone';
 
-// Shop purchases are overhead: cost only, never in Sold or Est. profit.
+// Shop purchases are overhead: cost only (shown as money out), never in Sold or Est. profit.
 const SHOP_GRID = { display: 'grid', gridTemplateColumns: '80px 96px minmax(140px,220px) minmax(0,1fr) 120px 112px', alignItems: 'center' };
 const shopDay = (iso) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}/${iso.slice(2, 4)}` : '—');
 
@@ -66,13 +66,13 @@ export default function UnlinkedReview({ unlinkedQuotes = [], shopPOs = [], onUp
                   <span role="cell" className="px-2.5" style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: '#34403F' }}>{p.po_number || '—'}</span>
                   <span role="cell" className="truncate px-2.5">{p.vendor || '—'}</span>
                   <span role="cell" className="truncate px-2.5">{p.vendor_quote_ref || '—'}</span>
-                  <span role="cell" className="inline-flex items-center gap-2 px-2.5"><span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: p.paid ? '#0B3F3B' : '#C08B2E' }} />{p.paid ? 'Paid' : statusLabel(p.status)}</span>
-                  <span role="cell" className="px-2.5 text-right tabular-nums">{money(p.amount_dealer)}</span>
+                  <span role="cell" className="px-2.5">{statusLabel(p.status)}</span>
+                  <span role="cell" className="px-2.5 text-right tabular-nums">{p.amount_dealer == null ? '—' : money(-p.amount_dealer)}</span>
                 </div>
               ))}
               <div role="row" className="font-bold" style={{ ...SHOP_GRID, minHeight: 40, background: '#FAF8F3', borderBottom: '1px solid #D6CCBA' }}>
                 <span role="cell" className="px-2.5" style={{ gridColumn: '1 / 6' }}>Total</span>
-                <span role="cell" className="px-2.5 text-right tabular-nums">{money(Math.round(shopPOs.reduce((n, p) => n + (Number(p.amount_dealer) || 0), 0) * 100) / 100)}</span>
+                <span role="cell" className="px-2.5 text-right tabular-nums">{money(-Math.round(shopPOs.reduce((n, p) => n + (Number(p.amount_dealer) || 0), 0) * 100) / 100)}</span>
               </div>
             </div>
           </div>

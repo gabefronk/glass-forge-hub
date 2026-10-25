@@ -32,7 +32,7 @@ const COLUMNS = [
   { label: 'Supplier', cls: XL },
   { label: 'ETA', sort: 'eta' },
   { label: 'Job stage', sort: 'payment' },
-  { label: 'Windows', sort: 'windows', right: true, cls: XL, title: 'Window and door material cost as entered' },
+  { label: 'Windows', sort: 'windows', right: true, cls: XL, title: 'Window and door cost as entered, shown as money out' },
   { label: 'Sale', sort: 'sale', right: true },
   { label: 'Est. profit', sort: 'profit', right: true, title: 'Sale less windows + tax less labor & material' },
 ];
@@ -169,7 +169,7 @@ function JobRows({ card, data, onSaved }) {
           <StageSelect stageKey={row.stageKey} busy={row.busy} onChange={row.saveStage} label={label} />
           {row.stageError && <span role="alert" className="mt-1 block text-[12px] font-semibold" style={{ color: '#A43432' }}>{row.stageError}</span>}
         </span>
-        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(f.windows)}</span>
+        <span className={`${XL} text-right text-[14px] tabular-nums`} style={cell}>{moneyCell(f.windows == null ? null : -f.windows)}</span>
         <span className="text-right text-[14px] tabular-nums" style={cell}>{moneyCell(f.sale, true)}</span>
         <span className="text-right text-[14px] tabular-nums" style={{ ...cell, paddingRight: '20px' }}>{moneyCell(f.profit, false, f.profit < 0)}</span>
       </div>

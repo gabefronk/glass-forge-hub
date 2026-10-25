@@ -1,4 +1,4 @@
-import { headerFigures, applyPurchasingFilter, purchasingFilterCounts, supplierPayables, sortCards, cardFigures, etaDate, etaEarliest, PURCHASING_FILTERS, DEFAULT_PURCHASING_SORT } from '@/lib/purchasingSummary';
+import { headerFigures, applyPurchasingFilter, purchasingFilterCounts, sortCards, cardFigures, etaDate, etaEarliest, PURCHASING_FILTERS, DEFAULT_PURCHASING_SORT } from '@/lib/purchasingSummary';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -63,13 +63,11 @@ function PurchasingWorkspace() {
     // job holds more than one (a second budget, a reorder PO, an order with no
     // PO). Multi-scope job rows then withhold scope-derived money via
     // applyScopeRollup so the roll-up can never read as a job total.
-    // The header figures and the filter also read what we owe suppliers (raw PO
-    // amounts) and the customer payment stage, so each card carries both.
+    // The header figures and the filter also read the customer payment stage.
     const jobsById = new Map((data.jobs || []).map((j) => [j.id, j]));
     return built.map((card) => applyScopeRollup({
       ...card,
       scopes: scopesForJob(card.job.id, data),
-      payables: supplierPayables(card.job.id, data),
       paymentStage: jobsById.get(card.job.id)?.payment_status || '',
     }));
   }, [data, today]);
@@ -79,12 +77,12 @@ function PurchasingWorkspace() {
   // Clicking the active column header flips it; a new one starts soonest / A-Z / largest.
   const changeSort = (key) => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: ['windows', 'sale', 'profit'].includes(key) ? 'desc' : 'asc' }));
   const exportCsv = () => {
-    const cols = ['Builder', 'Job', 'Supplier', 'ETA', 'Job stage', 'Windows + tax', 'Sale', 'Est. profit'];
+    const cols = ['Builder', 'Job', 'Supplier', 'ETA', 'Job stage', 'Windows (cost)', 'Sale', 'Est. profit'];
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const body = filtered.map((c) => {
       const f = cardFigures(c);
       const eta = (c.scopes || []).length > 1 ? etaEarliest(c.scopes.map((s) => s.etaLabel)) : etaDate(c.refs?.etaLabel);
-      return [c.job.builder || '', c.job.canonical_name || '', supplierText(c), eta, paymentStage(c.paymentStage)?.label || '', f.windows, f.sale, f.profit].map(esc).join(',');
+      return [c.job.builder || '', c.job.canonical_name || '', supplierText(c), eta, paymentStage(c.paymentStage)?.label || '', f.windows == null ? null : -f.windows, f.sale, f.profit].map(esc).join(',');
     });
     const blob = new Blob([[cols.join(','), ...body].join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -93,7 +91,7 @@ function PurchasingWorkspace() {
   const shownFilters = PURCHASING_FILTERS.filter((f) => f.key === 'all' || f.key === filter || filterCounts[f.key] > 0);
   const currentFilter = PURCHASING_FILTERS.find((f) => f.key === filter) || PURCHASING_FILTERS[0];
   const figures = useMemo(() => headerFigures(filtered, today), [filtered, today]);
-  const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders, vendor_orders: data.vendor_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
+  const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
 
   if (loading && !data) {
     return (
