@@ -132,7 +132,7 @@ export default function Todos({context=null}){
     <button type="button" disabled={busy} onClick={()=>setStatus(t,'done')} aria-label={'Mark '+t.title+' done'} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full disabled:opacity-50"><span className="flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 border-[#8c9eaf] text-transparent transition-colors group-hover:border-[#0B3F3B] hover:text-[#0B3F3B]"><Check className="h-3.5 w-3.5" strokeWidth={3}/></span></button>
     <button type="button" className="min-h-[52px] min-w-0 flex-1 py-2.5 text-left" onClick={()=>openTask(t)}>
      <span className="block break-words text-[15px] leading-snug text-[#101617]">{t.title}</span>
-     {(t.due_date||isWaiting(t)||(!isWaiting(t)&&t.focus_date&&view!=='today')||t.category||person==='all'||t.job_id)&&<span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12.5px] text-[#566063]">
+     {((inDay&&view!=='today')||t.due_date||isWaiting(t)||(!isWaiting(t)&&t.focus_date&&view!=='today')||t.category||person==='all'||t.job_id)&&<span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12.5px] text-[#566063]">
       {inDay&&view!=='today'&&<span className="inline-flex items-center gap-1"><Sun className="h-3 w-3"/>My Day</span>}
       {t.due_date&&<span className={'inline-flex items-center gap-1 '+(overdue?'font-semibold text-[#a43432]':'')}><CalendarDays className="h-3 w-3"/>{dueText(t,today)}</span>}
       {isWaiting(t)&&<span className="inline-flex items-center gap-1 text-[#6f4e10]"><Hourglass className="h-3 w-3"/>{t.waiting_on}{t.follow_up_date?` · ${shortDate(t.follow_up_date)}`:''}</span>}
