@@ -317,26 +317,24 @@ function DrawerPanel({ title, summary, days, today, onClose, renderDay }) {
         <span className="min-w-0 flex-1 truncate text-[13px]" style={{ color: "#616a6d" }}><b className="text-[14px]" style={{ color: C.text }}>{title}</b> · {summary}</span>
         <button type="button" onClick={onClose} className="shrink-0 text-[12.5px] font-semibold hover:underline" style={{ color: "#0b3f3b" }}>Close</button>
       </div>
-      {(
-        <div className="max-h-[560px] overflow-y-auto px-[18px] pb-2">
-          {days.map(({ date, items: dayItems }, di) => {
-            const s = dayStamp(date, today);
-            const newMonth = di === 0 || days[di - 1].date.slice(0, 7) !== date.slice(0, 7);
-            return (
-              <div key={date}>
-                {newMonth ? <div className="pb-1 pt-3 text-[11px] font-bold uppercase tracking-[.14em]" style={{ color: "#3e5a55" }}>{monthName(date, today)}</div> : null}
-                <div className="flex gap-4 border-t py-2" style={{ borderColor: newMonth ? "transparent" : "#f1ede5" }}>
-                  <div className="w-[58px] shrink-0 pt-1 leading-tight">
-                    <span className="block text-[10.5px] font-semibold uppercase tracking-[.1em]" style={{ color: s.rel ? "#10524c" : "#566063" }}>{s.rel || s.wd}</span>
-                    <span className="block text-[13px] font-bold" style={{ color: C.text }}>{s.mo} {s.day}</span>
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">{renderDay(dayItems, date)}</div>
+      <div className="max-h-[560px] overflow-y-auto px-[18px] pb-2">
+        {days.map(({ date, items: dayItems }, di) => {
+          const s = dayStamp(date, today);
+          const newMonth = di === 0 || days[di - 1].date.slice(0, 7) !== date.slice(0, 7);
+          return (
+            <div key={date}>
+              {newMonth ? <div className="pb-1 pt-3 text-[11px] font-bold uppercase tracking-[.14em]" style={{ color: "#3e5a55" }}>{monthName(date, today)}</div> : null}
+              <div className="flex gap-4 border-t py-2" style={{ borderColor: newMonth ? "transparent" : "#f1ede5" }}>
+                <div className="w-[58px] shrink-0 pt-1 leading-tight">
+                  <span className="block text-[10.5px] font-semibold uppercase tracking-[.1em]" style={{ color: s.rel ? "#10524c" : "#566063" }}>{s.rel || s.wd}</span>
+                  <span className="block text-[13px] font-bold" style={{ color: C.text }}>{s.mo} {s.day}</span>
                 </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">{renderDay(dayItems, date)}</div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -475,7 +473,7 @@ export default function JobActivityFeed({ jobId, events, rows, notes, fieldRepor
         </button>
       </div>
 
-      <div className={ledger ? "mb-4 flex items-center gap-2" : ""}>
+      <div className={ledger ? "mb-4 flex flex-wrap items-center gap-2" : ""}>
       {/* Nothing to filter until something is logged: no row of zeros on a fresh job. */}
       <div role="tablist" aria-label="Filter job history" className={counts.all === 0 ? (ledger ? "flex min-w-0 flex-1" : "hidden") : ledger ? "flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1" : "flex gap-1.5 overflow-x-auto pb-1 mb-3"}>
         {counts.all === 0 ? null : filters.map((f) => {
