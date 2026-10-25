@@ -183,7 +183,8 @@ test('computeProfit: positive / negative / zero', () => {
 
 test('refsForJob: all none when no records', () => {
   const r = refsForJob('j1', {});
-  for (const k of ['quoteStatus', 'poStatus', 'mfrStatus', 'etaStatus', 'payment']) assert.equal(r[k], 'none');
+  for (const k of ['quoteStatus', 'poStatus', 'mfrStatus', 'etaStatus']) assert.equal(r[k], 'none');
+  assert.ok(!('payment' in r) && !('paymentLabel' in r), 'suppliers are paid up front');
 });
 
 test('refsForJob: quote number from a single active reviewed budget', () => {
@@ -192,15 +193,14 @@ test('refsForJob: quote number from a single active reviewed budget', () => {
   assert.equal(r.quoteStatus, 'green');
 });
 
-test('refsForJob: green when reviewed budget, confirmed PO, paid order with ETA', () => {
+test('refsForJob: green when reviewed budget, confirmed PO, order with ETA', () => {
   const r = refsForJob('j1', {
     budgets: [reviewedBudget()],
     purchaseOrders: [{ job_id: 'j1', po_number: 'YA-0001', status: 'confirmed' }],
     vendorOrders: [{ job_id: 'j1', order_number: '09-5476', eta_date: '2026-10-10', status: 'paid', paid_at: '2026-10-09' }],
     today: TODAY,
   });
-  for (const k of ['quoteStatus', 'poStatus', 'mfrStatus', 'etaStatus', 'payment']) assert.equal(r[k], 'green');
-  assert.equal(r.paymentLabel, 'Paid');
+  for (const k of ['quoteStatus', 'poStatus', 'mfrStatus', 'etaStatus']) assert.equal(r[k], 'green');
 });
 
 test('refsForJob: pending PO (issued) → amber', () => {
@@ -225,11 +225,6 @@ test('refsForJob: ETA Delivered / overdue / Multiple', () => {
   assert.equal(multi.etaLabel, 'Multiple');
 });
 
-test('refsForJob: payment Partial / Unpaid', () => {
-  assert.equal(refsForJob('j1', { vendorOrders: [{ job_id: 'j1', order_number: '1', status: 'paid', paid_at: 'x' }, { job_id: 'j1', order_number: '2', status: 'ordered' }] }).paymentLabel, 'Partial');
-  assert.equal(refsForJob('j1', { vendorOrders: [{ job_id: 'j1', order_number: '1', status: 'eta_set' }] }).paymentLabel, 'Unpaid');
-});
-
 test('refsForJob: cancelled PO and its vendor order excluded', () => {
   const r = refsForJob('j1', {
     purchaseOrders: [{ id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'cancelled' }],
@@ -237,7 +232,6 @@ test('refsForJob: cancelled PO and its vendor order excluded', () => {
   });
   assert.equal(r.poStatus, 'none');
   assert.equal(r.mfrStatus, 'none');
-  assert.equal(r.payment, 'none');
 });
 
 const linkedPO = { id: 'po1', job_id: 'j1', po_number: 'YA-1', status: 'ordered', vendor: 'AMSCO', vendor_quote_ref: 'Q1' };
@@ -260,14 +254,9 @@ test('nextActionForJob: Record ETA when the linked supplier order has no eta', (
   assert.equal(a.label, 'Record ETA');
 });
 
-test('nextActionForJob: Record payment when unpaid and ETA set', () => {
-  const a = nextActionForJob('j1', { budgets: [reviewedBudget()], purchaseOrders: [linkedPO], vendorOrders: [{ id: 'vo1', job_id: 'j1', order_number: '09-1', eta_date: '2026-10-10', status: 'eta_set', purchase_order_id: 'po1' }] });
-  assert.equal(a.label, 'Record payment');
-});
-
-test('nextActionForJob: already paid → Reconcile, not Record payment', () => {
-  const a = nextActionForJob('j1', { budgets: [reviewedBudget()], purchaseOrders: [linkedPO], vendorOrders: [{ id: 'vo1', job_id: 'j1', order_number: '09-1', eta_date: '2026-10-10', received_date: '2026-10-11', status: 'paid', paid_at: '2026-10-12', purchase_order_id: 'po1' }] });
-  assert.equal(a.label, 'Reconcile');
+test('nextActionForJob: no payment or reconcile step once the ETA is set (suppliers are paid up front)', () => {
+  const a = nextActionForJob('j1', { budgets: [reviewedBudget()], purchaseOrders: [linkedPO], vendorOrders: [{ id: 'vo1', job_id: 'j1', order_number: '09-1', eta_date: '2026-11-10', status: 'eta_set', purchase_order_id: 'po1' }], today: TODAY });
+  assert.equal(a.label, 'Open job');
 });
 
 test('nextActionForJob: all complete → Open job', () => {
@@ -334,15 +323,14 @@ test('unlinkedEntities: shop POs and unlinked quotes surfaced', () => {
   assert.deepEqual(u.shopPOs.map((p) => p.id), ['p1']);
 });
 
-test('unlinkedEntities: shop POs are newest first and paid only when every supplier order is paid', () => {
+test('unlinkedEntities: shop POs are newest first', () => {
   const u = unlinkedEntities({
     purchase_orders: [
       { id: 'old', purchase_type: 'shop', status: 'ordered', created_date: '2026-10-05' },
       { id: 'new', purchase_type: 'shop', status: 'issued', created_date: '2026-10-25' },
     ],
-    vendor_orders: [{ id: 'o1', purchase_order_id: 'new', status: 'paid' }, { id: 'o2', purchase_order_id: 'old', status: 'ordered' }],
   });
-  assert.deepEqual(u.shopPOs.map((p) => [p.id, p.paid]), [['new', true], ['old', false]]);
+  assert.deepEqual(u.shopPOs.map((p) => p.id), ['new', 'old']);
 });
 
 test('cardMatchesSearch: finds the correct card by name, not cards[0]', () => {
