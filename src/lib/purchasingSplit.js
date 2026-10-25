@@ -26,7 +26,9 @@ export function splitFigures(jobId, { jobs = [], budgets = [], purchase_orders =
   const head = jobMoneyHeadline(jobId, [], { jobs, budgets, purchaseOrders: purchase_orders, vendorOrders: vendor_orders });
   if (!head || head.sale == null || head.cost == null || head.laborMaterial == null) return null;
   const cost = round(head.cost + head.laborMaterial);
-  return { sale: head.sale, cost, fee: round((head.sale - cost) * SPLIT_PCT) };
+  // In cents, so a half cent rounds up the same way every time ($297.03 -> $148.52).
+  const profitCents = Math.round(head.sale * 100) - Math.round(cost * 100);
+  return { sale: head.sale, cost, fee: Math.round(profitCents * SPLIT_PCT) / 100 };
 }
 
 const isOpen = (r) => !r.billed_to_bfs && !r.invoiced_to_ya && !r.paid_to_ya;

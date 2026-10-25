@@ -6,9 +6,11 @@ import assert from 'node:assert/strict';
 
 const { planSplitLines, isHeldForPurchasing, splitFigures, purchasingJobIds } = await import('../src/lib/purchasingSplit.js');
 
-const job = (over = {}) => ({ id: 'j1', canonical_name: 'Hidden Hallow Lot 509', manual_customer_total: 369.05, ...over });
-const po = { id: 'p1', job_id: 'j1', po_number: 'YA-0016', status: 'ordered', amount_dealer: 72.02 };
-const data = (over = {}) => ({ jobs: [job(over)], budgets: [], purchase_orders: [po], vendor_orders: [] });
+const job = (over = {}) => ({ id: 'j1', canonical_name: 'Hidden Hallow Lot 509', ...over });
+// Hidden Hallow Lot 509 as on Purchasing: sale $369.05, windows $72.02 (PO YA-0016), labor $0.
+const budget = { id: 'b1', job_id: 'j1', title: 'Hidden Hallow Lot 509', status: 'filed', inputs: { actual_total_sell: 369.05, labor_cost_sub_pay: 0, additional_install_material: 0 } };
+const po = { id: 'p1', job_id: 'j1', budget_id: 'b1', po_number: 'YA-0016', status: 'ordered', amount_dealer: 72.02 };
+const data = (over = {}) => ({ jobs: [job(over)], budgets: [budget], purchase_orders: [po], vendor_orders: [] });
 
 test('a Purchasing job is a job with a PO, budget or supplier order', () => {
   assert.deepEqual([...purchasingJobIds(data())], ['j1']);
@@ -42,7 +44,7 @@ test('once Paid, one line: half of sale less windows less labor & material, date
   assert.equal(line.purchasing_split_job_id, 'j1');
   assert.equal(line.job_date, '2026-10-25');
   assert.equal(line.invoice_month, '2026-10');
-  assert.equal(line.fee_amt, Math.round((line.sale_price - line.cost) * 50) / 100);
+  assert.deepEqual([line.sale_price, line.cost, line.fee_amt], [369.05, 72.02, 148.52], 'half of the $297.03 Est. profit');
   assert.equal(line.billable, true);
   assert.equal(line.needs_review, false);
 });
