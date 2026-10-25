@@ -206,7 +206,7 @@ export default function JobWorkspacePanel({ jobId, group = null, onJobChanged, o
 
         {isJobCalendarOwner(me) ? <JobUpcomingCard upcoming={upcoming} /> : null}
         <div className="scroll-mt-4">
-          <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<LiveMark live={live} />}>
+          <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="field reports and visits, newest first · notes and texts in one list" right={<LiveMark live={live} />}>
             {reportsError ? <p role="alert" className="mb-3 rounded-[9px] px-3 py-2 text-[12.5px]" style={{ color: "#a43432", backgroundColor: "#fcedec", border: "1px solid #f0c9c5" }}>Some field reports could not load. {reportsError}</p> : null}
             <JobActivityFeed
               onScheduleNext={(next) => { setScheduleStage(next); setShowCreateEvent(true); }}

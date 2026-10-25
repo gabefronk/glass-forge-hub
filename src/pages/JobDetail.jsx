@@ -290,7 +290,7 @@ export default function JobDetail() {
           {/* Phone: the next visit lives in the header's Job info dropdown. */}
           {isJobCalendarOwner(user) && !isPhone ? <JobUpcomingCard upcoming={upcoming} /> : null}
           <div id="add-note" className="scroll-mt-4">
-            <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="visits, reports and notes, newest first" right={<>{JOB_REPORT_EMAIL_ENABLED ? <JobReportMenu job={job} entries={reportEntries} tone="card" /> : null}<LiveMark live={live} /></>}>
+            <SheetCard icon={HardHat} tile={TILE.green} title="History" sub="field reports and visits, newest first · notes and texts in one list" right={<>{JOB_REPORT_EMAIL_ENABLED ? <JobReportMenu job={job} entries={reportEntries} tone="card" /> : null}<LiveMark live={live} /></>}>
               <JobActivityFeed
                 onScheduleNext={(next) => { setScheduleStage(next); setShowCreateEvent(true); }}
                 ledger
