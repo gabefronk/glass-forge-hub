@@ -89,7 +89,7 @@ test('one budget with one PO → a single scope (the board adds nothing)', () =>
   assert.equal(scopes[0].etaTarget.order.id, 'v1');
 });
 
-test('cancelled POs and their orders are excluded; supplier payment is per scope', () => {
+test('cancelled POs and their orders are excluded; scopes carry no supplier payment', () => {
   const scopes = scopesForJob('j1', {
     budgets: [budget()],
     purchase_orders: [
@@ -103,8 +103,8 @@ test('cancelled POs and their orders are excluded; supplier payment is per scope
   });
   assert.equal(scopes.length, 1);
   assert.deepEqual(scopes.map((s) => s.poNumber), ['YA-0002']);
-  assert.deepEqual(scopes[0].payment, { label: 'Paid', tone: 'green' });
-  // Paid is not received: the ETA still sits on that order and stays editable.
+  assert.equal(scopes[0].payment, undefined, 'suppliers are paid up front');
+  // A paid mark is not received: the ETA still sits on that order and stays editable.
   assert.equal(scopes[0].etaTarget.order.id, 'v1');
   assert.equal(scopes[0].etaLabel, null);
 });

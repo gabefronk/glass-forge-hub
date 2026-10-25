@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { moneyStatesForJob, hasMoneyStates, isPaymentRequested, isOrderPaid, paymentEvidence } from '../src/lib/purchasingMoneyStates.js';
+import { moneyStatesForJob, hasMoneyStates } from '../src/lib/purchasingMoneyStates.js';
+import * as states from '../src/lib/purchasingMoneyStates.js';
 
 const JOB = 'job-1';
 
@@ -30,48 +31,41 @@ test('committed sums open PO dealer amounts and excludes cancelled POs', () => {
   assert.equal(s.committed.records, 2);
 });
 
-test('incurred actual is never inferred from status, links, or settlement - it stays unknown', () => {
+test('incurred actual is never inferred from status - it stays unknown; orders are their own state', () => {
   const s = moneyStatesForJob(JOB, {
-    vendorOrders: [
-      vo({ status: 'ach_link_received', amount: 500 }),
-      vo({ id: 'vo2', status: 'ordered', amount: 700 }),
-      vo({ id: 'vo3', status: 'paid', amount: 300, paid_at: '2026-10-15' }),
-    ],
+    vendorOrders: [vo({ status: 'eta_set', amount: 500 }), vo({ id: 'vo2', status: 'ordered', amount: 700 })],
   });
   assert.equal(s.incurred.value, null);
   assert.equal(s.incurred.tracked, false);
-  assert.equal(s.paid.value, 300);
+  assert.equal(s.ordered.value, 1200);
 });
 
-test('paid is payment evidence only; it never invents an incurred figure', () => {
-  const s = moneyStatesForJob(JOB, {
-    vendorOrders: [vo({ status: 'paid', amount: 300, paid_at: '2026-10-20' })],
-  });
-  assert.equal(s.paid.value, 300);
-  assert.equal(s.incurred.value, null);
-  assert.equal(isOrderPaid(vo({ status: 'reconciled' })), true);
-  assert.equal(isOrderPaid(vo({ status: 'ordered', paid_at: '2026-10-20' })), true);
+test('suppliers are paid up front: no paid, payment-requested or reconcile state', () => {
+  const s = moneyStatesForJob(JOB, { vendorOrders: [vo({ status: 'paid', amount: 300, paid_at: '2026-10-20' })] });
+  assert.ok(!('paid' in s) && !('paymentRequested' in s));
+  assert.equal(states.isOrderPaid, undefined);
+  assert.equal(states.isPaymentRequested, undefined);
+  assert.equal(states.paymentEvidence, undefined);
 });
 
 test('vendor orders of a cancelled PO are excluded everywhere', () => {
   const s = moneyStatesForJob(JOB, {
     purchaseOrders: [po({ id: 'po9', status: 'cancelled' })],
-    vendorOrders: [vo({ purchase_order_id: 'po9', status: 'paid', amount: 400, paid_at: '2026-10-20' })],
+    vendorOrders: [vo({ purchase_order_id: 'po9', status: 'ordered', amount: 400 })],
   });
-  assert.equal(s.incurred.value, null);
-  assert.equal(s.paid.value, null);
+  assert.equal(s.ordered.value, null);
   assert.equal(hasMoneyStates(s), false);
 });
 
 test('missing amounts never fabricate a zero total; partial coverage is flagged', () => {
   const s = moneyStatesForJob(JOB, {
     purchaseOrders: [po({ amount_dealer: null }), po({ id: 'po2', amount_dealer: 100 })],
-    vendorOrders: [vo({ status: 'ach_link_received', amount: null })],
+    vendorOrders: [vo({ status: 'ordered', amount: null })],
   });
   assert.equal(s.committed.value, 100);
   assert.equal(s.committed.partial, true);
-  assert.equal(s.paymentRequested.value, null);
-  assert.equal(s.paymentRequested.records, 1);
+  assert.equal(s.ordered.value, null);
+  assert.equal(s.ordered.records, 1);
   assert.equal(s.incurred.value, null);
 });
 
@@ -87,36 +81,4 @@ test('records from other jobs never leak in', () => {
     vendorOrders: [vo({ job_id: 'job-2', status: 'paid', amount: 5, paid_at: '2026-10-20' })],
   });
   assert.equal(hasMoneyStates(s), false);
-});
-
-test('payment-requested indicator: ACH link present and not yet paid; never a bill', () => {
-  assert.equal(isPaymentRequested(vo({ status: 'ordered', ach_link: 'https://pay.example/x' })), true);
-  assert.equal(isPaymentRequested(vo({ status: 'ach_link_received', ach_link_received_at: '2026-10-15T05:14:21Z' })), true);
-  assert.equal(isPaymentRequested(vo({ status: 'eta_set' })), false);
-  assert.equal(isPaymentRequested(vo({ status: 'paid', ach_link: 'https://pay.example/x', paid_at: '2026-10-15' })), false);
-
-  const s = moneyStatesForJob(JOB, {
-    vendorOrders: [
-      vo({ status: 'ach_link_received', amount: 500 }),
-      vo({ id: 'vo2', status: 'eta_set', amount: 700 }),
-    ],
-  });
-  assert.equal(s.paymentRequested.value, 500);
-  assert.equal(s.paymentRequested.records, 1);
-});
-
-test('payment evidence is processor-marked unless reconciled', () => {
-  assert.equal(paymentEvidence(vo({ status: 'paid', paid_at: '2026-10-15', paid_reference: 'Helcim INV001194' })), 'processor_marked');
-  assert.equal(paymentEvidence(vo({ status: 'reconciled' })), 'reconciled');
-  assert.equal(paymentEvidence(vo({ status: 'paid', reconciled_at: '2026-10-20' })), 'reconciled');
-
-  const s = moneyStatesForJob(JOB, {
-    vendorOrders: [
-      vo({ status: 'paid', amount: 100, paid_at: '2026-10-15' }),
-      vo({ id: 'vo2', status: 'reconciled', amount: 50 }),
-    ],
-  });
-  assert.equal(s.paid.value, 150);
-  assert.equal(s.paid.reconciled, 1);
-  assert.equal(s.paid.processorMarked, 1);
 });
