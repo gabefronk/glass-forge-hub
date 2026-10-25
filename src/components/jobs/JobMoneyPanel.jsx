@@ -11,6 +11,7 @@ import { denverDate } from "@/lib/feeMath";
 import { procurementPath } from "@/lib/procurementRoutes";
 import { ticketLabel } from "@/lib/jobHistory";
 import JobInvoices from "@/components/jobs/JobInvoices";
+import { useRequestPayment } from "@/components/purchasing/RequestPayment";
 
 // Job money, QuickBooks Projects style (Oct 24): a money strip, then income, costs and profit
 // as Estimate · Actual · Variance (jobProject), then customer invoices and the source records.
@@ -132,6 +133,8 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
   const sources = useMemo(() => (raw ? aggregateJobMoney(raw.ids, raw) : null), [raw]);
   const project = useMemo(() => (raw ? jobProject(jobId, raw.ids, { ...raw, invoices, today: denverDate() }) : null), [raw, invoices, jobId]);
 
+  const pay = useRequestPayment({ job: raw?.jobs?.[0], sale: project?.contract ?? null, budgets: raw?.budgets || [], invoices, onRecorded: (row) => setInvoices((prev) => [...prev, row]) });
+
   // Intentionally render nothing for non-owners: no request, amount, placeholder,
   // or hint that private pricing exists reaches a crew login.
   if (!owner) return null;
@@ -153,6 +156,11 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
         <DropdownMenuContent align="end" className="min-w-[200px] p-1">
           <DropdownMenuItem className={item} onSelect={() => setInvoiceForm(true)}>Customer invoice</DropdownMenuItem>
           <DropdownMenuItem className={item} asChild><Link to={procurementPath(jobId, "orders")}>Purchase order</Link></DropdownMenuItem>
+          {project?.contract != null && <>
+            <div className="mx-2 my-1" style={{ borderTop: `1px solid ${RULE}` }} />
+            <div className="px-2 pb-1 pt-0.5 text-[13px] font-semibold" style={{ color: SECOND }}>Request payment</div>
+            {pay.items}
+          </>}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -174,6 +182,7 @@ export default function JobMoneyPanel({ jobId, memberIds }) {
 
       <div className="space-y-6 p-5">
         {sources?.budgetWarnings?.length > 0 && <p className="m-0 rounded-lg p-3 text-[14px]" style={{ background: "#FAF0DA", color: "#6F4E10" }}>Budget totals need review: {sources.budgetWarnings.join(" ")}</p>}
+        {pay.panel && <div className="overflow-hidden rounded-[12px]" style={{ border: `1px solid ${RULE}` }}>{pay.panel}</div>}
         <EstimateTable project={project} />
         <JobInvoices jobId={jobId} invoices={invoices} onChange={setInvoices} formOpen={invoiceForm} onFormOpen={setInvoiceForm} customerName={job?.customer_name || ""} />
 
