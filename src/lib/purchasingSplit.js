@@ -32,7 +32,7 @@ export function splitFigures(jobId, { jobs = [], budgets = [], purchase_orders =
 }
 
 const isOpen = (r) => !r.billed_to_bfs && !r.invoiced_to_ya && !r.paid_to_ya;
-const differs = (r, f) => ['sale_price', 'cost', 'fee_amt', 'needs_review'].some((k) => (r[k] ?? null) !== (f[k] ?? null));
+const differs = (r, f) => ['sale_price', 'cost', 'fee_amt', 'needs_review', 'manually_adjusted'].some((k) => (r[k] ?? null) !== (f[k] ?? null));
 
 // What to create, update and delete so each Paid Purchasing job has exactly one split line.
 // Billed lines are never touched. The line is dated the day the job was marked Paid; if that
@@ -45,7 +45,8 @@ export function planSplitLines(data = {}, feeLines = [], { today = denverDay(Dat
   for (const job of data.jobs || []) {
     if (!jobIds.has(job.id) || job.payment_status !== 'paid') continue;
     const f = splitFigures(job.id, data);
-    const fields = f ? { sale_price: f.sale, cost: f.cost, fee_amt: f.fee, needs_review: false } : { sale_price: null, cost: null, fee_amt: 0, needs_review: true };
+    // No figures yet: a $0 line that stays in Needs decision (needs_review, not owner-adjusted).
+    const fields = f ? { sale_price: f.sale, cost: f.cost, fee_amt: f.fee, needs_review: false, manually_adjusted: true } : { sale_price: null, cost: null, fee_amt: 0, needs_review: true, manually_adjusted: false };
     const mine = splits.filter((r) => r.purchasing_split_job_id === job.id);
     if (!mine.length) {
       let day = job.payment_status_at ? denverDay(job.payment_status_at) : today;
@@ -56,7 +57,7 @@ export function planSplitLines(data = {}, feeLines = [], { today = denverDay(Dat
         job_name_raw: `${name} · 50/50 profit split`, job_name_norm: name.toLowerCase(),
         line_description: 'Purchasing job marked Paid: half of the Est. profit (sale less windows less labor & material).',
         labor_amt: 0, fee_type: 'profit_split', fee_pct: 0, split_pct: SPLIT_PCT, billable: true,
-        manually_adjusted: true, source: 'purchasing', written_by: 'app', match_confidence: 'high', ...fields,
+        source: 'purchasing', written_by: 'app', match_confidence: 'high', ...fields,
       });
       continue;
     }
