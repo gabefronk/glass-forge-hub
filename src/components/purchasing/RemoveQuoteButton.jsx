@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { budgetVersion } from '../../../base44/shared/procurementCore.js';
+import { budgetVersion } from '@/lib/purchasingCoreTwin';
 import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
 
 // Remove a duplicate or stale quote from its job. Reversible: the record and its files
