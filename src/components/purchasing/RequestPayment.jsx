@@ -14,18 +14,18 @@ const INK = '#101617', SECOND = '#566063', RULE = '#D6CCBA', TEAL = '#0B3F3B', R
 const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' }));
 const item = 'flex min-h-9 cursor-pointer items-center justify-between gap-6 text-[14px]';
 
-export function useRequestPayment({ job, sale, budgets = [], invoices: given, onRecorded }) {
+export function useRequestPayment({ job, sale, budgets = [], invoices: given, onRecorded, enabled = true }) {
   const [loaded, setLoaded] = useState([]);
   const [open, setOpen] = useState(null);
   const invoices = given ?? loaded;
   useEffect(() => {
-    if (given !== undefined || !job?.id) return undefined;
+    if (given !== undefined || !job?.id || !enabled) return undefined;
     let active = true;
     base44.entities.Invoices.filter({ job_id: job.id }, 'invoice_date', 200)
       .then((rows) => { if (active) setLoaded(Array.isArray(rows) ? rows : []); })
       .catch(() => {});
     return () => { active = false; };
-  }, [given, job?.id]);
+  }, [given, job?.id, enabled]);
 
   const stage = job?.payment_status || '';
   const received = receivedSoFar({ sale, stage, invoices });

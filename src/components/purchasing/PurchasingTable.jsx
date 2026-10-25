@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, ArrowUpRight } from 'lucide-react';
 import PurchasingJobWorkspace from './PurchasingJobWorkspace';
+import { useRequestPayment } from './RequestPayment';
 import PurchasingRowTitle from './PurchasingRowTitle';
 import EtaCell from './EtaCell';
 import { money } from '@/components/budgets/ProcurementForms';
@@ -145,6 +146,7 @@ function JobRows({ card, data, onSaved }) {
   const supplier = supplierText(card);
   const label = [job.builder, job.canonical_name].filter(Boolean).join(' - ');
   const panelId = `purchasing-row-${job.id}`;
+  const pay = useRequestPayment({ job: row.fullJob || { ...job, payment_status: row.stageKey }, sale: f.sale, budgets: data?.budgets || [], enabled: row.expanded });
   return (
     <>
       <div role="row" className={`group items-center ${GRID} ${row.expanded ? 'bg-[#EEF5F3]' : 'bg-white hover:bg-[#F6F3EC]'}`}
@@ -180,10 +182,12 @@ function JobRows({ card, data, onSaved }) {
         <div id={panelId} style={{ backgroundColor: '#EEF5F3', padding: '2px 20px 20px 52px' }}>
           <div className="overflow-hidden rounded-[12px] bg-white" style={{ border: `1px solid ${EDGE}`, boxShadow: '0 1px 2px rgba(21,24,26,.05), 0 3px 8px -3px rgba(21,24,26,.10)' }}>
             <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-2.5" style={{ backgroundColor: '#FAF8F3', borderBottom: `1px solid ${RULE}` }}>
+              <span className="mr-auto">{pay.trigger({ border: '1px solid #9A9080', background: '#FFFFFF', color: INK })}</span>
               <PurchasingRowTitle job={job} onSaved={onSaved} compact />
               <Link to={`/jobs/${encodeURIComponent(job.id)}`} className="inline-flex h-9 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold no-underline hover:brightness-95"
                 style={{ backgroundColor: '#E2EEEB', color: '#082F2C', border: '1px solid #C7E4D2' }}>Open in Jobs<ArrowUpRight className="h-3.5 w-3.5" /></Link>
             </div>
+            {pay.panel}
             <PurchasingJobWorkspace job={row.fullJob} data={data} onSaved={onSaved} />
           </div>
         </div>
