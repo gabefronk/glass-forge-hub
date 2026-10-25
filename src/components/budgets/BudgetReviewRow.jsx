@@ -75,9 +75,6 @@ function fromBudget(b) {
 export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill = false }) {
   const [form, setForm] = useState(() => fromBudget(budget));
   const [version, setVersion] = useState(() => budgetVersion(budget));
-  // Saving is the review (Gabriel, Oct 25): no separate "I reviewed" tick box.
-  const reviewed = true;
-  const setReviewed = () => {};
   const [zeroConfirmed, setZeroConfirmed] = useState(false);
   const [fill, setFill] = useState(() => budget.autofill || null);
   // Import notes are about the numbers as first read. Once the numbers have been reviewed and
@@ -91,7 +88,7 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
   const [refilling, setRefilling] = useState(false);
   const [error, setError] = useState("");
   const preview = useMemo(() => computeJobBudget(Object.fromEntries(Object.entries(form).map(([k, v]) => [k, num(v)]))), [form]);
-  const set = (k) => (e) => { setReviewed(false); if (k === 'material_true_cost') setZeroConfirmed(false); setTouched((t) => ({ ...t, [k]: true })); setForm((f) => ({ ...f, [k]: e.target.value })); };
+  const set = (k) => (e) => { if (k === 'material_true_cost') setZeroConfirmed(false); setTouched((t) => ({ ...t, [k]: true })); setForm((f) => ({ ...f, [k]: e.target.value })); };
   const sources = fill?.sources || {};
 
   // Read the quote PDF again and refill every box it can (saves straight to the row).
@@ -105,7 +102,7 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
       if (data?.error) { setError(data.error); return; }
       setForm(fromBudget({ inputs: data.inputs }));
       if (data.budget) setVersion(budgetVersion(data.budget));
-      setReviewed(false); setZeroConfirmed(false);
+      setZeroConfirmed(false);
       setFill({ sources: data.sources || {}, notes: data.notes || [] });
       setFreshRead(true);
       setTouched({});
@@ -115,10 +112,12 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
   };
 
   const save = async () => {
-    if (!reviewed || (num(form.material_true_cost) === 0 && !zeroConfirmed)) { setError('Review the numbers and confirm any zero material cost.'); return; }
+    // Saving is the review (Gabriel, Oct 25): no separate "I reviewed" tick box. A $0
+    // material cost still needs its own confirmation - that one catches real mistakes.
+    if (num(form.material_true_cost) === 0 && !zeroConfirmed) { setError('Confirm the zero material cost first.'); return; }
     setBusy(true); setError("");
     try {
-      const res = await base44.functions.invoke("jobBudgetIngest", { action: "set_inputs", budget_id: budget.id, inputs: form, expected_version: version, request_key: crypto.randomUUID(), review_confirmed: reviewed, zero_cost_confirmed: zeroConfirmed });
+      const res = await base44.functions.invoke("jobBudgetIngest", { action: "set_inputs", budget_id: budget.id, inputs: form, expected_version: version, request_key: crypto.randomUUID(), review_confirmed: true, zero_cost_confirmed: zeroConfirmed });
       const data = res?.data || res;
       if (data?.error) { setError(data.fields?.length ? `Check: ${data.fields.map((f) => FIELD_LABEL[f] || f).join(", ")}` : data.error); return; }
       onDone(data);
@@ -176,9 +175,9 @@ export function NumbersEditor({ budget, onDone, onCancel, onRefilled, hideRefill
         <span>Margin <b style={{ color: (preview.actual_margin_pct ?? 0) >= 0.3 ? C.accentText : C.amber }}>{pct(num(form.material_true_cost) === 0 && !zeroConfirmed ? null : preview.actual_margin_pct)}</b></span>
       </div>
       {error ? <p role="alert" className="m-0 text-[12.5px] font-medium" style={{ color: C.amber }}>{error}</p> : null}
-      {num(form.material_true_cost) === 0 && <label className="flex items-start gap-2 text-[13px]" style={{ color: C.amber }}><input type="checkbox" checked={zeroConfirmed} onChange={e => { setZeroConfirmed(e.target.checked); setReviewed(false); }} />Zero material cost is intentional, not a missing supplier price.</label>}
+      {num(form.material_true_cost) === 0 && <label className="flex items-start gap-2 text-[13px]" style={{ color: C.amber }}><input type="checkbox" checked={zeroConfirmed} onChange={e => { setZeroConfirmed(e.target.checked); }} />Zero material cost is intentional, not a missing supplier price.</label>}
       <div className="flex items-center gap-2">
-        <button type="button" disabled={busy || refilling || !reviewed || (num(form.material_true_cost) === 0 && !zeroConfirmed)} onClick={save} className={smallBtn} style={btnPrimary}>{busy ? "Saving…" : "Save numbers"}</button>
+        <button type="button" disabled={busy || refilling || (num(form.material_true_cost) === 0 && !zeroConfirmed)} onClick={save} className={smallBtn} style={btnPrimary}>{busy ? "Saving…" : "Save numbers"}</button>
         <button type="button" disabled={busy} onClick={onCancel} className={smallBtn} style={btnGhost}>Cancel</button>
       </div>
     </div>
