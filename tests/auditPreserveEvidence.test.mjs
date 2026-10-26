@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
+import { filterRows } from './support/entityFilter.mjs';
 
 const path = new URL('../base44/shared/reportMatching.ts', import.meta.url);
 const source = ts.transpileModule(await readFile(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -39,7 +40,7 @@ async function compiledUrl(url) {
   for(const match of [...text.matchAll(/from ['"](\.[^'"]+)['"]/g)]) text=text.replace(match[0], 'from '+JSON.stringify(await compiledUrl(new URL(match[1],url))));
   return 'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(text,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');
 }
-const entity=(rows=[])=>({rows:structuredClone(rows),list:async(_sort,limit=1000,skip=0)=>structuredClone(rows.slice(skip,skip+limit)),bulkUpdate:async function(patches){for(const p of patches)Object.assign(this.rows.find(x=>x.id===p.id),p);return patches;},bulkCreate:async function(patches){this.rows.push(...patches);return patches;}});
+const entity=(rows=[])=>({rows:structuredClone(rows),list:async(_sort,limit=1000,skip=0)=>structuredClone(rows.slice(skip,skip+limit)),filter:async(q,sort,limit)=>structuredClone(filterRows(rows,q,sort,limit)),bulkUpdate:async function(patches){for(const p of patches)Object.assign(this.rows.find(x=>x.id===p.id),p);return patches;},bulkCreate:async function(patches){this.rows.push(...patches);return patches;}});
 test('forced month audit leaves verified ok event unchanged rather than clearing its linked post',async()=>{
   const ev=entity([ {id:'verified',...events[1]} ]), rp=entity(reports), au=entity(), settings=entity();
   const client={auth:{me:async()=>null},asServiceRole:{entities:{CalendarEvents:ev,FieldReports:rp,ReportAudit:au,AppSettings:settings}}};
