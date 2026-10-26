@@ -187,7 +187,7 @@ test('a bank month counts crew pay, overhead and other costs, and leaves out wha
   assert.equal(cats.rows.reduce((n, r) => n + r.total, 0).toFixed(2), (73489.81 - 159733.49).toFixed(2));
 });
 
-test('the overview takes bank costs off profit for months with bank lines only', () => {
+test('the earned figures stay the Hub\'s own: bank costs only reach the cash table', () => {
   const install = (id, month, labor) => ({ id, invoice_month: month, job_date: `${month}-10`, billable: true, fee_type: 'labor_pct', labor_amt: labor, calendar_labor_amt: labor, fee_pct: 0.1 });
   const bankLines = [
     { posted_date: '2026-02-03', amount: -400, category: 'crew_pay' },
@@ -199,7 +199,11 @@ test('the overview takes bank costs off profit for months with bank lines only',
   ];
   const y = companyYear({ rows: [install('a', '2026-01', 1000), install('b', '2026-02', 1000)], bankLines, today: '2026-02-20', start: '2026-01' });
   const [jan, feb] = y.months;
-  assert.deepEqual([jan.hasBank, jan.crewPay, jan.profit], [false, 0, 900]);
-  assert.deepEqual([feb.hasBank, feb.crewPay, feb.overhead, feb.otherCost, feb.otherIncome, feb.income, feb.profit], [true, 400, 100, 50, 25, 1025, 375]);
-  assert.deepEqual([y.ytd.crewPay, y.ytd.profit, y.ytd.bankMonths], [400, 1275, ['2026-02']]);
+  assert.deepEqual([jan.hasBank, jan.profit], [false, 900]);
+  // Earned: labor less the 10% fee, untouched by the bank's crew pay, overhead and other costs.
+  assert.deepEqual([feb.hasBank, feb.income, feb.profit], [true, 1000, 900]);
+  assert.deepEqual([y.ytd.profit, y.ytd.bankMonths], [1800, ['2026-02']]);
+  // The bank's side of February, on the cash table: 25 in; 400 + 100 + 50 out (job orders and
+  // BFS labor payments counted too, since cash counts every line).
+  assert.deepEqual([feb.bank.cash.crewPay, feb.bank.cash.overhead, feb.bank.cash.suppliers, feb.bank.cash.other, feb.bank.cash.moneyIn], [400, 100, 9999, 50, 1025]);
 });
