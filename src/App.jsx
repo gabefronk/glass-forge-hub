@@ -32,6 +32,7 @@ import ReportsRedirect from '@/components/ReportsRedirect';
 import SystemMap from "@/pages/SystemMap";
 import ResearchQueue from "@/pages/ResearchQueue";
 import CompanyOverview from '@/pages/CompanyOverview';
+import Bank from '@/pages/Bank';
 import JobBudgets from '@/pages/JobBudgets';
 import PurchaseOrders from '@/pages/PurchaseOrders';
 import Procurement from '@/pages/Procurement';
@@ -86,6 +87,7 @@ const AuthenticatedApp = () => {
           <Route path="/calendar" element={<QuotesOnlyRedirect><CalendarPage /></QuotesOnlyRedirect>} />
           <Route path="/dashboard" element={<QuotesOnlyRedirect><Dashboard /></QuotesOnlyRedirect>} />
           <Route path="/operations/overview" element={<QuotesOnlyRedirect><CompanyOverview /></QuotesOnlyRedirect>} />
+          <Route path="/operations/bank" element={<QuotesOnlyRedirect><Bank /></QuotesOnlyRedirect>} />
           <Route path="/todos" element={<QuotesOnlyRedirect><Navigate to="/dashboard?view=all" replace /></QuotesOnlyRedirect>} />
           <Route path="/window-quotes" element={<WindowQuotes />} />
           <Route path="/admin/agents" element={<QuotesOnlyRedirect><AdminAgentCenter /></QuotesOnlyRedirect>} />

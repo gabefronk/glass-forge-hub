@@ -26,6 +26,7 @@ const SECONDARY_NAV = [
 
 const ADMIN_NAV = [
   { label: "Company overview", to: "/operations/overview", icon: BarChart3 },
+  { label: "Bank", to: "/operations/bank", icon: Landmark },
   { label: "Agent Center", to: "/admin/agents", icon: Bot },
   { label: "System Map", to: "/system-map", icon: Network },
   { label: "Research Queue", to: "/research-queue", icon: Search },
