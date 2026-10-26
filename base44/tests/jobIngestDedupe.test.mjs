@@ -68,7 +68,10 @@ function memoryDb(seed = {}) {
       if (fail.has(name)) throw new Error(`${name} unavailable`);
       return sortRows(table(name), sort).slice(skip, skip + limit).map((r) => ({ ...r }));
     },
-    filter: async (q = {}, sort, limit = 1000) => filterRows(table(name), q, sort, limit).map((r) => ({ ...r })),
+    filter: async (q = {}, sort, limit = 1000) => {
+      if (fail.has(name)) throw new Error(`${name} unavailable`);
+      return filterRows(table(name), q, sort, limit).map((r) => ({ ...r }));
+    },
     get: async (id) => {
       const r = table(name).find((x) => x.id === id);
       if (!r) throw new Error('not found');
