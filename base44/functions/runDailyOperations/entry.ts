@@ -8,15 +8,35 @@ import { secrets as secrets2 } from "base44:runtime";
 async function fetchAllPages(entity, sort = "-created_date", pageSize = 1e3) {
   if (!Number.isInteger(pageSize) || pageSize < 1) throw new Error("Invalid pagination page size.");
   const all = [];
-  let skip = 0;
+  let after = null;
   for (let i = 0; i < 50; i++) {
-    const batch = await entity.list(sort, pageSize, skip);
+    const batch = await entity.filter(after == null ? {} : { id: { $gt: after } }, "id", pageSize);
     if (!Array.isArray(batch) || batch.length > pageSize) throw new Error("Entity pagination returned an invalid page.");
     all.push(...batch);
-    if (batch.length < pageSize) return all;
-    skip += pageSize;
+    if (batch.length < pageSize) return sortRows(all, sort);
+    for (const row of batch) {
+      const id2 = row && row.id != null ? String(row.id) : "";
+      if (!id2 || after != null && id2 <= after) throw new Error("Entity pagination returned rows out of id order.");
+      after = id2;
+    }
   }
   throw new Error("Entity pagination exceeded 50 pages; completeness is not verified.");
+}
+var rank = (v) => v == null ? 0 : typeof v === "number" ? 1 : 2;
+function compareValues(a, b) {
+  const ra = rank(a), rb = rank(b);
+  if (ra !== rb) return ra - rb;
+  if (ra === 0) return 0;
+  if (ra === 1) return a - b;
+  const sa = String(a), sb = String(b);
+  return sa < sb ? -1 : sa > sb ? 1 : 0;
+}
+function sortRows(rows, sort = "-created_date") {
+  const spec = String(sort || "").trim();
+  const desc = spec.startsWith("-");
+  const field = spec.replace(/^[-+]/, "");
+  const dir = desc ? -1 : 1;
+  return rows.sort((x, y) => dir * ((field ? compareValues(x?.[field], y?.[field]) : 0) || compareValues(String(x?.id), String(y?.id))));
 }
 
 // base44/shared/billingCore.js
