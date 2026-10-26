@@ -92,7 +92,7 @@ export function planUnlinkedLinks({ jobs = [], fees = [], events = [], reports =
 
   const feeLines = [];
   for (const f of fees) {
-    if (f.job_id || f.superseded_by || f.billed_to_bfs) continue;
+    if (f.job_id || f.superseded_by || f.billed_to_bfs || !f.billable) continue;
     const source = [eventJob.get(f.calendar_event_id), reportJob.get(f.probuild_post_id)].filter(Boolean);
     const job = decide({ name: f.job_name_raw, po: f.po_number, oe: f.oe_number, event_key: f.calendar_event_id, post_key: f.probuild_post_id, project_id: f.probuild_project_id, source_jobs: source });
     if (!job) continue;
