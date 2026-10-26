@@ -242,8 +242,8 @@ function CompanyOverviewContent() {
   const cashLabel = (m) => (m.partial ? `${monthName(m.month)} · partial (bank ${m.coveredDays} of ${m.monthDays} days)` : monthName(m.month));
   const net = (label) => BOOKS_PL.rows.find((r) => r[0] === label);
   const julyMonth = year.months.find((m) => m.month === july.month);
-  const t = pipe.totals;
-  const unassignedOpen = QBO_UNASSIGNED_OPEN.reduce((n, s) => n + s.open, 0);
+  const t = ledger.totals.active, tc = ledger.totals.completed;
+  const op = operating;
   const ov = cy.overlap;
 
   return (
@@ -256,10 +256,10 @@ function CompanyOverviewContent() {
           </div>
           <div style={{ flex: 1 }} />
           <div className="grid grid-cols-4 max-[1023px]:order-last max-[1023px]:w-full max-[1023px]:grid-cols-2">
-            <Figure label="Books net income · accrual" value={net("Net income")[1]} sub="QuickBooks · incomplete" title="QuickBooks Profit and Loss, Jan 1 – Oct 26, accrual basis. Incomplete: most of the bank feed is unposted and the books are unreconciled. Not final profit" />
-            <Figure label="Books net income · cash" value={net("Net income")[2]} sub="QuickBooks · incomplete" title="QuickBooks Profit and Loss, Jan 1 – Oct 26, cash basis. Incomplete: most of the bank feed is unposted and the books are unreconciled. Not final profit" />
+            <Figure label="Active jobs · job margin" value={t.profit} sub={`${t.jobs} jobs · lifetime · ${t.incomplete.jobs.length} before crew`} title="Job ledger: sale less all-in cost on the active jobs with a sale, over each job's lifetime (not a calendar period). Split 50/50 between YA and Glass Forge" />
+            <Figure label="Active jobs · customers owe" value={t.leftToCollect} sub="sale less payments on file" title="Job ledger: sale less customer payments on file (receipts ledger). The same figure as Purchasing's Customers owe on Active" />
             <Figure label="Bank net cash movement" value={cy.ytd.net} sub={hasBank ? `${bankSpan} · unreconciled` : "no bank lines"} title="Every deposit less every payment in the Hub's Mountain America bank lines. Cash movement, not profit" />
-            <Figure label="Signed jobs · left to collect" value={t.toCollect} sub={`${pipe.jobs.length} jobs · costs partly unknown`} title="Contract sale less cash received (bank) and payments QuickBooks shows after the bank data. See the pipeline below for costs and the unknowns" />
+            <Figure label="Books net income · accrual" value={net("Net income")[1]} sub="QuickBooks · incomplete" title="QuickBooks Profit and Loss, Jan 1 – Oct 26, accrual basis. Incomplete: most of the bank feed is unposted and the books are unreconciled. Not final profit" />
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -279,7 +279,7 @@ function CompanyOverviewContent() {
       {exportError && <p role="alert" className="m-0 rounded-[12px] border bg-white p-3 text-[14px]" style={{ color: LATE }}>{exportError}</p>}
 
       {/* 1. Books YTD */}
-      <Sheet title="1 · Books year to date (QuickBooks)" aside="Profit and Loss, Jan 1 – Oct 26, 2026 · incomplete, not final profit"
+      <Sheet title="3 · Books year to date (QuickBooks)" aside="Profit and Loss, Jan 1 – Oct 26, 2026 · incomplete, not final profit"
         source={<>Source: {BOOKS_PL.source}, read only (accrual read {BOOKS_PL.readAt.accrual}; cash {BOOKS_PL.readAt.cash}). Each column is one basis; the two are never added together.</>}>
         <table className="w-full border-collapse">
           <Head cols={[["Line"], ["Accrual basis", true], ["Cash basis", true]]} />
@@ -299,7 +299,7 @@ function CompanyOverviewContent() {
 
       {/* 2. Bank cash movement YTD */}
       {hasBank && (
-        <Sheet title="2 · Bank cash movement year to date" aside="unreconciled cash movement, not profit"
+        <Sheet title="4 · Bank cash movement year to date" aside="unreconciled cash movement, not profit"
           source={<>Source: the Hub&apos;s Mountain America bank lines ({bankSpan}; {bank.count} lines), not yet checked against bank statements{cy.missing.length ? ` · ${cy.missing.map(monthName).join(", ")} partial: the bank data ends ${dayLabel(bank.last)}` : ""} · <Link to="/operations/bank" className="font-semibold hover:underline" style={{ color: INK }}>Bank →</Link></>}>
           <table className="w-full border-collapse">
             <Head cols={CASH_COLS} />
@@ -376,7 +376,7 @@ function CompanyOverviewContent() {
           <li><strong>Accrual basis:</strong> the books year to date (view 1) are incomplete. Crew pay, supplier costs and payroll aren&apos;t posted, so anchoring a full year to them would overstate profit.</li>
           <li>
             <strong>Cash basis:</strong> the Nov–Dec cash would have to come from a run rate. The {ov.months}-month average ({monthName(ov.from)}–{monthName(ov.to)}) is {money(ov.net)} a month net, and it already includes {money(ov.customerIn)} a month of customer payments (job deposits among them) and {money(ov.suppliers)} a month of supplier payments.
-            The signed-job pipeline (view 3) adds those same kinds of flows again, so the old &quot;Projected 2026&quot; double-counted. Neither can be separated reliably from the labor business yet.
+            The job ledger (view 1) adds those same kinds of flows again, so the old &quot;Projected 2026&quot; double-counted. Neither can be separated reliably from the labor business yet.
           </li>
           <li><strong>Also open:</strong> the weekly $2.5k / $3k stream&apos;s classification, the July imported lines below, and no bank-statement reconciliation.</li>
         </ul>
