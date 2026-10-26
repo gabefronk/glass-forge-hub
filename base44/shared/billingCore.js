@@ -64,12 +64,13 @@ export function extractLaborAmount(description) {
 export function extractExplicitService(note) {
   const text = String(note || "").toLowerCase();
   // "2 vinyl man hours", "1 vinyl hour", and the crew shorthand "2 man vinyl hours" /
-  // "5 man vinyl man hour" (quantity, "man", material, hours).
-  const quantities = [...text.matchAll(/(?:^|[^\w.-])(\d+(?:\.\d+)?)\s*(?:(?:vinyl|composite|alumini?um|wood)\s+)?(?:man[\s-]*(?:hours?|hrs?)|man[\s-]+(?:vinyl|composite|alumini?um|wood)[\s-]+(?:man[\s-]*)?(?:hours?|hrs?)|(?<=vinyl\s|composite\s|aluminum\s|aluminium\s|wood\s)(?:hours?|hrs?))\b/g)];
+  // "5 man vinyl man hour" (quantity, "man", material, hours). A leading-dot half hour
+  // (".5 composite man hours") reads as 0.5.
+  const quantities = [...text.matchAll(/(?:^|[^\w.-])(\d+(?:\.\d+)?|\.\d+)\s*(?:(?:vinyl|composite|alumini?um|wood)\s+)?(?:man[\s-]*(?:hours?|hrs?)|man[\s-]+(?:vinyl|composite|alumini?um|wood)[\s-]+(?:man[\s-]*)?(?:hours?|hrs?)|(?<=vinyl\s|composite\s|aluminum\s|aluminium\s|wood\s)(?:hours?|hrs?))\b/g)];
   const hours = quantities.length === 1 ? Number(quantities[0][1]) : null;
-  // Crew shorthand counts: "trip charg", "trip chrg", "trip chg" (Israel writes "trip charg").
-  // "trip charged" is not a charge instruction and does not match.
-  const tripMatches = [...text.matchAll(/\b(?:(\d+(?:\.\d+)?)\s+)?trip\s*(?:charges?|charg|chrg|chg)\b/g)];
+  // Crew shorthand counts: "trip charg", "trip chrg", "trip chg", "trp charge" (Israel writes
+  // "trip charg"). "trip charged" is not a charge instruction and does not match.
+  const tripMatches = [...text.matchAll(/\b(?:(\d+(?:\.\d+)?)\s+)?(?:trip|trp)\s*(?:charges?|charg|chrg|chg)\b/g)];
   let trips = tripMatches.length === 1 ? Number(tripMatches[0][1] || 1) : null;
   if (trips == null && /\+\s*(?:a\s+)?trip\b/.test(text)) trips = 1;
   const statedTrips = text.match(/\b(\d+)\s+trips?\b/);
