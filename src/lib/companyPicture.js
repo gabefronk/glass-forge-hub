@@ -83,7 +83,7 @@ export function pipelineJob(card, { budgets = [], orders = [], costInputs = [], 
   const unknowns = [];
   if (sale == null) unknowns.push('sale');
   if (materials == null) unknowns.push('supplier cost');
-  if (crew.basis === 'unknown') unknowns.push('crew / labor');
+  if (crew.basis === 'unknown') unknowns.push('crew');
   unknowns.push('overhead');
   const costKnown = sale != null && materials != null;
   const knownMargin = costKnown ? round(sale - materials - (crew.value || 0)) : null;

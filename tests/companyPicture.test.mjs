@@ -35,7 +35,7 @@ test('a half-down job: received in the bank, supplier paid, crew from the budget
 
 test('unknown crew stays unknown (never $0); a typed cost hides crew inside it', () => {
   const unknown = pipelineJob(card('B', 'ordered', { sale: 500, windows: 300, budgetId: 'b2' }), { budgets: [{ id: 'b2', inputs: { labor_cost_sub_pay: 0 } }] });
-  assert.deepEqual([unknown.crew.value, unknown.crew.basis, unknown.unknowns], [null, 'unknown', ['crew / labor', 'overhead']]);
+  assert.deepEqual([unknown.crew.value, unknown.crew.basis, unknown.unknowns], [null, 'unknown', ['crew', 'overhead']]);
   assert.equal(unknown.knownMargin, 200); // before crew and overhead, both named
   const typed = pipelineJob(card('C', 'ordered', { sale: 2411.81, windows: 1256.98, typed: true }), {});
   assert.deepEqual([typed.crew.basis, typed.crew.value, typed.materials, typed.knownMargin], ['typed', null, 1256.98, 1154.83]);
@@ -44,7 +44,7 @@ test('unknown crew stays unknown (never $0); a typed cost hides crew inside it',
   });
   assert.deepEqual([entered.crew.basis, entered.crew.value], ['actual', 0]);
   const noSale = pipelineJob(card('E', 'delivered', { windows: 477.46 }), {});
-  assert.deepEqual([noSale.sale, noSale.knownMargin, noSale.yaShare, noSale.toCollect, noSale.unknowns], [null, null, null, null, ['sale', 'crew / labor', 'overhead']]);
+  assert.deepEqual([noSale.sale, noSale.knownMargin, noSale.yaShare, noSale.toCollect, noSale.unknowns], [null, null, null, null, ['sale', 'crew', 'overhead']]);
 });
 
 test('QuickBooks sales: billed, invoiced unpaid, and cash counted once (in the bank, or after the bank data)', () => {
