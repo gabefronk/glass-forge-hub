@@ -18,7 +18,7 @@ import { computeFeeAmt, computeLaborAmt } from './feeMath.js';
 import { inInvoiceScope } from './invoiceScope.js';
 import { cardFigures, isSold, isCompleted } from './purchasingSummary.js';
 import { SPLIT_PCT } from './purchasingSplit.js';
-import { bankMonth } from './bankLines.js';
+import { bankMonth, bankDays } from './bankLines.js';
 
 const round = (n) => Math.round(n * 100) / 100;
 const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? 0 : Number(v));
@@ -135,7 +135,13 @@ export function companyYear({ rows = [], superseded = new Set(), cards = [], pur
   const keys = Array.from({ length: thisMonth }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   const shown = rows.filter((r) => !superseded.has(r.id) && !(r.job_date && r.job_date > today));
   const issued = glassForgeInvoices(invoices);
-  const months = keys.map((m) => monthFigures(shown.filter((r) => inInvoiceScope(r, m)), m, shopCost(purchaseOrders, m), { invoice: issued.get(m) || null, start, bank: bankMonth(bankLines, m) }));
+  const days = bankDays(bankLines);
+  // Days in the month so far (this month: through today), to say how much of it the bank covers.
+  const monthDays = (m) => (m === today.slice(0, 7) ? Number(today.slice(8, 10)) : new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate());
+  const months = keys.map((m) => ({
+    ...monthFigures(shown.filter((r) => inInvoiceScope(r, m)), m, shopCost(purchaseOrders, m), { invoice: issued.get(m) || null, start, bank: bankMonth(bankLines, m, days) }),
+    monthDays: monthDays(m),
+  }));
   const ytd = { ...total(months), bankMonths: months.filter((m) => m.hasBank).map((m) => m.month) };
   const prior = months.slice(0, -1);
   const left = 12 - thisMonth;
