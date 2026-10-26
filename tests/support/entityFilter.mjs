@@ -18,7 +18,8 @@ export function filterRows(rows, query = {}, sort, limit) {
   if (sort) {
     const desc = String(sort).startsWith('-');
     const key = String(sort).replace(/^[-+]/, '');
-    out = [...out].sort((a, b) => String(a[key] ?? '').localeCompare(String(b[key] ?? '')) * (desc ? -1 : 1));
+    const cmp = (a, b) => { const x = String(a[key] ?? ''), y = String(b[key] ?? ''); return x < y ? -1 : x > y ? 1 : 0; };
+    out = [...out].sort((a, b) => cmp(a, b) * (desc ? -1 : 1));
   }
   return limit ? out.slice(0, limit) : out;
 }
