@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
+import { filterRows } from "./support/entityFilter.mjs";
 import { extractLaborAmount, extractExplicitService, parseServiceBilling, computeLaborAmt, computeFeeAmt, duplicatePostIds, pricingReview, extractPhotoUrls, denverDate, denverMidnight } from "../base44/shared/billingCore.js";
 
 test("real calendar note formats preserve explicit amounts and reject ambiguity", () => {
@@ -46,6 +47,7 @@ test("nested attachment URLs and Denver month boundaries", () => {
 function entity(initial=[]) {
   const rows=structuredClone(initial);
   return { rows, list:async(_sort,limit=1000,skip=0)=>structuredClone(rows.slice(skip,skip+limit)),
+    filter:async(q,sort,limit)=>structuredClone(filterRows(rows,q,sort,limit)),
     bulkCreate:async data=>{const created=data.map((r,i)=>({...r,id:"new-"+(rows.length+i)}));rows.push(...created);return structuredClone(created).reverse();},
     bulkUpdate:async data=>{assert.equal(new Set(data.map(r=>r.id)).size,data.length,"one patch per entity");for(const p of data){const r=rows.find(r=>r.id===p.id);assert.ok(r,"update target exists");Object.assign(r,p);}return data;} };
 }
