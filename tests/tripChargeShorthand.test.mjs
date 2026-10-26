@@ -34,6 +34,25 @@ test('chrg / chg shorthand and the full words still count', () => {
   assert.equal(price('trip charge').ext.trip_charges, 1);
 });
 
+test('"trp charge" counts as a trip', () => {
+  const { ext, service } = price('the super told me i hade to make apoinment trp charge');
+  assert.equal(ext.trip_charges, 1);
+  assert.equal(service.total, 75);
+});
+
+test('".5 composite man hours" reads as half an hour', () => {
+  const { ext, service } = price('Caps replaced on the window trip charge .5 composite man hours');
+  assert.deepEqual([ext.man_hours, ext.trip_charges, ext.needs_review], [0.5, 1, false]);
+  assert.equal(service.labor, 62.5);
+  assert.equal(service.total, 137.5);
+  assert.equal(price('1.5 vinyl man hours').ext.man_hours, 1.5);
+  assert.equal(price('0.5 vinyl man hours').ext.man_hours, 0.5);
+});
+
+test('a dotted part of another token is not an hour count', () => {
+  assert.equal(price('ref 79541131.5 man hours').ext.man_hours, null);
+});
+
 test('"trip charged" and words like "stripping" are not trip charges', () => {
   assert.equal(price('customer was already trip charged last week').ext.trip_charges, null);
   assert.equal(price('weatherstripping replaced').ext.trip_charges, null);
