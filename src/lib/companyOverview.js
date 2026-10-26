@@ -195,6 +195,13 @@ export function cashYear(y, bankLines = []) {
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const monthName = (key) => MONTH_NAMES[Number(String(key).slice(5, 7)) - 1] || key;
 
+// The cash table as CSV (costs as negative numbers, like the page).
+export function cashYearCsv(y, c) {
+  const head = ['Month', 'Bank days', 'Money in', 'Crew pay', 'Overhead', 'Suppliers', 'Glass Forge paid', 'Other costs', 'Profit', 'Earned (Hub)'];
+  const line = (label, r, days) => [label, days, r.moneyIn, -r.crewPay, -r.overhead, -r.suppliers, -r.glassForge, -r.other, r.profit, r.earned].map((v) => (typeof v === 'number' ? round(v || 0).toFixed(2) : `"${String(v).replace(/"/g, '""')}"`)).join(',');
+  return [head.join(','), ...c.months.map((m) => line(`${monthName(m.month)} ${y.year}`, m, `${m.coveredDays} of ${m.monthDays}`)), line(`${y.year} to date`, c.ytd, ''), line('Projected', c.projected, '')].join('\n');
+}
+
 // The YA month table as CSV (costs as negative numbers, like the page).
 export function companyYearCsv(y) {
   const head = ['Month', 'Labor billed', 'Job sales', 'Other income', 'Income', 'Job cost', 'Shop', 'Crew pay', 'Overhead', 'Other costs', 'Glass Forge fees', 'Glass Forge splits', 'Profit', 'Bank lines'];
