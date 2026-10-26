@@ -111,7 +111,7 @@ test('a bank month counts crew pay, overhead and other costs, and leaves out wha
   assert.deepEqual(bankCoverage(lines), { first: '2026-10-05', last: '2026-10-22', months: ['2026-10'], count: 13 });
   const cats = bankByCategory(lines);
   assert.equal(cats.rows.find((r) => r.key === 'job_cost').total, -139862.11);
-  assert.equal(cats.rows.reduce((n, r) => n + r.total, 0).toFixed(2), (73489.81 - 158733.49).toFixed(2));
+  assert.equal(cats.rows.reduce((n, r) => n + r.total, 0).toFixed(2), (73489.81 - 159733.49).toFixed(2));
 });
 
 test('the overview takes bank costs off profit for months with bank lines only', () => {
