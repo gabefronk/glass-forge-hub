@@ -63,7 +63,7 @@ function Head({ cols }) {
     <thead>
       <tr style={{ backgroundColor: HEAD_BG, borderBottom: `2px solid ${STRONG}` }}>
         {cols.map(([label, right, title]) => (
-          <th key={label} title={title} className={th} style={{ padding: "8px 12px", color: STRONG, textAlign: right ? "right" : "left" }}>{label}</th>
+          <th key={label} title={title} className={th} style={{ padding: "8px 10px", color: STRONG, textAlign: right ? "right" : "left" }}>{label}</th>
         ))}
       </tr>
     </thead>
@@ -80,7 +80,7 @@ function Row({ cells, tone = "", title }) {
         const text = kind === "money" || kind === "out" ? money(n) : kind === "pct" ? pct(value) : value;
         const negative = kind === "money" && typeof n === "number" && n < 0;
         return (
-          <td key={i} className={`whitespace-nowrap text-[14px] ${isMoney ? "text-right tabular-nums" : ""} ${total ? "font-bold" : ""}`} style={{ padding: "8px 12px", color: negative ? LATE : INK }}>{text}</td>
+          <td key={i} className={`${i === 0 ? "min-w-[96px] max-w-[190px]" : "whitespace-nowrap"} text-[14px] ${isMoney ? "text-right tabular-nums" : ""} ${total ? "font-bold" : ""}`} style={{ padding: "8px 10px", color: negative ? LATE : INK }}>{text}</td>
         );
       })}
     </tr>
@@ -211,7 +211,7 @@ function CompanyOverviewContent() {
     : <>Crew pay, overhead and other costs from the bank, {dayLabel(bank.first)} – {dayLabel(bank.last)}{noBank.length ? ` · ${noBank.length === 1 ? noBank[0] : `${noBank[0]}–${noBank[noBank.length - 1]}`} before crew pay (no bank lines)` : ""} · <Link to="/operations/bank" className="font-semibold hover:underline" style={{ color: INK }}>Bank →</Link></>;
 
   return (
-    <PageShell>
+    <PageShell width="max-w-[1480px]">
       <section className="rounded-[12px]" style={{ backgroundColor: BAND }}>
         <div className="flex flex-wrap items-center gap-y-2" style={{ minHeight: "68px", padding: "10px 12px 10px 20px" }}>
           <div className="min-w-0">
