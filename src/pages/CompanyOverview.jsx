@@ -354,11 +354,11 @@ function CompanyOverviewContent() {
               ]} />
             ))}
             <Row tone="total" cells={[[`${pipe.jobs.length} jobs`], [""], [t.supplierPaid, "out"], [t.supplierLeft, "out"], [t.crewLeft, "out"], unk(), [t.knownMargin, "money"], [t.netRemaining, "money"], [t.yaShare, "money"], [t.gfShare, "money"],
-              [`overhead on all; crew unknown on ${t.crewUnknown}, inside typed cost on ${t.crewTyped}${t.marginWithheld ? `; margin not shown on ${t.marginWithheld}` : ""}`]]} />
+              ["see below"]]} />
           </tbody>
         </table>
         <div className="text-[13px]" style={{ padding: "8px 16px 12px", color: SECONDARY }}>
-          Total expected job profit is not shown for any job: overhead is unknown on every job, and crew is unknown, estimated or inside a typed cost on most. Totals add only the jobs where a figure exists.
+          Total expected job profit is not shown for any job: overhead is unknown on all {pipe.jobs.length}; crew is unknown on {t.crewUnknown} and inside a typed cost on {t.crewTyped}{t.marginWithheld ? `; the margin is not shown on ${t.marginWithheld} (no sale or cost)` : ""}. Totals add only the jobs where a figure exists.
           {" "}Supplier left counts orders not found paid in the bank lines: {money(cy.ytd.suppliers - cy.ytd.jobSuppliers)} of supplier payments this year have no Hub job order (Builders FirstSource, ABC Supply and others), so part of what shows as left may already be paid.
         </div>
       </Sheet>
