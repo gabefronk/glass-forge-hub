@@ -34,7 +34,6 @@ export const LEDGER_NOTES = {
   '6ab65a0af4c7aab207863abb': ['For Gabriel: QuickBooks bills $2,406.60 in all (invoice 1002 $1,474.71 + invoice 1013 $931.89, memo "final payment"); the Hub sale is $2,863.79, $457.19 more. Which one is the agreed price is not on file.'],
   '6ac9042f38f6acd458b62de1': ['Supplier tax dispute open: 7.45% computed ($9,393.34) vs 4.75% charged ($5,989.04). The cost uses what was charged and paid.'],
   '6ad905765c09889963f111b3': ['For Gabriel: ABC Supply was paid $1,506.49 on Oct 22 for PO "TOBY HOLMES" (payment confirmation #370416113); the budget cost is $1,403.10, $103.39 less (consistent with sales tax). The cost is left at the budget figure until you confirm.'],
-  '6adb07ab10207439dec8647a': ['For Gabriel: marked Paid, but no $600 payment is in the bank feed, QuickBooks or email. No receipt is assumed.'],
   '6ac0842bdacabf0b5ef5a31f': ['For Gabriel: Glass Forge invoices GF-2026-002/003 bill "Holmes Homes - Agren" install lines at 10% (April $4,544.00, $350.00, $75.00, $695.00 job values; May $300.00 service). Whether that is the same job as this October cash sale is not on file. No invoice changed.'],
 };
 
@@ -100,6 +99,7 @@ export function ledgerJob(card, { budgets = [], orders = [], costInputs = [], ba
     paid,
   };
   if (matValue == null) flags.push('Materials cost unknown');
+  else if (paid > matValue) flags.push(`Bank feed shows ${usd(paid)} paid to suppliers, more than the ${usd(matValue)} materials cost`);
   else if (paid > 0 && !same(paid, matValue)) flags.push(`Bank feed shows ${usd(paid)} paid to suppliers against ${usd(matValue)} materials${suppliersPaid ? '; the rest is owner-confirmed paid' : ''}`);
   // How the supplier bills are known to be paid: feed (all of it in the bank feed), feed + owner,
   // owner (owner-confirmed, no bank line matched), or none (not confirmed).
@@ -144,7 +144,7 @@ export function ledgerJob(card, { budgets = [], orders = [], costInputs = [], ba
   const received = sum(receipts, (r) => r.amount);
   const leftToCollect = saleValue == null ? null : round(saleValue - received);
   const invoices = jobSales.map((s) => ({ ref: s.ref, date: s.date, amount: s.amount, open: s.open || 0 }));
-  if (isCompleted(card) && !receipts.length) flags.push('Marked Paid, but no payment is on file in the bank feed or QuickBooks');
+  if (isCompleted(card) && !receipts.length) flags.push('For Gabriel: marked Paid, but no payment is on file in the bank feed or QuickBooks; no receipt is assumed');
 
   for (const b of used) {
     if (b.status === 'needs_review') flags.push(`Budget "${b.title}" needs review: figures not confirmed`);
