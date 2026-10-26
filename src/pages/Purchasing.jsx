@@ -171,8 +171,8 @@ function PurchasingWorkspace() {
       )}
 
       {completed.length > 0 && (
-        <details className="group flex flex-col gap-2" aria-label="Completed">
-          <summary className="flex cursor-pointer list-none items-center gap-2 py-1" title="Jobs marked Paid. Out of the active list and Customers owe; still counted in Sold, Job cost and Est. profit.">
+        <details className="group" aria-label="Completed">
+          <summary className="flex cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden" title="Jobs marked Paid. Out of the active list and Customers owe; still counted in Sold, Job cost and Est. profit.">
             <ChevronDown className="h-4 w-4 -rotate-90 transition-transform group-open:rotate-0" style={{ color: '#566063' }} />
             <h2 className="m-0 text-[17px] font-bold" style={{ color: '#101617' }}>Completed <span className="tabular-nums" style={{ color: '#566063', fontWeight: 500 }}>{completed.length}</span></h2>
           </summary>
