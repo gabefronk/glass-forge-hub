@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Sparkles } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Sparkles, Landmark } from "lucide-react";
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
