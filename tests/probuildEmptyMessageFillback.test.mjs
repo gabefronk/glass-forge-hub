@@ -67,7 +67,7 @@ function memoryDb(seed = {}, opts = {}) {
   };
   const entity = (name) => ({
     list: async (_sort, limit = 1000, skip = 0) => table(name).slice(skip, skip + limit).map((r) => structuredClone(r)),
-    filter: async (q = {}) => table(name).filter((r) => Object.entries(q).every(([k, v]) => r[k] === v)).map((r) => structuredClone(r)),
+    filter: async (q = {}, sort, limit) => filterRows(table(name), q, sort, limit).map((r) => structuredClone(r)),
     get: async (id) => {
       if (name === 'FieldReports') frGetCalls.push(id);
       const rec = table(name).find((x) => x.id === id);
