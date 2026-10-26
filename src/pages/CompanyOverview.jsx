@@ -375,14 +375,14 @@ function CompanyOverviewContent() {
 
       {/* 2. Company profit */}
       <Sheet title="2 · Company profit" aside={`YA operating statement · cash basis · ${dayLabel(op.period.from)} – ${dayLabel(op.period.to)}, ${op.period.to.slice(0, 4)} · bank lines, unreconciled`}
-        source="One period and basis: every Mountain America bank line in the period. Only genuine operating expenses are deducted. Owner draws, loan payments and transfers are not expenses. Items still to classify are listed apart and not deducted, so the result is before them, not a final profit. Job-lifetime margins (view 1) are a different basis and are not added here.">
+        source="One period and basis: every Mountain America bank line in the period. Only genuine operating expenses are deducted. Owner draws, loan principal and transfers are not operating expenses; loan interest and fees are, and the bank doesn't split them, so loan payments wait with the items to classify. Those items are listed apart and not deducted, so the subtotal comes before them and is not a profit. Job-lifetime margins (view 1) are a different basis and are not added here.">
         <table className="w-full border-collapse">
           <Head cols={[["Line"], ["Amount", true]]} />
           <tbody>
             {OPERATING_GROUPS.filter(([, , k]) => k === "income").map(([key, label]) => <Row key={key} cells={[[label], [op.totals[key], "money"]]} />)}
             <Row tone="total" cells={[["Income"], [op.income, "money"]]} />
             {OPERATING_GROUPS.filter(([, , k]) => ["direct", "intercompany", "opex"].includes(k)).map(([key, label]) => <Row key={key} cells={[[label], [op.totals[key], "out"]]} />)}
-            <Row tone="total" cells={[["Operating result before the items still to classify"], [op.resultBeforePending, "money"]]} />
+            <Row tone="total" cells={[["Operating subtotal before the items still to classify (not a profit)"], [op.resultBeforePending, "money"]]} />
             {OPERATING_GROUPS.filter(([, , k]) => k === "pending").map(([key, label]) => <Row key={key} tone="muted" cells={[[`To classify · ${label}`], [op.totals[key], "out"]]} />)}
             <Row tone="muted" cells={[["To classify, total (not deducted above)"], [op.pending, "out"]]} />
             {OPERATING_GROUPS.filter(([, , k]) => k === "excluded").map(([key, label]) => <Row key={key} cells={[[`Not an expense · ${label}`], [op.totals[key], "out"]]} />)}
@@ -395,7 +395,7 @@ function CompanyOverviewContent() {
           <Head cols={[["Basis"], ["YA", true], ["Glass Forge", true], ["Combined", true, "YA and Glass Forge together, with the amount between them counted once"]]} />
           <tbody>
             <Row cells={[[`Active jobs · job lifetime · ${t.priced} jobs with a sale (job ledger)`], [entities.jobs.ya, "money"], [entities.jobs.gf, "money"], [entities.jobs.combined, "money"]]} />
-            <Row cells={[[`Cash basis · ${dayLabel(op.period.from)} – ${dayLabel(op.period.to)} · before items to classify`], [entities.cash.ya, "money"],
+            <Row cells={[[`Cash basis · ${dayLabel(op.period.from)} – ${dayLabel(op.period.to)} · operating subtotal before items to classify, not a profit`], [entities.cash.ya, "money"],
               [<span key="g">{money(entities.cash.gfFromYa)} <span className="text-[13px]" style={{ color: SECONDARY }}>from YA; own costs not in the Hub</span></span>, "r"], [entities.cash.combined, "money"]]} />
           </tbody>
         </table>
