@@ -203,7 +203,7 @@ test('the earned figures stay the Hub\'s own: bank costs only reach the cash tab
   // Earned: labor less the 10% fee, untouched by the bank's crew pay, overhead and other costs.
   assert.deepEqual([feb.hasBank, feb.income, feb.profit], [true, 1000, 900]);
   assert.deepEqual([y.ytd.profit, y.ytd.bankMonths], [1800, ['2026-02']]);
-  // The bank's side of February, on the cash table: 25 in; 400 + 100 + 50 out (job orders and
-  // BFS labor payments counted too, since cash counts every line).
+  // The bank's side of February, on the cash table, counts every line: 1,025 in (the BFS payment
+  // and the other income); out 400 crew, 100 overhead, 9,999 supplier order, 50 other.
   assert.deepEqual([feb.bank.cash.crewPay, feb.bank.cash.overhead, feb.bank.cash.suppliers, feb.bank.cash.other, feb.bank.cash.moneyIn], [400, 100, 9999, 50, 1025]);
 });
