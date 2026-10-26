@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { groupJobs } from '../../src/lib/jobDedupe.js';
 import { createJobIndex, canonicalJob } from '../shared/jobIdentity.js';
+import { filterRows } from '../../tests/support/entityFilter.mjs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 
@@ -67,7 +68,7 @@ function memoryDb(seed = {}) {
       if (fail.has(name)) throw new Error(`${name} unavailable`);
       return sortRows(table(name), sort).slice(skip, skip + limit).map((r) => ({ ...r }));
     },
-    filter: async (q = {}, sort, limit = 1000) => sortRows(table(name).filter((r) => Object.entries(q).every(([k, v]) => r[k] === v)), sort).slice(0, limit),
+    filter: async (q = {}, sort, limit = 1000) => filterRows(table(name), q, sort, limit).map((r) => ({ ...r })),
     get: async (id) => {
       const r = table(name).find((x) => x.id === id);
       if (!r) throw new Error('not found');
