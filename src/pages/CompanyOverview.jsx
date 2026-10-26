@@ -170,7 +170,9 @@ function CompanyOverviewContent() {
   }
   if (!year) return <PageShell><p role="alert" className="rounded-[12px] border bg-white p-4 text-[14px]" style={{ color: LATE }}>{state.error}</p></PageShell>;
 
-  const { ytd, pace, pipeline, rest, projected } = year;
+  const { ytd, pace, pipeline, projected } = year;
+  // No labor pace in December (no months left) or in January (no month before to average).
+  const rest = year.rest.filter((r) => r.key !== "pace" || (pace.months > 0 && pace.to));
   const paceLabel = `${monthName(`${year.year}-${String(13 - pace.months).padStart(2, "0")}`)}–Dec labor at the ${monthName(pace.from)}–${monthName(pace.to)} average`;
   const restLabel = { pipeline: `Open Purchasing jobs · ${pipeline.jobs.length}`, pace: paceLabel };
   const thisMonthName = monthName(thisMonth);
