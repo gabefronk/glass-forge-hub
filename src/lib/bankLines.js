@@ -169,13 +169,13 @@ export function suggestBankLine(line, { purchaseOrders = [], vendorOrders = [], 
     if (/^check\b/i.test(desc.trim()) && -amt <= 3500) return rule('crew_pay', 'Check up to $3,500 (payee not in the export)');
     return rule('other_cost', 'Not sorted yet');
   }
+  if (/other income/i.test(qb)) return rule('other_income', qb.replace(/^.*:/, ''));
   if (/intuit/i.test(desc)) {
     const c = cents(amt);
     const job = sales.find((j) => j.sale && (cents(j.sale) === c || Math.abs(cents(j.sale) / 2 - c) <= 0.5));
     if (job) return { category: 'customer_payment', match: 'exact', match_note: `${job.name}: ${cents(job.sale) === c ? 'full sale' : 'half of the sale'}`, job_id: job.id, purchase_order_id: '', vendor_order_id: '' };
     return rule('customer_payment', 'QuickBooks Payments deposit (customer not in the export)');
   }
-  if (/other income/i.test(qb)) return rule('other_income', qb.replace(/^.*:/, ''));
   if (/^deposit( by( check)?)?$/i.test(desc.trim())) return rule('labor_payment', 'Deposit (BFS labor payment)');
   if (/\bmh\b|mhsoniq/i.test(desc)) return rule('customer_payment', `ACH customer payment${line.from_to ? ` from ${line.from_to}` : ''}`);
   return rule('other_income', 'Not sorted yet');
