@@ -117,7 +117,7 @@ function RepairPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-white p-4 card-shadow" style={{ border: `1px solid ${C.border}` }}>
             <p className="m-0 text-sm" style={{ color: C.text }}>
               Ready to link <strong>{preview.fee_lines?.linked_now || 0}</strong> of {preview.fee_lines?.unlinked || 0} billing lines, <strong>{preview.calendar_events.linked_now}</strong> of {preview.calendar_events.unlinked} calendar events and <strong>{preview.field_reports.linked_now}</strong> of {preview.field_reports.unlinked} field reports with no job.
-              {preview.skipped_ambiguous ? ` ${preview.skipped_ambiguous} skipped (lines disagree on the job).` : ''}
+              {preview.skipped_ambiguous ? ` ${preview.skipped_ambiguous} skipped because their evidence points at more than one job.` : ''}
             </p>
             <button type="button" disabled={busy || !((preview.fee_lines?.linked_now || 0) + preview.calendar_events.linked_now + preview.field_reports.linked_now)} onClick={() => runBackfill(false)} className={`${heroBtn} disabled:opacity-50`} style={heroPrimary}>Link them</button>
           </div>
