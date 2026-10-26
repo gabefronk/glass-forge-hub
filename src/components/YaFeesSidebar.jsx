@@ -4,19 +4,29 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Sparkles, Landmark } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Sparkles, Landmark, Calculator } from "lucide-react";
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
-// Owner-only admin/background routes are grouped under ADMIN_ITEMS below.
+// Owner-only admin/background routes are grouped under ADMIN_ITEMS below. The money pages sit in
+// one Accounting group (Gabe, Oct 26) between Jobs and Calendar.
 const NAV_ITEMS = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
-  { label: "Invoicing", to: "/", icon: Receipt },
-  { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
+];
+const NAV_AFTER = [
   { label: "Calendar", to: "/calendar", icon: Calendar },
 ];
+
+// Mirrored in MobileBottomNav's Accounting sheet.
+const ACCOUNTING_ITEMS = [
+  { label: "Invoicing", to: "/", icon: Receipt },
+  { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
+  { label: "Bank", to: "/operations/bank", icon: Landmark, ownerOnly: true },
+  { label: "Company overview", to: "/operations/overview", icon: BarChart3, ownerOnly: true },
+];
+const inAccounting = (pathname) => ACCOUNTING_ITEMS.some((item) => pathname === item.to || (item.to !== "/" && pathname.startsWith(`${item.to}/`)));
 
 const MORE_ITEMS = [
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
@@ -27,8 +37,6 @@ const MORE_ITEMS = [
 
 // Owner-only admin tools (mirrored in MobileBottomNav's More sheet).
 const ADMIN_ITEMS = [
-  { label: "Company overview", to: "/operations/overview", icon: BarChart3 },
-  { label: "Bank", to: "/operations/bank", icon: Landmark },
   { label: "Agent Center", to: "/admin/agents", icon: Bot },
   { label: "System Map", to: "/system-map", icon: Network },
   { label: "Research Queue", to: "/research-queue", icon: Search },
@@ -137,6 +145,22 @@ export default function YaFeesSidebar() {
       <nav aria-label="Main navigation" className="min-h-0 flex-1 px-3 py-3 space-y-0.5 overflow-y-auto obsidian-scroll">
         {NAV_ITEMS.filter(item => (!item.ownerOnly || owner) && (!isWindowQuotesOnly(user) || item.to === "/window-quotes" || item.to === "/brands-specs" || item.to === "/summit")).map((item) => (
           <SidebarLink key={item.to} item={item} active={pathname === item.to || (item.to === "/jobs" && pathname.startsWith("/jobs/"))} />
+        ))}
+        {!isWindowQuotesOnly(user) && (
+          <details key={"accounting-" + pathname} open={inAccounting(pathname)} className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium hover:bg-white/5" style={{ minHeight: "36px", color: inAccounting(pathname) ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }}>
+              <Calculator className="h-4 w-4 shrink-0" strokeWidth={1.8} strokeLinecap="round" />Accounting
+              <span aria-hidden="true" className="ml-auto transition-transform group-open:rotate-180">⌄</span>
+            </summary>
+            <div className="space-y-0.5 pl-4">
+              {ACCOUNTING_ITEMS.filter((item) => !item.ownerOnly || owner).map((item) => (
+                <SidebarLink key={item.to} item={item} active={pathname === item.to || (item.to !== "/" && pathname.startsWith(`${item.to}/`))} />
+              ))}
+            </div>
+          </details>
+        )}
+        {NAV_AFTER.filter(() => !isWindowQuotesOnly(user)).map((item) => (
+          <SidebarLink key={item.to} item={item} active={pathname === item.to} />
         ))}
         <details key={"more-"+pathname} open={MORE_ITEMS.some(item => item.to === pathname)} className="pt-2">
           <summary className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-[13.5px]" style={{color:"var(--gf-sidebar-muted)"}}>More<span aria-hidden="true" className="ml-auto">⌄</span></summary>
