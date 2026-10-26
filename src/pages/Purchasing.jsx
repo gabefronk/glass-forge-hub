@@ -6,8 +6,8 @@ import { paymentStage } from '@/lib/jobPayment';
 import { useAuth } from '@/lib/AuthContext';
 import { isPurchasingMoneyOwner } from '@/lib/purchasingMoneyAccess';
 import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
-import { buildPurchasingCards, cardMatchesSearch, unlinkedEntities } from '@/lib/purchasingViewModel';
-import { scopesForJob, applyScopeRollup } from '@/lib/purchasingScopes';
+import { cardMatchesSearch, unlinkedEntities } from '@/lib/purchasingViewModel';
+import { purchasingBoardCards } from '@/lib/purchasingScopes';
 import { PageShell } from '@/components/PageShell';
 import PurchasingHeader from '@/components/purchasing/PurchasingHeader';
 import PageNotFound from '@/lib/PageNotFound';
@@ -54,24 +54,8 @@ function PurchasingWorkspace() {
   useEffect(() => { load(); return () => { loadSeq.current++; }; }, [load]);
 
   const today = denverDate();
-  const cards = useMemo(() => {
-    if (!data) return [];
-    const built = buildPurchasingCards({
-      jobs: data.jobs, budgets: data.budgets, purchase_orders: data.purchase_orders,
-      vendor_orders: data.vendor_orders, conflicts: data.conflicts, today,
-    });
-    // Each job also carries its scopes: the board adds one row per scope when a
-    // job holds more than one (a second budget, a reorder PO, an order with no
-    // PO). Multi-scope job rows then withhold scope-derived money via
-    // applyScopeRollup so the roll-up can never read as a job total.
-    // The header figures and the filter also read the customer payment stage.
-    const jobsById = new Map((data.jobs || []).map((j) => [j.id, j]));
-    return built.map((card) => applyScopeRollup({
-      ...card,
-      scopes: scopesForJob(card.job.id, data),
-      paymentStage: jobsById.get(card.job.id)?.payment_status || '',
-    }));
-  }, [data, today]);
+  // One card per job with its scope rows and payment stage (shared with the Company overview).
+  const cards = useMemo(() => purchasingBoardCards(data, today), [data, today]);
   // Quotes with no stage (or only Sent to customer) are not sold yet: they get their own
   // section below and stay out of the header figures, the Show counts and the export.
   const matched = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
