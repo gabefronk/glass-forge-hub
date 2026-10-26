@@ -84,7 +84,7 @@ test('supplier payments: feed-verified, feed plus owner-confirmed, or owner-conf
   assert.deepEqual([feed.materials.paidBasis, part.materials.paidBasis, owner.materials.paidBasis, none.materials.paidBasis, over.materials.paidBasis], ['feed', 'feed+owner', 'owner', 'none', 'feed']);
   // A payment above the budget is shown, never used to change the cost.
   assert.deepEqual([over.materials.value, over.materials.paid, over.cost], [1403.10, 1506.49, 1403.10]);
-  assert.ok(over.flags.some((f) => f.startsWith('Bank feed shows $1,506.49 paid')));
+  assert.ok(over.flags.includes('Bank feed shows $1,506.49 paid to suppliers, more than the $1,403.10 materials cost'));
 });
 
 test('the owner-confirmed Edgren job: sale $14,023.73, cost $10,849.11, profit $3,174.62, $1,587.31 each, owes $7,011.86', () => {
@@ -107,7 +107,7 @@ test('the ledger splits sold jobs into active and completed and leaves quotes ou
   const l = jobLedger({ cards: [card('A', 'half_down', { sale: 1000, windows: 400, rough: 0 }), card('Q', 'sent_to_customer', { sale: 9, windows: 1 }), card('P', 'paid', { sale: 600, windows: 300, typed: true })] });
   assert.deepEqual([l.active.map((r) => r.id), l.completed.map((r) => r.id)], [['A'], ['P']]);
   assert.deepEqual([l.totals.active.profit, l.totals.completed.profit], [600, 300]);
-  assert.ok(l.completed[0].flags.some((f) => f.startsWith('Marked Paid, but no payment')));
+  assert.ok(l.completed[0].flags.some((f) => f.startsWith('For Gabriel: marked Paid, but no payment')));
 });
 
 test('YA operating year: genuine expenses only; taxes, payroll, weekly stream, Amex, unsorted and loans (interest is an expense) wait; draws excluded', () => {
