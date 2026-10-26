@@ -80,14 +80,15 @@ function BankContent({ user }) {
     if (!file) return;
     setMessage(""); setBusy("Reading the file…");
     try {
-      const [text, pos, vos, board] = await Promise.all([
+      const [text, pos, vos, invoices, board] = await Promise.all([
         file.text(),
         base44.entities.PurchaseOrders.list("-created_date", 2000),
         base44.entities.VendorOrders.list("-created_date", 2000),
+        base44.entities.Invoices.list("-invoice_date", 2000).catch(() => []),
         purchasingRequest({ action: "overview" }),
       ]);
       const sales = purchasingBoardCards(board, denverDate()).map((c) => ({ id: c.job?.id, name: c.job?.canonical_name || "", sale: cardFigures(c).sale })).filter((j) => j.id && j.sale > 0);
-      const plan = planBankImport(text, { existing: state.lines, purchaseOrders: pos, vendorOrders: vos, sales });
+      const plan = planBankImport(text, { existing: state.lines, purchaseOrders: pos, vendorOrders: vos, invoices, sales });
       setPending({ file: file.name, plan });
     } catch (err) {
       setMessage(err?.message || "The file could not be read.");
