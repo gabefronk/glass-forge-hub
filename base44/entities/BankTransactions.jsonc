@@ -1,0 +1,136 @@
+{
+  "name": "BankTransactions",
+  "type": "object",
+  "properties": {
+    "account": {
+      "type": "string",
+      "title": "Account",
+      "description": "Bank account the line came from, e.g. 'YA \u00b7 Mountain America'."
+    },
+    "posted_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Date",
+      "description": "Date the bank posted the line (YYYY-MM-DD)."
+    },
+    "description": {
+      "type": "string",
+      "title": "Bank description",
+      "description": "The bank's description, as exported."
+    },
+    "amount": {
+      "type": "number",
+      "title": "Amount",
+      "description": "Signed: money in positive, money out negative."
+    },
+    "from_to": {
+      "type": "string",
+      "title": "From/To",
+      "description": "Payee or payer from the export, when it has one."
+    },
+    "qb_category": {
+      "type": "string",
+      "title": "QuickBooks guess",
+      "description": "QuickBooks' Match/Categorize column, kept for reference only. Often wrong."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "labor_payment",
+        "customer_payment",
+        "other_income",
+        "job_cost",
+        "shop",
+        "supplier",
+        "crew_pay",
+        "payroll",
+        "overhead",
+        "other_cost",
+        "owner_draw",
+        "transfer"
+      ],
+      "title": "Category",
+      "description": "Counted elsewhere already (left out of the overview's profit): labor_payment (BFS paying install labor billed), customer_payment (a customer paying a job), job_cost (a supplier paid for a Purchasing job's order), shop (a shop PO). Counted from the bank: other_income, supplier (a supplier not tied to a Hub order), crew_pay, payroll, overhead, other_cost (not sorted yet). Not profit or loss: owner_draw, transfer."
+    },
+    "job_id": {
+      "type": "string",
+      "title": "Job",
+      "description": "Hub job the line belongs to, when known."
+    },
+    "purchase_order_id": {
+      "type": "string",
+      "title": "PO",
+      "description": "Hub PurchaseOrders record the payment matches."
+    },
+    "vendor_order_id": {
+      "type": "string",
+      "title": "Supplier order",
+      "description": "Hub VendorOrders record the payment matches."
+    },
+    "match": {
+      "type": "string",
+      "enum": [
+        "exact",
+        "rule",
+        "manual"
+      ],
+      "title": "Match",
+      "description": "exact: the amount equals a Hub order or sale. rule: the category came from the bank description. manual: set by hand."
+    },
+    "match_note": {
+      "type": "string",
+      "title": "Match note",
+      "description": "What the line was matched to, in words."
+    },
+    "fingerprint": {
+      "type": "string",
+      "title": "Fingerprint",
+      "description": "account|date|amount|description|n (n = position among identical lines that day). Re-importing an overlapping export skips lines already here."
+    },
+    "import_batch": {
+      "type": "string",
+      "title": "Import batch"
+    },
+    "source_file": {
+      "type": "string",
+      "title": "Source file"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "categorized_by_email": {
+      "type": "string"
+    },
+    "categorized_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "posted_date",
+    "amount",
+    "category"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
