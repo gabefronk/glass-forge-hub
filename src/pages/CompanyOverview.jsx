@@ -12,7 +12,7 @@ import { moneyBarSegments, moneyStrip } from "@/lib/invoiceMoneyBar";
 import { planSplitLines, isHeldForPurchasing } from "@/lib/purchasingSplit";
 import { purchasingBoardCards } from "@/lib/purchasingScopes";
 import { paymentStage } from "@/lib/jobPayment";
-import { companyYear, companyYearCsv, withSplitPlan, monthName } from "@/lib/companyOverview";
+import { companyYear, companyYearCsv, cashYear, withSplitPlan, monthName } from "@/lib/companyOverview";
 import { bankCoverage } from "@/lib/bankLines";
 import { purchasingRequest, money } from "@/components/budgets/ProcurementForms";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -161,6 +161,7 @@ function CompanyOverviewContent() {
   }, [today]);
 
   const year = useMemo(() => (state.data ? companyYear({ rows: state.data.rows, superseded: state.data.superseded, cards: state.data.cards, purchaseOrders: state.data.pos, invoices: state.data.invoices, bankLines: state.data.bankLines, today }) : null), [state.data, today]);
+  const cy = useMemo(() => (year ? cashYear(year, state.data.bankLines) : null), [year, state.data]);
   const bank = useMemo(() => (state.data ? bankCoverage(state.data.bankLines.filter((l) => String(l.posted_date || "").startsWith(today.slice(0, 4)))) : null), [state.data, today]);
   // This month's Ready to invoice and Invoiced, unpaid: Invoicing's own money strip.
   const strip = useMemo(() => {
@@ -207,8 +208,13 @@ function CompanyOverviewContent() {
   const noBank = year.months.filter((m) => !m.hasBank).map((m) => monthName(m.month));
   const partial = year.months.filter((m) => m.hasBank && m.bank.coveredDays < m.monthDays);
   const monthLabel = (m) => (m.hasBank && m.bank.coveredDays < m.monthDays ? `${monthName(m.month)} · bank ${m.bank.coveredDays} of ${m.monthDays} days` : monthName(m.month));
-  const bankMonths = year.months.filter((m) => m.hasBank);
-  const cash = { moneyIn: bankMonths.reduce((n, m) => n + m.bank.moneyIn, 0), moneyOut: bankMonths.reduce((n, m) => n + m.bank.moneyOut, 0), income: bankMonths.reduce((n, m) => n + m.income, 0) };
+  // The headline is on a cash basis when there are bank lines (Gabe, Oct 26).
+  const onCash = cy.months.length > 0;
+  const cashLabel = (m) => (m.partial ? `${monthName(m.month)} · bank ${m.coveredDays} of ${m.monthDays} days` : monthName(m.month));
+  const gap = cy.ytd.moneyIn - cy.ytd.earned;
+  const cashRest = { pipeline: `Open Purchasing jobs · still to collect and pay`, pace: cy.full ? `${monthName(`${year.year}-${String(13 - cy.rest[1].months).padStart(2, "0")}`)}–Dec at the ${monthName(cy.rest[1].from)}–${monthName(cy.rest[1].to)} average` : "" };
+  const cashCells = (label, r, { earned = true } = {}) => [[label], [r.moneyIn, "money"], [r.crewPay, "out"], [r.overhead, "out"], [r.suppliers, "out"], [r.glassForge, "out"], [r.other, "out"], [r.profit, "money"], [r.moneyIn ? r.profit / r.moneyIn : null, "pct"],
+    earned ? [r.earned, "money"] : [""], earned ? [r.moneyIn - r.earned, "money"] : [""]];
   const profitLabel = !ytd.bankMonths.length ? "YA profit, before crew pay" : !noBank.length ? "YA profit" : `YA profit · crew pay ${ytd.bankMonths.length === 1 ? `${monthName(ytd.bankMonths[0])} only` : `${ytd.bankMonths.length} months`}`;
   const bankAside = !bank?.count
     ? <>No bank lines yet, so profit is before crew pay. <Link to="/operations/bank" className="font-semibold hover:underline" style={{ color: INK }}>Import the bank CSV →</Link></>
@@ -226,8 +232,17 @@ function CompanyOverviewContent() {
           <div className="grid grid-cols-4 max-[1023px]:order-last max-[1023px]:w-full max-[1023px]:grid-cols-2">
             <Figure label="YA income" value={ytd.income} title="Install labor billed plus outside job sales, January to today" />
             <Figure label="Glass Forge income" value={ytd.glassForge} title={`Issued Glass Forge invoices (${money(ytd.invoiced)}) plus months not invoiced yet at the Hub's figures (${money(ytd.notInvoiced)}), from March 2026`} />
-            <Figure label={profitLabel} value={ytd.profit} title={`YA income less job cost, shop purchases, Glass Forge, and the bank's crew pay (${money(-ytd.crewPay)}), overhead (${money(-ytd.overhead)}) and other costs (${money(-ytd.otherCost)})${noBank.length ? `. ${noBank.join(", ")}: no bank lines yet, so before crew pay` : ""}`} color={ytd.profit < 0 ? "#F0A8A6" : TITLE} />
-            <Figure label={`Projected ${year.year} YA profit`} value={projected.profit} title="Profit to date, plus YA's half of the open Purchasing jobs, plus the rest of the year's install labor at this year's monthly average less Glass Forge's fee" color={BRASS_LT} />
+            {onCash ? (
+              <>
+                <Figure label="YA profit · cash" value={cy.ytd.profit} title={`Bank deposits (${money(cy.ytd.moneyIn)}) less everything paid out of YA's account (transfers and owner draws aside), ${dayLabel(bank.first)} – ${dayLabel(bank.last)}${cy.missing.length ? `. ${cy.missing.map(monthName).join(" and ")} are only partly covered by the exports` : ""}. Cash until the Hub's income is fixed`} color={cy.ytd.profit < 0 ? "#F0A8A6" : TITLE} />
+                <Figure label={`Projected ${year.year} · cash`} value={cy.projected.profit} title="Cash to date, plus the open Purchasing jobs' sales still to collect less costs still to pay and Glass Forge's half, plus the months left at the average of the fully covered months" color={BRASS_LT} />
+              </>
+            ) : (
+              <>
+                <Figure label={profitLabel} value={ytd.profit} title="YA income less job cost, shop purchases and Glass Forge. Crew pay is not recorded in the Hub" color={ytd.profit < 0 ? "#F0A8A6" : TITLE} />
+                <Figure label={`Projected ${year.year} YA profit`} value={projected.profit} title="Profit to date, plus YA's half of the open Purchasing jobs, plus the rest of the year's install labor at this year's monthly average less Glass Forge's fee" color={BRASS_LT} />
+              </>
+            )}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -245,7 +260,23 @@ function CompanyOverviewContent() {
 
       {exportError && <p role="alert" className="m-0 rounded-[12px] border bg-white p-3 text-[14px]" style={{ color: LATE }}>{exportError}</p>}
 
-      <Sheet title="YA Windows & Doors" aside={bankAside}>
+      {onCash && (
+        <Sheet title="YA Windows & Doors · cash" aside={<>Bank deposits in, everything paid out of the account out · the headline until the Hub&apos;s income is fixed{cy.missing.length ? ` · ${cy.missing.map(monthName).join(", ")} only partly covered` : ""} · <Link to="/operations/bank" className="font-semibold hover:underline" style={{ color: INK }}>Bank →</Link></>}>
+          <table className="w-full border-collapse">
+            <Head cols={[["Month"], ["Money in", true, "Every deposit"], ["Crew pay", true, "Drafts and checks up to $3,500"], ["Overhead", true, "Payroll, payroll taxes, insurance, equipment rental, taxes, fees"],
+              ["Suppliers", true, "Supplier orders for Hub jobs, shop POs and suppliers with no Hub order"], ["Glass Forge", true, "Glass Forge invoices YA paid"], ["Other costs", true, "Amex card payments, loan payments and lines not sorted yet"],
+              ["Profit", true, "Money in less all of the above"], ["Margin", true, "Profit ÷ money in"], ["Earned (Hub)", true, "The month's YA income in the Hub (the earned table below)"], ["In less earned", true, "Deposits less the Hub's income. Positive: money came in that the Hub doesn't count (earlier work, customers not in the Hub, deposits on open jobs)"]]} />
+            <tbody>
+              {cy.months.map((m) => <Row key={m.month} cells={cashCells(cashLabel(m), m)} title={m.partial ? `The bank exports cover ${m.coveredDays} of this month's ${m.monthDays} days` : undefined} />)}
+              <Row tone="total" cells={cashCells(`${year.year} to date`, cy.ytd)} />
+              {cy.rest.filter((r) => r.key === "pipeline" || cy.full).map((r) => <Row key={r.key} cells={cashCells(cashRest[r.key], r, { earned: false })} title={r.key === "pipeline" ? "Sale still to collect (less customer payments matched to the job in the bank), cost still to pay (less supplier payments matched to the job) and Glass Forge's half of the profit" : `The fully covered months' average × ${r.months}`} />)}
+              <Row tone="projected" cells={cashCells(`Projected ${year.year}`, cy.projected, { earned: false })} />
+            </tbody>
+          </table>
+        </Sheet>
+      )}
+
+      <Sheet title={onCash ? "YA Windows & Doors · earned (Hub income)" : "YA Windows & Doors"} aside={<>{onCash ? `Income the Hub counts: ${money(gap)} less than came into the bank · ` : ""}{bankAside}</>}>
         <table className="w-full border-collapse">
           <Head cols={YA_COLS} />
           <tbody>
@@ -257,17 +288,6 @@ function CompanyOverviewContent() {
         </table>
       </Sheet>
 
-      {bankMonths.length > 0 && (
-        <Sheet title="Bank account · cash in and out" aside={`Every bank line, sorted or not, against the income the table above counts as earned · ${money(cash.moneyIn - cash.income)} more came in than was earned`}>
-          <table className="w-full border-collapse">
-            <Head cols={[["Month"], ["Money in", true, "Every deposit"], ["Money out", true, "Every payment, including supplier orders and Glass Forge"], ["Net", true], ["Income earned", true, "YA income in the table above"], ["In less earned", true, "Deposits less income earned. Positive: money came in that the Hub doesn't count as income (last year's work, customers not in the Hub, deposits on open jobs)"]]} />
-            <tbody>
-              {bankMonths.map((m) => <Row key={m.month} cells={[[monthLabel(m)], [m.bank.moneyIn, "money"], [m.bank.moneyOut, "money"], [m.bank.net, "money"], [m.income, "money"], [m.bank.moneyIn - m.income, "money"]]} />)}
-              <Row tone="total" cells={[[`${bankMonths.length} months`], [cash.moneyIn, "money"], [cash.moneyOut, "money"], [cash.moneyIn + cash.moneyOut, "money"], [cash.income, "money"], [cash.moneyIn - cash.income, "money"]]} />
-            </tbody>
-          </table>
-        </Sheet>
-      )}
 
       <Sheet title="Glass Forge · invoiced to YA" aside={`${money(ytd.invoiced)} invoiced · ${money(ytd.notInvoiced)} not invoiced yet${strip ? ` · ${thisMonthName}: ${money(strip.ready.fee)} ready to invoice` : ""}`}>
         <table className="w-full border-collapse">
