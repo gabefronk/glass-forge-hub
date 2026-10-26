@@ -41,16 +41,19 @@
         "other_income",
         "job_cost",
         "shop",
+        "glass_forge",
         "supplier",
         "crew_pay",
         "payroll",
         "overhead",
+        "card",
+        "loan",
         "other_cost",
         "owner_draw",
         "transfer"
       ],
       "title": "Category",
-      "description": "Counted elsewhere already (left out of the overview's profit): labor_payment (BFS paying install labor billed), customer_payment (a customer paying a job), job_cost (a supplier paid for a Purchasing job's order), shop (a shop PO). Counted from the bank: other_income, supplier (a supplier not tied to a Hub order), crew_pay, payroll, overhead, other_cost (not sorted yet). Not profit or loss: owner_draw, transfer."
+      "description": "Counted elsewhere already (left out of the overview's profit): labor_payment (BFS paying install labor billed), customer_payment (a customer paying a job), job_cost (a supplier paid for a Purchasing job's order), shop (a shop PO), glass_forge (YA paying a Glass Forge invoice). Counted from the bank: other_income; crew_pay; payroll and overhead (Overhead); supplier (no Hub order), card (Amex payment), loan and other_cost (not sorted yet) in Other costs. Not profit or loss: owner_draw, transfer."
     },
     "job_id": {
       "type": "string",
@@ -67,6 +70,11 @@
       "title": "Supplier order",
       "description": "Hub VendorOrders record the payment matches."
     },
+    "invoice_id": {
+      "type": "string",
+      "title": "Invoice",
+      "description": "Hub Invoices record the payment matches (e.g. a Glass Forge invoice YA paid)."
+    },
     "match": {
       "type": "string",
       "enum": [
@@ -75,7 +83,7 @@
         "manual"
       ],
       "title": "Match",
-      "description": "exact: the amount equals a Hub order or sale. rule: the category came from the bank description. manual: set by hand."
+      "description": "exact: the amount equals a Hub order, invoice or sale. rule: the category came from the bank description. manual: set by hand."
     },
     "match_note": {
       "type": "string",
@@ -89,7 +97,8 @@
     },
     "import_batch": {
       "type": "string",
-      "title": "Import batch"
+      "title": "Import batch",
+      "description": "One per imported file; its first to last line date is the span the export covers."
     },
     "source_file": {
       "type": "string",
