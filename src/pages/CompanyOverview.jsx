@@ -358,7 +358,8 @@ function CompanyOverviewContent() {
           </tbody>
         </table>
         <div className="text-[13px]" style={{ padding: "8px 16px 12px", color: SECONDARY }}>
-          Total expected job profit is not shown for any job: overhead is unknown on every job, and crew is unknown or estimated on most. Totals add only the jobs where a figure exists.
+          Total expected job profit is not shown for any job: overhead is unknown on every job, and crew is unknown, estimated or inside a typed cost on most. Totals add only the jobs where a figure exists.
+          {" "}Supplier left counts orders not found paid in the bank lines: {money(cy.ytd.suppliers - cy.ytd.jobSuppliers)} of supplier payments this year have no Hub job order (Builders FirstSource, ABC Supply and others), so part of what shows as left may already be paid.
         </div>
       </Sheet>
 
@@ -367,7 +368,7 @@ function CompanyOverviewContent() {
         <ul className="m-0 list-disc text-[14px]" style={{ padding: "0 16px 12px 34px", color: INK }}>
           <li><strong>Accrual basis:</strong> the books year to date (view 1) are incomplete. Crew pay, supplier costs and payroll aren&apos;t posted, so anchoring a full year to them would overstate profit.</li>
           <li>
-            <strong>Cash basis:</strong> the Nov–Dec cash would have to come from a run rate. The {ov.months}-month average ({monthName(ov.from)}–{monthName(ov.to)}) is {money(ov.net)} a month net, and it already includes {money(ov.customerIn)} a month of customer job payments and {money(ov.suppliers)} a month of supplier payments.
+            <strong>Cash basis:</strong> the Nov–Dec cash would have to come from a run rate. The {ov.months}-month average ({monthName(ov.from)}–{monthName(ov.to)}) is {money(ov.net)} a month net, and it already includes {money(ov.customerIn)} a month of customer payments (job deposits among them) and {money(ov.suppliers)} a month of supplier payments.
             The signed-job pipeline (view 3) adds those same kinds of flows again, so the old &quot;Projected 2026&quot; double-counted. Neither can be separated reliably from the labor business yet.
           </li>
           <li><strong>Also open:</strong> the weekly $2.5k / $3k stream&apos;s classification, the July imported lines below, and no bank-statement reconciliation.</li>
