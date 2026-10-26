@@ -117,6 +117,7 @@ const LEDGER_COLS = [
   ["Materials", true, "Windows, doors or glass incl. tax, or the typed all-in cost. feed: the bank's supplier payments matched to the job add up to it"],
   ["Sub-labor", true, "Crew / sub pay: an entered actual or the budget estimate (no crew payment is matched to a job in the bank), inside a typed cost, or unknown"],
   ["Other", true, "Budget install material"], ["All-in cost", true, "Materials + sub-labor + other"],
+  ["Suppliers paid", true, "feed: supplier payments in the bank feed matched to the job. owner: Gabriel confirmed every supplier on the active jobs is paid (Oct 26). A paid bill stays in the cost and is never shown as cash still to pay"],
   ["Profit", true, "Sale less all-in cost. Where crew is unknown the profit is before crew"], ["YA 50%", true], ["Glass Forge 50%", true],
   ["Received", true, "Customer payments on file (receipts ledger)"], ["Customers owe", true, "Sale less received"], ["Checks", true, "Flags, listed under the table"],
 ];
@@ -129,11 +130,19 @@ function ledgerCells(r) {
     s.basis === "typed" ? [note("in typed cost"), "r"] : tagged(s.value, s.tag, true, s.basis === "actual" ? "actual" : ""),
     r.other.value == null ? unk() : [r.other.value, "out"],
     r.cost == null ? unk() : [r.cost, "out"],
+    paidCell(r.materials),
     r.profit == null ? unk("Not shown") : [<span key="p" style={{ color: r.profit < 0 ? LATE : INK }}>{money(r.profit)}{r.costComplete ? "" : <> {note("before crew")}</>}</span>, "r"],
     r.ya == null ? unk("Not shown") : [r.ya, "money"], r.gf == null ? unk("Not shown") : [r.gf, "money"],
     [r.received, "money"], r.leftToCollect == null ? unk() : [r.leftToCollect, "money"],
     [r.flags.length || "", "r"],
   ];
+}
+function paidCell(m) {
+  if (m.paidBasis === "feed") return [<span key="f">{money(out(m.paid))} {note("feed")}</span>, "r"];
+  if (m.paidBasis === "feed+owner") return [<span key="f">{money(out(m.paid))} {note("feed · rest owner")}</span>, "r"];
+  if (m.paidBasis === "partial") return [<span key="f">{money(out(m.paid))} {note("feed · rest unconfirmed")}</span>, "r"];
+  if (m.paidBasis === "owner") return [note("owner-confirmed"), "r"];
+  return ["—", "r"];
 }
 function LedgerTable({ rows, totals: t }) {
   return (
@@ -141,7 +150,7 @@ function LedgerTable({ rows, totals: t }) {
       <Head cols={LEDGER_COLS} />
       <tbody>
         {rows.map((r) => <Row key={r.id} cells={ledgerCells(r)} />)}
-        <Row tone="total" cells={[[`${t.jobs} jobs`], [""], [t.sale, "money"], [t.materials, "out"], [t.subLabor, "out"], [t.other, "out"], [t.cost, "out"], [t.profit, "money"], [t.ya, "money"], [t.gf, "money"], [t.received, "money"], [t.leftToCollect, "money"], [""]]} />
+        <Row tone="total" cells={[[`${t.jobs} jobs`], [""], [t.sale, "money"], [t.materials, "out"], [t.subLabor, "out"], [t.other, "out"], [t.cost, "out"], [<span key="f">{money(out(t.paidFeed))} {note("feed")}</span>, "r"], [t.profit, "money"], [t.ya, "money"], [t.gf, "money"], [t.received, "money"], [t.leftToCollect, "money"], [""]]} />
       </tbody>
     </table>
   );
