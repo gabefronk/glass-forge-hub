@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { parseCsv, parseMoney, parseDate, parseBankExport, withFingerprints, suggestBankLine, planBankImport, bankMonth, bankCoverage, bankByCategory, bankDays } = await import('../src/lib/bankLines.js');
+const round2 = (n) => Math.round(n * 100) / 100;
 const { companyYear, cashYear, cashYearCsv } = await import('../src/lib/companyOverview.js');
 
 // The QuickBooks bank-feed export's shape (made-up amounts except where a test says otherwise).
@@ -135,31 +136,33 @@ test('each import covers its first to last day, so a month knows how much of it 
   assert.deepEqual(y.months.slice(7).map((m) => [m.month, m.bank.coveredDays, m.monthDays]), [['2026-08', 2, 31], ['2026-09', 1, 30], ['2026-10', 3, 26]]);
 });
 
-test('cash basis: deposits in, every payment out by bucket, transfers and owner draws left out', () => {
+test('bank cash movement: every line counts, the weekly $2,500/$3,000 stream is its own bucket, no projection', () => {
   const install = (id, month, labor) => ({ id, invoice_month: month, job_date: `${month}-10`, billable: true, fee_type: 'labor_pct', labor_amt: labor, calendar_labor_amt: labor, fee_pct: 0.1 });
   const b = (posted_date, amount, category, extra = {}) => ({ posted_date, amount, category, import_batch: posted_date < '2026-03-01' ? 'jan-feb' : 'mar', ...extra });
   const bankLines = [
     b('2026-01-01', 5000, 'labor_payment'), b('2026-01-31', -1000, 'crew_pay'), b('2026-01-15', -200, 'payroll'),
+    b('2026-01-20', -2500, 'crew_pay', { description: 'Check 606' }),
     b('2026-02-01', 3000, 'customer_payment'), b('2026-02-10', -500, 'supplier'), b('2026-02-11', -300, 'glass_forge'), b('2026-02-12', -100, 'card'), b('2026-02-13', -50, 'other_cost'),
     b('2026-02-14', -999, 'transfer'), b('2026-02-15', -888, 'owner_draw'), b('2026-02-28', 1, 'other_income'),
-    // March: a half down on job J and its supplier order, both matched to the job.
+    b('2026-02-20', -3000, 'crew_pay', { description: 'Draft Withdrawal Draft' }),
+    // Not the stream: a $3,000 payroll ACH and a $2,000 draft.
+    b('2026-02-21', -3000, 'payroll', { description: 'Company' }), b('2026-02-22', -2000, 'crew_pay', { description: 'Draft Withdrawal' }),
     b('2026-03-01', 600, 'customer_payment', { job_id: 'J' }), b('2026-03-05', -700, 'job_cost', { job_id: 'J' }),
   ];
-  const card = (id, stage, sale, cost) => ({ job: { id, canonical_name: id }, paymentStage: stage, windows: { display: { value: cost } }, rough: { display: { value: 0 } }, sale: { display: { value: sale } }, profitDisplay: { value: sale - cost } });
-  const y = companyYear({ rows: [install('a', '2026-01', 4000), install('b', '2026-02', 2500)], cards: [card('J', 'half_down', 1200, 800)], bankLines, today: '2026-03-05', start: '2026-01' });
-  const c = cashYear(y, bankLines);
+  const y = companyYear({ rows: [install('a', '2026-01', 4000), install('b', '2026-02', 2500)], bankLines, today: '2026-03-05', start: '2026-01' });
+  const c = cashYear(y);
   const [jan, feb, mar] = c.months;
-  assert.deepEqual([jan.moneyIn, jan.crewPay, jan.overhead, jan.profit, jan.earned, jan.partial], [5000, 1000, 200, 3800, 4000, false]);
-  assert.deepEqual([feb.moneyIn, feb.suppliers, feb.glassForge, feb.other, feb.profit], [3001, 500, 300, 150, 2051]);
-  assert.deepEqual([mar.moneyIn, mar.suppliers, mar.profit, mar.coveredDays, mar.monthDays, mar.partial], [600, 700, -100, 5, 5, false]);
-  assert.equal(c.ytd.profit, 3800 + 2051 - 100);
-  // Job J: sale 1,200 less 600 received; cost 800 less 700 paid; Glass Forge half of 400.
-  const pipe = c.rest[0];
-  assert.deepEqual([pipe.moneyIn, pipe.suppliers, pipe.glassForge, pipe.profit], [600, 100, 200, 300]);
-  // Nine months left at the Jan-Feb average profit (2,925.50).
-  assert.deepEqual([c.rest[1].months, c.rest[1].profit, c.full], [9, 26329.5, 2]);
-  assert.equal(c.projected.profit, 5751 + 300 + 26329.5);
-  assert.match(cashYearCsv(y, c).split('\n')[1], /^"Jan 2026","31 of 31",5000\.00,-1000\.00,-200\.00,0\.00,0\.00,0\.00,3800\.00,4000\.00$/);
+  assert.deepEqual([jan.moneyIn, jan.crewPay, jan.weekly, jan.overhead, jan.net, jan.partial], [5000, 1000, 2500, 200, 1300, false]);
+  // Transfers and owner draws stay in the cash movement (other money out): it is the account's movement.
+  assert.deepEqual([feb.moneyIn, feb.customerIn, feb.crewPay, feb.weekly, feb.overhead, feb.suppliers, feb.glassForge, feb.other, feb.net], [3001, 3000, 2000, 3000, 3000, 500, 300, 2037, -7836]);
+  assert.deepEqual([mar.moneyIn, mar.suppliers, mar.jobSuppliers, mar.net, mar.coveredDays, mar.monthDays], [600, 700, 700, -100, 5, 5]);
+  assert.equal(c.ytd.net, 1300 - 7836 - 100);
+  assert.equal(c.ytd.weekly, 5500);
+  assert.equal(c.ytd.net, round2(bankLines.reduce((n, l) => n + l.amount, 0)));
+  // No projection rows; the overlap test averages the fully covered months before this one.
+  assert.equal(c.projected, undefined);
+  assert.deepEqual(c.overlap, { months: 2, from: '2026-01', to: '2026-02', net: -3268, customerIn: 1500, suppliers: 250 });
+  assert.equal(cashYearCsv(y, c).split('\n')[1], '"Jan 2026","31 of 31",5000.00,-1000.00,-2500.00,-200.00,0.00,0.00,0.00,1300.00');
 });
 
 test('re-importing an overlapping export adds only the new lines', () => {
