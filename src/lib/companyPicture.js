@@ -50,7 +50,7 @@ export function pipelineJob(card, { budgets = [], orders = [], costInputs = [], 
   const materials = windows == null ? null : round(windows + (typed ? 0 : (addl || 0)));
 
   const mine = (l) => l.job_id === id;
-  const receivedLinked = -add(bankLines.filter((l) => mine(l) && l.category === 'customer_payment'), (l) => -l.amount);
+  const receivedLinked = add(bankLines.filter((l) => mine(l) && l.category === 'customer_payment'), (l) => l.amount);
   const supplierPaid = add(bankLines.filter((l) => mine(l) && l.category === 'job_cost'), (l) => -l.amount);
   const jobSales = sales.filter((s) => s.jobId === id);
   const billed = jobSales.length ? add(jobSales, (s) => s.amount) : null;
