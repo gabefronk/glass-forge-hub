@@ -48,7 +48,7 @@ function memoryDb(seed = {}) {
   };
   const entity = (name) => ({
     list: async (_sort, limit = 1000, skip = 0) => table(name).slice(skip, skip + limit).map((r) => structuredClone(r)),
-    filter: async (q = {}) => table(name).filter((r) => Object.entries(q).every(([k, v]) => r[k] === v)).map((r) => structuredClone(r)),
+    filter: async (q = {}, sort, limit) => filterRows(table(name), q, sort, limit).map((r) => structuredClone(r)),
     bulkCreate: async (rows) => rows.map((r) => {
       const row = { ...structuredClone(r), id: r.id || `${name.toLowerCase()}-new-${++seq}`, created_date: `2026-09-18T12:00:00.${String(seq).padStart(3, '0')}Z` };
       table(name).push(row);
