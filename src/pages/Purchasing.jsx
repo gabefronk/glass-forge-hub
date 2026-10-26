@@ -1,4 +1,4 @@
-import { isSold, headerFigures, applyPurchasingFilter, purchasingFilterCounts, sortCards, cardFigures, etaDate, etaEarliest, PURCHASING_FILTERS, DEFAULT_PURCHASING_SORT } from '@/lib/purchasingSummary';
+import { isSold, isCompleted, byStatus, PURCHASING_STATUSES, headerFigures, applyPurchasingFilter, purchasingFilterCounts, sortCards, cardFigures, etaDate, etaEarliest, PURCHASING_FILTERS, DEFAULT_PURCHASING_SORT } from '@/lib/purchasingSummary';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -32,6 +32,7 @@ function PurchasingWorkspace() {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
+  const [status, setStatus] = useState('active');
   const [sort, setSort] = useState(DEFAULT_PURCHASING_SORT);
   const [addQuoteSignal, setAddQuoteSignal] = useState(0);
   const loadSeq = useRef(0);
@@ -76,8 +77,14 @@ function PurchasingWorkspace() {
   const matched = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
   const searched = useMemo(() => matched.filter(isSold), [matched]);
   const notSold = useMemo(() => sortCards(matched.filter((c) => !isSold(c)), sort), [matched, sort]);
-  const filterCounts = useMemo(() => purchasingFilterCounts(searched, today), [searched, today]);
-  const filtered = useMemo(() => sortCards(applyPurchasingFilter(searched, filter, today), sort), [searched, filter, today, sort]);
+  // Status picks the rows in the main grid: Active (default; Paid jobs fold into the Completed
+  // section below), Completed or All. Show counts follow those rows; the header figures keep
+  // every sold job, Paid ones included.
+  const statusCards = useMemo(() => byStatus(searched, status), [searched, status]);
+  const statusCounts = useMemo(() => Object.fromEntries(PURCHASING_STATUSES.map((st) => [st.key, byStatus(searched, st.key).length])), [searched]);
+  const filterCounts = useMemo(() => purchasingFilterCounts(statusCards, today), [statusCards, today]);
+  const filtered = useMemo(() => sortCards(applyPurchasingFilter(statusCards, filter, today), sort), [statusCards, filter, today, sort]);
+  const completed = useMemo(() => (status === 'active' ? sortCards(applyPurchasingFilter(searched.filter(isCompleted), filter, today), sort) : []), [searched, status, filter, today, sort]);
   // Clicking the active column header flips it; a new one starts soonest / A-Z / largest.
   const changeSort = (key) => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: ['windows', 'sale', 'profit'].includes(key) ? 'desc' : 'asc' }));
   const exportCsv = () => {
@@ -94,7 +101,8 @@ function PurchasingWorkspace() {
   };
   const shownFilters = PURCHASING_FILTERS.filter((f) => f.key === 'all' || f.key === filter || filterCounts[f.key] > 0);
   const currentFilter = PURCHASING_FILTERS.find((f) => f.key === filter) || PURCHASING_FILTERS[0];
-  const figures = useMemo(() => headerFigures(filtered, today), [filtered, today]);
+  const figures = useMemo(() => headerFigures(applyPurchasingFilter(searched, filter, today), today), [searched, filter, today]);
+  const currentStatus = PURCHASING_STATUSES.find((st) => st.key === status) || PURCHASING_STATUSES[0];
   const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
 
   if (loading && !data) {
@@ -114,6 +122,25 @@ function PurchasingWorkspace() {
           <Search className="pointer-events-none absolute left-3 h-4 w-4" style={{ color: '#6B7276' }} />
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search jobs, builders, POs, quotes" aria-label="Search jobs, builders, POs and quotes" className="h-9 w-full rounded-[8px] pl-[36px] pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gf-teal-500)] max-[1023px]:h-11" style={{ border: '1px solid #9A9080', color: '#101617', backgroundColor: '#F4F1EA' }} />
         </label>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button aria-label={`Status: ${currentStatus.label}`} className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-white pl-3 pr-2.5 text-[14px] max-[1023px]:h-11" style={{ border: '1px solid #9A9080', color: '#101617', cursor: 'pointer' }}>
+              <span style={{ color: '#566063', fontWeight: 500 }}>Status</span>
+              <span style={{ fontWeight: 600 }}>{currentStatus.label}</span>
+              <span className="tabular-nums" style={{ color: '#566063', fontWeight: 500 }}>{statusCounts[currentStatus.key] || 0}</span>
+              <ChevronDown style={{ width: 16, height: 16, color: '#566063' }} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[200px] p-1">
+            {PURCHASING_STATUSES.map((st) => (
+              <DropdownMenuItem key={st.key} onSelect={() => setStatus(st.key)} className="flex min-h-9 cursor-pointer items-center gap-2 text-[14px]">
+                <Check style={{ width: 15, height: 15, color: '#0B3F3B', visibility: st.key === status ? 'visible' : 'hidden' }} />
+                <span className="flex-1" style={{ fontWeight: st.key === status ? 600 : 400 }}>{st.label}</span>
+                <span className="tabular-nums" style={{ color: '#566063' }}>{statusCounts[st.key] || 0}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button aria-label={`Show: ${currentFilter.label}`} className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-white pl-3 pr-2.5 text-[14px] max-[1023px]:h-11" style={{ border: '1px solid #9A9080', color: '#101617', cursor: 'pointer' }}>
@@ -138,9 +165,19 @@ function PurchasingWorkspace() {
       {error && <p role="alert" className="rounded-[12px] p-3.5 text-[13px]" style={{ backgroundColor: 'var(--gf-error-bg)', color: 'var(--gf-error)', border: '1px solid var(--gf-error-border)' }}>{error}</p>}
 
       {filtered.length === 0 ? (
-        <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query || filter !== 'all' ? 'No jobs match your search or filter.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
+        <p className="rounded-[14px] border bg-white p-6 text-center text-[13px]" style={{ borderColor: C.border, color: C.textSecondary }}>{query || filter !== 'all' || status !== 'active' ? 'No jobs match your search, status or filter.' : 'No purchasing activity yet. Add a quote to begin.'}</p>
       ) : (
         <PurchasingTable cards={filtered} data={data} sort={sort} onSort={changeSort} today={today} onSaved={load} />
+      )}
+
+      {completed.length > 0 && (
+        <details className="group flex flex-col gap-2" aria-label="Completed">
+          <summary className="flex cursor-pointer list-none items-center gap-2 py-1" title="Jobs marked Paid. Out of the active list and Customers owe; still counted in Sold, Job cost and Est. profit.">
+            <ChevronDown className="h-4 w-4 -rotate-90 transition-transform group-open:rotate-0" style={{ color: '#566063' }} />
+            <h2 className="m-0 text-[17px] font-bold" style={{ color: '#101617' }}>Completed <span className="tabular-nums" style={{ color: '#566063', fontWeight: 500 }}>{completed.length}</span></h2>
+          </summary>
+          <div className="mt-2"><PurchasingTable cards={completed} data={data} sort={sort} onSort={changeSort} today={today} onSaved={load} /></div>
+        </details>
       )}
 
       {notSold.length > 0 && (

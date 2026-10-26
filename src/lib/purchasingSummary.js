@@ -61,6 +61,20 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 export const NOT_SOLD_STAGES = ['', 'sent_to_customer'];
 export const isSold = (card) => !NOT_SOLD_STAGES.includes(card?.paymentStage || '');
 
+// A Paid job is completed, as a QuickBooks project is (Gabe, Oct 26): it leaves the active
+// list for a collapsed Completed section but still counts in Sold, Job cost and Est. profit.
+export const isCompleted = (card) => card?.paymentStage === 'paid';
+export const PURCHASING_STATUSES = [
+  { key: 'active', label: 'Active' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'all', label: 'All' },
+];
+export function byStatus(cards = [], status = 'active') {
+  if (status === 'completed') return cards.filter(isCompleted);
+  if (status === 'all') return cards;
+  return cards.filter((c) => !isCompleted(c));
+}
+
 // Per-job facts the header and the filter both read, so a count and a figure
 // can never disagree. `card.paymentStage` is the job's payment_status (attached by
 // the page). Suppliers are paid up front (Gabe, Oct 25): there are no payables.

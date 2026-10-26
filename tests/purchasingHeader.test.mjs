@@ -3,7 +3,7 @@
 // front (Gabe, Oct 25), so there is no supplier payables figure or filter.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isSold, jobFlags, headerFigures, purchasingFilterCounts, applyPurchasingFilter, customerOwedShare, etaShort, etaRange, sortCards, cardFigures, PURCHASING_FILTERS } from '../src/lib/purchasingSummary.js';
+import { isSold, isCompleted, byStatus, jobFlags, headerFigures, purchasingFilterCounts, applyPurchasingFilter, customerOwedShare, etaShort, etaRange, sortCards, cardFigures, PURCHASING_FILTERS } from '../src/lib/purchasingSummary.js';
 import * as summary from '../src/lib/purchasingSummary.js';
 
 const TODAY = '2026-10-24';
@@ -102,4 +102,15 @@ test('no stage or Sent to customer is not sold yet; any later stage is sold', ()
   assert.equal(isSold(card()), false);
   assert.equal(isSold(card({ stage: 'sent_to_customer' })), false);
   for (const stage of ['ordered', 'half_down', 'delivered', 'installed', 'billed', 'waiting_on_check', 'waiting_on_payment', 'paid']) assert.equal(isSold(card({ stage })), true, stage);
+});
+
+test('Paid jobs are completed: Active leaves them out, Completed and All include them', () => {
+  const cards = [card({ id: 'a', stage: 'ordered' }), card({ id: 'p', stage: 'paid' }), card({ id: 'w', stage: 'waiting_on_payment' })];
+  assert.deepEqual(cards.filter(isCompleted).map((c) => c.job.id), ['p']);
+  assert.deepEqual(byStatus(cards, 'active').map((c) => c.job.id), ['a', 'w']);
+  assert.deepEqual(byStatus(cards, 'completed').map((c) => c.job.id), ['p']);
+  assert.equal(byStatus(cards, 'all').length, 3);
+  const all = headerFigures(cards, TODAY);
+  assert.equal(all.sold, 9000, 'a Paid job still counts in Sold');
+  assert.equal(all.customersOwe, 6000, 'and owes nothing');
 });
