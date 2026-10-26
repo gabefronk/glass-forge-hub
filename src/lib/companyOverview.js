@@ -66,7 +66,7 @@ export function shopCost(purchaseOrders = [], month) {
 }
 
 // basis: 'invoice' (Glass Forge invoiced this month), 'hub' (not invoiced: the Hub's figures)
-// or 'before' (before the agreement: nothing owed). hubGlassForge is the Hub's figure either way.
+// or 'before' (before the agreement: nothing owed, so no Hub figure to compare either).
 export function monthFigures(lines, month, shop = 0, { invoice = null, start = GLASS_FORGE_START } = {}) {
   const splits = lines.filter(isProfitSplit);
   const install = lines.filter((r) => !isProfitSplit(r));
@@ -75,8 +75,8 @@ export function monthFigures(lines, month, shop = 0, { invoice = null, start = G
   const jobCost = sum(splits, (r) => num(r.cost));
   const hubFee = sum(install, computeFeeAmt);
   const hubSplit = sum(splits, computeFeeAmt);
-  const hubGlassForge = round(hubFee + hubSplit);
   const basis = month < start ? 'before' : invoice ? 'invoice' : 'hub';
+  const hubGlassForge = basis === 'before' ? 0 : round(hubFee + hubSplit);
   const split = basis === 'before' ? 0 : basis === 'invoice' ? invoice.split : hubSplit;
   const fee = basis === 'before' ? 0 : basis === 'invoice' ? round(invoice.amount - invoice.split) : hubFee;
   const income = round(labor + sales);
