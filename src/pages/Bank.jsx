@@ -103,10 +103,12 @@ function BankContent({ user }) {
       const at = new Date().toISOString();
       const batch = `${denverDate()} ${file}`;
       const rows = plan.lines.map((l) => ({ ...l, import_batch: batch, source_file: file, categorized_by_email: user?.email || "", categorized_at: at }));
-      for (let i = 0; i < rows.length; i += 100) await base44.entities.BankTransactions.bulkCreate(rows.slice(i, i + 100));
+      const created = [];
+      for (let i = 0; i < rows.length; i += 100) created.push(...(await base44.entities.BankTransactions.bulkCreate(rows.slice(i, i + 100))));
       setMessage(`Imported ${rows.length} new lines from ${file}${plan.skipped ? `; ${plan.skipped} were already here` : ""}.`);
       setPending(null);
-      await load();
+      // Show the saved lines straight away: a list read right after the write can miss them.
+      setState((s) => ({ ...s, lines: [...created, ...s.lines].sort((a, b) => String(b.posted_date).localeCompare(String(a.posted_date))) }));
     } catch (err) {
       setMessage(`The import stopped. ${err?.message || ""}`.trim());
       await load();
