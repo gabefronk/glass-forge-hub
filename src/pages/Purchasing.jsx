@@ -67,13 +67,13 @@ function PurchasingWorkspace() {
   // One card per job with its scope rows and payment stage, each carrying its row of the canonical
   // job ledger (jobLedger.js, shared with the Company overview): the grid's Cost, Sale and Est.
   // profit and every header figure read from that row.
+  const built = useMemo(() => purchasingBoardCards(data, today), [data, today]);
   const ledger = useMemo(() => {
-    const built = purchasingBoardCards(data, today);
     const inputs = data?.ledgerInputs || {};
     return jobLedger({ cards: built, budgets: data?.budgets || [], orders: data?.vendor_orders || [], costInputs: inputs.costInputs || [], bankLines: inputs.bankLines || [], sales: QBO_SALES });
-  }, [data, today]);
+  }, [built, data]);
   const receiptsKnown = Array.isArray(data?.ledgerInputs?.bankLines);
-  const cards = useMemo(() => purchasingBoardCards(data, today).map((c) => ({ ...c, ledger: ledger.byId.get(c.job.id) || null })), [data, today, ledger]);
+  const cards = useMemo(() => built.map((c) => ({ ...c, ledger: ledger.byId.get(c.job.id) || null })), [built, ledger]);
   // Quotes with no stage (or only Sent to customer) are not sold yet: they get their own
   // section below and stay out of the header figures, the Show counts and the export.
   const matched = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
