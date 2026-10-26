@@ -159,47 +159,33 @@ export function companyYear({ rows = [], superseded = new Set(), cards = [], pur
   return { year, today, months, ytd, pipeline: open, pace, rest, projected };
 }
 
-// The year on a cash basis (Gabe, Oct 26: the headline uses bank deposits for income until the
-// Hub's income is fixed). Each month with bank lines is its bankCash: money in, then crew pay,
-// overhead, suppliers (Hub job orders, shop POs and suppliers with no Hub order), Glass Forge
-// paid and other costs, less transfers and owner draws. `earned` is the same month's YA income
-// from companyYear, to show what the Hub misses. The projection adds, for each open Purchasing
-// job, the sale still to collect less the cost still to pay (customer payments and supplier
-// orders matched to the job in the bank) less Glass Forge's half; then the months left at the
-// average of the fully covered months before this one.
-const CASH_FIELDS = ['moneyIn', 'crewPay', 'overhead', 'suppliers', 'glassForge', 'other', 'profit', 'earned'];
+// Bank cash movement by month (Gabe, Oct 26): unreconciled cash movement, NOT profit. Each month
+// with bank lines is its bankCash: money in, then crew pay, the weekly $2,500/$3,000 stream
+// (classification unknown), overhead, suppliers, Glass Forge paid and other money out. No
+// projection: a run rate over these months already carries customer job receipts and supplier
+// payments, so adding open jobs on top would count the same work twice. `overlap` measures that
+// on the fully covered months before this one.
+const CASH_FIELDS = ['moneyIn', 'customerIn', 'crewPay', 'weekly', 'overhead', 'suppliers', 'jobSuppliers', 'glassForge', 'other', 'net'];
 const cashTotal = (rows) => Object.fromEntries(CASH_FIELDS.map((f) => [f, sum(rows, (r) => r[f])]));
-export function cashYear(y, bankLines = []) {
-  const months = y.months.filter((m) => m.hasBank).map((m) => ({ month: m.month, ...m.bank.cash, earned: m.income, coveredDays: m.bank.coveredDays, monthDays: m.monthDays, partial: m.bank.coveredDays < m.monthDays }));
+export function cashYear(y) {
+  const months = y.months.filter((m) => m.hasBank).map((m) => ({ month: m.month, ...m.bank.cash, coveredDays: m.bank.coveredDays, monthDays: m.monthDays, partial: m.bank.coveredDays < m.monthDays }));
   const ytd = cashTotal(months);
-  const byJob = (cat) => (id) => sum(bankLines.filter((l) => l.job_id === id && l.category === cat), (l) => num(l.amount));
-  const received = byJob('customer_payment'), paidOut = byJob('job_cost');
-  const jobs = y.pipeline.jobs.map((j) => {
-    const collect = round(Math.max(0, j.sale - received(j.id)));
-    const pay = round(Math.max(0, j.cost + paidOut(j.id)));
-    return { ...j, collect, pay, cash: round(collect - pay - j.glassForge) };
-  });
-  const pipe = { key: 'pipeline', moneyIn: sum(jobs, (j) => j.collect), crewPay: 0, overhead: 0, suppliers: sum(jobs, (j) => j.pay), glassForge: sum(jobs, (j) => j.glassForge), other: 0, earned: 0 };
-  pipe.profit = round(pipe.moneyIn - pipe.suppliers - pipe.glassForge);
   const thisMonth = y.today.slice(0, 7);
   const full = months.filter((m) => !m.partial && m.month < thisMonth);
-  const left = 12 - Number(y.today.slice(5, 7));
-  const avg = (f) => (full.length ? round((sum(full, (m) => m[f]) / full.length) * left) : 0);
-  const pace = { key: 'pace', months: left, from: full[0]?.month || '', to: full[full.length - 1]?.month || '', earned: 0, ...Object.fromEntries(['moneyIn', 'crewPay', 'overhead', 'suppliers', 'glassForge', 'other', 'profit'].map((f) => [f, avg(f)])) };
-  const rest = [pipe, pace];
-  const projected = cashTotal([ytd, ...rest]);
+  const per = (f) => (full.length ? round(sum(full, (m) => m[f]) / full.length) : 0);
+  const overlap = { months: full.length, from: full[0]?.month || '', to: full[full.length - 1]?.month || '', net: per('net'), customerIn: per('customerIn'), suppliers: per('suppliers') };
   const missing = months.filter((m) => m.partial).map((m) => m.month);
-  return { months, ytd, jobs, rest, projected, missing, full: full.length };
+  return { months, ytd, missing, overlap };
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const monthName = (key) => MONTH_NAMES[Number(String(key).slice(5, 7)) - 1] || key;
 
-// The cash table as CSV (costs as negative numbers, like the page).
+// The bank cash movement table as CSV (money out as negative numbers, like the page).
 export function cashYearCsv(y, c) {
-  const head = ['Month', 'Bank days', 'Money in', 'Crew pay', 'Overhead', 'Suppliers', 'Glass Forge paid', 'Other costs', 'Profit', 'Earned (Hub)'];
-  const line = (label, r, days) => [label, days, r.moneyIn, -r.crewPay, -r.overhead, -r.suppliers, -r.glassForge, -r.other, r.profit, r.earned].map((v) => (typeof v === 'number' ? round(v || 0).toFixed(2) : `"${String(v).replace(/"/g, '""')}"`)).join(',');
-  return [head.join(','), ...c.months.map((m) => line(`${monthName(m.month)} ${y.year}`, m, `${m.coveredDays} of ${m.monthDays}`)), line(`${y.year} to date`, c.ytd, ''), line('Projected', c.projected, '')].join('\n');
+  const head = ['Month', 'Bank days', 'Money in', 'Crew pay', 'Weekly $2,500/$3,000 (classification unknown)', 'Overhead', 'Suppliers', 'Glass Forge paid', 'Other money out', 'Net cash movement (unreconciled)'];
+  const line = (label, r, days) => [label, days, r.moneyIn, -r.crewPay, -r.weekly, -r.overhead, -r.suppliers, -r.glassForge, -r.other, r.net].map((v) => (typeof v === 'number' ? round(v || 0).toFixed(2) : `"${String(v).replace(/"/g, '""')}"`)).join(',');
+  return [head.join(','), ...c.months.map((m) => line(`${monthName(m.month)} ${y.year}`, m, `${m.coveredDays} of ${m.monthDays}`)), line(`${y.year} to date`, c.ytd, '')].join('\n');
 }
 
 // The YA month table as CSV (costs as negative numbers, like the page).
