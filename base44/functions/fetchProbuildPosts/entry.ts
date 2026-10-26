@@ -1,6 +1,6 @@
 import { extractExplicitService, extractPhotoUrls, canonicalPostRows, denverDate } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, mergeReviewFlags } from '../../shared/ingestShared.ts';
+import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, mergeReviewFlags, existingLineJobFill } from '../../shared/ingestShared.ts';
 import { countAttachments } from '../../shared/reportMatching.ts';
 import { toMs, getProbuildIdToken, fetchProbuildProjects, fetchProbuildPostsForProject, filterProjectsByWindow } from '../../shared/probuildApi.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
@@ -14,8 +14,9 @@ import { textGabeFieldReport } from '../../shared/fieldReportNotify.js';
 // Data: Firebase RTDB. Projects filtered by lastModifiedAt within 21-day window
 // (no deletedAt). Posts fetched per-project, createdAt converted UTC → America/Denver
 // before deriving job_date. LLM extracts man_hours/trip_charges from the verbatim
-// note (never inferred). Existing lines are append-only (photo and explicit
-// service-quantity fills only, see serviceFill); never overwrites a manually
+// note (never inferred). Existing lines are append-only (photo, explicit
+// service-quantity and empty-job fills only, see serviceFill and
+// existingLineJobFill); never overwrites a manually
 // adjusted, billed or locked row. photo_urls are merged, never wiped: existing
 // archived URLs survive re-syncs, and posts with attachments but no URLs get their
 // bytes archived into Base44 file storage (no ProBuild link dependency).
@@ -237,7 +238,8 @@ export default async function(req) {
         key: b.postId, normName, rawName: b.projectName,
         linkedJobId: projectJob.get(b.projectId) || '',
         currentJobId: ex?.job_id || '',
-        // Existing lines are append-only and locked months are skipped: no job.
+        // Existing lines are append-only and locked months are skipped: no new job.
+        // An existing line with no job still gets matched to an existing job.
         noCreate: !!ex || lockedMonths.has(invoiceMonthFromDate(b.jobDate)),
       };
     }), jobsArr, (item) => ({ canonical_name: item.normName, aliases: [item.normName] }));
@@ -413,6 +415,7 @@ export default async function(req) {
     let skipped = 0;
     let merged_count = 0;
     let feePhotosFilled = 0;
+    const feeJobsLinked = [];
     const serviceFilled = [];
     const flagged = [];
     const phillipGrover = [];
@@ -457,14 +460,20 @@ export default async function(req) {
       const ex = existingByPostId.get(b.postId);
       if (ex) {
         // Append-only (Gabriel 2026-09-15): an existing fee line is never overwritten.
-        // Permitted additive writes: photo_urls when the line has none, and an explicit
-        // service quantity on an untouched $0 line (see serviceFill).
+        // Permitted additive writes: photo_urls when the line has none, the job when the
+        // line has none and the match is confident (see existingLineJobFill), and an
+        // explicit service quantity on an untouched $0 line (see serviceFill).
         const patch = {};
         if (!(ex.photo_urls || []).length && (row.photo_urls || []).length) {
           patch.photo_urls = row.photo_urls;
           feePhotosFilled++;
         }
-        const fill = serviceFill(ex, row, ext, lockedMonths);
+        const jobFill = existingLineJobFill(ex, m);
+        if (jobFill) {
+          Object.assign(patch, jobFill);
+          feeJobsLinked.push({ id: ex.id, post_id: b.postId, job_date: ex.job_date, job_id: jobFill.job_id });
+        }
+        const fill = serviceFill(jobFill ? { ...ex, ...jobFill } : ex, row, ext, lockedMonths);
         if (fill) {
           Object.assign(patch, fill);
           serviceFilled.push({ id: ex.id, post_id: b.postId, job_date: ex.job_date, labor_amt: fill.labor_amt });
@@ -518,6 +527,7 @@ export default async function(req) {
       fr_messages_skipped_duplicate: frMessagesSkippedDuplicate,
       fr_messages_skipped_fresh: frMessagesSkippedFresh,
       fee_photos_filled: feePhotosFilled,
+      fee_jobs_linked: feeJobsLinked,
       service_quantity_filled: serviceFilled,
       merged_into_calendar: merged_count,
       skipped_manually_adjusted: skipped,
