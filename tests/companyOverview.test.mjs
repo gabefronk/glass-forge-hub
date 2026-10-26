@@ -91,7 +91,7 @@ test('shop purchases count in the Denver month they were raised; cancelled and j
 test('nothing is owed to Glass Forge before its agreement took effect (March 2026)', () => {
   const y = companyYear({ rows: [install('jan', '2026-01', 1000), install('mar', '2026-03', 2000)], today: '2026-03-20' });
   assert.deepEqual(y.months.map((m) => [m.month, m.basis, m.glassForge, m.hubGlassForge, m.profit]), [
-    ['2026-01', 'before', 0, 100, 1000], ['2026-02', 'before', 0, 0, 0], ['2026-03', 'hub', 200, 200, 1800],
+    ['2026-01', 'before', 0, 0, 1000], ['2026-02', 'before', 0, 0, 0], ['2026-03', 'hub', 200, 200, 1800],
   ]);
 });
 
