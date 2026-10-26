@@ -19,7 +19,7 @@ export const isTaxLine = (l) => /internal revenue|\btax\b/i.test(String(l.descri
 
 // [key, label, kind]. kind: income | direct | intercompany | opex | pending | excluded
 export const OPERATING_GROUPS = [
-  ['labor', 'BFS install labor received', 'income'],
+  ['labor', 'Labor payments (deposits the bank import sorted as BFS labor)', 'income'],
   ['customers', 'Customer payments (outside jobs)', 'income'],
   ['otherIncome', 'Other income', 'income'],
   ['suppliers', 'Suppliers (job materials, incl. supplier payments with no Hub order)', 'direct'],
