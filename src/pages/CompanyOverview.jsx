@@ -12,7 +12,7 @@ import { moneyBarSegments, moneyStrip } from "@/lib/invoiceMoneyBar";
 import { planSplitLines, isHeldForPurchasing } from "@/lib/purchasingSplit";
 import { purchasingBoardCards } from "@/lib/purchasingScopes";
 import { paymentStage } from "@/lib/jobPayment";
-import { companyYear, companyYearCsv, cashYear, withSplitPlan, monthName } from "@/lib/companyOverview";
+import { companyYear, companyYearCsv, cashYear, cashYearCsv, withSplitPlan, monthName } from "@/lib/companyOverview";
 import { bankCoverage } from "@/lib/bankLines";
 import { purchasingRequest, money } from "@/components/budgets/ProcurementForms";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -171,10 +171,10 @@ function CompanyOverviewContent() {
     return { ...moneyStrip(moneyBarSegments(monthRows, reports, superseded, invoiceRegister(invoices, feeLines))), monthRows };
   }, [state.data, thisMonth]);
 
-  const exportCsv = () => {
-    const blob = new Blob([companyYearCsv(year)], { type: "text/csv" });
+  const exportCsv = (cashBasis = false) => {
+    const blob = new Blob([cashBasis ? cashYearCsv(year, cy) : companyYearCsv(year)], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `ya-windows-${year.year}-to-date.csv`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement("a"); a.href = url; a.download = `ya-windows-${year.year}-${cashBasis ? "cash" : "earned"}-to-date.csv`; a.click(); URL.revokeObjectURL(url);
   };
   const [exportError, setExportError] = useState("");
   const exportStatement = async () => {
@@ -230,7 +230,9 @@ function CompanyOverviewContent() {
           </div>
           <div style={{ flex: 1 }} />
           <div className="grid grid-cols-4 max-[1023px]:order-last max-[1023px]:w-full max-[1023px]:grid-cols-2">
-            <Figure label="YA income" value={ytd.income} title="Install labor billed plus outside job sales, January to today" />
+            {onCash
+              ? <Figure label="YA income · bank deposits" value={cy.ytd.moneyIn} title={`Every deposit into YA's account, ${dayLabel(bank.first)} – ${dayLabel(bank.last)}. The Hub counts ${money(cy.ytd.earned)} as earned for the same months`} />
+              : <Figure label="YA income" value={ytd.income} title="Install labor billed plus outside job sales, January to today" />}
             <Figure label="Glass Forge income" value={ytd.glassForge} title={`Issued Glass Forge invoices (${money(ytd.invoiced)}) plus months not invoiced yet at the Hub's figures (${money(ytd.notInvoiced)}), from March 2026`} />
             {onCash ? (
               <>
@@ -251,7 +253,8 @@ function CompanyOverviewContent() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[260px] p-1">
-              <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" onSelect={exportCsv}>YA month table (CSV)</DropdownMenuItem>
+              <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" onSelect={() => exportCsv(false)}>YA earned table (CSV)</DropdownMenuItem>
+              {onCash && <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" onSelect={() => exportCsv(true)}>YA cash table (CSV)</DropdownMenuItem>}
               <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" onSelect={exportStatement}>{thisMonthName} ready-to-invoice statement (PDF)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
