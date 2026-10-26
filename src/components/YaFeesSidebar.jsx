@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Sparkles, Landmark, Calculator } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Sparkles, Landmark, Wallet } from "lucide-react";
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
@@ -149,7 +149,7 @@ export default function YaFeesSidebar() {
         {!isWindowQuotesOnly(user) && (
           <details key={"accounting-" + pathname} open={inAccounting(pathname)} className="group">
             <summary className="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium hover:bg-white/5" style={{ minHeight: "36px", color: inAccounting(pathname) ? "var(--gf-brass-300)" : "var(--gf-sidebar-text)" }}>
-              <Calculator className="h-4 w-4 shrink-0" strokeWidth={1.8} strokeLinecap="round" />Accounting
+              <Wallet className="h-4 w-4 shrink-0" strokeWidth={1.8} strokeLinecap="round" />Accounting
               <span aria-hidden="true" className="ml-auto transition-transform group-open:rotate-180">⌄</span>
             </summary>
             <div className="space-y-0.5 pl-4">

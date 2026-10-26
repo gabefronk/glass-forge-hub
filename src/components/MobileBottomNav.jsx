@@ -4,7 +4,7 @@ import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft,
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { base44 } from "@/api/base44Client";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Landmark, Calculator } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Landmark, Wallet } from "lucide-react";
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
 // labels because five slots share the phone width. Accounting is one slot that opens its own
@@ -202,7 +202,7 @@ export default function MobileBottomNav({ user }) {
         })}
         {visibleAccounting.length > 0 && <button onClick={() => setSheet(accountingOpen ? "" : "accounting")} aria-expanded={accountingOpen} aria-label="Accounting" aria-current={accountingActive ? "page" : undefined}
           className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1" style={{ minHeight: "44px", background: "none", border: "none", cursor: "pointer" }}>
-          <Calculator className="h-5 w-5" style={{ color: accountingActive ? ACTIVE_ICON : IDLE }} />
+          <Wallet className="h-5 w-5" style={{ color: accountingActive ? ACTIVE_ICON : IDLE }} />
           <span className="text-[12px] font-medium whitespace-nowrap" style={{ color: accountingActive ? ACTIVE_TEXT : IDLE }}>
             Accounting
           </span>
