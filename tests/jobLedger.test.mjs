@@ -74,6 +74,35 @@ test('a sale QuickBooks contradicts is flagged, never changed (Edgren: invoice $
   assert.ok(r.flags.includes('Sale conflict: QuickBooks implies $14,023.73, the Hub has $14,837.73 ($814.00)'));
 });
 
+test('supplier payments: feed-verified, feed plus owner-confirmed, or owner-confirmed only; never cash still to pay', () => {
+  const paid = { at: 'Oct 26, 2026' };
+  const feed = ledgerJob(card('A', 'ordered', { sale: 200, windows: 136.97, rough: 0 }), { bankLines: [bank('p', -136.97, 'job_cost', 'A')], suppliersPaid: paid });
+  const part = ledgerJob(card('S', 'delivered', { windows: 477.46 }), { bankLines: [bank('q', -256.52, 'job_cost', 'S')], suppliersPaid: paid });
+  const owner = ledgerJob(card('O', 'ordered', { sale: 900, windows: 363.26, rough: 0 }), { suppliersPaid: paid });
+  const none = ledgerJob(card('N', 'ordered', { sale: 900, windows: 363.26, rough: 0 }), {});
+  const over = ledgerJob(card('T', 'installed', { sale: 2536.62, windows: 1403.10, rough: 0 }), { bankLines: [bank('t', -1506.49, 'job_cost', 'T')], suppliersPaid: paid, notes: {} });
+  assert.deepEqual([feed.materials.paidBasis, part.materials.paidBasis, owner.materials.paidBasis, none.materials.paidBasis, over.materials.paidBasis], ['feed', 'feed+owner', 'owner', 'none', 'feed']);
+  // A payment above the budget is shown, never used to change the cost.
+  assert.deepEqual([over.materials.value, over.materials.paid, over.cost], [1403.10, 1506.49, 1403.10]);
+  assert.ok(over.flags.some((f) => f.startsWith('Bank feed shows $1,506.49 paid')));
+});
+
+test('the owner-confirmed Edgren job: sale $14,023.73, cost $10,849.11, profit $3,174.62, $1,587.31 each, owes $7,011.86', () => {
+  const scopes = [
+    { key: 'budget:w', label: 'windows', windows: { value: 1860.49 }, rough: { value: 0 }, sale: { value: 2457.38 } },
+    { key: 'budget:d', label: 'doors', windows: { value: 8388.62 }, rough: { value: 600 }, sale: { value: 11566.35 } },
+  ];
+  const c = { ...card('G', 'half_down'), scopes };
+  for (const k of ['windows', 'rough', 'sale']) c[k].display = { suppressed: true, value: null };
+  const r = ledgerJob(c, {
+    budgets: [{ id: 'w', inputs: { labor_cost_sub_pay: 0, additional_install_material: 0 } }, { id: 'd', inputs: { labor_cost_sub_pay: 400, additional_install_material: 200 } }],
+    sales: [{ ref: 'Invoice 1006', jobId: 'G', amount: 7011.87, open: 0, impliedSale: 14023.73, deposit: { inBank: true, linked: true, bankLineId: 'g' } }],
+    bankLines: [bank('g', 7011.87, 'customer_payment', 'G', '2026-10-15')], notes: {}, suppliersPaid: { at: 'Oct 26' },
+  });
+  assert.deepEqual([r.sale.value, r.sale.tag, r.materials.value, r.subLabor.value, r.other.value, r.cost, r.costComplete], [14023.73, 'invoice', 10249.11, 400, 200, 10849.11, true]);
+  assert.deepEqual([r.profit, r.ya, r.gf, r.received, r.leftToCollect, r.receipts.length], [3174.62, 1587.31, 1587.31, 7011.87, 7011.86, 1]);
+});
+
 test('the ledger splits sold jobs into active and completed and leaves quotes out', () => {
   const l = jobLedger({ cards: [card('A', 'half_down', { sale: 1000, windows: 400, rough: 0 }), card('Q', 'sent_to_customer', { sale: 9, windows: 1 }), card('P', 'paid', { sale: 600, windows: 300, typed: true })] });
   assert.deepEqual([l.active.map((r) => r.id), l.completed.map((r) => r.id)], [['A'], ['P']]);
@@ -81,7 +110,7 @@ test('the ledger splits sold jobs into active and completed and leaves quotes ou
   assert.ok(l.completed[0].flags.some((f) => f.startsWith('Marked Paid, but no payment')));
 });
 
-test('YA operating year: genuine expenses only; taxes, payroll, weekly stream, Amex and unsorted wait; loans and draws excluded', () => {
+test('YA operating year: genuine expenses only; taxes, payroll, weekly stream, Amex, unsorted and loans (interest is an expense) wait; draws excluded', () => {
   const L = (amount, category, description = 'x', match_note = '') => ({ posted_date: '2026-05-01', amount, category, description, match_note });
   const op = yaOperatingYear([
     L(10000, 'labor_payment'), L(5000, 'customer_payment'), L(-3000, 'job_cost'), L(-1000, 'crew_pay', 'Check 1'), L(-3000, 'crew_pay', 'Draft Withdrawal Draft'),
@@ -90,8 +119,8 @@ test('YA operating year: genuine expenses only; taxes, payroll, weekly stream, A
     { posted_date: '2025-12-31', amount: 99999, category: 'labor_payment' },
   ], { from: '2026-01-01', to: '2026-10-23' });
   assert.deepEqual([op.income, op.direct, op.intercompany, op.opex, op.resultBeforePending], [15000, 4000, 800, 200, 10000]);
-  assert.deepEqual([op.totals.taxes, op.totals.payroll, op.totals.weekly, op.totals.card, op.totals.unsorted, op.pending], [28777, 3000, 3000, 900, 50, 35727]);
-  assert.deepEqual([op.totals.loans, op.totals.ownerDraws, op.excluded], [499.39, 100, 599.39]);
+  assert.deepEqual([op.totals.taxes, op.totals.payroll, op.totals.weekly, op.totals.card, op.totals.unsorted, op.totals.loans, op.pending], [28777, 3000, 3000, 900, 50, 499.39, 36226.39]);
+  assert.deepEqual([op.totals.ownerDraws, op.excluded], [100, 100]);
   assert.equal(op.taxLines.length, 2);
   assert.ok(isTaxLine({ description: 'Withdrawal Ach P', match_note: 'Taxes' }) && !isTaxLine({ description: 'Pekin Insurance', match_note: 'Insurance' }));
   // Combined YA + Glass Forge cancels the intercompany payment exactly once.
