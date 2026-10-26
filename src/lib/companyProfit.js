@@ -1,7 +1,8 @@
 // Company profit views (Gabe, Oct 26). Pure.
 //  - yaOperatingYear: YA's full-year operating statement on ONE stated period and basis: cash basis,
 //    from the Hub's Mountain America bank lines. Only genuine operating expenses are deducted.
-//    Owner draws, loan payments and transfers are not expenses. Tax payments are listed one by one
+//    Owner draws, loan principal and transfers are not expenses; loan interest and fees are, and the
+//    bank line does not split them, so loan payments wait with the items to classify. Tax payments are listed one by one
 //    because employer payroll tax and income tax cannot be told apart from the bank line.
 //    Payroll ACH and the weekly $2,500/$3,000 stream wait for the bookkeeper's ruling, and Amex and
 //    unsorted lines are not classified, so they are shown as pending, never netted into the result.
@@ -32,7 +33,7 @@ export const OPERATING_GROUPS = [
   ['weekly', 'Weekly $2,500 / $3,000 stream: classification with the bookkeeper', 'pending'],
   ['card', 'Amex card payments: purchases not itemized', 'pending'],
   ['unsorted', 'Money out not sorted yet', 'pending'],
-  ['loans', 'Loan payments (principal / interest split unknown)', 'excluded'],
+  ['loans', 'Loan payments: principal (not an expense) vs interest and fees (expenses), split unknown', 'pending'],
   ['ownerDraws', 'Owner draws', 'excluded'],
   ['transfers', 'Transfers', 'excluded'],
 ];
