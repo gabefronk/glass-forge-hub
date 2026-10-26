@@ -90,10 +90,26 @@ const YA_COLS = [
   ["Job sales", true, "Sale on outside jobs that were paid: the 50/50 profit-split lines on Invoicing"],
   ["Income", true, "Labor billed plus job sales"], ["Job cost", true, "Cost on those outside jobs (windows plus labor & material)"],
   ["Shop", true, "Shop and overhead purchases (POs with no job)"],
-  ["Glass Forge", true, "What Glass Forge invoiced YA: the 10% install fee plus its half of each outside job's profit (Invoicing's Fee total)"],
+  ["Glass Forge", true, "What YA owes Glass Forge: the issued Glass Forge invoice where there is one, otherwise the Hub's 10% install fee plus half of each paid outside job's profit. Nothing before March 2026, when the agreement took effect"],
   ["Profit", true, "Income less job cost, shop and Glass Forge. Crew pay is not recorded in the Hub, so this is before crew pay"],
   ["Margin", true, "Profit ÷ income"],
 ];
+const GF_COLS = [
+  ["Month"], ["Invoice", false, "Glass Forge's issued invoice to YA for the month (opens the document)"],
+  ["Install fees", true, "10% of install labor"], ["Profit splits", true, "Glass Forge's share of outside job and product sales"],
+  ["Glass Forge", true, "The invoice's amount due, or the Hub's figure for a month not invoiced yet"],
+  ["Hub figure", true, "What the Hub's Invoicing lines come to for the month"], ["Difference", true, "Invoice less Hub figure"],
+];
+// The Invoice cell: the issued invoice's number (linked to the document), Not invoiced, or Before agreement.
+function invoiceCell(m) {
+  if (m.basis === "before") return <span style={{ color: SECONDARY }}>Before agreement</span>;
+  if (m.basis === "hub") return <span className="font-semibold" style={{ color: "#6F4E10" }}>Not invoiced</span>;
+  return m.invoice.docs.map((d) => (d.url
+    ? <a key={d.number} href={d.url} target="_blank" rel="noreferrer" className="mr-2 font-semibold hover:underline" style={{ color: INK }}>{d.number}</a>
+    : <span key={d.number} className="mr-2 font-semibold">{d.number}</span>));
+}
+const gfCells = (label, r, invoice, projection = false) => [[label], [invoice], [r.fee, "money"], [r.split, "money"], [r.glassForge, "money"],
+  projection ? [""] : [r.hubGlassForge, "money"], projection || !(r.invoiced || r.basis === "invoice") ? [""] : [r.difference, "money"]];
 const yaCells = (label, r) => [[label], [r.labor, "money"], [r.sales, "money"], [r.income, "money"], [r.jobCost, "out"], [r.shop, "out"], [r.glassForge, "out"], [r.profit, "money"], [r.margin, "pct"]];
 
 function CompanyOverviewContent() {
@@ -134,7 +150,7 @@ function CompanyOverviewContent() {
     return () => { loadSeq.current++; };
   }, [today]);
 
-  const year = useMemo(() => (state.data ? companyYear({ rows: state.data.rows, superseded: state.data.superseded, cards: state.data.cards, purchaseOrders: state.data.pos, today }) : null), [state.data, today]);
+  const year = useMemo(() => (state.data ? companyYear({ rows: state.data.rows, superseded: state.data.superseded, cards: state.data.cards, purchaseOrders: state.data.pos, invoices: state.data.invoices, today }) : null), [state.data, today]);
   // This month's Ready to invoice and Invoiced, unpaid: Invoicing's own money strip.
   const strip = useMemo(() => {
     if (!state.data) return null;
@@ -188,7 +204,7 @@ function CompanyOverviewContent() {
           <div style={{ flex: 1 }} />
           <div className="grid grid-cols-4 max-[1023px]:order-last max-[1023px]:w-full max-[1023px]:grid-cols-2">
             <Figure label="YA income" value={ytd.income} title="Install labor billed plus outside job sales, January to today" />
-            <Figure label="Glass Forge income" value={ytd.glassForge} title="10% install fees plus Glass Forge's half of each paid outside job: Invoicing's Fee totals, January to today" />
+            <Figure label="Glass Forge income" value={ytd.glassForge} title={`Issued Glass Forge invoices (${money(ytd.invoiced)}) plus months not invoiced yet at the Hub's figures (${money(ytd.notInvoiced)}), from March 2026`} />
             <Figure label="YA profit, before crew pay" value={ytd.profit} title="YA income less job cost, shop purchases and Glass Forge. Crew pay is not recorded in the Hub" color={ytd.profit < 0 ? "#F0A8A6" : TITLE} />
             <Figure label={`Projected ${year.year} YA profit`} value={projected.profit} title="Profit to date, plus YA's half of the open Purchasing jobs, plus the rest of the year's install labor at this year's monthly average less Glass Forge's fee" color={BRASS_LT} />
           </div>
@@ -220,14 +236,14 @@ function CompanyOverviewContent() {
         </table>
       </Sheet>
 
-      <Sheet title="Glass Forge · invoiced to YA" aside={strip ? `${thisMonthName}: ${money(strip.ready.fee)} ready to invoice · ${money(strip.unpaid.fee)} invoiced, unpaid` : ""}>
+      <Sheet title="Glass Forge · invoiced to YA" aside={`${money(ytd.invoiced)} invoiced · ${money(ytd.notInvoiced)} not invoiced yet${strip ? ` · ${thisMonthName}: ${money(strip.ready.fee)} ready to invoice` : ""}`}>
         <table className="w-full border-collapse">
-          <Head cols={[["Month"], ["Install fees", true, "10% of install labor"], ["Profit splits", true, "Half of each paid outside job's profit"], ["Glass Forge total", true, "Invoicing's Fee total for the month"]]} />
+          <Head cols={GF_COLS} />
           <tbody>
-            {year.months.map((m) => <Row key={m.month} cells={[[monthName(m.month)], [m.fee, "money"], [m.split, "money"], [m.glassForge, "money"]]} />)}
-            <Row tone="total" cells={[[`${year.year} to date`], [ytd.fee, "money"], [ytd.split, "money"], [ytd.glassForge, "money"]]} />
-            {rest.map((r) => <Row key={r.key} cells={[[restLabel[r.key]], [r.fee, "money"], [r.split, "money"], [r.glassForge, "money"]]} />)}
-            <Row tone="projected" cells={[[`Projected ${year.year}`], [projected.fee, "money"], [projected.split, "money"], [projected.glassForge, "money"]]} />
+            {year.months.map((m) => <Row key={m.month} cells={gfCells(monthName(m.month), m, invoiceCell(m))} title={m.basis === "invoice" ? `Hub figure ${money(m.hubGlassForge)}; the invoice is ${money(m.difference)} ${m.difference < 0 ? "less" : "more"}` : undefined} />)}
+            <Row tone="total" cells={gfCells(`${year.year} to date`, ytd, `${year.months.filter((m) => m.basis === "invoice").length} invoiced`)} />
+            {rest.map((r) => <Row key={r.key} cells={gfCells(restLabel[r.key], r, "Projected", true)} />)}
+            <Row tone="projected" cells={gfCells(`Projected ${year.year}`, projected, "", true)} />
           </tbody>
         </table>
       </Sheet>
