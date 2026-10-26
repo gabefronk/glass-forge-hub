@@ -27,7 +27,7 @@ export async function fetchAllPages(entity: any, sort = '-created_date', pageSiz
 }
 
 // Mongo-like order: missing/null first ascending, then numbers, then everything else as text.
-const rank = (v: any) => (v == null || v === '' ? 0 : typeof v === 'number' ? 1 : 2);
+const rank = (v: any) => (v == null ? 0 : typeof v === 'number' ? 1 : 2);
 function compareValues(a: any, b: any): number {
   const ra = rank(a), rb = rank(b);
   if (ra !== rb) return ra - rb;
