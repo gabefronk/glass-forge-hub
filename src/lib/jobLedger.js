@@ -41,7 +41,8 @@ export const GF_FEE_CHECK = {
   readAt: 'Oct 26, 2026',
   invoices: ['GF-2026-001 (March)', 'GF-2026-002 (April)', 'GF-2026-003 (May)', 'GF-2026-004 (June)'],
   conflicts: [],
-  finding: 'None of the four lists a Purchasing ledger job: they bill March–June install work at 10% and product or profit splits at 50%. No 10% fee is charged on an outside-BFS ledger job, so there is no conflict. No Glass Forge invoice covers July–October yet.',
+  finding: 'None of the four lists one of the 16 active ledger jobs: they bill March–June install work at 10% and product or profit splits at 50%. No 10% fee is charged on an active outside-BFS job, so there is no conflict. No Glass Forge invoice covers July–October yet.',
+  agren: 'To confirm: "Holmes Homes - Agren" install lines are billed at 10% in April ($4,544.00, $350.00, $75.00 and $695.00 job values) and May ($300.00 service). The completed ledger job Agren Res - Highland ($442.94 sale, October, cash customer) looks like separate later work; if it is the same job, that is a 10% fee on an outside-BFS job.',
   aside: 'Outside the ledger, for the owner: Hillwood - Tyson Res is billed at 10% in May ($1,667.40) and again as a profit split in June ($7,337.00); GF-2026-001 lists three "(Visit 2)" lines at the same values as the first visits.',
 };
 
