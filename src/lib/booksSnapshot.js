@@ -24,7 +24,7 @@ export const BOOKS_PL = {
   ],
   // Why the books view is incomplete (seen in QuickBooks the same day, read only).
   coverage: [
-    'Of 596 Mountain America bank-feed lines, 591 (Jan 1 – Oct 23) are still pending: crew pay, suppliers, Amex, loans and most deposits are not in the books.',
+    'The Mountain America bank feed has 591 lines pending (Jan 1 – Oct 23) and only 5 posted: crew pay, suppliers, Amex, loans and most deposits are not in the books.',
     'Israel\'s payroll ("DD Israel Yedra`" entries) is booked to the Cash account, a balance-sheet account, so no payroll cost appears in this P&L.',
     'The books are not reconciled to Mountain America statements, and $47,558.21 of receipts sit in Undeposited funds.',
   ],
