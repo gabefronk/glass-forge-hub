@@ -86,7 +86,7 @@ export function planUnlinkedLinks({ jobs = [], fees = [], events = [], reports =
       else if (prior && prior.size) conflict = true;
       else if (found.size && !found.has(j)) conflict = true;
     } else if (prior && prior.size > 1 && found.size) conflict = true;
-    if (conflict || found.size > 1) { if (found.size) ambiguous++; return null; }
+    if (conflict || found.size > 1) { ambiguous++; return null; }
     return found.size === 1 ? [...found][0] : null;
   };
 
@@ -101,7 +101,8 @@ export function planUnlinkedLinks({ jobs = [], fees = [], events = [], reports =
     feeLines.push({ id: f.id, job_id: job, match_confidence: 'high', needs_review: !!f.needs_review && (!!f.pricing_review_reason || f.service_review_status === 'review') });
   }
   // Lines linked in this plan count as evidence for their event / report.
-  for (const p of feeLines) noteLinkedFee({ ...fees.find((f) => f.id === p.id), job_id: p.job_id, match_confidence: 'high' });
+  const feeById = new Map(fees.map((f) => [f.id, f]));
+  for (const p of feeLines) noteLinkedFee({ ...feeById.get(p.id), job_id: p.job_id, match_confidence: 'high' });
 
   const calendarEvents = events.filter((e) => !e.job_id).flatMap((e) => {
     const job = decide({ name: e.job_name, po: e.po_number, oe: e.oe_number, event_key: e.google_event_id });
