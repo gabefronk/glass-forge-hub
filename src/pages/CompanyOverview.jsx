@@ -14,20 +14,24 @@ import { purchasingBoardCards } from "@/lib/purchasingScopes";
 import { paymentStage } from "@/lib/jobPayment";
 import { companyYear, companyYearCsv, cashYear, cashYearCsv, withSplitPlan, monthName } from "@/lib/companyOverview";
 import { bankCoverage, isWeeklyStream } from "@/lib/bankLines";
-import { pipelineView, importedLaborDiagnostic } from "@/lib/companyPicture";
-import { BOOKS_PL, QBO_SALES, QBO_UNASSIGNED_OPEN } from "@/lib/booksSnapshot";
+import { importedLaborDiagnostic } from "@/lib/companyPicture";
+import { jobLedger, receiptsLedger, TAGS, GF_FEE_CHECK } from "@/lib/jobLedger";
+import { yaOperatingYear, entityViews, OPERATING_GROUPS } from "@/lib/companyProfit";
+import { BOOKS_PL, QBO_SALES, QBO_UNASSIGNED } from "@/lib/booksSnapshot";
 import { purchasingRequest, money } from "@/components/budgets/ProcurementForms";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { PageShell } from "@/components/PageShell";
 
-// Company overview (Gabe, Oct 26): YA Windows & Doors' 2026 in three separate views, each with
-// its own source and coverage, never mixed into one number:
-//  1. Books YTD: QuickBooks' Profit and Loss, accrual and cash side by side (dated read-only
-//     snapshot, booksSnapshot.js). Incomplete: most of the bank feed is unposted.
-//  2. Bank cash movement YTD: the Hub's bank lines by month (cashYear). Unreconciled cash
-//     movement, not profit. The weekly $2,500/$3,000 stream is its own column (classification unknown).
-//  3. Remaining pipeline on signed jobs (companyPicture.js): sale, billed, cash received, left to
-//     collect, costs left, known margin before unknown costs, YA and Glass Forge shares apart.
+// Company overview (Gabe, Oct 26): YA Windows & Doors in separate views, each with its own source,
+// period and basis, never mixed into one number:
+//  1. Job ledger (jobLedger.js, the same rows Purchasing reads): management job margin over each
+//     active job's lifetime, sale less all-in cost split 50/50, every figure tagged by source; the
+//     completed jobs apart. Then the receipts ledger: every customer payment with its source, and
+//     every customer deposit no job accounts for.
+//  2. Company profit (companyProfit.js): YA's operating statement, cash basis from the bank lines,
+//     genuine expenses only, pending classifications shown apart; YA, Glass Forge and combined.
+//  3. Books YTD: QuickBooks' Profit and Loss, accrual and cash side by side (read-only snapshot).
+//  4. Bank cash movement YTD: the Hub's bank lines by month (cashYear). Unreconciled cash movement.
 // No full-year scenario: neither basis can be supported honestly yet (reasons on the page).
 // The July imported-lines diagnostic is conditional and kept apart from every actual.
 // Hub-recorded income (before crew pay) and Glass Forge's invoices stay below as reference.
@@ -191,7 +195,10 @@ function CompanyOverviewContent() {
     const lines = state.data.bankLines.filter((l) => String(l.posted_date || "").startsWith(today.slice(0, 4)) && isWeeklyStream(l));
     return { count: lines.length, total: lines.reduce((n, l) => n - Number(l.amount || 0), 0) };
   }, [state.data, today]);
-  const pipe = useMemo(() => (state.data ? pipelineView({ cards: state.data.cards, budgets: state.data.budgets, orders: state.data.vos, costInputs: state.data.costInputs, bankLines: state.data.bankLines, sales: QBO_SALES }) : null), [state.data]);
+  const ledger = useMemo(() => (state.data ? jobLedger({ cards: state.data.cards, budgets: state.data.budgets, orders: state.data.vos, costInputs: state.data.costInputs, bankLines: state.data.bankLines, sales: QBO_SALES }) : null), [state.data]);
+  const receipts = useMemo(() => (ledger ? receiptsLedger({ rows: [...ledger.active, ...ledger.completed], bankLines: state.data.bankLines, sales: QBO_SALES, unassigned: QBO_UNASSIGNED }) : null), [ledger, state.data]);
+  const operating = useMemo(() => (state.data ? yaOperatingYear(state.data.bankLines, { from: `${today.slice(0, 4)}-01-01`, to: today }) : null), [state.data, today]);
+  const entities = useMemo(() => (ledger && operating ? entityViews({ ledger: ledger.totals.active, operating }) : null), [ledger, operating]);
   const july = useMemo(() => (state.data ? importedLaborDiagnostic(state.data.rawFeeLines, `${today.slice(0, 4)}-07`) : null), [state.data, today]);
   // This month's Ready to invoice: Invoicing's own money strip.
   const strip = useMemo(() => {
