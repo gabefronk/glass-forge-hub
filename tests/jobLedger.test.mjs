@@ -27,13 +27,13 @@ test('the owner\'s Taira example: profit is sale less the all-in cost, split 50/
   assert.ok(r.flags.some((f) => /needs review/.test(f)) && r.flags.some((f) => /Draft/.test(f)) && r.flags.some((f) => /BFS installed sale/.test(f)));
 });
 
-test('unknown crew stays unknown and is flagged; a typed cost already holds labor; an odd cent goes to YA', () => {
+test('unknown crew stays unknown and is flagged; a typed cost already holds labor; an odd half cent rounds to Glass Forge', () => {
   const unknown = ledgerJob(card('U', 'ordered', { sale: 500, windows: 300, rough: 0, budgetId: 'b' }), { budgets: [{ id: 'b', inputs: { labor_cost_sub_pay: 0 } }] });
   assert.deepEqual([unknown.subLabor.value, unknown.subLabor.tag, unknown.costComplete, unknown.profit], [null, 'unknown', false, 200]);
   assert.ok(unknown.flags.includes('Crew cost unknown: profit is before crew'));
   const typed = ledgerJob(card('Y', 'ordered', { sale: 2411.81, windows: 1256.98, typed: true }), {});
   assert.deepEqual([typed.subLabor.basis, typed.cost, typed.profit, typed.costComplete], ['typed', 1256.98, 1154.83, true]);
-  assert.deepEqual([typed.gf, typed.ya], [577.41, 577.42]);
+  assert.deepEqual([typed.gf, typed.ya], [577.42, 577.41]);
   // Budget labor is an estimate and sits inside Purchasing's labor & material: never counted twice.
   const est = ledgerJob(card('E', 'half_down', { sale: 2863.79, windows: 933.96, rough: 700, budgetId: 'b' }), { budgets: [{ id: 'b', inputs: { labor_cost_sub_pay: 700 } }] });
   assert.deepEqual([est.subLabor.value, est.other.value, est.cost, est.profit], [700, 0, 1633.96, 1229.83]);
