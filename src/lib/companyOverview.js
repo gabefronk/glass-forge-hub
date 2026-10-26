@@ -6,7 +6,10 @@
 //  - Shop / overhead POs (purchase_type 'shop') are YA costs in the month they were raised.
 //  - Open Purchasing jobs (sold, not Paid) are the pipeline. A job lands in a month only once
 //    it is Paid, through its 50/50 split line, so nothing is counted twice.
-//  - Crew pay is not recorded in the Hub, so YA's profit is before crew pay (Gabe, Oct 26).
+//  - Crew pay, payroll, overhead and supplier spend with no Hub order come from YA's bank lines
+//    (BankTransactions, src/lib/bankLines.js). A month with no bank lines is before crew pay.
+//    Bank lines the Hub counts elsewhere (labor payments, customer payments, job orders, shop
+//    POs) are left out, so nothing is counted twice.
 //  - Glass Forge's consulting agreement with YA took effect in March 2026 (invoice GF-2026-001),
 //    so earlier months owe Glass Forge nothing. A month Glass Forge has invoiced (an Invoices
 //    record of kind 'glass_forge', recorded from the issued document) counts the invoice's
@@ -15,6 +18,7 @@ import { computeFeeAmt, computeLaborAmt } from './feeMath.js';
 import { inInvoiceScope } from './invoiceScope.js';
 import { cardFigures, isSold, isCompleted } from './purchasingSummary.js';
 import { SPLIT_PCT } from './purchasingSplit.js';
+import { bankMonth } from './bankLines.js';
 
 const round = (n) => Math.round(n * 100) / 100;
 const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? 0 : Number(v));
@@ -67,7 +71,8 @@ export function shopCost(purchaseOrders = [], month) {
 
 // basis: 'invoice' (Glass Forge invoiced this month), 'hub' (not invoiced: the Hub's figures)
 // or 'before' (before the agreement: nothing owed, so no Hub figure to compare either).
-export function monthFigures(lines, month, shop = 0, { invoice = null, start = GLASS_FORGE_START } = {}) {
+// bank: bankMonth(...) for the month (crew pay, overhead, other costs and other income).
+export function monthFigures(lines, month, shop = 0, { invoice = null, start = GLASS_FORGE_START, bank = null } = {}) {
   const splits = lines.filter(isProfitSplit);
   const install = lines.filter((r) => !isProfitSplit(r));
   const labor = sum(install, computeLaborAmt);
@@ -79,11 +84,13 @@ export function monthFigures(lines, month, shop = 0, { invoice = null, start = G
   const hubGlassForge = basis === 'before' ? 0 : round(hubFee + hubSplit);
   const split = basis === 'before' ? 0 : basis === 'invoice' ? invoice.split : hubSplit;
   const fee = basis === 'before' ? 0 : basis === 'invoice' ? round(invoice.amount - invoice.split) : hubFee;
-  const income = round(labor + sales);
+  const b = bank || bankMonth([], month);
+  const income = round(labor + sales + b.otherIncome);
   const glassForge = round(fee + split);
-  const profit = round(income - jobCost - shop - glassForge);
+  const profit = round(income - jobCost - shop - b.crewPay - b.overhead - b.otherCost - glassForge);
   return {
-    month, labor, sales, income, jobCost, shop, fee, split, glassForge, profit, margin: income ? profit / income : null, lines: lines.length,
+    month, labor, sales, otherIncome: b.otherIncome, income, jobCost, shop, crewPay: b.crewPay, overhead: b.overhead, otherCost: b.otherCost, hasBank: b.hasBank, bank: b,
+    fee, split, glassForge, profit, margin: income ? profit / income : null, lines: lines.length,
     basis, invoice, hubGlassForge,
     invoiced: basis === 'invoice' ? glassForge : 0,
     notInvoiced: basis === 'hub' ? glassForge : 0,
@@ -91,7 +98,7 @@ export function monthFigures(lines, month, shop = 0, { invoice = null, start = G
   };
 }
 
-const FIELDS = ['labor', 'sales', 'income', 'jobCost', 'shop', 'fee', 'split', 'glassForge', 'profit', 'hubGlassForge', 'invoiced', 'notInvoiced', 'difference'];
+const FIELDS = ['labor', 'sales', 'otherIncome', 'income', 'jobCost', 'shop', 'crewPay', 'overhead', 'otherCost', 'fee', 'split', 'glassForge', 'profit', 'hubGlassForge', 'invoiced', 'notInvoiced', 'difference'];
 function total(rows) {
   const t = Object.fromEntries(FIELDS.map((f) => [f, sum(rows, (r) => r[f])]));
   return { ...t, margin: t.income ? t.profit / t.income : null };
@@ -121,14 +128,15 @@ export function pipeline(cards = []) {
 // start: the month Glass Forge's agreement took effect.
 // rows: Invoicing's display rows (withCompanions, Purchasing-held lines removed);
 // superseded: buildSupersededSet of those rows; cards: Purchasing cards with paymentStage.
-export function companyYear({ rows = [], superseded = new Set(), cards = [], purchaseOrders = [], invoices = [], today, start = GLASS_FORGE_START }) {
+// bankLines: BankTransactions records (any account).
+export function companyYear({ rows = [], superseded = new Set(), cards = [], purchaseOrders = [], invoices = [], bankLines = [], today, start = GLASS_FORGE_START }) {
   const year = today.slice(0, 4);
   const thisMonth = Number(today.slice(5, 7));
   const keys = Array.from({ length: thisMonth }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   const shown = rows.filter((r) => !superseded.has(r.id) && !(r.job_date && r.job_date > today));
   const issued = glassForgeInvoices(invoices);
-  const months = keys.map((m) => monthFigures(shown.filter((r) => inInvoiceScope(r, m)), m, shopCost(purchaseOrders, m), { invoice: issued.get(m) || null, start }));
-  const ytd = total(months);
+  const months = keys.map((m) => monthFigures(shown.filter((r) => inInvoiceScope(r, m)), m, shopCost(purchaseOrders, m), { invoice: issued.get(m) || null, start, bank: bankMonth(bankLines, m) }));
+  const ytd = { ...total(months), bankMonths: months.filter((m) => m.hasBank).map((m) => m.month) };
   const prior = months.slice(0, -1);
   const left = 12 - thisMonth;
   const average = prior.length ? round(prior.reduce((n, m) => n + m.labor, 0) / prior.length) : 0;
@@ -140,7 +148,7 @@ export function companyYear({ rows = [], superseded = new Set(), cards = [], pur
   const rest = [
     { key: 'pipeline', labor: 0, sales: open.sale, income: open.sale, jobCost: open.cost, shop: 0, fee: 0, split: open.glassForge, glassForge: open.glassForge, profit: open.ya },
     { key: 'pace', labor: pace.labor, sales: 0, income: pace.labor, jobCost: 0, shop: 0, fee: pace.fee, split: 0, glassForge: pace.fee, profit: round(pace.labor - pace.fee) },
-  ].map((r) => ({ ...r, margin: r.income ? r.profit / r.income : null }));
+  ].map((r) => ({ otherIncome: 0, crewPay: 0, overhead: 0, otherCost: 0, ...r, margin: r.income ? r.profit / r.income : null }));
   const projected = total([ytd, ...rest]);
   return { year, today, months, ytd, pipeline: open, pace, rest, projected };
 }
@@ -150,7 +158,7 @@ export const monthName = (key) => MONTH_NAMES[Number(String(key).slice(5, 7)) - 
 
 // The YA month table as CSV (costs as negative numbers, like the page).
 export function companyYearCsv(y) {
-  const head = ['Month', 'Labor billed', 'Job sales', 'Income', 'Job cost', 'Shop', 'Glass Forge fees', 'Glass Forge splits', 'Profit before crew pay'];
-  const line = (label, r) => [label, r.labor, r.sales, r.income, -r.jobCost, -r.shop, -r.fee, -r.split, r.profit].map((v) => (typeof v === 'number' ? round(v || 0).toFixed(2) : `"${String(v).replace(/"/g, '""')}"`)).join(',');
-  return [head.join(','), ...y.months.map((m) => line(`${monthName(m.month)} ${y.year}`, m)), line(`${y.year} to date`, y.ytd)].join('\n');
+  const head = ['Month', 'Labor billed', 'Job sales', 'Other income', 'Income', 'Job cost', 'Shop', 'Crew pay', 'Overhead', 'Other costs', 'Glass Forge fees', 'Glass Forge splits', 'Profit', 'Bank lines'];
+  const line = (label, r, bank) => [label, r.labor, r.sales, r.otherIncome, r.income, -r.jobCost, -r.shop, -r.crewPay, -r.overhead, -r.otherCost, -r.fee, -r.split, r.profit, bank].map((v) => (typeof v === 'number' ? round(v || 0).toFixed(2) : `"${String(v).replace(/"/g, '""')}"`)).join(',');
+  return [head.join(','), ...y.months.map((m) => line(`${monthName(m.month)} ${y.year}`, m, m.hasBank ? 'yes' : 'no: before crew pay')), line(`${y.year} to date`, y.ytd, `${y.ytd.bankMonths.length} months`)].join('\n');
 }
