@@ -203,12 +203,16 @@ function CompanyOverviewContent() {
   const paceLabel = `${monthName(`${year.year}-${String(13 - pace.months).padStart(2, "0")}`)}–Dec labor at the ${monthName(pace.from)}–${monthName(pace.to)} average`;
   const restLabel = { pipeline: `Open Purchasing jobs · ${pipeline.jobs.length}`, pace: paceLabel };
   const thisMonthName = monthName(thisMonth);
-  // Which months the profit takes crew pay and overhead from the bank for.
+  // Which months the profit takes crew pay and overhead from the bank for, and how fully.
   const noBank = year.months.filter((m) => !m.hasBank).map((m) => monthName(m.month));
+  const partial = year.months.filter((m) => m.hasBank && m.bank.coveredDays < m.monthDays);
+  const monthLabel = (m) => (m.hasBank && m.bank.coveredDays < m.monthDays ? `${monthName(m.month)} · bank ${m.bank.coveredDays} of ${m.monthDays} days` : monthName(m.month));
+  const bankMonths = year.months.filter((m) => m.hasBank);
+  const cash = { moneyIn: bankMonths.reduce((n, m) => n + m.bank.moneyIn, 0), moneyOut: bankMonths.reduce((n, m) => n + m.bank.moneyOut, 0), income: bankMonths.reduce((n, m) => n + m.income, 0) };
   const profitLabel = !ytd.bankMonths.length ? "YA profit, before crew pay" : !noBank.length ? "YA profit" : `YA profit · crew pay ${ytd.bankMonths.length === 1 ? `${monthName(ytd.bankMonths[0])} only` : `${ytd.bankMonths.length} months`}`;
   const bankAside = !bank?.count
     ? <>No bank lines yet, so profit is before crew pay. <Link to="/operations/bank" className="font-semibold hover:underline" style={{ color: INK }}>Import the bank CSV →</Link></>
-    : <>Crew pay, overhead and other costs from the bank, {dayLabel(bank.first)} – {dayLabel(bank.last)}{noBank.length ? ` · ${noBank.length === 1 ? noBank[0] : `${noBank[0]}–${noBank[noBank.length - 1]}`} before crew pay (no bank lines)` : ""} · <Link to="/operations/bank" className="font-semibold hover:underline" style={{ color: INK }}>Bank →</Link></>;
+    : <>Crew pay, overhead and other costs from the bank, {dayLabel(bank.first)} – {dayLabel(bank.last)}{noBank.length ? ` · ${noBank.join(", ")} before crew pay (no bank lines)` : ""}{partial.length ? ` · ${partial.map((m) => monthName(m.month)).join(", ")} only partly covered` : ""} · <Link to="/operations/bank" className="font-semibold hover:underline" style={{ color: INK }}>Bank →</Link></>;
 
   return (
     <PageShell width="max-w-[1480px]">
@@ -245,13 +249,25 @@ function CompanyOverviewContent() {
         <table className="w-full border-collapse">
           <Head cols={YA_COLS} />
           <tbody>
-            {year.months.map((m) => <Row key={m.month} cells={yaCells(monthName(m.month), m)} />)}
+            {year.months.map((m) => <Row key={m.month} cells={yaCells(monthLabel(m), m)} title={m.hasBank && m.bank.coveredDays < m.monthDays ? `The bank exports cover ${m.bank.coveredDays} of this month's ${m.monthDays} days, so its crew pay and costs are incomplete` : undefined} />)}
             <Row tone="total" cells={yaCells(`${year.year} to date`, ytd)} />
             {rest.map((r) => <Row key={r.key} cells={yaCells(restLabel[r.key], r, false)} title={r.key === "pace" ? `${money(pace.average)} a month × ${pace.months}, less Glass Forge's ${(pace.feeRate * 100).toFixed(1)}%. No crew pay or overhead projected` : "Sold Purchasing jobs not yet Paid. Each splits 50/50 with Glass Forge when Paid"} />)}
             <Row tone="projected" cells={yaCells(`Projected ${year.year}`, projected)} />
           </tbody>
         </table>
       </Sheet>
+
+      {bankMonths.length > 0 && (
+        <Sheet title="Bank account · cash in and out" aside={`Every bank line, sorted or not, against the income the table above counts as earned · ${money(cash.moneyIn - cash.income)} more came in than was earned`}>
+          <table className="w-full border-collapse">
+            <Head cols={[["Month"], ["Money in", true, "Every deposit"], ["Money out", true, "Every payment, including supplier orders and Glass Forge"], ["Net", true], ["Income earned", true, "YA income in the table above"], ["In less earned", true, "Deposits less income earned. Positive: money came in that the Hub doesn't count as income (last year's work, customers not in the Hub, deposits on open jobs)"]]} />
+            <tbody>
+              {bankMonths.map((m) => <Row key={m.month} cells={[[monthLabel(m)], [m.bank.moneyIn, "money"], [m.bank.moneyOut, "money"], [m.bank.net, "money"], [m.income, "money"], [m.bank.moneyIn - m.income, "money"]]} />)}
+              <Row tone="total" cells={[[`${bankMonths.length} months`], [cash.moneyIn, "money"], [cash.moneyOut, "money"], [cash.moneyIn + cash.moneyOut, "money"], [cash.income, "money"], [cash.moneyIn - cash.income, "money"]]} />
+            </tbody>
+          </table>
+        </Sheet>
+      )}
 
       <Sheet title="Glass Forge · invoiced to YA" aside={`${money(ytd.invoiced)} invoiced · ${money(ytd.notInvoiced)} not invoiced yet${strip ? ` · ${thisMonthName}: ${money(strip.ready.fee)} ready to invoice` : ""}`}>
         <table className="w-full border-collapse">
