@@ -29,11 +29,19 @@ const half = (profit) => Math.round(Math.round(profit * 100) * SPLIT_PCT) / 100;
 // Findings that need the owner, from the source documents (read Oct 26). Shown on the job's row;
 // nothing here changes a figure.
 export const LEDGER_NOTES = {
-  '6ab10cdaa3f7840f482189b2': ['The Sep 18 down-payment wire ($82,617.88) is $14,085.79 less than half the sale ($96,703.67); the stage says half down. The reason for the difference is not on file.'],
-  '6acf9d64bc78f66ea67324a6': ['QuickBooks invoice 1006 bills $14,023.73 in all: AMSCO windows $2,457.38 + Windor doors $11,566.35. The Hub sale is $14,837.73 with the windows at $3,271.38, so the whole $814.00 difference is the windows price. Left to collect is shown against the Hub sale; against the invoice it would be $7,011.86. Owner to confirm which price is right.'],
-  '6ab65a0af4c7aab207863abb': ['QuickBooks bills $2,406.60 in all (invoice 1002 $1,474.71 + invoice 1013 $931.89, memo "final payment"); the Hub sale is $2,863.79, $457.19 more.'],
+  '6ab10cdaa3f7840f482189b2': ['For Gabriel: the Sep 18 down-payment wire ($82,617.88) is $14,085.79 less than half the sale ($96,703.67). What down payment was agreed is not on file (bank, QuickBooks and email searched), so the ledger counts only the wire received and does not assume half.'],
+  '6acf9d64bc78f66ea67324a6': ['Owner-confirmed Oct 26: the sale is the QuickBooks invoice 1006 pricing, $14,023.73 (AMSCO windows $2,457.38 + Windor doors $11,566.35). Cost incl. tax is $10,249.11 (AMSCO $1,860.49, Windor $8,388.62); the customer installs the windows; YA installs the doors ($400 labor + $200 install material).'],
+  '6ab65a0af4c7aab207863abb': ['For Gabriel: QuickBooks bills $2,406.60 in all (invoice 1002 $1,474.71 + invoice 1013 $931.89, memo "final payment"); the Hub sale is $2,863.79, $457.19 more. Which one is the agreed price is not on file.'],
   '6ac9042f38f6acd458b62de1': ['Supplier tax dispute open: 7.45% computed ($9,393.34) vs 4.75% charged ($5,989.04). The cost uses what was charged and paid.'],
+  '6ad905765c09889963f111b3': ['For Gabriel: ABC Supply was paid $1,506.49 on Oct 22 for PO "TOBY HOLMES" (payment confirmation #370416113); the budget cost is $1,403.10, $103.39 less (consistent with sales tax). The cost is left at the budget figure until you confirm.'],
+  '6adb07ab10207439dec8647a': ['For Gabriel: marked Paid, but no $600 payment is in the bank feed, QuickBooks or email. No receipt is assumed.'],
+  '6ac0842bdacabf0b5ef5a31f': ['For Gabriel: Glass Forge invoices GF-2026-002/003 bill "Holmes Homes - Agren" install lines at 10% (April $4,544.00, $350.00, $75.00, $695.00 job values; May $300.00 service). Whether that is the same job as this October cash sale is not on file. No invoice changed.'],
 };
+
+// Owner confirmation (Gabriel, Oct 26): every supplier on the active Purchasing jobs is paid. A paid
+// bill stays in the job's cost; it is never shown as cash still to pay. A payment found in the bank
+// feed is shown as feed-verified; the rest is owner-confirmed.
+export const SUPPLIERS_PAID = { at: 'Oct 26, 2026', by: 'Gabriel', scope: 'active' };
 
 // Issued Glass Forge invoices checked against the split rule: no 10% fee on an outside-BFS ledger job
 // (read from the four invoice documents in Drive, Oct 26). Listed for the owner; nothing is adjusted.
@@ -58,7 +66,7 @@ function jobBudgets(card, budgets) {
 
 // One ledger row. card: a Purchasing card (purchasingBoardCards). The record lists may be
 // unfiltered; they are filtered by job id here.
-export function ledgerJob(card, { budgets = [], orders = [], costInputs = [], bankLines = [], sales = [], notes = LEDGER_NOTES } = {}) {
+export function ledgerJob(card, { budgets = [], orders = [], costInputs = [], bankLines = [], sales = [], notes = LEDGER_NOTES, suppliersPaid = null } = {}) {
   const id = card.job?.id;
   const flags = [];
   const typed = card.windows?.display?.source === 'owner';
@@ -92,7 +100,10 @@ export function ledgerJob(card, { budgets = [], orders = [], costInputs = [], ba
     paid,
   };
   if (matValue == null) flags.push('Materials cost unknown');
-  else if (paid > 0 && !same(paid, matValue)) flags.push(`${usd(paid)} of ${usd(matValue)} materials found paid in the bank feed`);
+  else if (paid > 0 && !same(paid, matValue)) flags.push(`Bank feed shows ${usd(paid)} paid to suppliers against ${usd(matValue)} materials${suppliersPaid ? '; the rest is owner-confirmed paid' : ''}`);
+  // How the supplier bills are known to be paid: feed (all of it in the bank feed), feed + owner,
+  // owner (owner-confirmed, no bank line matched), or none (not confirmed).
+  materials.paidBasis = !(matValue > 0) ? 'none' : same(paid, matValue) || paid > matValue ? 'feed' : paid > 0 ? (suppliersPaid ? 'feed+owner' : 'partial') : suppliersPaid ? 'owner' : 'none';
 
   // Sub/crew labor: an entered actual (job cost inputs), inside a typed cost, the budget's estimate,
   // or unknown. Crew drafts are not matched to jobs in the bank, so none is feed-verified.
@@ -171,7 +182,7 @@ export function ledgerTotals(rows = []) {
 
 // The ledger for the sold Purchasing jobs: active (sold, not Paid) and completed (Paid) apart.
 export function jobLedger({ cards = [], ...records } = {}) {
-  const rows = cards.filter(isSold).map((c) => ledgerJob(c, records));
+  const rows = cards.filter(isSold).map((c) => ledgerJob(c, { ...records, suppliersPaid: isCompleted(c) ? null : SUPPLIERS_PAID }));
   const active = rows.filter((r) => !r.completed);
   const completed = rows.filter((r) => r.completed);
   return { active, completed, byId: new Map(rows.map((r) => [r.id, r])), totals: { active: ledgerTotals(active), completed: ledgerTotals(completed) } };
