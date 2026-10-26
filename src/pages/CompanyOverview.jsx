@@ -109,7 +109,7 @@ function invoiceCell(m) {
     : <span key={d.number} className="mr-2 font-semibold">{d.number}</span>));
 }
 const gfCells = (label, r, invoice, projection = false) => [[label], [invoice], [r.fee, "money"], [r.split, "money"], [r.glassForge, "money"],
-  projection ? [""] : [r.hubGlassForge, "money"], projection || !(r.invoiced || r.basis === "invoice") ? [""] : [r.difference, "money"]];
+  projection || r.basis === "before" ? [""] : [r.hubGlassForge, "money"], projection || !(r.invoiced || r.basis === "invoice") ? [""] : [r.difference, "money"]];
 const yaCells = (label, r) => [[label], [r.labor, "money"], [r.sales, "money"], [r.income, "money"], [r.jobCost, "out"], [r.shop, "out"], [r.glassForge, "out"], [r.profit, "money"], [r.margin, "pct"]];
 
 function CompanyOverviewContent() {
