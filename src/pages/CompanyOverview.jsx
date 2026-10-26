@@ -105,7 +105,56 @@ function Row({ cells, tone = "", title }) {
   );
 }
 const unk = (label = "Unknown") => [label, "unk"];
-const tag = (v, label, neg = false) => [<span key="t">{money(neg ? out(v) : v)} <span className="text-[13px]" style={{ color: SECONDARY }}>{label}</span></span>, "r"];
+// A money cell with its source tag ("-$1,234.56 feed"); an unknown reads Unknown, never $0.00.
+const TAG_SHORT = { feed: "feed", invoice: "invoice", estimate: "est.", unknown: "" };
+const note = (text) => <span className="text-[13px]" style={{ color: SECONDARY }}>{text}</span>;
+const tagged = (v, tagKey, neg = false, extra = "") => (v == null ? unk() : [<span key="t">{money(neg ? out(v) : v)} {note([TAG_SHORT[tagKey], extra].filter(Boolean).join(" · "))}</span>, "r"]);
+
+// The job ledger (jobLedger.js): one row per job, every figure with its tag; the flags are listed
+// under the table (FlagList), the Checks column counts them.
+const LEDGER_COLS = [
+  ["Job"], ["Stage"], ["Sale", true, "Contract sale. invoice: a QuickBooks document implies the same sale. est.: budget or typed figure"],
+  ["Materials", true, "Windows, doors or glass incl. tax, or the typed all-in cost. feed: the bank's supplier payments matched to the job add up to it"],
+  ["Sub-labor", true, "Crew / sub pay: an entered actual or the budget estimate (no crew payment is matched to a job in the bank), inside a typed cost, or unknown"],
+  ["Other", true, "Budget install material"], ["All-in cost", true, "Materials + sub-labor + other"],
+  ["Profit", true, "Sale less all-in cost. Where crew is unknown the profit is before crew"], ["YA 50%", true], ["Glass Forge 50%", true],
+  ["Received", true, "Customer payments on file (receipts ledger)"], ["Customers owe", true, "Sale less received"], ["Checks", true, "Flags, listed under the table"],
+];
+function ledgerCells(r) {
+  const s = r.subLabor;
+  return [
+    [<Link key="l" to={`/jobs/${r.id}`} className="font-semibold hover:underline" style={{ color: INK }}>{r.name}</Link>],
+    [paymentStage(r.stage)?.label || "—"],
+    tagged(r.sale.value, r.sale.tag), tagged(r.materials.value, r.materials.tag, true),
+    s.basis === "typed" ? [note("in typed cost"), "r"] : tagged(s.value, s.tag, true, s.basis === "actual" ? "actual" : ""),
+    r.other.value == null ? unk() : [r.other.value, "out"],
+    r.cost == null ? unk() : [r.cost, "out"],
+    r.profit == null ? unk("Not shown") : [<span key="p" style={{ color: r.profit < 0 ? LATE : INK }}>{money(r.profit)}{r.costComplete ? "" : <> {note("before crew")}</>}</span>, "r"],
+    r.ya == null ? unk("Not shown") : [r.ya, "money"], r.gf == null ? unk("Not shown") : [r.gf, "money"],
+    [r.received, "money"], r.leftToCollect == null ? unk() : [r.leftToCollect, "money"],
+    [r.flags.length || "", "r"],
+  ];
+}
+function LedgerTable({ rows, totals: t }) {
+  return (
+    <table className="w-full border-collapse">
+      <Head cols={LEDGER_COLS} />
+      <tbody>
+        {rows.map((r) => <Row key={r.id} cells={ledgerCells(r)} />)}
+        <Row tone="total" cells={[[`${t.jobs} jobs`], [""], [t.sale, "money"], [t.materials, "out"], [t.subLabor, "out"], [t.other, "out"], [t.cost, "out"], [t.profit, "money"], [t.ya, "money"], [t.gf, "money"], [t.received, "money"], [t.leftToCollect, "money"], [""]]} />
+      </tbody>
+    </table>
+  );
+}
+function FlagList({ rows }) {
+  const flagged = rows.filter((r) => r.flags.length);
+  if (!flagged.length) return null;
+  return (
+    <ul className="m-0 list-disc text-[13px]" style={{ padding: "4px 16px 12px 34px", color: INK }}>
+      {flagged.map((r) => <li key={r.id} style={{ marginTop: 2 }}><strong>{r.name}</strong>: {r.flags.join(" · ")}</li>)}
+    </ul>
+  );
+}
 
 const YA_COLS = [
   ["Month"], ["Labor billed", true, "Install labor billed to BFS: Invoicing's Labor total for the month"],
