@@ -117,16 +117,17 @@ export function pipeline(cards = []) {
 
 // The year to date, month by month, then the projection: YTD + open Purchasing jobs + the
 // months left at the year's monthly labor average (months before this one), less Glass
-// Forge's fee at the year's fee rate.
+// Forge's 10% (GLASS_FORGE_RATE). invoices: Invoices records (the 'glass_forge' ones are used);
+// start: the month Glass Forge's agreement took effect.
 // rows: Invoicing's display rows (withCompanions, Purchasing-held lines removed);
 // superseded: buildSupersededSet of those rows; cards: Purchasing cards with paymentStage.
-export function companyYear({ rows = [], superseded = new Set(), cards = [], purchaseOrders = [], invoices = [], today }) {
+export function companyYear({ rows = [], superseded = new Set(), cards = [], purchaseOrders = [], invoices = [], today, start = GLASS_FORGE_START }) {
   const year = today.slice(0, 4);
   const thisMonth = Number(today.slice(5, 7));
   const keys = Array.from({ length: thisMonth }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   const shown = rows.filter((r) => !superseded.has(r.id) && !(r.job_date && r.job_date > today));
   const issued = glassForgeInvoices(invoices);
-  const months = keys.map((m) => monthFigures(shown.filter((r) => inInvoiceScope(r, m)), m, shopCost(purchaseOrders, m), { invoice: issued.get(m) || null }));
+  const months = keys.map((m) => monthFigures(shown.filter((r) => inInvoiceScope(r, m)), m, shopCost(purchaseOrders, m), { invoice: issued.get(m) || null, start }));
   const ytd = total(months);
   const prior = months.slice(0, -1);
   const left = 12 - thisMonth;
