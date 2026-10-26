@@ -18,8 +18,27 @@
 import { isLiveBudget, budgetFigures, pText } from './purchasingCoreTwin.js';
 import {
   bestWindowsFromBudget, windowsDisplayCandidate, roughDisplayCandidate,
-  saleDisplayCandidate, profitDisplayCalc, quoteBrandLabel,
+  saleDisplayCandidate, profitDisplayCalc, quoteBrandLabel, buildPurchasingCards,
 } from './purchasingViewModel.js';
+
+// The Purchasing grid's cards from the overview data: each job carries its scope rows (one
+// per scope when a job holds more than one: a second budget, a reorder PO, an order with no
+// PO) and its payment stage, and a multi-scope job row withholds scope-derived money
+// (applyScopeRollup) so the roll-up never reads as a job total. Purchasing and the Company
+// overview both build their cards here, so their figures always agree.
+export function purchasingBoardCards(data, today = '') {
+  if (!data) return [];
+  const built = buildPurchasingCards({
+    jobs: data.jobs, budgets: data.budgets, purchase_orders: data.purchase_orders,
+    vendor_orders: data.vendor_orders, conflicts: data.conflicts, today,
+  });
+  const jobsById = new Map((data.jobs || []).map((j) => [j.id, j]));
+  return built.map((card) => applyScopeRollup({
+    ...card,
+    scopes: scopesForJob(card.job.id, data),
+    paymentStage: jobsById.get(card.job.id)?.payment_status || '',
+  }));
+}
 
 // PO statuses that mean the vendor accepted / material is in hand.
 const CONFIRMED_PO_STATUS = ['ordered', 'confirmed', 'received'];
