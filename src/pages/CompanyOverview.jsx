@@ -13,14 +13,16 @@ import { planSplitLines, isHeldForPurchasing } from "@/lib/purchasingSplit";
 import { purchasingBoardCards } from "@/lib/purchasingScopes";
 import { paymentStage } from "@/lib/jobPayment";
 import { companyYear, companyYearCsv, withSplitPlan, monthName } from "@/lib/companyOverview";
+import { bankCoverage } from "@/lib/bankLines";
 import { purchasingRequest, money } from "@/components/budgets/ProcurementForms";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { PageShell } from "@/components/PageShell";
 
 // Company overview (Gabe, Oct 26): the year to date the way QuickBooks' business overview
 // reads. YA Windows & Doors' income (install labor billed plus job sales), what Glass Forge
-// made by invoicing YA, YA's profit after Glass Forge before crew pay, and the year projected
-// from the open Purchasing jobs and the install-labor pace. The figures come from
+// made by invoicing YA, YA's profit after Glass Forge and the costs in YA's bank lines (crew
+// pay, overhead, other costs; months with no bank lines are before crew pay), and the year
+// projected from the open Purchasing jobs and the install-labor pace. The figures come from
 // companyYear (src/lib/companyOverview.js) over the same rows Invoicing and Purchasing show.
 // Field reports and other operational lists live on Invoicing and the job pages, not here.
 
@@ -88,10 +90,13 @@ function Row({ cells, tone = "", title }) {
 const YA_COLS = [
   ["Month"], ["Labor billed", true, "Install labor billed to BFS: Invoicing's Labor total for the month"],
   ["Job sales", true, "Sale on outside jobs that were paid: the 50/50 profit-split lines on Invoicing"],
-  ["Income", true, "Labor billed plus job sales"], ["Job cost", true, "Cost on those outside jobs (windows plus labor & material)"],
+  ["Income", true, "Labor billed plus job sales, plus any bank deposit sorted as Other income"], ["Job cost", true, "Cost on those outside jobs (windows plus labor & material)"],
   ["Shop", true, "Shop and overhead purchases (POs with no job)"],
+  ["Crew pay", true, "From YA's bank lines (Bank page): drafts sorted as crew pay. — means no bank lines for the month yet"],
+  ["Overhead", true, "From YA's bank lines: payroll, insurance, equipment rental, card payments and fees"],
+  ["Other costs", true, "From YA's bank lines: supplier payments with no Hub order, and lines not sorted yet. Still money out, so they count"],
   ["Glass Forge", true, "What YA owes Glass Forge: the issued Glass Forge invoice where there is one, otherwise the Hub's 10% install fee plus half of each paid outside job's profit. Nothing before March 2026, when the agreement took effect"],
-  ["Profit", true, "Income less job cost, shop and Glass Forge. Crew pay is not recorded in the Hub, so this is before crew pay"],
+  ["Profit", true, "Income less job cost, shop, crew pay, overhead, other costs and Glass Forge. A month with no bank lines is before crew pay and overhead"],
   ["Margin", true, "Profit ÷ income"],
 ];
 const GF_COLS = [
@@ -110,7 +115,11 @@ function invoiceCell(m) {
 }
 const gfCells = (label, r, invoice, projection = false) => [[label], [invoice], [r.fee, "money"], [r.split, "money"], [r.glassForge, "money"],
   projection || r.basis === "before" ? [""] : [r.hubGlassForge, "money"], projection || !(r.invoiced || r.basis === "invoice") ? [""] : [r.difference, "money"]];
-const yaCells = (label, r) => [[label], [r.labor, "money"], [r.sales, "money"], [r.income, "money"], [r.jobCost, "out"], [r.shop, "out"], [r.glassForge, "out"], [r.profit, "money"], [r.margin, "pct"]];
+// bank: true for a month or total row (no bank lines reads —), false for the projection rows.
+const yaCells = (label, r, bank = true) => {
+  const b = (v) => (!bank ? [""] : r.hasBank === false ? ["—"] : [v, "out"]);
+  return [[label], [r.labor, "money"], [r.sales, "money"], [r.income, "money"], [r.jobCost, "out"], [r.shop, "out"], b(r.crewPay), b(r.overhead), b(r.otherCost), [r.glassForge, "out"], [r.profit, "money"], [r.margin, "pct"]];
+};
 
 function CompanyOverviewContent() {
   const [state, setState] = useState({ loading: true, error: "", data: null });
@@ -122,7 +131,7 @@ function CompanyOverviewContent() {
     const seq = ++loadSeq.current;
     (async () => {
       try {
-        const [fl, events, jobs, budgets, pos, vos, closes, invoices, board] = await Promise.all([
+        const [fl, events, jobs, budgets, pos, vos, closes, invoices, bankLines, board] = await Promise.all([
           base44.entities.FeeLines.list("-job_date", 5000),
           base44.entities.CalendarEvents.list("-event_date", 5000),
           base44.entities.Jobs.list("canonical_name", 5000),
@@ -131,6 +140,7 @@ function CompanyOverviewContent() {
           base44.entities.VendorOrders.list("-created_date", 2000),
           base44.entities.MonthCloseSnapshot.list("-created_date", 100).catch(() => []),
           base44.entities.Invoices.list("-invoice_date", 2000).catch(() => []),
+          base44.entities.BankTransactions.list("-posted_date", 10000).catch(() => []),
           purchasingRequest({ action: "overview" }),
         ]);
         if (seq !== loadSeq.current) return;
@@ -142,7 +152,7 @@ function CompanyOverviewContent() {
         const rows = withCompanions(feeLines, events);
         const superseded = buildSupersededSet(rows, events);
         const reports = new Map(events.filter((e) => e.google_event_id).map((e) => [e.google_event_id, e.report_status]));
-        setState({ loading: false, error: "", data: { rows, superseded, reports, feeLines, invoices, pos, cards: purchasingBoardCards(board, today) } });
+        setState({ loading: false, error: "", data: { rows, superseded, reports, feeLines, invoices, pos, bankLines, cards: purchasingBoardCards(board, today) } });
       } catch (e) {
         if (seq === loadSeq.current) setState({ loading: false, error: `The overview could not load. ${e?.message || ""}`.trim(), data: null });
       }
@@ -150,7 +160,8 @@ function CompanyOverviewContent() {
     return () => { loadSeq.current++; };
   }, [today]);
 
-  const year = useMemo(() => (state.data ? companyYear({ rows: state.data.rows, superseded: state.data.superseded, cards: state.data.cards, purchaseOrders: state.data.pos, invoices: state.data.invoices, today }) : null), [state.data, today]);
+  const year = useMemo(() => (state.data ? companyYear({ rows: state.data.rows, superseded: state.data.superseded, cards: state.data.cards, purchaseOrders: state.data.pos, invoices: state.data.invoices, bankLines: state.data.bankLines, today }) : null), [state.data, today]);
+  const bank = useMemo(() => (state.data ? bankCoverage(state.data.bankLines.filter((l) => String(l.posted_date || "").startsWith(today.slice(0, 4)))) : null), [state.data, today]);
   // This month's Ready to invoice and Invoiced, unpaid: Invoicing's own money strip.
   const strip = useMemo(() => {
     if (!state.data) return null;
@@ -192,6 +203,12 @@ function CompanyOverviewContent() {
   const paceLabel = `${monthName(`${year.year}-${String(13 - pace.months).padStart(2, "0")}`)}–Dec labor at the ${monthName(pace.from)}–${monthName(pace.to)} average`;
   const restLabel = { pipeline: `Open Purchasing jobs · ${pipeline.jobs.length}`, pace: paceLabel };
   const thisMonthName = monthName(thisMonth);
+  // Which months the profit takes crew pay and overhead from the bank for.
+  const noBank = year.months.filter((m) => !m.hasBank).map((m) => monthName(m.month));
+  const profitLabel = !ytd.bankMonths.length ? "YA profit, before crew pay" : !noBank.length ? "YA profit" : `YA profit · crew pay ${ytd.bankMonths.length === 1 ? `${monthName(ytd.bankMonths[0])} only` : `${ytd.bankMonths.length} months`}`;
+  const bankAside = !bank?.count
+    ? <>No bank lines yet, so profit is before crew pay. <Link to="/operations/bank" className="font-semibold hover:underline" style={{ color: INK }}>Import the bank CSV →</Link></>
+    : <>Crew pay, overhead and other costs from the bank, {dayLabel(bank.first)} – {dayLabel(bank.last)}{noBank.length ? ` · ${noBank.length === 1 ? noBank[0] : `${noBank[0]}–${noBank[noBank.length - 1]}`} before crew pay (no bank lines)` : ""} · <Link to="/operations/bank" className="font-semibold hover:underline" style={{ color: INK }}>Bank →</Link></>;
 
   return (
     <PageShell>
@@ -205,7 +222,7 @@ function CompanyOverviewContent() {
           <div className="grid grid-cols-4 max-[1023px]:order-last max-[1023px]:w-full max-[1023px]:grid-cols-2">
             <Figure label="YA income" value={ytd.income} title="Install labor billed plus outside job sales, January to today" />
             <Figure label="Glass Forge income" value={ytd.glassForge} title={`Issued Glass Forge invoices (${money(ytd.invoiced)}) plus months not invoiced yet at the Hub's figures (${money(ytd.notInvoiced)}), from March 2026`} />
-            <Figure label="YA profit, before crew pay" value={ytd.profit} title="YA income less job cost, shop purchases and Glass Forge. Crew pay is not recorded in the Hub" color={ytd.profit < 0 ? "#F0A8A6" : TITLE} />
+            <Figure label={profitLabel} value={ytd.profit} title={`YA income less job cost, shop purchases, Glass Forge, and the bank's crew pay (${money(-ytd.crewPay)}), overhead (${money(-ytd.overhead)}) and other costs (${money(-ytd.otherCost)})${noBank.length ? `. ${noBank.join(", ")}: no bank lines yet, so before crew pay` : ""}`} color={ytd.profit < 0 ? "#F0A8A6" : TITLE} />
             <Figure label={`Projected ${year.year} YA profit`} value={projected.profit} title="Profit to date, plus YA's half of the open Purchasing jobs, plus the rest of the year's install labor at this year's monthly average less Glass Forge's fee" color={BRASS_LT} />
           </div>
           <DropdownMenu>
@@ -224,13 +241,13 @@ function CompanyOverviewContent() {
 
       {exportError && <p role="alert" className="m-0 rounded-[12px] border bg-white p-3 text-[14px]" style={{ color: LATE }}>{exportError}</p>}
 
-      <Sheet title="YA Windows & Doors" aside="Profit is before crew pay, which isn't recorded in the Hub">
+      <Sheet title="YA Windows & Doors" aside={bankAside}>
         <table className="w-full border-collapse">
           <Head cols={YA_COLS} />
           <tbody>
             {year.months.map((m) => <Row key={m.month} cells={yaCells(monthName(m.month), m)} />)}
             <Row tone="total" cells={yaCells(`${year.year} to date`, ytd)} />
-            {rest.map((r) => <Row key={r.key} cells={yaCells(restLabel[r.key], r)} title={r.key === "pace" ? `${money(pace.average)} a month × ${pace.months}, less Glass Forge's ${(pace.feeRate * 100).toFixed(1)}%` : "Sold Purchasing jobs not yet Paid. Each splits 50/50 with Glass Forge when Paid"} />)}
+            {rest.map((r) => <Row key={r.key} cells={yaCells(restLabel[r.key], r, false)} title={r.key === "pace" ? `${money(pace.average)} a month × ${pace.months}, less Glass Forge's ${(pace.feeRate * 100).toFixed(1)}%. No crew pay or overhead projected` : "Sold Purchasing jobs not yet Paid. Each splits 50/50 with Glass Forge when Paid"} />)}
             <Row tone="projected" cells={yaCells(`Projected ${year.year}`, projected)} />
           </tbody>
         </table>
