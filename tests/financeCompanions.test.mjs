@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { filterRows } from './support/entityFilter.mjs';
 
 // Loaded after the alias hook is registered (static imports would resolve first).
 const core = await import('../base44/shared/billingCore.js');
@@ -23,7 +24,7 @@ const SDK_STUB = { name: 'sdk-stub', setup(b) {
 const snapshotBundle = await build({ entryPoints: [fileURLToPath(new URL('../base44/functions/closeMonthSnapshot/entry.ts', import.meta.url))], bundle: true, platform: 'neutral', format: 'esm', write: false, logLevel: 'silent', plugins: [SDK_STUB] });
 const snapshotHandler = (await import('data:text/javascript;base64,' + Buffer.from(snapshotBundle.outputFiles[0].text).toString('base64'))).default;
 async function closeMonth(fees, events) {
-  const list = (rows) => ({ list: async (_s, limit = 1000, skip = 0) => rows.slice(skip, skip + limit).map((r) => ({ ...r })), create: async () => { throw new Error('dry run must not write'); } });
+  const list = (rows) => ({ list: async (_s, limit = 1000, skip = 0) => rows.slice(skip, skip + limit).map((r) => ({ ...r })), filter: async (q, sort, limit) => filterRows(rows, q, sort, limit).map((r) => ({ ...r })), create: async () => { throw new Error('dry run must not write'); } });
   const entities = { FeeLines: list(fees), CalendarEvents: list(events), MonthCloseSnapshot: list([]) };
   globalThis.__snapClient = { auth: { me: async () => ({ id: 'owner', role: 'admin' }) }, asServiceRole: { entities } };
   const json = await (await snapshotHandler(new Request('http://test.local/fn', { method: 'POST', body: JSON.stringify({ month: '2026-09', dry_run: true }) }))).json();
