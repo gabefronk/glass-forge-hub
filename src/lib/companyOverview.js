@@ -7,6 +7,10 @@
 //  - Open Purchasing jobs (sold, not Paid) are the pipeline. A job lands in a month only once
 //    it is Paid, through its 50/50 split line, so nothing is counted twice.
 //  - Crew pay is not recorded in the Hub, so YA's profit is before crew pay (Gabe, Oct 26).
+//  - Glass Forge's consulting agreement with YA took effect in March 2026 (invoice GF-2026-001),
+//    so earlier months owe Glass Forge nothing. A month Glass Forge has invoiced (an Invoices
+//    record of kind 'glass_forge', recorded from the issued document) counts the invoice's
+//    amounts; other months count the Hub's figures, and both are kept for the comparison.
 import { computeFeeAmt, computeLaborAmt } from './feeMath.js';
 import { inInvoiceScope } from './invoiceScope.js';
 import { cardFigures, isSold, isCompleted } from './purchasingSummary.js';
@@ -16,6 +20,27 @@ const round = (n) => Math.round(n * 100) / 100;
 const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? 0 : Number(v));
 const sum = (rows, f) => round(rows.reduce((n, r) => n + (f(r) || 0), 0));
 export const isProfitSplit = (r) => r?.fee_type === 'profit_split';
+export const GLASS_FORGE_START = '2026-03';
+export const GLASS_FORGE_RATE = 0.1; // of install labor, per the consulting agreement
+
+// Glass Forge's issued invoices to YA by service month (two in one month add together).
+export function glassForgeInvoices(invoices = []) {
+  const byMonth = new Map();
+  for (const i of invoices) {
+    if (i.kind !== 'glass_forge' || i.voided_at) continue;
+    const month = i.service_month || String(i.invoice_date || '').slice(0, 7);
+    if (!month) continue;
+    const prev = byMonth.get(month);
+    const doc = { number: i.invoice_number, date: i.invoice_date, url: i.source_url || '', paidDate: i.paid_date || null };
+    byMonth.set(month, {
+      amount: round((prev?.amount || 0) + num(i.amount)),
+      split: round((prev?.split || 0) + num(i.split_amount)),
+      jobValue: round((prev?.jobValue || 0) + num(i.job_value)),
+      docs: [...(prev?.docs || []), doc],
+    });
+  }
+  return byMonth;
+}
 
 // Base44 timestamps are UTC without a zone; months are counted in Denver time.
 export function denverMonth(value) {
@@ -40,21 +65,33 @@ export function shopCost(purchaseOrders = [], month) {
   return sum(purchaseOrders.filter((p) => p.purchase_type === 'shop' && p.status !== 'cancelled' && !p.deleted_at && denverMonth(p.created_date) === month), (p) => num(p.amount_dealer));
 }
 
-export function monthFigures(lines, month, shop = 0) {
+// basis: 'invoice' (Glass Forge invoiced this month), 'hub' (not invoiced: the Hub's figures)
+// or 'before' (before the agreement: nothing owed). hubGlassForge is the Hub's figure either way.
+export function monthFigures(lines, month, shop = 0, { invoice = null, start = GLASS_FORGE_START } = {}) {
   const splits = lines.filter(isProfitSplit);
   const install = lines.filter((r) => !isProfitSplit(r));
   const labor = sum(install, computeLaborAmt);
-  const fee = sum(install, computeFeeAmt);
   const sales = sum(splits, (r) => num(r.sale_price));
   const jobCost = sum(splits, (r) => num(r.cost));
-  const split = sum(splits, computeFeeAmt);
+  const hubFee = sum(install, computeFeeAmt);
+  const hubSplit = sum(splits, computeFeeAmt);
+  const hubGlassForge = round(hubFee + hubSplit);
+  const basis = month < start ? 'before' : invoice ? 'invoice' : 'hub';
+  const split = basis === 'before' ? 0 : basis === 'invoice' ? invoice.split : hubSplit;
+  const fee = basis === 'before' ? 0 : basis === 'invoice' ? round(invoice.amount - invoice.split) : hubFee;
   const income = round(labor + sales);
   const glassForge = round(fee + split);
   const profit = round(income - jobCost - shop - glassForge);
-  return { month, labor, sales, income, jobCost, shop, fee, split, glassForge, profit, margin: income ? profit / income : null, lines: lines.length };
+  return {
+    month, labor, sales, income, jobCost, shop, fee, split, glassForge, profit, margin: income ? profit / income : null, lines: lines.length,
+    basis, invoice, hubGlassForge,
+    invoiced: basis === 'invoice' ? glassForge : 0,
+    notInvoiced: basis === 'hub' ? glassForge : 0,
+    difference: basis === 'invoice' ? round(glassForge - hubGlassForge) : 0,
+  };
 }
 
-const FIELDS = ['labor', 'sales', 'income', 'jobCost', 'shop', 'fee', 'split', 'glassForge', 'profit'];
+const FIELDS = ['labor', 'sales', 'income', 'jobCost', 'shop', 'fee', 'split', 'glassForge', 'profit', 'hubGlassForge', 'invoiced', 'notInvoiced', 'difference'];
 function total(rows) {
   const t = Object.fromEntries(FIELDS.map((f) => [f, sum(rows, (r) => r[f])]));
   return { ...t, margin: t.income ? t.profit / t.income : null };
@@ -83,17 +120,18 @@ export function pipeline(cards = []) {
 // Forge's fee at the year's fee rate.
 // rows: Invoicing's display rows (withCompanions, Purchasing-held lines removed);
 // superseded: buildSupersededSet of those rows; cards: Purchasing cards with paymentStage.
-export function companyYear({ rows = [], superseded = new Set(), cards = [], purchaseOrders = [], today }) {
+export function companyYear({ rows = [], superseded = new Set(), cards = [], purchaseOrders = [], invoices = [], today }) {
   const year = today.slice(0, 4);
   const thisMonth = Number(today.slice(5, 7));
   const keys = Array.from({ length: thisMonth }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   const shown = rows.filter((r) => !superseded.has(r.id) && !(r.job_date && r.job_date > today));
-  const months = keys.map((m) => monthFigures(shown.filter((r) => inInvoiceScope(r, m)), m, shopCost(purchaseOrders, m)));
+  const issued = glassForgeInvoices(invoices);
+  const months = keys.map((m) => monthFigures(shown.filter((r) => inInvoiceScope(r, m)), m, shopCost(purchaseOrders, m), { invoice: issued.get(m) || null }));
   const ytd = total(months);
   const prior = months.slice(0, -1);
   const left = 12 - thisMonth;
   const average = prior.length ? round(prior.reduce((n, m) => n + m.labor, 0) / prior.length) : 0;
-  const feeRate = ytd.labor ? ytd.fee / ytd.labor : 0.1;
+  const feeRate = GLASS_FORGE_RATE;
   const paceLabor = round(average * left);
   const pace = { months: left, average, labor: paceLabor, fee: round(paceLabor * feeRate), feeRate, from: keys[0], to: prior.length ? prior[prior.length - 1].month : '' };
   const open = pipeline(cards);
