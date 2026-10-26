@@ -277,9 +277,11 @@ function CompanyOverviewContent() {
         <table className="w-full border-collapse">
           <Head cols={[["Line"], ["Accrual basis", true], ["Cash basis", true]]} />
           <tbody>
-            {BOOKS_PL.rows.map(([label, accrual, cash, kind]) => (
-              <Row key={label} tone={kind === "total" || kind === "net" ? "total" : ""} cells={[[label], [kind === "expense" || label === "Total expenses" ? accrual : accrual, kind === "expense" || label === "Total expenses" ? "out" : "money"], [cash, kind === "expense" || label === "Total expenses" ? "out" : "money"]]} />
-            ))}
+            {BOOKS_PL.rows.map(([label, accrual, cash, kind]) => {
+              // Expenses read as money out (negative), like every other cost on the page.
+              const how = kind === "expense" || label === "Total expenses" ? "out" : "money";
+              return <Row key={label} tone={kind === "total" || kind === "net" ? "total" : ""} cells={[[label], [accrual, how], [cash, how]]} />;
+            })}
           </tbody>
         </table>
         <ul className="m-0 list-disc text-[13px]" style={{ padding: "10px 16px 12px 34px", color: SECONDARY }}>
