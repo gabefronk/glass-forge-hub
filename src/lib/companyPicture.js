@@ -28,16 +28,28 @@ export function earnTiming(stage, orders = []) {
   return { year: '2026', label: `2026 (ETA ${eta})`, eta };
 }
 
+// A Purchasing card's figure the way Purchasing shows it: the job row's own value, or, when a
+// multi-scope job row withholds it (applyScopeRollup), the sum of its scope rows. Unlike the
+// Purchasing bar's totals, a missing figure stays null here (unknown, never 0).
+const ACCESS = { windows: [(c) => c.windows?.display, (s) => s.windows], rough: [(c) => c.rough?.display, (s) => s.rough], sale: [(c) => c.sale?.display, (s) => s.sale] };
+export function cardFigure(card, field) {
+  const [job, scope] = ACCESS[field];
+  const own = job(card);
+  if (!own?.suppressed) return num(own?.value);
+  const values = (card.scopes || []).map((s) => num(scope(s)?.value));
+  return !values.length || values.some((v) => v == null) ? null : round(values.reduce((n, v) => n + v, 0));
+}
+
 // One signed job. card: a Purchasing card; budgets / orders / costInputs / bankLines / sales: the
 // records for this job (unfiltered lists are fine; they are filtered by job id here).
 export function pipelineJob(card, { budgets = [], orders = [], costInputs = [], bankLines = [], sales = [] } = {}) {
   const id = card.job?.id;
-  const sale = num(card.sale?.display?.value);
-  const windows = num(card.windows?.display?.value);
+  const sale = cardFigure(card, 'sale');
+  const windows = cardFigure(card, 'windows');
+  const rough = cardFigure(card, 'rough');
   const typed = card.windows?.display?.source === 'owner';
   const budget = budgets.find((b) => b.id === card.chosenBudget?.id) || null;
   const labor = num(budget?.inputs?.labor_cost_sub_pay);
-  const addl = num(budget?.inputs?.additional_install_material);
   const jci = costInputs.filter((c) => c.job_id === id).sort((a, b) => String(b.updated_date || '').localeCompare(String(a.updated_date || '')))[0];
   const actualCrew = num(jci?.actual_labor_cost);
 
@@ -46,8 +58,11 @@ export function pipelineJob(card, { budgets = [], orders = [], costInputs = [], 
   else if (typed) crew = { value: null, basis: 'typed', label: 'Inside the typed job cost' };
   else if (labor != null && labor > 0) crew = { value: labor, basis: 'estimate', label: 'Budget estimate' };
   else crew = { value: null, basis: 'unknown', label: 'Unknown' };
-  // Materials and supplier cost: the typed job cost (crew inside it) or windows + install material.
-  const materials = windows == null ? null : round(windows + (typed ? 0 : (addl || 0)));
+  // Supplier cost: Purchasing's job cost (windows incl. tax + the budget's labor & install material,
+  // or the typed job cost) less the budget labor it carries, so crew is never counted twice.
+  const cost = windows == null ? null : round(windows + (rough || 0));
+  const laborInCost = !typed && labor != null && labor > 0 && (rough || 0) >= labor ? labor : 0;
+  const materials = cost == null ? null : round(cost - laborInCost);
 
   const mine = (l) => l.job_id === id;
   const receivedLinked = add(bankLines.filter((l) => mine(l) && l.category === 'customer_payment'), (l) => l.amount);
