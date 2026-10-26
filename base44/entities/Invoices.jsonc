@@ -5,13 +5,13 @@
     "invoice_number": {
       "type": "string",
       "title": "Invoice Number",
-      "description": "QuickBooks invoice number. Unique per invoice; the Hub never generates one."
+      "description": "QuickBooks invoice number (or Glass Forge's own GF-YYYY-NNN number). Unique per invoice; the Hub never generates one."
     },
     "invoice_date": {
       "type": "string",
       "format": "date",
       "title": "Invoice Date",
-      "description": "Date on the QuickBooks invoice."
+      "description": "Date on the invoice."
     },
     "kind": {
       "type": "string",
@@ -20,20 +20,21 @@
         "deposit",
         "balance",
         "progress",
-        "other"
+        "other",
+        "glass_forge"
       ],
       "title": "Kind",
-      "description": "labor_billing: monthly install/service labor lines billed to BFS (lines are FeeLines carrying this invoice_id). deposit/balance/progress/other: a customer invoice on one job."
+      "description": "labor_billing: monthly install/service labor lines billed to BFS (lines are FeeLines carrying this invoice_id). deposit/balance/progress/other: a customer invoice on one job. glass_forge: Glass Forge LLC's monthly consulting invoice to YA Windows and Doors (10% of install labor plus its share of outside sales), recorded from the issued document."
     },
     "customer_name": {
       "type": "string",
       "title": "Customer",
-      "description": "Who the invoice is addressed to, as in QuickBooks (e.g. BFS, a builder, a homeowner)."
+      "description": "Who the invoice is addressed to (e.g. BFS, a builder, a homeowner, YA Windows and Doors)."
     },
     "job_id": {
       "type": "string",
       "title": "Job",
-      "description": "The job a customer invoice belongs to. Empty for labor billing, which spans jobs through its lines."
+      "description": "The job a customer invoice belongs to. Empty for labor billing and Glass Forge invoices, which span jobs."
     },
     "budget_id": {
       "type": "string",
@@ -43,7 +44,7 @@
     "amount": {
       "type": "number",
       "title": "Amount",
-      "description": "Invoice total. For labor billing, the labor total of its lines when recorded."
+      "description": "Invoice total. For labor billing, the labor total of its lines when recorded. For a Glass Forge invoice, the amount due."
     },
     "fee_amount": {
       "type": "number",
@@ -53,13 +54,33 @@
     "line_count": {
       "type": "number",
       "title": "Line Count",
-      "description": "Labor billing only: number of FeeLines on the invoice when recorded."
+      "description": "Labor billing: number of FeeLines on the invoice when recorded. Glass Forge: number of job lines on the issued invoice."
+    },
+    "service_month": {
+      "type": "string",
+      "title": "Service Month",
+      "description": "Glass Forge invoices: the month of work billed, YYYY-MM."
+    },
+    "job_value": {
+      "type": "number",
+      "title": "Job Value",
+      "description": "Glass Forge invoices: the invoice's total YA job value (install labor plus product sale values)."
+    },
+    "split_amount": {
+      "type": "number",
+      "title": "Split Amount",
+      "description": "Glass Forge invoices: the part of the amount due from product / profit-split lines (50% or varied rate), the rest being the 10% install fee."
+    },
+    "source_url": {
+      "type": "string",
+      "title": "Source Document",
+      "description": "Link to the issued invoice document (e.g. Google Drive)."
     },
     "paid_date": {
       "type": "string",
       "format": "date",
       "title": "Paid Date",
-      "description": "Date payment was received, from QuickBooks. Empty while the invoice is open."
+      "description": "Date payment was received. Empty while the invoice is open."
     },
     "payment_reference": {
       "type": "string",
