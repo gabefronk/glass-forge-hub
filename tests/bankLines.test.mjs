@@ -105,7 +105,7 @@ test('older exports: checks are crew pay, Glass Forge invoices, loans, Amex, tax
   assert.equal(s('Loan', -4010.06, { qb_category: 'Interest Expense' }).category, 'loan');
   assert.equal(s('Withdrawal Transfer L', -499.39).category, 'loan');
   assert.equal(s('American Express', -10244.65, { qb_category: 'Other business expenses:Bank and credit card fees' }).category, 'card');
-  assert.equal(s('Internal Revenue Service', -22538, { qb_category: 'Taxes and Licenses:Payroll taxes' }).category, 'overhead');
+  assert.equal(s('Internal Revenue Service', -22538, { qb_category: 'Taxes and Licenses:Payroll taxes' }).category, 'payroll');
   assert.equal(s('Comment Type Payroll', -2500, { qb_category: 'Payroll expenses:Wages' }).category, 'payroll');
   assert.equal(s('QuickBooks', -116.59).category, 'overhead');
   assert.equal(s('Windows Doors Ach', -43126.27, { from_to: 'ABC Supply' }).category, 'supplier');
