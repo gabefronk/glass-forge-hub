@@ -15,13 +15,15 @@ export async function fetchAllPages(entity: any, sort = '-created_date', pageSiz
   for (let i = 0; i < 50; i++) {
     const batch = await entity.filter(after == null ? {} : { id: { $gt: after } }, 'id', pageSize);
     if (!Array.isArray(batch) || batch.length > pageSize) throw new Error('Entity pagination returned an invalid page.');
+    all.push(...batch);
+    if (batch.length < pageSize) return sortRows(all, sort);
+    // The next page starts after this page's last id, so a full page must be in strict
+    // id order; anything else could skip rows.
     for (const row of batch) {
       const id = row && row.id != null ? String(row.id) : '';
       if (!id || (after != null && id <= after)) throw new Error('Entity pagination returned rows out of id order.');
       after = id;
     }
-    all.push(...batch);
-    if (batch.length < pageSize) return sortRows(all, sort);
   }
   throw new Error('Entity pagination exceeded 50 pages; completeness is not verified.');
 }
