@@ -351,3 +351,18 @@ export function mergeReviewFlags(existing, incoming) {
   const needs_review = !!(existing && existing.needs_review) || !!incoming.needs_review;
   return { needs_review, match_confidence: 'unmatched' };
 }
+
+// Additive job fill for an EXISTING billing line that has no job (a line created
+// before its job existed, or while its name matched duplicate jobs). Only a confident
+// match (match_confidence 'high' to a real job) fills it. A line that already has a
+// job, or is superseded, billed or not billable, is never touched (same rule as the
+// Unlinked page's planUnlinkedLinks). The job hold clears per mergeReviewFlags: a
+// pricing or service review keeps the line held, and a line that was not held is
+// never put on hold. Returns the patch, or null.
+export function existingLineJobFill(existing, match) {
+  if (!existing || existing.job_id || existing.superseded_by || existing.billed_to_bfs || !existing.billable) return null;
+  const jobId = match && match.job_id;
+  if (!jobId || match.pending || String(jobId).startsWith('pending:') || match.match_confidence !== 'high') return null;
+  const flags = mergeReviewFlags(existing, { job_id: jobId, pricing_review_reason: existing.pricing_review_reason, service_review_status: existing.service_review_status });
+  return { job_id: jobId, match_confidence: flags.match_confidence, needs_review: !!existing.needs_review && flags.needs_review };
+}
