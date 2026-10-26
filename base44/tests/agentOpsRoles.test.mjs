@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { filterRows } from '../../tests/support/entityFilter.mjs';
 
 // Exercise the production integration source with actual shared helpers. Only
 // SDK entities/connectors are fake; no live account, text or business writes.
@@ -17,7 +18,10 @@ const freshRun = () => ({ id: 'knowledge-1', status: 'complete', completed_at: N
 function fixture({ events = [], reports = [], run = freshRun(), quotes = [], auth = [{ refresh_token: 'PRIVATE-REFRESH-TOKEN' }] } = {}) {
   const reads = [], writes = [], saved = new Map();
   let id = 0;
-  const listEntity = (name, values) => ({ list: async (sort, limit, skip = 0) => { reads.push({ name, sort, limit, skip }); return values.slice(skip, skip + limit); } });
+  const listEntity = (name, values) => ({
+    list: async (sort, limit, skip = 0) => { reads.push({ name, sort, limit, skip }); return values.slice(skip, skip + limit); },
+    filter: async (query, sort, limit) => { reads.push({ name, sort, limit, after: query?.id?.$gt ?? null }); return filterRows(values, query, sort, limit); },
+  });
   const writeEntity = name => ({
     create: async data => { const row = { id: name + '-' + (++id), ...data }; writes.push({ name, op: 'create', data }); saved.set(row.id, row); return row; },
     update: async (key, data) => { writes.push({ name, op: 'update', data }); const row = { ...saved.get(key), id: key, ...data }; saved.set(key, row); return row; },
@@ -47,7 +51,7 @@ test('calendar lead finds older report gaps beyond the first 1000 future rows', 
   const result = await reconcileLead(lead('calendar_ops_lead'), ctx);
   assert.match(result.summary, /all 1001 stored calendar rows; 1 past\/current required events/);
   assert(result.exceptions.some(value => /1 calendar events.*past the grace/.test(value)));
-  assert.deepEqual(reads.filter(r => r.name === 'CalendarEvents').map(r => r.skip), [0, 1000]);
+  assert.deepEqual(reads.filter(r => r.name === 'CalendarEvents').map(r => r.after), [null, 'future-999']);
   assert.equal(writes.length, 0);
 });
 
@@ -56,13 +60,14 @@ test('field lead reads reports to exhaustion instead of reporting a sampled coun
   const { ctx, reads } = fixture({ reports });
   const result = await reconcileLead(lead('field_reporting_lead'), ctx);
   assert.match(result.summary, /all 2101 stored field reports/);
-  assert.deepEqual(reads.filter(r => r.name === 'FieldReports').map(r => r.skip), [0, 1000, 2000]);
+  assert.equal(reads.filter(r => r.name === 'FieldReports').length, 3);
   assert.equal(result.exceptions.length, 0);
 });
 
 test('a full final cap page fails closed and never reports complete calendar counts', async () => {
   const { ctx, reads } = fixture();
-  ctx.entities.CalendarEvents.list = async (sort, limit, skip) => { reads.push({ name: 'cap', skip }); return Array.from({ length: limit }, (_, i) => ({ id: skip + i, event_date: '2026-09-11' })); };
+  let next = 0;
+  ctx.entities.CalendarEvents.filter = async (query, sort, limit) => { reads.push({ name: 'cap' }); return Array.from({ length: limit }, () => ({ id: String(next++).padStart(6, '0'), event_date: '2026-09-11' })); };
   const result = await reconcileLead(lead('calendar_ops_lead'), ctx);
   assert.equal(reads.filter(r => r.name === 'cap').length, 50);
   assert.match(result.summary, /Reconciliation incomplete/);
@@ -72,7 +77,7 @@ test('a full final cap page fails closed and never reports complete calendar cou
 
 test('source entity error yields a safe incomplete summary without provider error text', async () => {
   const { ctx } = fixture();
-  ctx.entities.FieldReports.list = async () => { throw Error('https://private.example/?token=SHOULD-NOT-LEAK'); };
+  ctx.entities.FieldReports.filter = async () => { throw Error('https://private.example/?token=SHOULD-NOT-LEAK'); };
   const result = await reconcileLead(lead('field_reporting_lead'), ctx);
   assert.match(result.summary, /Reconciliation incomplete/);
   assert(!JSON.stringify(result).includes('SHOULD-NOT-LEAK'));
