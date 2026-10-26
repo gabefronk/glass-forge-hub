@@ -15,11 +15,11 @@ const matches = (value, cond) => {
 
 export function filterRows(rows, query = {}, sort, limit) {
   let out = rows.filter((r) => Object.entries(query || {}).every(([k, cond]) => matches(r[k], cond)));
-  if (sort) {
+  if (typeof sort === 'string' && sort) {
     const desc = String(sort).startsWith('-');
     const key = String(sort).replace(/^[-+]/, '');
     const cmp = (a, b) => { const x = String(a[key] ?? ''), y = String(b[key] ?? ''); return x < y ? -1 : x > y ? 1 : 0; };
     out = [...out].sort((a, b) => cmp(a, b) * (desc ? -1 : 1));
   }
-  return limit ? out.slice(0, limit) : out;
+  return typeof limit === 'number' ? out.slice(0, limit) : out;
 }
