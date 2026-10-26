@@ -372,6 +372,81 @@ test('ProBuild: posts attach to the canonical Job, a new project creates one Job
   assert.equal(fee('post-9').job_id, holmes);
 });
 
+test('ProBuild: an existing line with no job gets a confident job; linked, billed and doubtful lines are left alone', async () => {
+  // Lines created before their job existed (or while the name matched two jobs) used
+  // to stay unlinked forever because existing lines are append-only.
+  const holmes = { id: 'job-h', canonical_name: 'Holmes Homes - 607 Daybreak', builder: 'Holmes Homes', created_date: '2026-09-20T10:00:00' };
+  const oakDr = { id: 't1', canonical_name: 'Holmes Homes - 88 Oak Dr', created_date: '2026-01-01' };
+  const oakCt = { id: 't2', canonical_name: 'Holmes Homes - 88 Oak Ct', created_date: '2026-01-02' };
+  const post = (projectId, postId, day) => ({ projectId, postId, post: { createdAt: `2026-09-${day}T18:00:00Z`, message: 'Installed windows, all complete.' } });
+  globalThis.__testProbuild = {
+    projects: [{ id: 'ph', name: 'Holmes Homes - 607 Daybreak' }, { id: 'pp', name: 'Pulte Homes - 2154 Jordanelle Ridge Dr' }, { id: 'po', name: 'Holmes Homes - 88 Oak' }],
+    posts: [post('ph', 'post-1', '02'), post('ph', 'post-2', '03'), post('pp', 'post-3', '04'), post('po', 'post-4', '05'), post('ph', 'post-5', '06'), post('ph', 'post-6', '07')],
+  };
+  const line = (id, postId, projectName, extra = {}) => ({
+    id, probuild_post_id: postId, probuild_project_id: 'x', job_name_raw: projectName, job_id: null, job_date: '2026-09-02', invoice_month: '2026-09',
+    source: 'probuild', written_by: 'probuild', billable: true, labor_amt: 400, fee_pct: 0.1, fee_amt: 40, match_confidence: 'unmatched', needs_review: true,
+    service_review_status: 'ready', pricing_review_reason: null, photo_urls: ['https://files.test/p'], created_date: '2026-09-02T12:00:00.000Z', ...extra,
+  });
+  const seed = () => memoryDb({
+    Jobs: [...PULTE, holmes, oakDr, oakCt],
+    FeeLines: [
+      line('fl-1', 'post-1', 'Holmes Homes - 607 Daybreak'),
+      line('fl-2', 'post-2', 'Holmes Homes - 607 Daybreak', { pricing_review_reason: 'ambiguous_quantity' }),
+      line('fl-3', 'post-3', 'Pulte Homes - 2154 Jordanelle Ridge Dr', { job_id: 'job-b', match_confidence: 'low', needs_review: false }),
+      line('fl-4', 'post-4', 'Holmes Homes - 88 Oak'),
+      line('fl-5', 'post-5', 'Holmes Homes - 607 Daybreak', { billed_to_bfs: true }),
+      line('fl-6', 'post-6', 'Holmes Homes - 607 Daybreak', { needs_review: false }),
+    ],
+  });
+  const before = seed().table('FeeLines').map((r) => ({ ...r }));
+
+  const dry = seed();
+  const preview = await run(probuildHandler, dry, { ...WINDOW, dry_run: true });
+  assert.deepEqual(preview.fee_jobs_linked.map((r) => [r.id, r.job_id]), [['fl-1', 'job-h'], ['fl-2', 'job-h'], ['fl-6', 'job-h']]);
+  assert.deepEqual(dry.table('FeeLines'), before, 'a dry run writes nothing');
+
+  const db = seed();
+  const res = await run(probuildHandler, db, WINDOW);
+  const fee = (id) => db.table('FeeLines').find((f) => f.id === id);
+  assert.equal(res.fee_jobs_linked.length, 3);
+  assert.equal(db.bulkCreates.Jobs, undefined, 'existing lines never create jobs');
+  assert.equal(db.bulkCreates.FeeLines, undefined, 'no new billing lines');
+  assert.deepEqual([fee('fl-1').job_id, fee('fl-1').match_confidence, fee('fl-1').needs_review], ['job-h', 'high', false], 'the job hold clears');
+  assert.deepEqual([fee('fl-2').job_id, fee('fl-2').needs_review], ['job-h', true], 'a pricing review keeps the line held');
+  assert.deepEqual([fee('fl-6').job_id, fee('fl-6').needs_review], ['job-h', false], 'a line that was not held is not put on hold');
+  assert.deepEqual(fee('fl-3'), before[2], 'a line that already has a job is never re-pointed');
+  assert.deepEqual(fee('fl-4'), before[3], 'doubtful evidence leaves the line unlinked');
+  assert.deepEqual(fee('fl-5'), before[4], 'a billed line is never touched');
+  for (const id of ['fl-1', 'fl-2', 'fl-6']) {
+    const { job_id: _j, match_confidence: _m, needs_review: _n, ...rest } = fee(id);
+    const { job_id: _j0, match_confidence: _m0, needs_review: _n0, ...was } = before.find((r) => r.id === id);
+    assert.deepEqual(rest, was, `${id}: only the job fields change`);
+  }
+
+  // A second run changes nothing more.
+  const again = await run(probuildHandler, db, WINDOW);
+  assert.deepEqual(again.fee_jobs_linked, []);
+});
+
+test('existingLineJobFill: only an empty-job, unbilled, billable line with a confident real match', () => {
+  const ex = { id: 'f', job_id: null, billable: true, needs_review: true, match_confidence: 'unmatched' };
+  const high = { job_id: 'job-1', match_confidence: 'high' };
+  assert.deepEqual(ingest.existingLineJobFill(ex, high), { job_id: 'job-1', match_confidence: 'high', needs_review: false });
+  assert.deepEqual(ingest.existingLineJobFill({ ...ex, service_review_status: 'review' }, high), { job_id: 'job-1', match_confidence: 'high', needs_review: true });
+  assert.deepEqual(ingest.existingLineJobFill({ ...ex, needs_review: false, pricing_review_reason: 'x' }, high), { job_id: 'job-1', match_confidence: 'high', needs_review: false });
+  for (const [label, line, m] of [
+    ['has a job', { ...ex, job_id: 'job-2' }, high],
+    ['superseded', { ...ex, superseded_by: 'g' }, high],
+    ['billed', { ...ex, billed_to_bfs: true }, high],
+    ['not billable', { ...ex, billable: false }, high],
+    ['review match', ex, { job_id: null, match_confidence: 'unmatched', needs_review: true }],
+    ['low match', ex, { job_id: 'job-1', match_confidence: 'low' }],
+    ['pending job', ex, { job_id: 'pending:000001', match_confidence: 'high', pending: true }],
+    ['no match', ex, null],
+  ]) assert.equal(ingest.existingLineJobFill(line, m), null, label);
+});
+
 // ── resolveFieldReport (published handler) ──────────────────────────────────
 test('field report uploads are filed on the canonical Job; doubtful groups keep the given record', async () => {
   const dr = { id: 't1', canonical_name: 'Holmes Homes - 88 Oak Dr', created_date: '2026-01-01' };
