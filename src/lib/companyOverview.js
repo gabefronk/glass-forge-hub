@@ -159,6 +159,39 @@ export function companyYear({ rows = [], superseded = new Set(), cards = [], pur
   return { year, today, months, ytd, pipeline: open, pace, rest, projected };
 }
 
+// The year on a cash basis (Gabe, Oct 26: the headline uses bank deposits for income until the
+// Hub's income is fixed). Each month with bank lines is its bankCash: money in, then crew pay,
+// overhead, suppliers (Hub job orders, shop POs and suppliers with no Hub order), Glass Forge
+// paid and other costs, less transfers and owner draws. `earned` is the same month's YA income
+// from companyYear, to show what the Hub misses. The projection adds, for each open Purchasing
+// job, the sale still to collect less the cost still to pay (customer payments and supplier
+// orders matched to the job in the bank) less Glass Forge's half; then the months left at the
+// average of the fully covered months before this one.
+const CASH_FIELDS = ['moneyIn', 'crewPay', 'overhead', 'suppliers', 'glassForge', 'other', 'profit', 'earned'];
+const cashTotal = (rows) => Object.fromEntries(CASH_FIELDS.map((f) => [f, sum(rows, (r) => r[f])]));
+export function cashYear(y, bankLines = []) {
+  const months = y.months.filter((m) => m.hasBank).map((m) => ({ month: m.month, ...m.bank.cash, earned: m.income, coveredDays: m.bank.coveredDays, monthDays: m.monthDays, partial: m.bank.coveredDays < m.monthDays }));
+  const ytd = cashTotal(months);
+  const byJob = (cat) => (id) => sum(bankLines.filter((l) => l.job_id === id && l.category === cat), (l) => num(l.amount));
+  const received = byJob('customer_payment'), paidOut = byJob('job_cost');
+  const jobs = y.pipeline.jobs.map((j) => {
+    const collect = round(Math.max(0, j.sale - received(j.id)));
+    const pay = round(Math.max(0, j.cost + paidOut(j.id)));
+    return { ...j, collect, pay, cash: round(collect - pay - j.glassForge) };
+  });
+  const pipe = { key: 'pipeline', moneyIn: sum(jobs, (j) => j.collect), crewPay: 0, overhead: 0, suppliers: sum(jobs, (j) => j.pay), glassForge: sum(jobs, (j) => j.glassForge), other: 0, earned: 0 };
+  pipe.profit = round(pipe.moneyIn - pipe.suppliers - pipe.glassForge);
+  const thisMonth = y.today.slice(0, 7);
+  const full = months.filter((m) => !m.partial && m.month < thisMonth);
+  const left = 12 - Number(y.today.slice(5, 7));
+  const avg = (f) => (full.length ? round((sum(full, (m) => m[f]) / full.length) * left) : 0);
+  const pace = { key: 'pace', months: left, from: full[0]?.month || '', to: full[full.length - 1]?.month || '', earned: 0, ...Object.fromEntries(['moneyIn', 'crewPay', 'overhead', 'suppliers', 'glassForge', 'other', 'profit'].map((f) => [f, avg(f)])) };
+  const rest = [pipe, pace];
+  const projected = cashTotal([ytd, ...rest]);
+  const missing = months.filter((m) => m.partial).map((m) => m.month);
+  return { months, ytd, jobs, rest, projected, missing, full: full.length };
+}
+
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const monthName = (key) => MONTH_NAMES[Number(String(key).slice(5, 7)) - 1] || key;
 
