@@ -49,6 +49,9 @@ test('projection adds open Purchasing jobs and the months left at the average of
   assert.equal(y.projected.income, round(6500 + 10000 + 1333.34));
   assert.equal(y.projected.glassForge, round(650 + 2000 + 133.33));
   assert.equal(y.projected.profit, round(5850 + 2000 + 1333.34 - 133.33));
+  // Each rest-of-year row adds up across, and the projected row is YTD plus both.
+  for (const r of [...y.rest, y.projected]) assert.equal(r.profit, round(r.income - r.jobCost - r.shop - r.glassForge));
+  assert.equal(y.projected.jobCost, 6000);
 });
 const round = (n) => Math.round(n * 100) / 100;
 
@@ -59,6 +62,8 @@ test('pipeline halves profit in cents the way the split line does and flags jobs
   assert.equal(p.jobs.find((j) => j.id === 'a').ya, 148.51);
   assert.equal(p.missing, 1);
   assert.equal(p.cost, 780.43);
+  // A job with a cost and no sale yet counts its cost and has no split.
+  assert.deepEqual(['profit', 'glassForge', 'ya'].map((k) => p.jobs.find((j) => j.id === 'b')[k]), [-477.46, 0, -477.46]);
 });
 
 test('a job marked Paid before Invoicing syncs still lands in its month through the pending split line', () => {
