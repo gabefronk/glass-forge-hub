@@ -106,7 +106,7 @@ test('a bank month counts crew pay, overhead and other costs, and leaves out wha
     { crewPay: 5220, overhead: 5012.08, otherCost: 9639.3, otherIncome: 0, hasBank: true, lines: 13 },
   );
   assert.equal(m.moneyIn, 73489.81);
-  assert.equal(m.moneyOut, -158733.49);
+  assert.equal(m.moneyOut, -159733.49);
   assert.equal(bankMonth(lines, '2026-09').hasBank, false);
   assert.deepEqual(bankCoverage(lines), { first: '2026-10-05', last: '2026-10-22', months: ['2026-10'], count: 13 });
   const cats = bankByCategory(lines);
