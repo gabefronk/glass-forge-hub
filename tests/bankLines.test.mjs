@@ -2,7 +2,7 @@ import './support/register-src-alias.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { parseCsv, parseMoney, parseDate, parseBankExport, withFingerprints, suggestBankLine, planBankImport, bankMonth, bankCoverage, bankByCategory } = await import('../src/lib/bankLines.js');
+const { parseCsv, parseMoney, parseDate, parseBankExport, withFingerprints, suggestBankLine, planBankImport, bankMonth, bankCoverage, bankByCategory, bankDays } = await import('../src/lib/bankLines.js');
 const { companyYear } = await import('../src/lib/companyOverview.js');
 
 // The QuickBooks bank-feed export's shape (made-up amounts except where a test says otherwise).
@@ -87,6 +87,52 @@ test('a big draft with no Hub order is not crew pay, and an order matches one ba
   assert.deepEqual(planBankImport(two, ctx).lines.map((l) => l.category), ['job_cost', 'other_cost']);
   // An order raised long before the payment is not a match.
   assert.equal(suggestBankLine({ posted_date: '2027-06-01', description: 'Company', amount: -7787.92 }, ctx).category, 'other_cost');
+});
+
+test('older exports: checks are crew pay, Glass Forge invoices, loans, Amex, taxes and ACH customers sort', () => {
+  const invoices = [
+    { id: 'gf1', kind: 'glass_forge', invoice_number: 'GF-2026-001', service_month: '2026-03', invoice_date: '2026-03-31', amount: 8321.3 },
+    { id: 'gf9', kind: 'labor_billing', invoice_number: 'Q-1', invoice_date: '2026-03-31', amount: 1600 },
+  ];
+  const s = (description, amount, extra = {}) => suggestBankLine({ posted_date: '2026-04-14', description, amount, ...extra }, { invoices });
+  assert.deepEqual([s('Check 903', -8321.3).category, s('Check 903', -8321.3).match_note], ['glass_forge', 'GF-2026-001 (2026-03)']);
+  // Paid before the invoice existed: not that invoice.
+  assert.equal(suggestBankLine({ posted_date: '2026-03-01', description: 'Check 1', amount: -8321.3 }, { invoices }).category, 'other_cost');
+  assert.equal(s('Glass Forge Llc', -25935.82, { from_to: 'Glass Forge LLC' }).category, 'glass_forge');
+  assert.equal(s('Check 905', -1670).category, 'crew_pay');
+  assert.equal(s('Check 1600', -1600).category, 'crew_pay');
+  assert.equal(s('Check 920', -5000).category, 'other_cost');
+  assert.equal(s('Loan', -4010.06, { qb_category: 'Interest Expense' }).category, 'loan');
+  assert.equal(s('Withdrawal Transfer L', -499.39).category, 'loan');
+  assert.equal(s('American Express', -10244.65, { qb_category: 'Other business expenses:Bank and credit card fees' }).category, 'card');
+  assert.equal(s('Internal Revenue Service', -22538, { qb_category: 'Taxes and Licenses:Payroll taxes' }).category, 'overhead');
+  assert.equal(s('Comment Type Payroll', -2500, { qb_category: 'Payroll expenses:Wages' }).category, 'payroll');
+  assert.equal(s('QuickBooks', -116.59).category, 'overhead');
+  assert.equal(s('Windows Doors Ach', -43126.27, { from_to: 'ABC Supply' }).category, 'supplier');
+  assert.equal(s('Company', -17849.94, { qb_category: 'Cost of goods sold:Direct supplies & materials' }).category, 'supplier');
+  assert.equal(s('Deposit By', 62963).category, 'labor_payment');
+  assert.equal(s('Deposit by Check', 35340).category, 'labor_payment');
+  assert.equal(s('Deposit Ach Mh', 5842.71).category, 'customer_payment');
+  assert.equal(s('Deposit Mhsoniq Window', 11387.5, { from_to: 'Aspen Ridge Remodeling' }).match_note, 'ACH customer payment from Aspen Ridge Remodeling');
+  assert.equal(s('Intuit Deposit', 0.22, { qb_category: 'Other income:Credit card rewards' }).category, 'other_income');
+  assert.equal(s('Intuit Deposit Ach', 2400).category, 'customer_payment');
+  // One invoice pays once.
+  const two = planBankImport('Date,Bank description,Spent,Received\n04/14/2026,Check 903,"$8,321.30",\n04/15/2026,Check 904,"$8,321.30",\n', { invoices });
+  assert.deepEqual(two.lines.map((l) => [l.category, l.invoice_id || '']), [['glass_forge', 'gf1'], ['other_cost', '']]);
+});
+
+test('each import covers its first to last day, so a month knows how much of it is in', () => {
+  const lines = [
+    { posted_date: '2026-08-30', amount: -1, category: 'crew_pay', import_batch: 'a' },
+    { posted_date: '2026-09-01', amount: -1, category: 'crew_pay', import_batch: 'a' },
+    { posted_date: '2026-10-05', amount: -1, category: 'crew_pay', import_batch: 'b' },
+    { posted_date: '2026-10-07', amount: -1, category: 'crew_pay', import_batch: 'b' },
+  ];
+  const days = bankDays(lines);
+  assert.equal(days.size, 3 + 3);
+  assert.deepEqual([bankMonth(lines, '2026-08', days).coveredDays, bankMonth(lines, '2026-09', days).coveredDays, bankMonth(lines, '2026-10', days).coveredDays], [2, 1, 3]);
+  const y = companyYear({ rows: [], bankLines: lines, today: '2026-10-26', start: '2026-01' });
+  assert.deepEqual(y.months.slice(7).map((m) => [m.month, m.bank.coveredDays, m.monthDays]), [['2026-08', 2, 31], ['2026-09', 1, 30], ['2026-10', 3, 26]]);
 });
 
 test('re-importing an overlapping export adds only the new lines', () => {
