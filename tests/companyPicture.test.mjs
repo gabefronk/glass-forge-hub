@@ -2,19 +2,23 @@ import './support/register-src-alias.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { pipelineJob, pipelineView, earnTiming, importedLaborDiagnostic } = await import('../src/lib/companyPicture.js');
+const { pipelineJob, pipelineView, earnTiming, importedLaborDiagnostic, cardFigure } = await import('../src/lib/companyPicture.js');
 const { BOOKS_PL, QBO_SALES } = await import('../src/lib/booksSnapshot.js');
 
 const card = (id, stage, { sale = null, windows = null, typed = false, budgetId = null } = {}) => ({
   job: { id, canonical_name: id }, paymentStage: stage, chosenBudget: budgetId ? { id: budgetId } : null,
   sale: { display: { value: sale, label: typed ? 'Typed customer total' : 'From budget' } },
   windows: { display: { value: windows, source: typed ? 'owner' : 'budget', label: typed ? 'Typed budget cost' : 'Quote' } },
-  rough: { display: { value: typed ? 0 : null } },
+  rough: { display: { value: typed ? 0 : rough } },
 });
+let rough = null;
 const bank = (amount, category, jobId, date = '2026-10-01') => ({ posted_date: date, amount, category, job_id: jobId });
 
 test('a half-down job: received in the bank, supplier paid, crew from the budget, overhead unknown', () => {
-  const j = pipelineJob(card('A', 'half_down', { sale: 10000, windows: 6000, budgetId: 'b1' }), {
+  rough = 1200; // the budget's labor 1,000 + install material 200, as Purchasing carries it
+  const c = card('A', 'half_down', { sale: 10000, windows: 6000, budgetId: 'b1' });
+  rough = null;
+  const j = pipelineJob(c, {
     budgets: [{ id: 'b1', inputs: { labor_cost_sub_pay: 1000, additional_install_material: 200 } }],
     bankLines: [bank(5000, 'customer_payment', 'A'), bank(-6000, 'job_cost', 'A'), bank(-999, 'crew_pay', null)],
     orders: [{ job_id: 'A', eta_date: '2026-11-09' }],
@@ -54,6 +58,16 @@ test('QuickBooks sales: billed, invoiced unpaid, and cash counted once (in the b
   assert.deepEqual([j.billed, j.invoicedUnpaid, j.receivedLinked, j.paidInBankUnlinked, j.received, j.paidAfterBank, j.collected], [32936.79, 931.89, 1474.71, 870.93, 2345.64, 29659.26, 32004.90]);
   assert.equal(j.toCollect, 70000 - 32004.90);
   assert.equal(j.toBill, 70000 - 32936.79);
+});
+
+test('a multi-scope job reads its scope rows; a missing scope figure stays unknown', () => {
+  const multi = { ...card('S', 'half_down'), scopes: [{ windows: { value: 1731.49 }, sale: { value: 3271.38 }, rough: { value: 0 } }, { windows: { value: 7807 }, sale: { value: 11566.35 }, rough: { value: 0 } }] };
+  multi.windows.display = { suppressed: true, value: null }; multi.sale.display = { suppressed: true, value: null };
+  assert.deepEqual([cardFigure(multi, 'windows'), cardFigure(multi, 'sale')], [9538.49, 14837.73]);
+  const j = pipelineJob(multi, {});
+  assert.deepEqual([j.sale, j.materials, j.knownMargin], [14837.73, 9538.49, 5299.24]);
+  multi.scopes[1].sale = { value: null };
+  assert.equal(cardFigure(multi, 'sale'), null);
 });
 
 test('earn timing: installed this year, ETA months, December at risk, none unknown', () => {
