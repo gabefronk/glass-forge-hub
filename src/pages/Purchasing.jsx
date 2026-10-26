@@ -1,4 +1,8 @@
-import { isSold, isCompleted, byStatus, PURCHASING_STATUSES, headerFigures, applyPurchasingFilter, purchasingFilterCounts, sortCards, cardFigures, etaDate, etaEarliest, PURCHASING_FILTERS, DEFAULT_PURCHASING_SORT } from '@/lib/purchasingSummary';
+import { isSold, isCompleted, byStatus, PURCHASING_STATUSES, applyPurchasingFilter, purchasingFilterCounts, sortCards, etaDate, etaEarliest, PURCHASING_FILTERS, DEFAULT_PURCHASING_SORT } from '@/lib/purchasingSummary';
+import { jobLedger, ledgerTotals } from '@/lib/jobLedger';
+import { QBO_SALES } from '@/lib/booksSnapshot';
+import { base44 } from '@/api/base44Client';
+import { money } from '@/components/budgets/ProcurementForms';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -41,9 +45,15 @@ function PurchasingWorkspace() {
     const v = ++loadSeq.current;
     setLoading(true); setError('');
     try {
-      const overview = await purchasingRequest({ action: 'overview' });
+      // The job ledger also needs the bank lines (receipts, supplier payments) and job cost inputs
+      // (entered crew actuals). If they cannot load, Customers owe shows a dash rather than a guess.
+      const [overview, bankLines, costInputs] = await Promise.all([
+        purchasingRequest({ action: 'overview' }),
+        base44.entities.BankTransactions.list('-posted_date', 10000).catch(() => null),
+        base44.entities.JobCostInputs.list('-updated_date', 2000).catch(() => []),
+      ]);
       if (v !== loadSeq.current) return;
-      setData(overview);
+      setData({ ...overview, ledgerInputs: { bankLines, costInputs } });
     } catch (e) {
       if (v === loadSeq.current) setError(messageOf(e));
     } finally {
@@ -54,8 +64,16 @@ function PurchasingWorkspace() {
   useEffect(() => { load(); return () => { loadSeq.current++; }; }, [load]);
 
   const today = denverDate();
-  // One card per job with its scope rows and payment stage (shared with the Company overview).
-  const cards = useMemo(() => purchasingBoardCards(data, today), [data, today]);
+  // One card per job with its scope rows and payment stage, each carrying its row of the canonical
+  // job ledger (jobLedger.js, shared with the Company overview): the grid's Cost, Sale and Est.
+  // profit and every header figure read from that row.
+  const ledger = useMemo(() => {
+    const built = purchasingBoardCards(data, today);
+    const inputs = data?.ledgerInputs || {};
+    return jobLedger({ cards: built, budgets: data?.budgets || [], orders: data?.vendor_orders || [], costInputs: inputs.costInputs || [], bankLines: inputs.bankLines || [], sales: QBO_SALES });
+  }, [data, today]);
+  const receiptsKnown = Array.isArray(data?.ledgerInputs?.bankLines);
+  const cards = useMemo(() => purchasingBoardCards(data, today).map((c) => ({ ...c, ledger: ledger.byId.get(c.job.id) || null })), [data, today, ledger]);
   // Quotes with no stage (or only Sent to customer) are not sold yet: they get their own
   // section below and stay out of the header figures, the Show counts and the export.
   const matched = useMemo(() => cards.filter((c) => cardMatchesSearch(c, query)), [cards, query]);
@@ -75,9 +93,9 @@ function PurchasingWorkspace() {
     const cols = ['Builder', 'Job', 'Supplier', 'ETA', 'Job stage', 'Cost', 'Sale', 'Est. profit'];
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const body = filtered.map((c) => {
-      const f = cardFigures(c);
+      const r = c.ledger;
       const eta = (c.scopes || []).length > 1 ? etaEarliest(c.scopes.map((s) => s.etaLabel)) : etaDate(c.refs?.etaLabel);
-      return [c.job.builder || '', c.job.canonical_name || '', supplierText(c), eta, paymentStage(c.paymentStage)?.label || '', f.cost == null ? null : 0 - f.cost, f.sale, f.profit].map(esc).join(',');
+      return [c.job.builder || '', c.job.canonical_name || '', supplierText(c), eta, paymentStage(c.paymentStage)?.label || '', r?.cost == null ? null : 0 - r.cost, r?.sale.value, r?.profit].map(esc).join(',');
     });
     const blob = new Blob([[cols.join(','), ...body].join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -85,8 +103,16 @@ function PurchasingWorkspace() {
   };
   const shownFilters = PURCHASING_FILTERS.filter((f) => f.key === 'all' || f.key === filter || filterCounts[f.key] > 0);
   const currentFilter = PURCHASING_FILTERS.find((f) => f.key === filter) || PURCHASING_FILTERS[0];
-  const figures = useMemo(() => headerFigures(applyPurchasingFilter(searched, filter, today), today), [searched, filter, today]);
+  // Header figures: the ledger totals over exactly the jobs in the grid (status, filter and search),
+  // so the scope is always named. Active (the default) is the same set of jobs the Company overview's
+  // job ledger shows; Completed jobs have their own totals on the Completed section.
   const currentStatus = PURCHASING_STATUSES.find((st) => st.key === status) || PURCHASING_STATUSES[0];
+  const figures = useMemo(() => {
+    const shown = applyPurchasingFilter(statusCards, filter, today);
+    const t = ledgerTotals(shown.map((c) => c.ledger).filter(Boolean));
+    return { ...t, scope: `${currentStatus.label} · ${shown.length} job${shown.length === 1 ? '' : 's'}${filter !== 'all' || query ? ' shown' : ''}`, receiptsKnown };
+  }, [statusCards, filter, today, currentStatus, query, receiptsKnown]);
+  const completedTotals = useMemo(() => ledgerTotals(completed.map((c) => c.ledger).filter(Boolean)), [completed]);
   const unlinked = useMemo(() => (data ? unlinkedEntities({ budgets: data.budgets, purchase_orders: data.purchase_orders }) : { unlinkedQuotes: [], shopPOs: [] }), [data]);
 
   if (loading && !data) {
@@ -156,9 +182,10 @@ function PurchasingWorkspace() {
 
       {completed.length > 0 && (
         <details className="group" aria-label="Completed">
-          <summary className="flex cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden" title="Jobs marked Paid. Out of the active list and Customers owe; still counted in Sold, Job cost and Est. profit.">
+          <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 py-1 [&::-webkit-details-marker]:hidden" title="Jobs marked Paid, with their own totals. Not in the Active figures in the header; pick Status: Completed or All to see them there.">
             <ChevronDown className="h-4 w-4 -rotate-90 transition-transform group-open:rotate-0" style={{ color: '#566063' }} />
             <h2 className="m-0 text-[17px] font-bold" style={{ color: '#101617' }}>Completed <span className="tabular-nums" style={{ color: '#566063', fontWeight: 500 }}>{completed.length}</span></h2>
+            <span className="text-[13px] tabular-nums" style={{ color: '#566063' }}>Sold {money(completedTotals.sale)} · Job cost {money(completedTotals.cost ? -completedTotals.cost : 0)} · Est. profit {money(completedTotals.profit)} · not in the figures above</span>
           </summary>
           <div className="mt-2"><PurchasingTable cards={completed} data={data} sort={sort} onSort={changeSort} today={today} onSaved={load} /></div>
         </details>
