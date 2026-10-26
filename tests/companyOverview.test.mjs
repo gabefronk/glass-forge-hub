@@ -115,6 +115,6 @@ test('CSV lists each month and the YTD row with costs as negatives', () => {
   const y = companyYear({ rows: [install('a', '2026-01', 1000), split('b', '2026-02', 3000, 1000)], today: '2026-02-20', start: ALL_YEAR });
   const csv = companyYearCsv(y).split('\n');
   assert.equal(csv.length, 4);
-  assert.equal(csv[2], '"Feb 2026",0.00,3000.00,0.00,3000.00,-1000.00,0.00,0.00,0.00,0.00,0.00,-1000.00,1000.00,"no: before crew pay"');
-  assert.equal(csv[3], '"2026 to date",1000.00,3000.00,0.00,4000.00,-1000.00,0.00,0.00,0.00,0.00,-100.00,-1000.00,1900.00,"0 months"');
+  assert.equal(csv[2], '"Feb 2026",0.00,3000.00,3000.00,-1000.00,0.00,0.00,-1000.00,1000.00');
+  assert.equal(csv[3], '"2026 to date",1000.00,3000.00,4000.00,-1000.00,0.00,-100.00,-1000.00,1900.00');
 });
