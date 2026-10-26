@@ -1,444 +1,246 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { isAgentCenterOwner } from "@/lib/agentCenterAccess";
-import { invoicingStats } from "@/lib/invoicingStats";
-import { isIgnoredWorkItem, denverDate } from "../../base44/shared/billingCore.js";
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { formatMoney, withComputedAmounts } from "@/lib/feeMath";
+import { computeFeeAmt, computeLaborAmt, withComputedAmounts } from "@/lib/feeMath";
 import { buildSupersededSet, isReady, withCompanions } from "@/lib/invoicingFilters";
-import { C } from "@/lib/feeUI";
-import { PageShell, PageHero, HeroStat, heroBtn, heroPrimary, heroSecondary } from "@/components/PageShell";
-import { Download, Plus, Check, HardHat } from "lucide-react";
-import OutstandingReports from "@/components/dashboard/OutstandingReports";
-import ComplianceSettings from "@/components/dashboard/ComplianceSettings";
-import { teamProfileForUser } from "@/lib/teamStructure";
+import { inInvoiceScope } from "@/lib/invoiceScope";
+import { invoiceRegister } from "@/lib/invoiceRegister";
+import { moneyBarSegments, moneyStrip } from "@/lib/invoiceMoneyBar";
+import { planSplitLines, isHeldForPurchasing } from "@/lib/purchasingSplit";
+import { purchasingBoardCards } from "@/lib/purchasingScopes";
+import { paymentStage } from "@/lib/jobPayment";
+import { companyYear, companyYearCsv, withSplitPlan, monthName } from "@/lib/companyOverview";
+import { purchasingRequest, money } from "@/components/budgets/ProcurementForms";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { PageShell } from "@/components/PageShell";
 
-function todayStr() {
-  return denverDate(); // YYYY-MM-DD
+// Company overview (Gabe, Oct 26): the year to date the way QuickBooks' business overview
+// reads. YA Windows & Doors' income (install labor billed plus job sales), what Glass Forge
+// made by invoicing YA, YA's profit after Glass Forge before crew pay, and the year projected
+// from the open Purchasing jobs and the install-labor pace. The figures come from
+// companyYear (src/lib/companyOverview.js) over the same rows Invoicing and Purchasing show.
+// Field reports and other operational lists live on Invoicing and the job pages, not here.
+
+// America/Denver today (inlined; new src files may not import base44/shared).
+const denverDate = (value = new Date()) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+
+const BAND = "#0B3F3B", TITLE = "#F2EEE8", LABEL = "#C3CBCC", DIVIDER = "rgba(242,238,232,.18)", BRASS_LT = "#E0C994";
+const INK = "#101617", SECONDARY = "#566063", STRONG = "#34403F", RULE = "#D6CCBA", HEAD_BG = "#E9E2D4", LATE = "#A43432";
+const out = (v) => (v ? -v : 0); // money out reads as a negative number; zero stays $0.00
+const pct = (r) => (r == null ? "—" : `${(r * 100).toFixed(1)}%`);
+const dayLabel = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+function Figure({ label, value, title, color = TITLE }) {
+  return (
+    <div title={title} className="min-w-0 px-5 max-[1023px]:px-3 max-[1023px]:py-2" style={{ borderLeft: `1px solid ${DIVIDER}` }}>
+      <div className="whitespace-nowrap text-[13px] font-medium" style={{ color: LABEL }}>{label}</div>
+      <div className="whitespace-nowrap text-[18px] font-bold tabular-nums max-[1023px]:text-[17px]" style={{ color, letterSpacing: "-0.01em" }}>{money(value)}</div>
+    </div>
+  );
 }
 
-function dateHeader() {
-  const d = new Date();
-  const day = d.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
-  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).toLowerCase();
-  return `${day} · ${date} · ${time}`;
+function Sheet({ title, aside, children }) {
+  return (
+    <section className="overflow-hidden rounded-[12px]" style={{ backgroundColor: "#FFFFFF", border: "1px solid #B3A792" }}>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1" style={{ padding: "12px 16px" }}>
+        <h2 className="m-0 text-[16px] font-bold" style={{ color: INK, letterSpacing: "-0.01em" }}>{title}</h2>
+        {aside ? <span className="text-[14px]" style={{ color: SECONDARY }}>{aside}</span> : null}
+      </div>
+      <div className="overflow-x-auto">{children}</div>
+    </section>
+  );
 }
 
-function eventTag(ev) {
-  const text = `${ev.job_name || ""} ${ev.scope_notes || ""}`.toLowerCase();
-  if (/install/.test(text)) return "INSTALL";
-  if (/measure|measurement/.test(text)) return "MEASURE";
-  if (/pickup|pick up|pick-up/.test(text)) return "PICKUP";
-  if (/deliver|delivery/.test(text)) return "DELIVER";
-  if (/bill|invoice|quote/.test(text)) return "BILLING";
-  if (/service|warranty/.test(text)) return "SERVICE";
-  return "INSTALL";
+const th = "whitespace-nowrap text-[13px] font-semibold uppercase tracking-[0.04em]";
+function Head({ cols }) {
+  return (
+    <thead>
+      <tr style={{ backgroundColor: HEAD_BG, borderBottom: `2px solid ${STRONG}` }}>
+        {cols.map(([label, right, title]) => (
+          <th key={label} title={title} className={th} style={{ padding: "8px 12px", color: STRONG, textAlign: right ? "right" : "left" }}>{label}</th>
+        ))}
+      </tr>
+    </thead>
+  );
 }
 
-function crewForEvent(ev) {
-  if (!ev.created_by) return "";
-  if (ev.created_by === "iryedra@gmail.com") return "Ragen";
-  if (ev.created_by === "gabriel.fronk.wd@gmail.com") return "Gabe";
-  return ev.created_by.split("@")[0];
+function Row({ cells, tone = "", title }) {
+  const total = tone === "total" || tone === "projected";
+  return (
+    <tr title={title} style={{ borderTop: total ? `2px solid ${STRONG}` : `1px solid ${RULE}`, backgroundColor: tone === "projected" ? "#F6F3EC" : undefined }}>
+      {cells.map(([value, kind], i) => {
+        const isMoney = kind === "money" || kind === "out" || kind === "pct";
+        const n = kind === "out" ? out(value) : value;
+        const text = kind === "money" || kind === "out" ? money(n) : kind === "pct" ? pct(value) : value;
+        const negative = kind === "money" && typeof n === "number" && n < 0;
+        return (
+          <td key={i} className={`whitespace-nowrap text-[14px] ${isMoney ? "text-right tabular-nums" : ""} ${total ? "font-bold" : ""}`} style={{ padding: "8px 12px", color: negative ? LATE : INK }}>{text}</td>
+        );
+      })}
+    </tr>
+  );
 }
+
+const YA_COLS = [
+  ["Month"], ["Labor billed", true, "Install labor billed to BFS: Invoicing's Labor total for the month"],
+  ["Job sales", true, "Sale on outside jobs that were paid: the 50/50 profit-split lines on Invoicing"],
+  ["Income", true, "Labor billed plus job sales"], ["Job cost", true, "Cost on those outside jobs (windows plus labor & material)"],
+  ["Shop", true, "Shop and overhead purchases (POs with no job)"],
+  ["Glass Forge", true, "What Glass Forge invoiced YA: the 10% install fee plus its half of each outside job's profit (Invoicing's Fee total)"],
+  ["Profit", true, "Income less job cost, shop and Glass Forge. Crew pay is not recorded in the Hub, so this is before crew pay"],
+  ["Margin", true, "Profit ÷ income"],
+];
+const yaCells = (label, r) => [[label], [r.labor, "money"], [r.sales, "money"], [r.income, "money"], [r.jobCost, "out"], [r.shop, "out"], [r.glassForge, "out"], [r.profit, "money"], [r.margin, "pct"]];
 
 function CompanyOverviewContent() {
-  const navigate = useNavigate();
-  const [calendarError, setCalendarError] = useState("");
-  const [loadError, setLoadError] = useState("");
-  const [reportStatusMap, setReportStatusMap] = useState(new Map());
-  const [profits, setProfits] = useState([]);
-  const [todayEvents, setTodayEvents] = useState([]);
-  const [tomorrowEvents, setTomorrowEvents] = useState([]);
-  const [feeLines, setFeeLines] = useState([]);
-  const [allCalendarEvents, setAllCalendarEvents] = useState([]);
-  const [unmatchedEvents, setUnmatchedEvents] = useState([]);
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [checked, setChecked] = useState(new Set());
-  const [complianceStartDate, setComplianceStartDate] = useState(null);
+  const [state, setState] = useState({ loading: true, error: "", data: null });
+  const loadSeq = useRef(0);
+  const today = denverDate();
+  const thisMonth = today.slice(0, 7);
 
-  const today = todayStr();
-  const tomorrow = denverDate(new Date(Date.now() + 86400000));
-  const currentMonth = today.slice(0, 7);
+  useEffect(() => {
+    const seq = ++loadSeq.current;
+    (async () => {
+      try {
+        const [fl, events, jobs, budgets, pos, vos, closes, invoices, board] = await Promise.all([
+          base44.entities.FeeLines.list("-job_date", 5000),
+          base44.entities.CalendarEvents.list("-event_date", 5000),
+          base44.entities.Jobs.list("canonical_name", 5000),
+          base44.entities.JobBudgets.list("-updated_date", 2000),
+          base44.entities.PurchaseOrders.list("-created_date", 2000),
+          base44.entities.VendorOrders.list("-created_date", 2000),
+          base44.entities.MonthCloseSnapshot.list("-created_date", 100).catch(() => []),
+          base44.entities.Invoices.list("-invoice_date", 2000).catch(() => []),
+          purchasingRequest({ action: "overview" }),
+        ]);
+        if (seq !== loadSeq.current) return;
+        // Invoicing's rows exactly: Purchasing jobs' own lines held off, a Paid job's 50/50 split
+        // line in place (pending here if Invoicing has not written it yet), companions resolved.
+        const closedMonths = (closes || []).map((c) => c.month).filter(Boolean);
+        const plan = planSplitLines({ jobs, budgets, purchase_orders: pos, vendor_orders: vos }, fl, { closedMonths });
+        const feeLines = withComputedAmounts(withSplitPlan(fl, plan).filter((r) => !isHeldForPurchasing(r, plan.jobIds)));
+        const rows = withCompanions(feeLines, events);
+        const superseded = buildSupersededSet(rows, events);
+        const reports = new Map(events.filter((e) => e.google_event_id).map((e) => [e.google_event_id, e.report_status]));
+        setState({ loading: false, error: "", data: { rows, superseded, reports, feeLines, invoices, pos, cards: purchasingBoardCards(board, today) } });
+      } catch (e) {
+        if (seq === loadSeq.current) setState({ loading: false, error: `The overview could not load. ${e?.message || ""}`.trim(), data: null });
+      }
+    })();
+    return () => { loadSeq.current++; };
+  }, [today]);
 
-  const load = async () => {
-    try {
-      const [mp, reconciliation, fl, me, settings, calSource] = await Promise.all([
-        base44.entities.MonthlyProfit.list("-month", 500),
-        base44.functions.invoke("ownedCalendar", {}).catch(error => ({ data: { error: error?.response?.data?.error || "Calendar could not refresh." } })),
-        base44.entities.FeeLines.filter({ invoice_month: currentMonth }, "-job_date", 5000),
-        base44.auth.me().catch(() => null),
-        base44.entities.AppSettings.list("-created_date", 10).catch(() => []),
-        base44.entities.CalendarEvents.list("-event_date", 5000),
-      ]);
-      // The run sheet is operational only: the reconciliation function returns
-      // sales-tracker-verified jobs and leaves unmatched source events in review.
-      setCalendarError(reconciliation?.data?.error || "");
-      // Groups include unverified events (ownership: null) as their own groups; admins also get
-      // them again as excluded_events. Split on ownership so each event appears exactly once:
-      // verified visits on the run sheet, unverified ones in the review list (for every role).
-      const allEvents = (reconciliation?.data?.groups || []).map(group => group[0]).filter(e => e && !isIgnoredWorkItem(e));
-      const verified = allEvents.filter((e) => e.ownership);
-      setUnmatchedEvents(allEvents.filter((e) => !e.ownership));
-      setReportStatusMap(new Map(calSource.filter(e => e.google_event_id).map(e => [e.google_event_id, e.report_status])));
-      setProfits(Array.isArray(mp) ? mp : []);
-      setAllCalendarEvents(allEvents);
-      setTodayEvents(verified.filter((e) => (e.event_date || "").slice(0, 10) === today));
-      setTomorrowEvents(allEvents.filter((e) => (e.event_date || "").slice(0, 10) === tomorrow));
-      // Same display rows as Invoicing (companion lines resolved) so the totals agree.
-      setFeeLines(withCompanions(withComputedAmounts(fl), calSource));
-      if (me) setUser(me);
-      if (Array.isArray(settings) && settings.length > 0) setComplianceStartDate(settings[0].compliance_start_date);
-      setLoadError("");
-    } catch (e) {
-      setLoadError("Dashboard data could not load; figures below may be incomplete. " + (e?.message || ""));
-    } finally {
-      setLoading(false);
-    }
+  const year = useMemo(() => (state.data ? companyYear({ rows: state.data.rows, superseded: state.data.superseded, cards: state.data.cards, purchaseOrders: state.data.pos, today }) : null), [state.data, today]);
+  // This month's Ready to invoice and Invoiced, unpaid: Invoicing's own money strip.
+  const strip = useMemo(() => {
+    if (!state.data) return null;
+    const { rows, superseded, reports, invoices, feeLines } = state.data;
+    const monthRows = rows.filter((r) => inInvoiceScope(r, thisMonth));
+    return { ...moneyStrip(moneyBarSegments(monthRows, reports, superseded, invoiceRegister(invoices, feeLines))), monthRows };
+  }, [state.data, thisMonth]);
+
+  const exportCsv = () => {
+    const blob = new Blob([companyYearCsv(year)], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `ya-windows-${year.year}-to-date.csv`; a.click(); URL.revokeObjectURL(url);
   };
-  useEffect(() => { load(); }, []);
-
-  // Year to date: only this calendar year's months (the list holds every month on record).
-  const ytdMonths = useMemo(() => profits.filter((p) => String(p.month || "").startsWith(currentMonth.slice(0, 4))), [profits, currentMonth]);
-  const ytdProfit = useMemo(() => {
-    return ytdMonths.reduce((s, p) => s + (Number(p.ya_windows_profit) || 0) + (Number(p.glass_forge_profit) || 0), 0);
-  }, [ytdMonths]);
-
-  const billing = useMemo(() => invoicingStats(feeLines, reportStatusMap), [feeLines, reportStatusMap]);
-  const unbilled = { total: billing.readyTotal, count: billing.readyCount };
-
-  // Exports the same population as the "Ready to bill" KPI (this month's ready lines).
-  const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const exportStatement = async () => {
-    setExporting(true);
     setExportError("");
     try {
       const { exportInvoicePdf } = await import("@/lib/exportInvoicePdf");
-      const superseded = buildSupersededSet(feeLines);
-      const rows = feeLines.filter((r) => isReady(r, reportStatusMap, superseded));
-      await exportInvoicePdf(currentMonth, rows);
+      const { superseded, reports } = state.data;
+      const ready = strip.monthRows.filter((r) => isReady(r, reports, superseded)).map((r) => ({ ...r, labor_amt: computeLaborAmt(r), fee_amt: computeFeeAmt(r) }));
+      await exportInvoicePdf(thisMonth, ready);
     } catch (e) {
-      setExportError("Statement export failed. " + (e?.message || ""));
-    } finally {
-      setExporting(false);
+      setExportError(`The statement could not be made. ${e?.message || ""}`.trim());
     }
   };
 
-  const onHold = useMemo(() => {
-    // Jobs with needs_report status — approximate from fee lines
-    const jobMap = {};
-    for (const r of feeLines) {
-      if (!r.job_id) continue;
-      if (!jobMap[r.job_id]) jobMap[r.job_id] = { needsReview: false, name: r.job_name_norm };
-      if (r.needs_review) jobMap[r.job_id].needsReview = true;
-    }
-    const held = Object.entries(jobMap).filter(([, v]) => v.needsReview);
-    return { count: held.length, name: held[0]?.[1]?.name || "" };
-  }, [feeLines]);
-
-  const sortedToday = useMemo(() => {
-    return [...todayEvents].sort((a, b) => (a.start_time || "99").localeCompare(b.start_time || "99"));
-  }, [todayEvents]);
-
-  const unmatchedToday = useMemo(() => {
-    return unmatchedEvents
-      .filter((e) => (e.event_date || "").slice(0, 10) === today)
-      .sort((a, b) => (a.start_time || "99").localeCompare(b.start_time || "99"));
-  }, [unmatchedEvents, today]);
-
-  const firstUp = sortedToday[0] || null;
-  const doneCount = sortedToday.filter((e) => checked.has(e.id)).length;
-
-  const toggleCheck = (id) => {
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  // Mini bar chart data — last 8 months
-  const chartData = useMemo(() => {
-    const sorted = profits.filter((p) => p.month).sort((a, b) => String(a.month).localeCompare(String(b.month)));
-    return sorted.slice(-8).map((p) => ({
-      month: p.month,
-      value: (Number(p.ya_windows_profit) || 0) + (Number(p.glass_forge_profit) || 0),
-    }));
-  }, [profits]);
-
-  if (loading) {
+  if (state.loading) {
     return (
-      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.pageBg }}>
-        <div className="w-7 h-7 border-2 rounded-full animate-spin" style={{ borderColor: C.borderStrong, borderTopColor: C.accent }} />
-      </div>
+      <PageShell>
+        <div className="flex items-center justify-center py-24"><div className="h-7 w-7 animate-spin rounded-full border-2" style={{ borderColor: RULE, borderTopColor: BAND }} /></div>
+      </PageShell>
     );
   }
+  if (!year) return <PageShell><p role="alert" className="rounded-[12px] border bg-white p-4 text-[14px]" style={{ color: LATE }}>{state.error}</p></PageShell>;
 
-  const teamProfile = teamProfileForUser(user);
+  const { ytd, pace, pipeline, rest, projected } = year;
+  const paceLabel = `${monthName(`${year.year}-${String(13 - pace.months).padStart(2, "0")}`)}–Dec labor at the ${monthName(pace.from)}–${monthName(pace.to)} average`;
+  const restLabel = { pipeline: `Open Purchasing jobs · ${pipeline.jobs.length}`, pace: paceLabel };
+  const thisMonthName = monthName(thisMonth);
 
   return (
-    <PageShell width="max-w-none">
-      <PageHero
-        eyebrow={dateHeader()}
-        title="Company overview"
-        actions={<>
-          <button type="button" onClick={exportStatement} disabled={exporting} title={`PDF of ${currentMonth} lines that are ready to bill`} className={`${heroBtn} disabled:opacity-60`} style={heroSecondary}>
-            <Download className="h-4 w-4" style={{ color: "#e0c994" }} />{exporting ? "Generating…" : "Export statement"}
-          </button>
-          <button onClick={() => navigate("/window-quotes?new=1")} className={heroBtn} style={heroPrimary}>
-            <Plus className="h-4 w-4" />New quote
-          </button>
-        </>}
-      >
-        {/* KPI row */}
-        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 xl:grid-cols-4 gap-3">
-          <HeroStat label="Profit YTD" value={`$${formatMoney(ytdProfit)}`} sub={`${ytdMonths.length} ${ytdMonths.length === 1 ? "month" : "months"} recorded in ${currentMonth.slice(0, 4)}`} />
-          <HeroStat label={`${currentMonth} recorded fees`} value={`$${formatMoney(billing.monthEarnedTotal)}`} tone="brass" sub={`done and reported · ${formatMoney(billing.readyTotal)} ready to bill`} />
-          <HeroStat label="Ready to bill" value={`$${formatMoney(unbilled.total)}`} sub={`${unbilled.count} eligible lines this month`} />
-          <HeroStat label="On hold" value={String(onHold.count)} tone={onHold.count ? "brass" : undefined} sub={onHold.name || "—"} />
-        </div>
-      </PageHero>
-
-      {/* Body */}
-      <div>
-        {calendarError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{calendarError}</p>}
-        {loadError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{loadError}</p>}
-        {exportError && <p role="alert" className="mb-4 rounded-lg border bg-white p-3 text-red-700">{exportError}</p>}
-        <OutstandingReports events={allCalendarEvents} user={user} onChanged={load} complianceStartDate={complianceStartDate} />
-        {user?.role === "admin" && (
-          <ComplianceSettings value={complianceStartDate} onChanged={load} />
-        )}
-
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] gap-5">
-          {/* Left: Run sheet */}
-          <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-            <div className="sheet-band flex flex-wrap items-center gap-3 px-5 py-[11px] max-[699px]:px-4">
-              <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] text-white" style={{ backgroundColor: "#0b3f3b" }}><HardHat className="h-[15px] w-[15px]" /></span>
-              <h2 className="m-0 text-[16.5px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>Today&apos;s run sheet</h2>
-              <span className="ml-auto font-mono-num text-[12.5px] font-medium" style={{ color: "#3e5a55" }}>
-                {doneCount} of {sortedToday.length} done
-              </span>
-            </div>
-            {/* Progress bar */}
-            <div className="h-[3px]" style={{ backgroundColor: C.rowBorder }}>
-              <div className="h-full transition-all duration-300" style={{ width: `${sortedToday.length ? (doneCount / sortedToday.length) * 100 : 0}%`, backgroundColor: C.accent }} />
-            </div>
-            <div>
-              {sortedToday.length === 0 && unmatchedToday.length === 0 && (
-                <div className="px-5 py-12 text-center">
-                  <div className="mono-label mb-1">Nothing scheduled</div>
-                  <p className="text-[13px]" style={{ color: C.textMuted }}>No calendar events for today.</p>
-                </div>
-              )}
-              {sortedToday.map((ev) => {
-                const isDone = checked.has(ev.id);
-                const tag = eventTag(ev);
-                return (
-                  <div
-                    key={ev.id}
-                    className="flex items-center gap-0 px-3 sm:px-5 py-3 transition-colors"
-                    style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}`, opacity: isDone ? 0.4 : 1 }}
-                  >
-                    {/* Time gutter */}
-                    <div className="w-[48px] sm:w-[58px] shrink-0 text-right pr-2 sm:pr-3">
-                      <span className="font-mono-num text-[13px]" style={{ color: C.textSecondary }}>
-                        {ev.start_time || "—"}
-                      </span>
-                    </div>
-                    {/* Divider */}
-                    <div className="w-px self-stretch shrink-0" style={{ backgroundColor: C.border }} />
-                    {/* Content */}
-                    <div className="flex-1 min-w-0 px-2 sm:px-4">
-                      <div
-                        className="text-[14px] font-medium break-words"
-                        style={{
-                          color: C.text,
-                          textDecoration: isDone ? "line-through" : "none",
-                        }}
-                      >
-                        {ev.job_name || "(untitled)"}
-                      </div>
-                      <div className="text-[12px] break-words" style={{ color: C.textMuted }}>
-                        {ev.address || ev.scope_notes?.slice(0, 80) || ""}
-                      </div>
-                      <span className="mt-1 inline-flex sm:hidden text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: C.accent18, border: `1px solid ${C.tagBillable.border}`, color: C.accentText }}>{tag}</span>
-                    </div>
-                    {/* Tag */}
-                    <span
-                      className="hidden sm:inline-flex text-[9px] font-semibold tracking-[0.01em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
-                      style={{ backgroundColor: C.accent18, border: `1px solid ${C.tagBillable.border}`, color: C.accentText }}
-                    >
-                      {tag}
-                    </span>
-                    {/* Checkbox */}
-                    <button
-                      onClick={() => toggleCheck(ev.id)}
-                      title="Checkmarks are for this screen only and are not saved"
-                      aria-label={`Mark ${ev.job_name || "event"} ${isDone ? "incomplete" : "done"}`}
-                      aria-pressed={isDone}
-                      className="ml-1 sm:ml-3 h-10 w-10 rounded-full shrink-0 flex items-center justify-center transition-all"
-                      style={{
-                        border: isDone ? "none" : `1.5px solid ${C.borderStrong}`,
-                        backgroundColor: isDone ? C.accent : "transparent",
-                      }}
-                    >
-                      {isDone && <Check className="h-3.5 w-3.5" style={{ color: C.accentDark }} strokeWidth={3} />}
-                    </button>
-                  </div>
-                );
-              })}
-
-              {/* Events synced from the calendars that did not verify against the Sales Tracker.
-                  Shown for review instead of hidden, so Today matches the real calendar. */}
-              {unmatchedToday.length > 0 && (
-                <div>
-                  <div className="px-3 sm:px-5 py-2" style={{ borderTop: `1px solid ${C.rowBorder}`, backgroundColor: C.amberLight }}>
-                    <span className="mono-label-sm" style={{ color: C.amber }}>
-                      Also on today&apos;s calendar &mdash; not matched to the Sales Tracker
-                    </span>
-                  </div>
-                  {unmatchedToday.map((ev) => (
-                    <div
-                      key={ev.id}
-                      className="flex items-center gap-0 px-3 sm:px-5 py-3"
-                      style={{ minHeight: "56px", borderTop: `1px solid ${C.rowBorder}` }}
-                    >
-                      <div className="w-[48px] sm:w-[58px] shrink-0 text-right pr-2 sm:pr-3">
-                        <span className="font-mono-num text-[13px]" style={{ color: C.textSecondary }}>
-                          {ev.start_time || "All day"}
-                        </span>
-                      </div>
-                      <div className="w-px self-stretch shrink-0" style={{ backgroundColor: C.border }} />
-                      <div className="flex-1 min-w-0 px-2 sm:px-4">
-                        <div className="text-[14px] font-medium break-words" style={{ color: C.text }}>
-                          {ev.job_name || "(untitled)"}
-                        </div>
-                        {ev.address && (
-                          <div className="text-[12px] break-words" style={{ color: C.textMuted }}>{ev.address}</div>
-                        )}
-                      </div>
-                      <span
-                        className="text-[9px] font-semibold tracking-[0.01em] px-2 py-1 rounded-full whitespace-nowrap shrink-0"
-                        style={{ backgroundColor: C.tagReview.bg, border: `1px solid ${C.tagReview.border}`, color: C.tagReview.text }}
-                      >
-                        REVIEW
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+    <PageShell>
+      <section className="rounded-[12px]" style={{ backgroundColor: BAND }}>
+        <div className="flex flex-wrap items-center gap-y-2" style={{ minHeight: "68px", padding: "10px 12px 10px 20px" }}>
+          <div className="min-w-0">
+            <h1 className="m-0 text-[24px] font-bold max-[1023px]:text-[22px]" style={{ color: TITLE, letterSpacing: "-0.03em" }}>Company overview</h1>
+            <div className="text-[13px] font-medium" style={{ color: LABEL }}>{year.year} to date · through {dayLabel(today)}</div>
           </div>
-
-          {/* Right rail */}
-          <div className="min-w-0 space-y-4">
-            {/* First-up card */}
-            {firstUp && (
-              <div className="rounded-[14px] p-5 card-shadow" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", color: "#f2eee8" }}>
-                <div className="mb-2 text-[10.5px] font-semibold tracking-[.14em]" style={{ color: "#9fc3b6" }}>FIRST UP</div>
-                <div className="font-mono-num-bold text-[32px] mb-1" style={{ letterSpacing: "-0.03em" }}>
-                  {firstUp.start_time || "All day"}
-                </div>
-                <div className="text-[15px] font-semibold mb-1 break-words">{firstUp.job_name}</div>
-                <div className="text-[12px] mb-3" style={{ color: "rgba(255,255,255,.60)" }}>
-                  {crewForEvent(firstUp) ? `Crew: ${crewForEvent(firstUp)}` : ""}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                {firstUp.job_id && (
-                  <button type="button" onClick={() => navigate(`/jobs/${firstUp.job_id}`)} className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "#FFFFFF" }}>
-                    Open job
-                  </button>
-                )}
-                {firstUp.address ? (
-                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(firstUp.address)}`} target="_blank" rel="noreferrer" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "#FFFFFF", color: C.accent }}>
-                    Directions
-                  </a>
-                ) : (
-                  <button disabled title="No address on file for this event" className="text-[10px] font-semibold tracking-[0.01em] px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.45)", cursor: "not-allowed" }}>
-                    Directions
-                  </button>
-                )}
-                </div>
-              </div>
-            )}
-
-            {teamProfile && (
-              <div className="rounded-[14px] overflow-hidden card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-                <div className="sheet-band px-5 py-[11px]">
-                  <div className="text-[10.5px] font-bold uppercase tracking-[.12em]" style={{ color: C.textMuted }}>My current focus</div>
-                  <h3 className="mt-1 text-[16.5px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>{teamProfile.title}</h3>
-                </div>
-                <div className="px-5 py-4">
-                  <div className="space-y-2">
-                    {teamProfile.focus.map((item) => (
-                      <div key={item} className="flex items-start gap-2.5 text-[13px]" style={{ color: C.text }}>
-                        <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: C.accent }} />
-                        <span>{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-
-            {/* Mini bar chart */}
-            <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[15px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>Monthly profit</h3>
-                <span className="mono-label-sm">8 mo</span>
-              </div>
-              <div className="flex items-end gap-2 h-[80px]">
-                {chartData.length === 0 && (
-                  <div className="flex-1 text-center text-[12px] flex items-center justify-center" style={{ color: C.textMuted }}>No data</div>
-                )}
-                {chartData.map((d, i) => {
-                  const max = Math.max(...chartData.map((x) => x.value), 1);
-                  const h = (d.value / max) * 100;
-                  const opacity = 0.25 + (i / Math.max(chartData.length - 1, 1)) * 0.75;
-                  return (
-                    <div key={d.month} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-                      <div className="w-full rounded-[3px] transition-all" style={{ height: `${h}%`, backgroundColor: C.accent, opacity, minHeight: "4px" }} />
-                      <span className="text-[8px] tracking-[0.01em] whitespace-nowrap" style={{ color: C.textFaint }}>
-                        {d.month.slice(5)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Tomorrow card */}
-            <div className="rounded-[14px] p-5 card-shadow" style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[15px] font-extrabold" style={{ color: "#082f2c", letterSpacing: "-0.02em" }}>Tomorrow</h3>
-                <span className="font-mono-num text-[11px]" style={{ color: C.textSecondary }}>
-                  {tomorrowEvents.length} {tomorrowEvents.length === 1 ? "item" : "items"}
-                </span>
-              </div>
-              {tomorrowEvents.length === 0 ? (
-                <p className="text-[12px]" style={{ color: C.textMuted }}>Nothing scheduled</p>
-              ) : (
-                <div className="space-y-2">
-                  {tomorrowEvents.slice(0, 3).map((ev) => (
-                    <div key={ev.id} className="flex items-center gap-2">
-                      <span className="font-mono-num text-[12px] w-[52px] shrink-0" style={{ color: C.textSecondary }}>
-                        {ev.start_time || "—"}
-                      </span>
-                      <span className="text-[13px] truncate" style={{ color: C.text }}>{ev.job_name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div style={{ flex: 1 }} />
+          <div className="grid grid-cols-4 max-[1023px]:order-last max-[1023px]:w-full max-[1023px]:grid-cols-2">
+            <Figure label="YA income" value={ytd.income} title="Install labor billed plus outside job sales, January to today" />
+            <Figure label="Glass Forge income" value={ytd.glassForge} title="10% install fees plus Glass Forge's half of each paid outside job: Invoicing's Fee totals, January to today" />
+            <Figure label="YA profit, before crew pay" value={ytd.profit} title="YA income less job cost, shop purchases and Glass Forge. Crew pay is not recorded in the Hub" color={ytd.profit < 0 ? "#F0A8A6" : TITLE} />
+            <Figure label={`Projected ${year.year} YA profit`} value={projected.profit} title="Profit to date, plus YA's half of the open Purchasing jobs, plus the rest of the year's install labor at this year's monthly average less Glass Forge's fee" color={BRASS_LT} />
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="ml-2 inline-flex h-9 items-center gap-1.5 rounded-[8px] px-3 text-[14px] font-semibold" style={{ border: "1px solid rgba(242,238,232,.3)", background: "none", color: TITLE }}>
+                Export <ChevronDown style={{ width: "16px", height: "16px" }} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[260px] p-1">
+              <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" onSelect={exportCsv}>YA month table (CSV)</DropdownMenuItem>
+              <DropdownMenuItem className="flex min-h-9 cursor-pointer items-center text-[14px]" onSelect={exportStatement}>{thisMonthName} ready-to-invoice statement (PDF)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </div>
+      </section>
+
+      {exportError && <p role="alert" className="m-0 rounded-[12px] border bg-white p-3 text-[14px]" style={{ color: LATE }}>{exportError}</p>}
+
+      <Sheet title="YA Windows & Doors" aside="Profit is before crew pay, which isn't recorded in the Hub">
+        <table className="w-full border-collapse">
+          <Head cols={YA_COLS} />
+          <tbody>
+            {year.months.map((m) => <Row key={m.month} cells={yaCells(monthName(m.month), m)} />)}
+            <Row tone="total" cells={yaCells(`${year.year} to date`, ytd)} />
+            {rest.map((r) => <Row key={r.key} cells={yaCells(restLabel[r.key], r)} title={r.key === "pace" ? `${money(pace.average)} a month × ${pace.months}, less Glass Forge's ${(pace.feeRate * 100).toFixed(1)}%` : "Sold Purchasing jobs not yet Paid. Each splits 50/50 with Glass Forge when Paid"} />)}
+            <Row tone="projected" cells={yaCells(`Projected ${year.year}`, projected)} />
+          </tbody>
+        </table>
+      </Sheet>
+
+      <Sheet title="Glass Forge · invoiced to YA" aside={strip ? `${thisMonthName}: ${money(strip.ready.fee)} ready to invoice · ${money(strip.unpaid.fee)} invoiced, unpaid` : ""}>
+        <table className="w-full border-collapse">
+          <Head cols={[["Month"], ["Install fees", true, "10% of install labor"], ["Profit splits", true, "Half of each paid outside job's profit"], ["Glass Forge total", true, "Invoicing's Fee total for the month"]]} />
+          <tbody>
+            {year.months.map((m) => <Row key={m.month} cells={[[monthName(m.month)], [m.fee, "money"], [m.split, "money"], [m.glassForge, "money"]]} />)}
+            <Row tone="total" cells={[[`${year.year} to date`], [ytd.fee, "money"], [ytd.split, "money"], [ytd.glassForge, "money"]]} />
+            {rest.map((r) => <Row key={r.key} cells={[[restLabel[r.key]], [r.fee, "money"], [r.split, "money"], [r.glassForge, "money"]]} />)}
+            <Row tone="projected" cells={[[`Projected ${year.year}`], [projected.fee, "money"], [projected.split, "money"], [projected.glassForge, "money"]]} />
+          </tbody>
+        </table>
+      </Sheet>
+
+      <Sheet title="Open Purchasing jobs" aside={`Sold, not yet Paid${pipeline.missing ? ` · ${pipeline.missing} with no sale or cost yet` : ""}`}>
+        <table className="w-full border-collapse">
+          <Head cols={[["Job"], ["Stage"], ["Sale", true], ["Cost", true], ["Est. profit", true, "Sale less cost"], ["YA half", true], ["Glass Forge half", true, "Written to Invoicing as a 50/50 split line when the job is marked Paid"]]} />
+          <tbody>
+            {pipeline.jobs.map((j) => (
+              <Row key={j.id} cells={[[<Link key="l" to={`/jobs/${j.id}`} className="font-semibold hover:underline" style={{ color: INK }}>{j.name}</Link>], [paymentStage(j.stage)?.label || "—"], [j.sale, "money"], [j.cost, "out"], [j.profit, "money"], [j.ya, "money"], [j.glassForge, "money"]]} />
+            ))}
+            <Row tone="total" cells={[[`${pipeline.jobs.length} open jobs`], [""], [pipeline.sale, "money"], [pipeline.cost, "out"], [pipeline.profit, "money"], [pipeline.ya, "money"], [pipeline.glassForge, "money"]]} />
+          </tbody>
+        </table>
+      </Sheet>
     </PageShell>
   );
 }
