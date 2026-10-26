@@ -40,9 +40,12 @@ const COLUMNS = [
 const cell = { padding: '0 10px', minWidth: 0 };
 const dash = <span style={{ color: INK2 }}>—</span>;
 const moneyCell = (v, bold, negative) => (v == null ? dash : <span style={{ fontWeight: bold ? 700 : 500, color: negative ? '#A43432' : bold ? INK : INK3 }}>{money(v)}</span>);
-// Figures as the grid shows them: a job's own, or the sum of its scopes (a dash when
-// none of them has a figure yet - never a made-up $0).
+// Figures as the grid shows them. A sold job reads its row of the canonical job ledger
+// (card.ledger, jobLedger.js): all-in cost, sale and profit, the same figures the Company overview
+// shows. A quote not sold yet has no ledger row: its own figures, or the sum of its scopes (a dash
+// when none of them has a figure yet - never a made-up $0).
 function jobMoney(card, scopes) {
+  if (card.ledger) return { cost: card.ledger.cost, sale: card.ledger.sale.value, profit: card.ledger.profit };
   const pick = (own, k) => {
     if (!own?.suppressed && own?.value != null) return own.value;
     if (!scopes.length) return null;
