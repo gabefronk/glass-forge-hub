@@ -4,20 +4,26 @@ import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft,
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { base44 } from "@/api/base44Client";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Landmark } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Landmark, Calculator } from "lucide-react";
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
-// labels because five slots share the phone width.
+// labels because five slots share the phone width. Accounting is one slot that opens its own
+// sheet (Invoicing, Purchasing, Bank, Company overview), like the sidebar's Accounting group.
 const PRIMARY_NAV = [
   { label: "Today", to: "/dashboard", icon: BarChart3 },
   { label: "Jobs", to: "/jobs", icon: Briefcase },
   { label: "Calendar", to: "/calendar", icon: Calendar },
+];
+
+const ACCOUNTING_NAV = [
   { label: "Invoicing", to: "/", icon: Receipt },
+  { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
+  { label: "Bank", to: "/operations/bank", icon: Landmark, ownerOnly: true },
+  { label: "Company overview", to: "/operations/overview", icon: BarChart3, ownerOnly: true },
 ];
 
 const SECONDARY_NAV = [
   { label: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft },
-  { label: "Purchasing", to: "/purchasing", icon: DollarSign, ownerOnly: true },
   { label: "Field reports", to: "/jobs?view=reports", icon: FileText, ownerOnly: true },
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", ariaLabel: "Summit door service", to: "/summit", icon: Mountain },
@@ -25,8 +31,6 @@ const SECONDARY_NAV = [
 ];
 
 const ADMIN_NAV = [
-  { label: "Company overview", to: "/operations/overview", icon: BarChart3 },
-  { label: "Bank", to: "/operations/bank", icon: Landmark },
   { label: "Agent Center", to: "/admin/agents", icon: Bot },
   { label: "System Map", to: "/system-map", icon: Network },
   { label: "Research Queue", to: "/research-queue", icon: Search },
@@ -57,7 +61,11 @@ function SheetLink({ item, active, onNavigate }) {
 
 export default function MobileBottomNav({ user }) {
   const { pathname } = useLocation();
-  const [moreOpen, setMoreOpen] = useState(false);
+  // Which sheet is open: "more", "accounting" or none.
+  const [sheet, setSheet] = useState("");
+  const moreOpen = sheet === "more";
+  const accountingOpen = sheet === "accounting";
+  const setMoreOpen = (open) => setSheet(open ? "more" : "");
   const [signingOut, setSigningOut] = useState(false);
   // The mobile top bar is gone; sign-out lives here in the More sheet.
   const handleSignOut = async () => {
@@ -66,13 +74,13 @@ export default function MobileBottomNav({ user }) {
     catch { window.location.href = "/login"; }
   };
 
-  useEffect(() => { setMoreOpen(false); }, [pathname]);
+  useEffect(() => { setSheet(""); }, [pathname]);
   useEffect(() => {
-    if (!moreOpen) return undefined;
-    const closeOnEscape = event => { if (event.key === "Escape") setMoreOpen(false); };
+    if (!sheet) return undefined;
+    const closeOnEscape = event => { if (event.key === "Escape") setSheet(""); };
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [moreOpen]);
+  }, [sheet]);
 
   const isPrimaryActive = (to) => pathname === to || (to === "/jobs" && pathname.startsWith("/jobs/"));
   const isSecondaryActive = (to) => pathname === to;
@@ -82,11 +90,42 @@ export default function MobileBottomNav({ user }) {
   const visiblePrimary = quotesOnly ? [{ label: "Quotes", ariaLabel: "Window Quotes", to: "/window-quotes", icon: PanelsTopLeft }] : PRIMARY_NAV;
   const visibleSecondary = quotesOnly ? SECONDARY_NAV.filter((s) => s.to === "/brands-specs" || s.to === "/summit") : SECONDARY_NAV.filter((s) => !s.ownerOnly || owner);
   const visibleAdmin = owner && !quotesOnly ? ADMIN_NAV.filter((item) => !item.emailOwnerOnly || emailOwner) : [];
+  const visibleAccounting = quotesOnly ? [] : ACCOUNTING_NAV.filter((s) => !s.ownerOnly || owner);
+  const isAccountingActive = (to) => pathname === to || (to !== "/" && pathname.startsWith(`${to}/`));
+  const accountingActive = visibleAccounting.some((s) => isAccountingActive(s.to));
   const moreActive = [...visibleSecondary, ...visibleAdmin].some((s) => isSecondaryActive(s.to));
   const showMore = visibleSecondary.length + visibleAdmin.length > 0;
 
+  const sheetStyle = {
+    position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 41,
+    maxHeight: "85dvh",
+    background: "linear-gradient(180deg, var(--gf-sidebar-top), var(--gf-sidebar-bottom))",
+    borderTop: "1px solid rgba(255,255,255,.08)",
+    borderRadius: "16px 16px 0 0",
+    paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+    paddingLeft: "env(safe-area-inset-left, 0px)",
+    paddingRight: "env(safe-area-inset-right, 0px)",
+    boxShadow: "0 -8px 24px -12px rgba(10,29,31,.4)",
+  };
+
   return (
     <>
+      {accountingOpen && (
+        <>
+          <div onClick={() => setSheet("")} style={{ position: "fixed", inset: 0, zIndex: 40, backgroundColor: "rgba(10,29,31,.4)" }} />
+          <div role="dialog" aria-modal="true" aria-label="Accounting" className="overflow-y-auto" style={sheetStyle}>
+            <div className="flex items-center justify-between px-5 pt-4 pb-2">
+              <span className="text-[13px] font-semibold" style={{ color: ACTIVE_TEXT }}>Accounting</span>
+              <button onClick={() => setSheet("")} aria-label="Close menu" className="flex h-11 w-11 items-center justify-center rounded-lg" style={{ color: IDLE }}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 px-4 pb-4">
+              {visibleAccounting.map((item) => <SheetLink key={item.to} item={item} active={isAccountingActive(item.to)} onNavigate={() => setSheet("")} />)}
+            </div>
+          </div>
+        </>
+      )}
       {moreOpen && (
         <>
           <div onClick={() => setMoreOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40, backgroundColor: "rgba(10,29,31,.4)" }} />
@@ -161,6 +200,13 @@ export default function MobileBottomNav({ user }) {
             </Link>
           );
         })}
+        {visibleAccounting.length > 0 && <button onClick={() => setSheet(accountingOpen ? "" : "accounting")} aria-expanded={accountingOpen} aria-label="Accounting" aria-current={accountingActive ? "page" : undefined}
+          className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1" style={{ minHeight: "44px", background: "none", border: "none", cursor: "pointer" }}>
+          <Calculator className="h-5 w-5" style={{ color: accountingActive ? ACTIVE_ICON : IDLE }} />
+          <span className="text-[12px] font-medium whitespace-nowrap" style={{ color: accountingActive ? ACTIVE_TEXT : IDLE }}>
+            Accounting
+          </span>
+        </button>}
         {showMore && <button onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen} aria-label="More navigation" aria-current={moreActive ? "page" : undefined}
           className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1" style={{ minHeight: "44px", background: "none", border: "none", cursor: "pointer" }}>
           <MoreHorizontal className="h-5 w-5" style={{ color: moreActive ? ACTIVE_ICON : IDLE }} />
