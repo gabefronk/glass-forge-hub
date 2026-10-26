@@ -35,6 +35,16 @@ export const LEDGER_NOTES = {
   '6ac9042f38f6acd458b62de1': ['Supplier tax dispute open: 7.45% computed ($9,393.34) vs 4.75% charged ($5,989.04). The cost uses what was charged and paid.'],
 };
 
+// Issued Glass Forge invoices checked against the split rule: no 10% fee on an outside-BFS ledger job
+// (read from the four invoice documents in Drive, Oct 26). Listed for the owner; nothing is adjusted.
+export const GF_FEE_CHECK = {
+  readAt: 'Oct 26, 2026',
+  invoices: ['GF-2026-001 (March)', 'GF-2026-002 (April)', 'GF-2026-003 (May)', 'GF-2026-004 (June)'],
+  conflicts: [],
+  finding: 'None of the four lists a Purchasing ledger job: they bill March–June install work at 10% and product or profit splits at 50%. No 10% fee is charged on an outside-BFS ledger job, so there is no conflict. No Glass Forge invoice covers July–October yet.',
+  aside: 'Outside the ledger, for the owner: Hillwood - Tyson Res is billed at 10% in May ($1,667.40) and again as a profit split in June ($7,337.00); GF-2026-001 lists three "(Visit 2)" lines at the same values as the first visits.',
+};
+
 // The budgets a job's money comes from: each quote-budget scope on a multi-scope job, else the
 // budget the Purchasing row reads (card.chosenBudget).
 function jobBudgets(card, budgets) {
