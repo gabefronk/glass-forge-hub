@@ -173,7 +173,7 @@ export function ledgerTotals(rows = []) {
     sale: sum(priced, (r) => r.sale.value), cost: sum(priced, (r) => r.cost), profit: sum(priced, (r) => r.profit),
     ya: sum(priced, (r) => r.ya), gf: sum(priced, (r) => r.gf),
     received: sum(rows, (r) => r.received), leftToCollect: sum(priced, (r) => r.leftToCollect), invoicedOpen: sum(rows, (r) => r.invoicedOpen),
-    materials: sum(priced, (r) => r.materials.value), subLabor: sum(priced, (r) => r.subLabor.value), other: sum(priced, (r) => r.other.value),
+    materials: sum(priced, (r) => r.materials.value), paidFeed: sum(rows, (r) => r.materials.paid), subLabor: sum(priced, (r) => r.subLabor.value), other: sum(priced, (r) => r.other.value),
     noSale: { jobs: unpriced.map((r) => r.name), cost: sum(unpriced, (r) => r.cost) },
     incomplete: { jobs: incomplete.map((r) => r.name), profit: sum(incomplete, (r) => r.profit) },
     completeProfit: sum(priced.filter((r) => r.costComplete), (r) => r.profit),
