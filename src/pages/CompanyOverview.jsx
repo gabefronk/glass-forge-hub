@@ -75,7 +75,7 @@ function Row({ cells, tone = "", title }) {
   return (
     <tr title={title} style={{ borderTop: total ? `2px solid ${STRONG}` : `1px solid ${RULE}`, backgroundColor: tone === "projected" ? "#F6F3EC" : undefined }}>
       {cells.map(([value, kind], i) => {
-        const isMoney = kind === "money" || kind === "out" || kind === "pct";
+        const isMoney = kind === "money" || kind === "out" || kind === "pct" || kind === "dash";
         const n = kind === "out" ? out(value) : value;
         const text = kind === "money" || kind === "out" ? money(n) : kind === "pct" ? pct(value) : value;
         const negative = kind === "money" && typeof n === "number" && n < 0;
@@ -117,7 +117,7 @@ const gfCells = (label, r, invoice, projection = false) => [[label], [invoice], 
   projection || r.basis === "before" ? [""] : [r.hubGlassForge, "money"], projection || !(r.invoiced || r.basis === "invoice") ? [""] : [r.difference, "money"]];
 // bank: true for a month or total row (no bank lines reads —), false for the projection rows.
 const yaCells = (label, r, bank = true) => {
-  const b = (v) => (!bank ? [""] : r.hasBank === false ? ["—"] : [v, "out"]);
+  const b = (v) => (!bank ? [""] : r.hasBank === false ? ["—", "dash"] : [v, "out"]);
   return [[label], [r.labor, "money"], [r.sales, "money"], [r.income, "money"], [r.jobCost, "out"], [r.shop, "out"], b(r.crewPay), b(r.overhead), b(r.otherCost), [r.glassForge, "out"], [r.profit, "money"], [r.margin, "pct"]];
 };
 
