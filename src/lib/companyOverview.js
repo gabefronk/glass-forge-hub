@@ -63,13 +63,17 @@ function total(rows) {
 // Glass Forge's half of a job's profit, in cents the way the split line rounds it ($297.03 -> $148.52).
 export const glassForgeHalf = (profit) => Math.round(Math.round(num(profit) * 100) * SPLIT_PCT) / 100;
 
-// Open Purchasing jobs: sold (a stage past Sent to customer) and not Paid. Figures are the
-// Purchasing row's own (cardFigures), so their totals tie to the Purchasing grid.
+// Open Purchasing jobs: sold (a stage past Sent to customer) and not Paid. Sale and Cost are
+// the Purchasing row's own (cardFigures), so they tie to the Purchasing grid. Profit is Sale
+// less Cost, so a job with a cost and no sale yet counts its cost; such a job (missing) has no
+// split yet, so all of it sits with YA.
 export function pipeline(cards = []) {
   const jobs = cards.filter((c) => isSold(c) && !isCompleted(c)).map((c) => {
     const f = cardFigures(c);
-    const gf = glassForgeHalf(f.profit);
-    return { id: c.job?.id, name: c.job?.canonical_name || '', builder: c.job?.builder || '', stage: c.paymentStage || '', sale: f.sale, cost: f.cost, profit: f.profit, glassForge: gf, ya: round(f.profit - gf), missing: !(f.sale > 0 && f.cost > 0) };
+    const missing = !(f.sale > 0 && f.cost > 0);
+    const profit = round(f.sale - f.cost);
+    const gf = missing ? 0 : glassForgeHalf(profit);
+    return { id: c.job?.id, name: c.job?.canonical_name || '', builder: c.job?.builder || '', stage: c.paymentStage || '', sale: f.sale, cost: f.cost, profit, glassForge: gf, ya: round(profit - gf), missing };
   }).sort((a, b) => b.sale - a.sale || a.name.localeCompare(b.name));
   return { jobs, sale: sum(jobs, (j) => j.sale), cost: sum(jobs, (j) => j.cost), profit: sum(jobs, (j) => j.profit), glassForge: sum(jobs, (j) => j.glassForge), ya: sum(jobs, (j) => j.ya), missing: jobs.filter((j) => j.missing).length };
 }
@@ -93,12 +97,13 @@ export function companyYear({ rows = [], superseded = new Set(), cards = [], pur
   const paceLabor = round(average * left);
   const pace = { months: left, average, labor: paceLabor, fee: round(paceLabor * feeRate), feeRate, from: keys[0], to: prior.length ? prior[prior.length - 1].month : '' };
   const open = pipeline(cards);
-  const projected = {
-    income: round(ytd.income + open.sale + pace.labor),
-    glassForge: round(ytd.glassForge + open.glassForge + pace.fee),
-    profit: round(ytd.profit + open.ya + pace.labor - pace.fee),
-  };
-  return { year, today, months, ytd, pipeline: open, pace, projected };
+  // The rest of the year as month-table rows, then the projected year (YTD plus both).
+  const rest = [
+    { key: 'pipeline', labor: 0, sales: open.sale, income: open.sale, jobCost: open.cost, shop: 0, fee: 0, split: open.glassForge, glassForge: open.glassForge, profit: open.ya },
+    { key: 'pace', labor: pace.labor, sales: 0, income: pace.labor, jobCost: 0, shop: 0, fee: pace.fee, split: 0, glassForge: pace.fee, profit: round(pace.labor - pace.fee) },
+  ].map((r) => ({ ...r, margin: r.income ? r.profit / r.income : null }));
+  const projected = total([ytd, ...rest]);
+  return { year, today, months, ytd, pipeline: open, pace, rest, projected };
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
