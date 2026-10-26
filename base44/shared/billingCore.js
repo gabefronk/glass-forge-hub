@@ -67,7 +67,9 @@ export function extractExplicitService(note) {
   // "5 man vinyl man hour" (quantity, "man", material, hours).
   const quantities = [...text.matchAll(/(?:^|[^\w.-])(\d+(?:\.\d+)?)\s*(?:(?:vinyl|composite|alumini?um|wood)\s+)?(?:man[\s-]*(?:hours?|hrs?)|man[\s-]+(?:vinyl|composite|alumini?um|wood)[\s-]+(?:man[\s-]*)?(?:hours?|hrs?)|(?<=vinyl\s|composite\s|aluminum\s|aluminium\s|wood\s)(?:hours?|hrs?))\b/g)];
   const hours = quantities.length === 1 ? Number(quantities[0][1]) : null;
-  const tripMatches = [...text.matchAll(/\b(?:(\d+(?:\.\d+)?)\s+)?trip\s+charges?\b/g)];
+  // Crew shorthand counts: "trip charg", "trip chrg", "trip chg" (Israel writes "trip charg").
+  // "trip charged" is not a charge instruction and does not match.
+  const tripMatches = [...text.matchAll(/\b(?:(\d+(?:\.\d+)?)\s+)?trip\s*(?:charges?|charg|chrg|chg)\b/g)];
   let trips = tripMatches.length === 1 ? Number(tripMatches[0][1] || 1) : null;
   if (trips == null && /\+\s*(?:a\s+)?trip\b/.test(text)) trips = 1;
   const statedTrips = text.match(/\b(\d+)\s+trips?\b/);
