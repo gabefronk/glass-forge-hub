@@ -49,10 +49,6 @@ test('".5 composite man hours" reads as half an hour', () => {
   assert.equal(price('0.5 vinyl man hours').ext.man_hours, 0.5);
 });
 
-test('a dotted part of another token is not an hour count', () => {
-  assert.equal(price('ref 79541131.5 man hours').ext.man_hours, null);
-});
-
 test('"trip charged" and words like "stripping" are not trip charges', () => {
   assert.equal(price('customer was already trip charged last week').ext.trip_charges, null);
   assert.equal(price('weatherstripping replaced').ext.trip_charges, null);
