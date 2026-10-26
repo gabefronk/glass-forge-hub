@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fetchAllPages } from '../shared/pagination.ts';
+import { filterRows } from '../../tests/support/entityFilter.mjs';
 
 // Execute the proposed installer module unchanged except resolving its unchanged
 // sanitizer import to the preserved audit dependency tree. No mock sanitizer.
@@ -98,27 +99,57 @@ test('existing installer update preserves success shape and no-notification opti
   assert.equal(request.url.searchParams.get('sendUpdates'), 'none');
 });
 
-test('entity pagination returns all rows and offsets on proven completion', async () => {
-  const offsets = [];
-  const all = await fetchAllPages({ list: async (sort, limit, skip) => { offsets.push([sort, limit, skip]); return skip === 0 ? [{ id: 'a' }, { id: 'b' }] : [{ id: 'c' }]; } }, '-event_date', 2);
-  assert.deepEqual(all.map(x => x.id), ['a', 'b', 'c']);
-  assert.deepEqual(offsets, [['-event_date', 2, 0], ['-event_date', 2, 2]]);
+test('entity pagination walks ids after the last one and returns rows in the requested order', async () => {
+  const queries = [];
+  const rows = [{ id: 'a', event_date: '2026-09-01' }, { id: 'b', event_date: '2026-09-03' }, { id: 'c', event_date: '2026-09-02' }];
+  const all = await fetchAllPages({ filter: async (q, sort, limit) => { queries.push([q, sort, limit]); return filterRows(rows, q, sort, limit); } }, '-event_date', 2);
+  assert.deepEqual(all.map(x => x.id), ['b', 'c', 'a']);
+  assert.deepEqual(queries, [[{}, 'id', 2], [{ id: { $gt: 'b' } }, 'id', 2]]);
+});
+
+test('entity pagination reads every row exactly once when many rows share a created_date', async () => {
+  // 2,500 rows from three bulk creates: skip on -created_date could repeat or miss rows
+  // across page boundaries; the id walk cannot.
+  const rows = Array.from({ length: 2500 }, (_, i) => ({ id: 'r' + String(i).padStart(5, '0'), created_date: ['2026-08-23T00:31:28.927', '2026-09-01T10:00:00.000', '2026-10-26T12:00:00.000'][i % 3] }));
+  const shuffled = [...rows].sort((x, y) => ((x.id.charCodeAt(5) * 7919) % 13) - ((y.id.charCodeAt(5) * 7919) % 13));
+  const all = await fetchAllPages({ filter: async (q, sort, limit) => filterRows(shuffled, q, sort, limit) }, '-created_date', 1000);
+  assert.equal(all.length, 2500);
+  assert.equal(new Set(all.map(x => x.id)).size, 2500);
+  // Newest first; ties broken by id, newest id first.
+  assert.equal(all[0].created_date, '2026-10-26T12:00:00.000');
+  assert.equal(all.at(-1).created_date, '2026-08-23T00:31:28.927');
+  for (let i = 1; i < all.length; i++) {
+    const [p, c] = [all[i - 1], all[i]];
+    assert(p.created_date > c.created_date || (p.created_date === c.created_date && p.id > c.id), `row ${i} out of order`);
+  }
+});
+
+test('entity pagination sorts numbers numerically and missing values like the database', async () => {
+  const rows = [{ id: '1', n: 10 }, { id: '2', n: 9 }, { id: '3' }, { id: '4', n: 100 }];
+  const asc = await fetchAllPages({ filter: async (q, sort, limit) => filterRows(rows, q, sort, limit) }, 'n', 10);
+  assert.deepEqual(asc.map(x => x.id), ['3', '2', '1', '4']);
+  const desc = await fetchAllPages({ filter: async (q, sort, limit) => filterRows(rows, q, sort, limit) }, '-n', 10);
+  assert.deepEqual(desc.map(x => x.id), ['4', '1', '2', '3']);
 });
 
 test('entity pagination cap throws rather than silently publishing incomplete state', async () => {
   let calls = 0;
-  await assert.rejects(fetchAllPages({ list: async () => { calls++; return [{ id: 'x' }]; } }, '-created_date', 1), /exceeded 50 pages/);
+  await assert.rejects(fetchAllPages({ filter: async () => [{ id: String(++calls).padStart(3, '0') }] }, '-created_date', 1), /exceeded 50 pages/);
   assert.equal(calls, 50);
 });
 
 test('entity pagination accepts an empty final page at the limit', async () => {
   let calls = 0;
-  const result = await fetchAllPages({ list: async () => ++calls === 50 ? [] : [{ id: String(calls) }] }, '-created_date', 1);
+  const result = await fetchAllPages({ filter: async () => ++calls === 50 ? [] : [{ id: String(calls).padStart(3, '0') }] }, '-created_date', 1);
   assert.equal(result.length, 49); assert.equal(calls, 50);
 });
 
 test('entity provider failure and malformed payloads never return partial rows', async () => {
   let calls = 0;
-  await assert.rejects(fetchAllPages({ list: async () => { if (++calls > 1) throw new Error('provider unavailable'); return [{ id: 'a' }]; } }, '-created_date', 1), /provider unavailable/);
-  await assert.rejects(fetchAllPages({ list: async () => ({ data: [] }) }), /invalid page/);
+  await assert.rejects(fetchAllPages({ filter: async () => { if (++calls > 1) throw new Error('provider unavailable'); return [{ id: 'a' }]; } }, '-created_date', 1), /provider unavailable/);
+  await assert.rejects(fetchAllPages({ filter: async () => ({ data: [] }) }), /invalid page/);
+  // A full page that is not in id order (or repeats the last id) could skip rows: fail closed.
+  await assert.rejects(fetchAllPages({ filter: async () => [{ id: 'b' }, { id: 'a' }] }, '-created_date', 2), /out of id order/);
+  await assert.rejects(fetchAllPages({ filter: async () => [{ id: 'a' }] }, '-created_date', 1), /out of id order/);
+  await assert.rejects(fetchAllPages({ filter: async () => [{ name: 'no id' }] }, '-created_date', 1), /out of id order/);
 });
