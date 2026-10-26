@@ -235,23 +235,33 @@ export function bankMonth(lines = [], month, days = null) {
   };
 }
 
-// Cash buckets (Gabe, Oct 26: income is bank deposits until the Hub's income is fixed). Every line
-// counts except transfers and owner draws; money in is every deposit, money out is grouped by
-// category. Costs are positive numbers, like the overview's other costs.
+// The recurring weekly payment stream (Gabe, Oct 26): checks and drafts of exactly $2,500 or
+// $3,000, Jan–Oct 2026. Payees are only partly verified and the classification (wages, owner
+// payments, other) is unknown, so it is its own cash-out bucket, never crew pay or an expense.
+export const isWeeklyStream = (l) => /^(draft withdrawal|check\b)/i.test(String(l.description || '').trim()) && [2500, 3000].includes(-num(l.amount));
+
+// Cash movement by bucket (Gabe, Oct 26: bank cash movement, not profit). Every bank line counts,
+// whatever its category, so the total is the account's net movement; costs are positive numbers.
+// customerIn is the part of moneyIn that came from customers paying jobs.
 const CASH_BUCKET = {
   crew_pay: 'crewPay', payroll: 'overhead', overhead: 'overhead',
   job_cost: 'suppliers', shop: 'suppliers', supplier: 'suppliers', glass_forge: 'glassForge',
 };
 export function bankCash(lines = []) {
-  const c = { moneyIn: 0, crewPay: 0, overhead: 0, suppliers: 0, glassForge: 0, other: 0 };
+  const c = { moneyIn: 0, customerIn: 0, crewPay: 0, weekly: 0, overhead: 0, suppliers: 0, jobSuppliers: 0, glassForge: 0, other: 0 };
   for (const l of lines) {
-    if (l.category === 'transfer' || l.category === 'owner_draw') continue;
     const a = num(l.amount);
-    if (a > 0) c.moneyIn += a;
-    else c[CASH_BUCKET[l.category] || 'other'] -= a;
+    if (a > 0) {
+      c.moneyIn += a;
+      if (l.category === 'customer_payment') c.customerIn += a;
+    } else if (isWeeklyStream(l)) c.weekly -= a;
+    else {
+      c[CASH_BUCKET[l.category] || 'other'] -= a;
+      if (l.category === 'job_cost') c.jobSuppliers -= a;
+    }
   }
   const r = Object.fromEntries(Object.entries(c).map(([k, v]) => [k, round(v)]));
-  return { ...r, profit: round(r.moneyIn - r.crewPay - r.overhead - r.suppliers - r.glassForge - r.other) };
+  return { ...r, net: round(r.moneyIn - r.crewPay - r.weekly - r.overhead - r.suppliers - r.glassForge - r.other) };
 }
 
 // Which dates the stored lines cover: { first, last, months: ['2026-10'], count }.
