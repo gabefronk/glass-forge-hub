@@ -231,7 +231,27 @@ export function bankMonth(lines = [], month, days = null) {
     hasBank: rows.length > 0, lines: rows.length, coveredDays,
     otherIncome: round(f.otherIncome), crewPay: round(f.crewPay), overhead: round(f.overhead), otherCost: round(f.otherCost),
     moneyIn: round(moneyIn), moneyOut: round(moneyOut), net: round(moneyIn + moneyOut),
+    cash: bankCash(rows),
   };
+}
+
+// Cash buckets (Gabe, Oct 26: income is bank deposits until the Hub's income is fixed). Every line
+// counts except transfers and owner draws; money in is every deposit, money out is grouped by
+// category. Costs are positive numbers, like the overview's other costs.
+const CASH_BUCKET = {
+  crew_pay: 'crewPay', payroll: 'overhead', overhead: 'overhead',
+  job_cost: 'suppliers', shop: 'suppliers', supplier: 'suppliers', glass_forge: 'glassForge',
+};
+export function bankCash(lines = []) {
+  const c = { moneyIn: 0, crewPay: 0, overhead: 0, suppliers: 0, glassForge: 0, other: 0 };
+  for (const l of lines) {
+    if (l.category === 'transfer' || l.category === 'owner_draw') continue;
+    const a = num(l.amount);
+    if (a > 0) c.moneyIn += a;
+    else c[CASH_BUCKET[l.category] || 'other'] -= a;
+  }
+  const r = Object.fromEntries(Object.entries(c).map(([k, v]) => [k, round(v)]));
+  return { ...r, profit: round(r.moneyIn - r.crewPay - r.overhead - r.suppliers - r.glassForge - r.other) };
 }
 
 // Which dates the stored lines cover: { first, last, months: ['2026-10'], count }.
