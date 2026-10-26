@@ -11,6 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { filterRows } from '../../tests/support/entityFilter.mjs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const STUBS = {

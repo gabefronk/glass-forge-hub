@@ -23,6 +23,7 @@ try {
 }
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { filterRows } from './support/entityFilter.mjs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const STUBS = {
