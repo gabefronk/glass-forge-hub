@@ -2,7 +2,7 @@ import './support/register-src-alias.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { dayPlan, dedupeEvents, markOverlaps, outlookState, overlapping, briefingLines, coversDay, minutesOf, spanLabel, taskReason, daySummary, denverMinutes, directionsUrl, nextUp } =
+const { dayPlan, dedupeEvents, markOverlaps, outlookState, overlapping, briefingLines, coversDay, minutesOf, spanLabel, taskReason, taskDetails, daySummary, denverMinutes, directionsUrl, nextUp, ownerOf } =
   await import('../src/lib/todayPlayByPlay.js');
 
 const TODAY = '2026-10-28';
@@ -12,7 +12,11 @@ const NOW = Date.parse('2026-10-28T15:00:00.000Z');
 // Shapes copied from live CalendarEvents rows: job_name is the title, start_time
 // is HH:MM or null for all-day, end_date is Google's exclusive all-day end.
 const event = (fields) => ({ source: 'google', source_status: 'confirmed', event_date: TODAY, job_name: 'Visit', ...fields });
-const task = (fields) => ({ status: 'open', title: 'Task', due_date: '', focus_date: '', follow_up_date: '', waiting_on: '', job_id: '', ...fields });
+const task = (fields) => ({ status: 'open', title: 'Task', details: '', due_date: '', focus_date: '', follow_up_date: '', waiting_on: '', job_id: '', ...fields });
+
+// The live to-do created for today, verbatim: an "Address:" line, then the note.
+const PRESTON_DETAILS = 'Address: 2132 E Applewood Ave, Holladay, UT\n\nFlexible timing. Could go right after Beau’s school; otherwise around noon or this afternoon. Confirm timing before leaving.';
+const preston = () => task({ id: '6ae1fe29c912b73c2c970a0f', title: 'Preston RO check — retro', details: PRESTON_DETAILS, focus_date: TODAY });
 
 test('timed events sort by start time, then title, and keep their range and location', () => {
   const plan = dayPlan({
@@ -247,31 +251,117 @@ test('a directions link is an ordinary Google Maps search built from the address
   assert.equal(directionsUrl(null), '');
 });
 
-// The hierarchy My Day renders: every timed item — personal or job — is the
-// timeline, and all-day install work is a separate section, never mixed in.
-test('a Hub-only personal appointment stays in the timeline with its exact address, apart from all-day installs', () => {
+// The hierarchy My Day renders: ownership decides the section, not whether an
+// item carries a time. A job-linked row is install work even when it is timed,
+// and the user's own tasks and unlinked appointments are the primary section.
+test('the day splits by ownership: the user’s own calendar and to-dos above, every job-linked row on the Install Calendar', () => {
+  const plan = dayPlan({
+    today: TODAY,
+    now: NOW,
+    jobs: [{ id: 'job1', canonical_name: 'One Wolf Const' }, { id: 'job2', canonical_name: 'Landscope' }],
+    events: [
+      event({ id: 'i', google_event_id: 'gi', start_time: '08:00', end_time: '10:00', job_name: 'One Wolf Const - Alexander Pool House', address: '3549 W Boulden Blvd Bluffdale, UT 84065', job_id: 'job1' }),
+      event({ id: 'p', source: 'app', start_time: '08:45', end_time: null, job_name: 'Beau’s Halloween event at school', address: 'Avondale Preschool Academy, 1417 Lake View Terrace Rd, Saratoga Springs, UT 84045', report_status: 'waived' }),
+      event({ id: 'a1', google_event_id: 'ga1', start_time: null, end_date: '2026-10-30', job_name: 'Landscope - Bldg 12 Mayflower', address: '1008 W Hert Cir Heber City, UT 84032', job_id: 'job2' }),
+    ],
+    tasks: [preston()],
+  });
+  // The user's own day: their timed appointment first, then the to-do with no time.
+  assert.deepEqual(plan.personal.timed.map((i) => i.title), ['Beau’s Halloween event at school']);
+  assert.deepEqual(plan.personal.untimed.map((i) => i.title), ['Preston RO check — retro']);
+  assert.deepEqual([...plan.personal.timed, ...plan.personal.untimed].map((i) => i.owner), ['personal', 'personal']);
+  // One Wolf is install work: it never appears in the personal section, timed or not.
+  assert.equal([...plan.personal.timed, ...plan.personal.untimed].some((i) => i.title.startsWith('One Wolf')), false);
+  assert.deepEqual(plan.install.timed.map((i) => i.title), ['One Wolf Const - Alexander Pool House']);
+  assert.deepEqual(plan.install.allDay.map((i) => i.title), ['Landscope - Bldg 12 Mayflower']);
+  assert.deepEqual([...plan.install.timed, ...plan.install.allDay].map((i) => i.owner), ['install', 'install']);
+  assert.equal(ownerOf({ job_id: 'job1' }), 'install');
+  assert.equal(ownerOf({ job_id: '' }), 'personal');
+  assert.equal(ownerOf({}), 'personal');
+  // The undivided day is untouched, so the briefing and the summary still read off it.
+  assert.deepEqual(plan.timed.map((i) => i.title), ['One Wolf Const - Alexander Pool House', 'Beau’s Halloween event at school']);
+  assert.deepEqual(plan.allDay.map((i) => i.title), ['Landscope - Bldg 12 Mayflower']);
+  assert.deepEqual(plan.unscheduled.map((i) => i.title), ['Preston RO check — retro']);
+  // Overlaps are marked before the split, so the clash survives in both sections.
+  assert.deepEqual(plan.personal.timed[0].conflicts, ['One Wolf Const - Alexander Pool House']);
+  assert.deepEqual(plan.personal.timed[0].conflictsAcross, ['One Wolf Const - Alexander Pool House']);
+  assert.deepEqual(plan.install.timed[0].conflicts, ['Beau’s Halloween event at school']);
+  assert.deepEqual(plan.install.timed[0].conflictsAcross, ['Beau’s Halloween event at school']);
+  assert.equal(plan.conflicts, 2);
+  assert.equal(plan.crossSection, 2);
+  assert.equal(plan.briefing.includes('Your own day and the Install Calendar overlap: One Wolf Const - Alexander Pool House; Beau’s Halloween event at school.'), true);
+  // Each row keeps its own address, directions and job link in whichever section it lands.
+  assert.equal(plan.personal.timed[0].location, 'Avondale Preschool Academy, 1417 Lake View Terrace Rd, Saratoga Springs, UT 84045');
+  assert.equal(plan.personal.timed[0].source.label, 'Hub event');
+  assert.equal(plan.personal.timed[0].jobId, '');
+  assert.equal(directionsUrl(plan.personal.timed[0].location).includes('Avondale%20Preschool%20Academy'), true);
+  assert.equal(plan.install.timed[0].jobId, 'job1');
+  assert.equal(plan.install.timed[0].location, '3549 W Boulden Blvd Bluffdale, UT 84065');
+  assert.equal(plan.install.timed[0].timeLabel, '08:00–10:00');
+  assert.equal(plan.install.allDay[0].jobId, 'job2');
+  assert.equal(plan.install.allDay[0].span, '2026-10-26' < TODAY ? '2026-10-28 through 2026-10-29' : '');
+  // At 08:45 the install is still running, so the one lead marker belongs to that row.
+  assert.deepEqual(nextUp(plan.timed, 525), { key: plan.install.timed[0].key, state: 'now' });
+});
+
+// A timed install stays below even when it is the only job-linked row and the
+// user's own day is empty, so the personal section never borrows install work.
+test('a day of nothing but job work leaves the personal section empty rather than pulling installs up', () => {
   const plan = dayPlan({
     today: TODAY,
     now: NOW,
     events: [
       event({ id: 'i', google_event_id: 'gi', start_time: '08:00', end_time: '10:00', job_name: 'One Wolf Const - Alexander Pool House', job_id: 'job1' }),
-      event({ id: 'p', source: 'app', start_time: '08:45', end_time: null, job_name: 'Beau’s Halloween event at school', address: 'Avondale Preschool Academy, 1417 Lake View Terrace Rd, Saratoga Springs, UT 84045', report_status: 'waived' }),
-      event({ id: 'a1', google_event_id: 'ga1', start_time: null, job_name: 'Landscope - Bldg 12 Mayflower', address: '1008 W Hert Cir Heber City, UT 84032', job_id: 'job2' }),
+      event({ id: 'a1', google_event_id: 'ga1', start_time: null, job_name: 'Thomas Res - finish install', job_id: 'job2' }),
     ],
   });
-  assert.deepEqual(plan.timed.map((i) => i.title), ['One Wolf Const - Alexander Pool House', 'Beau’s Halloween event at school']);
-  assert.deepEqual(plan.allDay.map((i) => i.title), ['Landscope - Bldg 12 Mayflower']);
-  const personal = plan.timed[1];
-  assert.equal(personal.timeLabel, '08:45');
-  assert.equal(personal.location, 'Avondale Preschool Academy, 1417 Lake View Terrace Rd, Saratoga Springs, UT 84045');
-  assert.equal(personal.source.label, 'Hub event');
-  assert.equal(personal.jobId, '');
-  assert.equal(directionsUrl(personal.location).includes('Avondale%20Preschool%20Academy'), true);
-  // The clash is marked on both rows, each naming the other, and nothing is dropped.
-  assert.deepEqual(plan.timed.map((i) => i.conflicts), [['Beau’s Halloween event at school'], ['One Wolf Const - Alexander Pool House']]);
-  assert.equal(plan.conflicts, 2);
-  // At 08:45 the install is still running, so it — not the later start — leads.
-  assert.deepEqual(nextUp(plan.timed, 525), { key: plan.timed[0].key, state: 'now' });
-  // The install keeps its job link in its own section.
-  assert.equal(plan.allDay[0].jobId, 'job2');
+  assert.deepEqual(plan.personal.timed, []);
+  assert.deepEqual(plan.personal.untimed, []);
+  assert.deepEqual(plan.install.timed.map((i) => i.title), ['One Wolf Const - Alexander Pool House']);
+  assert.deepEqual(plan.install.allDay.map((i) => i.title), ['Thomas Res - finish install']);
+  assert.equal(plan.crossSection, 0);
+  assert.equal(plan.empty, false);
+  // No cross-section line when nothing clashes across the two sections.
+  assert.equal(plan.briefing.some((line) => line.startsWith('Your own day and the Install Calendar')), false);
+});
+
+// The to-do created for today: its address must be visible in the personal
+// section with a directions link, and its flexible-timing note readable but
+// plainly subordinate. The record itself is never rewritten to achieve that.
+test('a to-do’s details carry its exact address into the personal section, with the timing note kept subordinate', () => {
+  const plan = dayPlan({ today: TODAY, now: NOW, tasks: [preston()] });
+  const row = plan.personal.untimed[0];
+  assert.equal(row.title, 'Preston RO check — retro');
+  assert.equal(row.owner, 'personal');
+  assert.equal(row.source.label, 'Hub task');
+  assert.equal(row.location, '2132 E Applewood Ave, Holladay, UT');
+  assert.equal(row.note, 'Flexible timing. Could go right after Beau’s school; otherwise around noon or this afternoon. Confirm timing before leaving.');
+  // The address line is lifted out of the note, so it is never shown twice.
+  assert.equal(row.note.includes('Address:'), false);
+  assert.equal(directionsUrl(row.location), 'https://www.google.com/maps/search/?api=1&query=2132%20E%20Applewood%20Ave%2C%20Holladay%2C%20UT');
+  // Flexible timing stays flexible: no start minute is invented for it.
+  assert.equal(row.start, null);
+  assert.equal(row.end, null);
+  assert.equal(row.timeLabel, 'No set time');
+  assert.equal(row.status.label, 'Planned for today');
+  assert.deepEqual(row.conflicts, []);
+  assert.deepEqual(row.conflictsAcross, []);
+  // Still the same unscheduled row the briefing and the summary count.
+  assert.deepEqual(plan.unscheduled.map((i) => i.title), ['Preston RO check — retro']);
+  assert.equal(daySummary(plan), 'No timed appointment · 1 task with no set time.');
+});
+
+test('task details are read, never guessed: an address line is lifted out and the rest is left verbatim', () => {
+  assert.deepEqual(taskDetails(PRESTON_DETAILS), {
+    location: '2132 E Applewood Ave, Holladay, UT',
+    note: 'Flexible timing. Could go right after Beau’s school; otherwise around noon or this afternoon. Confirm timing before leaving.',
+  });
+  assert.deepEqual(taskDetails('Site - 100 Main St\nBring the shims'), { location: '100 Main St', note: 'Bring the shims' });
+  assert.deepEqual(taskDetails('Call Preston first'), { location: '', note: 'Call Preston first' });
+  assert.deepEqual(taskDetails(''), { location: '', note: '' });
+  assert.deepEqual(taskDetails(null), { location: '', note: '' });
+  // Only the first address line is taken; a second stays in the note as written.
+  assert.deepEqual(taskDetails('Address: A\nAddress: B'), { location: 'A', note: 'Address: B' });
+  // No address line means no address, so the row offers no directions link.
+  assert.equal(directionsUrl(taskDetails('Call Preston first').location), '');
 });
