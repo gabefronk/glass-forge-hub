@@ -82,7 +82,7 @@ function PlanRow({ item }) {
   );
 }
 
-function Group({ label, hint, items, Icon }) {
+function Group({ label, items, Icon, hint = "" }) {
   if (!items.length) return null;
   return (
     <div>
