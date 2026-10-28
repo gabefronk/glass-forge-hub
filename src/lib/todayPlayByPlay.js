@@ -298,6 +298,9 @@ export function briefingLines(plan) {
   }
   const clashing = timed.filter((item) => item.conflicts.length);
   if (clashing.length) lines.push(`${count(clashing.length, "timed item overlaps", "timed items overlap")} another: ${clashing.map((item) => item.title).join("; ")}.`);
+  // Stated separately because the two sides are read in different sections.
+  const crossing = clashing.filter((item) => item.conflictsAcross.length);
+  if (crossing.length) lines.push(`Your own day and the Install Calendar overlap: ${crossing.map((item) => item.title).join("; ")}.`);
   const provisional = [...timed, ...allDay].filter((item) => item.status.key === "provisional");
   if (provisional.length) lines.push(`${count(provisional.length, "item is a provisional ETA", "items are provisional ETAs")}, not a confirmed schedule.`);
   const rescheduled = [...timed, ...allDay].filter((item) => item.status.key === "rescheduled");
@@ -334,6 +337,10 @@ export function nextUp(timed = [], nowMinutes = null) {
 
 // The whole day in one object: timed items in order, all-day items and tasks
 // kept apart, overlaps marked, and a briefing read off the items themselves.
+// `timed`, `allDay` and `unscheduled` are the undivided day, in shape order, and
+// still what the briefing and the summary are read off. `personal` and `install`
+// are the same marked items regrouped by who owns them — the two sections the
+// view renders — so splitting the day changes nothing about what it says.
 export function dayPlan({ events = [], tasks = [], jobs = [], today, outlook = null, now = Date.now() }) {
   const day = dayText(today);
   const source = outlookState(outlook, day, now);
@@ -344,6 +351,26 @@ export function dayPlan({ events = [], tasks = [], jobs = [], today, outlook = n
   const unscheduled = (tasks || [])
     .filter((task) => task && !isIgnoredWorkItem({ job_name: task.title }))
     .map((task) => taskItem(task, { jobs, today: day }));
-  const plan = { today: day, timed, allDay, unscheduled, outlook: source, conflicts: timed.filter((item) => item.conflicts.length).length };
+  // The user's own day keeps its chronology first, then the items that hold no
+  // time at all: their own all-day appointments, then the tasks on their list.
+  const personal = {
+    timed: timed.filter((item) => item.owner === PERSONAL),
+    untimed: [...allDay.filter((item) => item.owner === PERSONAL), ...unscheduled],
+  };
+  const install = {
+    timed: timed.filter((item) => item.owner === INSTALL),
+    allDay: allDay.filter((item) => item.owner === INSTALL),
+  };
+  const plan = {
+    today: day,
+    timed,
+    allDay,
+    unscheduled,
+    personal,
+    install,
+    outlook: source,
+    conflicts: timed.filter((item) => item.conflicts.length).length,
+    crossSection: timed.filter((item) => item.conflictsAcross.length).length,
+  };
   return { ...plan, briefing: briefingLines(plan), empty: !timed.length && !allDay.length && !unscheduled.length };
 }
