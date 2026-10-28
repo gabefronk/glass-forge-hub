@@ -293,7 +293,7 @@ export default function TodayPlayByPlay({ today = denverDate(), tasks = [], jobs
 
         {!firstLoad && !state.error && !plan.empty ? (
           <Section
-            label="My calendar &amp; to-dos"
+            label="My calendar & to-dos"
             count={personal.length}
             Icon={CalendarClock}
             primary
