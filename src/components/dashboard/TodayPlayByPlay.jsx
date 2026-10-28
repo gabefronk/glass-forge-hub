@@ -237,6 +237,14 @@ export default function TodayPlayByPlay({ today = denverDate(), tasks = [], jobs
     return { plan: next, lead: nextUp(next.timed, denverMinutes()) };
   }, [state.events, state.outlook, tasks, jobs, today]);
   const leadLabel = lead.state === "now" ? "Happening now" : lead.state === "next" ? "Next up" : "";
+  // Two lists, read straight off the plan's ownership split: the user's own day
+  // in time order with its untimed items after it, then install work, timed
+  // before all-day. The lead marker is still the one appointment of the whole
+  // day to act on, rendered wherever that item actually lives.
+  const personal = [...plan.personal.timed, ...plan.personal.untimed];
+  const install = [...plan.install.timed, ...plan.install.allDay];
+  const personalOverlaps = personal.filter((item) => item.conflicts.length).length;
+  const installOverlaps = install.filter((item) => item.conflicts.length).length;
   const firstLoad = state.loading && !state.checkedAt && !state.error;
   const checked = state.checkedAt ? new Date(state.checkedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
   const dateLabel = new Date(`${today}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
@@ -285,36 +293,36 @@ export default function TodayPlayByPlay({ today = denverDate(), tasks = [], jobs
 
         {!firstLoad && !state.error && !plan.empty ? (
           <Section
-            label="Your timeline"
-            count={plan.timed.length}
+            label="My calendar &amp; to-dos"
+            count={personal.length}
             Icon={CalendarClock}
-            hint={lead.state === "done" && plan.timed.length ? "Every timed appointment today has already started." : ""}
-            badge={plan.conflicts ? <Chip tone={STATUS_TONES.provisional}>{plan.conflicts === 1 ? "1 overlap" : `${plan.conflicts} items overlap`}</Chip> : null}
+            primary
+            hint={lead.state === "done" && plan.personal.timed.length ? "Your own appointments and to-dos. Every timed one has already started." : "Your own appointments and to-dos, in time order."}
+            badge={personalOverlaps ? <Chip tone={STATUS_TONES.provisional}>{personalOverlaps === 1 ? "1 overlap" : `${personalOverlaps} overlaps`}</Chip> : null}
           >
-            {plan.timed.length ? (
-              <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label="Your timeline">
-                {plan.timed.map((item) => <TimelineRow key={item.key} item={item} lead={item.key === lead.key ? leadLabel : ""} />)}
+            {personal.length ? (
+              <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label="My calendar and to-dos">
+                {personal.map((item) => <TimelineRow key={item.key} item={item} lead={item.key === lead.key ? leadLabel : ""} />)}
               </ul>
             ) : (
               <p className="m-0 rounded-xl border border-dashed px-3 py-2.5 text-[13px] text-[#616A6D]" style={{ borderColor: "#E2DCD1" }}>
-                No appointment has an exact start time today.
+                Nothing of your own on today — everything scheduled is job work, on the Install Calendar below.
               </p>
             )}
           </Section>
         ) : null}
 
-        {!firstLoad && !state.error && plan.allDay.length ? (
-          <Section label="Today’s installs" count={plan.allDay.length} Icon={Hammer} hint="All-day job work, with no start time in the source calendar." sunken>
-            <ul className="m-0 flex list-none flex-col divide-y divide-[#E4DCCC] p-0" aria-label="Today’s installs">
-              {plan.allDay.map((item) => <CompactRow key={item.key} item={item} />)}
-            </ul>
-          </Section>
-        ) : null}
-
-        {plan.unscheduled.length ? (
-          <Section label="Tasks with no set time" count={plan.unscheduled.length} Icon={Sun} hint="On your day, with no time of their own." sunken>
-            <ul className="m-0 flex list-none flex-col divide-y divide-[#E4DCCC] p-0" aria-label="Tasks with no set time">
-              {plan.unscheduled.map((item) => <CompactRow key={item.key} item={item} bold={false} />)}
+        {!firstLoad && !state.error && install.length ? (
+          <Section
+            label="Install Calendar"
+            count={install.length}
+            Icon={Hammer}
+            hint="Job work from the install calendar — timed jobs first, then all-day."
+            badge={installOverlaps ? <Chip tone={STATUS_TONES.provisional}>{installOverlaps === 1 ? "1 overlap" : `${installOverlaps} overlaps`}</Chip> : null}
+            sunken
+          >
+            <ul className="m-0 flex list-none flex-col divide-y divide-[#E4DCCC] p-0" aria-label="Install Calendar">
+              {install.map((item) => <InstallRow key={item.key} item={item} lead={item.key === lead.key ? leadLabel : ""} />)}
             </ul>
           </Section>
         ) : null}
