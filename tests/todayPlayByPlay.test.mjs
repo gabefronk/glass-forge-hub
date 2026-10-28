@@ -299,7 +299,7 @@ test('the day splits by ownership: the user’s own calendar and to-dos above, e
   assert.equal(plan.install.timed[0].location, '3549 W Boulden Blvd Bluffdale, UT 84065');
   assert.equal(plan.install.timed[0].timeLabel, '08:00–10:00');
   assert.equal(plan.install.allDay[0].jobId, 'job2');
-  assert.equal(plan.install.allDay[0].span, '2026-10-26' < TODAY ? '2026-10-28 through 2026-10-29' : '');
+  assert.equal(plan.install.allDay[0].span, '2026-10-28 through 2026-10-29');
   // At 08:45 the install is still running, so the one lead marker belongs to that row.
   assert.deepEqual(nextUp(plan.timed, 525), { key: plan.install.timed[0].key, state: 'now' });
 });
