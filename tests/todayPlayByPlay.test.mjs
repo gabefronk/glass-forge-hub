@@ -169,8 +169,8 @@ test('the briefing states only what the items already say, and never a travel ti
     events: [
       event({ id: 'a', google_event_id: 'ga', start_time: '08:00', end_time: '10:00', job_name: 'One Wolf Const - Alexander Pool House', address: '3549 W Boulden Blvd' }),
       event({ id: 'b', google_event_id: 'gb', start_time: '09:00', end_time: '09:30', job_name: 'Amsco will call' }),
-      event({ id: 'c', google_event_id: 'gc', start_time: null, job_name: 'ETA - Holmes Homes - 324 Lake View', builder: 'ETA', report_status: 'rescheduled' }),
-      event({ id: 'd', google_event_id: 'gd', start_time: null, job_name: 'Thomas Res - finish install' }),
+      event({ id: 'c', google_event_id: 'gc', start_time: null, job_name: 'ETA - Holmes Homes - 324 Lake View', builder: 'ETA' }),
+      event({ id: 'd', google_event_id: 'gd', start_time: null, job_name: 'Thomas Res - finish install', report_status: 'rescheduled' }),
     ],
     tasks: [task({ id: 't1', title: 'Send COI', due_date: '2026-09-15' })],
   });
@@ -183,6 +183,8 @@ test('the briefing states only what the items already say, and never a travel ti
     '1 item is marked rescheduled.',
   ]);
   assert.equal(plan.allDay.find((i) => i.title.startsWith('ETA')).status.label, 'Provisional ETA');
+  // One status per row: a provisional ETA stays provisional even when its report was rescheduled.
+  assert.equal(plan.allDay.find((i) => i.title.startsWith('Thomas')).status.label, 'Rescheduled');
   assert.equal(plan.briefing.join(' ').toLowerCase().includes('travel'), false);
   assert.equal(plan.briefing.join(' ').toLowerCase().includes('drive'), false);
 
