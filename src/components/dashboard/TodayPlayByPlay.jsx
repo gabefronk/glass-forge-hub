@@ -279,7 +279,7 @@ export default function TodayPlayByPlay({ today = denverDate(), tasks = [], jobs
 
         {!firstLoad && !state.error && plan.allDay.length ? (
           <Section label="Today’s installs" count={plan.allDay.length} Icon={Hammer} hint="All-day job work, with no start time in the source calendar." sunken>
-            <ul className="m-0 flex list-none flex-col divide-y p-0" style={{ borderColor: "#E4DCCC" }} aria-label="Today’s installs">
+            <ul className="m-0 flex list-none flex-col divide-y divide-[#E4DCCC] p-0" aria-label="Today’s installs">
               {plan.allDay.map((item) => <CompactRow key={item.key} item={item} />)}
             </ul>
           </Section>
@@ -287,7 +287,7 @@ export default function TodayPlayByPlay({ today = denverDate(), tasks = [], jobs
 
         {plan.unscheduled.length ? (
           <Section label="Tasks with no set time" count={plan.unscheduled.length} Icon={Sun} hint="On your day, with no time of their own." sunken>
-            <ul className="m-0 flex list-none flex-col divide-y p-0" style={{ borderColor: "#E4DCCC" }} aria-label="Tasks with no set time">
+            <ul className="m-0 flex list-none flex-col divide-y divide-[#E4DCCC] p-0" aria-label="Tasks with no set time">
               {plan.unscheduled.map((item) => <CompactRow key={item.key} item={item} bold={false} />)}
             </ul>
           </Section>
