@@ -67,7 +67,7 @@ function PlanRow({ item }) {
           {item.mergedSourceIds.length ? <Chip>{item.mergedSourceIds.length === 1 ? "1 mirrored copy merged" : `${item.mergedSourceIds.length} mirrored copies merged`}</Chip> : null}
           {item.jobId ? (
             <Link to={`/jobs/${encodeURIComponent(item.jobId)}`} className="inline-flex min-h-9 items-center text-[12.5px] font-medium text-[#0B3F3B] hover:underline">
-              {item.jobName || "Open job"} →
+              {item.jobName && item.jobName !== item.title ? item.jobName : "Open job"} →
             </Link>
           ) : null}
         </span>
