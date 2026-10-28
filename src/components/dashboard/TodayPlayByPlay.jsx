@@ -5,11 +5,13 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { dayPlan, daySummary, denverDate, denverMinutes, directionsUrl, nextUp } from "@/lib/todayPlayByPlay";
 
-// My Day, on the Today tab: the user's own day first. Personal and timed
-// appointments are the chronological timeline at the top, with the one running
-// now (or next to start) carrying the lead treatment and its full address ready
-// to open for directions. All-day job work sits in its own lower section, and
-// the tasks already on the day sit below that, so installs never flood the top.
+// My Day, on the Today tab: the user's own day first, split by ownership rather
+// than by shape. "My calendar & to-dos" is the primary section — the user's own
+// appointments in time order, then the to-dos that hold no time, each with its
+// full address ready to open for directions. "Install Calendar" is the secondary
+// section below it and holds every job-linked row, timed ones included, compact
+// enough that an install never dominates the user's own day. A clash between the
+// two is marked on both rows and names where the other side is.
 // Same records, same model: read-only — this panel never writes an event, a task
 // or any mail, and it never states a travel time, because no record holds one.
 const CALENDAR_ROLES = ["admin", "manager"];
@@ -99,20 +101,31 @@ function Meta({ item }) {
 }
 
 // An overlap is stated on both rows that clash, in the warning tone and on one
-// line, so it reads as a flag on the appointment rather than an alarm card.
-function Overlap({ conflicts }) {
-  if (!conflicts.length) return null;
+// line, so it reads as a flag on the appointment rather than an alarm card. When
+// the other side of the clash sits in the other section, the row says so, so
+// splitting the day never costs the user the conflict.
+function Overlap({ item, across = "" }) {
+  if (!item.conflicts.length) return null;
   return (
     <p className="m-0 mt-1 flex items-start gap-1.5 text-[12.5px] font-medium leading-snug" style={{ color: "#6F4E10" }}>
       <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      <span className="break-words">Overlaps {conflicts.join(", ")}</span>
+      <span className="break-words">Overlaps {item.conflicts.join(", ")}{across && item.conflictsAcross.length ? ` · ${across}` : ""}</span>
     </p>
   );
 }
 
-// One line of the personal timeline: a strong time gutter, then the event and
-// its address. `lead` is the "Happening now" / "Next up" marker for the one
-// appointment to act on; it is the only row given extra weight.
+// A to-do's own note, kept readable but plainly subordinate to the title and the
+// address above it. The record's own wording and line breaks, nothing added.
+function Detail({ note }) {
+  if (!note) return null;
+  return <p className="m-0 mt-1 whitespace-pre-line text-[12.5px] leading-relaxed text-[#566063]">{note}</p>;
+}
+
+// One line of the user's own day: a strong time gutter, then the item and its
+// address. An item with no exact time keeps the same card and says so in the
+// gutter, so a to-do reads as part of the day instead of an afterthought.
+// `lead` is the "Happening now" / "Next up" marker for the one appointment to
+// act on; it is the only row given extra weight.
 function TimelineRow({ item, lead = "" }) {
   const [start, end] = item.timeLabel.split("–");
   const conflict = item.conflicts.length > 0;
@@ -124,40 +137,53 @@ function TimelineRow({ item, lead = "" }) {
       {lead ? <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: "#0B3F3B" }} /> : null}
       <div className="flex gap-3">
         <span className="w-[54px] shrink-0 sm:w-[62px]">
-          <span className={"block tabular-nums font-semibold leading-none " + (lead ? "text-[17px]" : "text-[15px]")} style={{ color: lead ? "#0B3F3B" : "#34403F" }}>{start}</span>
-          {end ? <span className="mt-1.5 block text-[12px] leading-none tabular-nums text-[#616A6D]">{end}</span> : null}
+          {item.start === null ? (
+            <span className="block text-[11.5px] font-semibold uppercase leading-tight tracking-[.04em] text-[#7A8285]">{item.timeLabel}</span>
+          ) : (
+            <>
+              <span className={"block tabular-nums font-semibold leading-none " + (lead ? "text-[17px]" : "text-[15px]")} style={{ color: lead ? "#0B3F3B" : "#34403F" }}>{start}</span>
+              {end ? <span className="mt-1.5 block text-[12px] leading-none tabular-nums text-[#616A6D]">{end}</span> : null}
+            </>
+          )}
         </span>
         <div className="min-w-0 flex-1">
           {lead ? <p className="m-0 mb-0.5 text-[11px] font-semibold uppercase tracking-[.08em]" style={{ color: "#0B3F3B" }}>{lead}</p> : null}
           <p className={"m-0 break-words font-semibold leading-snug text-[#101617] " + (lead ? "text-[16.5px]" : "text-[15px]")}>{item.title}</p>
           {item.span ? <p className="m-0 mt-0.5 text-[12.5px] text-[#616A6D]">Runs {item.span}</p> : null}
           <Address location={item.location} label={item.title} />
+          <Detail note={item.note} />
           <Meta item={item} />
-          <Overlap conflicts={item.conflicts} />
+          <Overlap item={item} across="on the Install Calendar below" />
         </div>
       </div>
     </li>
   );
 }
 
-// All-day job work and loose tasks: compact rules instead of cards, so the
-// secondary sections scan fast and never compete with the timeline. The job
-// link and the full address are kept on every install row.
-function CompactRow({ item, bold = true }) {
+// Install Calendar rows: one compact rule each, time first, so a timed install
+// reads in the same breath as the all-day jobs under it and never competes with
+// the section above. The job link, the full address and any clash are all kept,
+// and the lead marker shrinks to a chip rather than taking over the row.
+function InstallRow({ item, lead = "" }) {
   return (
     <li className="py-2.5 first:pt-0 last:pb-0">
-      <p className={"m-0 break-words text-[14.5px] leading-snug text-[#101617] " + (bold ? "font-semibold" : "")}>{item.title}</p>
+      <p className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="shrink-0 tabular-nums text-[12.5px] font-semibold text-[#34403F]">{item.timeLabel}</span>
+        <span className="min-w-0 break-words text-[14.5px] font-semibold leading-snug text-[#101617]">{item.title}</span>
+        {lead ? <Chip tone={STATUS_TONES.in_progress}>{lead}</Chip> : null}
+      </p>
       {item.span ? <p className="m-0 mt-0.5 text-[12px] text-[#616A6D]">Runs {item.span}</p> : null}
       <Address location={item.location} label={item.title} />
       <Meta item={item} />
+      <Overlap item={item} across="on your own calendar above" />
     </li>
   );
 }
 
-function Section({ label, count, Icon, hint = "", badge = null, sunken = false, children }) {
+function Section({ label, count, Icon, hint = "", badge = null, sunken = false, primary = false, children }) {
   return (
     <section className={sunken ? "rounded-xl p-3 sm:p-3.5" : ""} style={sunken ? { backgroundColor: "#FAF8F3" } : undefined}>
-      <h3 className="m-0 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] font-semibold uppercase tracking-[.08em] text-[#566063]">
+      <h3 className={"m-0 flex flex-wrap items-center gap-x-1.5 gap-y-1 font-semibold uppercase tracking-[.08em] " + (primary ? "text-[12.5px] text-[#34403F]" : "text-[12px] text-[#566063]")}>
         <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{label}
         <span className="tabular-nums font-normal text-[#616A6D]">{count}</span>
         {badge}
