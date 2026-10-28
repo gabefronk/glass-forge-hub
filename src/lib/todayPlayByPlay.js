@@ -107,17 +107,24 @@ export function dedupeEvents(events) {
     let slot = null;
     for (const id of ids) if (bySourceId.has(id)) { slot = bySourceId.get(id); break; }
     if (!slot) {
-      slot = { event, merged: [] };
+      slot = { event, merged: [], jobId: text(event.job_id) };
       slots.push(slot);
     } else {
       const replace = outranks(event, slot.event);
       const dropped = replace ? slot.event : event;
       if (replace) slot.event = event;
       slot.merged.push(text(dropped.id) || sourceIds(dropped)[0] || "");
+      slot.jobId = slot.jobId || text(event.job_id);
     }
     for (const id of ids) if (!bySourceId.has(id)) bySourceId.set(id, slot);
   }
-  return slots.map(({ event, merged }) => (merged.length ? { ...event, merged_source_ids: merged.filter(Boolean) } : event));
+  // A mirrored copy is dropped, never its job link: the kept row inherits a job
+  // id only when it has none of its own.
+  return slots.map(({ event, merged, jobId }) => {
+    if (!merged.length) return event;
+    const kept = { ...event, merged_source_ids: merged.filter(Boolean) };
+    return !text(kept.job_id) && jobId ? { ...kept, job_id: jobId, job_link_inherited: true } : kept;
+  });
 }
 
 // Outlook is read-only and only trusted while a complete import actually covers
