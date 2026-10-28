@@ -3,6 +3,7 @@
   "scopes": [
     "Mail.ReadWrite",
     "User.Read",
-    "offline_access"
+    "offline_access",
+    "Calendars.Read"
   ]
 }
