@@ -834,8 +834,6 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
   // leads with it instead of the saved-completion step (which may lag the live
   // calendar). Saved job completion status (status.label, snap) is untouched.
   const proj = useMemo(() => (upcoming && upcoming.events && upcoming.events.length) ? nextVisitProjection(upcoming.events) : null, [upcoming]);
-  const [heroExpanded, setHeroExpanded] = useState(false);
-  useEffect(() => { setHeroExpanded(false); }, [proj]);
 
   return (
     <section className="relative z-[3] rounded-[14px]" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
@@ -870,16 +868,8 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
       {/* Footer bar: where the job stands on the left, the actions on the right. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-b-[14px] px-6 py-3 max-[699px]:px-4" style={{ backgroundColor: "rgba(255,255,255,.05)", borderTop: "1px solid rgba(255,255,255,.09)" }}>
         <div className="flex min-w-0 flex-1 basis-[320px] flex-wrap items-center gap-2.5">
-          {proj ? (
-            <>
-              <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: "rgba(224,201,148,.2)", color: BRASS_LT }}>Next visit</span>
-              <span className="shrink-0 font-mono-num text-[14px] font-semibold whitespace-nowrap" style={{ color: HERO_INK }}>{proj.line}</span>
-              <p className="m-0 min-w-0 flex-1 text-[14.5px] font-semibold leading-[20px] max-[699px]:w-full max-[699px]:flex-none" style={{ color: HERO_INK }}>
-                {proj.expandable && heroExpanded ? proj.purposeFull : proj.purposePreview}
-                {proj.expandable ? <button type="button" onClick={() => setHeroExpanded((v) => !v)} className="ml-1.5 text-[12px] font-semibold hover:underline" style={{ color: BRASS_LT }}>{heroExpanded ? "Show less" : "Show more"}</button> : null}
-              </p>
-            </>
-          ) : (
+          {/* A booked visit is listed in the Upcoming card right below, so the hero doesn't repeat it. */}
+          {proj ? null : (
             <>
               <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: chipBg, color: chipInk }}>{snap.step.tag}</span>
               <p className="m-0 min-w-0 flex-1 text-[15px] font-semibold leading-[21px]" style={{ color: HERO_INK }}>
