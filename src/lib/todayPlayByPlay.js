@@ -147,6 +147,9 @@ const jobLabel = (jobs, id) => (id ? text((jobs || []).find((job) => job && job.
 
 export function eventItem(event, { jobs = [], today = "" } = {}) {
   const start = minutesOf(event.start_time);
+  const status = scheduleStatus(event);
+  // The field-report chip is dropped when it would only repeat the status.
+  const report = reportBadge(event, today);
   return {
     key: `event:${text(event.id) || sourceIds(event)[0] || titleOf(event)}`,
     kind: "event",
@@ -160,8 +163,8 @@ export function eventItem(event, { jobs = [], today = "" } = {}) {
     jobId: text(event.job_id),
     jobName: jobLabel(jobs, text(event.job_id)) || (text(event.job_id) ? titleOf(event) : ""),
     source: sourceBadge(event),
-    status: scheduleStatus(event),
-    report: reportBadge(event, today),
+    status,
+    report: report && report.label !== status.label ? report : null,
     mergedSourceIds: event.merged_source_ids || [],
     conflicts: [],
   };
