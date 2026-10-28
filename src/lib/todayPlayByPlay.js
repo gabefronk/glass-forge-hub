@@ -7,6 +7,12 @@
 // Deliberately absent: travel time, drive time and route duration. None of that
 // exists in the records, so the briefing never states it. An item without an
 // exact start time is called all-day or unscheduled, never guessed into a slot.
+//
+// The day is split by ownership, not by shape. A TodoTask is the user's own work;
+// a calendar row carrying a job_id is install work, timed or not; an unlinked
+// appointment (a Hub event, a personal calendar entry) is the user's own day.
+// Overlaps are marked across the whole day before it is split, so a personal
+// appointment and an install that clash still name each other from either side.
 
 import { addDays, reportBadge } from "@/lib/calendarModel";
 
@@ -24,6 +30,13 @@ export const isIgnoredWorkItem = (row) =>
 
 export const titleOf = (event) => text(event?.job_name) || text(event?.summary) || text(event?.title) || "(untitled)";
 export const locationOf = (event) => text(event?.address) || text(event?.source_location);
+
+// Ownership is read off one field the record already holds, so the split never
+// depends on how a title is written: a linked job means install work. Nothing
+// here guesses from the name, the builder or the calendar it came from.
+export const PERSONAL = "personal";
+export const INSTALL = "install";
+export const ownerOf = (event) => (text(event?.job_id) ? INSTALL : PERSONAL);
 
 // An ordinary Google Maps search for the address already on the record. Built
 // here, opened only when the user taps it: no address leaves the page by itself.
@@ -177,7 +190,10 @@ export function eventItem(event, { jobs = [], today = "" } = {}) {
     status,
     report: report && report.label !== status.label ? report : null,
     mergedSourceIds: event.merged_source_ids || [],
+    owner: ownerOf(event),
+    note: "",
     conflicts: [],
+    conflictsAcross: [],
   };
 }
 
@@ -195,7 +211,24 @@ export function taskReason(task, today) {
   return { key: "listed", label: "On your list" };
 }
 
+// A task's own details, read as the Hub already writes them: an "Address: …"
+// line names the place, and whatever is left is the note, in its own wording and
+// order. Nothing is invented — a task with no address line simply has none.
+const ADDRESS_LINE_RE = /^\s*(?:address|addr|location|site)\s*[:\-]\s*(.+)$/i;
+export function taskDetails(details) {
+  const lines = String(details ?? "").replace(/\r\n?/g, "\n").split("\n");
+  let location = "";
+  const rest = [];
+  for (const line of lines) {
+    const match = location ? null : ADDRESS_LINE_RE.exec(line);
+    if (match) location = text(match[1]);
+    else rest.push(line);
+  }
+  return { location, note: rest.join("\n").replace(/\n{3,}/g, "\n\n").trim() };
+}
+
 export function taskItem(task, { jobs = [], today = "" } = {}) {
+  const { location, note } = taskDetails(task?.details);
   return {
     key: `task:${text(task.id)}`,
     kind: "task",
@@ -205,14 +238,17 @@ export function taskItem(task, { jobs = [], today = "" } = {}) {
     timeLabel: "No set time",
     allDay: false,
     span: "",
-    location: "",
+    location,
     jobId: text(task.job_id),
     jobName: jobLabel(jobs, text(task.job_id)),
     source: SOURCE_BADGES.task,
     status: taskReason(task, today),
     report: null,
     mergedSourceIds: [],
+    owner: PERSONAL,
+    note,
     conflicts: [],
+    conflictsAcross: [],
   };
 }
 
@@ -227,13 +263,18 @@ export function overlapping(a, b) {
 }
 
 // Each overlapping item names the others it clashes with, so the row can say so.
+// Run across the undivided day: a clash whose other side lands in the other
+// section is recorded as such on both rows, so neither section can hide it.
 export function markOverlaps(items) {
-  const marked = items.map((item) => ({ ...item, conflicts: [] }));
+  const marked = items.map((item) => ({ ...item, conflicts: [], conflictsAcross: [] }));
   for (let i = 0; i < marked.length; i += 1) {
     for (let j = i + 1; j < marked.length; j += 1) {
       if (!overlapping(marked[i], marked[j])) continue;
       marked[i].conflicts.push(marked[j].title);
       marked[j].conflicts.push(marked[i].title);
+      if (marked[i].owner === marked[j].owner) continue;
+      marked[i].conflictsAcross.push(marked[j].title);
+      marked[j].conflictsAcross.push(marked[i].title);
     }
   }
   return marked;
