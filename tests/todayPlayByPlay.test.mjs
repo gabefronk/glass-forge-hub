@@ -2,7 +2,7 @@ import './support/register-src-alias.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { dayPlan, dedupeEvents, markOverlaps, outlookState, overlapping, briefingLines, coversDay, minutesOf, spanLabel, taskReason } =
+const { dayPlan, dedupeEvents, markOverlaps, outlookState, overlapping, briefingLines, coversDay, minutesOf, spanLabel, taskReason, daySummary, denverMinutes, directionsUrl, nextUp } =
   await import('../src/lib/todayPlayByPlay.js');
 
 const TODAY = '2026-10-28';
@@ -195,4 +195,83 @@ test('the briefing states only what the items already say, and never a travel ti
   assert.deepEqual(empty.briefing, ['Nothing on the calendar and no tasks on your list for today.']);
   assert.equal(empty.empty, true);
   assert.deepEqual(briefingLines({ timed: [], allDay: [], unscheduled: [] }), empty.briefing);
+});
+
+// My Day leads with one plain sentence instead of the whole briefing. The
+// briefing itself is unchanged and still rendered, under Day details.
+test('the day summary is one plain sentence read off the same items as the briefing', () => {
+  const plan = dayPlan({
+    today: TODAY,
+    now: NOW,
+    events: [
+      event({ id: 'a', google_event_id: 'ga', start_time: '08:00', end_time: '10:00', job_name: 'One Wolf Const - Alexander Pool House' }),
+      event({ id: 'b', google_event_id: 'gb', start_time: '08:45', source: 'app', job_name: 'School event' }),
+      event({ id: 'c', google_event_id: 'gc', start_time: null, job_name: 'Thomas Res - finish install' }),
+    ],
+    tasks: [task({ id: 't1', title: 'Send COI', due_date: '2026-09-15' })],
+  });
+  assert.equal(daySummary(plan), '2 timed appointments, starting 08:00 · 1 all-day job running · 1 task with no set time.');
+  assert.equal(plan.briefing[0], '2 timed events, 1 all-day item, 1 task.');
+  assert.equal(daySummary(plan).toLowerCase().includes('travel'), false);
+  assert.equal(daySummary({ timed: [], allDay: [], unscheduled: [] }), 'Nothing on your calendar and no tasks on your list today.');
+  const installsOnly = dayPlan({ today: TODAY, now: NOW, events: [event({ id: 'd', google_event_id: 'gd', start_time: null })] });
+  assert.equal(daySummary(installsOnly), 'No timed appointment · 1 all-day job running.');
+});
+
+test('the lead marker follows the clock handed in: running now, else next to start, else none left', () => {
+  const timed = [
+    { key: 'install', start: 480, end: 600 },
+    { key: 'school', start: 525, end: null },
+    { key: 'walk', start: 660, end: 720 },
+  ];
+  assert.deepEqual(nextUp(timed, 420), { key: 'install', state: 'next' });
+  assert.deepEqual(nextUp(timed, 540), { key: 'install', state: 'now' });
+  assert.deepEqual(nextUp(timed, 620), { key: 'walk', state: 'next' });
+  assert.deepEqual(nextUp(timed, 800), { key: '', state: 'done' });
+  assert.deepEqual(nextUp([], 540), { key: '', state: 'none' });
+  // Without a clock the first appointment leads, so the view is never unmarked.
+  assert.deepEqual(nextUp(timed, null), { key: 'install', state: 'next' });
+  // An item with no end claims its own minute only; it never invents a span.
+  assert.deepEqual(nextUp([{ key: 'school', start: 525, end: null }], 525), { key: 'school', state: 'now' });
+  assert.deepEqual(nextUp([{ key: 'school', start: 525, end: null }], 526), { key: '', state: 'done' });
+  // 09:00 Denver on the day itself, the same instant the Outlook window uses.
+  assert.equal(denverMinutes(NOW), 540);
+});
+
+test('a directions link is an ordinary Google Maps search built from the address on the record', () => {
+  assert.equal(
+    directionsUrl('Avondale Preschool Academy, 1417 Lake View Terrace Rd, Saratoga Springs, UT 84045'),
+    'https://www.google.com/maps/search/?api=1&query=Avondale%20Preschool%20Academy%2C%201417%20Lake%20View%20Terrace%20Rd%2C%20Saratoga%20Springs%2C%20UT%2084045',
+  );
+  assert.equal(directionsUrl(''), '');
+  assert.equal(directionsUrl(null), '');
+});
+
+// The hierarchy My Day renders: every timed item — personal or job — is the
+// timeline, and all-day install work is a separate section, never mixed in.
+test('a Hub-only personal appointment stays in the timeline with its exact address, apart from all-day installs', () => {
+  const plan = dayPlan({
+    today: TODAY,
+    now: NOW,
+    events: [
+      event({ id: 'i', google_event_id: 'gi', start_time: '08:00', end_time: '10:00', job_name: 'One Wolf Const - Alexander Pool House', job_id: 'job1' }),
+      event({ id: 'p', source: 'app', start_time: '08:45', end_time: null, job_name: 'Beau’s Halloween event at school', address: 'Avondale Preschool Academy, 1417 Lake View Terrace Rd, Saratoga Springs, UT 84045', report_status: 'waived' }),
+      event({ id: 'a1', google_event_id: 'ga1', start_time: null, job_name: 'Landscope - Bldg 12 Mayflower', address: '1008 W Hert Cir Heber City, UT 84032', job_id: 'job2' }),
+    ],
+  });
+  assert.deepEqual(plan.timed.map((i) => i.title), ['One Wolf Const - Alexander Pool House', 'Beau’s Halloween event at school']);
+  assert.deepEqual(plan.allDay.map((i) => i.title), ['Landscope - Bldg 12 Mayflower']);
+  const personal = plan.timed[1];
+  assert.equal(personal.timeLabel, '08:45');
+  assert.equal(personal.location, 'Avondale Preschool Academy, 1417 Lake View Terrace Rd, Saratoga Springs, UT 84045');
+  assert.equal(personal.source.label, 'Hub event');
+  assert.equal(personal.jobId, '');
+  assert.equal(directionsUrl(personal.location).includes('Avondale%20Preschool%20Academy'), true);
+  // The clash is marked on both rows, each naming the other, and nothing is dropped.
+  assert.deepEqual(plan.timed.map((i) => i.conflicts), [['Beau’s Halloween event at school'], ['One Wolf Const - Alexander Pool House']]);
+  assert.equal(plan.conflicts, 2);
+  // At 08:45 the install is still running, so it — not the later start — leads.
+  assert.deepEqual(nextUp(plan.timed, 525), { key: plan.timed[0].key, state: 'now' });
+  // The install keeps its job link in its own section.
+  assert.equal(plan.allDay[0].jobId, 'job2');
 });
