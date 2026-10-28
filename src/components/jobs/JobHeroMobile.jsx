@@ -215,9 +215,8 @@ export default function JobHeroMobile({
 
             {payment ? <Row label="Payment"><span className="inline-flex justify-end">{payment}</span></Row> : null}
 
-            <Row label="Next visit" sub={proj?.purposePreview || null}>
-              {proj ? proj.line : (snap?.step?.tag || "—")}
-            </Row>
+            {/* A booked visit is listed in the Upcoming card below, so it isn't repeated here. */}
+            {proj ? null : <Row label="Next visit">{snap?.step?.tag || "—"}</Row>}
 
             {pos.length ? <Row label="PO"><span className="font-mono text-[13px]">{pos.join(", ")}</span></Row> : null}
             {oes.length ? <Row label="OE"><span className="font-mono text-[13px]">{oes.join(", ")}</span></Row> : null}
