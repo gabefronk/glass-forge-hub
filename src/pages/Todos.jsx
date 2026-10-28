@@ -25,7 +25,10 @@ const fmt=v=>v?new Date(v).toLocaleString():'';
 const shortDate=ymd=>ymd?new Date(ymd+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}):'';
 const dueText=(t,today)=>{const s=dueState(t,today),d=daysBetween(today,t.due_date);return s==='overdue'?`Overdue ${-d}d · ${shortDate(t.due_date)}`:s==='today'?'Due today':s==='soon'?`Due ${shortDate(t.due_date)} (${d}d)`:`Due ${shortDate(t.due_date)}`;};
 
-export default function Todos({context=null}){
+// `dayPlan` is the slot above the task lists (the Today tab's play-by-play). It
+// takes a function so the panel reads the tasks this page already loaded instead
+// of fetching them again; `context` stays the panel below the lists.
+export default function Todos({context=null,dayPlan=null}){
  const {user}=useAuth();
  const [rawData,setData]=useState(null),[person,setPerson]=useState('mine'),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const data=rawData?._loaded_user_id===user?.id?rawData:null;
@@ -113,6 +116,7 @@ export default function Todos({context=null}){
    <button type="button" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#34403f] hover:bg-black/5 disabled:opacity-50" disabled={busy||loading} onClick={()=>refresh()} aria-label="Refresh tasks" title="Refresh"><RefreshCw className={'h-[18px] w-[18px] '+(loading?'animate-spin':'')}/></button>
   </header>
   <nav aria-label="Task lists" className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">{PERSONAL_VIEWS.map(key=>{const {label,Icon}=VIEW_META[key],on=view===key;return <button key={key} type="button" aria-pressed={on} onClick={()=>setView(key)} className={'inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-[14px] font-medium transition-colors '+(on?'bg-[#0B3F3B] text-white':'bg-white/70 text-[#34403f] hover:bg-white')}><Icon className="h-4 w-4" aria-hidden="true"/>{label}<span className={'tabular-nums text-[13px] '+(on?'text-white/80':'text-[#566063]')}>{views[key].length}</span></button>;})}</nav>
+  {person==='mine'&&(typeof dayPlan==='function'?dayPlan({tasks:views.today,jobs,today,loading,error}):dayPlan)}
   {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">{error}</p>}
   {notice&&<p role="status" className="rounded-xl bg-[#e2eeeb] px-3 py-2.5 text-sm text-[#082f2c]">{notice}</p>}
   {loading&&!data&&<p role="status" className="p-8 text-center text-[#566063]">Loading your day…</p>}
