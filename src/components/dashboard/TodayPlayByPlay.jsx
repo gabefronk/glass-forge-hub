@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, CalendarClock, MapPin, RefreshCw, Sun } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
-import { dayPlan, denverDate, SOURCE_BADGES } from "@/lib/todayPlayByPlay";
+import { dayPlan, denverDate } from "@/lib/todayPlayByPlay";
 
 // Today's play-by-play, on the Today tab: today's normalized CalendarEvents —
 // the scheduling source of truth — in one chronological list, with all-day
