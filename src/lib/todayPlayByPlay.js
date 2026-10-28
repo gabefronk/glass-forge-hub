@@ -25,11 +25,22 @@ export const isIgnoredWorkItem = (row) =>
 export const titleOf = (event) => text(event?.job_name) || text(event?.summary) || text(event?.title) || "(untitled)";
 export const locationOf = (event) => text(event?.address) || text(event?.source_location);
 
+// An ordinary Google Maps search for the address already on the record. Built
+// here, opened only when the user taps it: no address leaves the page by itself.
+export const directionsUrl = (location) =>
+  (text(location) ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(text(location))}` : "");
+
 // HH:MM 24h only. Anything else (null, "", "all day", "8am") has no exact time.
 export function minutesOf(time) {
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(text(time));
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
+
+// America/Denver wall clock as minutes past midnight, so the view can lead with
+// the appointment running now. The only clock read in this file; dayPlan itself
+// stays clock-free, and an unparseable hour simply yields null.
+export const denverMinutes = (value = new Date()) =>
+  minutesOf(new Intl.DateTimeFormat("en-GB", { timeZone: "America/Denver", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)));
 
 export function timeLabel(event) {
   const start = minutesOf(event?.start_time);
@@ -251,6 +262,33 @@ export function briefingLines(plan) {
   const rescheduled = [...timed, ...allDay].filter((item) => item.status.key === "rescheduled");
   if (rescheduled.length) lines.push(`${count(rescheduled.length, "item is marked rescheduled", "items are marked rescheduled")}.`);
   return lines;
+}
+
+// One plain sentence for the top of My Day, read off the same items as the
+// briefing: counts and the first start time, nothing from the clock and nothing
+// the records do not already say. The briefing itself is kept, in full, below.
+export function daySummary(plan) {
+  const { timed = [], allDay = [], unscheduled = [] } = plan || {};
+  if (!timed.length && !allDay.length && !unscheduled.length) return "Nothing on your calendar and no tasks on your list today.";
+  const parts = [];
+  if (timed.length) parts.push(`${count(timed.length, "timed appointment", "timed appointments")}, starting ${timed[0].timeLabel.split("–")[0]}`);
+  else parts.push("No timed appointment");
+  if (allDay.length) parts.push(`${count(allDay.length, "all-day job", "all-day jobs")} running`);
+  if (unscheduled.length) parts.push(`${count(unscheduled.length, "task", "tasks")} with no set time`);
+  return `${parts.join(" · ")}.`;
+}
+
+// The appointment to lead with: the one running now, else the next one to start,
+// else none left today. Pure — the wall clock is handed in, and without one the
+// first appointment of the day leads.
+export function nextUp(timed = [], nowMinutes = null) {
+  if (!timed.length) return { key: "", state: "none" };
+  if (nowMinutes === null || nowMinutes === undefined) return { key: timed[0].key, state: "next" };
+  // An item with no end is "now" for its own minute only; it claims no span.
+  const running = timed.find((item) => nowMinutes >= item.start && nowMinutes < (item.end !== null && item.end > item.start ? item.end : item.start + 1));
+  if (running) return { key: running.key, state: "now" };
+  const upcoming = timed.find((item) => item.start > nowMinutes);
+  return upcoming ? { key: upcoming.key, state: "next" } : { key: "", state: "done" };
 }
 
 // The whole day in one object: timed items in order, all-day items and tasks
