@@ -257,7 +257,7 @@ function CostLine({ label, value, kind }) {
   return <div className="flex min-h-[32px] items-center justify-between gap-4 text-[13.5px]" style={style}><span>{label}</span><span className="tabular-nums">{lineMoney(value)}</span></div>;
 }
 
-function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO, onSaved, editorPanel }) {
+function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onPreparePO, onSaved, editorPanel }) {
   const fig = budgetFigures(budget);
   const c = fig.calculated || {};
   const i = budget.inputs || {};
@@ -278,10 +278,10 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
   const sub = [supplier, budget.quote_number ? `Quote ${budget.quote_number}` : '', budget.openings_qty > 0 ? `${budget.openings_qty} unit${budget.openings_qty === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
   const statusLine = dupe ? `Same quote as “${dupe.title || dupe.quote_number}”. Keep the right copy and remove the other.`
     : stale ? 'A vendor quote is now on this job. Remove this placeholder once that quote has your customer price.'
-    : noQuote ? '' : warnings.length ? warnings[0] : budget.budget_usage === 'draft' ? 'Draft - review the numbers and your customer price, then include this scope.' : '';
+    : noQuote ? '' : warnings.length ? warnings[0]
+    : budget.budget_usage === 'draft' ? 'Draft: set Budget use to “Counted in budget” below to order it. Saving your numbers does this for a job’s only quote.' : '';
   const sourceHref = safeHref(budget.source_pdf_url) || fileHref(budget.drive_quote_file_id);
   const privateSource = !sourceHref && /^[a-f0-9]{64}$/.test(budget.source_sha256 || '') ? budget.id : null;
-  const fHref = safeHref(job?.drive_job_folder_url) || folderHref(job?.drive_job_folder_id || budget.drive_job_folder_id);
   const related = pos.filter((p) => p.budget_id === budget.id);
   const history = distinctHistory(budget);
   const sell = noSell ? null : num(i.actual_total_sell), total = num(c.total_cost_overhead), suggested = num(c.suggested_total_sell);
@@ -294,41 +294,41 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
       <div className="flex flex-wrap items-start gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="break-words text-[14.5px] font-semibold" style={{ color: INK }}>{budget.title || budget.quote_name || 'Untitled quote'}</span>
-          {sub ? <span className="text-[12.5px]" style={{ color: INK2 }}>{sub}{qty ? <span style={{ color: '#96490F' }}> · Quantity needs review</span> : null}</span> : null}
+          {sub ? <span className="text-[13px]" style={{ color: INK2 }}>{sub}{qty ? <span style={{ color: '#96490F' }}> · Quantity needs review</span> : null}</span> : null}
         </div>
         <Chip tone={chipTone}>{chipText}</Chip>
         {!editing && <button type="button" onClick={() => onEdit({ mode: 'numbers', budget_id: budget.id })} className={BTN} style={PRI}><Pencil className="h-3.5 w-3.5" />Edit numbers</button>}
       </div>
-      {statusLine ? <p className="rounded-[9px] px-3 py-2 text-[12.5px] font-medium" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>{statusLine}</p> : null}
+      {statusLine ? <p className="rounded-[9px] px-3 py-2 text-[13px] font-medium" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>{statusLine}</p> : null}
       {editing ? editorPanel : noQuote ? (
         <div className="flex flex-col gap-3">
           <div className="grid max-w-[460px] grid-cols-2 gap-2">
             {[['Customer sell', lineMoney(i.actual_total_sell)], ['Labor (sub pay)', lineMoney(i.labor_cost_sub_pay)]].map(([k, v]) => (
               <div key={k} className="flex flex-col gap-0.5 rounded-[10px] p-3" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
-                <span className="text-[11px] font-medium" style={{ color: INK2 }}>{k}</span>
+                <span className="text-[13px] font-medium" style={{ color: INK2 }}>{k}</span>
                 <span className="text-[17px] font-bold tabular-nums tracking-[-0.02em]">{v}</span>
               </div>
             ))}
           </div>
-          <p className="text-[12.5px]" style={{ color: INK2 }}>No vendor quote on this job, so its windows cost comes from the PO above. Drop the supplier quote below to see the full cost build-up and margin.</p>
+          <p className="text-[13px]" style={{ color: INK2 }}>No vendor quote on this job, so its windows cost comes from the PO above. Drop the supplier quote below to see the full cost build-up and margin.</p>
         </div>
       ) : (
         <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           <div className="flex flex-col">
             <span className={EYEBROW} style={{ color: INK2, paddingBottom: 4 }}>Cost build-up</span>
+            {/* No overhead is added (Gabriel, Oct 30): his sub pay already covers it. */}
             <CostLine label="Material cost" value={i.material_true_cost} />
-            <CostLine label="Material with overhead" value={c.cost_material_tax} kind="sub" />
             <CostLine label="Labor (sub pay)" value={i.labor_cost_sub_pay} />
             <CostLine label="Additional install material" value={i.additional_install_material} />
             <CostLine label="Additional equipment" value={i.additional_equipment} />
-            <CostLine label="Total cost with overhead" value={c.total_cost_overhead} kind="total" />
+            <CostLine label="Total cost" value={c.total_cost_overhead} kind="total" />
           </div>
           <div className="flex flex-col gap-3.5">
             <span className={EYEBROW} style={{ color: INK2 }}>Price & margin</span>
             <div className="grid grid-cols-3 gap-2">
               {[['Customer sell', noSell ? 'Not set' : lineMoney(sell), noSell ? INK2 : INK], ['Margin', noSell ? '—' : pct(c.actual_margin_pct), '#082F2C'], ['Suggested', lineMoney(suggested), INK3]].map(([k, v, color]) => (
                 <div key={k} className="flex flex-col gap-0.5 rounded-[10px] p-3" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
-                  <span className="text-[11px] font-medium" style={{ color: INK2 }}>{k}</span>
+                  <span className="text-[13px] font-medium" style={{ color: INK2 }}>{k}</span>
                   <span className="text-[17px] font-bold tabular-nums tracking-[-0.02em]" style={{ color }}>{v}</span>
                 </div>
               ))}
@@ -339,35 +339,34 @@ function BudgetCard({ budget, job, allBudgets, pos, editing, onEdit, onPreparePO
                   <span style={{ width: `${(Math.min(total, sell) / scale) * 100}%`, backgroundColor: '#8C9EAF' }} />
                   <span style={{ width: `${(Math.max(profit, 0) / scale) * 100}%`, backgroundColor: '#0B3F3B' }} />
                 </div>
-                <div className="flex flex-wrap gap-3.5 text-[12px]" style={{ color: INK2 }}>
+                <div className="flex flex-wrap gap-3.5 text-[13px]" style={{ color: INK2 }}>
                   <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#8C9EAF' }} />Cost {lineMoney(total)}</span>
-                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#0B3F3B' }} />Margin after overhead {lineMoney(profit)}</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#0B3F3B' }} />Margin {lineMoney(profit)}</span>
                 </div>
               </div>
             )}
-            {noSell ? <p className="text-[12.5px]" style={{ color: INK2 }}>No customer price yet. Use Edit numbers to add what you're charging and the margin fills in.</p> : null}
-            {under ? <p className="rounded-[9px] px-3 py-2 text-[12.5px]" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>Selling {lineMoney(suggested - sell)} under the suggested price.</p> : null}
+            {noSell ? <p className="text-[13px]" style={{ color: INK2 }}>No customer price yet. Use Edit numbers to add what you're charging and the margin fills in.</p> : null}
+            {under ? <p className="rounded-[9px] px-3 py-2 text-[13px]" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>Selling {lineMoney(suggested - sell)} under the suggested price.</p> : null}
           </div>
         </div>
       )}
       <QuoteLines budget={budget} />
       {history.length > 0 && (
-        <details className="text-[12.5px]" style={{ color: INK2 }}>
+        <details className="text-[13px]" style={{ color: INK2 }}>
           <summary className="cursor-pointer font-semibold">Earlier numbers ({history.length})</summary>
           {history.map((h, idx) => <p key={idx} className="mt-1">{h.at} · material {money(h.inputs?.material_true_cost)} · customer sell {money(h.inputs?.actual_total_sell)}</p>)}
         </details>
       )}
       <div className="flex flex-wrap items-center gap-2 pt-3" style={{ borderTop: `1px solid ${RULE}` }}>
-        {budget.job_id ? <button type="button" onClick={() => onEdit({ mode: 'usage', budget_id: budget.id })} className={BTN} style={SEC} title="Included, draft or reference, and whether it replaces another quote">Count in budget?</button> : null}
+        {budget.job_id ? <BudgetUseSelect budget={budget} budgets={allBudgets} onSaved={onSaved} /> : null}
         {budget.job_id && active && fig.ready && !related.length ? <button type="button" onClick={() => onPreparePO(budget.id)} className={BTN} style={SEC}><Plus className="h-3.5 w-3.5" />Prepare PO</button> : null}
         {!budget.job_id ? <DeleteUnusedQuoteButton budget={budget} onDeleted={(_r, msg) => onSaved?.(msg)} /> : null}
         {budget.job_id && !related.length ? <RemoveQuoteButton budget={budget} duplicate={Boolean(dupe)} className={BTN} style={SEC} onRemoved={onSaved} /> : null}
         <span className="flex-1" />
         {sourceHref ? <a href={sourceHref} target="_blank" rel="noreferrer" className={BTN} style={SEC}>Vendor quote PDF<ArrowUpRight className="h-3.5 w-3.5" /></a> : null}
         {privateSource ? <PrivateSourceButton budgetId={privateSource} label="Vendor quote PDF" className={BTN} style={SEC} /> : null}
-        {fHref ? <a href={fHref} target="_blank" rel="noreferrer" className={BTN} style={SEC}>Drive folder<ArrowUpRight className="h-3.5 w-3.5" /></a> : null}
       </div>
-      {/* Scope / revision opens under the buttons; Edit numbers replaces the figures above. */}
+      {/* Edit numbers replaces the figures above. The job's Drive folder is under Job files. */}
       {!editing && editorPanel}
     </div>
   );
@@ -383,7 +382,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
 
   const openEditor = (next) => setEditor({ ...next, key: crypto.randomUUID() });
   const done = (_r, msg) => { setEditor(null); onSaved(msg); };
-  const budgetDone = (r) => done(r, `Budget saved. ${r?.warnings?.join(' ') || 'Issued POs, invoices and recorded payments are unchanged.'}`);
+  const budgetDone = (r) => done(r, `Budget saved.${r?.budget?.budget_usage === 'included' ? ' Counted in the budget.' : ''} ${r?.warnings?.join(' ') || 'Issued POs, invoices and recorded payments are unchanged.'}`);
   const preparePO = (budgetId) => openEditor({ mode: 'po', budget_id: budgetId, job_id: job.id });
 
   const currentBudget = editor?.budget_id ? rec.budgets.find((b) => b.id === editor.budget_id) : null;
@@ -393,8 +392,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
   const close = () => setEditor(null);
   const editorPanel = (ed) => ed && (
     <div key={ed.key}>
-      {ed.mode === 'po' && <PurchaseOrderForm job={job} budgets={rec.budgets} initialBudget={currentBudget} onDone={done} onCancel={close} />}
-      {ed.mode === 'usage' && currentBudget && <BudgetUsageForm budget={currentBudget} budgets={rec.budgets} onDone={budgetDone} onCancel={close} />}
+      {ed.mode === 'po' && <PurchaseOrderForm job={job} budgets={rec.budgets} purchaseOrders={rec.pos} initialBudget={currentBudget} onDone={done} onCancel={close} />}
       {ed.mode === 'numbers' && currentBudget && <NumbersEditor budget={currentBudget} onDone={budgetDone} hideRefill onCancel={close} />}
       {ed.mode === 'supplier' && <SupplierOrderForm jobs={[job]} purchaseOrders={rec.pos} initialJobId={job.id} initialPO={currentPO} order={currentOrder} onDone={done} onCancel={close} />}
       {ed.mode === 'po_status' && currentPO && <OrderStatusForm row={currentPO} onDone={done} onCancel={close} />}
@@ -407,8 +405,8 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
   const hasLines = rec.pos.length + looseOrders.length > 0;
   const toggleLine = (key) => setOpenLine((k) => (k === key ? null : key));
   // Forms that are not about one budget (new PO, supplier confirmations, statuses) open under the list.
-  const listEditor = editor && editor.mode !== 'numbers' && editor.mode !== 'usage' ? editorPanel(editor) : null;
-  const budgetEditor = (b) => (editor && editor.budget_id === b.id && (editor.mode === 'numbers' || editor.mode === 'usage') ? editorPanel(editor) : null);
+  const listEditor = editor && editor.mode !== 'numbers' ? editorPanel(editor) : null;
+  const budgetEditor = (b) => (editor && editor.budget_id === b.id && editor.mode === 'numbers' ? editorPanel(editor) : null);
 
   return (
     <div className="flex flex-col gap-5 p-4 sm:p-5">
@@ -422,7 +420,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
         {hasLines ? (
           <div className="overflow-hidden rounded-[10px]" style={{ border: `1px solid ${RULE}` }}>
             <div className={`${LINE_GRID} max-[767px]:hidden`} style={{ backgroundColor: '#FAF8F3', paddingTop: 7, paddingBottom: 7 }}>
-              {['Supplier', 'PO · quote · order', 'ETA', 'Cost', ''].map((h, idx) => <span key={idx} className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] ${idx === 3 ? 'text-right' : ''}`} style={{ color: INK2 }}>{h}</span>)}
+              {['Supplier', 'PO · quote · order', 'ETA', 'Cost', ''].map((h, idx) => <span key={idx} className={`text-[13px] font-semibold uppercase tracking-[0.04em] ${idx === 3 ? 'text-right' : ''}`} style={{ color: INK2 }}>{h}</span>)}
             </div>
             {rec.pos.map((p) => <POLine key={p.id} po={p} budgets={rec.budgets} orders={rec.orders} onEdit={openEditor} onSaved={onSaved} open={openLine === `po:${p.id}`} onToggle={() => toggleLine(`po:${p.id}`)} />)}
             {looseOrders.map((o) => <OrderLine key={o.id} order={o} onEdit={openEditor} onSaved={onSaved} open={openLine === `o:${o.id}`} onToggle={() => toggleLine(`o:${o.id}`)} />)}
@@ -430,7 +428,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
         ) : <p className="rounded-[10px] px-3 py-3 text-[13px]" style={{ border: `1px solid ${RULE}`, backgroundColor: '#FAF8F3', color: INK2 }}>No purchase orders or supplier confirmations yet.</p>}
         {listEditor}
         {rec.conflicts.length > 0 && (
-          <details className="rounded-[10px] p-2.5 text-[12.5px]" style={{ border: '1px solid #EFDFB7', backgroundColor: '#FAF0DA', color: '#6F4E10' }} open>
+          <details className="rounded-[10px] p-2.5 text-[13px]" style={{ border: '1px solid #EFDFB7', backgroundColor: '#FAF0DA', color: '#6F4E10' }} open>
             <summary className="cursor-pointer font-semibold">{rec.conflicts.length} PO reference conflict{rec.conflicts.length === 1 ? '' : 's'} - review before linking</summary>
             {rec.conflicts.map((c) => (
               <p key={c.number} className="mt-1"><strong>{c.number}</strong> appears against {c.job_ids.map((id, idx) => <span key={id}>{idx ? ' / ' : ''}<Link className="underline" to={`/jobs/${id}`}>{jobNameById(id)}</Link></span>)}. Original records are kept; nothing is cross-linked automatically.</p>
@@ -443,14 +441,12 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
         <span className={EYEBROW} style={{ color: INK2 }}>Budget</span>
         {rec.budgets.length === 0 ? <p className="text-[13px]" style={{ color: INK2 }}>No vendor quote attached yet. Add the supplier quote below to build the cost and margin.</p> : null}
         {rec.budgets.map((b) => (
-          <BudgetCard key={b.id} budget={b} job={job} allBudgets={rec.budgets} pos={rec.pos} editing={editor?.mode === 'numbers' && editor.budget_id === b.id}
+          <BudgetCard key={b.id} budget={b} allBudgets={rec.budgets} pos={rec.pos} editing={editor?.mode === 'numbers' && editor.budget_id === b.id}
             onEdit={openEditor} onPreparePO={preparePO} onSaved={onSaved} editorPanel={budgetEditor(b)} />
         ))}
       </section>
 
-      <div className="rounded-[12px] p-2" style={{ border: '1.5px dashed #CEC6B8', backgroundColor: '#FAF8F3' }}>
-        <QuoteDropzone jobId={job.id} onDone={(r) => onSaved?.(r?.duplicate ? `Already on this job: ${r.title || 'that quote'}.` : `Quote uploaded: ${r?.title || 'vendor quote'}. Check its numbers and tax below.`)} />
-      </div>
+      <JobFilesPanel job={job} onSaved={onSaved} />
     </div>
   );
 }
