@@ -47,6 +47,22 @@ test('a dash part with a digit (address, lot) is never dropped', () => {
   assert.notEqual(results.get('x').job_id, EDGREN.id);
 });
 
+test('a lot, plat or homeowner part is not task wording', () => {
+  const lot = { ...EDGREN, id: 'c00000000000000000000001', canonical_name: 'david weekley - 151', aliases: [], builder: 'David Weekley' };
+  for (const title of ['David Weekley - 151 - Plat B', 'David Weekley - 151 - Andy Widerberg']) {
+    assert.notEqual(plan([item('x', title)], [lot]).results.get('x').reason, 'name_without_task', title);
+  }
+});
+
+test('new jobs are named builder then job name, without task wording', () => {
+  assert.equal(ingest.jobNameFromTitle('Y A Windows - Steve Edgren (Newco) - Pickup ONLY, hold at YA shop (Lehi)'), 'steve edgren');
+  assert.equal(ingest.jobNameFromTitle('Phil Chadwick - Retro - Pickup + Delivery only'), 'phil chadwick - retro');
+  assert.equal(ingest.jobNameFromTitle('Pulte Home - 404 Copper Rim - Warranty service'), 'pulte home - 404 copper rim');
+  assert.equal(ingest.jobNameFromTitle('Pulte Home - 404 Copper Rim'), 'pulte home - 404 copper rim');
+  assert.equal(ingest.jobNameFromTitle('David Weekley - 151 - Plat B'), 'david weekley - 151 - plat b');
+  assert.equal(ingest.jobNameFromTitle('Measure'), 'measure');
+});
+
 test('a builder shared by several jobs is never the match', () => {
   const pulte = (id, name) => ({ id, created_date: '2026-01-0' + id.slice(-1), canonical_name: name, aliases: [], builder: 'Pulte Home', address: null, po_numbers: [], oe_numbers: [] });
   const jobs = [pulte('b00000000000000000000001', 'Pulte Home - Oak Hollow'), pulte('b00000000000000000000002', 'Pulte Home - Willow Bend'), { ...pulte('b00000000000000000000003', 'Pulte Home'), builder: null }];
