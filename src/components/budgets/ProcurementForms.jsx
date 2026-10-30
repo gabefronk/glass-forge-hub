@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { C } from '@/lib/feeUI';
-import { amount, prepareBudgetPO, activeBudgets, budgetVersion, isLiveBudget } from '../../../base44/shared/procurementCore.js';
+import { amount, prepareBudgetPO, activeBudgets, budgetVersion, isLiveBudget, sameVendor } from '../../../base44/shared/procurementCore.js';
 import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
 
 export const money = value => amount(value) === null ? '\u2014' : amount(value).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -34,7 +34,16 @@ function Buttons({ busy, enabled = true, label, onCancel }) {
   return <div className="mt-3 flex flex-wrap gap-2"><button type="submit" disabled={busy || !enabled} className={buttonClass} style={primaryStyle}>{busy ? 'Saving...' : label}</button><button type="button" disabled={busy} onClick={onCancel} className={buttonClass} style={secondaryStyle}>Cancel</button></div>;
 }
 
-export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCancel }) {
+// Live POs already issued for this quote (same budget, or same quote number and supplier) -
+// the same match the server uses before it asks why another PO is needed.
+export function existingPOsForQuote(purchaseOrders = [], form = {}, jobId = '') {
+  const ref = String(form.vendor_quote_ref || '').trim().toUpperCase();
+  return purchaseOrders.filter(po => po.status !== 'cancelled' && po.job_id === jobId && (
+    (form.budget_id && po.budget_id === form.budget_id) ||
+    (ref && String(po.vendor_quote_ref || '').trim().toUpperCase() === ref && sameVendor(po, { vendor: form.vendor }))));
+}
+
+export function PurchaseOrderForm({ job, budgets, purchaseOrders = [], initialBudget, onDone, onCancel }) {
   // Started from a job, the PO can still be a shop / overhead buy (showroom, tools, stock):
   // that saves it with no job, budget or customer amount, so it never reads as a sale.
   const [purpose, setPurpose] = useState(job ? 'job' : 'shop');
@@ -59,6 +68,9 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const key = useRef(crypto.randomUUID());
   const source = budgets.find(b => b.id === form.budget_id);
+  // A draft quote can't be ordered (the server refuses it); say so here instead of after Issue.
+  const draftSource = Boolean(source) && !shop && !activeBudgets(budgets.filter(b => b.job_id === source.job_id)).some(b => b.id === source.id);
+  const earlier = shop ? [] : existingPOsForQuote(purchaseOrders, form, job?.id || '');
   const set = (name, value) => { setForm(f => ({ ...f, [name]: value })); setReviewed(false); };
   function selectBudget(id) {
     const b = eligible.find(x => x.id === id);
@@ -82,14 +94,17 @@ export function PurchaseOrderForm({ job, budgets, initialBudget, onDone, onCance
       <Field label="Supplier" value={form.vendor} onChange={v => set('vendor', v)} />
       <Field label="Supplier quote / reference" value={form.vendor_quote_ref} onChange={v => set('vendor_quote_ref', v)} />
       <Field label="Supplier cost for this PO" type="number" value={form.amount_dealer} onChange={v => { set('amount_dealer', v); setZero(false); }} hint="Review supplier tax and freight. This is not the whole-job budget cost." />
-      <Field disabled={shop} label="Customer amount for this PO scope (optional)" type="number" value={form.amount_customer} onChange={v => set('amount_customer', v)} hint="Leave blank when the customer price belongs to the whole job, not this order." />
-      <Field label="Reason for an additional PO for the same quote (when needed)" value={form.additional_order_reason || ''} onChange={v => set('additional_order_reason', v)} />
+      {/* Only a PO with no quote budget can carry its own customer price; a quote's price is on its budget. */}
+      {!shop && !form.budget_id && <Field label="Customer price for this order (optional)" type="number" value={form.amount_customer} onChange={v => set('amount_customer', v)} hint="Only for an order with no quote budget. Leave blank when the job's customer total covers it." />}
+      {/* Asked only when this quote already has a PO (a reorder or an added window). */}
+      {earlier.length > 0 && <Field label={`This quote already has ${earlier.map(p => p.po_number).join(', ')}. Why another PO?`} value={form.additional_order_reason || ''} onChange={v => set('additional_order_reason', v)} hint="For example: added a window, or reordering a damaged unit. At least 10 characters." />}
     </div>
+    {draftSource && <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{source.title} is still a Draft, so it can't be ordered. Set its Budget use to “Counted in budget” on the card below, then prepare the PO.</p>}
     {source && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Budget customer total: <strong>{money(source.inputs?.actual_total_sell)}</strong> (context only). {prepareBudgetPO(source).supplier_hint}</p>}
     <label className="mt-3 block text-xs font-semibold text-slate-600">Scope / ordering notes<textarea className="mt-1 min-h-20 w-full rounded-lg border p-3 text-sm" value={form.notes} onChange={e => set('notes', e.target.value)} /></label>
     {amount(form.amount_dealer) === 0 && <Review checked={zero} onChange={setZero}>The supplier cost is intentionally zero.</Review>}
     <Review checked={reviewed} onChange={setReviewed}>I reviewed the purchase purpose, supplier, reference, scope and payable. Issue a PO record only; do not place or email an order.</Review>
-    <ErrorLine error={error} /><Buttons busy={busy} enabled={reviewed && !!form.vendor && !!form.vendor_quote_ref && amount(form.amount_dealer) !== null && (amount(form.amount_dealer) !== 0 || zero)} label="Issue reviewed PO" onCancel={onCancel} />
+    <ErrorLine error={error} /><Buttons busy={busy} enabled={reviewed && !draftSource && !!form.vendor && !!form.vendor_quote_ref && amount(form.amount_dealer) !== null && (amount(form.amount_dealer) !== 0 || zero) && (!earlier.length || (form.additional_order_reason || '').trim().length >= 10)} label="Issue reviewed PO" onCancel={onCancel} />
   </fieldset></form></FormPanel>;
 }
 
