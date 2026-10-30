@@ -1,5 +1,5 @@
 import { computeLaborAmt, computeFeeAmt, extractLaborAmount } from "./billingCore.js";
-import { createJobIndex, resolveJob, planJobMatches, pendingIdResolver, draftRecord, OWN_COMPANY_PREFIX, isOwnCompany } from "./jobIdentity.js";
+import { createJobIndex, resolveJob, planJobMatches, pendingIdResolver, draftRecord, OWN_COMPANY_PREFIX, isOwnCompany, isTaskWording } from "./jobIdentity.js";
 export { computeLaborAmt, computeFeeAmt, extractLaborAmount, pendingIdResolver, draftRecord };
 // Shared ingest helpers used by both fetchCalendarEvents and fetchProbuildPosts.
 // Never copy this logic into a function — import it.
@@ -15,6 +15,15 @@ export function normalizeJobName(raw) {
   s = s.replace(/[.,;:!?\-–—]+$/, "");
   s = s.replace(/\s+/g, " ").trim();
   return s;
+}
+
+// The name a NEW job gets from a calendar title: builder then job name only. The
+// company prefix, (notes) and trailing task wording stay on the event, not the job
+// ("Y A Windows - Steve Edgren (Newco) - Pickup ONLY, hold at YA shop" -> "steve edgren").
+export function jobNameFromTitle(raw) {
+  const parts = normalizeJobName(raw).split(/\s+[-–—]+\s+/);
+  while (parts.length > 1 && isTaskWording(parts[parts.length - 1])) parts.pop();
+  return parts.join(" - ").replace(/[.,;:!?\-–—\s]+$/, "").trim();
 }
 
 export function levenshtein(a, b) {
