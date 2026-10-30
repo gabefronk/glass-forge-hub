@@ -150,7 +150,10 @@ export function createOrderEmailHandler({ getClient, request = fetch, now = () =
       if (!accessToken) return reply({ error: 'Outlook is not connected to the Hub.' }, 503);
       const graph = (path, init = {}) => request(GRAPH + path, { ...init, headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', ...init.headers } });
       const me = await graph('/me?$select=mail,userPrincipalName,displayName').then((r) => (r.ok ? r.json() : null)).catch(() => null);
-      const from = text(me?.mail || me?.userPrincipalName);
+      // The account's sign-in can differ from the address its mail goes out from (an Outlook.com
+      // alias, e.g. YAWindowInstall@outlook.com): the newest sent email says which one it is.
+      const lastSent = await graph('/me/mailFolders/sentitems/messages?$top=1&$orderby=sentDateTime%20desc&$select=from').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      const from = text(lastSent?.value?.[0]?.from?.emailAddress?.address || me?.mail || me?.userPrincipalName);
 
       if (input.action === 'prepare') {
         const earlier = pageItems(await db.PurchaseOrders.filter({ order_email_status: 'sent' }, { sort: '-order_email_at', limit: 50 }).catch(() => []));
