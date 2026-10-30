@@ -819,7 +819,7 @@ function JobInfo({ snap, folder }) {
 // alert (optional): a node shown first in the chip row by the job name — the red service-item marker.
 // onScheduleNext (optional): "Pick a date" on the status bar's "Up next" stage, when that stage
 // isn't on the calendar yet.
-export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, onEditAddress = null, extra, headingLevel = "h1", progress = null, alert = null, upcoming = null, payment = null, corner = null, onScheduleNext = null }) {
+export function JobHero({ job, status, snap, jobContacts, events, folder, plans, onFieldReport, onRename, onEditAddress = null, extra, headingLevel = "h1", progress = null, alert = null, payment = null, corner = null, onScheduleNext = null }) {
   // The builder already leads most job names ("Bangerter Homes - Gomez Res"); only add it
   // to the eyebrow when the title doesn't carry it.
   const builderText = sanitizeText(job.builder || "");
