@@ -8,8 +8,6 @@
 export const BUDGET_DEFAULTS = Object.freeze({
   material_margin: 0.30,
   labor_margin: 0.27,
-  labor_overhead_factor: 0.74,
-  overhead_keep_pct: 0.20,
 });
 export const roundMoney = (n) => Math.round((Number(n) + Number.EPSILON * Math.max(1, Math.abs(Number(n)))) * 100) / 100;
 const _num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -17,25 +15,24 @@ export function computeJobBudget(inputs = {}, opts = {}) {
   const matMargin = _num(opts.material_margin ?? BUDGET_DEFAULTS.material_margin);
   const labMargin = _num(opts.labor_margin ?? BUDGET_DEFAULTS.labor_margin);
   const materialTrueCost = _num(inputs.material_true_cost);
-  const overheadAdderIn = _num(inputs.overhead_adder);
   const addlInstallMatl = _num(inputs.additional_install_material);
   const addlEquipment = _num(inputs.additional_equipment);
   const laborCostSubPay = _num(inputs.labor_cost_sub_pay);
   const laborSellPrice = _num(inputs.labor_sell_price);
   const actualTotalSell = _num(inputs.actual_total_sell);
-  const overheadAdder = overheadAdderIn !== 0 ? overheadAdderIn : (laborCostSubPay ? (laborCostSubPay / BUDGET_DEFAULTS.labor_overhead_factor) - laborCostSubPay : 0);
-  const budgetCostTotalMaterial = materialTrueCost + overheadAdder * BUDGET_DEFAULTS.overhead_keep_pct;
+  // No overhead is added (Gabriel, Oct 30 2026): the sub pay already covers it.
+  const budgetCostTotalMaterial = materialTrueCost;
   const costMaterialTax = budgetCostTotalMaterial + addlInstallMatl + addlEquipment;
   const sellMaterialTax = matMargin < 1 ? costMaterialTax / (1 - matMargin) : null;
   const laborTargetSell = labMargin < 1 ? laborCostSubPay / (1 - labMargin) : null;
-  const totalCost = costMaterialTax + laborCostSubPay + (overheadAdder - overheadAdder * 0.8);
+  const totalCost = costMaterialTax + laborCostSubPay;
   const actualMarginPct = actualTotalSell > 0 ? 1 - totalCost / actualTotalSell : null;
   const suggestedTotalSell = (sellMaterialTax ?? 0) + (laborSellPrice || laborTargetSell || 0);
   return {
     material_true_cost: roundMoney(materialTrueCost),
     additional_install_material: roundMoney(addlInstallMatl),
     additional_equipment: roundMoney(addlEquipment),
-    overhead_adder: roundMoney(overheadAdder),
+    overhead_adder: 0,
     budget_cost_total_material: roundMoney(budgetCostTotalMaterial),
     cost_material_tax: roundMoney(costMaterialTax),
     sell_material_tax_target: sellMaterialTax === null ? null : roundMoney(sellMaterialTax),
