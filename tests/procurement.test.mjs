@@ -73,7 +73,8 @@ test('cost review suppresses false 100 percent margin but retains genuine negati
   assert.equal(budgetFigures(missing).margin_pct, null);
   assert.equal(budgetFigures({ ...missing, numbers_reviewed_at: stamp }).margin_pct, 1);
   assert.equal(budgetFigures({ inputs: { material_true_cost: 430, actual_total_sell: 400 } }).margin_dollars, -30);
-  assert.equal(budgetFigures(sandy).margin_dollars, 349.19);
+  // 600 - (108.24 material + 125 sub pay): no overhead is added (Gabriel, Oct 30).
+  assert.equal(budgetFigures(sandy).margin_dollars, 366.76);
 });
 test('reference copies and revisions remain stored but are not counted twice', () => {
   const draft = { ...sandy, id: 'b2', budget_usage: 'draft' };
@@ -146,7 +147,7 @@ test('preview and sync estimates never overwrite actual costs, revenue or unrela
   await procurementAction(s.api, { ...body, preview_version: preview.version }, owner, deps);
   const after = s.data.JobCostInputs[0];
   for (const k of ['product_sell', 'actual_labor_cost', 'installation_revenue', 'route', 'notes', 'allocated_overhead']) assert.equal(after[k], record[k]);
-  assert.equal(after.budget_snapshot.margin_dollars, 349.19);
+  assert.equal(after.budget_snapshot.margin_dollars, 366.76);
   assert.deepEqual(Object.keys(estimatePatch({}, 'owner', stamp)).sort(), ['budget_snapshot', 'budget_synced_at', 'budget_synced_by']);
   assert.equal(s.data.PurchaseOrders.length, 0);
 });

@@ -17,28 +17,36 @@ test("workbook replication: BAXTER / Amsco 3517590 matches the filled sheet", ()
 
 test("desired margins drive target sells", () => {
   const b = computeJobBudget({ material_true_cost: 1000, labor_cost_sub_pay: 500 });
-  // B16 = 500/0.74 - 500 = 175.68 -> B17 = 1000 + 35.14 = 1035.14; target sell = 1035.14 / 0.70
-  assert.equal(b.overhead_adder, 175.68);
-  assert.equal(b.sell_material_tax_target, 1478.76);
+  // No overhead (Gabriel, Oct 30 2026): target sell = 1000 / 0.70
+  assert.equal(b.overhead_adder, 0);
+  assert.equal(b.sell_material_tax_target, 1428.57);
   assert.equal(b.labor_target_sell, 684.93); // 500 / 0.73
   assert.equal(b.actual_margin_pct, null);   // no actual sell -> no margin
 });
 
-test("labor cost (sub pay, C24) feeds the overhead adder (B16) and the total cost (B27); labor sell (C25) is price only", () => {
+test("labor cost (sub pay, C24) adds to the total cost once, with no overhead; labor sell (C25) is price only", () => {
   const b = computeJobBudget({ material_true_cost: 1000, labor_cost_sub_pay: 740, labor_sell_price: 1200, actual_total_sell: 3000 });
-  // B16 = 740/0.74 - 740 = 260; B17 = 1000 + 260*0.2 = 1052
-  assert.equal(b.overhead_adder, 260);
-  assert.equal(b.budget_cost_total_material, 1052);
-  // B27 = B21 + C24 + (260 - 208) = 1052 + 740 + 52
-  assert.equal(b.total_cost_overhead, 1844);
+  assert.equal(b.overhead_adder, 0);
+  assert.equal(b.budget_cost_total_material, 1000);
+  assert.equal(b.cost_material_tax, 1000);
+  assert.equal(b.total_cost_overhead, 1740); // 1000 + 740
   assert.equal(b.labor_cost_sub_pay, 740);
   assert.equal(b.labor_sell_price, 1200);
   assert.equal(b.labor_target_sell, 1013.7); // 740 / 0.73
-  assert.equal(b.actual_margin_pct, 0.3853); // 1 - 1844 / 3000
+  assert.equal(b.actual_margin_pct, 0.42);   // 1 - 1740 / 3000
   // the sell price never changes the cost side
   const same = computeJobBudget({ material_true_cost: 1000, labor_cost_sub_pay: 740, actual_total_sell: 3000 });
   assert.equal(same.total_cost_overhead, b.total_cost_overhead);
   assert.equal(same.actual_margin_pct, b.actual_margin_pct);
+});
+
+test("Campbell Addition (AMSCO 3608034): material + sub pay = cost, nothing added", () => {
+  const b = computeJobBudget({ material_true_cost: 1291.13, labor_cost_sub_pay: 489, actual_total_sell: 2496.03 });
+  assert.equal(b.cost_material_tax, 1291.13);
+  assert.equal(b.total_cost_overhead, 1780.13);
+  assert.equal(b.actual_margin_pct, 0.2868); // 1 - 1780.13 / 2496.03
+  // an old stored overhead_adder input is ignored too
+  assert.equal(computeJobBudget({ material_true_cost: 1291.13, labor_cost_sub_pay: 489, overhead_adder: 50 }).total_cost_overhead, 1780.13);
 });
 
 test("excel serial dates round-trip", () => {
