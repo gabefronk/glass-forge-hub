@@ -4,27 +4,26 @@
 //
 // Workbook cells this mirrors (sheet1):
 //   C15  Material True Cost from Quote (includes delivery)
-//   C16  Overhead Adder (INSTLAB, $/unit put in qty; 20% of it feeds B17)
+//   C16  Overhead Adder - dropped (Gabriel, Oct 30 2026): the sub pay already covers it
 //   C18  Additional Install Material
 //   C19  Additional Equipment
-//   C24  Labor Cost (sub pay, non taxable) - yellow input; drives B16 and B27
+//   C24  Labor Cost (sub pay, non taxable) - yellow input; part of B27
 //   C25  Labor Sell Price (non taxable) - manual price, never part of the cost side
 //   B28  Total Sell to Customer, includes tax (actual sell, yellow input)
 //   E22  Desired material margin (0.30)     E25  Desired labor margin (0.27)
-//   B16  =(C24/0.74)-C24   overhead adder from labor cost
-//   B17  =C15+(C16*0.2)    budget cost total (material)
+//   B16  =(C24/0.74)-C24   overhead adder from labor cost - dropped with C16: no overhead
+//        is added anywhere (the job ledger rule is the same: no overhead loading)
+//   B17  =C15              budget cost total (material)
 //   C20  use tax - dropped (Gabriel, Oct 24 2026): material cost is entered with tax in it
 //   B21  =C17+C18+C19      cost material   (note: workbook uses C17..C19,
 //        where C17 mirrors B17 - we pass the same value through)
 //   B22  =C21/(1-E22)      sell material/tax at desired margin
-//   B27  =C21+C24+(C16-(C16*0.8))  total cost of material and labor (overhead)
+//   B27  =C21+C24          total cost of material and labor
 //   B29  =(C27/C28-1)*-1   actual margin % vs the real sell
 
 export const BUDGET_DEFAULTS = Object.freeze({
   material_margin: 0.30,     // desired margin on material
   labor_margin: 0.27,        // desired margin on labor
-  labor_overhead_factor: 0.74, // B16 divisor
-  overhead_keep_pct: 0.20,   // B17 keeps 20% of the overhead adder
 });
 
 export const roundMoney = (n) =>
@@ -48,36 +47,32 @@ export function isoToExcelSerial(iso) {
   return Math.round(t / 86400000) + 25569;
 }
 
-// inputs: material_true_cost, overhead_adder (C16, usually 0), additional_install_material,
-// additional_equipment, labor_cost_sub_pay, labor_sell_price, actual_total_sell (B28),
-// material_margin / labor_margin overrides.
-// Returns every workbook output plus convenience target-sell figures.
+// inputs: material_true_cost, additional_install_material, additional_equipment,
+// labor_cost_sub_pay, labor_sell_price, actual_total_sell (B28), material_margin /
+// labor_margin overrides. Returns every workbook output plus convenience target-sell
+// figures. overhead_adder is always 0 and total_cost_overhead keeps its stored name, but
+// neither carries any overhead.
 export function computeJobBudget(inputs = {}, opts = {}) {
   const matMargin = num(opts.material_margin ?? BUDGET_DEFAULTS.material_margin);
   const labMargin = num(opts.labor_margin ?? BUDGET_DEFAULTS.labor_margin);
 
   const materialTrueCost = num(inputs.material_true_cost);
-  const overheadAdderIn = num(inputs.overhead_adder); // C16 manual override, normally 0
   const addlInstallMatl = num(inputs.additional_install_material);
   const addlEquipment = num(inputs.additional_equipment);
   const laborCostSubPay = num(inputs.labor_cost_sub_pay);
   const laborSellPrice = num(inputs.labor_sell_price);
   const actualTotalSell = num(inputs.actual_total_sell);
 
-  // B16 - overhead adder derived from labor cost (C24) unless manually entered.
-  const overheadAdder = overheadAdderIn !== 0
-    ? overheadAdderIn
-    : (laborCostSubPay ? (laborCostSubPay / BUDGET_DEFAULTS.labor_overhead_factor) - laborCostSubPay : 0);
-  // B17 - budget cost total (material).
-  const budgetCostTotalMaterial = materialTrueCost + overheadAdder * BUDGET_DEFAULTS.overhead_keep_pct;
+  // B17 - budget cost total (material): the material cost as entered.
+  const budgetCostTotalMaterial = materialTrueCost;
   // B21 - cost material (no use tax added).
   const costMaterialTax = budgetCostTotalMaterial + addlInstallMatl + addlEquipment;
   // B22 - sell material/tax at desired margin.
   const sellMaterialTax = matMargin < 1 ? costMaterialTax / (1 - matMargin) : null;
   // Labor target sell at desired labor margin (workbook leaves labor sell, C25, manual).
   const laborTargetSell = labMargin < 1 ? laborCostSubPay / (1 - labMargin) : null;
-  // B27 - total cost of material and labor (overhead): C21 + C24 + (C16 - C16*0.8).
-  const totalCost = costMaterialTax + laborCostSubPay + (overheadAdder - overheadAdder * 0.8);
+  // B27 - total cost of material and labor: C21 + C24.
+  const totalCost = costMaterialTax + laborCostSubPay;
   // B29 - actual margin vs the real customer sell.
   const actualMarginPct = actualTotalSell > 0 ? 1 - totalCost / actualTotalSell : null;
   // Convenience: suggested total sell = material target + labor target.
@@ -87,7 +82,7 @@ export function computeJobBudget(inputs = {}, opts = {}) {
     material_true_cost: roundMoney(materialTrueCost),
     additional_install_material: roundMoney(addlInstallMatl),
     additional_equipment: roundMoney(addlEquipment),
-    overhead_adder: roundMoney(overheadAdder),
+    overhead_adder: 0,
     budget_cost_total_material: roundMoney(budgetCostTotalMaterial),
     cost_material_tax: roundMoney(costMaterialTax),
     sell_material_tax_target: sellMaterialTax === null ? null : roundMoney(sellMaterialTax),
