@@ -22,6 +22,15 @@ export function marginTone(pct) {
   return pct >= 0.25 ? 'green' : pct >= 0.15 ? 'amber' : 'red';
 }
 
+// Under Budget cost: how many scopes the header adds up, and whether they are drafts
+// (counted because no scope is marked Counted yet; see countedBudgets).
+export function scopeCountLabel(rollup = {}) {
+  const n = Number(rollup?.count) || 0;
+  const scopes = `${n} scope${n === 1 ? '' : 's'}`;
+  if (!n) return 'No scope yet';
+  return rollup?.drafts ? `${scopes} · draft` : `${scopes} counted`;
+}
+
 export function budgetSummary(job = {}, rollup = {}) {
   const manualCost = num(job?.manual_budget_cost);
   const manualSell = num(job?.manual_customer_total);
