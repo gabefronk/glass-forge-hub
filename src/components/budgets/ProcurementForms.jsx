@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { C } from '@/lib/feeUI';
-import { amount, prepareBudgetPO, activeBudgets, budgetVersion, isLiveBudget, sameVendor } from '../../../base44/shared/procurementCore.js';
+import { amount, prepareBudgetPO, activeBudgets, budgetVersion, isLiveBudget } from '../../../base44/shared/procurementCore.js';
+import { existingPOsForQuote } from '@/lib/purchaseOrderSetup';
 import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
 
 export const money = value => amount(value) === null ? '\u2014' : amount(value).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -32,15 +33,6 @@ function ErrorLine({ error }) { return error ? <p role="alert" className="mt-3 r
 function Review({ checked, onChange, children }) { return <label className="my-4 flex items-start gap-2 text-sm text-slate-700"><input className="mt-1" type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />{children}</label>; }
 function Buttons({ busy, enabled = true, label, onCancel }) {
   return <div className="mt-3 flex flex-wrap gap-2"><button type="submit" disabled={busy || !enabled} className={buttonClass} style={primaryStyle}>{busy ? 'Saving...' : label}</button><button type="button" disabled={busy} onClick={onCancel} className={buttonClass} style={secondaryStyle}>Cancel</button></div>;
-}
-
-// Live POs already issued for this quote (same budget, or same quote number and supplier) -
-// the same match the server uses before it asks why another PO is needed.
-export function existingPOsForQuote(purchaseOrders = [], form = {}, jobId = '') {
-  const ref = String(form.vendor_quote_ref || '').trim().toUpperCase();
-  return purchaseOrders.filter(po => po.status !== 'cancelled' && po.job_id === jobId && (
-    (form.budget_id && po.budget_id === form.budget_id) ||
-    (ref && String(po.vendor_quote_ref || '').trim().toUpperCase() === ref && sameVendor(po, { vendor: form.vendor }))));
 }
 
 export function PurchaseOrderForm({ job, budgets, purchaseOrders = [], initialBudget, onDone, onCancel }) {

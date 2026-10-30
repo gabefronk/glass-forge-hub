@@ -1,3 +1,5 @@
+import { sameVendor } from './purchasingCoreTwin.js';
+
 const text = value => String(value ?? "").trim();
 
 export function approvedSetupSheetContext(sheets, jobId) {
@@ -54,4 +56,13 @@ export function purchaseOrderSubmission({ form, context, reviewed }) {
     amount_customer: text(form?.amount_customer),
     notes: text(form?.notes),
   };
+}
+
+// Live POs already issued for this quote (same budget, or same quote number and supplier) -
+// the same match the server uses before it asks why another PO is needed.
+export function existingPOsForQuote(purchaseOrders = [], form = {}, jobId = '') {
+  const ref = String(form.vendor_quote_ref || '').trim().toUpperCase();
+  return purchaseOrders.filter(po => po.status !== 'cancelled' && po.job_id === jobId && (
+    (form.budget_id && po.budget_id === form.budget_id) ||
+    (ref && String(po.vendor_quote_ref || '').trim().toUpperCase() === ref && sameVendor(po, { vendor: form.vendor }))));
 }
