@@ -29,7 +29,8 @@ export const isOwner = (user) => !!user && OWNER_IDS.has(user.id);
 
 export const CREW_CALENDAR = 'iryedra@gmail.com';
 // Crew calendars an owner may pick for a new visit. Key -> calendar id. Anything else is rejected.
-export const CREW_CALENDARS = { israel: 'iryedra@gmail.com', milan: 'milanfronk@gmail.com' };
+// Milan's crew calendar is the owner-held "MILAN" calendar; milanfronk@gmail.com is not shared with the connected account.
+export const CREW_CALENDARS = { israel: 'iryedra@gmail.com', milan: '08a2b4c1b1445699212a273e19ea019b2856ee0fd90ee714535ad3038413921a@group.calendar.google.com' };
 export const calendarIdFor = (key) => CREW_CALENDARS[key == null ? 'israel' : key] || null;
 // 'both' lands the same visit on every crew calendar (same event id on each; ids are per calendar).
 export const calendarKeysFor = (key) => (key === 'both' ? Object.keys(CREW_CALENDARS) : [key == null ? 'israel' : key]);
