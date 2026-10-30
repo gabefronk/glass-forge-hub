@@ -1,5 +1,5 @@
 import { computeLaborAmt, computeFeeAmt, extractLaborAmount } from "./billingCore.js";
-import { createJobIndex, resolveJob, planJobMatches, pendingIdResolver, draftRecord } from "./jobIdentity.js";
+import { createJobIndex, resolveJob, planJobMatches, pendingIdResolver, draftRecord, OWN_COMPANY_PREFIX, isOwnCompany } from "./jobIdentity.js";
 export { computeLaborAmt, computeFeeAmt, extractLaborAmount, pendingIdResolver, draftRecord };
 // Shared ingest helpers used by both fetchCalendarEvents and fetchProbuildPosts.
 // Never copy this logic into a function — import it.
@@ -8,7 +8,7 @@ export { computeLaborAmt, computeFeeAmt, extractLaborAmount, pendingIdResolver, 
 export function normalizeJobName(raw) {
   if (!raw) return "";
   let s = String(raw).toLowerCase().trim();
-  s = s.replace(/^ya\b\s*[-–—]?\s*/, "");
+  s = s.replace(OWN_COMPANY_PREFIX, "");
   s = s.replace(/^#\d+\s*/, "");
   s = s.replace(/\([^)]*\)/g, " ");
   s = s.replace(/\bcash\s+account\b\s*$/, "");
@@ -188,9 +188,9 @@ export function accumulateJobPatch(u, ev) {
 export function extractBuilder(jobName) {
   if (!jobName) return null;
   // Case-insensitive: "YA - Pulte Home - …" must yield "Pulte Home", not "YA".
-  let s = String(jobName).replace(/^ya\b\s*[-–—]?\s*/i, "").trim();
+  let s = String(jobName).replace(OWN_COMPANY_PREFIX, "").trim();
   const m = s.match(/^([A-Z][A-Za-z0-9&\s.'-]+?)\s*[-–—]\s*/);
-  if (m && m[1].trim()) return m[1].trim();
+  if (m && m[1].trim() && !isOwnCompany(m[1])) return m[1].trim();
   return null;
 }
 
