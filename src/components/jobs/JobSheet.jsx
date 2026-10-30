@@ -12,7 +12,6 @@ import { eventAttachments, isGmailOnly, openAttachment } from "@/components/jobs
 import { useJobSuper } from "@/hooks/use-job-super";
 import { useJobHomeowner, searchContacts } from "@/hooks/use-job-homeowner";
 import { pickHomeowner } from "../../../base44/shared/jobHomeowner.js";
-import { nextVisitProjection } from "@/lib/jobCalendarShared";
 import { homeownerEditLabel, showHomeownerEdit } from "@/lib/homeownerAction";
 
 // "Sand & brass" job sheet: a dark hero (name, address, super, next step,
@@ -775,7 +774,6 @@ export function JobAddress({ job, onEditAddress }) {
 
 const HERO_BTN = "inline-flex h-[38px] items-center gap-[7px] rounded-[9px] px-3.5 text-[13.5px] font-semibold whitespace-nowrap";
 const HERO_SEC = { backgroundColor: "rgba(255,255,255,.09)", color: HERO_INK, border: "1px solid rgba(255,255,255,.12)" };
-const STEP_CHIP = { bad: ["#f1b9b3", "#4a0f0d"], warn: [BRASS_LT, "#1d160a"], teal: [BRASS_LT, "#1d160a"], neutral: ["rgba(224,201,148,.2)", BRASS_LT] };
 
 // Crew, every PO and OE, and the job folder, folded under the address. Same values the
 // old "The job" card showed (snap.refs / snap.facts from jobSnapshot, folder from
@@ -828,12 +826,6 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
   const flat = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const builderInTitle = builderText && flat(job.canonical_name).includes(flat(builderText).split(" ")[0]);
   const eyebrow = [snap.kind, builderInTitle ? "" : builderText].filter(Boolean).join(" · ").toUpperCase();
-  const [chipBg, chipInk] = STEP_CHIP[snap.step.tone] || STEP_CHIP.neutral;
-  const [lead, ...rest] = String(snap.step.text || "").split(/(?<=\.)\s+/);
-  // When the scoped crew-calendar read found a confirmed upcoming visit, the hero
-  // leads with it instead of the saved-completion step (which may lag the live
-  // calendar). Saved job completion status (status.label, snap) is untouched.
-  const proj = useMemo(() => (upcoming && upcoming.events && upcoming.events.length) ? nextVisitProjection(upcoming.events) : null, [upcoming]);
 
   return (
     <section className="relative z-[3] rounded-[14px]" style={{ background: "linear-gradient(160deg,#10292b 0%,#0a1d1f 100%)", boxShadow: "0 20px 44px -26px rgba(10,29,31,.7)" }}>
