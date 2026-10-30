@@ -170,7 +170,7 @@ export function describeReviewed(p) {
   const rows = [
     ['Title', p.title],
     ['Jobsite', p.address || (p.confirm_no_jobsite ? 'None (confirmed)' : '—')],
-    ['Crew calendar', p.calendar === 'both' ? 'Both: Israel (iryedra@gmail.com) and Milan (milanfronk@gmail.com)' : p.calendar === 'milan' ? 'Milan (milanfronk@gmail.com)' : 'Israel (iryedra@gmail.com)'],
+    ['Crew calendar', p.calendar === 'both' ? 'Both: Israel (iryedra@gmail.com) and Milan (MILAN calendar)' : p.calendar === 'milan' ? 'Milan (MILAN calendar)' : 'Israel (iryedra@gmail.com)'],
   ];
   if (p.all_day) {
     rows.push(['Start', `${fmtDay(p.start_date)} · all day`]);
