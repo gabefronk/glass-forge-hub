@@ -56,15 +56,21 @@ export function normalizeCustomer(raw) {
     .join(" ");
 }
 
+// Y A Windows is this company, never a customer. Its title prefix ("YA - ", "Y A - ",
+// "YA Windows - ", "Y A Windows & Doors - ") is dropped before names are compared.
+export const OWN_COMPANY_PREFIX = /^y\s?a\b(?:\s+windows\b(?:\s*(?:&|and)\s*doors\b)?)?\s*[-–—]?\s*/i;
+const OWN_COMPANY_NAMES = new Set(["ya", "y a", "ya windows", "y a windows", "ya windows doors", "y a windows doors"]);
+export const isOwnCompany = (raw) => OWN_COMPANY_NAMES.has(normalizeCustomer(raw));
+
 function cleanName(name) {
-  return String(name || "").trim().replace(/^ya\b\s*[-–—]?\s*/i, "").replace(/^#\d+\s*/, "");
+  return String(name || "").trim().replace(OWN_COMPANY_PREFIX, "").replace(/^#\d+\s*/, "");
 }
 
 // Customer (builder) and the rest of the job name after the customer.
 export function jobCustomer(job) {
   const name = cleanName(job?.canonical_name);
-  // Older calendar syncs stored the "YA" title prefix as the builder; it names no customer.
-  const explicit = [job?.builder, job?.customer_name].find((v) => v && normalizeCustomer(v) && normalizeCustomer(v) !== "ya") || "";
+  // Calendar syncs stored the "YA" / "Y A Windows" title prefix as the builder; it names no customer.
+  const explicit = [job?.builder, job?.customer_name].find((v) => v && normalizeCustomer(v) && !isOwnCompany(v)) || "";
   const parts = name.split(DASH_SPLIT);
   if (explicit) {
     const b = String(explicit).trim().toLowerCase();
@@ -346,6 +352,13 @@ export function resolveJob(input, index) {
     return review("name_on_several_jobs", fitting);
   }
 
+  // 3b. The same name with trailing task wording dropped ("Steve Edgren - Pickup ONLY,
+  // hold at YA shop" is the "Steve Edgren" job). A dropped part never holds a digit
+  // (address, lot, PO), a builder shared by several jobs is never the match, and a
+  // job at another address stays another job.
+  const trimmed = withoutTaskWording(normName, builder, me, index);
+  if (trimmed) return trimmed.ok ? attach(trimmed.job, "name_without_task") : review("name_without_task_on_several_jobs", trimmed.jobs);
+
   // An address with no house number (a subdivision, or only a city) is too weak
   // to attach on, and too weak to create beside another job that shares it.
   const loose = me.address ? "" : looseAddressKey(address);
@@ -356,6 +369,37 @@ export function resolveJob(input, index) {
   //    new job. Name similarity to a different lot/unit must not block it.
   if (poNumber || oeNumber || address || me.address) return create("new_identity");
   return null; // caller decides by name similarity
+}
+
+// A customer name used by two or more jobs ("Pulte Home") is a builder, not one job.
+function isBuilderName(name, index) {
+  const customer = normalizeCustomer(name);
+  if (!customer) return false;
+  let n = 0;
+  for (const info of index.info.values()) if (info.customer === customer && info.name && ++n >= 2) return true;
+  return false;
+}
+
+// Step 3b of resolveJob. Returns null (no match), { ok, job } or { ok: false, jobs }.
+function withoutTaskWording(normName, builder, me, index) {
+  const parts = String(normName || "").split(DASH_SPLIT);
+  const known = builder && !isOwnCompany(builder) ? normalizeCustomer(builder) : "";
+  const fits = (j) => {
+    const info = index.info.get(j.id);
+    return !addressesClash(me.address, info.address) && !(known && customersConflict(known, info.customer));
+  };
+  for (let k = parts.length - 1; k >= 1; k--) {
+    if (/\d/.test(parts[k])) return null;
+    const shorter = parts.slice(0, k).join(" - ").trim();
+    if (!shorter || isBuilderName(shorter, index)) return null;
+    const hits = index.byName.get(shorter) || [];
+    if (!hits.length) continue;
+    const fitting = canonicalSet(hits.filter(fits), index);
+    if (!fitting.length) return null;
+    if (fitting.length === 1 || compatibleRecords(fitting, index)) return { ok: true, job: fitting[0] };
+    return { ok: false, jobs: fitting };
+  }
+  return null;
 }
 
 // Plans one ingestion batch. items: [{ key, normName, rawName, builder, address,
