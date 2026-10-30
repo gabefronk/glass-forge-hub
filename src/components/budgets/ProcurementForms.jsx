@@ -19,7 +19,7 @@ export async function purchasingRequest(body) {
 export const messageOf = error => error?.response?.data?.error || error?.message || 'The request could not be completed. Refresh before retrying.';
 export function Field({ label, value, onChange, type = 'text', children = undefined, disabled = false, hint = '' }) {
   const cls = 'mt-1 w-full min-w-0 rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 disabled:opacity-60';
-  return <label className="block min-w-0 text-xs font-semibold text-slate-600">{label}
+  return <label className="block min-w-0 text-[13px] font-semibold text-slate-600">{label}
     {children ? <select className={cls} value={value} disabled={disabled} onChange={e => onChange(e.target.value)}>{children}</select>
       : <input className={cls} type={type} step={type === 'number' ? 'any' : undefined} min={type === 'number' ? '0' : undefined} inputMode={type === 'number' ? 'decimal' : undefined} value={value ?? ''} disabled={disabled} onChange={e => onChange(e.target.value)} />}
     {hint && <span className="mt-1 block font-normal leading-5">{hint}</span>}
@@ -101,7 +101,7 @@ export function PurchaseOrderForm({ job, budgets, purchaseOrders = [], initialBu
     </div>
     {draftSource && <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{source.title} is still a Draft, so it can't be ordered. Set its Budget use to “Counted in budget” on the card below, then prepare the PO.</p>}
     {source && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Budget customer total: <strong>{money(source.inputs?.actual_total_sell)}</strong> (context only). {prepareBudgetPO(source).supplier_hint}</p>}
-    <label className="mt-3 block text-xs font-semibold text-slate-600">Scope / ordering notes<textarea className="mt-1 min-h-20 w-full rounded-lg border p-3 text-sm" value={form.notes} onChange={e => set('notes', e.target.value)} /></label>
+    <label className="mt-3 block text-[13px] font-semibold text-slate-600">Scope / ordering notes<textarea className="mt-1 min-h-20 w-full rounded-lg border p-3 text-sm" value={form.notes} onChange={e => set('notes', e.target.value)} /></label>
     {amount(form.amount_dealer) === 0 && <Review checked={zero} onChange={setZero}>The supplier cost is intentionally zero.</Review>}
     <Review checked={reviewed} onChange={setReviewed}>I reviewed the purchase purpose, supplier, reference, scope and payable. Issue a PO record only; do not place or email an order.</Review>
     <ErrorLine error={error} /><Buttons busy={busy} enabled={reviewed && !draftSource && !!form.vendor && !!form.vendor_quote_ref && amount(form.amount_dealer) !== null && (amount(form.amount_dealer) !== 0 || zero) && (!earlier.length || (form.additional_order_reason || '').trim().length >= 10)} label="Issue reviewed PO" onCancel={onCancel} />
