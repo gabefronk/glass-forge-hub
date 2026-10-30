@@ -1,7 +1,7 @@
 import { assessBillingLine, isSalesTrackerOnlyEvent } from "../../shared/billingAudit.js";
 import { isIgnoredWorkItem, pricingReview, canonicalPostRows, COMPANION_WINDOW_DAYS } from "../../shared/billingCore.js";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { normalizeJobName, planIngestJobs, pendingIdResolver, draftRecord, jobSiteFromLocation, accumulateJobPatch, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit, isTripChargeAmount } from '../../shared/ingestShared.ts';
+import { normalizeJobName, jobNameFromTitle, planIngestJobs, pendingIdResolver, draftRecord, jobSiteFromLocation, accumulateJobPatch, computeLaborAmt, computeFeeAmt, invoiceMonthFromDate, extractLaborAmount, extractTicketSequence, mergeReviewFlags, extractBuilder, htmlToText, extractProfitSplit, isTripChargeAmount } from '../../shared/ingestShared.ts';
 import { fetchAllPages } from '../../shared/pagination.ts';
 
 // Derive FeeLines from CalendarEvents (the single Google reader).
@@ -162,7 +162,8 @@ export default async function(req) {
         noCreate: backfillIds.has(ev.google_event_id) || !!(ex && (ex.manually_adjusted || ex.billed_to_bfs || ex.written_by === 'app' || lockedMonths.has(ex.invoice_month))),
       };
     }), jobsArr, (item) => ({
-      canonical_name: item.normName, aliases: [item.normName],
+      // Builder then job name only; the full title stays an alias so the same event re-matches.
+      canonical_name: jobNameFromTitle(item.rawName) || item.normName, aliases: [...new Set([jobNameFromTitle(item.rawName) || item.normName, item.normName])],
       po_numbers: item.poNumber ? [item.poNumber] : [],
       oe_numbers: item.oeNumber ? [item.oeNumber] : [],
       address: item.address || null,
