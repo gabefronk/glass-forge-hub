@@ -2,20 +2,14 @@ import React, { useRef, useState } from 'react';
 import { UploadCloud, FileText, Loader2, AlertCircle, RotateCw } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { C } from '@/lib/feeUI';
+import { MAX_QUOTE_BYTES, uploadQuote } from '@/lib/jobFileUpload';
 
 // Private quote-PDF dropzone. The PDF bytes go to purchasingQuoteIngest, which
 // (after owner-id auth) uploads them to private storage itself and records a
 // server-only receipt. The client never sees or sends a file ref or URL.
 // One stable request_key per chosen file: a retry after an unknown outcome
 // reuses it, so the server replays instead of creating a duplicate.
-const MAX_PDF_BYTES = 5 * 1024 * 1024;
-
-const toBase64 = (file) => new Promise((resolve, reject) => {
-  const r = new FileReader();
-  r.onload = () => resolve(String(r.result).split(',')[1] || '');
-  r.onerror = () => reject(new Error('Could not read the file.'));
-  r.readAsDataURL(file);
-});
+// A job's Budget & Orders page uses JobFilesPanel, which also takes drawings and photos.
 
 export default function QuoteDropzone({ jobId, onDone }) {
   const inputRef = useRef(null);
@@ -27,12 +21,7 @@ export default function QuoteDropzone({ jobId, onDone }) {
   async function send(job) {
     setBusy(true); setStatus(null);
     try {
-      const file_base64 = await toBase64(job.file);
-      const res = await base44.functions.invoke('purchasingQuoteIngest', {
-        action: 'ingest', file_name: job.file.name, file_type: job.file.type || '', file_base64, request_key: job.key, ...(jobId ? { job_id: jobId } : {}),
-      });
-      const data = res?.data || res;
-      if (data?.error) throw new Error(data.error);
+      const data = await uploadQuote({ invoke: (name, body) => base44.functions.invoke(name, body), jobId, file: job.file, requestKey: job.key });
       setPending(null);
       setStatus({ kind: 'ok', text: data.duplicate || data.recovered ? `Already saved: ${data.title || 'quote'}` : `Saved: ${data.title || job.file.name}` });
       if (onDone) onDone(data);
@@ -48,7 +37,7 @@ export default function QuoteDropzone({ jobId, onDone }) {
   function choose(file) {
     if (!file || busy) return;
     if (!/\.pdf$/i.test(file.name)) { setStatus({ kind: 'error', text: 'Quote must be a PDF.' }); return; }
-    if (file.size > MAX_PDF_BYTES) { setStatus({ kind: 'error', text: 'Quote PDF must be under 5 MB.' }); return; }
+    if (file.size > MAX_QUOTE_BYTES) { setStatus({ kind: 'error', text: 'Quote PDF must be under 5 MB.' }); return; }
     const job = { file, key: crypto.randomUUID() };
     setPending(job);
     send(job);
