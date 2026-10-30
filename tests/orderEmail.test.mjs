@@ -71,7 +71,8 @@ function setup({ user = OWNER, canSend = true, record = po, receipts = [{ id: 'r
   const request = async (url, init = {}) => {
     calls.push({ url, method: init.method || 'GET', body: init.body, headers: init.headers || {} });
     if (url.startsWith('https://storage.example/')) return new Response(new Uint8Array([37, 80, 68, 70]));
-    if (url.includes('/me?')) return Response.json({ mail: 'YAWindowInstall@outlook.com', displayName: 'YA Window Install' });
+    if (url.includes('/me?')) return Response.json({ mail: 'gabefronk@gmail.com', displayName: 'YA Window Install' });
+    if (url.includes('/me/mailFolders/sentitems/messages')) return Response.json({ value: [{ from: { emailAddress: { address: 'YAWindowInstall@outlook.com' } } }] });
     if (url.endsWith('/me/messages') && init.method === 'POST') return Response.json({ id: 'msg1', webLink: 'https://outlook.live.com/owa/?ItemID=msg1' }, { status: 201 });
     if (url.endsWith('/me/messages/msg1/send')) return canSend ? new Response(null, { status: 202 }) : Response.json({ error: { code: 'ErrorAccessDenied' } }, { status: 403 });
     return new Response('missing', { status: 404 });
