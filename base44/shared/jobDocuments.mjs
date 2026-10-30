@@ -114,7 +114,8 @@ export function createJobDocumentsHandler({getClient,request=fetch}={}){
     const session=String(input.upload_url||'');if(!isDriveUploadSession(session))return reply({error:'That upload link is not a Drive upload.'},400);
     const bytes=base64Bytes(input.data),offset=Number(input.offset),total=Number(input.total);
     const problem=uploadChunkProblem(offset,bytes.length,total);if(problem)return reply({error:problem},400);
-    const sent=await request(session,{method:'PUT',headers:{Authorization:'Bearer '+accessToken,'Content-Range':`bytes ${offset}-${offset+bytes.length-1}/${total}`},body:bytes});
+    // 308 here is Drive's "resume incomplete", not a redirect to follow.
+    const sent=await request(session,{method:'PUT',redirect:'manual',headers:{Authorization:'Bearer '+accessToken,'Content-Range':`bytes ${offset}-${offset+bytes.length-1}/${total}`},body:bytes});
     if(sent.status===308){const range=sent.headers.get('range')||'';return reply({ok:true,done:false,received:range?Number(range.split('-')[1])+1:0});}
     if(!sent.ok)return reply({error:'Drive stopped the upload ('+sent.status+'). Try again.'},502);
     const f=await sent.json();
