@@ -33,7 +33,10 @@ const EMAIL = /^[^\s@<>(),;:"[\]]+@[^\s@<>(),;:"[\]]+\.[a-z]{2,}$/i;
 export function parseRecipients(value) {
   const parts = (Array.isArray(value) ? value : String(value || '').split(/[,;\s]+/)).map(text).filter(Boolean);
   const list = [], bad = [];
-  for (const p of parts) (EMAIL.test(p) ? (list.some((x) => x.toLowerCase() === p.toLowerCase()) ? null : list.push(p)) : bad.push(p));
+  for (const p of parts) {
+    if (!EMAIL.test(p)) bad.push(p);
+    else if (!list.some((x) => x.toLowerCase() === p.toLowerCase())) list.push(p);
+  }
   return { list, bad };
 }
 
