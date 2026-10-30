@@ -74,7 +74,41 @@
     },
     "order_email_ref": {
       "type": "string",
-      "description": "Reference to the order email sent to the vendor (Gmail message/thread id or subject)."
+      "description": "Reference to the order email sent to the vendor (Gmail message/thread id or subject). The Hub's order email stores the Outlook message link."
+    },
+    "order_email_status": {
+      "type": "string",
+      "enum": [
+        "sent",
+        "drafted"
+      ],
+      "description": "Hub order email (orderEmail function, Oct 30 2026): sent from Outlook, or saved as an Outlook draft."
+    },
+    "order_email_at": {
+      "type": "string",
+      "description": "When the Hub order email was sent or drafted (ISO time)."
+    },
+    "order_email_to": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Who the Hub order email went to; the next order to the same supplier starts from this list."
+    },
+    "order_email_subject": {
+      "type": "string"
+    },
+    "order_email_body": {
+      "type": "string",
+      "description": "The order email text as sent (plain text)."
+    },
+    "order_email_mailbox": {
+      "type": "string",
+      "description": "The Outlook mailbox the order email came from."
+    },
+    "order_email_request_key": {
+      "type": "string",
+      "description": "Request key of the last order email click, so a retry never sends twice."
     },
     "notes": {
       "type": "string"
