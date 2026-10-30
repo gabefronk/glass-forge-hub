@@ -91,8 +91,26 @@ export function activeBudgets(rows = []) {
   const replaced = new Set(included.filter(r => r.replaces_budget_id && rows.some(old => old.id === r.replaces_budget_id && old.job_id === r.job_id)).map(r => r.replaces_budget_id));
   return included.filter(r => !replaced.has(r.id));
 }
-export function budgetRollup(rows = []) {
+// The scopes a job's budget counts: its included quotes or, while none is included, its live
+// draft quotes - the same pool the Purchasing row shows - so the Budget & Orders header reads
+// what the cards below it show (Gabriel, Oct 30).
+export function countedBudgets(rows = []) {
   const active = activeBudgets(rows);
+  if (active.length) return { rows: active, drafts: 0 };
+  const drafts = rows.filter(b => isLiveBudget(b) && b.budget_usage === 'draft');
+  return { rows: drafts, drafts: drafts.length };
+}
+// A reviewed numbers save on a fresh draft that is its job's only scope counts it in the
+// budget: the owner has entered and confirmed his numbers, and nothing else could be
+// double counted. A draft he set back on purpose (already reviewed once), or one of
+// several scopes on the job, keeps its usage.
+export function shouldCountOnReview(record, siblings = []) {
+  if (!record?.job_id || record.budget_usage !== 'draft' || text(record.numbers_reviewed_at)) return false;
+  return !siblings.some(b => b.id !== record.id && b.job_id === record.job_id && isLiveBudget(b) && b.budget_usage !== 'reference');
+}
+export function budgetRollup(rows = [], { draftFallback = false } = {}) {
+  const counted = draftFallback ? countedBudgets(rows) : { rows: activeBudgets(rows), drafts: 0 };
+  const active = counted.rows;
   const warnings = [];
   const items = active.map(row => ({ row, figures: budgetFigures(row) }));
   for (const { row, figures } of items) for (const warning of figures.warnings) warnings.push(`${row.title || row.id}: ${warning}`);
@@ -104,7 +122,7 @@ export function budgetRollup(rows = []) {
   const sum = fn => roundMoney(items.reduce((v, item) => v + (fn(item) || 0), 0));
   const cost = complete ? sum(i => i.figures.cost) : null;
   const sell = complete ? sum(i => i.figures.sell) : null;
-  return { version: 1, status: complete ? 'ready' : active.length ? 'needs_review' : 'empty', count: active.length,
+  return { version: 1, status: complete ? 'ready' : active.length ? 'needs_review' : 'empty', count: active.length, drafts: counted.drafts,
     source_budget_ids: active.map(r => r.id), source_versions: active.map(budgetVersion),
     cost, sell, margin_dollars: complete ? roundMoney(sell - cost) : null,
     margin_pct: complete && sell > 0 ? (sell - cost) / sell : null,
