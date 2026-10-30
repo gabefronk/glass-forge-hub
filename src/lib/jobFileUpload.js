@@ -8,7 +8,7 @@ export const MAX_DRIVE_BYTES = 50 * 1024 * 1024; // job-documents MAX_UPLOAD_BYT
 export const DRIVE_CHUNK_BYTES = 2 * 1024 * 1024; // job-documents UPLOAD_CHUNK_BYTES (8 x 256 KiB)
 
 // Words that mark a PDF as a supplier quote rather than drawings or notes.
-const QUOTE_WORDS = /\b(quote|quotation|estimate|proposal|amsco|pella|andersen|milgard|windor|marvin|jeld|ply ?gem|simonton|anlin|western window|fhc|frameless|bmc|abc supply|nu ?vista|studio)\b/i;
+const QUOTE_WORDS = /\b(quote|quotation|estimate|proposal|amsco|pella|andersen|milgard|windor|marvin|jeld|ply ?gem|simonton|anlin|western window|fhc|frameless|bmc|abc supply|nu ?vista)\b/i;
 
 export const isPdf = (file) => /\.pdf$/i.test(file?.name || '') || file?.type === 'application/pdf';
 
