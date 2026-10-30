@@ -17,7 +17,7 @@
 // looked up from rec.* (this job only), so a record from another job can never load.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Pencil, Plus } from 'lucide-react';
+import { ArrowUpRight, Pencil, Plus, Send } from 'lucide-react';
 import {
   money, purchasingRequest, messageOf,
   PurchaseOrderForm, SupplierOrderForm, OrderStatusForm,
@@ -26,6 +26,7 @@ import { NumbersEditor } from '@/components/budgets/BudgetReviewRow';
 import DeleteUnusedQuoteButton from '@/components/budgets/DeleteUnusedQuoteButton';
 import PurchasingDates from '@/components/budgets/PurchasingDates';
 import JobFilesPanel from './JobFilesPanel';
+import OrderEmailPanel from './OrderEmailPanel';
 import PrivateSourceButton from './PrivateSourceButton';
 import RemoveQuoteButton from './RemoveQuoteButton';
 import { duplicateOf, replacedByQuote } from '@/lib/quoteDuplicates';
@@ -125,17 +126,28 @@ function POLine({ po, budgets, orders, onEdit, onSaved, open, onToggle }) {
   const related = orders.filter((o) => o.purchase_order_id === po.id);
   const quote = source?.quote_number || po.vendor_quote_ref || '';
   const etas = related.map((o) => o.eta_date).filter(Boolean).sort();
+  const emailOrder = () => onEdit({ mode: 'email', po_id: po.id });
+  // Until the order email has gone out, it is one click from the row (Gabriel, Oct 30).
+  const emailAction = po.status === 'issued' && po.order_email_status !== 'sent'
+    ? <button type="button" onClick={emailOrder} className={BTN} style={{ ...PRI, height: 32 }}><Send className="h-3.5 w-3.5" />Email order</button> : null;
   return (
     <div style={{ borderTop: `1px solid ${RULE}` }}>
       <Line supplier={po.vendor} refs={[['PO', po.po_number], ['Quote', quote], ...related.map((o) => ['Order', o.order_number])]}
-        eta={etas[0]} amount={po.amount_dealer} cancelled={po.status === 'cancelled'} open={open} onToggle={onToggle} />
+        eta={etas[0]} amount={po.amount_dealer} cancelled={po.status === 'cancelled'} open={open} onToggle={onToggle} action={emailAction} />
       {open && (
         <div className="flex flex-col gap-2.5 px-4 pb-4 pt-1" style={{ backgroundColor: '#FAF8F3' }}>
           <div className="flex flex-wrap items-center gap-2"><Chip tone="plain">PO {statusWithDate(po)}</Chip>{po.amount_customer != null ? <span className="text-[13px]" style={{ color: INK2 }}>Customer amount {money(po.amount_customer)}</span> : null}</div>
+          {po.order_email_status ? (
+            <p className="text-[13px]" style={{ color: INK2 }}>
+              Order email {po.order_email_status === 'sent' ? 'sent' : 'saved as an Outlook draft'} {etaDate(String(po.order_email_at || '').slice(0, 10))} to {(po.order_email_to || []).join(', ')}.
+              {safeHref(po.order_email_ref) ? <> <a href={po.order_email_ref} target="_blank" rel="noreferrer" className="font-semibold underline">Open in Outlook</a></> : null}
+            </p>
+          ) : null}
           <PurchasingDates row={po} supplier={related[0] || null} showStatus={false} />
           <NotesHistory notes={po.notes} />
           {related.map((o) => <OrderDetail key={o.id} order={o} onEdit={onEdit} onSaved={onSaved} />)}
           <div className="flex flex-wrap gap-2">
+            {po.status !== 'cancelled' ? <button type="button" onClick={emailOrder} className={BTN} style={SEC}><Send className="h-3.5 w-3.5" />{po.order_email_status === 'sent' ? 'Email order again' : 'Email order'}</button> : null}
             <button type="button" onClick={() => onEdit({ mode: 'po_status', po_id: po.id })} className={BTN} style={SEC}>Record PO status</button>
             {related.length === 0 ? <button type="button" onClick={() => onEdit({ mode: 'supplier', po_id: po.id })} className={BTN} style={SEC}>Record supplier confirmation</button> : null}
           </div>
@@ -155,8 +167,8 @@ function OrderLine({ order, onEdit, onSaved, open, onToggle }) {
   );
 }
 
-const LINE_GRID = 'grid items-center gap-3 px-4 py-2.5 [grid-template-columns:minmax(96px,1fr)_minmax(0,2.6fr)_84px_104px_92px] max-[767px]:[grid-template-columns:1fr_auto]';
-function Line({ supplier, refs, eta, amount, cancelled, open, onToggle }) {
+const LINE_GRID = 'grid items-center gap-3 px-4 py-2.5 [grid-template-columns:minmax(96px,1fr)_minmax(0,2.6fr)_84px_104px_minmax(92px,auto)] max-[767px]:[grid-template-columns:1fr_auto]';
+function Line({ supplier, refs, eta, amount, cancelled, open, onToggle, action = null }) {
   const shown = refs.filter(([, v]) => v);
   return (
     <div className={LINE_GRID}>
@@ -167,7 +179,8 @@ function Line({ supplier, refs, eta, amount, cancelled, open, onToggle }) {
       </span>
       <span className="whitespace-nowrap text-[13px] font-medium max-[767px]:hidden" style={{ color: INK }}>{etaDate(eta) || '—'}</span>
       <span className="text-right text-[13.5px] font-semibold tabular-nums max-[767px]:hidden" style={{ color: INK }}>{amount == null || amount === '' ? '—' : money(0 - Number(amount))}</span>
-      <span className="text-right">
+      <span className="flex justify-end gap-2">
+        {action}
         <button type="button" onClick={onToggle} aria-expanded={open} className={BTN} style={{ ...SEC, height: 32 }}>{open ? 'Close' : 'Manage'}</button>
       </span>
     </div>
@@ -396,6 +409,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
       {ed.mode === 'numbers' && currentBudget && <NumbersEditor budget={currentBudget} onDone={budgetDone} hideRefill onCancel={close} />}
       {ed.mode === 'supplier' && <SupplierOrderForm jobs={[job]} purchaseOrders={rec.pos} initialJobId={job.id} initialPO={currentPO} order={currentOrder} onDone={done} onCancel={close} />}
       {ed.mode === 'po_status' && currentPO && <OrderStatusForm row={currentPO} onDone={done} onCancel={close} />}
+      {ed.mode === 'email' && currentPO && <OrderEmailPanel po={currentPO} onDone={done} onCancel={close} />}
       {ed.mode === 'vendor_status' && currentOrder && <OrderStatusForm row={currentOrder} supplier onDone={done} onCancel={close} />}
     </div>
   );
