@@ -388,7 +388,8 @@ export default async function jobBudgetIngest(req) {
   if (action === 'set_inputs') {
     const record = body.budget_id ? await db.JobBudgets.get(String(body.budget_id)).catch(() => null) : null;
     if (!record) return Response.json({ error: 'budget not found' }, { status: 404 });
-    const patch = budgetInputPatch(record, body, user.email, new Date().toISOString());
+    const siblings = record.job_id ? (await fetchCompleteEntity(db.JobBudgets)).filter((b) => b.job_id === record.job_id) : [];
+    const patch = budgetInputPatch(record, body, user.email, new Date().toISOString(), { siblings });
     const values = patch.inputs;
     const budget = patch.computed;
     const job = record.job_id ? await db.Jobs.get(record.job_id) : null;
