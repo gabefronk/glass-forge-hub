@@ -330,9 +330,9 @@ export default function JobDetail() {
           {canWriteJobDocuments(user) && (
             <div className="max-[699px]:hidden">
             <SheetCard icon={FolderOpen} tile={TILE.bronze} title="Drive job folder" sub={job.drive_job_folder_id ? "linked" : "not linked"}>
-              <p className="m-0 text-[13px]" style={{ color: "#566063" }}>Paste the ID of a verified folder inside Glass Forge Jobs. A matching name alone is not enough. {job.drive_job_folder_id ? "Linking a new folder replaces the current link." : ""}</p>
+              <p className="m-0 text-[13px]" style={{ color: "#566063" }}>Paste the Drive folder link (or its ID). It must be inside Glass Forge Jobs; a matching name alone is not enough. {job.drive_job_folder_id ? "Linking a new folder replaces the current link." : ""}</p>
               <div className="mt-2 flex gap-2">
-                <input className="min-w-0 flex-1 rounded-[9px] border p-2 text-[13px]" style={{ borderColor: "#e2dcd1" }} aria-label="Drive folder ID" value={folderId} onChange={(e) => setFolderId(e.target.value)} />
+                <input className="min-w-0 flex-1 rounded-[9px] border p-2 text-[13px]" style={{ borderColor: "#e2dcd1" }} aria-label="Drive folder link" placeholder="https://drive.google.com/drive/folders/…" value={folderId} onChange={(e) => setFolderId(e.target.value)} />
                 <button type="button" disabled={linkingFolder || !folderId.trim()} className="rounded-[9px] px-3 text-[13px] font-semibold text-white disabled:opacity-50" style={{ backgroundColor: "#0b3f3b" }} onClick={attachFolder}>{job.drive_job_folder_id ? "Replace folder link" : "Link folder"}</button>
               </div>
               {job.drive_job_folder_id && <button type="button" disabled={linkingFolder} className="mt-2 text-[13px] underline disabled:opacity-50" onClick={unlinkFolder}>Unlink folder</button>}
