@@ -1,13 +1,15 @@
 import { validateBudgetInputs } from './jobBudgetReview.js';
 import { computeJobBudget } from './jobBudgetMath.js';
-import { budgetVersion } from './procurementCore.js';
+import { budgetVersion, shouldCountOnReview } from './procurementCore.js';
 import { procurementError } from './procurementLock.mjs';
 
 export function assertBudgetVersion(record, expected) {
   if (record?.deleted_at) throw procurementError(409, 'This quote was deleted. Open the current quote instead.');
   if (!expected || budgetVersion(record) !== expected) throw procurementError(409, 'This budget changed. Reopen it before saving.');
 }
-export function budgetInputPatch(record, body, userEmail, at) {
+// siblings: the job's other budgets, when the caller has them. With them, the first reviewed
+// save of a job's only scope also counts it in the budget (shouldCountOnReview).
+export function budgetInputPatch(record, body, userEmail, at, { siblings } = {}) {
   assertBudgetVersion(record, body.expected_version);
   if (body.review_confirmed !== true) throw procurementError(400, 'Review all budget inputs before saving.');
   const checked = validateBudgetInputs(body.inputs || {});
@@ -19,6 +21,7 @@ export function budgetInputPatch(record, body, userEmail, at) {
     // A reviewed save settles the import's "Needs review" on a quote that is already on a job
     // (an unlinked quote keeps it until it is linked).
     ...(record.status === 'needs_review' && record.job_id ? { status: 'filed' } : {}),
+    ...(Array.isArray(siblings) && shouldCountOnReview(record, siblings) ? { budget_usage: 'included' } : {}),
     input_history: [...(record.input_history || []), { at, by: userEmail, action: 'reviewed numbers', inputs: record.inputs || {}, computed: record.computed || {}, previous_reviewed_at: record.numbers_reviewed_at || '' }],
   };
 }
