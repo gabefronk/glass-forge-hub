@@ -868,15 +868,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
       {/* Footer bar: where the job stands on the left, the actions on the right. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-b-[14px] px-6 py-3 max-[699px]:px-4" style={{ backgroundColor: "rgba(255,255,255,.05)", borderTop: "1px solid rgba(255,255,255,.09)" }}>
         <div className="flex min-w-0 flex-1 basis-[320px] flex-wrap items-center gap-2.5">
-          {/* A booked visit is listed in the Upcoming card right below, so the hero doesn't repeat it. */}
-          {proj ? null : (
-            <>
-              <span className="shrink-0 whitespace-nowrap rounded-[7px] px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: chipBg, color: chipInk }}>{snap.step.tag}</span>
-              <p className="m-0 min-w-0 flex-1 text-[15px] font-semibold leading-[21px]" style={{ color: HERO_INK }}>
-                {lead}{rest.length ? <span className="font-medium" style={{ color: HERO_MUTED }}> {rest.join(" ")}</span> : null}
-              </p>
-            </>
-          )}
+          {/* No next-step note here: visits are listed in the Upcoming card right below. */}
           {progress?.next && !progress.next.booked ? (
             <span className="inline-flex max-w-full items-center gap-2 rounded-[9px] py-1 pl-2.5 pr-1 text-[13px]" style={{ border: "1px dashed rgba(224,201,148,.45)", color: HERO_MUTED }}>
               <span className="shrink-0 whitespace-nowrap text-[10.5px] font-semibold uppercase tracking-[.12em]" style={{ color: BRASS_LT }}>Up next</span>
