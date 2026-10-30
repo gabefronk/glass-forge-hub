@@ -3,7 +3,7 @@ import { Pencil } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { HERO_INK, HERO_MUTED, HeroStat } from '@/components/PageShell';
 import { money, percent, messageOf } from '@/components/budgets/ProcurementForms';
-import { budgetSummary, parseDollars } from '@/lib/budgetSummary';
+import { budgetSummary, parseDollars, scopeCountLabel } from '@/lib/budgetSummary';
 
 // The Budget & Orders summary (Gabriel, Oct 24). Budget cost and Customer total are
 // typed straight into the box and saved on the job (manual_budget_cost /
@@ -13,7 +13,7 @@ import { budgetSummary, parseDollars } from '@/lib/budgetSummary';
 // Nothing needs a vendor quote, a verified checkbox or a status record. Display only:
 // these numbers change nothing on Purchasing, invoicing or any other page.
 const BOX = { backgroundColor: 'rgba(207,227,218,.08)', border: '1px solid rgba(207,227,218,.18)' };
-const LABEL = 'text-[10.5px] font-semibold tracking-[.14em]';
+const LABEL = 'text-[13px] font-semibold tracking-[.1em]';
 const TONE = { green: '#86d3a5', amber: '#e0c994', red: '#f3a29a' };
 
 function EditableStat({ label, field, value, quote, emptySub, job, disabled, onSaved }) {
@@ -64,18 +64,18 @@ function EditableStat({ label, field, value, quote, emptySub, job, disabled, onS
           <Pencil className="h-3.5 w-3.5 shrink-0 opacity-70 group-hover:opacity-100" style={{ color: '#e0c994' }} aria-hidden="true" />
         </button>
       )}
-      {error ? <div role="alert" className="mt-0.5 text-[11.5px] font-semibold" style={{ color: '#f3a29a' }}>{error}</div> : null}
+      {error ? <div role="alert" className="mt-0.5 text-[13px] font-semibold" style={{ color: '#f3a29a' }}>{error}</div> : null}
       {manual && quote != null ? (
-        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[11.5px]" style={{ color: HERO_MUTED }}>
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[13px]" style={{ color: HERO_MUTED }}>
           <span>My estimate · Budget {money(quote)}</span>
           {Number(job[field]) !== quote ? (
             <button type="button" disabled={disabled || busy} onClick={() => save(null)} className="font-semibold underline underline-offset-2 disabled:opacity-60" style={{ color: '#e0c994' }}>Use budget</button>
           ) : null}
         </div>
       ) : manual ? (
-        <div className="mt-0.5 text-[11.5px]" style={{ color: HERO_MUTED }}>My estimate</div>
+        <div className="mt-0.5 text-[13px]" style={{ color: HERO_MUTED }}>My estimate</div>
       ) : emptySub ? (
-        <div className="mt-0.5 text-[11.5px] break-words" style={{ color: HERO_MUTED }}>{emptySub}</div>
+        <div className="mt-0.5 text-[13px] break-words" style={{ color: HERO_MUTED }}>{emptySub}</div>
       ) : null}
     </div>
   );
@@ -87,7 +87,7 @@ export default function BudgetSummaryStats({ job, rollup, disabled, onSaved }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <EditableStat label="Budget cost" field="manual_budget_cost" value={s.cost} quote={s.quoteCost} job={job} disabled={disabled} onSaved={onSaved}
-        emptySub={`${rollup.count} included scope${rollup.count === 1 ? '' : 's'}`} />
+        emptySub={scopeCountLabel(rollup)} />
       <EditableStat label="Customer total" field="manual_customer_total" value={s.sell} quote={s.quoteSell} job={job} disabled={disabled} onSaved={onSaved}
         emptySub="Budget estimate, not an invoice" />
       <HeroStat label="Margin dollars" value={money(s.marginDollars)} sub={s.anyManual && s.quoteMarginDollars != null ? `On my estimate · Budget ${money(s.quoteMarginDollars)}` : undefined} />
@@ -98,12 +98,12 @@ export default function BudgetSummaryStats({ job, rollup, disabled, onSaved }) {
           {percent(s.marginPct)}
         </div>
         {s.anyManual ? (
-          <div className="mt-0.5 text-[11.5px]" style={{ color: HERO_MUTED }}>
+          <div className="mt-0.5 text-[13px]" style={{ color: HERO_MUTED }}>
             {s.tone ? (s.tone === 'green' ? 'Healthy (25%+)' : s.tone === 'amber' ? 'Thin (15–25%)' : 'Low (under 15%)') : 'On my estimate'}
             {s.quoteMarginPct != null ? ` · Budget ${percent(s.quoteMarginPct)}` : ''}
           </div>
         ) : (
-          <div className="mt-0.5 text-[11.5px]" style={{ color: HERO_MUTED }}>{s.reviewWarning ? 'Review incomplete or duplicate costs' : 'Based on included scopes'}</div>
+          <div className="mt-0.5 text-[13px]" style={{ color: HERO_MUTED }}>{s.reviewWarning ? (rollup.count ? 'Review the scope numbers below' : 'No scope yet') : 'Based on the scopes below'}</div>
         )}
       </div>
     </div>
