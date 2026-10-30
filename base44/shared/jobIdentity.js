@@ -62,6 +62,12 @@ export const OWN_COMPANY_PREFIX = /^y\s?a\b(?:\s+windows\b(?:\s*(?:&|and)\s*door
 const OWN_COMPANY_NAMES = new Set(["ya", "y a", "ya windows", "y a windows", "ya windows doors", "y a windows doors"]);
 export const isOwnCompany = (raw) => OWN_COMPANY_NAMES.has(normalizeCustomer(raw));
 
+// Task wording on a calendar title says what the visit is for, not which job it is
+// ("Pickup ONLY, hold at YA shop", "Measure", "Warranty service"). A part with a digit
+// (address, lot, plat, PO) is never task wording.
+const TASK_WORDS = /\b(?:pick\s?-?ups?|deliver(?:y|ies)?|drop\s?-?offs?|hold|re-?measure|measure|install(?:ation)?|service|warranty|punch(?:\s?list)?|trip|inspect(?:ion)?|repairs?|fix|finish|trim|screens?|caulk|walk\s?-?through|meeting|eta|ready|re-?order|order(?:ed)?|only|shop|returns?|swap|adjust(?:ment)?|parts)\b/i;
+export const isTaskWording = (part) => !!part && !/\d/.test(part) && TASK_WORDS.test(part);
+
 function cleanName(name) {
   return String(name || "").trim().replace(OWN_COMPANY_PREFIX, "").replace(/^#\d+\s*/, "");
 }
@@ -353,8 +359,8 @@ export function resolveJob(input, index) {
   }
 
   // 3b. The same name with trailing task wording dropped ("Steve Edgren - Pickup ONLY,
-  // hold at YA shop" is the "Steve Edgren" job). A dropped part never holds a digit
-  // (address, lot, PO), a builder shared by several jobs is never the match, and a
+  // hold at YA shop" is the "Steve Edgren" job). Only task wording is dropped (never a
+  // lot, plat or homeowner), a builder shared by several jobs is never the match, and a
   // job at another address stays another job.
   const trimmed = withoutTaskWording(normName, builder, me, index);
   if (trimmed) return trimmed.ok ? attach(trimmed.job, "name_without_task") : review("name_without_task_on_several_jobs", trimmed.jobs);
@@ -389,7 +395,7 @@ function withoutTaskWording(normName, builder, me, index) {
     return !addressesClash(me.address, info.address) && !(known && customersConflict(known, info.customer));
   };
   for (let k = parts.length - 1; k >= 1; k--) {
-    if (/\d/.test(parts[k])) return null;
+    if (!isTaskWording(parts[k])) return null;
     const shorter = parts.slice(0, k).join(" - ").trim();
     if (!shorter || isBuilderName(shorter, index)) return null;
     const hits = index.byName.get(shorter) || [];
