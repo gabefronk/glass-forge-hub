@@ -4,6 +4,7 @@
     "Mail.ReadWrite",
     "User.Read",
     "offline_access",
-    "Calendars.Read"
+    "Calendars.Read",
+    "Mail.Send"
   ]
 }
