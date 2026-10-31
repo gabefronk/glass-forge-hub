@@ -12,7 +12,7 @@ const MONEY = /\$\s?-?[\d,]+\.\d{2}/g;
 const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
 const PHONE = /\(?\b\d{3}\)?[-. ]\d{3}[-. ]\d{4}\b/;
 // Distributors and dealers whose names must never reach the customer (manufacturers stay).
-const OTHER_COMPANIES = /builders\s*first\s*source|\bBFS\b|lehi american|american\s*fork|ox glass|bonneville builders|abc supply|lehigh valley|po box 25178|\bfork\b$/i;
+const OTHER_COMPANIES = /builders\s*first\s*source|\bBFS\b|lehi american|american\s*fork|ox glass|bonneville builders|abc supply|lehigh valley|po box 25178/i;
 
 export const money = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const amountOf = (s) => Number(String(s).replace(/[$,\s]/g, ''));
@@ -84,7 +84,10 @@ export function pagePlan(page, { supplier, factor, company, job = {}, pageIndex 
       if (/^Dealer Quote$/.test(i.str.trim())) take(i, 'Quote', { bold: true });
       else if (/^(Dealer|Customer) Price:$/.test(i.str.trim())) take(i, 'Price:', { bold: true });
       else if (/^Sales Rep:/.test(i.str)) { lineOf(items, i).filter((j) => j.x >= i.x && j.x < i.x + 120).forEach(cover); }
-      else if (/^Quoted by:/.test(i.str)) { lineOf(items, i).filter((j) => j.x > i.x && j.x < i.x + 100).forEach((j) => take(j, j === lineOf(items, i).filter((k) => k.x > i.x && k.x < i.x + 100)[0] ? 'Y A Windows & Doors' : '')); }
+      else if (/^Quoted by:/.test(i.str)) {
+        // "Quoted by: <supplier user>" → "Quoted by: Y A Windows & Doors".
+        lineOf(items, i).filter((j) => j.x > i.x && j.x < i.x + 100).sort((a, b) => a.x - b.x).forEach((j, k) => take(j, k === 0 ? 'Y A Windows & Doors' : ''));
+      }
     }
   }
 
@@ -109,8 +112,7 @@ export function pagePlan(page, { supplier, factor, company, job = {}, pageIndex 
     if (done.has(i)) continue;
     if (EMAIL.test(i.str) || OTHER_COMPANIES.test(i.str.trim()) || (PHONE.test(i.str) && !/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(i.str))) { cover(i); continue; }
     if (/^(Fax|Phone|P|F):?\s*$/i.test(i.str.trim()) && pageIndex === 0 && i.y < page.height * 0.45) { cover(i); continue; }
-    if (factor && MONEY.test(i.str)) { MONEY.lastIndex = 0; take(i, repriceText(i.str, factor), { align: /^\s*\$/.test(i.str) ? 'right' : 'left', bold: i.bold }); }
-    MONEY.lastIndex = 0;
+    if (factor && /\$\s?-?[\d,]+\.\d{2}/.test(i.str)) take(i, repriceText(i.str, factor), { align: /^\s*\$/.test(i.str) ? 'right' : 'left', bold: i.bold });
   }
   return { erase, write, logos };
 }
