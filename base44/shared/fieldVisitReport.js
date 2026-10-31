@@ -464,11 +464,14 @@ export const feeLineMarker = (requestKey) => `[field-visit:${KEY_SAFE(requestKey
 export function reportSummaryLines(report, { job } = {}) {
   const lines = [];
   const eventType = text(report?.event_type);
+  // Labels come from this module's own vocabularies, not from whatever the client sent, so a
+  // stale or forged label can never change how the office reads the report.
+  const labelFrom = (vocab, key, fallback) => (vocab.find((v) => v.key === key) || {}).label || text(fallback) || text(key);
   lines.push(`Event: ${eventTypeLabel(eventType)}`);
   if (report?.completion) lines.push(`Status: ${report.completion === 'complete' ? 'Completed' : 'Incomplete'}`);
   if (text(report?.incomplete_reason)) lines.push(`Why incomplete: ${text(report.incomplete_reason)}`);
-  for (const r of list(report?.not_ready_reasons)) lines.push(`Not ready: ${text(r.label) || text(r.key)}${text(r.note) ? ` — ${text(r.note)}` : ''}`);
-  for (const o of list(report?.sheetrock_outcomes)) lines.push(`Sheetrock: ${text(o.label) || text(o.key)}${text(o.note) ? ` — ${text(o.note)}` : ''}`);
+  for (const r of list(report?.not_ready_reasons)) lines.push(`Not ready: ${labelFrom(notReadyReasonsFor(eventType), text(r.key), r.label)}${text(r.note) ? ` — ${text(r.note)}` : ''}`);
+  for (const o of list(report?.sheetrock_outcomes)) lines.push(`Sheetrock: ${labelFrom(SHEETROCK_OUTCOMES, text(o.key), o.label)}${text(o.note) ? ` — ${text(o.note)}` : ''}`);
   if (text(report?.warranty_issue?.text)) lines.push(`Reported by ${text(report.warranty_issue.reported_by) || 'caller'}: ${text(report.warranty_issue.text)}`);
   const windows = job ? orderedWindowOptions(job) : [];
   const windowLabel = (id, fallback) => text(fallback) || (windows.find((w) => w.id === id) || {}).label || text(id);
@@ -484,7 +487,7 @@ export function reportSummaryLines(report, { job } = {}) {
     if (text(w.note)) bits.push(text(w.note));
     lines.push(bits.join(' · '));
   }
-  for (const it of list(report?.items)) lines.push(`Issue: ${text(it.label) || text(it.key)}${text(it.note) ? ` — ${text(it.note)}` : ''}`);
+  for (const it of list(report?.items)) lines.push(`Issue: ${labelFrom(checklistItemsFor(eventType), text(it.key), it.label)}${text(it.note) ? ` — ${text(it.note)}` : ''}${it.follow_up === true ? ' (still unresolved)' : ''}`);
   for (const s of list(report?.screen_issues)) lines.push(`Screens ${text(s.kind)}: qty ${num(s.quantity) ?? '?'} at ${text(s.location)}${text(s.note) ? ` — ${text(s.note)}` : ''}`);
   for (const c of list(report?.cannot_fix)) lines.push(`Cannot fix ${windowLabel(text(c.window_id), c.window_label)}: ${text(c.note)} (manager review)`);
   if (text(report?.parts_needed)) lines.push(`Parts needed: ${text(report.parts_needed)}`);
