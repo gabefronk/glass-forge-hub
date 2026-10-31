@@ -246,11 +246,65 @@ function QuoteLines({ budget }) {
   );
 }
 
-function CostLine({ label, value, kind }) {
-  const zero = num(value) === 0;
-  const style = kind === 'total' ? { borderTop: '1px solid #CEC6B8', marginTop: 4, paddingTop: 8, fontWeight: 700, color: INK, fontSize: 14.5 }
-    : kind === 'sub' ? { borderTop: '1px dashed #E2DCD1', fontWeight: 600, color: INK } : { color: zero ? '#616A6D' : INK3 };
-  return <div className="flex min-h-[32px] items-center justify-between gap-4 text-[13.5px]" style={style}><span>{label}</span><span className="tabular-nums">{lineMoney(value)}</span></div>;
+// One budget section (Gabriel, Oct 30): sell, cost and margin, then one bar that splits
+// the price into each cost and the margin, keyed by the cost lines. No suggested price.
+// No overhead is added: his sub pay already covers it. Colors pass the dataviz CVD check.
+const COST_PARTS = [
+  ['material_true_cost', 'Material', '#2a78d6'],
+  ['labor_cost_sub_pay', 'Labor (sub pay)', '#eb6834'],
+  ['additional_install_material', 'Install material', '#6250d6'],
+  ['additional_equipment', 'Equipment', '#eda100'],
+];
+const MARGIN_COLOR = '#1baf7a';
+
+function BudgetSummary({ inputs, total, sell, marginPct }) {
+  const profit = sell != null && total != null ? sell - total : null;
+  const parts = [
+    ...COST_PARTS.map(([key, label, color]) => ({ label, color, value: num(inputs[key]) ?? 0 })),
+    ...(profit != null ? [{ label: 'Margin', color: MARGIN_COLOR, value: profit }] : []),
+  ];
+  const scale = Math.max(sell || 0, total || 0) || 1;
+  const share = (v) => (sell ? `${((v / sell) * 100).toFixed(1)}%` : '');
+  const tiles = [
+    ['Customer sell', sell == null ? 'Not set' : lineMoney(sell), sell == null ? INK2 : INK, ''],
+    ['Total cost', lineMoney(total), INK, ''],
+    ['Margin', profit == null ? '—' : lineMoney(profit), profit != null && profit < 0 ? '#A43432' : '#082F2C', profit == null ? '' : `${pct(marginPct)} of sell`],
+  ];
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
+        {tiles.map(([k, v, color, note]) => (
+          <div key={k} className="flex flex-col gap-0.5 rounded-[10px] p-3" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
+            <span className="text-[13px] font-medium" style={{ color: INK2 }}>{k}</span>
+            <span className="text-[19px] font-bold tabular-nums tracking-[-0.02em]" style={{ color }}>{v}</span>
+            {note ? <span className="text-[13px] font-semibold tabular-nums" style={{ color }}>{note}</span> : null}
+          </div>
+        ))}
+      </div>
+      {total > 0 && (
+        <div className="flex h-3.5 gap-[2px] overflow-hidden rounded-[4px]" style={{ backgroundColor: '#F3EFE7' }} role="img" aria-label={parts.map((p) => `${p.label} ${lineMoney(p.value)}`).join(', ')}>
+          {parts.filter((p) => p.value > 0).map((p) => (
+            <span key={p.label} title={`${p.label} ${lineMoney(p.value)}${share(p.value) ? ` · ${share(p.value)}` : ''}`} style={{ width: `${(p.value / scale) * 100}%`, backgroundColor: p.color }} />
+          ))}
+        </div>
+      )}
+      <div className="grid gap-x-5 gap-y-2.5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
+        {parts.map((p) => {
+          const zero = !(p.value > 0);
+          return (
+            <div key={p.label} className="flex flex-col gap-0.5">
+              <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: INK2 }}>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: zero ? EDGE : p.color }} />{p.label}
+              </span>
+              <span className="pl-4 text-[14.5px] font-semibold tabular-nums" style={{ color: zero ? '#616A6D' : INK }}>
+                {lineMoney(p.value)}{share(p.value) && !zero ? <span className="ml-1.5 text-[13px] font-normal" style={{ color: INK2 }}>{share(p.value)}</span> : null}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onPreparePO, onSaved, editorPanel }) {
@@ -280,10 +334,7 @@ function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onPreparePO, onS
   const privateSource = !sourceHref && /^[a-f0-9]{64}$/.test(budget.source_sha256 || '') ? budget.id : null;
   const related = pos.filter((p) => p.budget_id === budget.id);
   const history = distinctHistory(budget);
-  const sell = noSell ? null : num(i.actual_total_sell), total = num(c.total_cost_overhead), suggested = num(c.suggested_total_sell);
-  const profit = sell != null && total != null ? sell - total : null;
-  const scale = Math.max(sell || 0, suggested || 0, total || 0) || 1;
-  const under = sell != null && suggested != null && sell < suggested - 0.005;
+  const sell = noSell ? null : num(i.actual_total_sell), total = num(c.total_cost_overhead);
   const qty = quantityReviewLabel(budget);
   return (
     <div className="flex flex-col gap-3.5 rounded-[12px] p-4" style={{ border: `1px solid ${EDGE}`, backgroundColor: '#FFFFFF' }}>
@@ -309,41 +360,9 @@ function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onPreparePO, onS
           <p className="text-[13px]" style={{ color: INK2 }}>No vendor quote on this job, so its windows cost comes from the PO above. Drop the supplier quote below to see the full cost build-up and margin.</p>
         </div>
       ) : (
-        <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-          <div className="flex flex-col">
-            <span className={EYEBROW} style={{ color: INK2, paddingBottom: 4 }}>Cost build-up</span>
-            {/* No overhead is added (Gabriel, Oct 30): his sub pay already covers it. */}
-            <CostLine label="Material cost" value={i.material_true_cost} />
-            <CostLine label="Labor (sub pay)" value={i.labor_cost_sub_pay} />
-            <CostLine label="Additional install material" value={i.additional_install_material} />
-            <CostLine label="Additional equipment" value={i.additional_equipment} />
-            <CostLine label="Total cost" value={c.total_cost_overhead} kind="total" />
-          </div>
-          <div className="flex flex-col gap-3.5">
-            <span className={EYEBROW} style={{ color: INK2 }}>Price & margin</span>
-            <div className="grid grid-cols-3 gap-2">
-              {[['Customer sell', noSell ? 'Not set' : lineMoney(sell), noSell ? INK2 : INK], ['Margin', noSell ? '—' : pct(c.actual_margin_pct), '#082F2C'], ['Suggested', lineMoney(suggested), INK3]].map(([k, v, color]) => (
-                <div key={k} className="flex flex-col gap-0.5 rounded-[10px] p-3" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
-                  <span className="text-[13px] font-medium" style={{ color: INK2 }}>{k}</span>
-                  <span className="text-[17px] font-bold tabular-nums tracking-[-0.02em]" style={{ color }}>{v}</span>
-                </div>
-              ))}
-            </div>
-            {sell != null && total != null && (
-              <div className="flex flex-col gap-2">
-                <div className="flex h-3 overflow-hidden rounded-full" style={{ backgroundColor: '#E2EEEB' }} role="img" aria-label={`Cost ${lineMoney(total)}, profit ${lineMoney(profit)}`}>
-                  <span style={{ width: `${(Math.min(total, sell) / scale) * 100}%`, backgroundColor: '#8C9EAF' }} />
-                  <span style={{ width: `${(Math.max(profit, 0) / scale) * 100}%`, backgroundColor: '#0B3F3B' }} />
-                </div>
-                <div className="flex flex-wrap gap-3.5 text-[13px]" style={{ color: INK2 }}>
-                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#8C9EAF' }} />Cost {lineMoney(total)}</span>
-                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: '#0B3F3B' }} />Margin {lineMoney(profit)}</span>
-                </div>
-              </div>
-            )}
-            {noSell ? <p className="text-[13px]" style={{ color: INK2 }}>No customer price yet. Use Edit numbers to add what you're charging and the margin fills in.</p> : null}
-            {under ? <p className="rounded-[9px] px-3 py-2 text-[13px]" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>Selling {lineMoney(suggested - sell)} under the suggested price.</p> : null}
-          </div>
+        <div className="flex flex-col gap-3">
+          <BudgetSummary inputs={i} total={total} sell={sell} marginPct={c.actual_margin_pct} />
+          {noSell ? <p className="text-[13px]" style={{ color: INK2 }}>No customer price yet. Use Edit numbers to add what you're charging and the margin fills in.</p> : null}
         </div>
       )}
       <QuoteLines budget={budget} />
