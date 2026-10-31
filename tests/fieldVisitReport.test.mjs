@@ -503,6 +503,10 @@ test('the form and the server validate with the same shared module', () => {
   const handler = fs.readFileSync(new URL('../base44/functions/resolveFieldReport/entry.ts', import.meta.url), 'utf8');
   assert.match(handler, /from '\.\.\/\.\.\/shared\/fieldVisitReport\.js'/);
   assert.match(handler, /validateFieldReport/);
+  assert.ok(
+    handler.indexOf('api.FieldVisitReports.create') < handler.indexOf('api.JobNotes.create'),
+    'structured submit must claim its idempotency row before writing the job note',
+  );
   assert.match(
     handler,
     /if \(!structured && user\.email !== 'gabefronk@gmail\.com'\)/,
