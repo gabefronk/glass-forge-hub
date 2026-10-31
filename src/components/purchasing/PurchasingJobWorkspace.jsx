@@ -117,7 +117,7 @@ function Facts({ rows }) {
   return (
     <dl className="grid max-w-[760px] gap-x-5 gap-y-1 text-[13.5px] [grid-template-columns:max-content_minmax(0,1fr)]">
       {rows.filter(Boolean).map(([k, v, phoneOnly]) => (
-        <div key={k} className={`contents ${phoneOnly ? 'min-[768px]:hidden' : ''}`}>
+        <div key={k} className="contents">
           <dt className={phoneOnly ? 'min-[768px]:hidden' : ''} style={{ color: INK3 }}>{k}</dt>
           <dd className={`min-w-0 break-words ${phoneOnly ? 'min-[768px]:hidden' : ''}`} style={{ color: INK }}>{v}</dd>
         </div>
@@ -489,7 +489,7 @@ function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onSaved, editorP
           <p className="px-4 py-2 text-[13.5px]" style={{ color: INK3, borderTop: `1px solid ${RULE}` }}>No vendor quote, so the windows cost is the supplier total above. Upload the quote from Add for the full build-up.</p>
         </div>
       ) : <BudgetTable inputs={i} total={total} sell={sell} marginPct={c.actual_margin_pct} />}
-      {(budget.quote?.lines?.length || history.length) && !editing ? (
+      {(budget.quote?.lines?.length > 0 || history.length > 0) && !editing ? (
         <div className="flex flex-col gap-1.5 px-4 py-2.5" style={{ borderTop: `1px solid ${RULE}` }}>
           <QuoteLines budget={budget} />
           {history.length > 0 && (
@@ -510,6 +510,7 @@ function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onSaved, editorP
 // row's white card already is the sheet.
 export default function PurchasingJobWorkspace({ job, data, onSaved, framed = false }) {
   const [editor, setEditor] = useState(null);
+  const [hasFolder, setHasFolder] = useState(false);
   const filesRef = useRef(null);
   const rec = useMemo(() => jobProcurementRecords(data, job.id), [data, job.id]);
   const ordered = useMemo(() => sheetTotal(job.id, rec), [job.id, rec]);
@@ -548,7 +549,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved, framed = fa
       { label: 'Prepare PO', onSelect: () => openEditor({ mode: 'po', job_id: job.id }) },
       { label: 'Record supplier confirmation', onSelect: () => openEditor({ mode: 'supplier', job_id: job.id }) },
       { label: 'Upload quote or files', onSelect: () => filesRef.current?.pick() },
-      { label: filesRef.current?.hasFolder ? 'Link a different Drive folder' : 'Link Drive folder', onSelect: () => filesRef.current?.link() },
+      { label: hasFolder ? 'Link a different Drive folder' : 'Link Drive folder', onSelect: () => filesRef.current?.link() },
     ]} trigger={(
       <button type="button" className={BTN} style={{ ...SEC, height: 32 }}><Plus className="h-4 w-4" />Add<ChevronDown className="h-4 w-4" /></button>
     )} />
@@ -573,7 +574,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved, framed = fa
       </section>
 
       <div style={{ borderTop: `1px solid ${EDGE}` }}>
-        <JobFilesPanel ref={filesRef} job={job} onSaved={onSaved} headClass={HEAD} headStyle={{ backgroundColor: HEAD_BG }} />
+        <JobFilesPanel ref={filesRef} job={job} onSaved={onSaved} onFolderChange={setHasFolder} headClass={HEAD} headStyle={{ backgroundColor: HEAD_BG }} />
       </div>
     </div>
   );
