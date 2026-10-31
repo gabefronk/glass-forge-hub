@@ -435,10 +435,10 @@ export default async function(req) {
         }
       }
 
-      // Crew upload -> text Gabe (this action only runs from the signed-in app UI, so
-      // automations never reach it; Gabe's own uploads are skipped). Dedup: a double
-      // submit that already produced an identical note in the last 2 minutes sends nothing.
-      if (user.email !== 'gabefronk@gmail.com') {
+      // Preserve the legacy crew-upload notifier only for legacy payloads. Structured field
+      // reports route follow-up inside the Hub through TodoTask and must never send email/SMS.
+      // Gabe's own legacy uploads are skipped; legacy double-submits retain the prior dedupe.
+      if (!structured && user.email !== 'gabefronk@gmail.com') {
         try {
           const recent = await api.JobNotes.filter({ job_id: jobId, author: user.email }, '-created_date', 5, 0).catch(() => []);
           const dup = (recent || []).some((n) => n.id !== note?.id
