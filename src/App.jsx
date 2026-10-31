@@ -33,6 +33,7 @@ import SystemMap from "@/pages/SystemMap";
 import ResearchQueue from "@/pages/ResearchQueue";
 import CompanyOverview from '@/pages/CompanyOverview';
 import Bank from '@/pages/Bank';
+import InstallGuides from '@/pages/InstallGuides';
 import JobBudgets from '@/pages/JobBudgets';
 import PurchaseOrders from '@/pages/PurchaseOrders';
 import Procurement from '@/pages/Procurement';
@@ -101,6 +102,7 @@ const AuthenticatedApp = () => {
           <Route path="/jobs/:id" element={<QuotesOnlyRedirect><JobDetail /></QuotesOnlyRedirect>} />
           <Route path="/match-debug" element={<QuotesOnlyRedirect><MatchDebug /></QuotesOnlyRedirect>} />
           <Route path="/brands-specs" element={<BrandsSpecs />} />
+          <Route path="/install-guides" element={<QuotesOnlyRedirect><InstallGuides /></QuotesOnlyRedirect>} />
           <Route path="/products" element={<Navigate to="/brands-specs" replace />} />
           <Route path="/research-queue" element={<QuotesOnlyRedirect><ResearchQueue /></QuotesOnlyRedirect>} />
           <Route path="/purchasing" element={<QuotesOnlyRedirect><Purchasing /></QuotesOnlyRedirect>} />
