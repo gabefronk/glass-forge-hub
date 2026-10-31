@@ -7,12 +7,13 @@ import { money } from "@/components/budgets/ProcurementForms";
 import { PageShell } from "@/components/PageShell";
 import { openPrivateFile } from "@/components/jobs/FlashingGuideLink";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { MAX_GUIDE_BYTES, builderKey, history, importDefaults, moveGuide, newGuide, pdfProblem, replaceFilePatch, sha256Hex, sizeLabel, sortGuides } from "@/lib/installGuides";
+import { MAX_GUIDE_BYTES, builderKey, history, moveGuide, newGuide, pdfProblem, replaceFilePatch, sha256Hex, sizeLabel, sortGuides } from "@/lib/installGuides";
 
 // Install guides (Gabe, Oct 31): the flashing / install method PDFs sent with YA quotes and
 // pinned to jobs, kept in the Hub (InstallGuides, private files) instead of Drive. Replacing a
 // file adds a version; jobs keep the version their customer approved. Rules live in
-// src/lib/installGuides.js.
+// src/lib/installGuides.js. The six Drive guides (INSTALL BUDGET SHEET › Install Type Guides) were
+// imported once on Oct 31; the protected "1F Upgraded … WITH Sill Pan" was skipped.
 
 const BAND = "#0B3F3B", TITLE = "#F2EEE8", LABEL = "#C3CBCC";
 const INK = "#101617", SECONDARY = "#566063", STRONG = "#34403F", RULE = "#D6CCBA", HEAD_BG = "#E9E2D4", LATE = "#A43432";
@@ -23,8 +24,6 @@ const BTN = "inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[8px
 const FIELD = "h-9 w-full rounded-[8px] border bg-white px-2.5 text-[14px]";
 const ITEM = "cursor-pointer px-3 py-2 text-[14px]";
 const dayLabel = (iso) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
-const invoke = (name, body) => base44.functions.invoke(name, body);
-const dataOf = (r) => { const d = r?.data ?? r; if (d?.error) throw new Error(d.error); return d; };
 const errorText = (e) => e?.response?.data?.error || e?.message || "Something went wrong.";
 
 // A picked file -> checked bytes, or an Error saying why it can't be a guide.
@@ -39,21 +38,6 @@ async function checkedPdf(file) {
 async function storePdf(name, bytes, sha256) {
   const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file: new File([bytes], name, { type: "application/pdf" }) });
   return { file_uri, file_name: name, size: bytes.length, sha256 };
-}
-
-// One-time import from Drive › INSTALL BUDGET SHEET › Install Type Guides through the old
-// job-documents guide actions (they need some job to authorise the call; any job will do).
-function fromBase64(s) { const bin = atob(s); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i); return out; }
-async function driveBytes(jobId, fileId) {
-  const parts = []; let offset = 0;
-  for (;;) {
-    const r = dataOf(await invoke("job-documents", { action: "guide_chunk", job_id: jobId, file_id: fileId, offset }));
-    const bytes = fromBase64(r.data); parts.push(bytes); offset += bytes.length;
-    if (r.done || !bytes.length) break;
-  }
-  const out = new Uint8Array(offset); let at = 0;
-  for (const p of parts) { out.set(p, at); at += p.length; }
-  return out;
 }
 
 function RowMenu({ items }) {
@@ -166,27 +150,6 @@ function InstallGuidesContent() {
     });
   };
 
-  const importDrive = () => run("Importing from Drive…", async () => {
-    const [job] = await base44.entities.Jobs.list("-updated_date", 1);
-    const files = dataOf(await invoke("job-documents", { action: "install_guides", job_id: job.id })).guides || [];
-    const done = new Set(state.guides.map((g) => g.source_drive_file_id).filter(Boolean));
-    const imported = [], skipped = [];
-    let order = Math.max(0, ...state.guides.map((g) => g.sort_order || 0));
-    for (const f of files) {
-      if (done.has(f.id)) continue;
-      const { name, builder_match } = importDefaults(f.name);
-      setBusy(`Importing ${name}…`);
-      const bytes = await driveBytes(job.id, f.id);
-      const problem = pdfProblem(bytes, `"${name}"`);
-      if (problem) { skipped.push(problem); continue; }
-      const sha256 = await sha256Hex(bytes);
-      order += 1;
-      await base44.entities.InstallGuides.create(newGuide({ name, builder_match, sort_order: order, file: await storePdf(f.name, bytes, sha256), source_drive_file_id: f.id }));
-      imported.push(name);
-    }
-    return `Imported ${imported.length} guide${imported.length === 1 ? "" : "s"} from Drive.${skipped.length ? ` Skipped ${skipped.length}: ${skipped.join(" ")}` : ""}`;
-  });
-
   const move = (id, dir) => run("Saving…", async () => {
     for (const p of moveGuide(state.guides, id, dir)) await base44.entities.InstallGuides.update(p.id, { sort_order: p.sort_order });
   });
@@ -291,12 +254,7 @@ function InstallGuidesContent() {
               ))}
               {!shown.length && (
                 <tr><td colSpan={7} className="text-[14px]" style={{ ...cell, color: SECONDARY }}>
-                  {state.guides.length ? "No guides in this view." : (
-                    <span className="flex flex-wrap items-center gap-3">
-                      No guides yet. Add a PDF, or bring in the guides from Drive › INSTALL BUDGET SHEET › Install Type Guides once.
-                      <button type="button" disabled={Boolean(busy)} onClick={importDrive} className={`${BTN} border`} style={{ borderColor: RULE, color: STRONG, background: "#FFFFFF" }}>Import from Drive</button>
-                    </span>
-                  )}
+                  {state.guides.length ? "No guides in this view." : "No guides yet. Add a PDF with Add guide."}
                 </td></tr>
               )}
             </tbody>
