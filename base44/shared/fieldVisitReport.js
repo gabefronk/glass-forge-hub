@@ -154,6 +154,53 @@ export const SCREEN_ISSUE_KINDS = Object.freeze([
   { key: 'wrong_size', label: 'Wrong size' },
 ]);
 
+// Service's own parts / issue checklist. Repeated issues are checklist and note items, not
+// attachment subforms: every photo for the visit goes in the one shared end-of-visit section.
+export const SERVICE_CHECKLIST_ITEMS = Object.freeze([
+  { key: 'window_operation', label: 'Window will not operate properly' },
+  { key: 'hardware', label: 'Hardware (lock, handle, balance, roller)' },
+  { key: 'screen', label: 'Screen' },
+  { key: 'glass', label: 'Glass (broken, scratched, failed seal)' },
+  { key: 'weatherstrip', label: 'Weatherstrip / seal' },
+  { key: 'caulking', label: 'Caulking / sealant' },
+  { key: 'water_leak', label: 'Water leak' },
+  { key: 'trim_drywall', label: 'Trim / drywall damage' },
+  { key: 'other', label: 'Other', needsNote: true },
+]);
+
+// Installer Error corrective work. Always non-billable; captured for the internal record.
+export const INSTALLER_ERROR_ITEMS = Object.freeze([
+  { key: 'missed_flashing', label: 'Missed flashing' },
+  { key: 'missing_back_dam', label: 'Missing back dam' },
+  { key: 'sill_pan', label: 'Sill pan not installed correctly' },
+  { key: 'fastening', label: 'Fastening' },
+  { key: 'plumb_square_level', label: 'Not plumb / square / level' },
+  { key: 'sealant', label: 'Sealant' },
+  { key: 'other', label: 'Other', needsNote: true },
+]);
+
+/** The repeatable checklist vocabulary for one event, or [] when the event has none. */
+export function checklistItemsFor(eventType) {
+  const scope = eventFieldScope(eventType);
+  if (scope.serviceChecklist) return SERVICE_CHECKLIST_ITEMS;
+  if (scope.correctiveNotes) return INSTALLER_ERROR_ITEMS;
+  return [];
+}
+
+/** The not-ready / readiness reasons for one event, or [] when the event has none. */
+export function notReadyReasonsFor(eventType) {
+  if (eventType === 'install') return INSTALL_NOT_READY_REASONS;
+  if (eventType === 'service') return SERVICE_NOT_READY_REASONS;
+  if (eventType === 'job_readiness') return READINESS_JOB_FLAGS;
+  return [];
+}
+
+/** The window-issue kinds one event may record against an ordered unit. */
+export function windowIssueKindsFor(eventType) {
+  if (!eventFieldScope(eventType).orderedWindows) return [];
+  return WINDOW_ISSUE_KINDS.filter((k) => k.events.includes(eventType));
+}
+
 // Optional, non-blocking documentation confirmations. Install and Service share this list;
 // the patio prompts only appear when the visit says a patio door exists. A missing
 // confirmation is never an error — it is a prompt, not a gate.
