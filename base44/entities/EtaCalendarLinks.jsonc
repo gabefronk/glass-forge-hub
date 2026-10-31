@@ -1,7 +1,7 @@
 {
   "name": "EtaCalendarLinks",
   "type": "object",
-  "description": "Ties one supplier ETA (a job budget or a vendor order) to its Google Calendar event on Israel's calendar. The stored Google event id is what lets a later ETA change MOVE the same event instead of creating a second one.",
+  "description": "Ties one supplier ETA (a job budget or a vendor order) to its Google Calendar events on the crew calendars picked with it (Israel's, Milan's or both). The stored Google event ids are what let a later ETA change MOVE the same events instead of creating more.",
   "properties": {
     "eta_key": {
       "type": "string",
@@ -16,7 +16,22 @@
     "google_event_id": {
       "type": "string",
       "title": "Google Event Id",
-      "description": "The Google Calendar event id on Israel's calendar (iryedra@gmail.com)."
+      "description": "The event id on Israel's calendar (iryedra@gmail.com), else on the one calendar it is on. Rows from before the calendar choice only have this."
+    },
+    "google_event_ids": {
+      "type": "object",
+      "title": "Google Event Ids",
+      "description": "Google event id per crew calendar key: { israel, milan }."
+    },
+    "calendar_choice": {
+      "type": "string",
+      "enum": [
+        "israel",
+        "milan",
+        "both"
+      ],
+      "title": "Calendar Choice",
+      "description": "Crew calendar(s) the ETA event goes on, picked with the ETA. Missing means Israel's."
     },
     "event_date": {
       "type": "string",
