@@ -230,6 +230,26 @@ export default async function(req) {
         }
       }
 
+      if (structured && !visitRow) {
+        // Claim the key before writing the note or any chargeable/alerting side effect. If a
+        // later step fails, a retry finds this unsettled row and resumes without duplication.
+        visitRow = await api.FieldVisitReports.create({
+          request_key,
+          settled: false,
+          job_id: jobId,
+          job_name: jobName,
+          event_date: noteDate,
+          calendar_event_id: event_id || '',
+          event_type,
+          completion: completionValue,
+          author: user.email || '',
+          created_at: now,
+          updated_at: now,
+        }).catch(() => null);
+        // With no claimed row there is no durable idempotency key, so write nothing else.
+        if (!visitRow) return Response.json({ error: 'report_not_claimed' }, { status: 200 });
+      }
+
       const summaryLines = structured ? reportSummaryLines(report, { job }) : [];
       const noteBody = structured
         ? (summaryLines.join('\n') || 'Field report photos uploaded')
@@ -247,29 +267,6 @@ export default async function(req) {
           edited: false,
           completion: completionValue,
         });
-      }
-
-      if (structured && !visitRow) {
-        // Claim the key before any chargeable or alerting side effect, so a retry after a
-        // partial failure resumes instead of repeating.
-        visitRow = await api.FieldVisitReports.create({
-          request_key,
-          settled: false,
-          job_id: jobId,
-          job_name: jobName,
-          event_date: noteDate,
-          calendar_event_id: event_id || '',
-          job_note_id: note?.id || '',
-          event_type,
-          completion: completionValue,
-          author: user.email || '',
-          created_at: now,
-          updated_at: now,
-        }).catch(() => null);
-        // Without the claimed row there is no idempotency key, so a retry could double the
-        // charge and the alerts. Stop before any of that happens; the note already written is
-        // reused by the retry that follows.
-        if (!visitRow) return Response.json({ error: 'report_not_claimed', note_id: note?.id || '' }, { status: 200 });
       }
 
       // ── Pricing ───────────────────────────────────────────────────────────
