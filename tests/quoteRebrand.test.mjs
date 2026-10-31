@@ -60,6 +60,29 @@ test('BFS / Andersen: SOLD BY becomes YA, BFS and fax go, thank-you line is YA, 
   assert.ok(strs(plan).includes('$58,091.82'));
 });
 
+// Pella "Proposal - Detailed" from BFS (Becky Retro, quote 21464768), page 1 header.
+const pella = { width: 612, height: 792, items: [
+  it('Proposal - Detailed', 120, 40, 140, 14), it('268 East 1600 South', 120, 60, 70, 8),
+  it('Sales Rep Name:', 360, 52, 60, 8), it('BFSSAND, Y', 425, 52, 45, 8), it('Sales Rep Phone:', 360, 62, 60, 8),
+  it('Customer Information', 108, 108, 80, 9), it('Project/Delivery Address', 302, 108, 95, 9), it('Order Information', 490, 108, 70, 9),
+  it('PO BOX 70006', 108, 126, 50, 7), it('Primary Phone: (801) 5052479', 108, 156, 110, 7), it('Customer Number: 1009982318', 108, 208, 110, 7),
+  it('YA WINDOWS', 302, 120, 40, 7), it('08035 - BUILDERS FIRST WAREHOU', 302, 128, 120, 7), it('Owner Phone: (801) 5052479', 302, 200, 100, 7),
+  it('Quote Number:', 490, 150, 50, 8), it('21464768', 545, 150, 35, 8),
+  it('Line #', 108, 262, 20, 7), it('$1,033.37', 560, 285, 35, 7),
+] };
+
+test('Pella proposal: BFS address, sales rep and customer / delivery columns become YA and the job', () => {
+  assert.equal(detectSupplier([pella]), 'pella');
+  const plan = pagePlan(pella, { supplier: 'pella', factor: 1.5, company, job, pageIndex: 0 });
+  for (const s of ['268 East 1600 South', 'BFSSAND, Y', 'PO BOX 70006', 'Primary Phone: (801) 5052479', 'Customer Number: 1009982318', 'YA WINDOWS', '08035 - BUILDERS FIRST WAREHOU', 'Owner Phone: (801) 5052479']) {
+    assert.ok(covered(plan, pella.items.find((i) => i.str === s)), `${s} is covered`);
+  }
+  assert.ok(!covered(plan, pella.items.find((i) => i.str === '21464768')), 'order information stays');
+  assert.ok(strs(plan).includes('Y A Windows Doors LLC'));
+  assert.ok(strs(plan).includes('HANDLEY RES'));
+  assert.ok(strs(plan).includes('$1,550.06'));
+});
+
 test('prices scale so the quote total lands on the product sell', () => {
   const f = priceFactor(29045.91, 45000);
   assert.equal(repriceText('$29,045.91', f), '$45,000.00');
