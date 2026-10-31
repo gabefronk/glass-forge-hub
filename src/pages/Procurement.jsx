@@ -33,7 +33,7 @@ export default function Procurement() {
 }
 
 function JobBudgetOrders({ jobId }) {
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const wanted = params.get('section');
   const section = SECTIONS.includes(wanted) ? wanted : 'budgets';
   const [data, setData] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
@@ -54,7 +54,6 @@ function JobBudgetOrders({ jobId }) {
   const job = current.jobs.find((j) => j.id === jobId);
   // The header reads the scopes the cards below show: included quotes, else the draft ones.
   const rollup = useMemo(() => budgetRollup(current.budgets.filter((b) => b.job_id === jobId), { draftFallback: true }), [current.budgets, jobId]);
-  const changeSection = (tab) => { const p = new URLSearchParams(params); p.set('section', tab); setParams(p); };
   // Only text is ever shown as the notice; a form handing back its result object must not
   // crash the page (React can't render an object).
   const onSaved = (message) => { setNotice(typeof message === 'string' && message ? message : 'Saved.'); load(true); };
