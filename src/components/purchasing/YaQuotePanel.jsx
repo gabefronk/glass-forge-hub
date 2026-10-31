@@ -51,6 +51,8 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
   const [settings, setSettings] = useState(null);
   const [step, setStep] = useState(''), [error, setError] = useState('');
   const [built, setBuilt] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
   const split = productSell(budget);
   const factor = split ? priceFactor(quoteTotal(budget), split.product) : null;
   const brand = budget.manufacturer || budget.quote?.manufacturer || '';
@@ -79,16 +81,14 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
     return { ...next, guide };
   }
 
+  // Shown in the panel (a script-opened tab can't be pointed at the file in Chrome).
   async function preview() {
     if (step || !split || !factor) return;
     setError('');
-    const tab = window.open('', '_blank');
     try {
       const { bytes } = await make();
-      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-      if (tab) tab.location.href = url; else window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 120000);
-    } catch (e) { if (tab) tab.close(); setError(messageOf(e)); } finally { setStep(''); }
+      setPreviewUrl(URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })));
+    } catch (e) { setError(messageOf(e)); } finally { setStep(''); }
   }
 
   async function build() {
@@ -117,7 +117,7 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
       ) : <p role="alert" className="text-[13.5px] font-semibold" style={{ color: RED }}>Add the customer price with Edit numbers first, so the quote can be priced at sell.</p>}
       <label className="flex max-w-[520px] flex-col gap-1 text-[13px] font-medium" style={{ color: INK3 }}>
         Flashing / install method (sent with the quote for approval)
-        <select value={guideId} onChange={(e) => setGuideId(e.target.value)} disabled={!guides || Boolean(step)} className="h-9 rounded-[8px] border bg-white px-2.5 text-[13.5px]" style={{ borderColor: EDGE, color: INK }}>
+        <select value={guideId} onChange={(e) => { setGuideId(e.target.value); setPreviewUrl(''); }} disabled={!guides || Boolean(step)} className="h-9 rounded-[8px] border bg-white px-2.5 text-[13.5px]" style={{ borderColor: EDGE, color: INK }}>
           <option value="">{guides ? 'No install guide' : 'Loading guides…'}</option>
           {(guides || []).map((g) => <option key={g.id} value={g.id}>{guideLabel(g.name)}</option>)}
         </select>
@@ -127,7 +127,9 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
         <button type="button" disabled={Boolean(step) || !split || !factor || !settings} onClick={build} className={BTN} style={PRI}>{step || 'Save to job Drive folder'}</button>
         <button type="button" disabled={Boolean(step) || !split || !factor || !settings} onClick={preview} className={BTN} style={SEC}>Preview</button>
         <button type="button" disabled={Boolean(step)} onClick={onCancel} className={BTN} style={SEC}>Cancel</button>
+        {previewUrl ? <a href={previewUrl} target="_blank" rel="noreferrer" className="text-[13.5px] font-semibold underline-offset-2 hover:underline" style={{ color: '#0B3F3B' }}>Open in a new tab</a> : null}
       </div>
+      {previewUrl ? <iframe title="YA quote preview" src={previewUrl} className="h-[720px] w-full rounded-[8px] bg-white" style={{ border: `1px solid ${EDGE}` }} /> : null}
     </div>
   );
 }
