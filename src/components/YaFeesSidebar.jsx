@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Sparkles, Landmark, Wallet } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Sparkles, Landmark, Wallet, BookOpen } from "lucide-react";
 import { isReady, buildSupersededSet, withCompanions } from "@/lib/invoicingFilters";
 import { formatMoney, computeFeeAmt, currentMonthStr, withComputedAmounts } from "@/lib/feeMath";
 
@@ -33,6 +33,7 @@ const MORE_ITEMS = [
   { label: "Summit", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
   { label: "Field reports", to: "/jobs?view=reports", icon: FileText, ownerOnly: true },
+  { label: "Install guides", to: "/install-guides", icon: BookOpen, ownerOnly: true },
 ];
 
 // Owner-only admin tools (mirrored in MobileBottomNav's More sheet).
