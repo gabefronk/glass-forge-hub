@@ -475,7 +475,8 @@ function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onSaved, editorP
           <span className="break-words text-[14.5px] font-semibold" style={{ color: INK }}>{budget.title || budget.quote_name || 'Untitled quote'}</span>
           {sub ? <span className="text-[13.5px]" style={{ color: INK3 }}>{sub}{qty ? <span style={{ color: '#96490F' }}> · Quantity needs review</span> : null}</span> : null}
         </div>
-        <Chip tone={chipTone}>{chipText}</Chip>
+        {/* Counted / Draft / Reference is what the Budget use dropdown already says. */}
+        {budget.job_id && [chip.ok[0], chip.draft[0], chip.ref[0]].includes(chipText) ? null : <Chip tone={chipTone}>{chipText}</Chip>}
         {budget.job_id ? <BudgetUseSelect budget={budget} budgets={allBudgets} onSaved={onSaved} /> : null}
         {!editing && <button type="button" onClick={() => onEdit({ mode: 'numbers', budget_id: budget.id })} className={BTN} style={SEC}><Pencil className="h-3.5 w-3.5" />Edit numbers</button>}
         <ActionMenu label="More for this quote" items={menu} />
