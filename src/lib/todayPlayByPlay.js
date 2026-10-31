@@ -85,7 +85,8 @@ export const isCancelled = (event) =>
   ["cancelled", "canceled"].includes(text(event?.source_status).toLowerCase()) ||
   ["cancelled", "canceled"].includes(text(event?.status).toLowerCase());
 
-// The Hub's etaCalendar function titles supplier ETAs "ETA - <builder> - <job>",
+// Hand-made supplier ETA events are titled "ETA - <builder> - <job>" (the Hub's own
+// etaCalendar events use the job name and are not pulled into CalendarEvents),
 // and Google's own "tentative" status is provisional as well. Neither is a
 // confirmed schedule, so both are labelled instead of read as a commitment.
 const ETA_TITLE_RE = /^eta\s*-/i;
