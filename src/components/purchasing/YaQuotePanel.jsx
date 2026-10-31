@@ -2,8 +2,8 @@
 // carries Y A Windows & Doors' details and logo (distributor names, addresses, phones, faxes,
 // emails and sales reps covered) with every price at sell, a YA summary / approval page and
 // the flashing / install method guide the customer picks from Drive › INSTALL BUDGET SHEET ›
-// Install Type Guides. Saved to the job's Drive folder and downloaded; the method is saved on
-// the job for the installers. Nothing is emailed.
+// Install Type Guides. Preview opens it in a new tab; Save puts it in the job's Drive folder and
+// saves the method on the job for the installers. Nothing is emailed.
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { messageOf } from '@/components/budgets/ProcurementForms';
@@ -47,6 +47,7 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
   const [guides, setGuides] = useState(null), [guideId, setGuideId] = useState(job.flashing_guide_file_id || '');
   const [settings, setSettings] = useState(null);
   const [step, setStep] = useState(''), [error, setError] = useState('');
+  const [built, setBuilt] = useState(null);
   const split = productSell(budget);
   const factor = split ? priceFactor(quoteTotal(budget), split.product) : null;
   const brand = budget.manufacturer || budget.quote?.manufacturer || '';
@@ -59,27 +60,46 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
     return () => { live = false; };
   }, [job.id]);
 
+  // Built once per guide choice; Preview and Save use the same file.
+  async function make() {
+    const guide = (guides || []).find((g) => g.id === guideId) || null;
+    if (built && built.guideId === guideId) return { ...built, guide };
+    setStep('Reading the supplier quote…');
+    const src = await sourceBytes(budget);
+    const gBytes = guide ? (setStep('Getting the install guide…'), await guideBytes(job.id, guide.id)) : null;
+    setStep('Building the YA quote…');
+    const { buildYaQuote } = await import('@/lib/quoteRebrandRender');
+    const { bytes, supplier } = await buildYaQuote({ sourceBytes: src, factor, company: companyDetails(settings || {}), job, quoteLabel, split, guideName: guide ? guideLabel(guide.name) : '', guideBytes: gBytes });
+    const name = `${job.canonical_name || 'Job'} - YA Quote${budget.quote_number ? ` ${budget.quote_number}` : ''}.pdf`.replace(/[\\/:*?"<>|]+/g, ' ');
+    const next = { bytes, supplier, name, guideId };
+    setBuilt(next);
+    return { ...next, guide };
+  }
+
+  async function preview() {
+    if (step || !split || !factor) return;
+    setError('');
+    const tab = window.open('', '_blank');
+    try {
+      const { bytes } = await make();
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      if (tab) tab.location.href = url; else window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+    } catch (e) { if (tab) tab.close(); setError(messageOf(e)); } finally { setStep(''); }
+  }
+
   async function build() {
     if (step || !split || !factor) return;
     setError('');
     try {
-      const guide = (guides || []).find((g) => g.id === guideId) || null;
-      setStep('Reading the supplier quote…');
-      const src = await sourceBytes(budget);
-      const gBytes = guide ? (setStep('Getting the install guide…'), await guideBytes(job.id, guide.id)) : null;
-      setStep('Building the YA quote…');
-      const { buildYaQuote } = await import('@/lib/quoteRebrandRender');
-      const { bytes, supplier } = await buildYaQuote({ sourceBytes: src, factor, company: companyDetails(settings || {}), job, quoteLabel, split, guideName: guide ? guideLabel(guide.name) : '', guideBytes: gBytes });
-      const name = `${job.canonical_name || 'Job'} - YA Quote${budget.quote_number ? ` ${budget.quote_number}` : ''}.pdf`.replace(/[\\/:*?"<>|]+/g, ' ');
-      const { saveBytes } = await import('@/lib/yaInvoicePdf');
-      saveBytes(bytes, name);
+      const { bytes, supplier, name, guide } = await make();
       setStep('Saving to the job’s Drive folder…');
       const file = await uploadToJobFolder({ invoke, jobId: job.id, file: new File([bytes], name, { type: 'application/pdf' }) });
       await base44.entities.JobBudgets.update(budget.id, { ya_quote_file_id: file.id, ya_quote_url: file.url, ya_quote_at: new Date().toISOString() });
       await base44.entities.Jobs.update(job.id, guide
         ? { flashing_method: guideLabel(guide.name), flashing_guide_file_id: guide.id, flashing_guide_url: guide.url }
         : { flashing_method: null, flashing_guide_file_id: null, flashing_guide_url: null });
-      onDone(`YA quote saved to ${file.folder?.name || 'the job folder'} and downloaded${guide ? `, with ${guideLabel(guide.name)}` : ''}.${supplier === 'generic' ? ' This quote layout is not mapped yet: check that no supplier details are left.' : ''} Nothing was emailed.`);
+      onDone(`YA quote saved to ${file.folder?.name || 'the job folder'}${guide ? `, with ${guideLabel(guide.name)}` : ''}.${supplier === 'generic' ? ' This quote layout is not mapped yet: check that no supplier details are left.' : ''} Nothing was emailed.`);
     } catch (e) { setError(messageOf(e)); } finally { setStep(''); }
   }
 
@@ -101,7 +121,8 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
       </label>
       {error ? <p role="alert" className="text-[13.5px] font-semibold" style={{ color: RED }}>{error}</p> : null}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={Boolean(step) || !split || !factor || !settings} onClick={build} className={BTN} style={PRI}>{step || 'Make YA quote'}</button>
+        <button type="button" disabled={Boolean(step) || !split || !factor || !settings} onClick={build} className={BTN} style={PRI}>{step || 'Save to job Drive folder'}</button>
+        <button type="button" disabled={Boolean(step) || !split || !factor || !settings} onClick={preview} className={BTN} style={SEC}>Preview</button>
         <button type="button" disabled={Boolean(step)} onClick={onCancel} className={BTN} style={SEC}>Cancel</button>
       </div>
     </div>
