@@ -4,7 +4,7 @@ import {
   etaEventBody, etaEventTitle, etaCalendarKeys, etaCalendarId, linkEventIds, planEtaCalendars,
   isWillCall, normalizeDeliveryMethod, isEtaCalendarChoice,
 } from '../shared/etaCalendarEvent.js';
-import { CREW_CALENDARS, extractExplicitJobId } from '../shared/jobCalendarCore.js';
+import { CREW_CALENDARS, extractExplicitJobId, matchEventToJob } from '../shared/jobCalendarCore.js';
 
 const job = { id: '6ad643b00d03283fdedd55d5', canonical_name: 'Hidden Hallow Lot 509', builder: 'Cadence', address: '2978 Cambrian Lane, Eagle Mountain, UT 84005' };
 const args = { date: '2026-11-03', etaKey: 'order:6ae557ae4f8cc68bd0f81da3', ref: '10-4407.26', vendor: 'AMSCO' };
@@ -45,8 +45,9 @@ test('the event still ties to its job by explicit identity (hubJobId and the Hub
   assert.equal(ev.extendedProperties.private.appSource, 'glassforge');
   assert.equal(ev.extendedProperties.private.hubJobId, job.id);
   assert.match(ev.description, new RegExp(`^Hub job: https://gfglassforge\\.com/jobs/${job.id}$`, 'm'));
-  const found = extractExplicitJobId(ev);
-  assert.equal(found.id ?? found.job_id ?? found, job.id);
+  assert.equal(extractExplicitJobId(ev).jobId, job.id);
+  assert.equal(matchEventToJob(ev, job).match, true);
+  assert.equal(matchEventToJob(ev, { ...job, id: '6ae36c2ec74dcdbc0904f302' }).match, false);
 });
 
 test('delivery method values', () => {
