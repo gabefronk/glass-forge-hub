@@ -266,6 +266,10 @@ export default async function(req) {
           created_at: now,
           updated_at: now,
         }).catch(() => null);
+        // Without the claimed row there is no idempotency key, so a retry could double the
+        // charge and the alerts. Stop before any of that happens; the note already written is
+        // reused by the retry that follows.
+        if (!visitRow) return Response.json({ error: 'report_not_claimed', note_id: note?.id || '' }, { status: 200 });
       }
 
       // ── Pricing ───────────────────────────────────────────────────────────
