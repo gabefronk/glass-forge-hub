@@ -1,0 +1,377 @@
+{
+  "name": "FieldVisitReports",
+  "type": "object",
+  "description": "One structured field-visit report filed from the Hub (resolveFieldReport, action=upload). The JobNotes row stays the human-readable history entry; this row is the structured record: the event type, the conditional answers, the ordered-window issues, the follow-up recipients, and the settled billing / internal-cost outcome. request_key is the idempotency key: a retried submit or an edited re-submit reuses this row and never creates a second job note, fee line or Today item.",
+  "properties": {
+    "request_key": {
+      "type": "string",
+      "maxLength": 180,
+      "description": "One key per opened form. Idempotency key for the whole submit (job note, invoicing staging line, per-recipient Today items)."
+    },
+    "settled": {
+      "type": "boolean",
+      "default": false,
+      "description": "True once every side effect of this submit finished. A retry on an unsettled row resumes the missing steps instead of repeating the finished ones."
+    },
+    "job_id": {
+      "type": "string",
+      "description": "Canonical Jobs record the report was filed on."
+    },
+    "job_name": {
+      "type": "string"
+    },
+    "event_date": {
+      "type": "string",
+      "description": "Visit date (YYYY-MM-DD)."
+    },
+    "calendar_event_id": {
+      "type": "string",
+      "description": "CalendarEvents row this report answers, when the worker picked an appointment."
+    },
+    "job_note_id": {
+      "type": "string",
+      "description": "The JobNotes history entry this report wrote."
+    },
+    "event_type": {
+      "type": "string",
+      "description": "job_readiness | install | sheetrock_window_install | service | screen_service | warranty | installer_error. Legacy values may appear on historical rows."
+    },
+    "completion": {
+      "type": "string",
+      "enum": [
+        "",
+        "complete",
+        "incomplete"
+      ],
+      "default": "",
+      "description": "Completion of THIS visit. On a Job Readiness visit this is the readiness visit's own outcome, never installation completion."
+    },
+    "incomplete_reason": {
+      "type": "string",
+      "maxLength": 3000,
+      "description": "Required explanation when the visit was incomplete."
+    },
+    "not_ready": {
+      "type": "boolean",
+      "default": false
+    },
+    "not_ready_reasons": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "Readiness / job-not-ready reasons with notes. 'other' always carries a note."
+    },
+    "window_issues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "Per-ordered-window issues: missing, framing_ro (current vs required dimensions), damaged, osb_header, needs_clarification. Several may coexist."
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "Repeatable checklist / issue items for the event. Never carries its own attachments: media is visit-level."
+    },
+    "sheetrock_outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "Sheetrock Window Install outcomes: window_installed, sheetrock_not_stocked, window_missing, window_damaged."
+    },
+    "screen_issues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "Screen issues with kind (missing/short/wrong_size), quantity and location."
+    },
+    "cannot_fix": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "Windows that could not be fixed: affected window, problem notes, manager investigation/review."
+    },
+    "warranty_issue": {
+      "type": "object",
+      "description": "Warranty: the issue as reported by the superintendent / caller."
+    },
+    "parts_needed": {
+      "type": "string",
+      "maxLength": 3000,
+      "description": "Freeform parts-needed text (phone dictation lands here as plain text)."
+    },
+    "documentation": {
+      "type": "object",
+      "description": "Optional, non-blocking documentation confirmations (elevations, patio-door video, patio handles, foundation windows). A blank confirmation never blocks a submit."
+    },
+    "has_patio_door": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the visit says a patio door exists; the patio prompts only appear when it does."
+    },
+    "needs_rescheduling": {
+      "type": "boolean",
+      "default": false,
+      "description": "Delivery/install or the visit needs rescheduling. No replacement date is ever invented."
+    },
+    "rescheduling_reason": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "rescheduled_date": {
+      "type": "string",
+      "default": "",
+      "description": "Always blank from a field report: the Hub never guesses a new date."
+    },
+    "follow_up_triggers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Why follow-up was required: incomplete_work, job_not_ready, needs_clarification, unresolved_issue, manager_review, needs_rescheduling."
+    },
+    "recipients": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Stable TeamMember ids selected as manager/salesperson recipients. Zero is valid only when no follow-up trigger exists."
+    },
+    "recipient_task_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "The TodoTask (Today Hub) row created for each recipient, one per recipient."
+    },
+    "routing": {
+      "type": "string",
+      "default": "",
+      "description": "selected | legacy_fallback \u2014 how recipients were resolved. legacy_fallback is only for pre-redesign payloads that carry no recipient list."
+    },
+    "media_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "All photos and videos for the visit, uploaded once in the shared end-of-visit section. Never per issue."
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 5000
+    },
+    "hours": {
+      "type": "number",
+      "description": "Man-hours tally. Only collected for Screen Service, Warranty and Installer Error; Install never collects hours.",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "material": {
+      "type": "string",
+      "description": "Product material key from the existing PricingRubric material rows."
+    },
+    "long_distance": {
+      "type": "boolean",
+      "default": false
+    },
+    "billable": {
+      "type": "boolean",
+      "default": false,
+      "description": "False for Installer Error always, and for any visit that priced to $0."
+    },
+    "fee_line_id": {
+      "type": "string",
+      "description": "The FeeLines draft staged into the Hub invoicing tab, when the visit was chargeable."
+    },
+    "charge_labor_amt": {
+      "type": "number",
+      "description": "Customer charge computed server-side from the live PricingRubric.",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "invoice_staging_state": {
+      "type": "string",
+      "enum": [
+        "none",
+        "staged",
+        "not_billable"
+      ],
+      "default": "none",
+      "description": "staged = one FeeLines draft is in the Hub invoicing tab. not_billable = Installer Error, excluded from chargeable service reports and invoicing staging by rule."
+    },
+    "internal_cost_state": {
+      "type": "string",
+      "enum": [
+        "priced",
+        "pending",
+        "unpriced"
+      ],
+      "default": "unpriced",
+      "description": "Internal labour/material cost state. 'pending' means hours were recorded but the Hub has no verified internal cost rate. PricingRubric hourly rates are CUSTOMER sell rates and are never used as internal cost."
+    },
+    "internal_cost_amount": {
+      "type": "number",
+      "description": "Internal cost, only when a real internal cost source supplied a rate. Null while pending/unpriced.",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        },
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "manager"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "internal_cost_reason": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Why the internal cost state is what it is, e.g. no_internal_labor_cost_rate."
+    },
+    "author": {
+      "type": "string",
+      "description": "Email of the worker who filed the report."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "request_key",
+    "job_id",
+    "event_type"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manager"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
