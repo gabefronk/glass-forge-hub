@@ -129,7 +129,7 @@ export function defaultLines({ job = {}, budgets = [], sell = null, itemize = fa
     items = quoteLines.map((l) => {
       const qty = Math.max(1, Number(l.qty) || 1);
       const unit = round((Number(l.extended) * productTotal) / sum / qty);
-      return { kind: 'item', description: text(l.description) || 'Window', size: sizeLabel(l.width_in, l.height_in), qty, unit, amount: round(unit * qty) };
+      return { kind: 'item', description: text(l.description) || 'Window', size: sizeLabel(l.width_in, l.height_in), qty, unit, amount: round(unit * qty), ...(l.kind === 'part' ? { part: true } : {}) };
     });
   } else if (material > 0) {
     items = [{ kind: 'item', description: [`${brand || 'Windows and doors'}${quoteNo ? `, quote ${quoteNo}` : ''}`, units ? `${units} units` : ''].filter(Boolean).join(' · '), size: '', qty: 1, unit: productTotal, amount: productTotal }];
@@ -143,6 +143,18 @@ export function defaultLines({ job = {}, budgets = [], sell = null, itemize = fa
   return [...items, ...charges];
 }
 
+// What the job sells for: the typed Customer total wins (as on Purchasing), else the counted
+// quotes' sell, else the first draft's.
+export function customerTotal(job = {}, budgets = []) {
+  const typed = num(job.manual_customer_total);
+  if (typed != null) return typed;
+  const quotes = countedFirst(liveQuoteBudgets(job, budgets));
+  const counted = quotes.filter((b) => b.budget_usage !== 'draft');
+  const pool = counted.length ? counted : quotes.slice(0, 1);
+  const sells = pool.map((b) => num(b.inputs?.actual_total_sell)).filter((v) => v != null && v > 0);
+  return sells.length ? round(sells.reduce((n, v) => n + v, 0)) : null;
+}
+
 export function lineAmount(line = {}) {
   if (line.kind === 'item') return round((num(line.qty) ?? 0) * (num(line.unit) ?? 0));
   return round(num(line.amount) ?? 0);
@@ -154,7 +166,8 @@ export function invoiceTotals(lines = []) {
   const itemTotal = round(items.reduce((n, l) => n + lineAmount(l), 0));
   return {
     items: itemTotal,
-    units: items.reduce((n, l) => n + (Number(l.qty) || 0), 0),
+    // Windows and doors, not trim parts (Becky's 16 frame expanders aren't units).
+    units: items.filter((l) => !l.part).reduce((n, l) => n + (Number(l.qty) || 0), 0),
     charges: round(charges.reduce((n, l) => n + lineAmount(l), 0)),
     total: round(itemTotal + charges.reduce((n, l) => n + lineAmount(l), 0)),
   };
