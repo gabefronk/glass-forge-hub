@@ -73,14 +73,14 @@ const pella = { width: 612, height: 792, items: [
 
 test('Pella proposal: BFS address, sales rep and customer / delivery columns become YA and the job', () => {
   assert.equal(detectSupplier([pella]), 'pella');
-  const plan = pagePlan(pella, { supplier: 'pella', factor: 1.5, company, job, pageIndex: 0 });
+  const plan = pagePlan(pella, { supplier: 'pella', factor: 2, company, job, pageIndex: 0 });
   for (const s of ['268 East 1600 South', 'BFSSAND, Y', 'PO BOX 70006', 'Primary Phone: (801) 5052479', 'Customer Number: 1009982318', 'YA WINDOWS', '08035 - BUILDERS FIRST WAREHOU', 'Owner Phone: (801) 5052479']) {
     assert.ok(covered(plan, pella.items.find((i) => i.str === s)), `${s} is covered`);
   }
   assert.ok(!covered(plan, pella.items.find((i) => i.str === '21464768')), 'order information stays');
   assert.ok(strs(plan).includes('Y A Windows Doors LLC'));
   assert.ok(strs(plan).includes('HANDLEY RES'));
-  assert.ok(strs(plan).includes('$1,550.06'));
+  assert.ok(strs(plan).includes('$2,066.74'));
 });
 
 test('prices scale so the quote total lands on the product sell', () => {
