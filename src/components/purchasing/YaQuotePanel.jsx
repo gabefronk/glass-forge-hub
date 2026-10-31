@@ -51,7 +51,7 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
   const [settings, setSettings] = useState(null);
   const [step, setStep] = useState(''), [error, setError] = useState('');
   const [built, setBuilt] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewUrl, setPreviewUrl] = useState(''), [pages, setPages] = useState([]);
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
   const split = productSell(budget);
   const factor = split ? priceFactor(quoteTotal(budget), split.product) : null;
@@ -81,12 +81,16 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
     return { ...next, guide };
   }
 
-  // Shown in the panel (a script-opened tab can't be pointed at the file in Chrome).
+  // Shown in the panel as page images: a script-opened tab can't be pointed at the file, and
+  // Chrome may be set to download PDFs instead of showing them.
   async function preview() {
     if (step || !split || !factor) return;
     setError('');
     try {
       const { bytes } = await make();
+      setStep('Drawing the preview…');
+      const { previewImages } = await import('@/lib/quoteRebrandRender');
+      setPages(await previewImages(bytes));
       setPreviewUrl(URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })));
     } catch (e) { setError(messageOf(e)); } finally { setStep(''); }
   }
@@ -117,7 +121,7 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
       ) : <p role="alert" className="text-[13.5px] font-semibold" style={{ color: RED }}>Add the customer price with Edit numbers first, so the quote can be priced at sell.</p>}
       <label className="flex max-w-[520px] flex-col gap-1 text-[13px] font-medium" style={{ color: INK3 }}>
         Flashing / install method (sent with the quote for approval)
-        <select value={guideId} onChange={(e) => { setGuideId(e.target.value); setPreviewUrl(''); }} disabled={!guides || Boolean(step)} className="h-9 rounded-[8px] border bg-white px-2.5 text-[13.5px]" style={{ borderColor: EDGE, color: INK }}>
+        <select value={guideId} onChange={(e) => { setGuideId(e.target.value); setPreviewUrl(''); setPages([]); }} disabled={!guides || Boolean(step)} className="h-9 rounded-[8px] border bg-white px-2.5 text-[13.5px]" style={{ borderColor: EDGE, color: INK }}>
           <option value="">{guides ? 'No install guide' : 'Loading guides…'}</option>
           {(guides || []).map((g) => <option key={g.id} value={g.id}>{guideLabel(g.name)}</option>)}
         </select>
@@ -129,7 +133,11 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
         <button type="button" disabled={Boolean(step)} onClick={onCancel} className={BTN} style={SEC}>Cancel</button>
         {previewUrl ? <a href={previewUrl} target="_blank" rel="noreferrer" className="text-[13.5px] font-semibold underline-offset-2 hover:underline" style={{ color: '#0B3F3B' }}>Open in a new tab</a> : null}
       </div>
-      {previewUrl ? <iframe title="YA quote preview" src={previewUrl} className="h-[720px] w-full rounded-[8px] bg-white" style={{ border: `1px solid ${EDGE}` }} /> : null}
+      {pages.length ? (
+        <div aria-label="YA quote preview" className="flex max-h-[760px] flex-col items-center gap-3 overflow-auto rounded-[8px] p-3" style={{ border: `1px solid ${EDGE}`, backgroundColor: '#E9E5DC' }}>
+          {pages.map((src, i) => <img key={i} src={src} alt={`Page ${i + 1}`} className="w-full max-w-[900px] bg-white shadow-sm" />)}
+        </div>
+      ) : null}
     </div>
   );
 }
