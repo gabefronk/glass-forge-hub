@@ -34,7 +34,7 @@ import { activeBudgets, budgetFigures, budgetVersion } from '@/lib/purchasingCor
 import { statusWithDate } from '@/lib/purchasingDates';
 import { jobProcurementRecords } from '@/lib/purchasingViewModel';
 import { etaDate } from '@/lib/purchasingSummary';
-import { saveEtaTarget } from '@/lib/etaTarget';
+import EtaEditor from './EtaEditor';
 import { quantityReviewLabel } from '@/lib/quantityReview';
 
 const INK = '#101617', INK2 = '#566063', INK3 = '#34403F', RULE = '#EEE9E0', EDGE = '#E2DCD1';
@@ -79,19 +79,7 @@ function NotesHistory({ notes }) {
 // ---------- 1. Purchase orders & quotes ----------
 
 function OrderDetail({ order, onEdit, onSaved }) {
-  const [etaBusy, setEtaBusy] = useState(false);
-  const [etaError, setEtaError] = useState('');
   const etaEditable = Boolean(order.order_number) && order.amount != null && !order.received_date;
-  async function saveEta(value) {
-    if (etaBusy) return;
-    setEtaBusy(true); setEtaError('');
-    try {
-      // Same path as the grid's ETA cell: writes the supplier record and moves its calendar event.
-      const result = await saveEtaTarget({ jobId: order.job_id, order, date: value });
-      if (result.error) setEtaError(result.error);
-      if (result.saved) await onSaved?.();
-    } finally { setEtaBusy(false); }
-  }
   return (
     <div className="flex flex-col gap-2 rounded-[10px] p-3" style={{ border: `1px solid ${RULE}`, backgroundColor: '#FFFFFF' }}>
       <div className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: INK }}>
@@ -100,17 +88,12 @@ function OrderDetail({ order, onEdit, onSaved }) {
       </div>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]" style={{ color: INK3 }}>
         <span>Cost <strong className="tabular-nums" style={{ color: INK }}>{order.amount == null || order.amount === '' ? '—' : money(0 - Number(order.amount))}</strong></span>
-        <label className="inline-flex items-center gap-1.5">ETA
-          {etaEditable ? (
-            <input type="date" aria-label={`ETA for supplier order ${order.order_number}`} disabled={etaBusy}
-              value={order.eta_date || ''} onChange={(e) => saveEta(e.target.value)}
-              className="h-8 rounded-[7px] border px-1.5 text-[13px] font-semibold" style={{ borderColor: EDGE, color: INK, backgroundColor: '#fff' }} />
-          ) : <strong style={{ color: INK }}>{etaDate(order.eta_date) || 'Not confirmed'}</strong>}
-        </label>
+        {etaEditable ? null : <span>ETA <strong style={{ color: INK }}>{etaDate(order.eta_date) || 'Not confirmed'}</strong></span>}
         <span>Received <strong style={{ color: INK }}>{etaDate(order.received_date) || '—'}</strong></span>
       </div>
+      {/* Same editor as the grid's ETA cell: writes the supplier record and moves its calendar event(s). */}
+      {etaEditable ? <EtaEditor key={`${order.id}:${order.updated_date}`} inline jobId={order.job_id} order={order} date={order.eta_date || ''} onSaved={onSaved} /> : null}
       {!order.purchase_order_id ? <p className="text-[13px]" style={{ color: INK2 }}>Not linked to a PO yet - link it before editing.</p> : null}
-      {etaError ? <p className="text-[13px] font-semibold" style={{ color: '#A43432' }}>{etaError}</p> : null}
       <NotesHistory notes={order.notes} />
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: order.id })} className={BTN} style={SEC}>Record order status</button>
