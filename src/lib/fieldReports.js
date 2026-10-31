@@ -13,6 +13,7 @@ const MESSAGES = {
   invalid_report: "Some answers are missing. Check the highlighted sections and submit again.",
   recipients_required: "Pick at least one manager or salesperson to follow this up.",
   missing_request_key: "Reload the page and file the report again.",
+  report_not_claimed: "The report could not be saved completely. Submit it again — nothing will be duplicated.",
 };
 
 export async function resolveFieldReport(payload) {
