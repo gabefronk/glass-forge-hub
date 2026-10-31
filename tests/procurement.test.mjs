@@ -187,6 +187,17 @@ test('supplier confirmation history matches its initial status with or without E
     assert.equal(eta.order.paid_at, undefined);
   }
 });
+test('supplier confirmation records will call, keeps it when left out, and refuses anything else', async () => {
+  const s = store({ PurchaseOrders: [existingPO] });
+  const base = { action: 'save_supplier_order', job_id: 'j1', purchase_order_id: 'p1', order_number: '09-1234', amount: 116.3, eta_date: '2026-11-03', review_confirmed: true };
+  const created = await procurementAction(s.api, { ...base, delivery_method: 'will-call', request_key: 'supplier-wc-test-01' }, owner, deps);
+  assert.equal(created.order.delivery_method, 'will_call');
+  const moved = await procurementAction(s.api, { ...base, eta_date: '2026-11-05', order_id: created.order.id, expected_updated_date: created.order.updated_date, request_key: 'supplier-wc-test-02' }, owner, deps);
+  assert.equal(moved.order.delivery_method, 'will_call');
+  const delivered = await procurementAction(s.api, { ...base, order_id: created.order.id, delivery_method: 'delivery', expected_updated_date: moved.order.updated_date, request_key: 'supplier-wc-test-03' }, owner, deps);
+  assert.equal(delivered.order.delivery_method, 'delivery');
+  await assert.rejects(procurementAction(s.api, { ...base, order_id: created.order.id, delivery_method: 'drone', expected_updated_date: delivered.order.updated_date, request_key: 'supplier-wc-test-04' }, owner, deps), /delivered or will call/);
+});
 test('API handler refuses crew before any private entity read', async () => {
   const handler = createProcurementHandler(() => ({ auth: { me: async () => ({ role: 'user', email: 'crew@example.com' }) }, get asServiceRole() { throw new Error('must not read'); } }));
   const res = await handler(new Request('https://unit.test', { method: 'POST', body: '{}' }));
