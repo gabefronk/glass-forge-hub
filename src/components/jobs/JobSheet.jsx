@@ -778,7 +778,7 @@ const HERO_SEC = { backgroundColor: "rgba(255,255,255,.09)", color: HERO_INK, bo
 // Crew, every PO and OE, and the job folder, folded under the address. Same values the
 // old "The job" card showed (snap.refs / snap.facts from jobSnapshot, folder from
 // useJobFolderFiles); closed by default.
-function JobInfo({ snap, folder }) {
+function JobInfo({ job, snap, folder }) {
   const [open, setOpen] = useState(false);
   const pos = (snap?.refs || []).filter((r) => r.startsWith("PO ")).map((r) => r.slice(3));
   const oes = (snap?.refs || []).filter((r) => r.startsWith("OE ")).map((r) => r.slice(3));
@@ -793,6 +793,12 @@ function JobInfo({ snap, folder }) {
     ["Job folder", folder?.folder?.url
       ? <a key="f" href={folder.folder.url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: BRASS_LT }}>Open in Drive</a>
       : <span key="f" style={{ opacity: 0.6 }}>{folder?.loading ? "Checking…" : "Not linked"}</span>],
+    // The flashing / install method the customer approved with the YA quote (Oct 31), for installers.
+    ["Flashing", job?.flashing_method
+      ? (job.flashing_guide_url
+        ? <a key="fl" href={job.flashing_guide_url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: BRASS_LT }}>{job.flashing_method}</a>
+        : <span key="fl">{job.flashing_method}</span>)
+      : <span key="fl" style={{ opacity: 0.6 }}>Not chosen</span>],
   ];
   return (
     <div className="mt-1.5">
@@ -802,7 +808,7 @@ function JobInfo({ snap, folder }) {
         <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} style={{ color: BRASS_LT }} />
       </button>
       {open ? (
-        <dl className="m-0 mt-2.5 grid max-w-[720px] grid-cols-4 overflow-hidden rounded-[12px] max-[699px]:grid-cols-2" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.04)" }}>
+        <dl className="m-0 mt-2.5 grid max-w-[900px] grid-cols-5 overflow-hidden rounded-[12px] max-[699px]:grid-cols-2" style={{ border: "1px solid rgba(255,255,255,.12)", backgroundColor: "rgba(255,255,255,.04)" }}>
           {cells.map(([k, v]) => (
             <div key={k} className="min-w-0 border-l px-3.5 py-2.5 first:border-l-0 max-[699px]:[&:nth-child(3)]:border-l-0 max-[699px]:[&:nth-child(n+3)]:border-t" style={{ borderColor: "rgba(255,255,255,.08)" }}>
               <dt className="text-[10.5px] font-semibold uppercase tracking-[.12em]" style={LABEL}>{k}</dt>
@@ -849,7 +855,7 @@ export function JobHero({ job, status, snap, jobContacts, events, folder, plans,
             {payment}
           </div>
           <JobAddress job={job} onEditAddress={onEditAddress} />
-          <JobInfo snap={snap} folder={folder} />
+          <JobInfo job={job} snap={snap} folder={folder} />
         </div>
         <div className="grid w-[380px] max-w-full shrink-0 gap-2 max-[1100px]:w-full max-[1100px]:grid-cols-2 max-[699px]:grid-cols-1">
           <SuperBox compact jobId={job.id} jobContacts={jobContacts} events={events} />
