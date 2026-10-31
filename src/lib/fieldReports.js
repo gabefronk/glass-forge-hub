@@ -9,6 +9,10 @@ const MESSAGES = {
   missing_params: "The request was incomplete. Reload and try again.",
   forbidden: "Your account cannot do that.",
   Unauthorized: "Sign in again, then retry.",
+  // Structured field-visit report rules (base44/shared/fieldVisitReport.js).
+  invalid_report: "Some answers are missing. Check the highlighted sections and submit again.",
+  recipients_required: "Pick at least one manager or salesperson to follow this up.",
+  missing_request_key: "Reload the page and file the report again.",
 };
 
 export async function resolveFieldReport(payload) {
