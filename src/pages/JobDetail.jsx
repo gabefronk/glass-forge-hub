@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, FolderOpen, HardHat, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { C } from "@/lib/feeUI";
@@ -8,6 +8,7 @@ import { holdForService } from "@/lib/serviceHold";
 import JobFactsRail from "@/components/jobs/JobFactsRail";
 import JobActivityFeed from "@/components/jobs/JobActivityFeed";
 import JobFieldReportModal from "@/components/jobs/JobFieldReportModal";
+import FieldVisitReportView from "@/components/jobs/FieldVisitReportView";
 import { AttachmentViewer } from "@/components/jobs/FeedImage";
 import { fetchAllPages } from "@/lib/pagination";
 import { useJobContacts } from "@/hooks/use-job-contacts";
@@ -60,6 +61,14 @@ function useIsPhone() {
 
 export default function JobDetail() {
   const { id } = useParams();
+  // A Today follow-up item links straight to the report it came from: /jobs/<id>?report=<id>.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openReportId = searchParams.get("report") || "";
+  const closeOpenReport = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("report");
+    setSearchParams(next, { replace: true });
+  };
   const navigate = useNavigate();
   const { user } = useAuth();
   const isPhone = useIsPhone();
@@ -355,6 +364,8 @@ export default function JobDetail() {
       {showReport && (
         <JobFieldReportModal jobId={id} jobName={job.canonical_name} events={calEvents} onClose={() => setShowReport(false)} onDone={() => { setShowReport(false); service.reload(); loadAll(); }} />
       )}
+
+      {openReportId ? <FieldVisitReportView reportId={openReportId} onClose={closeOpenReport} /> : null}
 
 
       {showCreateEvent && isJobCalendarOwner(user) ? (
