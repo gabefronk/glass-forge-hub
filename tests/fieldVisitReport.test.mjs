@@ -503,6 +503,11 @@ test('the form and the server validate with the same shared module', () => {
   const handler = fs.readFileSync(new URL('../base44/functions/resolveFieldReport/entry.ts', import.meta.url), 'utf8');
   assert.match(handler, /from '\.\.\/\.\.\/shared\/fieldVisitReport\.js'/);
   assert.match(handler, /validateFieldReport/);
+  assert.match(
+    handler,
+    /if \(!structured && user\.email !== 'gabefronk@gmail\.com'\)/,
+    'structured reports must never reach the legacy SMS notifier',
+  );
   // No person is named in the follow-up routing any more.
   assert.equal(/milan|mylan|israel|yelian|elian|jeremy/i.test(handler), false, 'recipients must come from live data, not names');
   assert.equal(/milan|mylan|israel|yelian|elian|jeremy/i.test(fs.readFileSync(new URL('../base44/shared/fieldVisitReport.js', import.meta.url), 'utf8')), false);
