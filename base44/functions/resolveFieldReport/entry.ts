@@ -79,10 +79,11 @@ export default async function(req) {
     };
 
     if (action === 'form_context') {
-      // Everything the form needs and the crew cannot read directly. No prices.
+      // Everything the phone form needs and the crew cannot read directly: TeamMember is
+      // RLS-closed to clients, and the job's ordered window package lives in an admin-only
+      // snapshot field. Deliberately narrow: a stable id and a display name per recipient (no
+      // emails, no auth ids, no roles), and window identity/dimensions with no pricing at all.
       const members = await activeMembers();
-      const userRows = await api.User.list('id', 200, 0).catch(() => []);
-      const roleByUser = new Map((Array.isArray(userRows) ? userRows : []).map((u) => [u.id, u.role || '']));
       let job = null;
       if (job_id) job = await api.Jobs.get(job_id).catch(() => null);
       const windows = orderedWindowOptions(job).filter((w) => !w.other);
@@ -90,10 +91,8 @@ export default async function(req) {
         ok: true,
         recipients: members.map((m) => ({
           id: m.id,
-          member_key: m.member_key || '',
-          display_name: m.display_name || m.member_key || '',
+          display_name: m.display_name || '',
           pending_account: !Array.isArray(m.auth_user_ids) || m.auth_user_ids.length === 0,
-          role: (m.auth_user_ids || []).map((uid) => roleByUser.get(uid) || '').find(Boolean) || '',
         })),
         windows,
         patio_door_detected: patioDoorDetected(job),
