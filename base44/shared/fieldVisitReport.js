@@ -284,7 +284,7 @@ export function rubricFromRows(rows) {
 /** What the customer is charged for one visit, from the live rubric only.
  *  Installer Error returns a non-billable zero. Hours/material are ignored for any event
  *  whose scope does not show them, so an Install can never price labor it never collected. */
-export function priceFieldReport({ eventType, hours, material, longDistance, rubric } = {}) {
+export function priceFieldReport({ eventType = '', hours = 0, material = '', longDistance = false, rubric = null } = {}) {
   const scope = eventFieldScope(eventType);
   const base = { event_type: String(eventType || ''), billable: false, visit_fee: 0, hours: 0, rate: 0, material: '', long_distance_amt: 0, labor_amt: 0, parts: [], reason: '' };
   if (!isCurrentEventType(eventType)) return { ...base, reason: 'unknown_event_type' };
@@ -328,7 +328,7 @@ export function priceFieldReport({ eventType, hours, material, longDistance, rub
  *  labour cost rate anywhere in the Hub today — PricingRubric.hourly_rate is the CUSTOMER rate
  *  — so with no rate supplied this returns `pending` and no amount. It never falls back to the
  *  rubric, by construction: no rubric argument reaches this function. */
-export function internalCostState({ eventType, hours, material, costSources } = {}) {
+export function internalCostState({ eventType = '', hours = 0, material = '', costSources = null } = {}) {
   const scope = eventFieldScope(eventType);
   const hrs = scope.hours ? halfHours(hours) : 0;
   const mat = scope.material ? text(material) : '';
@@ -461,7 +461,7 @@ export const feeLineMarker = (requestKey) => `[field-visit:${KEY_SAFE(requestKey
 
 /** Readable lines describing what the visit found — the body of the job note and the
  *  detail block of every follow-up Today item. */
-export function reportSummaryLines(report, { job } = {}) {
+export function reportSummaryLines(report, { job = null } = {}) {
   const lines = [];
   const eventType = text(report?.event_type);
   // Labels come from this module's own vocabularies, not from whatever the client sent, so a
@@ -504,7 +504,10 @@ export function reportSummaryLines(report, { job } = {}) {
 /** One Today Hub item per selected recipient. Each carries the job, the event, the issue
  *  detail, the notes and a link back to the originating report, and a per-recipient
  *  request_key so a retry or an edited re-submit updates nothing and duplicates nothing. */
-export function buildFollowUpTasks({ report, requestKey, recipients, job, jobId, jobName, originPath, author, now, createdByUserId, assignedByUserId } = {}) {
+export function buildFollowUpTasks({
+  report = null, requestKey = '', recipients = [], job = null, jobId = '', jobName = '',
+  originPath = '', author = '', now = '', createdByUserId = '', assignedByUserId = '',
+} = {}) {
   const triggers = followUpTriggers(report);
   if (!triggers.length) return [];
   const people = (Array.isArray(recipients) ? recipients : []).filter((m) => m && text(m.id));
@@ -549,7 +552,10 @@ export function buildFollowUpTasks({ report, requestKey, recipients, job, jobId,
  *  Returns null when the event is not chargeable (Installer Error always) or prices to $0,
  *  so a non-billable visit can never reach staging. The marker in note_text is the
  *  idempotency key a retry or an edited re-submit matches on. */
-export function buildInvoiceStagingLine({ price, report, requestKey, jobId, jobName, jobDate, calendarEventId, media, author } = {}) {
+export function buildInvoiceStagingLine({
+  price = null, report = null, requestKey = '', jobId = '', jobName = '', jobDate = '',
+  calendarEventId = '', media = [], author = '',
+} = {}) {
   if (!price || price.billable !== true || !(num(price.labor_amt) > 0)) return null;
   const date = text(jobDate);
   const marker = feeLineMarker(requestKey);
