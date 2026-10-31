@@ -6,6 +6,17 @@ import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementFo
 // Remove a duplicate or stale quote from its job. Reversible: the record and its files
 // stay for recovery. The server refuses a quote a PO, order, accounting record or later
 // revision still points at, and the last copy of a quote number a PO uses.
+// Shared with the budget card's menu. Asks first; returns the server's message, or null if
+// the owner said no.
+export async function removeJobQuote(budget, { duplicate = false, requestKey }) {
+  const label = budget.title || `Quote ${budget.quote_number || ''}`.trim();
+  if (!window.confirm(`Remove this ${duplicate ? 'duplicate ' : ''}quote from the job?\n\n${label}\n\nIt leaves the job's quotes and budget. Its record and files are kept for recovery. POs, orders and invoices are not changed.`)) return null;
+  const result = await purchasingRequest({ action: 'remove_job_quote', budget_id: budget.id, expected_version: budgetVersion(budget),
+    request_key: requestKey, review_confirmed: true, reason: duplicate ? 'Duplicate quote removed by owner from Budget & Orders.' : 'Quote removed from the job by owner.' });
+  if (!result?.deleted || result.budget_id !== budget.id) throw new Error('Removal was not confirmed. Refresh before trying again.');
+  return result.message || 'Quote removed from the job.';
+}
+
 export default function RemoveQuoteButton({ budget, duplicate = false, className, style, onRemoved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -14,15 +25,11 @@ export default function RemoveQuoteButton({ budget, duplicate = false, className
 
   async function remove() {
     if (busy) return;
-    const label = budget.title || `Quote ${budget.quote_number || ''}`.trim();
-    if (!window.confirm(`Remove this ${duplicate ? 'duplicate ' : ''}quote from the job?\n\n${label}\n\nIt leaves the job's quotes and budget. Its record and files are kept for recovery. POs, orders and invoices are not changed.`)) return;
     setBusy(true); setError('');
     key.current ||= crypto.randomUUID();
     try {
-      const result = await purchasingRequest({ action: 'remove_job_quote', budget_id: budget.id, expected_version: budgetVersion(budget),
-        request_key: key.current, review_confirmed: true, reason: duplicate ? 'Duplicate quote removed by owner from Budget & Orders.' : 'Quote removed from the job by owner.' });
-      if (!result?.deleted || result.budget_id !== budget.id) throw new Error('Removal was not confirmed. Refresh before trying again.');
-      onRemoved?.(result.message || 'Quote removed from the job.');
+      const message = await removeJobQuote(budget, { duplicate, requestKey: key.current });
+      if (message) onRemoved?.(message);
     } catch (e) { setError(messageOf(e)); key.current = null; } finally { setBusy(false); }
   }
   return (
