@@ -24,7 +24,8 @@ const INK = "#101617", MUT = "#34403F", DARK = "#0F2628", TEAL = "#0B3F3B";
 const fieldStyle = { border: `1px solid ${FIELD}`, backgroundColor: CARD, color: INK };
 const inputClass = "min-h-[48px] w-full rounded-[12px] px-3 text-[15px] focus:outline-none";
 
-export function Label({ children, as: Tag = "div", className = "" }) {
+export function Label({ children, as = "div", className = "" }) {
+  const Tag = /** @type {any} */ (as);
   return <Tag className={`mb-1.5 block text-[12px] font-semibold uppercase ${className}`} style={{ color: MUT, letterSpacing: ".06em" }}>{children}</Tag>;
 }
 
@@ -111,7 +112,7 @@ const listOps = (value, onChange) => ({
 });
 
 // ── Readiness / not-ready reasons ──────────────────────────────────────────────
-export function NotReadySection({ eventType, value, onChange, notReady = false, onNotReady = () => {} }) {
+export function NotReadySection({ eventType, value, onChange, notReady = false, onNotReady = (_on) => {} }) {
   const reasons = notReadyReasonsFor(eventType);
   if (!reasons.length) return null;
   const { rows, patch } = listOps(value, onChange);
