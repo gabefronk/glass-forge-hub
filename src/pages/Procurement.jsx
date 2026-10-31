@@ -77,7 +77,7 @@ function JobBudgetOrders({ jobId }) {
     {job.merged_into && <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">This is a merged job record. <Link className="underline" to={procurementPath(job.merged_into, section)}>Open the current job's Budget & Orders</Link>. No job links have been changed.</p>}
     {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</p>}
     <fieldset disabled={locked} className="min-w-0 border-0 p-0">
-      <PurchasingJobWorkspace job={job} data={current} section={section} onSection={changeSection} onSaved={onSaved} />
+      <PurchasingJobWorkspace framed job={job} data={current} onSaved={onSaved} />
     </fieldset>
   </PageShell>;
 }
