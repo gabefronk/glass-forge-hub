@@ -122,7 +122,7 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
         Flashing / install method (sent with the quote for approval)
         <select value={guideId} onChange={(e) => { setGuideId(e.target.value); setPreviewUrl(''); setPages([]); }} disabled={!guides || Boolean(step)} className="h-9 rounded-[8px] border bg-white px-2.5 text-[13.5px]" style={{ borderColor: EDGE, color: INK }}>
           <option value="">{guides ? 'No install guide' : 'Loading guides…'}</option>
-          {(guides || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          {(guides || []).map((g) => <option key={g.id} value={g.id}>{g.name}{g.builder_match ? ` · ${g.builder_match} default` : ''}</option>)}
         </select>
       </label>
       {error ? <p role="alert" className="text-[13.5px] font-semibold" style={{ color: RED }}>{error}</p> : null}
