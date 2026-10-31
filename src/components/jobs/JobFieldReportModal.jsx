@@ -322,7 +322,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
               {scope.cannotFix ? <CannotFixSection windows={ctx.windows} value={cannotFix} onChange={setCannotFix} /> : null}
 
               {scope.hours || scope.material ? (
-                <HoursMaterialSection eventType={eventType} materials={materials} hours={hours} onHours={setHours}
+                <HoursMaterialSection materials={materials} hours={hours} onHours={setHours}
                   material={material} onMaterial={setMaterial} longDistance={longDistance} onLongDistance={setLongDistance}
                   showLongDistance={scope.longDistance} billable={scope.billable} />
               ) : null}
