@@ -191,11 +191,9 @@ export default function InvoicePanel({ job, budgets, invoices, onDone, onCancel 
 
   const pickType = (next) => { setType(next); setOptions((o) => ({ ...o, terms: next === 'half', signature: next === 'half' })); };
   const toggle = (key) => {
-    setOptions((o) => {
-      const next = { ...o, [key]: !o[key] };
-      if (key === 'itemize') setLines(defaultLines({ job, budgets, sell, itemize: next.itemize }));
-      return next;
-    });
+    const next = { ...options, [key]: !options[key] };
+    setOptions(next);
+    if (key === 'itemize') setLines(defaultLines({ job, budgets, sell, itemize: next.itemize }));
   };
   const patchLine = (idx, patch) => setLines((ls) => ls.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
   const optionDisabled = (key) => (key === 'wire' && !bank) || (key === 'itemize' && !hasQuoteLines) || ((key === 'w9' || key === 'coi') && !attachments[key]);
@@ -209,7 +207,6 @@ export default function InvoicePanel({ job, budgets, invoices, onDone, onCancel 
       v: 1, type, number: number.trim(), date, received: type === 'final' ? received : 0,
       bill_to: billTo, project, lines: lines.map((l) => ({ ...l, amount: lineAmount(l) })), options,
       company, attachments: { w9: options.w9 ? attachments.w9 : null, coi: options.coi ? attachments.coi : null },
-      ref_quote: budgets.find((b) => b.quote_number)?.quote_number || '',
     };
     try {
       await downloadInvoice(doc);
