@@ -249,11 +249,11 @@ export default function InvoicePanel({ job, budgets, invoices, onDone, onCancel 
       </div>
 
       <div className="overflow-hidden rounded-[10px] bg-white" style={{ border: `1px solid ${EDGE}` }}>
-        <div className="grid gap-2 px-3 py-1.5 text-[13px] font-semibold [grid-template-columns:110px_minmax(0,1fr)_90px_60px_100px_100px_28px] max-[767px]:hidden" style={{ color: INK3, backgroundColor: '#FAF8F3' }}>
+        <div className="grid gap-2 px-3 py-1.5 text-[13px] font-semibold [grid-template-columns:136px_minmax(0,1fr)_90px_60px_100px_100px_28px] max-[767px]:hidden" style={{ color: INK3, backgroundColor: '#FAF8F3' }}>
           <span>Line</span><span>Description</span><span>Size</span><span className="text-right">Qty</span><span className="text-right">Unit / amount</span><span className="text-right">Amount</span><span />
         </div>
         {lines.map((l, idx) => (
-          <div key={idx} className="grid items-center gap-2 px-3 py-1.5 [grid-template-columns:110px_minmax(0,1fr)_90px_60px_100px_100px_28px] max-[767px]:[grid-template-columns:1fr_1fr]" style={{ borderTop: `1px solid ${RULE}` }}>
+          <div key={idx} className="grid items-center gap-2 px-3 py-1.5 [grid-template-columns:136px_minmax(0,1fr)_90px_60px_100px_100px_28px] max-[767px]:[grid-template-columns:1fr_1fr]" style={{ borderTop: `1px solid ${RULE}` }}>
             <select aria-label="Line type" value={l.kind} onChange={(e) => patchLine(idx, e.target.value === 'item' ? { kind: 'item', qty: 1, unit: lineAmount(l) } : { kind: 'charge', amount: lineAmount(l) })} className={FIELD} style={FIELD_STYLE}>
               <option value="item">Window / door</option>
               <option value="charge">Labor / other</option>
