@@ -311,8 +311,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
 
               {scope.sheetrock ? <SheetrockSection value={sheetrockOutcomes} onChange={setSheetrockOutcomes} /> : null}
 
-              <WindowIssuesSection eventType={eventType} windows={ctx.windows} value={windowIssues} onChange={setWindowIssues}
-                job={{ accepted_quote_snapshot: { lines: ctx.windows.map((w) => ({ id: w.id, mark: w.mark, room: w.room, style: w.style, width: w.width, height: w.height, qty: w.qty, units: w.units, dimension_basis: w.dimension_basis })) } }} />
+              <WindowIssuesSection eventType={eventType} windows={ctx.windows} value={windowIssues} onChange={setWindowIssues} />
 
               {scope.warrantyIssue ? <WarrantySection value={warrantyIssue} onChange={setWarrantyIssue} /> : null}
 
