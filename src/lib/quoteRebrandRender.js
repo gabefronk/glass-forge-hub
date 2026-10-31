@@ -89,6 +89,24 @@ function summaryPage({ company, job, quoteLabel, split, guideName }) {
   return pdf.output("arraybuffer");
 }
 
+// Page images of the finished file for the panel's preview (Chrome may be set to download PDFs
+// rather than show them, so the preview never relies on the browser's PDF viewer).
+export async function previewImages(bytes, width = 900) {
+  const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const out = [];
+  for (let n = 1; n <= doc.numPages; n += 1) {
+    const page = await doc.getPage(n);
+    const vp = page.getViewport({ scale: width / page.getViewport({ scale: 1 }).width });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height);
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    out.push(canvas.toDataURL("image/jpeg", 0.8));
+    canvas.width = 0; canvas.height = 0;
+  }
+  await doc.destroy();
+  return out;
+}
+
 // Everything: the rebranded quote pages, the YA summary page, the install guide.
 export async function buildYaQuote({ sourceBytes, factor, company, job, quoteLabel, split, guideName = "", guideBytes = null }) {
   const doc = await pdfjs.getDocument({ data: sourceBytes }).promise;
