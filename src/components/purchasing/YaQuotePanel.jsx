@@ -21,9 +21,10 @@ const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v
 
 function fromBase64(s) { const bin = atob(s); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i); return out; }
 
+// The private copy the quote reader kept, else the quote's own PDF link.
 async function sourceBytes(budget) {
-  let url = safeHref(budget.source_pdf_url);
-  if (!url) url = dataOf(await invoke('purchasingQuoteIngest', { action: 'sign_source', budget_id: budget.id })).signed_url;
+  const signed = await invoke('purchasingQuoteIngest', { action: 'sign_source', budget_id: budget.id }).then((r) => dataOf(r).signed_url).catch(() => '');
+  const url = signed || safeHref(budget.source_pdf_url);
   if (!url) throw new Error('The original quote PDF is not on file for this budget.');
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Couldn't load the original quote (${res.status}).`);
