@@ -27,11 +27,11 @@ export const INVOICE_OPTIONS = [
   { key: 'w9', label: 'Attach Form W-9' },
   { key: 'coi', label: 'Attach certificate of insurance' },
 ];
-export function defaultOptions(type = 'full', { hasBank = false, hasQuoteLines = false, hasW9 = false, hasCoi = false } = {}) {
+export function defaultOptions(type = 'full', { hasBank = false, hasQuoteLines = false } = {}) {
   return {
     wire: hasBank, ach_link: true, check: true,
     terms: type === 'half', signature: type === 'half',
-    itemize: hasQuoteLines, w9: false && hasW9, coi: false && hasCoi,
+    itemize: hasQuoteLines, w9: false, coi: false,
   };
 }
 
@@ -105,8 +105,10 @@ export function defaultLines({ job = {}, budgets = [], sell = null, itemize = fa
   const total = num(sell);
   const quoteBudgets = countedFirst(liveQuoteBudgets(job, budgets));
   if (!quoteBudgets.length) return [{ kind: 'charge', description: 'Labor', amount: total ?? 0 }];
+  // Counted quotes make the budget; with none counted yet, the first draft stands in.
+  const counted = quoteBudgets.filter((x) => x.budget_usage !== 'draft');
   let material = 0, labor = 0, extra = 0;
-  for (const b of quoteBudgets.filter((x) => x.budget_usage !== 'draft').length ? quoteBudgets.filter((x) => x.budget_usage !== 'draft') : quoteBudgets.slice(0, 1)) {
+  for (const b of counted.length ? counted : quoteBudgets.slice(0, 1)) {
     const i = b.inputs || {};
     material += num(i.material_true_cost) || 0;
     labor += num(i.labor_cost_sub_pay) || 0;
