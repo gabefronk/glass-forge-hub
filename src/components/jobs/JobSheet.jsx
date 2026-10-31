@@ -793,11 +793,10 @@ function JobInfo({ job, snap, folder }) {
     ["Job folder", folder?.folder?.url
       ? <a key="f" href={folder.folder.url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: BRASS_LT }}>Open in Drive</a>
       : <span key="f" style={{ opacity: 0.6 }}>{folder?.loading ? "Checking…" : "Not linked"}</span>],
-    // The flashing / install method the customer approved with the YA quote (Oct 31), for installers.
+    // The flashing / install method the customer approved with the YA quote (Oct 31), for installers:
+    // the pinned guide version, opened through a short-lived signed link.
     ["Flashing", job?.flashing_method
-      ? (job.flashing_guide_url
-        ? <a key="fl" href={job.flashing_guide_url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: BRASS_LT }}>{job.flashing_method}</a>
-        : <span key="fl">{job.flashing_method}</span>)
+      ? <FlashingGuideLink key="fl" job={job} color={BRASS_LT} />
       : <span key="fl" style={{ opacity: 0.6 }}>Not chosen</span>],
   ];
   return (
