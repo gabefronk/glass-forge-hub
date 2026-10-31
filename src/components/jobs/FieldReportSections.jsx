@@ -103,7 +103,7 @@ function RowHeader({ title, onRemove }) {
   );
 }
 
-const useList = (value, onChange) => ({
+const listOps = (value, onChange) => ({
   rows: Array.isArray(value) ? value : [],
   add: (row) => onChange([...(Array.isArray(value) ? value : []), row]),
   patch: (i, patch) => onChange((Array.isArray(value) ? value : []).map((r, j) => (j === i ? { ...r, ...patch } : r))),
@@ -114,7 +114,7 @@ const useList = (value, onChange) => ({
 export function NotReadySection({ eventType, value, onChange, notReady, onNotReady }) {
   const reasons = notReadyReasonsFor(eventType);
   if (!reasons.length) return null;
-  const { rows, patch } = useList(value, onChange);
+  const { rows, patch } = listOps(value, onChange);
   const pick = (spec, on) => {
     if (on) onChange([...rows, { key: spec.key, label: spec.label, note: "" }]);
     else onChange(rows.filter((r) => r.key !== spec.key));
@@ -146,7 +146,7 @@ export function NotReadySection({ eventType, value, onChange, notReady, onNotRea
 export function WindowIssuesSection({ eventType, windows, value, onChange, job }) {
   const kinds = windowIssueKindsFor(eventType);
   if (!kinds.length) return null;
-  const { rows, add, patch, remove } = useList(value, onChange);
+  const { rows, add, patch, remove } = listOps(value, onChange);
   const options = [...(windows || []), { id: "other", label: "Other / cannot identify the unit", other: true }];
   const title = eventType === "job_readiness" ? "Window-by-window checklist" : "Window issues";
   const hint = windows && windows.length
@@ -234,7 +234,7 @@ export function WindowIssuesSection({ eventType, windows, value, onChange, job }
 
 // ── Sheetrock Window Install ───────────────────────────────────────────────────
 export function SheetrockSection({ value, onChange }) {
-  const { rows, patch } = useList(value, onChange);
+  const { rows, patch } = listOps(value, onChange);
   const pick = (spec, on) => {
     if (on) onChange([...rows, { key: spec.key, label: spec.label, note: "" }]);
     else onChange(rows.filter((r) => r.key !== spec.key));
@@ -265,7 +265,7 @@ export function PartsNeededSection({ value, onChange }) {
 }
 
 export function ScreenIssuesSection({ value, onChange }) {
-  const { rows, add, patch, remove } = useList(value, onChange);
+  const { rows, add, patch, remove } = listOps(value, onChange);
   return (
     <Card title="Screen issues" hint="Quantity and where they go. Add another item for each different screen problem.">
       {rows.map((row, i) => (
@@ -296,7 +296,7 @@ export function ScreenIssuesSection({ value, onChange }) {
 }
 
 export function CannotFixSection({ windows, value, onChange }) {
-  const { rows, add, patch, remove } = useList(value, onChange);
+  const { rows, add, patch, remove } = listOps(value, onChange);
   const options = [...(windows || []), { id: "other", label: "Other / cannot identify the unit" }];
   return (
     <Card title="Could not fix a window" hint="Each one goes to a manager for investigation / review.">
@@ -322,7 +322,7 @@ export function CannotFixSection({ windows, value, onChange }) {
 export function ChecklistSection({ eventType, value, onChange }) {
   const vocab = checklistItemsFor(eventType);
   if (!vocab.length) return null;
-  const { rows, patch } = useList(value, onChange);
+  const { rows, patch } = listOps(value, onChange);
   const pick = (spec, on) => {
     if (on) onChange([...rows, { key: spec.key, label: spec.label, note: "", follow_up: false }]);
     else onChange(rows.filter((r) => r.key !== spec.key));
