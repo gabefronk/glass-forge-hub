@@ -5,7 +5,7 @@
     "invoice_number": {
       "type": "string",
       "title": "Invoice Number",
-      "description": "QuickBooks invoice number (or Glass Forge's own GF-YYYY-NNN number). Unique per invoice; the Hub never generates one."
+      "description": "QuickBooks invoice number, Glass Forge GF-YYYY-NNN, or a YA customer invoice printed from Budget & Orders (YA-YYMMDD-NN, the date plus that day's next number). Unique per invoice."
     },
     "invoice_date": {
       "type": "string",
