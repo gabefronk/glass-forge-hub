@@ -137,8 +137,8 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
     // received field stamped bogus received dates on live orders. Recording
     // receipt stays possible when updating an existing confirmation.
     const payload = order ? form : { ...form, received_date: '' };
-    // Stamped only when it is a choice: a change, or will call on a new confirmation.
-    const deliveryPatch = delivery !== deliveryChoice(order) || (!order && delivery === 'will_call') ? { delivery_method: delivery } : {};
+    // Stamped only when changed, so an order with nothing recorded is not marked delivered.
+    const deliveryPatch = delivery !== deliveryChoice(order) ? { delivery_method: delivery } : {};
     try {
       const r = await purchasingRequest({ ...payload, ...deliveryPatch, action: 'save_supplier_order', order_id: order?.id, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true });
       // The recorded ETA is the event on the picked crew calendar(s): this save
