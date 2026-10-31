@@ -2,7 +2,7 @@
 // overwrite, and the exact version a job keeps.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pdfProblem, sha256Hex, sortGuides, builderKey, builderDefault, importDefaults, newGuide, replaceFilePatch, pinnedVersion, jobGuidePatch, moveGuide, sizeLabel } from '../src/lib/installGuides.js';
+import { pdfProblem, sha256Hex, sortGuides, builderKey, builderDefault, newGuide, replaceFilePatch, pinnedVersion, jobGuidePatch, moveGuide, sizeLabel } from '../src/lib/installGuides.js';
 
 const bytes = (s) => new TextEncoder().encode(s);
 const file = (n, sha = `sha${n}`) => ({ file_uri: `private/guide-${n}.pdf`, file_name: `guide ${n}.pdf`, size: 1000 * n, sha256: sha });
@@ -38,10 +38,8 @@ test('builder names match their default guide', () => {
   assert.deepEqual(sortGuides(guides, { retired: true }).map((g) => g.id), ['std', 'old', 'rec', 'typ']);
 });
 
-test('the Drive import cleans names and sets the Holmes and Pulte defaults', () => {
-  assert.deepEqual(importDefaults('1F Standard Flat Wall Nail-on 405 NO Sill Pan (1).pdf'), { name: '1F Standard Flat Wall Nail-on 405 NO Sill Pan', builder_match: '' });
-  assert.equal(importDefaults('HOLMES HOMES RECESSED WINDOW INSTALL.pdf').builder_match, 'Holmes Homes');
-  assert.equal(importDefaults('NEW Pulte Typar - 1F Upgraded Flat Wall Nail Fin.pdf').builder_match, 'Pulte');
+test('a new guide without a name is named from its file', () => {
+  assert.equal(newGuide({ file: { ...file(1), file_name: '1F Standard Flat Wall Nail-on 405 NO Sill Pan (1).pdf' } }).name, '1F Standard Flat Wall Nail-on 405 NO Sill Pan');
 });
 
 test('replacing the file adds a version and keeps every old file', () => {
