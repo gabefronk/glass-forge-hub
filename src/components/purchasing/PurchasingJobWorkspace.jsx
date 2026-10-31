@@ -27,6 +27,7 @@ import { NumbersEditor } from '@/components/budgets/BudgetReviewRow';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import JobFilesPanel from './JobFilesPanel';
 import InvoicePanel, { PrintedInvoices, useJobInvoices } from './InvoicePanel';
+import YaQuotePanel from './YaQuotePanel';
 import OrderEmailPanel from './OrderEmailPanel';
 import { openPrivateSource } from './PrivateSourceButton';
 import { removeJobQuote } from './RemoveQuoteButton';
@@ -423,7 +424,7 @@ function BudgetTable({ inputs, total, sell, marginPct }) {
   );
 }
 
-function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onSaved, editorPanel }) {
+function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onSaved, editorPanel, onYaQuote, yaPanel }) {
   const [menuError, setMenuError] = useState('');
   const removeKey = useRef(null);
   const fig = budgetFigures(budget);
@@ -464,6 +465,9 @@ function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onSaved, editorP
   }
   const openSource = () => { setMenuError(''); openPrivateSource(privateSource).catch((e) => setMenuError(e.message)); };
   const menu = [
+    // A YA-branded copy of this supplier quote at sell, with the flashing method (Oct 31).
+    !noQuote && budget.job_id ? { label: budget.ya_quote_url ? 'Make YA quote again' : 'Make YA quote', onSelect: onYaQuote } : null,
+    safeHref(budget.ya_quote_url) ? { label: 'YA quote in Drive', href: budget.ya_quote_url } : null,
     sourceHref ? { label: 'Vendor quote PDF', href: sourceHref } : null,
     privateSource ? { label: 'Vendor quote PDF', onSelect: openSource } : null,
     budget.job_id && !related.length && !budget.deleted_at ? { label: dupe ? 'Remove duplicate quote' : 'Remove quote from job', onSelect: remove, danger: true } : null,
@@ -483,6 +487,7 @@ function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onSaved, editorP
         <ActionMenu label="More for this quote" items={menu} />
       </div>
       {menuError ? <p role="alert" className="px-4 pb-2 text-[13.5px] font-semibold" style={{ color: '#A43432' }}>{menuError}</p> : null}
+      {yaPanel ? <div className="px-4 pb-3">{yaPanel}</div> : null}
       {statusLine ? <p className="mx-4 mb-2.5 rounded-[9px] px-3 py-2 text-[13.5px] font-medium" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>{statusLine}</p> : null}
       {editing ? <div className="px-4 pb-4">{editorPanel}</div> : noQuote ? (
         <div>
@@ -514,6 +519,7 @@ export default function PurchasingJobWorkspace({ job, data, onSaved, framed = fa
   const [editor, setEditor] = useState(null);
   const [hasFolder, setHasFolder] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
+  const [yaQuoteFor, setYaQuoteFor] = useState('');
   const [invoiceRefresh, setInvoiceRefresh] = useState(0);
   const filesRef = useRef(null);
   const rec = useMemo(() => jobProcurementRecords(data, job.id), [data, job.id]);
@@ -578,7 +584,8 @@ export default function PurchasingJobWorkspace({ job, data, onSaved, framed = fa
         {quoteBudgets.length ? null : <TypedBudget job={job} ordered={ordered} framed={framed} />}
         {rec.budgets.map((b) => (
           <BudgetCard key={b.id} budget={b} allBudgets={rec.budgets} pos={rec.pos} editing={editor?.mode === 'numbers' && editor.budget_id === b.id}
-            onEdit={openEditor} onSaved={onSaved} editorPanel={budgetEditor(b)} />
+            onEdit={openEditor} onSaved={onSaved} editorPanel={budgetEditor(b)} onYaQuote={() => setYaQuoteFor(b.id)}
+            yaPanel={yaQuoteFor === b.id ? <YaQuotePanel job={job} budget={b} onCancel={() => setYaQuoteFor('')} onDone={(msg) => { setYaQuoteFor(''); onSaved(msg); }} /> : null} />
         ))}
         <PrintedInvoices invoices={invoices} />
       </section>
