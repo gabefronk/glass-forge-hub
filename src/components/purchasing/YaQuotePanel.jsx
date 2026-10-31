@@ -1,14 +1,15 @@
 // Make YA quote (Gabe, Oct 31): from a supplier quote budget, a copy that looks the same but
 // carries Y A Windows & Doors' details and logo (distributor names, addresses, phones, faxes,
 // emails and sales reps covered) with every price at sell, a YA summary / approval page and
-// the flashing / install method guide the customer picks from Drive › INSTALL BUDGET SHEET ›
-// Install Type Guides. Preview opens it in a new tab; Save puts it in the job's Drive folder and
-// saves the method on the job for the installers. Nothing is emailed.
+// the flashing / install method guide the customer picks from the Hub's Install guides (the
+// builder's default preselected). Preview shows it in the panel; Save puts it in the job's Drive
+// folder and pins that guide version on the job for the installers. Nothing is emailed.
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { messageOf } from '@/components/budgets/ProcurementForms';
 import { companyDetails } from '@/lib/yaInvoice';
-import { productSell, quoteTotal, priceFactor, guideLabel, money } from '@/lib/quoteRebrand';
+import { productSell, quoteTotal, priceFactor, money } from '@/lib/quoteRebrand';
+import { builderDefault, jobGuidePatch, pdfProblem, sortGuides } from '@/lib/installGuides';
 import { uploadToJobFolder } from '@/lib/jobFileUpload';
 
 const INK = '#101617', INK3 = '#34403F', EDGE = '#E2DCD1', RED = '#A43432';
@@ -18,8 +19,6 @@ const PRI = { border: '1px solid #0B3F3B', backgroundColor: '#0B3F3B', color: '#
 const invoke = (name, body) => base44.functions.invoke(name, body);
 const dataOf = (r) => { const d = r?.data ?? r; if (d?.error) throw new Error(d.error); return d; };
 const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v : ''; } catch { return ''; } };
-
-function fromBase64(s) { const bin = atob(s); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i); return out; }
 
 // The private copy the quote reader kept, else the quote's own PDF link.
 async function sourceBytes(budget) {
@@ -31,23 +30,19 @@ async function sourceBytes(budget) {
   return new Uint8Array(await res.arrayBuffer());
 }
 
-async function guideBytes(jobId, fileId, name) {
-  const parts = []; let offset = 0;
-  for (;;) {
-    const r = dataOf(await invoke('job-documents', { action: 'guide_chunk', job_id: jobId, file_id: fileId, offset }));
-    const bytes = fromBase64(r.data); parts.push(bytes); offset += bytes.length;
-    if (r.done || !bytes.length) break;
-  }
-  const out = new Uint8Array(offset); let at = 0;
-  for (const p of parts) { out.set(p, at); at += p.length; }
-  // A rights-protected (Microsoft-encrypted) file is not a PDF the Hub can attach.
-  const head = new TextDecoder('latin1').decode(out.subarray(0, 1024));
-  if (!head.includes('%PDF-')) throw new Error(`${name} is a protected or encrypted file, not a plain PDF. Save it again as a normal PDF in Install Type Guides, or pick another guide.`);
-  return out;
+// The guide's current version, from its private Hub file.
+async function guideBytes(guide) {
+  const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({ file_uri: guide.file_uri, expires_in: 300 });
+  const res = await fetch(signed_url);
+  if (!res.ok) throw new Error(`Couldn't load the ${guide.name} guide (${res.status}).`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const problem = pdfProblem(bytes, guide.name);
+  if (problem) throw new Error(problem);
+  return bytes;
 }
 
 export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
-  const [guides, setGuides] = useState(null), [guideId, setGuideId] = useState(job.flashing_guide_file_id || '');
+  const [guides, setGuides] = useState(null), [guideId, setGuideId] = useState('');
   const [settings, setSettings] = useState(null);
   const [step, setStep] = useState(''), [error, setError] = useState('');
   const [built, setBuilt] = useState(null);
@@ -60,10 +55,16 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
 
   useEffect(() => {
     let live = true;
-    invoke('job-documents', { action: 'install_guides', job_id: job.id }).then((r) => { if (live) setGuides(dataOf(r).guides || []); }).catch((e) => { if (live) { setGuides([]); setError(messageOf(e)); } });
+    // The job's saved guide while it is still offered, else the builder's default.
+    base44.entities.InstallGuides.list('sort_order', 200).then((rows) => {
+      if (!live) return;
+      const list = sortGuides(rows || []);
+      setGuides(list);
+      setGuideId((list.find((g) => g.id === job.flashing_guide_id) || builderDefault(list, job.builder))?.id || '');
+    }).catch((e) => { if (live) { setGuides([]); setError(messageOf(e)); } });
     base44.entities.AppSettings.list('-created_date', 5).then((rows) => { if (live) setSettings(rows?.[0] || {}); }).catch(() => { if (live) setSettings({}); });
     return () => { live = false; };
-  }, [job.id]);
+  }, [job.id, job.flashing_guide_id, job.builder]);
 
   // Built once per guide choice; Preview and Save use the same file.
   async function make() {
@@ -71,10 +72,10 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
     if (built && built.guideId === guideId) return { ...built, guide };
     setStep('Reading the supplier quote…');
     const src = await sourceBytes(budget);
-    const gBytes = guide ? (setStep('Getting the install guide…'), await guideBytes(job.id, guide.id, guideLabel(guide.name))) : null;
+    const gBytes = guide ? (setStep('Getting the install guide…'), await guideBytes(guide)) : null;
     setStep('Building the YA quote…');
     const { buildYaQuote } = await import('@/lib/quoteRebrandRender');
-    const { bytes, supplier } = await buildYaQuote({ sourceBytes: src, factor, company: companyDetails(settings || {}), job, quoteLabel, split, guideName: guide ? guideLabel(guide.name) : '', guideBytes: gBytes });
+    const { bytes, supplier } = await buildYaQuote({ sourceBytes: src, factor, company: companyDetails(settings || {}), job, quoteLabel, split, guideName: guide ? guide.name : '', guideBytes: gBytes });
     const name = `${job.canonical_name || 'Job'} - YA Quote${budget.quote_number ? ` ${budget.quote_number}` : ''}.pdf`.replace(/[\\/:*?"<>|]+/g, ' ');
     const next = { bytes, supplier, name, guideId };
     setBuilt(next);
@@ -103,10 +104,8 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
       setStep('Saving to the job’s Drive folder…');
       const file = await uploadToJobFolder({ invoke, jobId: job.id, file: new File([bytes], name, { type: 'application/pdf' }) });
       await base44.entities.JobBudgets.update(budget.id, { ya_quote_file_id: file.id, ya_quote_url: file.url, ya_quote_at: new Date().toISOString() });
-      await base44.entities.Jobs.update(job.id, guide
-        ? { flashing_method: guideLabel(guide.name), flashing_guide_file_id: guide.id, flashing_guide_url: guide.url }
-        : { flashing_method: null, flashing_guide_file_id: null, flashing_guide_url: null });
-      onDone(`YA quote saved to ${file.folder?.name || 'the job folder'}${guide ? `, with ${guideLabel(guide.name)}` : ''}.${supplier === 'generic' ? ' This quote layout is not mapped yet: check that no supplier details are left.' : ''} Nothing was emailed.`);
+      await base44.entities.Jobs.update(job.id, jobGuidePatch(guide));
+      onDone(`YA quote saved to ${file.folder?.name || 'the job folder'}${guide ? `, with ${guide.name} (version ${guide.version || 1})` : ''}.${supplier === 'generic' ? ' This quote layout is not mapped yet: check that no supplier details are left.' : ''} Nothing was emailed.`);
     } catch (e) { setError(messageOf(e)); } finally { setStep(''); }
   }
 
@@ -123,7 +122,7 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
         Flashing / install method (sent with the quote for approval)
         <select value={guideId} onChange={(e) => { setGuideId(e.target.value); setPreviewUrl(''); setPages([]); }} disabled={!guides || Boolean(step)} className="h-9 rounded-[8px] border bg-white px-2.5 text-[13.5px]" style={{ borderColor: EDGE, color: INK }}>
           <option value="">{guides ? 'No install guide' : 'Loading guides…'}</option>
-          {(guides || []).map((g) => <option key={g.id} value={g.id}>{guideLabel(g.name)}</option>)}
+          {(guides || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
       </label>
       {error ? <p role="alert" className="text-[13.5px] font-semibold" style={{ color: RED }}>{error}</p> : null}
