@@ -4,7 +4,7 @@ import { BarChart3, Briefcase, Calendar, Receipt, MoreHorizontal, PanelsTopLeft,
 import { isAgentCenterOwner, isWindowQuotesOnly } from "@/lib/agentCenterAccess";
 import { base44 } from "@/api/base44Client";
 import { isEmailOwner } from "@/lib/ownerAccess";
-import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Landmark, Wallet } from "lucide-react";
+import { Settings, Users, Bot, Network, Search, MessageSquare, Unlink, FileText, Bug, Landmark, Wallet, BookOpen } from "lucide-react";
 
 // Labels match the desktop sidebar (YaFeesSidebar). Primary bar keeps short
 // labels because five slots share the phone width. Accounting is one slot that opens its own
@@ -28,6 +28,7 @@ const SECONDARY_NAV = [
   { label: "Brands & Specs", to: "/brands-specs", icon: Library },
   { label: "Summit", ariaLabel: "Summit door service", to: "/summit", icon: Mountain },
   { label: "Contacts", to: "/contacts", icon: Users, ownerOnly: true },
+  { label: "Install guides", to: "/install-guides", icon: BookOpen, ownerOnly: true },
 ];
 
 const ADMIN_NAV = [
