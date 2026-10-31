@@ -1,12 +1,15 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import DotText from './DotText';
+import EtaEditor from './EtaEditor';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { pickDisplayBudget } from '@/lib/purchasingViewModel';
 import { isLiveBudget } from '@/lib/purchasingCoreTwin';
 import { displayDate, etaDistance } from '@/lib/purchasingDates';
-import { saveEtaTarget } from '@/lib/etaTarget';
 import { etaDate } from '@/lib/purchasingSummary';
 
-// The ETA cell: clicking it picks a date in place - no form to fill in.
+// The ETA cell: clicking it opens the ETA editor in place - the date, whose
+// calendar it goes on (Israel / Milan / both) and, on a supplier order, delivered
+// or will call (EtaEditor; Gabriel, Oct 30).
 //   - A job with ONE pending supplier confirmation keeps its ETA on that order
 //     (save_supplier_order), so the supplier record stays the source of truth.
 //   - A job with no supplier confirmation yet keeps its glass ETA on the budget
@@ -16,6 +19,7 @@ import { etaDate } from '@/lib/purchasingSummary';
 // A scope row passes its own etaTarget (its budget or its one pending order) and
 // no `data`, so the cell never falls back to the job's aggregate records.
 const LINE = '#D6CCBA';
+const EDGE = '#E2DCD1';
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const denverToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
@@ -45,37 +49,10 @@ function jobEtaTarget(job, data) {
 }
 
 export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier, etaTarget, compact = false }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  // showPicker() is refused inside the preview's cross-origin iframe (SecurityError).
-  // When that happens, swap the label for a real date field: tapping it opens the
-  // browser's own calendar, which is allowed in a frame.
-  const [manual, setManual] = useState(false);
-  const inputRef = useRef(null);
+  const [open, setOpen] = useState(false);
 
   const target = etaTarget ?? jobEtaTarget(job, data);
   const date = target?.date || '';
-
-  async function save(value) {
-    if (busy || !target) return;
-    setBusy(true); setError('');
-    try {
-      // The ETA on Israel's Google Calendar is the same ETA: it is created here
-      // and moved here, never duplicated, and removed when the ETA is cleared.
-      const result = await saveEtaTarget({ jobId: job.id, order: target.order || null, budgetId: target.budgetId || '', date: value });
-      if (result.error) setError(result.error);
-      if (result.saved) await onSaved?.();
-    } finally { setBusy(false); }
-  }
-
-  function openPicker() {
-    const el = inputRef.current;
-    if (!el) return;
-    try {
-      if (!el.showPicker) throw new Error('unsupported');
-      el.showPicker();
-    } catch { setManual(true); }
-  }
 
   if (!target) {
     return (
@@ -88,24 +65,21 @@ export default function EtaCell({ job, data, etaLabel, onSaved, onOpenSupplier, 
   }
 
   return (
-    <div className={`relative flex flex-col gap-1 ${compact ? 'items-start' : 'items-center'}`}>
-      {manual ? (
-        <input type="date" aria-label="Supplier ETA" disabled={busy}
-          value={date}
-          onChange={(e) => save(e.target.value)}
-          className="w-full rounded-md border px-1 py-1 text-[11.5px] font-semibold"
-          style={{ borderColor: LINE, color: '#101617', backgroundColor: '#FFFFFF' }} />
-      ) : (
-        <button type="button" disabled={busy} title="Pick the supplier ETA" onClick={openPicker}
-          className="cursor-pointer rounded-md px-1 py-0.5 hover:bg-stone-100">
-          {compact ? <EtaWords label={date} empty="Set ETA" /> : date ? <DotText tone="blue"><EtaText date={date} /></DotText> : <span className="rounded-md px-1.5 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: '#F3EEE4', color: '#4A5652', border: `1px dashed ${LINE}` }}>Set ETA</span>}
-        </button>
-      )}
-      <input ref={inputRef} type="date" aria-label="Supplier ETA" tabIndex={-1}
-        value={date}
-        onChange={(e) => save(e.target.value)}
-        style={{ position: 'absolute', left: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} />
-      {error && <span className="text-[13px] font-semibold" style={{ color: '#A43432' }}>{error}</span>}
+    <div className={`flex flex-col gap-1 ${compact ? 'items-start' : 'items-center'}`}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" title="Set the supplier ETA and its calendar"
+            className="cursor-pointer rounded-md px-1 py-0.5 hover:bg-stone-100">
+            {compact ? <EtaWords label={date} empty="Set ETA" /> : date ? <DotText tone="blue"><EtaText date={date} /></DotText> : <span className="rounded-md px-1.5 py-0.5 text-[13px] font-semibold" style={{ backgroundColor: '#F3EEE4', color: '#4A5652', border: `1px dashed ${LINE}` }}>Set ETA</span>}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[280px] rounded-[12px] bg-white p-3" style={{ borderColor: EDGE }}>
+          {open ? (
+            <EtaEditor jobId={job.id} order={target.order || null} budgetId={target.budgetId || ''} date={date}
+              onSaved={onSaved} onDone={() => setOpen(false)} onCancel={() => setOpen(false)} />
+          ) : null}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
