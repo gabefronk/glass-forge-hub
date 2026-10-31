@@ -2,7 +2,7 @@
   "name": "AppSettings",
   "properties": {
     "compliance_start_date": {
-      "description": "Date from which field report compliance is enforced (America/Denver). Calendar events before this date are marked pre_compliance \u2014 excluded from the Today tab, never rendered red on the calendar, and never accrue days_late. The matcher still runs and stores report_status_raw for tuning.",
+      "description": "Date from which field report compliance is enforced (America/Denver). Calendar events before this date are marked pre_compliance — excluded from the Today tab, never rendered red on the calendar, and never accrue days_late. The matcher still runs and stores report_status_raw for tuning.",
       "format": "date",
       "title": "Compliance Start Date",
       "type": "string"
@@ -32,6 +32,76 @@
       "description": "Fallback only: email-to-SMS address used when the BlueBubbles iMessage can't be sent, e.g. 8015551234@vtext.com (Verizon), @txt.att.net (AT&T), @tmomail.net (T-Mobile). Blank = no fallback.",
       "title": "Service owner text address",
       "type": "string"
+    },
+    "invoice_company_name": {
+      "type": "string",
+      "title": "Invoice company name",
+      "description": "YA customer invoices: legal name in the header (Y A Windows Doors LLC)."
+    },
+    "invoice_company_address": {
+      "type": "string",
+      "title": "Invoice company address",
+      "description": "YA customer invoices: mailing address in the header and for mailed checks."
+    },
+    "invoice_phone": {
+      "type": "string",
+      "title": "Invoice phone",
+      "description": "YA customer invoices: phone to call or text for an ACH payment link."
+    },
+    "invoice_email": {
+      "type": "string",
+      "title": "Invoice email",
+      "description": "YA customer invoices: email for questions and ACH payment link requests."
+    },
+    "invoice_checks_payable_to": {
+      "type": "string",
+      "title": "Checks payable to",
+      "description": "YA customer invoices: name on checks."
+    },
+    "invoice_bank_name": {
+      "type": "string",
+      "title": "Bank name",
+      "description": "YA customer invoices: wire / ACH bank."
+    },
+    "invoice_bank_address": {
+      "type": "string",
+      "title": "Bank address",
+      "description": "YA customer invoices: wire / ACH bank address."
+    },
+    "invoice_account_name": {
+      "type": "string",
+      "title": "Bank account name",
+      "description": "YA customer invoices: name on the receiving account."
+    },
+    "invoice_routing_number": {
+      "type": "string",
+      "title": "ABA routing number",
+      "description": "YA customer invoices: receiving account routing number. Typed by the owner; never in code."
+    },
+    "invoice_account_number": {
+      "type": "string",
+      "title": "Bank account number",
+      "description": "YA customer invoices: receiving account number. Typed by the owner; never in code."
+    },
+    "invoice_w9_file_uri": {
+      "type": "string",
+      "title": "W-9 file",
+      "description": "YA customer invoices: private file URI of the signed Form W-9 attached on request."
+    },
+    "invoice_w9_file_name": {
+      "type": "string",
+      "title": "W-9 file name",
+      "description": "Original name of the W-9 file."
+    },
+    "invoice_coi_file_uri": {
+      "type": "string",
+      "title": "Certificate of insurance file",
+      "description": "YA customer invoices: private file URI of the certificate of insurance attached on request."
+    },
+    "invoice_coi_file_name": {
+      "type": "string",
+      "title": "Certificate of insurance file name",
+      "description": "Original name of the certificate of insurance file."
     }
   },
   "required": [
