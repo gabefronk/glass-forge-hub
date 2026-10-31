@@ -12,7 +12,7 @@ const MONEY = /\$\s?-?[\d,]+\.\d{2}/g;
 const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
 const PHONE = /\(?\b\d{3}\)?[-. ]\d{3}[-. ]\d{4}\b/;
 // Distributors and dealers whose names must never reach the customer (manufacturers stay).
-const OTHER_COMPANIES = /builders\s*first\s*source|\bBFS\b|lehi american|american\s*fork|ox glass|bonneville builders|abc supply|lehigh valley|po box 25178/i;
+const OTHER_COMPANIES = /builders\s*first|\bBFS|lehi american|american\s*fork|ox glass|bonneville builders|abc supply|lehigh valley|po box 25178|po box 70006/i;
 
 export const money = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const amountOf = (s) => Number(String(s).replace(/[$,\s]/g, ''));
@@ -21,6 +21,7 @@ export function detectSupplier(pages = []) {
   const text = pages.slice(0, 2).flatMap((p) => p.items.map((i) => i.str)).join(' ');
   if (/Billing Information:/.test(text) && /(Dealer|Customer) (Quote|Price)/.test(text)) return 'amsco';
   if (/SOLD BY:/.test(text) || /Abbreviated Quote Report/.test(text)) return 'pqm';
+  if (/Proposal - Detailed/.test(text) || (/Customer Information/.test(text) && /Project\/Delivery Address/.test(text))) return 'pella';
   return 'generic';
 }
 
@@ -105,6 +106,34 @@ export function pagePlan(page, { supplier, factor, company, job = {}, pageIndex 
       [job.canonical_name, job.address].filter(Boolean).forEach((text, i) => write.push({ text, x: soldTo.x, y: soldTo.y + soldTo.h + 4 + i * 11.5, size: 9, bold: i === 0, align: 'left' }));
     }
     for (const i of items) if (/Thank you for choosing/i.test(i.str)) take(i, 'Thank you for choosing Y A Windows & Doors');
+  }
+
+  if (supplier === 'pella' && pageIndex === 0) {
+    // Pella "Proposal - Detailed" from BFS: the warehouse address under the title, the sales rep,
+    // and the Customer Information / Project-Delivery columns are BFS's; Order Information stays.
+    const title = find(items, /Proposal - Detailed/), rep = find(items, /^Sales Rep Name:/);
+    const cust = find(items, /^Customer Information/), proj = find(items, /^Project\/Delivery Address/), order = find(items, /^Order Information/);
+    const lineHead = items.filter((i) => /^Line\s*#/.test(i.str) && (!cust || i.y > cust.y)).sort((a, b) => a.y - b.y)[0];
+    if (title && cust) {
+      coverBox(title.x - 2, title.y + title.h + 1, rep ? rep.x - 4 : title.x + 250, cust.y - 2);
+      write.push(...yaBlock(title.x, title.y + title.h + 3, company, 8.5));
+    }
+    for (const label of items.filter((i) => /^Sales Rep (Name|Phone|E-?Mail|Fax):/.test(i.str))) {
+      const [, head, rest] = label.str.match(/^(Sales Rep [^:]+:)(.*)$/) || [];
+      if (rest && rest.trim()) take(label, head, {});
+      else done.add(label);
+      lineOf(items, label).filter((j) => j.x > label.x + 4 && !done.has(j)).forEach(cover);
+      if (/Name/.test(head || '')) write.push({ text: company.invoice_company_name, x: label.x + label.w + 4, y: label.y, size: label.h * 0.92, bold: false, align: 'left' });
+    }
+    const bottom = lineHead ? lineHead.y - 1 : (cust ? cust.y + 200 : 0);
+    if (cust && proj) {
+      coverBox(cust.x - 6, cust.y + cust.h + 1, proj.x - 3, bottom);
+      [job.customer_name || job.canonical_name, job.address].filter(Boolean).forEach((text, i) => write.push({ text, x: cust.x, y: cust.y + cust.h + 4 + i * 10.5, size: 8, bold: i === 0, align: 'left' }));
+    }
+    if (proj && order) {
+      coverBox(proj.x - 6, proj.y + proj.h + 1, order.x - 3, bottom);
+      [job.canonical_name, job.address].filter(Boolean).forEach((text, i) => write.push({ text, x: proj.x, y: proj.y + proj.h + 4 + i * 10.5, size: 8, bold: i === 0, align: 'left' }));
+    }
   }
 
   // Every supplier: other companies' names, emails, phones and faxes go; prices go to sell.
