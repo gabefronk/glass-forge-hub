@@ -1,9 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { C } from '@/lib/feeUI';
 import { amount, prepareBudgetPO, activeBudgets, budgetVersion, isLiveBudget } from '../../../base44/shared/procurementCore.js';
 import { existingPOsForQuote } from '@/lib/purchaseOrderSetup';
-import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
+import { syncEtaCalendar, CALENDAR_MISSED, ETA_CALENDAR_OPTIONS, DEFAULT_ETA_CALENDAR, loadEtaCalendarChoice, deliveryChoice, supplierName } from '@/lib/etaCalendar';
 
 export const money = value => amount(value) === null ? '\u2014' : amount(value).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 export const percent = value => value == null ? '\u2014' : `${(value * 100).toFixed(1)}%`;
@@ -124,22 +124,28 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
   const sourceVersion = useRef(order?.updated_date);
   const [form, setForm] = useState(() => ({ job_id: order?.job_id || initialPO?.job_id || initialJobId, purchase_order_id: order?.purchase_order_id || initialPO?.id || '', order_number: order?.order_number || '', amount: order?.amount ?? '', eta_date: order?.eta_date || '', received_date: order?.received_date || '', notes: order?.notes || '' }));
   const [reviewed, setReviewed] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  // Whose calendar the ETA goes on, and delivered or will call (Gabriel, Oct 30); same choices as the ETA editor.
+  const [calendars, setCalendars] = useState(DEFAULT_ETA_CALENDAR), [delivery, setDelivery] = useState(() => deliveryChoice(order));
+  useEffect(() => { let live = true; if (order?.id) loadEtaCalendarChoice(`order:${order.id}`).then(c => { if (live) setCalendars(c); }); return () => { live = false; }; }, [order?.id]);
   const key = useRef(crypto.randomUUID());
   const set = (name, value) => { setForm(f => ({ ...f, [name]: value, ...(name === 'job_id' ? { purchase_order_id: '' } : {}) })); setReviewed(false); };
   const pos = purchaseOrders.filter(p => p.job_id === form.job_id && p.status !== 'cancelled');
+  const supplier = supplierName(pos.find(p => p.id === form.purchase_order_id)?.vendor || order?.vendor) || 'supplier';
   async function submit(e) {
     e.preventDefault(); if (busy || !reviewed) return; setBusy(true); setError('');
     // A fresh confirmation is never "received": the owner mixing up the
     // received field stamped bogus received dates on live orders. Recording
     // receipt stays possible when updating an existing confirmation.
     const payload = order ? form : { ...form, received_date: '' };
+    // Stamped only when it is a choice: a change, or will call on a new confirmation.
+    const deliveryPatch = delivery !== deliveryChoice(order) || (!order && delivery === 'will_call') ? { delivery_method: delivery } : {};
     try {
-      const r = await purchasingRequest({ ...payload, action: 'save_supplier_order', order_id: order?.id, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true });
-      // The recorded ETA is the event on Israel's calendar: this save creates it
-      // or moves it, so the two can never drift apart.
+      const r = await purchasingRequest({ ...payload, ...deliveryPatch, action: 'save_supplier_order', order_id: order?.id, expected_updated_date: sourceVersion.current, request_key: key.current, review_confirmed: true });
+      // The recorded ETA is the event on the picked crew calendar(s): this save
+      // creates or moves it, so the two can never drift apart.
       const saved = r?.order;
       const sync = saved?.id
-        ? await syncEtaCalendar({ jobId: saved.job_id || form.job_id, etaKey: `order:${saved.id}`, date: saved.eta_date || '', ref: saved.order_number || '', vendor: saved.vendor || '' })
+        ? await syncEtaCalendar({ jobId: saved.job_id || form.job_id, etaKey: `order:${saved.id}`, date: saved.eta_date || '', ref: saved.order_number || '', vendor: saved.vendor || '', calendars })
         : { error: 'missing_order' };
       onDone(r, 'Supplier confirmation saved against the selected job and PO. No order or payment was sent.' + (sync.error ? ` ${CALENDAR_MISSED}` : ''));
     }
@@ -152,6 +158,8 @@ export function SupplierOrderForm({ jobs, purchaseOrders, initialJobId = '', ini
       <Field label="Supplier confirmation / order number" value={form.order_number} onChange={v => set('order_number', v)} />
       <Field label="Confirmed supplier amount" type="number" value={form.amount} onChange={v => set('amount', v)} hint="Record what the supplier confirmed. An issued PO is not a supplier confirmation." />
       <Field label="Supplier ETA" type="date" value={form.eta_date} onChange={v => set('eta_date', v)} />
+      <Field label="Calendar" value={calendars} onChange={v => { setCalendars(v); setReviewed(false); }}>{ETA_CALENDAR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</Field>
+      <Field label="Pickup" value={delivery} onChange={v => { setDelivery(v); setReviewed(false); }}><option value="delivery">Delivered</option><option value="will_call">Will call at {supplier}</option></Field>
       {order ? <Field label="Received date (only when received)" type="date" value={form.received_date} onChange={v => set('received_date', v)} /> : null}
     </div>
     <Field label="Notes" value={form.notes} onChange={v => set('notes', v)} />
