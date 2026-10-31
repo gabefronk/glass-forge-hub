@@ -39,14 +39,6 @@ export function builderDefault(guides, builder) {
   return sortGuides(guides).find((g) => g.builder_match && builderKey(g.builder_match) === key) || null;
 }
 
-// The one-time Drive import names guides with guideLabel and sets Gabe's two builder defaults.
-export function importDefaults(driveName = '') {
-  return {
-    name: guideLabel(driveName),
-    builder_match: /holmes/i.test(driveName) ? 'Holmes Homes' : /pulte/i.test(driveName) ? 'Pulte' : '',
-  };
-}
-
 const versionEntry = (file, version, at) => ({ version, file_uri: file.file_uri, file_name: file.file_name, size: file.size, sha256: file.sha256, uploaded_at: at });
 
 export function history(guide) {
