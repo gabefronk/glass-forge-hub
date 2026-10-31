@@ -18,7 +18,7 @@
 // record from another job can never load.
 import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, ChevronDown, ChevronRight, MoreHorizontal, Pencil, Plus, Send } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, ChevronRight, FileText, MoreHorizontal, Pencil, Plus, Send } from 'lucide-react';
 import {
   money, purchasingRequest, messageOf,
   PurchaseOrderForm, SupplierOrderForm, OrderStatusForm,
@@ -26,6 +26,7 @@ import {
 import { NumbersEditor } from '@/components/budgets/BudgetReviewRow';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import JobFilesPanel from './JobFilesPanel';
+import InvoicePanel, { PrintedInvoices, useJobInvoices } from './InvoicePanel';
 import OrderEmailPanel from './OrderEmailPanel';
 import { openPrivateSource } from './PrivateSourceButton';
 import { removeJobQuote } from './RemoveQuoteButton';
@@ -512,9 +513,13 @@ function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onSaved, editorP
 export default function PurchasingJobWorkspace({ job, data, onSaved, framed = false }) {
   const [editor, setEditor] = useState(null);
   const [hasFolder, setHasFolder] = useState(false);
+  const [invoicing, setInvoicing] = useState(false);
+  const [invoiceRefresh, setInvoiceRefresh] = useState(0);
   const filesRef = useRef(null);
   const rec = useMemo(() => jobProcurementRecords(data, job.id), [data, job.id]);
   const ordered = useMemo(() => sheetTotal(job.id, rec), [job.id, rec]);
+  const invoices = useJobInvoices(job.id, invoiceRefresh);
+  const invoiceDone = (msg) => { setInvoicing(false); setInvoiceRefresh((k) => k + 1); onSaved(msg); };
   const jobNameById = (id) => (data.jobs || []).find((j) => j.id === id)?.canonical_name || id;
 
   const openEditor = (next) => setEditor({ ...next, key: crypto.randomUUID() });
@@ -566,12 +571,16 @@ export default function PurchasingJobWorkspace({ job, data, onSaved, framed = fa
       <OrdersSection job={job} rec={rec} jobNameById={jobNameById} onEdit={openEditor} onSaved={onSaved} editorFor={editorFor} listEditor={listEditor} addMenu={addMenu} />
 
       <section aria-label="Budget" style={{ borderTop: `1px solid ${EDGE}` }}>
-        <SectionHead title="Budget" note={budgetNote} />
+        <SectionHead title="Budget" note={budgetNote}>
+          {invoicing ? null : <button type="button" onClick={() => setInvoicing(true)} className={BTN} style={{ ...SEC, height: 32 }}><FileText className="h-4 w-4" />Print invoice</button>}
+        </SectionHead>
+        {invoicing ? <div className="px-4 pb-4 pt-1"><InvoicePanel job={job} budgets={rec.budgets} invoices={invoices} onDone={invoiceDone} onCancel={() => setInvoicing(false)} /></div> : null}
         {quoteBudgets.length ? null : <TypedBudget job={job} ordered={ordered} framed={framed} />}
         {rec.budgets.map((b) => (
           <BudgetCard key={b.id} budget={b} allBudgets={rec.budgets} pos={rec.pos} editing={editor?.mode === 'numbers' && editor.budget_id === b.id}
             onEdit={openEditor} onSaved={onSaved} editorPanel={budgetEditor(b)} />
         ))}
+        <PrintedInvoices invoices={invoices} />
       </section>
 
       <div style={{ borderTop: `1px solid ${EDGE}` }}>
