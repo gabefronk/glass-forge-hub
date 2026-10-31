@@ -1,3 +1,12 @@
+// The field-visit report a worker files from a job, on a phone, in one pass:
+// pick the visit, pick the event, say whether it was completed, fill only the fields that
+// event collects, add as many issue items as the visit needs, pick who has to know, and
+// upload every photo and video ONCE at the end.
+//
+// The rules live in base44/shared/fieldVisitReport.js and are shared with the published
+// resolveFieldReport handler, so the form and the server agree on which fields an event
+// shows, what must be explained, when a recipient is required and what may be charged.
+// Nothing is priced here: the server prices the visit from the live PricingRubric.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { resolveFieldReport } from "@/lib/fieldReports";
@@ -6,57 +15,65 @@ import { titleCase } from "@/lib/displayName";
 import { isVideoUrl } from "@/lib/fileLinks";
 import { Loader2, X, Camera, Image as ImageIcon } from "lucide-react";
 import { formatShort } from "@/lib/feeUI";
+import {
+  VISIT_EVENT_TYPES,
+  eventFieldScope,
+  validateFieldReport,
+  followUpTriggers,
+  TRIGGER_LABELS,
+  rubricFromRows,
+} from "../../../base44/shared/fieldVisitReport.js";
+import {
+  Label,
+  Card,
+  Segmented,
+  TextArea,
+  NotReadySection,
+  WindowIssuesSection,
+  SheetrockSection,
+  PartsNeededSection,
+  ScreenIssuesSection,
+  CannotFixSection,
+  ChecklistSection,
+  WarrantySection,
+  HoursMaterialSection,
+  DocumentationSection,
+  RecipientsSection,
+} from "@/components/jobs/FieldReportSections";
 
 const PENDING = ["pending", "missing_photos", "missing_notes", "missing_all", "rescheduled"];
-// Fallbacks only - the form reads the live PricingRubric entity (ticket types with visit fees,
-// materials with hourly rates, the long distance charge). These apply when the rubric fetch
-// fails; the server always prices the report from the rubric itself, never from this file.
-const FALLBACK_TYPES = [
-  { key: "initial_visit_po", label: "Initial visit", visitFee: null },
-  { key: "delivery", label: "Delivery", visitFee: null },
-  { key: "install", label: "Install", visitFee: null },
-  { key: "sheetrock_window", label: "Sheetrock window", visitFee: null },
-  { key: "screen_service", label: "Screen Service", visitFee: null },
-  { key: "service", label: "Service", visitFee: null },
-  { key: "follow_up", label: "Follow-up", visitFee: 0 },
-  { key: "warranty", label: "Warranty", visitFee: null },
-  { key: "punch_list", label: "Punch List", visitFee: null },
-];
-const FALLBACK_MATERIALS = [
-  { key: "vinyl", label: "Vinyl", rate: 100 },
-  { key: "composite", label: "Composite", rate: 125 },
-  { key: "wood", label: "Wood", rate: 150 },
-];
-const FALLBACK_LD_FEE = 75;
 
 // Hub palette (sand sheet, dark teal, brass edges), approved on the Jobs concepts canvas (Oct 24).
 const PAGE = "#F6F2EA", CARD = "#FFFFFF", LINE = "#D6CCBA", EDGE = "#B3A792", FIELD = "#9A9080";
-const INK = "#101617", MUT = "#34403F", DARK = "#0F2628", TEAL = "#0B3F3B";
+const INK = "#101617", MUT = "#34403F", TEAL = "#0B3F3B";
 
-const label = { color: MUT, letterSpacing: ".06em" };
 const fieldStyle = { border: `1px solid ${FIELD}`, backgroundColor: CARD, color: INK };
 
-// Two-way switch: both halves are real buttons, the picked one is filled.
-function Segmented({ value, options, onChange, ariaLabel }) {
-  return (
-    <div role="group" aria-label={ariaLabel} className="grid grid-cols-2 gap-1 rounded-[12px] p-1" style={{ backgroundColor: "#E9E2D4" }}>
-      {options.map((o) => {
-        const on = value === o.value;
-        return (
-          <button key={o.value} type="button" aria-pressed={on} onClick={() => onChange(o.value)}
-            className="min-h-[44px] rounded-[9px] px-2 text-[14px] font-semibold"
-            style={on ? { backgroundColor: DARK, color: "#fff" } : { color: MUT }}>
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function Label({ children, as: Tag = "div", className = "" }) {
-  return <Tag className={`mb-1.5 block text-[12px] font-semibold uppercase ${className}`} style={label}>{children}</Tag>;
-}
+// One plain-English line per blocking rule. Missing photos and unticked documentation
+// confirmations are deliberately absent: they never block a submit.
+const ERRORS = {
+  event_type: "Pick what kind of visit this was.",
+  completion: "Say whether the visit was completed or left incomplete.",
+  incomplete_reason: "Incomplete work needs an explanation.",
+  other_reason_note: "An “Other” reason needs a note.",
+  other_issue_note: "An “Other” issue needs a note.",
+  issue_level_media_not_allowed: "Photos and videos belong in the one section at the end of the visit.",
+  window_issue_kind: "One window item does not apply to this visit type.",
+  window_target: "Pick the affected window on every window item.",
+  window_other_location: "“Other” needs a location or note so the office can find it.",
+  current_ro_dimensions: "Enter the current framed opening on every framing / RO item.",
+  required_ro_dimensions: "Enter the dimensions required by the ordered unit.",
+  window_issue_note: "“Needs clarification” needs a note.",
+  screen_issue_kind: "Pick the screen problem on every screen item.",
+  screen_quantity: "Enter how many screens on every screen item.",
+  screen_location: "Enter where the screens go on every screen item.",
+  cannot_fix_window: "Pick the window that could not be fixed.",
+  cannot_fix_note: "Say what is wrong with the window that could not be fixed.",
+  sheetrock_outcome: "Pick what happened with the sheetrock window.",
+  recipients_required: "Pick at least one manager or salesperson to follow this up.",
+  invalid_report: "Some answers are missing. Check the highlighted sections.",
+  missing_request_key: "Reload the page and file the report again.",
+};
 
 export default function JobFieldReportModal({ jobId, jobName, events, onClose, onDone }) {
   const pendingEvents = useMemo(
@@ -68,42 +85,94 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
     { id: "", title: "No appointment", sub: "General report for this job" },
   ];
   const [selected, setSelected] = useState(pendingEvents[0] ? pendingEvents[0].id : "");
-  const [ticketType, setTicketType] = useState("Install");
-  const [status, setStatus] = useState(""); // Open | Closed -> incomplete | complete (required, like the old question)
+  const [eventType, setEventType] = useState("");
+  const [status, setStatus] = useState("");
+  const [incompleteReason, setIncompleteReason] = useState("");
+  const [notReady, setNotReady] = useState(false);
+  const [notReadyReasons, setNotReadyReasons] = useState([]);
+  const [windowIssues, setWindowIssues] = useState([]);
+  const [sheetrockOutcomes, setSheetrockOutcomes] = useState([]);
+  const [screenIssues, setScreenIssues] = useState([]);
+  const [cannotFix, setCannotFix] = useState([]);
+  const [items, setItems] = useState([]);
+  const [warrantyIssue, setWarrantyIssue] = useState({ reported_by: "", text: "" });
+  const [partsNeeded, setPartsNeeded] = useState("");
+  const [documentation, setDocumentation] = useState({});
+  const [hasPatioDoor, setHasPatioDoor] = useState(false);
+  const [recipients, setRecipients] = useState([]);
   const [hours, setHours] = useState(0);
   const [material, setMaterial] = useState("");
-  const [longDistance, setLongDistance] = useState("No");
+  const [longDistance, setLongDistance] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [videos, setVideos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [rubric, setRubric] = useState(null);
+  const [showErrors, setShowErrors] = useState(false);
+  const [materials, setMaterials] = useState([]);
+  const [ctx, setCtx] = useState({ recipients: [], windows: [], patio_door_detected: false });
+  const [ctxState, setCtxState] = useState("loading");
 
+  // Live PricingRubric material rows drive the product-material picker. Amounts are never
+  // read here: the server prices the visit from the same rubric on submit.
   useEffect(() => {
     let cancelled = false;
     base44.entities.PricingRubric.list("sort", 200).then((rows) => {
-      if (cancelled) return;
-      const active = (Array.isArray(rows) ? rows : []).filter((r) => r && !r.retired);
-      const types = active.filter((r) => r.kind === "ticket_type").map((r) => ({ key: r.key, label: r.label, visitFee: r.visit_fee ?? null }));
-      const materials = active.filter((r) => r.kind === "material").map((r) => ({ key: r.key, label: r.label, rate: Number(r.hourly_rate) || 0 }));
-      const ldRow = active.find((r) => r.kind === "setting" && r.key === "long_distance");
-      if (types.length && materials.length) setRubric({ types, materials, ldFee: ldRow ? Number(ldRow.amount) || 0 : FALLBACK_LD_FEE });
+      if (!cancelled) setMaterials(rubricFromRows(rows).materials);
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
+
+  // The follow-up recipients and the job's ordered window package come from the server:
+  // TeamMember is RLS-closed to the client, and the ordered package lives in an admin-only
+  // field on the job. Real identities and stable ids only — no names in this file.
+  useEffect(() => {
+    let cancelled = false;
+    setCtxState("loading");
+    resolveFieldReport({ action: "form_context", job_id: jobId })
+      .then((data) => {
+        if (cancelled) return;
+        setCtx({ recipients: data?.recipients || [], windows: data?.windows || [], patio_door_detected: !!data?.patio_door_detected });
+        setHasPatioDoor(!!data?.patio_door_detected);
+        setCtxState("ready");
+      })
+      .catch(() => { if (!cancelled) setCtxState("error"); });
+    return () => { cancelled = true; };
+  }, [jobId]);
+
+  // One key per opened form. The server treats it as the idempotency key, so a retried
+  // submit — or an edited re-submit of this same form — never doubles the job note, the
+  // invoicing staging line or anybody's Today item.
   const requestKey = useRef(`field-report:${jobId}:${crypto.randomUUID()}`);
 
-  const canSubmit = (photos.length + videos.length > 0 || notes.trim()) && status && !saving && !uploading;
+  const scope = eventFieldScope(eventType);
+  const report = useMemo(() => ({
+    event_type: eventType,
+    completion: status === "Closed" ? "complete" : status === "Open" ? "incomplete" : "",
+    incomplete_reason: incompleteReason,
+    not_ready: notReady,
+    not_ready_reasons: notReadyReasons,
+    window_issues: windowIssues,
+    items,
+    sheetrock_outcomes: sheetrockOutcomes,
+    screen_issues: screenIssues,
+    cannot_fix: cannotFix,
+    warranty_issue: warrantyIssue,
+    parts_needed: partsNeeded,
+    documentation,
+    has_patio_door: hasPatioDoor,
+    hours,
+    material,
+    long_distance: longDistance,
+    notes,
+    recipients,
+  }), [eventType, status, incompleteReason, notReady, notReadyReasons, windowIssues, items, sheetrockOutcomes,
+    screenIssues, cannotFix, warrantyIssue, partsNeeded, documentation, hasPatioDoor, hours, material, longDistance, notes, recipients]);
 
-  // Live rubric values drive the pickers. The charge itself is priced
-  // server-side on submit (from these keys) and lands on the job's budget
-  // and invoicing - nothing is shown or totalled here.
-  const types = rubric ? rubric.types : FALLBACK_TYPES;
-  const materials = rubric ? rubric.materials : FALLBACK_MATERIALS;
-  const typeRow = types.find((t) => t.label === ticketType || t.key === ticketType) || null;
-  const matRow = materials.find((m) => m.label === material || m.key === material) || null;
+  const check = useMemo(() => validateFieldReport(report), [report]);
+  const triggers = check.triggers.map((t) => TRIGGER_LABELS[t] || t);
+  const canSubmit = check.ok && !saving && !uploading;
 
   // One picker for photos and videos: each file goes to its list by type.
   const handleFiles = async (files) => {
@@ -123,37 +192,43 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!check.ok) { setShowErrors(true); return; }
+    if (saving || uploading) return;
     setSaving(true);
     setError("");
     try {
-      // The report record keeps its existing shape (body + attachments + completion);
-      // the new structured picks ride as readable lines on the note so the office
-      // sees them in the job history exactly as typed.
-      const lines = [];
-      if (ticketType) lines.push(`Type: ${ticketType}`);
-      if (notes.trim()) lines.push(notes.trim());
-      if (hours > 0) lines.push(`Hours: ${hours.toFixed(1)}`);
-      if (material) lines.push(`Material: ${material}`);
-      if (longDistance === "Yes") lines.push("Long distance: Yes");
-      await resolveFieldReport({
+      const res = await resolveFieldReport({
         action: "upload",
         event_id: selected || undefined,
         job_id: jobId,
         photos: [...photos, ...videos],
-        notes: lines.join("\n") || "Field report photos uploaded",
-        completion: status === "Closed" ? "complete" : "incomplete",
+        notes,
+        completion: report.completion,
+        event_type: eventType,
+        incomplete_reason: incompleteReason,
+        not_ready: notReady,
+        not_ready_reasons: notReadyReasons,
+        window_issues: windowIssues,
+        items,
+        sheetrock_outcomes: sheetrockOutcomes,
+        screen_issues: screenIssues,
+        cannot_fix: cannotFix,
+        warranty_issue: warrantyIssue,
+        parts_needed: partsNeeded,
+        documentation,
+        has_patio_door: hasPatioDoor,
+        recipients,
         // Priced server-side from the live PricingRubric; keys only, never amounts.
-        ticket_type: typeRow ? typeRow.key : ticketType,
         hours,
-        material: matRow ? matRow.key : material,
-        long_distance: longDistance === "Yes",
-        // One key per opened form, so a retried submit cannot raise a second to-do.
+        material,
+        long_distance: longDistance,
         request_key: requestKey.current,
       });
-      onDone();
+      onDone(res);
     } catch (e) {
-      setError(e?.message || "Submit failed. Try again.");
+      const code = String(e?.message || "");
+      setError(ERRORS[code] || code || "Submit failed. Try again.");
+      setShowErrors(true);
     } finally {
       setSaving(false);
     }
@@ -164,7 +239,6 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
     if (i < photos.length) setPhotos((p) => p.filter((_, j) => j !== i));
     else setVideos((p) => p.filter((_, j) => j !== i - photos.length));
   };
-  const step = (d) => setHours((h) => Math.min(24, Math.max(0, Math.round((h + d) * 2) / 2)));
   const pickerClass = "flex min-h-[48px] cursor-pointer items-center justify-center gap-2 rounded-[12px] border-2 border-dashed text-[14px] font-semibold";
 
   return (
@@ -184,7 +258,7 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
           <button type="button" onClick={onClose} aria-label="Close" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ border: `1px solid ${EDGE}`, color: INK, backgroundColor: CARD }}><X className="h-4 w-4" /></button>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
+        <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           <fieldset>
             <Label as="legend">Which visit is this for?</Label>
             <div className="overflow-hidden rounded-[12px]" style={{ border: `1px solid ${EDGE}`, backgroundColor: CARD }}>
@@ -207,82 +281,113 @@ export default function JobFieldReportModal({ jobId, jobName, events, onClose, o
           </fieldset>
 
           <label className="block">
-            <Label as="span">Ticket type</Label>
-            <select value={ticketType} onChange={(e) => setTicketType(e.target.value)} className="min-h-[48px] w-full rounded-[12px] px-3 text-[15px] focus:outline-none" style={fieldStyle}>
-              {types.map((t) => <option key={t.key} value={t.label}>{t.label}</option>)}
+            <Label as="span">What kind of visit?</Label>
+            <select value={eventType} onChange={(e) => setEventType(e.target.value)} aria-label="Visit type"
+              className="min-h-[48px] w-full rounded-[12px] px-3 text-[15px] focus:outline-none" style={fieldStyle}>
+              <option value="">Pick the visit type…</option>
+              {VISIT_EVENT_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
           </label>
 
-          <div>
-            <Label>Is the work done?</Label>
-            <Segmented ariaLabel="Status" value={status} onChange={setStatus} options={[{ value: "Open", label: "Still open" }, { value: "Closed", label: "Done · close it" }]} />
-          </div>
-
-          <label className="block">
-            <Label as="span">Notes</Label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4}
-              placeholder="What was done, what's left, anything the office should know…"
-              className="w-full resize-y rounded-[12px] p-3 text-[15px] focus:outline-none" style={fieldStyle} />
-          </label>
-
-          {/* Material, long distance and hours price the visit, so they sit together. */}
-          <section aria-label="Charge" className="space-y-3 rounded-[12px] p-3" style={{ backgroundColor: CARD, border: `1px solid ${EDGE}` }}>
-            <p className="text-[12.5px]" style={{ color: MUT }}>These set what the visit is charged.</p>
-            <div className="grid grid-cols-2 items-start gap-2.5">
-              <label className="block">
-                <Label as="span">Material</Label>
-                <select value={material} onChange={(e) => setMaterial(e.target.value)} className="min-h-[48px] w-full rounded-[12px] px-3 text-[15px] focus:outline-none" style={fieldStyle}>
-                  <option value="">Pick…</option>
-                  {materials.map((m) => <option key={m.key} value={m.label}>{m.label}</option>)}
-                </select>
-              </label>
+          {eventType ? (
+            <>
               <div>
-                <Label>Long distance</Label>
-                <Segmented ariaLabel="Long distance" value={longDistance} onChange={setLongDistance} options={[{ value: "No", label: "No" }, { value: "Yes", label: "Yes" }]} />
+                <Label>{eventType === "job_readiness" ? "Was the readiness visit completed?" : "Was the work completed?"}</Label>
+                <Segmented ariaLabel="Completion" value={status} onChange={setStatus}
+                  options={[{ value: "Open", label: "Incomplete" }, { value: "Closed", label: "Completed" }]} />
+                {eventType === "job_readiness" ? (
+                  <p className="mt-1.5 text-[12.5px]" style={{ color: MUT }}>This is the readiness visit itself — not whether the windows are installed.</p>
+                ) : null}
               </div>
-            </div>
-            <div>
-              <Label>Hours worked</Label>
-              <div className="flex items-center gap-2 rounded-[12px] p-1" style={fieldStyle}>
-                <button type="button" aria-label="Half hour less" onClick={() => step(-0.5)} className="h-11 w-11 rounded-[9px] text-[20px] font-bold" style={{ backgroundColor: "#E9E2D4", color: INK }}>−</button>
-                <span className="flex-1 text-center font-mono-num text-[20px] font-semibold" style={{ color: INK }} aria-live="polite">{hours.toFixed(1)}</span>
-                <button type="button" aria-label="Half hour more" onClick={() => step(0.5)} className="h-11 w-11 rounded-[9px] text-[20px] font-bold" style={{ backgroundColor: "#E9E2D4", color: INK }}>+</button>
-              </div>
-            </div>
-          </section>
 
-          <div>
-            <Label>Photos &amp; videos{media.length ? ` · ${media.length}` : ""}</Label>
-            {media.length > 0 && (
-              <div className="mb-2.5 grid grid-cols-3 gap-2">
-                {media.map((m, i) => (
-                  <div key={i} className="relative aspect-[4/3] overflow-hidden rounded-[10px]" style={{ border: `1px solid ${LINE}` }}>
-                    {m.v || isVideoUrl(m.u) ? <video src={m.u} muted playsInline preload="metadata" className="h-full w-full object-cover" /> : <img src={m.u} alt="" className="h-full w-full object-cover" />}
-                    <button type="button" onClick={() => removeAt(i)} aria-label="Remove" className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: "rgba(15,38,40,.8)", color: "#fff" }}>
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+              {status === "Open" ? (
+                <Card title="Why was it incomplete? (required)">
+                  <TextArea value={incompleteReason} onChange={setIncompleteReason} rows={3} ariaLabel="Why incomplete"
+                    placeholder="What stopped you, and what is still left" />
+                </Card>
+              ) : null}
+
+              <NotReadySection eventType={eventType} value={notReadyReasons} onChange={setNotReadyReasons} notReady={notReady} onNotReady={setNotReady} />
+
+              {scope.sheetrock ? <SheetrockSection value={sheetrockOutcomes} onChange={setSheetrockOutcomes} /> : null}
+
+              <WindowIssuesSection eventType={eventType} windows={ctx.windows} value={windowIssues} onChange={setWindowIssues}
+                job={{ accepted_quote_snapshot: { lines: ctx.windows.map((w) => ({ id: w.id, mark: w.mark, room: w.room, style: w.style, width: w.width, height: w.height, qty: w.qty, units: w.units, dimension_basis: w.dimension_basis })) } }} />
+
+              {scope.warrantyIssue ? <WarrantySection value={warrantyIssue} onChange={setWarrantyIssue} /> : null}
+
+              <ChecklistSection eventType={eventType} value={items} onChange={setItems} />
+
+              {scope.partsNeeded ? <PartsNeededSection value={partsNeeded} onChange={setPartsNeeded} /> : null}
+              {scope.screenIssues ? <ScreenIssuesSection value={screenIssues} onChange={setScreenIssues} /> : null}
+              {scope.cannotFix ? <CannotFixSection windows={ctx.windows} value={cannotFix} onChange={setCannotFix} /> : null}
+
+              {scope.hours || scope.material ? (
+                <HoursMaterialSection eventType={eventType} materials={materials} hours={hours} onHours={setHours}
+                  material={material} onMaterial={setMaterial} longDistance={longDistance} onLongDistance={setLongDistance}
+                  showLongDistance={scope.longDistance} billable={scope.billable} />
+              ) : null}
+
+              {!scope.hours && !scope.material && scope.longDistance ? (
+                <div>
+                  <Label>Long distance</Label>
+                  <Segmented ariaLabel="Long distance" value={longDistance ? "yes" : "no"} onChange={(v) => setLongDistance(v === "yes")}
+                    options={[{ value: "no", label: "No" }, { value: "yes", label: "Yes" }]} />
+                </div>
+              ) : null}
+
+              <DocumentationSection eventType={eventType} hasPatioDoor={hasPatioDoor} onPatioDoor={setHasPatioDoor} value={documentation} onChange={setDocumentation} />
+
+              <label className="block">
+                <Label as="span">Notes</Label>
+                <TextArea value={notes} onChange={setNotes} rows={4} ariaLabel="Notes"
+                  placeholder="What was done, what's left, anything the office should know…" />
+              </label>
+
+              <RecipientsSection people={ctx.recipients} value={recipients} onChange={setRecipients}
+                required={followUpTriggers(report).length > 0} triggers={triggers}
+                loading={ctxState === "loading"} error={ctxState === "error" ? "The team list could not load. Reload and try again." : ""} />
+
+              {/* The one and only media section: everything for the whole visit, at the end. */}
+              <Card title={`Photos & videos for this visit${media.length ? ` · ${media.length}` : ""}`}
+                hint="Upload everything for the whole visit here, once. Optional — a missing photo never stops you submitting.">
+                {media.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {media.map((m, i) => (
+                      <div key={i} className="relative aspect-[4/3] overflow-hidden rounded-[10px]" style={{ border: `1px solid ${LINE}` }}>
+                        {m.v || isVideoUrl(m.u) ? <video src={m.u} muted playsInline preload="metadata" className="h-full w-full object-cover" /> : <img src={m.u} alt="" className="h-full w-full object-cover" />}
+                        <button type="button" onClick={() => removeAt(i)} aria-label="Remove" className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: "rgba(15,38,40,.8)", color: "#fff" }}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              <label className={pickerClass} style={{ borderColor: FIELD, backgroundColor: CARD, color: TEAL }}>
-                <input type="file" accept="image/*,video/*" capture="environment" className="sr-only" onChange={(e) => { handleFiles(Array.from(e.target.files)); e.target.value = ""; }} />
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-[18px] w-[18px]" />}Camera
-              </label>
-              <label className={pickerClass} style={{ borderColor: FIELD, backgroundColor: CARD, color: TEAL }}>
-                <input type="file" multiple accept="image/*,video/*" className="sr-only" onChange={(e) => { handleFiles(Array.from(e.target.files)); e.target.value = ""; }} />
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-[18px] w-[18px]" />}{uploading ? "Uploading…" : "Library"}
-              </label>
-            </div>
-          </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <label className={pickerClass} style={{ borderColor: FIELD, backgroundColor: CARD, color: TEAL }}>
+                    <input type="file" accept="image/*,video/*" capture="environment" className="sr-only" onChange={(e) => { handleFiles(Array.from(e.target.files || [])); e.target.value = ""; }} />
+                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-[18px] w-[18px]" />}Camera
+                  </label>
+                  <label className={pickerClass} style={{ borderColor: FIELD, backgroundColor: CARD, color: TEAL }}>
+                    <input type="file" multiple accept="image/*,video/*" className="sr-only" onChange={(e) => { handleFiles(Array.from(e.target.files || [])); e.target.value = ""; }} />
+                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-[18px] w-[18px]" />}{uploading ? "Uploading…" : "Library"}
+                  </label>
+                </div>
+              </Card>
+            </>
+          ) : null}
 
+          {showErrors && check.errors.length ? (
+            <ul role="alert" className="space-y-1 rounded-[12px] p-3 text-[13px]" style={{ backgroundColor: "#FCEDEC", border: "1px solid #F0C9C5", color: "#A43432" }}>
+              {check.errors.map((code) => <li key={code}>{ERRORS[code] || code}</li>)}
+            </ul>
+          ) : null}
           {error ? <p role="alert" className="text-[13px]" style={{ color: "#A43432" }}>{error}</p> : null}
         </div>
 
         <div className="grid grid-cols-[1fr_2fr] gap-2.5 px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:px-5" style={{ borderTop: `1px solid ${EDGE}`, backgroundColor: CARD }}>
           <button type="button" onClick={onClose} className="min-h-[48px] rounded-[12px] text-[15px] font-semibold" style={{ border: `1px solid ${EDGE}`, color: INK, backgroundColor: CARD }}>Cancel</button>
-          <button type="button" onClick={handleSubmit} disabled={!canSubmit} className="min-h-[48px] rounded-[12px] text-[15px] font-semibold text-white"
+          <button type="button" onClick={handleSubmit} disabled={saving || uploading} className="min-h-[48px] rounded-[12px] text-[15px] font-semibold text-white"
             style={{ backgroundColor: canSubmit ? TEAL : "#9AA6A4", opacity: saving ? 0.8 : 1 }}>
             {saving ? "Submitting…" : "Submit report"}
           </button>
