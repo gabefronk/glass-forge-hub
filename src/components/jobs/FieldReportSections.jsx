@@ -12,7 +12,7 @@ import {
   SCREEN_ISSUE_KINDS,
   SHEETROCK_OUTCOMES,
   documentationPrompts,
-  requiredDimensionsFor,
+  requiredDimensionsOf,
   windowIssueKindsFor,
   notReadyReasonsFor,
   checklistItemsFor,
@@ -143,7 +143,7 @@ export function NotReadySection({ eventType, value, onChange, notReady, onNotRea
 }
 
 // ── Ordered-window issues (Install, Job Readiness) ─────────────────────────────
-export function WindowIssuesSection({ eventType, windows, value, onChange, job }) {
+export function WindowIssuesSection({ eventType, windows, value, onChange }) {
   const kinds = windowIssueKindsFor(eventType);
   if (!kinds.length) return null;
   const { rows, add, patch, remove } = listOps(value, onChange);
@@ -157,7 +157,7 @@ export function WindowIssuesSection({ eventType, windows, value, onChange, job }
     <Card title={title} hint={hint}>
       {rows.map((row, i) => {
         const spec = kinds.find((k) => k.key === row.kind) || kinds[0];
-        const required = requiredDimensionsFor(job, row.window_id);
+        const required = requiredDimensionsOf(windows, row.window_id);
         return (
           <div key={i} className="space-y-2 rounded-[10px] p-2.5" style={{ border: `1px solid ${LINE}` }}>
             <RowHeader title={`Item ${i + 1}`} onRemove={() => remove(i)} />
@@ -170,7 +170,7 @@ export function WindowIssuesSection({ eventType, windows, value, onChange, job }
             <label className="block">
               <Label as="span">Affected window</Label>
               <select value={row.window_id || ""} onChange={(e) => {
-                const req = requiredDimensionsFor(job, e.target.value);
+                const req = requiredDimensionsOf(windows, e.target.value);
                 patch(i, {
                   window_id: e.target.value,
                   window_label: (options.find((o) => o.id === e.target.value) || {}).label || "",
