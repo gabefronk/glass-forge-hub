@@ -344,12 +344,20 @@ test('the charge reuses the existing rubric product rates and long-distance amou
   // Half-hour granularity is preserved, as the old form had it.
   assert.equal(halfHours(2.3), 2.5);
   assert.equal(priceFieldReport({ eventType: 'screen_service', hours: 2.3, material: 'vinyl', rubric: RUBRIC }).labor_amt, 250);
-  // No competing pricing source: a rate the rubric does not carry prices nothing.
-  assert.equal(priceFieldReport({ eventType: 'screen_service', hours: 2, material: 'vinyl', rubric: rubricFromRows([]) }).labor_amt, 0);
   // Retired rubric rows stay off the form and out of the maths.
   assert.equal(RUBRIC.ticketTypes.some((t) => t.key === 'inspection'), false);
-  // $200/hr was illustrative only; it is nowhere in the code.
-  assert.equal(fs.readFileSync(new URL('../base44/shared/fieldVisitReport.js', import.meta.url), 'utf8').includes('200'), false);
+  // No competing pricing source and no hardcoded fallback table (vinyl/$200 was illustrative
+  // only): with an empty rubric every event prices to nothing, whatever was collected.
+  const empty = rubricFromRows([]);
+  for (const key of EVENT_TYPE_KEYS) {
+    const p = priceFieldReport({ eventType: key, hours: 8, material: 'vinyl', longDistance: true, rubric: empty });
+    assert.equal(p.labor_amt, 0, key);
+    assert.equal(p.rate, 0, key);
+    assert.equal(p.long_distance_amt, 0, key);
+  }
+  // The rubric's own rates are the only source, and they are read, not restated.
+  assert.deepEqual(RUBRIC.materials.map((m) => [m.key, m.hourly_rate]), [['vinyl', 100], ['composite', 125], ['wood', 150]]);
+  assert.equal(RUBRIC.longDistanceAmount, 75);
 });
 
 test('Warranty is not assumed non-billable: labour prices, a no-labour visit simply has no amount', () => {
