@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { invoiceArial, invoiceArialBold } from "@/lib/invoiceFonts";
 import { invoiceTotals, invoiceType, lineAmount, paymentSchedule, hasBankDetails } from "@/lib/yaInvoice";
+import { yaLogoPng, YA_LOGO_RATIO } from "@/lib/yaLogo";
 
 // The YA Windows & Doors customer invoice PDF (Gabe, Oct 31), laid out like his Arena invoice
 // YA-260916-01 in neutral colors. Built only from the saved invoice document, so a reprint is
@@ -38,18 +39,19 @@ export function buildYaInvoicePdf(doc) {
   const hline = (x1, x2, top, color = RULE, w = 0.6) => { pdf.setDrawColor(color); pdf.setLineWidth(w); pdf.line(x1, top, x2, top); };
   const ensure = (h) => { if (y + h > bottom) { pdf.addPage(); y = 44; } };
 
-  // Header: company left, INVOICE and its facts right.
-  text("YA WINDOWS & DOORS", left, y, 19, true, HEAD);
+  // Header: the YA logo and company lines left, INVOICE and its facts right.
+  const logoH = 62;
+  pdf.addImage(yaLogoPng, "PNG", left, y - 8, logoH * YA_LOGO_RATIO, logoH);
   text("INVOICE", right, y - 2, 26, true, HEAD, "right");
   const coLines = [c.invoice_company_name, c.invoice_company_address, [c.invoice_phone, c.invoice_email].filter(Boolean).join(" · ")].filter(Boolean);
-  text(coLines, left, y + 28, 9, false, SOFT);
+  text(coLines, left, y + logoH - 2, 9, false, SOFT);
   const facts = [["Invoice #:", doc.number], ["Date:", longDate(doc.date)], ["Terms:", doc.type === "half" ? "Deposit due upon acceptance" : "Due on receipt"], ...(doc.ref_quote ? [["Ref. quote:", doc.ref_quote]] : [])];
   facts.forEach(([k, v], i) => {
     font(9, false); const vw = pdf.getTextWidth(clean(v));
     text(v, right, y + 34 + i * 12, 9, false, INK, "right");
     text(k, right - vw - 4, y + 34 + i * 12, 9, true, INK, "right");
   });
-  y += 40 + Math.max(coLines.length * 11.5, facts.length * 12);
+  y += Math.max(logoH + 2 + coLines.length * 11.5, 40 + facts.length * 12);
   hline(left, right, y, HEAD, 1.4);
   y += 14;
 
