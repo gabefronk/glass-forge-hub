@@ -222,7 +222,7 @@ export default function JobHeroMobile({
             {oes.length ? <Row label="OE"><span className="font-mono text-[13px]">{oes.join(", ")}</span></Row> : null}
             {crew && crew !== "—" ? <Row label="Crew">{crew}</Row> : null}
             {job.flashing_method ? (
-              <Row label="Flashing">{job.flashing_guide_url ? <a href={job.flashing_guide_url} target="_blank" rel="noreferrer" style={{ color: BRASS_LT }}>{job.flashing_method}</a> : job.flashing_method}</Row>
+              <Row label="Flashing"><FlashingGuideLink job={job} color={BRASS_LT} /></Row>
             ) : null}
 
             <Row label="Homeowner" action={<SmallAction label="Edit homeowner" onClick={() => toggleContact("homeowner")}>{contactOpen === "homeowner" ? "Done" : owner ? "Edit" : "Add"}</SmallAction>}>
