@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   nextInvoiceNumber, defaultLines, invoiceTotals, paymentSchedule, sizeLabel, defaultBillTo,
-  invoiceChecks, companyDetails, hasBankDetails, defaultOptions, lineAmount,
+  invoiceChecks, companyDetails, hasBankDetails, defaultOptions, lineAmount, customerTotal,
 } from '../src/lib/yaInvoice.js';
 
 const jutkins = { id: 'j1', canonical_name: 'JUTKINS', builder: 'Cash customer', address: '12084 S 4130 W Riverton, Utah 84096', manual_customer_total: 780 };
@@ -15,7 +15,7 @@ const beckyBudget = {
   quote: { lines: [
     { qty: 1, width_in: 35, height_in: 71, description: 'Lifestyle, Casement Left', extended: 1033.37 },
     { qty: 6, width_in: 23.75, height_in: 59.75, description: 'Lifestyle, Direct Set', extended: 3081 },
-    { qty: 16, width_in: 1, height_in: 1, description: '1" Frame Exp / Receptor', extended: 1507.2 },
+    { qty: 16, width_in: 1, height_in: 1, kind: 'part', description: '1" Frame Exp / Receptor', extended: 1507.2 },
   ] },
 };
 
@@ -51,7 +51,13 @@ test('itemized quote lines keep qty × unit exact and labor absorbs the cents', 
   assert.equal(items[1].size, '23¾ × 59¾');
   assert.equal(items[2].size, '');
   assert.equal(invoiceTotals(lines).total, 59318.51);
-  assert.equal(invoiceTotals(lines).units, 23);
+  assert.equal(invoiceTotals(lines).units, 7);
+});
+
+test('customer total: typed wins, else the quote sell', () => {
+  assert.equal(customerTotal(jutkins, []), 780);
+  assert.equal(customerTotal(becky, [beckyBudget]), 59318.51);
+  assert.equal(customerTotal({ id: 'x' }, []), null);
 });
 
 test('payment schedule: half down rounds up, final is what is left', () => {
