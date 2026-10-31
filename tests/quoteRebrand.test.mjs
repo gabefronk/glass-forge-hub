@@ -70,8 +70,8 @@ test('prices scale so the quote total lands on the product sell', () => {
 test('product sell splits the budget sell by cost share', () => {
   const becky = { inputs: { material_true_cost: 37580.5, labor_cost_sub_pay: 2000, actual_total_sell: 59318.51 }, quote: { customer_total: 37580.5 } };
   const s = productSell(becky);
-  assert.equal(s.product, 56321.3);
-  assert.equal(s.install, 2997.21);
+  assert.equal(s.product, 56321.15);
+  assert.equal(s.install, 2997.36);
   assert.equal(quoteTotal(becky), 37580.5);
   assert.equal(productSell({ inputs: { material_true_cost: 100, actual_total_sell: 0 } }), null);
 });
