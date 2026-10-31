@@ -258,10 +258,16 @@ export function patioDoorDetected(job) {
   return orderedWindowOptions(job).some((w) => !w.other && PATIO_RE.test([w.style, w.mark, w.room, w.label].join(' ')));
 }
 
-export function requiredDimensionsFor(job, windowId) {
-  const w = orderedWindowOptions(job).find((x) => x.id === windowId && !x.other);
+/** The dimensions the ordered unit requires, from a window option list (what the form holds)
+ *  or from a job record (what the server holds). Null when the unit is unknown. */
+export function requiredDimensionsOf(windows, windowId) {
+  const w = (Array.isArray(windows) ? windows : []).find((x) => x && x.id === windowId && !x.other);
   if (!w) return null;
-  return { width: w.width, height: w.height, units: w.units || 'in', dimension_basis: w.dimension_basis || '' };
+  return { width: num(w.width), height: num(w.height), units: w.units || 'in', dimension_basis: w.dimension_basis || '' };
+}
+
+export function requiredDimensionsFor(job, windowId) {
+  return requiredDimensionsOf(orderedWindowOptions(job), windowId);
 }
 
 // ── Pricing (customer sell) ────────────────────────────────────────────────────
