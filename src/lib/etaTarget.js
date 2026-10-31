@@ -1,23 +1,29 @@
 import { base44 } from '@/api/base44Client';
 import { purchasingRequest, messageOf } from '@/components/budgets/ProcurementForms';
-import { syncEtaCalendar, CALENDAR_MISSED } from '@/lib/etaCalendar';
+import { syncEtaCalendar, CALENDAR_MISSED, deliveryChoice, etaKeyFor } from '@/lib/etaCalendar';
 
 // One supplier ETA write. The board's job row and every extra scope row go
 // through here, so the date always lands on the real record — the supplier
-// order, or the budget when nothing is on order — and the matching event on
-// Israel's calendar is created or moved to the same day.
+// order, or the budget when nothing is on order — and the matching events on
+// the picked crew calendar(s) are created or moved to the same day.
+//
+// calendars: 'israel' | 'milan' | 'both' ('' keeps the ETA's current choice).
+// delivery: 'will_call' | 'delivery', supplier orders only; saved on the order
+// only when it changes, so an order with nothing recorded is not stamped.
 //
 // Returns { saved, error }: saved is true once the Hub accepted the ETA, even
 // when only the calendar leg failed (the caller then offers a retry by saving
 // the ETA again). A write that never landed returns saved false with the reason.
-export async function saveEtaTarget({ jobId, order = null, budgetId = '', date = '' }) {
+export async function saveEtaTarget({ jobId, order = null, budgetId = '', date = '', calendars = '', delivery = '' }) {
   try {
     if (order?.id) {
+      const deliveryChanged = delivery && delivery !== deliveryChoice(order);
       await purchasingRequest({
         action: 'save_supplier_order', order_id: order.id, job_id: jobId,
         purchase_order_id: order.purchase_order_id, order_number: order.order_number,
         amount: order.amount, eta_date: date || '', received_date: order.received_date || '',
         notes: order.notes || '', expected_updated_date: order.updated_date,
+        ...(deliveryChanged ? { delivery_method: delivery } : {}),
         request_key: crypto.randomUUID(), review_confirmed: true,
       });
     } else if (budgetId) {
@@ -32,10 +38,11 @@ export async function saveEtaTarget({ jobId, order = null, budgetId = '', date =
   }
   const sync = await syncEtaCalendar({
     jobId,
-    etaKey: order?.id ? `order:${order.id}` : `budget:${budgetId}`,
+    etaKey: etaKeyFor({ order, budgetId }),
     date: date || '',
     ref: order?.order_number || '',
     vendor: order?.vendor || '',
+    calendars,
   });
   return { saved: true, error: sync.error ? CALENDAR_MISSED : '' };
 }
