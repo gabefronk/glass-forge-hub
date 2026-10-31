@@ -279,7 +279,7 @@ export default async function(req) {
       try {
         if (structured) {
           const rubric = rubricFromRows(await api.PricingRubric.list('sort', 200, 0).catch(() => []));
-          price = priceFieldReport({ event_type, eventType: event_type, hours, material, longDistance: long_distance === true, rubric });
+          price = priceFieldReport({ eventType: event_type, hours, material, longDistance: long_distance === true, rubric });
           // Internal cost never reads the rubric: those hourly rates are customer sell rates.
           // With no verified internal rate anywhere in the Hub, this stays pending.
           costState = internalCostState({ eventType: event_type, hours, material, costSources: await internalCostSources(api, jobId) });
@@ -414,24 +414,17 @@ export default async function(req) {
           routing = 'legacy_fallback';
         }
 
+        // A legacy payload carries no event_type, so its Today item keeps the old wording.
         const tasks = buildFollowUpTasks({
-          report: structured ? report : { event_type: '', completion: completionValue, notes },
+          report: structured ? report : { event_type: '', completion: 'incomplete', notes },
           requestKey: request_key || `field-report-incomplete:${event_id || jobId}:${noteDate}`,
           recipients: chosen, job, jobId, jobName,
           originPath: structured && visitRow?.id ? `/jobs/${jobId}?report=${visitRow.id}` : `/jobs/${jobId}`,
           author: user.full_name || user.email, now,
           createdByUserId: user.id, assignedByUserId: user.id,
-        });
-        // Legacy payloads carry no event_type, so buildFollowUpTasks sees no trigger. Keep the
-        // old alert by building it from the same shape with the incomplete flag set.
-        const effective = tasks.length ? tasks : buildFollowUpTasks({
-          report: { event_type: 'service', completion: 'incomplete', notes },
-          requestKey: request_key || `field-report-incomplete:${event_id || jobId}:${noteDate}`,
-          recipients: chosen, job, jobId, jobName, originPath: `/jobs/${jobId}`,
-          author: user.full_name || user.email, now, createdByUserId: user.id, assignedByUserId: user.id,
-        }).map((t) => ({ ...t, title: `Incomplete field report — ${jobName || 'job'}`.slice(0, 200) }));
+        }).map((t) => (structured ? t : { ...t, title: `Incomplete field report — ${jobName || 'job'}`.slice(0, 200) }));
 
-        for (const task of effective) {
+        for (const task of tasks) {
           const existing = await api.TodoTask.filter({ request_key: task.request_key }, 'id', 1, 0).catch(() => []);
           if ((Array.isArray(existing) ? existing : []).length) { taskIds.push(existing[0].id); continue; }
           const created = await api.TodoTask.create(task).catch((e) => { console.log('follow-up task failed:', (e && e.message) || e); return null; });
