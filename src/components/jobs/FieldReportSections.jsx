@@ -28,7 +28,7 @@ export function Label({ children, as: Tag = "div", className = "" }) {
   return <Tag className={`mb-1.5 block text-[12px] font-semibold uppercase ${className}`} style={{ color: MUT, letterSpacing: ".06em" }}>{children}</Tag>;
 }
 
-export function Card({ title, hint, children, ...rest }) {
+export function Card({ title = "", hint = "", children = null, ...rest }) {
   return (
     <section className="space-y-3 rounded-[12px] p-3" style={{ backgroundColor: CARD, border: `1px solid ${EDGE}` }} {...rest}>
       {title ? <h4 className="text-[14.5px] font-semibold" style={{ color: INK }}>{title}</h4> : null}
@@ -57,7 +57,7 @@ export function Segmented({ value, options, onChange, ariaLabel }) {
 }
 
 // A full-width checkbox row: the whole row is the hit target, which is what a thumb needs.
-export function CheckRow({ checked, onChange, label, sub, children }) {
+export function CheckRow({ checked, onChange, label, sub = "", children = null }) {
   return (
     <div className="rounded-[10px]" style={{ border: `1px solid ${checked ? TEAL : LINE}`, backgroundColor: checked ? "#EAF2EF" : CARD }}>
       <label className="flex min-h-[48px] cursor-pointer items-center gap-3 px-3 py-2">
@@ -75,7 +75,7 @@ export function CheckRow({ checked, onChange, label, sub, children }) {
   );
 }
 
-export function TextArea({ value, onChange, placeholder, rows = 3, ariaLabel }) {
+export function TextArea({ value, onChange, placeholder = "", rows = 3, ariaLabel = "" }) {
   // Plain textarea: the phone keyboard's own dictation button fills it. No speech code here.
   return (
     <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} aria-label={ariaLabel}
@@ -111,7 +111,7 @@ const listOps = (value, onChange) => ({
 });
 
 // ── Readiness / not-ready reasons ──────────────────────────────────────────────
-export function NotReadySection({ eventType, value, onChange, notReady, onNotReady }) {
+export function NotReadySection({ eventType, value, onChange, notReady = false, onNotReady = () => {} }) {
   const reasons = notReadyReasonsFor(eventType);
   if (!reasons.length) return null;
   const { rows, patch } = listOps(value, onChange);
@@ -143,7 +143,7 @@ export function NotReadySection({ eventType, value, onChange, notReady, onNotRea
 }
 
 // ── Ordered-window issues (Install, Job Readiness) ─────────────────────────────
-export function WindowIssuesSection({ eventType, windows, value, onChange }) {
+export function WindowIssuesSection({ eventType, windows = [], value, onChange }) {
   const kinds = windowIssueKindsFor(eventType);
   if (!kinds.length) return null;
   const { rows, add, patch, remove } = listOps(value, onChange);
@@ -295,7 +295,7 @@ export function ScreenIssuesSection({ value, onChange }) {
   );
 }
 
-export function CannotFixSection({ windows, value, onChange }) {
+export function CannotFixSection({ windows = [], value, onChange }) {
   const { rows, add, patch, remove } = listOps(value, onChange);
   const options = [...(windows || []), { id: "other", label: "Other / cannot identify the unit" }];
   return (
@@ -359,7 +359,7 @@ export function WarrantySection({ value, onChange }) {
 }
 
 // ── Hours + product material (Screen Service, Warranty, Installer Error) ───────
-export function HoursMaterialSection({ eventType, materials, hours, onHours, material, onMaterial, longDistance, onLongDistance, showLongDistance, billable }) {
+export function HoursMaterialSection({ materials = [], hours = 0, onHours, material = "", onMaterial, longDistance = false, onLongDistance, showLongDistance = false, billable = false }) {
   const step = (d) => onHours(Math.min(24, Math.max(0, Math.round((Number(hours || 0) + d) * 2) / 2)));
   return (
     <Card title="Man-hours and product material"
@@ -415,7 +415,7 @@ export function DocumentationSection({ eventType, hasPatioDoor, onPatioDoor, val
 }
 
 // ── Follow-up recipients ───────────────────────────────────────────────────────
-export function RecipientsSection({ people, value, onChange, required, triggers, loading, error }) {
+export function RecipientsSection({ people = [], value, onChange, required = false, triggers = [], loading = false, error = "" }) {
   const ids = Array.isArray(value) ? value : [];
   const toggle = (id, on) => onChange(on ? [...ids.filter((x) => x !== id), id] : ids.filter((x) => x !== id));
   return (
