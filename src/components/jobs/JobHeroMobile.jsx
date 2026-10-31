@@ -221,6 +221,9 @@ export default function JobHeroMobile({
             {pos.length ? <Row label="PO"><span className="font-mono text-[13px]">{pos.join(", ")}</span></Row> : null}
             {oes.length ? <Row label="OE"><span className="font-mono text-[13px]">{oes.join(", ")}</span></Row> : null}
             {crew && crew !== "—" ? <Row label="Crew">{crew}</Row> : null}
+            {job.flashing_method ? (
+              <Row label="Flashing">{job.flashing_guide_url ? <a href={job.flashing_guide_url} target="_blank" rel="noreferrer" style={{ color: BRASS_LT }}>{job.flashing_method}</a> : job.flashing_method}</Row>
+            ) : null}
 
             <Row label="Homeowner" action={<SmallAction label="Edit homeowner" onClick={() => toggleContact("homeowner")}>{contactOpen === "homeowner" ? "Done" : owner ? "Edit" : "Add"}</SmallAction>}>
               {owner ? <>{sanitizeText(owner.name || "")}{owner.phone ? <span style={{ color: MUTED }}> · {owner.phone}</span> : null}</> : <span style={{ color: MUTED }}>{homeowner.loading ? "Looking…" : "Not on file"}</span>}
