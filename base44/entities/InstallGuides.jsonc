@@ -1,0 +1,120 @@
+{
+  "name": "InstallGuides",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "Flashing / install method name shown in Make YA quote, on the quote summary and on the job."
+    },
+    "description": {
+      "type": "string",
+      "title": "Description",
+      "description": "Short note about when to use this guide."
+    },
+    "sort_order": {
+      "type": "number",
+      "title": "Sort order",
+      "description": "Position in the guide dropdown (1 first)."
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "title": "Active",
+      "description": "False = retired: no longer offered for new quotes. Jobs pinned to it still open their version."
+    },
+    "file_uri": {
+      "type": "string",
+      "title": "File",
+      "description": "Private file URI (UploadPrivateFile) of the current version's PDF. Opened only through a short-lived CreateFileSignedUrl link."
+    },
+    "file_name": {
+      "type": "string",
+      "title": "File name",
+      "description": "Original file name of the current version."
+    },
+    "size": {
+      "type": "number",
+      "title": "Size",
+      "description": "Bytes of the current version."
+    },
+    "sha256": {
+      "type": "string",
+      "title": "SHA-256",
+      "description": "SHA-256 of the current version's bytes."
+    },
+    "version": {
+      "type": "number",
+      "title": "Version",
+      "description": "Current version number. Replacing the file adds a version; a PDF is never overwritten, so a job keeps the exact guide its customer approved."
+    },
+    "versions": {
+      "type": "array",
+      "title": "Versions",
+      "description": "Every version, oldest first: version, file_uri, file_name, size, sha256, uploaded_at.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          },
+          "file_uri": {
+            "type": "string"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "uploaded_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "builder_match": {
+      "type": "string",
+      "title": "Builder default",
+      "description": "Builder this guide is the default for (e.g. Holmes Homes, Pulte). Make YA quote preselects it for that builder's jobs."
+    },
+    "price_per_opening": {
+      "type": "number",
+      "title": "Price per opening",
+      "description": "Optional upgrade price per opening (e.g. sill pans)."
+    },
+    "source_drive_file_id": {
+      "type": "string",
+      "title": "Imported from Drive file",
+      "description": "Drive file id in INSTALL BUDGET SHEET > Install Type Guides this guide was imported from (one-time import, Oct 31)."
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

@@ -35,7 +35,7 @@
     "address": {
       "type": "string",
       "title": "Address",
-      "description": "Job site address — a hard match key that doesn't change when the name is written differently"
+      "description": "Job site address \u2014 a hard match key that doesn't change when the name is written differently"
     },
     "address_manual": {
       "type": "boolean",
@@ -131,7 +131,7 @@
         "installed",
         "closed"
       ],
-      "description": "Where the job is in its life: quoted → sold → ordered → handed_off (Stage 2, in the PM's hands) → scheduled → installed → closed. Set by hand from the job hero; the handoff sets handed_off itself."
+      "description": "Where the job is in its life: quoted \u2192 sold \u2192 ordered \u2192 handed_off (Stage 2, in the PM's hands) \u2192 scheduled \u2192 installed \u2192 closed. Set by hand from the job hero; the handoff sets handed_off itself."
     },
     "payment_status": {
       "type": "string",
@@ -211,17 +211,22 @@
     "flashing_method": {
       "type": "string",
       "title": "Flashing method",
-      "description": "Install / flashing method the customer approved with the YA quote: the guide name from Drive > INSTALL BUDGET SHEET > Install Type Guides. Shown to installers on the job."
+      "description": "Install / flashing method the customer approved with the YA quote: the InstallGuides name when the quote was saved. Shown to installers on the job."
     },
-    "flashing_guide_file_id": {
+    "flashing_guide_id": {
+      "type": "string",
+      "title": "Flashing guide",
+      "description": "InstallGuides id of the guide sent with the YA quote."
+    },
+    "flashing_guide_version": {
+      "type": "number",
+      "title": "Flashing guide version",
+      "description": "The guide version the customer approved. A replaced guide file is a new version; this job keeps this one."
+    },
+    "flashing_guide_file_uri": {
       "type": "string",
       "title": "Flashing guide file",
-      "description": "Drive file id of the chosen install type guide PDF."
-    },
-    "flashing_guide_url": {
-      "type": "string",
-      "title": "Flashing guide link",
-      "description": "Drive link to the chosen install type guide PDF."
+      "description": "Private file URI of that exact version's PDF, opened on the job page through a short-lived signed link (installers can't read InstallGuides or Gabe's Drive)."
     }
   },
   "required": [
