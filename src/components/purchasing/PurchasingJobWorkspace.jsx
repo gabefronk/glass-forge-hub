@@ -92,7 +92,7 @@ function OrderDetail({ order, onEdit, onSaved }) {
         <span>Received <strong style={{ color: INK }}>{etaDate(order.received_date) || '—'}</strong></span>
       </div>
       {/* Same editor as the grid's ETA cell: writes the supplier record and moves its calendar event(s). */}
-      {etaEditable ? <EtaEditor key={`${order.id}:${order.updated_date}`} inline jobId={order.job_id} order={order} date={order.eta_date || ''} onSaved={onSaved} /> : null}
+      {etaEditable ? <EtaEditor key={order.id} inline jobId={order.job_id} order={order} date={order.eta_date || ''} onSaved={onSaved} /> : null}
       {!order.purchase_order_id ? <p className="text-[13px]" style={{ color: INK2 }}>Not linked to a PO yet - link it before editing.</p> : null}
       <NotesHistory notes={order.notes} />
       <div className="flex flex-wrap gap-2">
