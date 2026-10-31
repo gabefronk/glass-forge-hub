@@ -479,6 +479,25 @@ test('the phone form keeps thumb-sized targets and a single column', () => {
   assert.match(MODAL, /const canSubmit = check\.ok && !saving && !uploading;/);
 });
 
+test('the Today item link lands on a page that actually opens the originating report', () => {
+  const tasks = buildFollowUpTasks({
+    report: base({ completion: 'incomplete', incomplete_reason: 'x', recipients: [PEOPLE[0].id] }),
+    requestKey: 'k', recipients: [PEOPLE[0]], jobId: 'job-1', jobName: 'J', originPath: '/jobs/job-1?report=fvr-7',
+  });
+  const link = tasks[0].details.split('\n').find((l) => l.startsWith('Full report: ')).slice(13);
+  // The route the link uses exists, and that page reads the report id and opens the viewer.
+  const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  assert.match(app, /path="\/jobs\/:id"/);
+  assert.match(link, /^\/jobs\/[^?]+\?report=[^&]+$/);
+  const page = fs.readFileSync(new URL('../src/pages/JobDetail.jsx', import.meta.url), 'utf8');
+  assert.match(page, /searchParams\.get\("report"\)/);
+  assert.match(page, /<FieldVisitReportView reportId=\{openReportId\}/);
+  const view = fs.readFileSync(new URL('../src/components/jobs/FieldVisitReportView.jsx', import.meta.url), 'utf8');
+  assert.match(view, /FieldVisitReports\.get\(reportId\)/);
+  assert.match(view, /media_urls/, 'the viewer shows the visit-level media');
+  assert.equal(/type="file"/.test(view), false, 'the viewer is read-only');
+});
+
 test('the form and the server validate with the same shared module', () => {
   assert.match(MODAL, /from "\.\.\/\.\.\/\.\.\/base44\/shared\/fieldVisitReport\.js"/);
   const handler = fs.readFileSync(new URL('../base44/functions/resolveFieldReport/entry.ts', import.meta.url), 'utf8');
