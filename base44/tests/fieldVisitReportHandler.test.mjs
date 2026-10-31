@@ -122,7 +122,9 @@ test('form_context returns the live eligible recipients and the ordered window p
   assert.deepEqual(res.recipients.map((r) => r.display_name).sort(), ['Gabriel', 'Israel', 'Milan Fronk', 'Yelian']);
   assert.equal(res.recipients.some((r) => r.display_name === 'Retired Helper'), false, 'inactive members are not offered');
   assert.equal(res.recipients.find((r) => r.id === 'tm-sales').pending_account, true);
-  assert.equal(res.recipients.find((r) => r.id === 'tm-pm').role, 'admin');
+  // Narrow by design: a stable id and a display name, nothing else about the person.
+  assert.deepEqual(Object.keys(res.recipients[0]).sort(), ['display_name', 'id', 'pending_account']);
+  assert.equal(/@|auth_user_ids/.test(JSON.stringify(res.recipients)), false, 'no emails or auth ids leave the server');
   assert.deepEqual(res.windows.map((w) => w.id), ['w-a', 'w-b']);
   assert.equal(res.window_source, 'accepted_quote_snapshot');
   assert.equal(/price|cost|sell|dealer|total/i.test(JSON.stringify(res.windows)), false);
