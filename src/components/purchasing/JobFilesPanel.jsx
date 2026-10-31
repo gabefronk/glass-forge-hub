@@ -5,7 +5,7 @@
 // is going (a dropdown, guessed from its name) before Upload. Choosing files and linking a
 // folder live in the sheet's Add menu (pick() / link() on the ref). Every Drive link on the
 // job follows Jobs.drive_job_folder_id, so they all move together.
-import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { ArrowUpRight, ChevronDown, ChevronRight, Loader2, UploadCloud } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useJobFolderFiles } from '@/hooks/use-job-folder-files';
@@ -56,7 +56,7 @@ function FolderFiles({ folder, files }) {
   ));
 }
 
-const JobFilesPanel = forwardRef(function JobFilesPanel({ job, onSaved, headClass, headStyle }, ref) {
+const JobFilesPanel = forwardRef(function JobFilesPanel({ job, onSaved, onFolderChange, headClass, headStyle }, ref) {
   const inputRef = useRef(null);
   const [refresh, setRefresh] = useState(0);
   const folderState = useJobFolderFiles(job, refresh);
@@ -71,8 +71,8 @@ const JobFilesPanel = forwardRef(function JobFilesPanel({ job, onSaved, headClas
   useImperativeHandle(ref, () => ({
     pick: () => inputRef.current?.click(),
     link: () => setLinking(true),
-    hasFolder: Boolean(folder),
-  }), [folder]);
+  }), []);
+  useEffect(() => { onFolderChange?.(Boolean(folder)); }, [folder, onFolderChange]);
 
   function add(list) {
     const files = Array.from(list || []);
