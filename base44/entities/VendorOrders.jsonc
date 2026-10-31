@@ -57,7 +57,7 @@
     },
     "delivery_method": {
       "type": "string",
-      "description": "e.g. will_call or delivery."
+      "description": "will_call or delivery (older rows: will-call). Set with the ETA; a will call is written into the ETA calendar event."
     },
     "picked_up_at": {
       "type": "string",
