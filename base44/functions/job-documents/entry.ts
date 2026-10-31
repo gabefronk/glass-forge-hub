@@ -11,6 +11,10 @@ const canWriteJobDocuments = user => Boolean(user);
 
 // base44/shared/jobDocuments.mjs
 const ROOT='1F_PgUPEuvyvzCk92tdaFiwioLSack4iS';
+// My Drive › INSTALL BUDGET SHEET › Install Type Guides (Gabriel, Oct 31): the flashing / install
+// method PDFs a customer picks from when approving a YA quote. Only files in this folder are read.
+const INSTALL_GUIDES_FOLDER='1Owij_BDl-4TPLRrZtC8n-TTR24XaTkGm';
+const GUIDE_CHUNK_BYTES=2*1024*1024;
 const DRIVE='https://www.googleapis.com/drive/v3';
 const UPLOAD='https://www.googleapis.com/upload/drive/v3/files';
 const JSON_HEADERS={'Content-Type':'application/json'};
@@ -39,6 +43,12 @@ function uploadChunkProblem(offset,length,total){
 const cleanFileName=value=>String(value||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,180);
 const cleanMime=value=>/^[\w.+-]{1,60}\/[\w.+-]{1,100}$/.test(String(value||''))?String(value):'application/octet-stream';
 function base64Bytes(value){const bin=atob(String(value||''));const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}
+function bytesBase64(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(s);}
+// The byte range for one guide part, or null when the offset is outside the file.
+function guideRange(offset,size){
+ if(!Number.isSafeInteger(offset)||!Number.isSafeInteger(size)||offset<0||size<1||offset>=size)return null;
+ return {start:offset,end:Math.min(size,offset+GUIDE_CHUNK_BYTES)-1};
+}
 const reply=(body,status=200)=>Response.json(body,{status});
 const clean=value=>String(value||'').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim().slice(0,140);
 const escaped=value=>value.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
@@ -92,7 +102,7 @@ function createJobDocumentsHandler({getClient,request=fetch}={}){
    const jobId=String(input.job_id||'');if(!jobId)return reply({error:'Select a job.'},400);
    const api=client.asServiceRole.entities,job=await api.Jobs.get(jobId).catch(()=>null);
    if(!job)return reply({error:'Job not found.'},404);
-   if(!['ensure_folder','attach_folder','unlink_folder','list','upload_start','upload_chunk'].includes(input.action))return reply({error:'Unsupported action.'},400);
+   if(!['ensure_folder','attach_folder','unlink_folder','list','upload_start','upload_chunk','install_guides','guide_chunk'].includes(input.action))return reply({error:'Unsupported action.'},400);
    if(input.action==='unlink_folder'){
     await api.Jobs.update(job.id,{drive_job_folder_id:null,drive_job_folder_url:null});
     return reply({ok:true,folder:null});
@@ -104,6 +114,21 @@ function createJobDocumentsHandler({getClient,request=fetch}={}){
     if(!r.ok)throw Error('Drive request failed ('+r.status+').');return r.json();
    };
    const {folder,save,validParent}=jobFolderTools({drive,api,job});
+   if(input.action==='install_guides'){
+    const q=`'${INSTALL_GUIDES_FOLDER}' in parents and mimeType='application/pdf' and trashed=false`;
+    const r=await drive('/files?q='+encodeURIComponent(q)+'&fields=files(id,name,size,webViewLink,modifiedTime)&orderBy=name&pageSize=100');
+    return reply({guides:(r.files||[]).map(f=>({id:f.id,name:f.name,size:Number(f.size)||0,url:f.webViewLink||'https://drive.google.com/file/d/'+encodeURIComponent(f.id)+'/view'}))});
+   }
+   if(input.action==='guide_chunk'){
+    const id=String(input.file_id||'');if(!/^[\w-]{10,100}$/.test(id))return reply({error:'Choose an install guide.'},400);
+    const f=await drive('/files/'+encodeURIComponent(id)+'?fields=id,name,size,mimeType,parents,trashed');
+    if(f.trashed||f.mimeType!=='application/pdf'||!(f.parents||[]).includes(INSTALL_GUIDES_FOLDER))return reply({error:'That file is not in Install Type Guides.'},403);
+    const size=Number(f.size),range=guideRange(Number(input.offset||0),size);if(!range)return reply({error:'That part of the guide does not exist.'},400);
+    const got=await request(DRIVE+'/files/'+encodeURIComponent(id)+'?alt=media',{headers:{Authorization:'Bearer '+accessToken,Range:`bytes=${range.start}-${range.end}`}});
+    if(!got.ok)return reply({error:'Drive would not send the guide ('+got.status+').'},502);
+    const bytes=new Uint8Array(await got.arrayBuffer());
+    return reply({ok:true,name:f.name,size,offset:range.start,data:bytesBase64(bytes),done:range.start+bytes.length>=size});
+   }
    if(input.action==='attach_folder'){
     const id=driveFolderIdFrom(input.folder_id);if(!id)return reply({error:'Paste the Drive folder link or its ID.'},400);
     const r=await save(await folder(id));return reply(r.body,r.status);
