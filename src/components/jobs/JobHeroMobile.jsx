@@ -10,6 +10,7 @@ import { pickSuper } from "@/lib/jobWorkspace";
 import { nextVisitProjection } from "@/lib/jobCalendarShared";
 import { paymentStage } from "@/lib/jobPayment";
 import { FilesMenu, HomeownerBox, SuperBox } from "@/components/jobs/JobSheet";
+import FlashingGuideLink from "@/components/jobs/FlashingGuideLink";
 
 // Phone-only job header (10/23 redesign, "Final" on the Job Header canvas):
 // name + status, Field report / Call / Text, one "Job info" dropdown of tidy
