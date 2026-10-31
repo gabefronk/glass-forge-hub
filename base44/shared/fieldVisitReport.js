@@ -474,7 +474,7 @@ export function reportSummaryLines(report, { job } = {}) {
   for (const o of list(report?.sheetrock_outcomes)) lines.push(`Sheetrock: ${labelFrom(SHEETROCK_OUTCOMES, text(o.key), o.label)}${text(o.note) ? ` — ${text(o.note)}` : ''}`);
   if (text(report?.warranty_issue?.text)) lines.push(`Reported by ${text(report.warranty_issue.reported_by) || 'caller'}: ${text(report.warranty_issue.text)}`);
   const windows = job ? orderedWindowOptions(job) : [];
-  const windowLabel = (id, fallback) => text(fallback) || (windows.find((w) => w.id === id) || {}).label || text(id);
+  const windowLabel = (id, fallback) => (windows.find((w) => w.id === id) || {}).label || text(fallback) || text(id);
   for (const w of list(report?.window_issues)) {
     const spec = WINDOW_ISSUE_KINDS.find((k) => k.key === text(w.kind));
     const bits = [`${spec ? spec.label : text(w.kind)}: ${windowLabel(text(w.window_id), w.window_label)}`];
