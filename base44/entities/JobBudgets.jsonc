@@ -183,6 +183,22 @@
           ]
         }
       }
+    },
+    "ya_quote_file_id": {
+      "type": "string",
+      "title": "YA quote file",
+      "description": "Drive file id of the YA-branded copy of this supplier quote (supplier details covered, prices at sell)."
+    },
+    "ya_quote_url": {
+      "type": "string",
+      "title": "YA quote link",
+      "description": "Drive link to the YA-branded copy of this quote."
+    },
+    "ya_quote_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "YA quote made",
+      "description": "When the YA-branded copy was last made."
     }
   },
   "required": [
