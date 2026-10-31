@@ -4,6 +4,7 @@ import { unusedQuoteDeletionPatch, jobQuoteRemovalPatch } from './unusedQuoteDel
 import { procurementError as fail, requestKey, withProcurementLock } from './procurementLock.mjs';
 import { assertOwner, getPurchasingJob, issuePurchaseOrder } from './purchaseOrderService.mjs';
 import { isPurchasingMoneyOwner } from './purchasingMoneyPure.js';
+import { normalizeDeliveryMethod } from './etaCalendarEvent.js';
 
 const PO_STATES = ['issued', 'emailed', 'ordered', 'confirmed', 'received', 'cancelled'];
 // Suppliers are paid up front (Gabe, Oct 25): a supplier order is Ordered or ETA received;
@@ -111,6 +112,8 @@ export async function procurementAction(api, body, user, deps = {}) {
       if (value === null || value < 0) throw fail(400, 'Enter the confirmed supplier amount.');
       if (text(body.eta_date) && !validDate(body.eta_date)) throw fail(400, 'Enter a valid ETA date.');
       if (text(body.received_date) && !validDate(body.received_date)) throw fail(400, 'Enter a valid received date.');
+      const delivery = body.delivery_method === undefined ? undefined : normalizeDeliveryMethod(body.delivery_method);
+      if (delivery === null) throw fail(400, 'Choose delivered or will call.');
       let existing = body.order_id ? orders.find(o => o.id === body.order_id) : orders.find(o => o.request_key === key);
       if (body.order_id && !existing) throw fail(404, 'Supplier order not found.');
       if (existing && ((existing.job_id && existing.job_id !== job.id) || (existing.purchase_order_id && existing.purchase_order_id !== po.id))) throw fail(409, 'This supplier order belongs to a different job or PO. No links were changed.');
@@ -124,6 +127,8 @@ export async function procurementAction(api, body, user, deps = {}) {
         eta_date: text(body.eta_date), eta_source: text(body.eta_date) ? 'owner reviewed supplier confirmation' : '',
         received_date: text(body.received_date), notes: text(body.notes).slice(0, 4000),
       };
+      // Left out of the request = unchanged (older rows say "will-call").
+      if (delivery !== undefined) payload.delivery_method = delivery;
       if (existing && !body.order_id) {
         if (Object.entries(payload).some(([k, v]) => (existing[k] ?? '') !== v)) throw fail(409, 'This save key already recorded different supplier details. Refresh.');
         return { ok: true, order: existing, duplicate: true };
