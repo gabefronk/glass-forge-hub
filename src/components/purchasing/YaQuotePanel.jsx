@@ -31,7 +31,7 @@ async function sourceBytes(budget) {
   return new Uint8Array(await res.arrayBuffer());
 }
 
-async function guideBytes(jobId, fileId) {
+async function guideBytes(jobId, fileId, name) {
   const parts = []; let offset = 0;
   for (;;) {
     const r = dataOf(await invoke('job-documents', { action: 'guide_chunk', job_id: jobId, file_id: fileId, offset }));
@@ -40,6 +40,9 @@ async function guideBytes(jobId, fileId) {
   }
   const out = new Uint8Array(offset); let at = 0;
   for (const p of parts) { out.set(p, at); at += p.length; }
+  // A rights-protected (Microsoft-encrypted) file is not a PDF the Hub can attach.
+  const head = new TextDecoder('latin1').decode(out.subarray(0, 1024));
+  if (!head.includes('%PDF-')) throw new Error(`${name} is a protected or encrypted file, not a plain PDF. Save it again as a normal PDF in Install Type Guides, or pick another guide.`);
   return out;
 }
 
@@ -66,7 +69,7 @@ export default function YaQuotePanel({ job, budget, onDone, onCancel }) {
     if (built && built.guideId === guideId) return { ...built, guide };
     setStep('Reading the supplier quote…');
     const src = await sourceBytes(budget);
-    const gBytes = guide ? (setStep('Getting the install guide…'), await guideBytes(job.id, guide.id)) : null;
+    const gBytes = guide ? (setStep('Getting the install guide…'), await guideBytes(job.id, guide.id, guideLabel(guide.name))) : null;
     setStep('Building the YA quote…');
     const { buildYaQuote } = await import('@/lib/quoteRebrandRender');
     const { bytes, supplier } = await buildYaQuote({ sourceBytes: src, factor, company: companyDetails(settings || {}), job, quoteLabel, split, guideName: guide ? guideLabel(guide.name) : '', guideBytes: gBytes });
