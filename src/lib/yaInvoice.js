@@ -64,14 +64,14 @@ export function nextInvoiceNumber(date, existing = []) {
   return `${prefix}${String((used.length ? Math.max(...used) : 0) + 1).padStart(2, '0')}`;
 }
 
-// 47.5 x 119.5 → 47½ × 119½ (eighths).
-const FRACTIONS = { 1: '⅛', 2: '¼', 3: '⅜', 4: '½', 5: '⅝', 6: '¾', 7: '⅞' };
+// 47.5 x 119.5 → 47½ × 119½, to the eighth. The invoice font has ¼ ½ ¾ but no ⅛ glyphs.
+const FRACTIONS = { 1: ' 1/8', 2: '¼', 3: ' 3/8', 4: '½', 5: ' 5/8', 6: '¾', 7: ' 7/8' };
 function inches(v) {
   const n = num(v);
   if (n == null || n <= 0) return '';
   const eighths = Math.round(n * 8);
   const whole = Math.floor(eighths / 8), part = eighths % 8;
-  return `${whole || ''}${part ? FRACTIONS[part] : ''}` || '0';
+  return `${whole || ''}${part ? FRACTIONS[part] : ''}`.trim() || '0';
 }
 export function sizeLabel(width, height) {
   const w = inches(width), h = inches(height);
