@@ -1,176 +1,315 @@
 // The one per-job purchasing workspace: opens in place beneath a Purchasing row,
 // and is the whole Budget & Orders page for a job (pages/Procurement.jsx).
-// Redesign (Gabriel, Oct 24): one page, no section switcher, nothing said twice.
-//   1. Purchase orders & quotes - one line per PO / supplier order with its PO,
-//      quote and order numbers, ETA and cost (money out; suppliers are paid up front,
-//      so there is no payment tracking). Manage opens that line's forms (status,
-//      confirmation, ETA).
-//   2. Budget - each quote budget's cost build-up and price & margin. Edit numbers
-//      is the one place job money is changed (the budget is the source). Budget use
-//      (counted / draft / reference / replaces) is a dropdown on the card (Oct 30).
-//   3. Job files: vendor quote PDFs (private) and everything else to the job's Drive
-//      folder, plus the Drive folder menu (JobFilesPanel).
-// Reuses the existing native procurement forms (PurchaseOrderForm,
-// SupplierOrderForm, OrderStatusForm, NumbersEditor, DeleteUnusedQuoteButton) and the
-// shared procurement service validation. Same-job records are filtered by EXACT
-// immutable job id (jobProcurementRecords) - never a name join. Editor records are
-// looked up from rec.* (this job only), so a record from another job can never load.
-import { useMemo, useState } from 'react';
+// One ruled sheet (Gabriel, Oct 31), nothing said twice, options in dropdowns:
+//   1. Orders - one table line per PO / supplier order (PO, quote, order, status, ETA,
+//      cost as money out; suppliers are paid up front) with a total row. A reorder or
+//      remake shows its reason under the line. Click a line for its details and ETA;
+//      its ⋯ menu holds the line's forms. The Add menu prepares a PO, records a supplier
+//      confirmation, uploads files or links the Drive folder.
+//   2. Budget - each quote budget as a ruled table (cost lines, total, sell, margin).
+//      Edit numbers is the one place job money is changed. Budget use (counted / draft /
+//      reference / replaces) is a dropdown on the card (Oct 30). A job with no vendor
+//      quote shows its typed Budget cost / Customer total, which drive Purchasing.
+//   3. Files - the Drive folder, its files and a drop target on one line (JobFilesPanel).
+// Reuses the existing native procurement forms (PurchaseOrderForm, SupplierOrderForm,
+// OrderStatusForm, NumbersEditor) and the shared procurement service validation.
+// Same-job records are filtered by EXACT immutable job id (jobProcurementRecords) -
+// never a name join. Editor records are looked up from rec.* (this job only), so a
+// record from another job can never load.
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Pencil, Plus, Send } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, ChevronRight, MoreHorizontal, Pencil, Plus, Send } from 'lucide-react';
 import {
   money, purchasingRequest, messageOf,
   PurchaseOrderForm, SupplierOrderForm, OrderStatusForm,
 } from '@/components/budgets/ProcurementForms';
 import { NumbersEditor } from '@/components/budgets/BudgetReviewRow';
-import DeleteUnusedQuoteButton from '@/components/budgets/DeleteUnusedQuoteButton';
-import PurchasingDates from '@/components/budgets/PurchasingDates';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import JobFilesPanel from './JobFilesPanel';
 import OrderEmailPanel from './OrderEmailPanel';
-import PrivateSourceButton from './PrivateSourceButton';
-import RemoveQuoteButton from './RemoveQuoteButton';
+import { openPrivateSource } from './PrivateSourceButton';
+import { removeJobQuote } from './RemoveQuoteButton';
 import { duplicateOf, replacedByQuote } from '@/lib/quoteDuplicates';
 import { activeBudgets, budgetFigures, budgetVersion } from '@/lib/purchasingCoreTwin';
-import { statusWithDate } from '@/lib/purchasingDates';
+import { displayDate, originalOrderDate, statusLabel, statusWithDate } from '@/lib/purchasingDates';
 import { jobProcurementRecords } from '@/lib/purchasingViewModel';
 import { etaDate } from '@/lib/purchasingSummary';
+import { orderLines, sheetTotal, typedBudget } from '@/lib/budgetOrdersSheet';
 import EtaEditor from './EtaEditor';
 import { quantityReviewLabel } from '@/lib/quantityReview';
 
 const INK = '#101617', INK2 = '#566063', INK3 = '#34403F', RULE = '#EEE9E0', EDGE = '#E2DCD1';
-const EYEBROW = 'text-[13px] font-semibold uppercase tracking-[0.08em]';
+const OPEN_BG = '#F4F8F7', HEAD_BG = '#FAF8F3', TOTAL_RULE = '#9A9080';
 const BTN = 'inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[9px] px-3 text-[13px] font-medium no-underline disabled:opacity-60';
 const SEC = { border: `1px solid ${EDGE}`, backgroundColor: '#FFFFFF', color: INK3 };
 const PRI = { border: '1px solid #0B3F3B', backgroundColor: '#0B3F3B', color: '#FFFFFF', fontWeight: 600 };
+const HEAD = 'flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5';
+const ITEM = 'flex min-h-9 cursor-pointer items-center justify-between gap-6 text-[14px]';
 const TONES = {
   ok: { c: '#082F2C', bg: '#E2EEEB', b: '#C7E4D2' },
   warn: { c: '#6F4E10', bg: '#FAF0DA', b: '#EFDFB7' },
-  bad: { c: '#A43432', bg: '#FCEDEC', b: '#F0C9C5' },
-  plain: { c: INK2, bg: '#F3EFE7', b: EDGE },
+  plain: { c: INK3, bg: '#F3EFE7', b: EDGE },
 };
 
 const safeHref = (v) => { try { return v && new URL(v).protocol === 'https:' ? v : ''; } catch { return ''; } };
 const fileHref = (id) => (id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : '');
 const lineMoney = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' }));
+const outMoney = (v) => (v == null || v === '' ? '—' : lineMoney(0 - Number(v)));
 const pct = (v) => (v == null || !Number.isFinite(Number(v)) ? '—' : `${(Number(v) * 100).toFixed(1)}%`);
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+const stop = (e) => e.stopPropagation();
 
 function Chip({ tone = 'plain', children }) {
   const t = TONES[tone] || TONES.plain;
-  return <span className="inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-[7px] px-2 text-[13px] font-semibold" style={{ color: t.c, backgroundColor: t.bg, border: `1px solid ${t.b}` }}>{children}</span>;
+  return <span className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-[6px] px-1.5 text-[13px] font-semibold" style={{ color: t.c, backgroundColor: t.bg, border: `1px solid ${t.b}` }}>{children}</span>;
 }
-function Ref({ k, v }) {
+
+function SectionHead({ title, note, children }) {
   return (
-    <span className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[6px] px-2 text-[13px]" style={{ backgroundColor: '#F3EFE7', border: `1px solid ${EDGE}`, color: INK2 }}>
-      {k}<span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 500, color: INK }}>{v}</span>
-    </span>
+    <div className={HEAD} style={{ backgroundColor: HEAD_BG }}>
+      <h3 className="text-[15px] font-semibold" style={{ color: INK }}>{title}</h3>
+      {note ? <span className="text-[13.5px]" style={{ color: INK3 }}>{note}</span> : null}
+      <span className="flex-1" />
+      {children}
+    </div>
   );
 }
-function NotesHistory({ notes }) {
-  if (!notes) return null;
+
+// A dropdown of actions. Menu clicks must not reach the row underneath (React bubbles
+// through the portal), or choosing an item would also open or close the row.
+function ActionMenu({ items, label, trigger }) {
+  const shown = items.filter(Boolean);
+  if (!shown.length) return null;
   return (
-    <details className="text-[13px]" style={{ color: INK2 }}>
-      <summary className="cursor-pointer font-semibold">Notes & history</summary>
-      <p className="mt-1 whitespace-pre-line">{notes}</p>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {trigger || (
+          <button type="button" aria-label={label} title={label} onClick={stop} onKeyDown={stop}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] hover:bg-black/5 disabled:opacity-60" style={{ color: INK3 }}>
+            <MoreHorizontal className="h-5 w-5" />
+          </button>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[240px] p-1" onClick={stop}>
+        {shown.map((it) => (
+          it.href ? (
+            <DropdownMenuItem key={it.label} asChild className={ITEM}>
+              <a href={it.href} target="_blank" rel="noreferrer">{it.label}<ArrowUpRight className="h-4 w-4" /></a>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem key={it.label} className={ITEM} onSelect={it.onSelect} style={it.danger ? { color: '#A43432' } : undefined}>{it.label}</DropdownMenuItem>
+          )
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ---------- 1. Orders ----------
+
+// Desktop: chevron · supplier · PO · quote · order · status · ETA · cost · menu.
+// Phone: chevron · PO · cost · menu (the rest is in the line's details).
+const GRID = 'grid items-center gap-x-3 px-4 [grid-template-columns:16px_minmax(64px,0.8fr)_minmax(112px,1fr)_minmax(72px,0.8fr)_minmax(88px,0.9fr)_minmax(120px,1.3fr)_76px_96px_32px] max-[767px]:[grid-template-columns:16px_minmax(0,1fr)_auto_32px]';
+const WIDE = 'max-[767px]:hidden';
+const MONO = { fontFamily: 'var(--font-mono)', fontSize: '13px', color: INK };
+
+function Facts({ rows }) {
+  return (
+    <dl className="grid max-w-[760px] gap-x-5 gap-y-1 text-[13.5px] [grid-template-columns:max-content_minmax(0,1fr)]">
+      {rows.filter(Boolean).map(([k, v, phoneOnly]) => (
+        <div key={k} className={`contents ${phoneOnly ? 'min-[768px]:hidden' : ''}`}>
+          <dt className={phoneOnly ? 'min-[768px]:hidden' : ''} style={{ color: INK3 }}>{k}</dt>
+          <dd className={`min-w-0 break-words ${phoneOnly ? 'min-[768px]:hidden' : ''}`} style={{ color: INK }}>{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Notes({ entries }) {
+  const shown = entries.filter(([, text]) => text);
+  if (!shown.length) return null;
+  return (
+    <details className="text-[13.5px]" style={{ color: INK3 }}>
+      <summary className="cursor-pointer font-semibold">Notes</summary>
+      {shown.map(([label, text]) => (
+        <div key={label} className="mt-1.5"><span className="font-semibold" style={{ color: INK }}>{label}</span><p className="whitespace-pre-line">{text}</p></div>
+      ))}
     </details>
   );
 }
 
-// ---------- 1. Purchase orders & quotes ----------
-
-function OrderDetail({ order, onEdit, onSaved }) {
-  const etaEditable = Boolean(order.order_number) && order.amount != null && !order.received_date;
+// The open line: plain facts, the ETA editor for each confirmed order, one Notes toggle.
+// Every form is in the line's ⋯ menu, so there are no buttons here besides Save ETA.
+function LineDetail({ line, onSaved }) {
+  const { po, orders } = line;
+  const multi = orders.length > 1;
+  const rows = [
+    ['Supplier', line.supplier || 'Not set', true],
+    line.quote ? ['Quote', line.quote, true] : null,
+    po ? ['PO', `${po.po_number || '(no number)'} · ${statusWithDate(po)}`] : ['PO', 'Not linked to a PO yet. Use Order details / link PO in the ⋯ menu.'],
+    po && num(po.amount_customer) != null ? ['Customer amount', money(po.amount_customer)] : null,
+    po && originalOrderDate(po) ? ['Ordered', displayDate(originalOrderDate(po))] : null,
+    ...(orders.length ? orders.map((o) => [
+      `Supplier order${multi ? ` ${o.order_number || ''}` : ''}`,
+      [o.order_number || '(no number)', statusWithDate(o), num(o.amount) != null && num(o.amount) !== num(po?.amount_dealer) ? `${outMoney(o.amount)} on the order` : '',
+        o.received_date ? `received ${displayDate(o.received_date)}` : 'not received'].filter(Boolean).join(' · '),
+    ]) : [['Supplier order', 'No confirmation recorded yet']]),
+    po?.order_email_status ? ['Order email', (
+      <>
+        {po.order_email_status === 'sent' ? 'Sent' : 'Saved as an Outlook draft'} {etaDate(String(po.order_email_at || '').slice(0, 10))} to {(po.order_email_to || []).join(', ')}
+        {safeHref(po.order_email_ref) ? <> · <a href={po.order_email_ref} target="_blank" rel="noreferrer" className="font-semibold underline">Open in Outlook</a></> : null}
+      </>
+    )] : po ? ['Order email', 'Not sent'] : null,
+  ];
+  const etaOrders = orders.filter((o) => Boolean(o.order_number) && o.amount != null && !o.received_date);
   return (
-    <div className="flex flex-col gap-2 rounded-[10px] p-3" style={{ border: `1px solid ${RULE}`, backgroundColor: '#FFFFFF' }}>
-      <div className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: INK }}>
-        <span className="font-semibold">Order {order.order_number || '(no number)'}</span>
-        <Chip tone="plain">{statusWithDate(order)}</Chip>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]" style={{ color: INK3 }}>
-        <span>Cost <strong className="tabular-nums" style={{ color: INK }}>{order.amount == null || order.amount === '' ? '—' : money(0 - Number(order.amount))}</strong></span>
-        {etaEditable ? null : <span>ETA <strong style={{ color: INK }}>{etaDate(order.eta_date) || 'Not confirmed'}</strong></span>}
-        <span>Received <strong style={{ color: INK }}>{etaDate(order.received_date) || '—'}</strong></span>
-      </div>
+    <div className="flex flex-col gap-3 px-4 pb-3.5 pt-1.5 min-[768px]:pl-[44px]" style={{ backgroundColor: OPEN_BG }}>
+      <Facts rows={rows} />
       {/* Same editor as the grid's ETA cell: writes the supplier record and moves its calendar event(s). */}
-      {etaEditable ? <EtaEditor key={order.id} inline jobId={order.job_id} order={order} date={order.eta_date || ''} onSaved={onSaved} /> : null}
-      {!order.purchase_order_id ? <p className="text-[13px]" style={{ color: INK2 }}>Not linked to a PO yet - link it before editing.</p> : null}
-      <NotesHistory notes={order.notes} />
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => onEdit({ mode: 'vendor_status', order_id: order.id })} className={BTN} style={SEC}>Record order status</button>
-        <button type="button" onClick={() => onEdit({ mode: 'supplier', order_id: order.id })} className={BTN} style={SEC}>Order details / link PO</button>
-      </div>
-    </div>
-  );
-}
-
-// A PO line: the summary is always visible, Manage opens the PO's own actions.
-function POLine({ po, budgets, orders, onEdit, onSaved, open, onToggle }) {
-  const source = budgets.find((b) => b.id === po.budget_id);
-  const related = orders.filter((o) => o.purchase_order_id === po.id);
-  const quote = source?.quote_number || po.vendor_quote_ref || '';
-  const etas = related.map((o) => o.eta_date).filter(Boolean).sort();
-  const emailOrder = () => onEdit({ mode: 'email', po_id: po.id });
-  // Until the order email has gone out, it is one click from the row (Gabriel, Oct 30).
-  const emailAction = po.status === 'issued' && po.order_email_status !== 'sent'
-    ? <button type="button" onClick={emailOrder} className={BTN} style={{ ...PRI, height: 32 }}><Send className="h-3.5 w-3.5" />Email order</button> : null;
-  return (
-    <div style={{ borderTop: `1px solid ${RULE}` }}>
-      <Line supplier={po.vendor} refs={[['PO', po.po_number], ['Quote', quote], ...related.map((o) => ['Order', o.order_number])]}
-        eta={etas[0]} amount={po.amount_dealer} cancelled={po.status === 'cancelled'} open={open} onToggle={onToggle} action={emailAction} />
-      {open && (
-        <div className="flex flex-col gap-2.5 px-4 pb-4 pt-1" style={{ backgroundColor: '#FAF8F3' }}>
-          <div className="flex flex-wrap items-center gap-2"><Chip tone="plain">PO {statusWithDate(po)}</Chip>{po.amount_customer != null ? <span className="text-[13px]" style={{ color: INK2 }}>Customer amount {money(po.amount_customer)}</span> : null}</div>
-          {po.order_email_status ? (
-            <p className="text-[13px]" style={{ color: INK2 }}>
-              Order email {po.order_email_status === 'sent' ? 'sent' : 'saved as an Outlook draft'} {etaDate(String(po.order_email_at || '').slice(0, 10))} to {(po.order_email_to || []).join(', ')}.
-              {safeHref(po.order_email_ref) ? <> <a href={po.order_email_ref} target="_blank" rel="noreferrer" className="font-semibold underline">Open in Outlook</a></> : null}
-            </p>
-          ) : null}
-          <PurchasingDates row={po} supplier={related[0] || null} showStatus={false} />
-          <NotesHistory notes={po.notes} />
-          {related.map((o) => <OrderDetail key={o.id} order={o} onEdit={onEdit} onSaved={onSaved} />)}
-          <div className="flex flex-wrap gap-2">
-            {po.status !== 'cancelled' ? <button type="button" onClick={emailOrder} className={BTN} style={SEC}><Send className="h-3.5 w-3.5" />{po.order_email_status === 'sent' ? 'Email order again' : 'Email order'}</button> : null}
-            <button type="button" onClick={() => onEdit({ mode: 'po_status', po_id: po.id })} className={BTN} style={SEC}>Record PO status</button>
-            {related.length === 0 ? <button type="button" onClick={() => onEdit({ mode: 'supplier', po_id: po.id })} className={BTN} style={SEC}>Record supplier confirmation</button> : null}
-          </div>
+      {etaOrders.map((o) => (
+        <div key={o.id} className="flex flex-col gap-1">
+          {multi ? <span className="text-[13px] font-semibold" style={{ color: INK }}>Order {o.order_number}</span> : null}
+          <EtaEditor key={o.id} inline jobId={o.job_id} order={o} date={o.eta_date || ''} onSaved={onSaved} />
         </div>
-      )}
+      ))}
+      <Notes entries={[[po ? `PO ${po.po_number || ''}` : 'PO', po?.notes], ...orders.map((o) => [`Order ${o.order_number || ''}`, o.notes])]} />
     </div>
   );
 }
 
-function OrderLine({ order, onEdit, onSaved, open, onToggle }) {
+function lineMenu(line, onEdit) {
+  const { po, orders } = line;
+  const multi = orders.length > 1;
+  const items = [];
+  if (po) {
+    // While the order email hasn't gone out it is a button on the line itself (Gabriel, Oct 30).
+    if (!(po.status === 'issued' && po.order_email_status !== 'sent')) items.push({ label: po.order_email_status === 'sent' ? 'Email order again' : 'Email order', onSelect: () => onEdit({ mode: 'email', po_id: po.id }) });
+    items.push({ label: 'Record PO status', onSelect: () => onEdit({ mode: 'po_status', po_id: po.id }) });
+  }
+  for (const o of orders) {
+    const suffix = multi ? ` · ${o.order_number || 'no number'}` : '';
+    items.push({ label: `Record order status${suffix}`, onSelect: () => onEdit({ mode: 'vendor_status', order_id: o.id }) });
+    items.push({ label: `Order details / link PO${suffix}`, onSelect: () => onEdit({ mode: 'supplier', order_id: o.id }) });
+  }
+  if (po && !orders.length) items.push({ label: 'Record supplier confirmation', onSelect: () => onEdit({ mode: 'supplier', po_id: po.id }) });
+  return items;
+}
+
+function lineStatus(line) {
+  const { po, orders } = line;
+  const row = po || orders[0];
+  const label = statusLabel(row?.status);
+  return po?.status === 'issued' && po.order_email_status === 'drafted' ? `${label} · email drafted` : label;
+}
+
+function OrderRow({ line, open, onToggle, onEdit, onSaved, editor }) {
+  const { po } = line;
+  const emailPending = po && po.status === 'issued' && po.order_email_status !== 'sent';
+  const keyToggle = (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onToggle(); } };
   return (
     <div style={{ borderTop: `1px solid ${RULE}` }}>
-      <Line supplier={order.vendor} refs={[['Order', order.order_number]]} eta={order.eta_date} amount={order.amount}
-        open={open} onToggle={onToggle} />
-      {open && <div className="px-4 pb-4 pt-1" style={{ backgroundColor: '#FAF8F3' }}><OrderDetail order={order} onEdit={onEdit} onSaved={onSaved} /></div>}
+      <div role="button" tabIndex={0} aria-expanded={open} onClick={onToggle} onKeyDown={keyToggle}
+        className="cursor-pointer outline-none hover:bg-[#F7F4EE] focus-visible:bg-[#F7F4EE]" style={open ? { backgroundColor: OPEN_BG } : undefined}>
+        <div className={`${GRID} min-h-[44px] py-1.5 text-[13.5px]`}>
+          <span style={{ color: INK3 }}>{open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</span>
+          <span className={`${WIDE} truncate font-semibold`} style={{ color: line.supplier ? INK : INK2 }}>{line.supplier || 'Not set'}</span>
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span style={MONO}>{line.poNumber || (po ? '(no number)' : 'No PO')}</span>
+            {line.tag ? <Chip tone="warn">{line.tag.label}</Chip> : null}
+            <span className="min-[768px]:hidden" style={{ color: INK3 }}>{line.supplier}</span>
+          </span>
+          <span className={`${WIDE} truncate`} style={MONO}>{line.quote || '—'}</span>
+          <span className={`${WIDE} truncate`} style={MONO}>{line.orderNumbers.join(', ') || '—'}</span>
+          <span className={`${WIDE} flex min-w-0 flex-wrap items-center gap-2`} style={{ color: INK }}>
+            {lineStatus(line)}
+            {emailPending ? (
+              <button type="button" onClick={(e) => { stop(e); onEdit({ mode: 'email', po_id: po.id }); }} onKeyDown={stop}
+                className="inline-flex h-7 items-center gap-1 rounded-[7px] px-2 text-[13px] font-semibold disabled:opacity-60" style={PRI}><Send className="h-3.5 w-3.5" />Email order</button>
+            ) : null}
+          </span>
+          <span className={`${WIDE} whitespace-nowrap tabular-nums`} style={{ color: INK }}>{etaDate(line.eta) || '—'}</span>
+          <span className="whitespace-nowrap text-right font-semibold tabular-nums" style={{ color: INK }}>{outMoney(line.amount)}</span>
+          <span className="flex justify-end"><ActionMenu label={`Actions for ${line.poNumber || line.orderNumbers[0] || 'this order'}`} items={lineMenu(line, onEdit)} /></span>
+        </div>
+        {line.tag ? <p className="-mt-0.5 pb-2 pl-4 pr-4 text-[13.5px] min-[768px]:pl-[44px]" style={{ color: INK3 }}>{line.tag.reason}</p> : null}
+      </div>
+      {open ? <LineDetail line={line} onSaved={onSaved} /> : null}
+      {editor ? <div className="px-4 pb-3.5 pt-1" style={{ backgroundColor: OPEN_BG }}>{editor}</div> : null}
     </div>
   );
 }
 
-const LINE_GRID = 'grid items-center gap-3 px-4 py-2.5 [grid-template-columns:minmax(96px,1fr)_minmax(0,2.6fr)_84px_104px_minmax(92px,auto)] max-[767px]:[grid-template-columns:1fr_auto]';
-function Line({ supplier, refs, eta, amount, cancelled, open, onToggle, action = null }) {
-  const shown = refs.filter(([, v]) => v);
+function OrdersSection({ job, rec, jobNameById, onEdit, onSaved, editorFor, listEditor, addMenu }) {
+  const [openLine, setOpenLine] = useState(null);
+  const lines = useMemo(() => orderLines(rec), [rec]);
+  const total = useMemo(() => sheetTotal(job.id, rec), [job.id, rec]);
+  const toggle = (key) => setOpenLine((k) => (k === key ? null : key));
+  const count = rec.pos.length;
   return (
-    <div className={LINE_GRID}>
-      <span className="truncate text-[13.5px] font-semibold" style={{ color: supplier ? INK : INK2 }}>{supplier || 'Supplier not set'}</span>
-      <span className="flex min-w-0 flex-wrap items-center gap-1.5 max-[767px]:order-3 max-[767px]:col-span-2">
-        {shown.length ? shown.map(([k, v], i) => <Ref key={`${k}${v}${i}`} k={k} v={v} />) : <span className="text-[13px]" style={{ color: INK2 }}>No PO or quote number yet</span>}
-        {cancelled ? <Chip tone="plain">Cancelled</Chip> : null}
-      </span>
-      <span className="whitespace-nowrap text-[13px] font-medium max-[767px]:hidden" style={{ color: INK }}>{etaDate(eta) || '—'}</span>
-      <span className="text-right text-[13.5px] font-semibold tabular-nums max-[767px]:hidden" style={{ color: INK }}>{amount == null || amount === '' ? '—' : money(0 - Number(amount))}</span>
-      <span className="flex justify-end gap-2">
-        {action}
-        <button type="button" onClick={onToggle} aria-expanded={open} className={BTN} style={{ ...SEC, height: 32 }}>{open ? 'Close' : 'Manage'}</button>
-      </span>
-    </div>
+    <section aria-label="Orders">
+      <SectionHead title="Orders" note={lines.length ? `${count} PO${count === 1 ? '' : 's'}${lines.length > count ? ` · ${lines.length - count} order${lines.length - count === 1 ? '' : 's'} without a PO` : ''}` : ''}>{addMenu}</SectionHead>
+      {lines.length ? (
+        <>
+          <div className={`${GRID} ${WIDE} py-1.5 text-[13px] font-semibold`} style={{ color: INK3, borderTop: `1px solid ${EDGE}` }}>
+            <span /><span>Supplier</span><span>PO</span><span>Quote</span><span>Order</span><span>Status</span><span>ETA</span><span className="text-right">Cost</span><span />
+          </div>
+          {lines.map((line) => (
+            <OrderRow key={line.key} line={line} open={openLine === line.key} onToggle={() => toggle(line.key)} onEdit={onEdit} onSaved={onSaved} editor={editorFor(line)} />
+          ))}
+          <div className={`${GRID} py-2 text-[13.5px] font-semibold`} style={{ borderTop: `1.5px solid ${TOTAL_RULE}`, backgroundColor: HEAD_BG, color: INK }}>
+            <span />
+            <span className="[grid-column:2/8] max-[767px]:[grid-column:2/3]">Total supplier cost{total.partial ? <span className="font-normal" style={{ color: INK3 }}> · a line has no amount yet</span> : null}</span>
+            <span className="whitespace-nowrap text-right tabular-nums">{outMoney(total.value)}</span>
+            <span />
+          </div>
+        </>
+      ) : <p className="px-4 py-3 text-[13.5px]" style={{ color: INK3, borderTop: `1px solid ${RULE}` }}>No purchase orders or supplier confirmations yet. Use Add to prepare a PO or record one.</p>}
+      {listEditor ? <div className="px-4 py-3" style={{ borderTop: `1px solid ${RULE}` }}>{listEditor}</div> : null}
+      {rec.conflicts.length > 0 && (
+        <details className="mx-4 mb-3 rounded-[10px] p-2.5 text-[13.5px]" style={{ border: '1px solid #EFDFB7', backgroundColor: '#FAF0DA', color: '#6F4E10' }} open>
+          <summary className="cursor-pointer font-semibold">{rec.conflicts.length} PO reference conflict{rec.conflicts.length === 1 ? '' : 's'} - review before linking</summary>
+          {rec.conflicts.map((c) => (
+            <p key={c.number} className="mt-1"><strong>{c.number}</strong> appears against {c.job_ids.map((id, idx) => <span key={id}>{idx ? ' / ' : ''}<Link className="underline" to={`/jobs/${id}`}>{jobNameById(id)}</Link></span>)}. Original records are kept; nothing is cross-linked automatically.</p>
+          ))}
+        </details>
+      )}
+    </section>
   );
 }
 
 // ---------- 2. Budget ----------
+
+// Ruled money rows: label · amount · share of sell. `total` draws the heavier rule.
+const MONEY_GRID = 'grid items-center gap-x-4 px-4 [grid-template-columns:minmax(0,1fr)_120px_96px] max-[767px]:[grid-template-columns:minmax(0,1fr)_auto_64px]';
+function MoneyRow({ label, value, share = '', color = null, strong = false, total = false, tone = INK }) {
+  return (
+    <div className={`${MONEY_GRID} py-1.5 text-[13.5px]`} style={{ borderTop: total ? `1.5px solid ${TOTAL_RULE}` : `1px solid ${RULE}`, backgroundColor: total ? HEAD_BG : undefined, fontWeight: strong || total ? 600 : 400, color: INK }}>
+      <span className="inline-flex min-w-0 items-center gap-2">{color ? <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: color }} /> : null}{label}</span>
+      <span className="whitespace-nowrap text-right tabular-nums" style={{ color: tone }}>{value}</span>
+      <span className="whitespace-nowrap text-right tabular-nums" style={{ color: INK3 }}>{share}</span>
+    </div>
+  );
+}
+
+// A job with no vendor quote: the typed figures (they drive Purchasing), split into the
+// supplier orders above and everything else (crew trips, extras).
+function TypedBudget({ job, ordered, framed }) {
+  const t = typedBudget(job, ordered.value);
+  const where = framed ? 'at the top of this page' : 'on the job’s Budget & Orders page';
+  if (!t.any) return <p className="px-4 py-3 text-[13.5px]" style={{ color: INK3, borderTop: `1px solid ${RULE}` }}>No budget yet. Type Budget cost and Customer total {where}, or upload the vendor quote from Add.</p>;
+  const lines = ordered.value == null ? 0 : 1;
+  return (
+    <div>
+      {lines ? <MoneyRow label={`Supplier orders (total above${ordered.partial ? ', a line has no amount' : ''})`} value={outMoney(t.orders)} /> : null}
+      {t.other != null ? <MoneyRow label="Other costs (typed budget cost less supplier orders)" value={outMoney(t.other)} /> : null}
+      {t.overBy != null ? <MoneyRow label="Supplier orders are over the typed budget cost by" value={lineMoney(t.overBy)} tone="#A43432" /> : null}
+      <MoneyRow label="Budget cost (typed)" value={t.cost == null ? `Not typed ${framed ? '· type it above' : ''}`.trim() : outMoney(t.cost)} strong />
+      <MoneyRow label="Customer total (typed)" value={t.sell == null ? 'Not typed' : lineMoney(t.sell)} />
+      <MoneyRow label="Margin" value={t.margin == null ? '—' : lineMoney(t.margin)} share={pct(t.marginPct)} total tone={t.margin != null && t.margin < 0 ? '#A43432' : INK} />
+    </div>
+  );
+}
 
 const chip = { ok: ['Counted in budget', 'ok'], warn: ['Needs review', 'warn'], draft: ['Draft', 'warn'], ref: ['Reference / replaced', 'plain'], unlinked: ['Needs a job', 'warn'] };
 function budgetChip(b, active) {
@@ -202,21 +341,20 @@ function BudgetUseSelect({ budget, budgets, onSaved }) {
     setBusy(true); setError('');
     try {
       const r = await purchasingRequest({ action: 'budget_usage', budget_id: budget.id, budget_version: budgetVersion(budget), budget_usage: usage, replaces_budget_id: replaces, review_confirmed: true, request_key: crypto.randomUUID() });
-      onSaved?.(usage === 'included' ? 'Counted in the budget. You can prepare its PO now.' : r?.message);
+      onSaved?.(usage === 'included' ? 'Counted in the budget. You can prepare its PO from Add.' : r?.message);
     } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
   }
   return (
-    <label className="inline-flex flex-wrap items-center gap-2 text-[13px] font-medium" style={{ color: INK2 }}
-      title="Counted quotes make up the budget and can be ordered. A replacement leaves the earlier quote out of the totals; its files, numbers and POs stay in history.">
-      Budget use
-      <select value={value} disabled={busy} onChange={(e) => choose(e.target.value)} className="h-9 rounded-[9px] border bg-white px-2 text-[13px] font-semibold" style={{ borderColor: EDGE, color: INK }}>
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <select aria-label="Budget use" value={value} disabled={busy} onChange={(e) => choose(e.target.value)} className="h-9 rounded-[9px] border bg-white px-2 text-[13px] font-semibold" style={{ borderColor: EDGE, color: INK }}
+        title="Counted quotes make up the budget and can be ordered. A replacement leaves the earlier quote out of the totals; its files, numbers and POs stay in history.">
         <option value="included">Counted in budget</option>
         {others.map((o) => <option key={o.id} value={`replaces:${o.id}`}>Counted · replaces {o.title || o.quote_number || 'earlier quote'}</option>)}
         <option value="draft">Draft · not counted</option>
         <option value="reference">Reference only</option>
       </select>
-      {error ? <span role="alert" className="font-semibold" style={{ color: '#A43432' }}>{error}</span> : null}
-    </label>
+      {error ? <span role="alert" className="text-[13px] font-semibold" style={{ color: '#A43432' }}>{error}</span> : null}
+    </span>
   );
 }
 
@@ -225,10 +363,10 @@ function QuoteLines({ budget }) {
   if (!Array.isArray(lines) || !lines.length) return null;
   return (
     <details>
-      <summary className="cursor-pointer text-[13px] font-semibold" style={{ color: INK2 }}>Quote line items ({lines.length})</summary>
+      <summary className="cursor-pointer text-[13.5px] font-semibold" style={{ color: INK3 }}>Quote line items ({lines.length})</summary>
       <div className="mt-1.5 overflow-x-auto">
         <table className="w-full text-[13px] tabular-nums" style={{ color: INK }}>
-          <thead><tr style={{ color: INK2 }}>{['Kind', 'Description', 'Qty', 'Unit', 'Extended'].map((h, idx) => <th key={h} className={`px-1.5 py-1 font-semibold ${idx >= 2 ? 'text-right' : 'text-left'}`}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ color: INK3 }}>{['Kind', 'Description', 'Qty', 'Unit', 'Extended'].map((h, idx) => <th key={h} className={`px-1.5 py-1 font-semibold ${idx >= 2 ? 'text-right' : 'text-left'}`}>{h}</th>)}</tr></thead>
           <tbody>
             {lines.map((l, idx) => (
               <tr key={idx} style={{ borderTop: `1px solid ${RULE}` }}>
@@ -246,9 +384,10 @@ function QuoteLines({ budget }) {
   );
 }
 
-// One budget section (Gabriel, Oct 30): sell, cost and margin, then one bar that splits
-// the price into each cost and the margin, keyed by the cost lines. No suggested price.
-// No overhead is added: his sub pay already covers it. Colors pass the dataviz CVD check.
+// A quote budget (Gabriel, Oct 30 bar; Oct 31 ruled table): the bar splits the price into
+// each cost and the margin; the table below lists them with the total and the margin.
+// No suggested price. No overhead is added: his sub pay already covers it. Colors pass the
+// dataviz CVD check.
 const COST_PARTS = [
   ['material_true_cost', 'Material', '#2a78d6'],
   ['labor_cost_sub_pay', 'Labor (sub pay)', '#eb6834'],
@@ -257,57 +396,35 @@ const COST_PARTS = [
 ];
 const MARGIN_COLOR = '#1baf7a';
 
-function BudgetSummary({ inputs, total, sell, marginPct }) {
+function BudgetTable({ inputs, total, sell, marginPct }) {
   const profit = sell != null && total != null ? sell - total : null;
-  const parts = [
-    ...COST_PARTS.map(([key, label, color]) => ({ label, color, value: num(inputs[key]) ?? 0 })),
-    ...(profit != null ? [{ label: 'Margin', color: MARGIN_COLOR, value: profit }] : []),
-  ];
+  const parts = COST_PARTS.map(([key, label, color]) => ({ key, label, color, value: num(inputs[key]) ?? 0 }));
+  const bar = [...parts, ...(profit != null ? [{ label: 'Margin', color: MARGIN_COLOR, value: profit }] : [])];
   const scale = Math.max(sell || 0, total || 0) || 1;
   const share = (v) => (sell ? `${((v / sell) * 100).toFixed(1)}%` : '');
-  const tiles = [
-    ['Customer sell', sell == null ? 'Not set' : lineMoney(sell), sell == null ? INK2 : INK, ''],
-    ['Total cost', lineMoney(total), INK, ''],
-    ['Margin', profit == null ? '—' : lineMoney(profit), profit != null && profit < 0 ? '#A43432' : '#082F2C', profit == null ? '' : `${pct(marginPct)} of sell`],
-  ];
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
-        {tiles.map(([k, v, color, note]) => (
-          <div key={k} className="flex flex-col gap-0.5 rounded-[10px] p-3" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
-            <span className="text-[13px] font-medium" style={{ color: INK2 }}>{k}</span>
-            <span className="text-[19px] font-bold tabular-nums tracking-[-0.02em]" style={{ color }}>{v}</span>
-            {note ? <span className="text-[13px] font-semibold tabular-nums" style={{ color }}>{note}</span> : null}
-          </div>
-        ))}
-      </div>
+    <div>
       {total > 0 && (
-        <div className="flex h-3.5 gap-[2px] overflow-hidden rounded-[4px]" style={{ backgroundColor: '#F3EFE7' }} role="img" aria-label={parts.map((p) => `${p.label} ${lineMoney(p.value)}`).join(', ')}>
-          {parts.filter((p) => p.value > 0).map((p) => (
-            <span key={p.label} title={`${p.label} ${lineMoney(p.value)}${share(p.value) ? ` · ${share(p.value)}` : ''}`} style={{ width: `${(p.value / scale) * 100}%`, backgroundColor: p.color }} />
-          ))}
+        <div className="px-4 pb-2.5 pt-1">
+          <div className="flex h-3 gap-[2px] overflow-hidden rounded-[4px]" style={{ backgroundColor: '#F3EFE7' }} role="img" aria-label={bar.map((p) => `${p.label} ${lineMoney(p.value)}`).join(', ')}>
+            {bar.filter((p) => p.value > 0).map((p) => (
+              <span key={p.label} title={`${p.label} ${lineMoney(p.value)}${share(p.value) ? ` · ${share(p.value)}` : ''}`} style={{ width: `${(p.value / scale) * 100}%`, backgroundColor: p.color }} />
+            ))}
+          </div>
         </div>
       )}
-      <div className="grid gap-x-5 gap-y-2.5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
-        {parts.map((p) => {
-          const zero = !(p.value > 0);
-          return (
-            <div key={p.label} className="flex flex-col gap-0.5">
-              <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: INK2 }}>
-                <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: zero ? EDGE : p.color }} />{p.label}
-              </span>
-              <span className="pl-4 text-[14.5px] font-semibold tabular-nums" style={{ color: zero ? '#616A6D' : INK }}>
-                {lineMoney(p.value)}{share(p.value) && !zero ? <span className="ml-1.5 text-[13px] font-normal" style={{ color: INK2 }}>{share(p.value)}</span> : null}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      <div className={`${MONEY_GRID} py-1 text-[13px] font-semibold`} style={{ color: INK3, borderTop: `1px solid ${EDGE}` }}><span>Line</span><span className="text-right">Amount</span><span className="text-right">Share of sell</span></div>
+      {parts.filter((p) => p.value > 0 || p.key === 'material_true_cost').map((p) => <MoneyRow key={p.key} label={p.label} color={p.color} value={outMoney(p.value)} share={share(p.value)} />)}
+      <MoneyRow label="Total cost" value={outMoney(total)} share={total != null ? share(total) : ''} strong />
+      <MoneyRow label="Customer sell" value={sell == null ? 'Not set · use Edit numbers' : lineMoney(sell)} tone={sell == null ? INK3 : INK} />
+      <MoneyRow label="Margin" color={MARGIN_COLOR} value={profit == null ? '—' : lineMoney(profit)} share={profit == null ? '' : pct(marginPct)} total tone={profit != null && profit < 0 ? '#A43432' : INK} />
     </div>
   );
 }
 
-function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onPreparePO, onSaved, editorPanel }) {
+function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onSaved, editorPanel }) {
+  const [menuError, setMenuError] = useState('');
+  const removeKey = useRef(null);
   const fig = budgetFigures(budget);
   const c = fig.calculated || {};
   const i = budget.inputs || {};
@@ -316,89 +433,91 @@ function BudgetCard({ budget, allBudgets, pos, editing, onEdit, onPreparePO, onS
   // sale and labor only - its windows cost comes from the PO, so no margin math is shown.
   const noQuote = num(i.material_true_cost) == null && !budget.quote_number && !budget.quote;
   // A second copy of the same quote, or a job-money placeholder a real quote has replaced:
-  // flagged, with a Remove button below (the server re-checks nothing still uses it).
+  // flagged, with Remove in the menu (the server re-checks nothing still uses it).
   const dupe = duplicateOf(budget, allBudgets);
   const stale = replacedByQuote(budget, allBudgets);
   const [chipText, chipTone] = dupe ? ['Possible duplicate', 'warn'] : stale ? ['Replaced by vendor quote', 'plain'] : noQuote ? ['Job money · no vendor quote', 'plain'] : budgetChip(budget, active);
-  // No customer price typed yet: say that once, instead of a $0 sell, a negative margin
-  // and an "under the suggested price" warning.
+  // No customer price typed yet: the table says so once, instead of a $0 sell and a negative margin.
   const noSell = !(num(i.actual_total_sell) > 0);
   const warnings = fig.warnings.filter((w) => !(noSell && /customer sell/i.test(w)));
   const supplier = budget.vendor || budget.manufacturer || '';
   const sub = [supplier, budget.quote_number ? `Quote ${budget.quote_number}` : '', budget.openings_qty > 0 ? `${budget.openings_qty} unit${budget.openings_qty === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
-  const statusLine = dupe ? `Same quote as “${dupe.title || dupe.quote_number}”. Keep the right copy and remove the other.`
-    : stale ? 'A vendor quote is now on this job. Remove this placeholder once that quote has your customer price.'
+  const statusLine = dupe ? `Same quote as “${dupe.title || dupe.quote_number}”. Keep the right copy and remove the other from the ⋯ menu.`
+    : stale ? 'A vendor quote is now on this job. Remove this placeholder (⋯ menu) once that quote has your customer price.'
     : noQuote ? '' : warnings.length ? warnings[0]
-    : budget.budget_usage === 'draft' ? 'Draft: set Budget use to “Counted in budget” below to order it. Saving your numbers does this for a job’s only quote.' : '';
+    : budget.budget_usage === 'draft' ? 'Draft: set Budget use to “Counted in budget” to order it. Saving your numbers does this for a job’s only quote.' : '';
   const sourceHref = safeHref(budget.source_pdf_url) || fileHref(budget.drive_quote_file_id);
   const privateSource = !sourceHref && /^[a-f0-9]{64}$/.test(budget.source_sha256 || '') ? budget.id : null;
   const related = pos.filter((p) => p.budget_id === budget.id);
   const history = distinctHistory(budget);
   const sell = noSell ? null : num(i.actual_total_sell), total = num(c.total_cost_overhead);
   const qty = quantityReviewLabel(budget);
+
+  async function remove() {
+    setMenuError('');
+    removeKey.current ||= crypto.randomUUID();
+    try {
+      const message = await removeJobQuote(budget, { duplicate: Boolean(dupe), requestKey: removeKey.current });
+      if (message) onSaved?.(message);
+    } catch (e) { setMenuError(messageOf(e)); removeKey.current = null; }
+  }
+  const openSource = () => { setMenuError(''); openPrivateSource(privateSource).catch((e) => setMenuError(e.message)); };
+  const menu = [
+    sourceHref ? { label: 'Vendor quote PDF', href: sourceHref } : null,
+    privateSource ? { label: 'Vendor quote PDF', onSelect: openSource } : null,
+    budget.job_id && !related.length && !budget.deleted_at ? { label: dupe ? 'Remove duplicate quote' : 'Remove quote from job', onSelect: remove, danger: true } : null,
+  ];
+
   return (
-    <div className="flex flex-col gap-3.5 rounded-[12px] p-4" style={{ border: `1px solid ${EDGE}`, backgroundColor: '#FFFFFF' }}>
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+    <div style={{ borderTop: `1px solid ${EDGE}` }}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+        <div className="flex min-w-[200px] flex-1 flex-col">
           <span className="break-words text-[14.5px] font-semibold" style={{ color: INK }}>{budget.title || budget.quote_name || 'Untitled quote'}</span>
-          {sub ? <span className="text-[13px]" style={{ color: INK2 }}>{sub}{qty ? <span style={{ color: '#96490F' }}> · Quantity needs review</span> : null}</span> : null}
+          {sub ? <span className="text-[13.5px]" style={{ color: INK3 }}>{sub}{qty ? <span style={{ color: '#96490F' }}> · Quantity needs review</span> : null}</span> : null}
         </div>
         <Chip tone={chipTone}>{chipText}</Chip>
-        {!editing && <button type="button" onClick={() => onEdit({ mode: 'numbers', budget_id: budget.id })} className={BTN} style={PRI}><Pencil className="h-3.5 w-3.5" />Edit numbers</button>}
-      </div>
-      {statusLine ? <p className="rounded-[9px] px-3 py-2 text-[13px] font-medium" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>{statusLine}</p> : null}
-      {editing ? editorPanel : noQuote ? (
-        <div className="flex flex-col gap-3">
-          <div className="grid max-w-[460px] grid-cols-2 gap-2">
-            {[['Customer sell', lineMoney(i.actual_total_sell)], ['Labor (sub pay)', lineMoney(i.labor_cost_sub_pay)]].map(([k, v]) => (
-              <div key={k} className="flex flex-col gap-0.5 rounded-[10px] p-3" style={{ backgroundColor: '#FAF8F3', border: `1px solid ${RULE}` }}>
-                <span className="text-[13px] font-medium" style={{ color: INK2 }}>{k}</span>
-                <span className="text-[17px] font-bold tabular-nums tracking-[-0.02em]">{v}</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-[13px]" style={{ color: INK2 }}>No vendor quote on this job, so its windows cost comes from the PO above. Drop the supplier quote below to see the full cost build-up and margin.</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          <BudgetSummary inputs={i} total={total} sell={sell} marginPct={c.actual_margin_pct} />
-          {noSell ? <p className="text-[13px]" style={{ color: INK2 }}>No customer price yet. Use Edit numbers to add what you're charging and the margin fills in.</p> : null}
-        </div>
-      )}
-      <QuoteLines budget={budget} />
-      {history.length > 0 && (
-        <details className="text-[13px]" style={{ color: INK2 }}>
-          <summary className="cursor-pointer font-semibold">Earlier numbers ({history.length})</summary>
-          {history.map((h, idx) => <p key={idx} className="mt-1">{h.at} · material {money(h.inputs?.material_true_cost)} · customer sell {money(h.inputs?.actual_total_sell)}</p>)}
-        </details>
-      )}
-      <div className="flex flex-wrap items-center gap-2 pt-3" style={{ borderTop: `1px solid ${RULE}` }}>
         {budget.job_id ? <BudgetUseSelect budget={budget} budgets={allBudgets} onSaved={onSaved} /> : null}
-        {budget.job_id && active && fig.ready && !related.length ? <button type="button" onClick={() => onPreparePO(budget.id)} className={BTN} style={SEC}><Plus className="h-3.5 w-3.5" />Prepare PO</button> : null}
-        {!budget.job_id ? <DeleteUnusedQuoteButton budget={budget} onDeleted={(_r, msg) => onSaved?.(msg)} /> : null}
-        {budget.job_id && !related.length ? <RemoveQuoteButton budget={budget} duplicate={Boolean(dupe)} className={BTN} style={SEC} onRemoved={onSaved} /> : null}
-        <span className="flex-1" />
-        {sourceHref ? <a href={sourceHref} target="_blank" rel="noreferrer" className={BTN} style={SEC}>Vendor quote PDF<ArrowUpRight className="h-3.5 w-3.5" /></a> : null}
-        {privateSource ? <PrivateSourceButton budgetId={privateSource} label="Vendor quote PDF" className={BTN} style={SEC} /> : null}
+        {!editing && <button type="button" onClick={() => onEdit({ mode: 'numbers', budget_id: budget.id })} className={BTN} style={SEC}><Pencil className="h-3.5 w-3.5" />Edit numbers</button>}
+        <ActionMenu label="More for this quote" items={menu} />
       </div>
-      {/* Edit numbers replaces the figures above. The job's Drive folder is under Job files. */}
-      {!editing && editorPanel}
+      {menuError ? <p role="alert" className="px-4 pb-2 text-[13.5px] font-semibold" style={{ color: '#A43432' }}>{menuError}</p> : null}
+      {statusLine ? <p className="mx-4 mb-2.5 rounded-[9px] px-3 py-2 text-[13.5px] font-medium" style={{ backgroundColor: '#FAF0DA', border: '1px solid #EFDFB7', color: '#6F4E10' }}>{statusLine}</p> : null}
+      {editing ? <div className="px-4 pb-4">{editorPanel}</div> : noQuote ? (
+        <div>
+          <MoneyRow label="Customer sell" value={lineMoney(i.actual_total_sell)} />
+          <MoneyRow label="Labor (sub pay)" value={outMoney(i.labor_cost_sub_pay)} />
+          <p className="px-4 py-2 text-[13.5px]" style={{ color: INK3, borderTop: `1px solid ${RULE}` }}>No vendor quote, so the windows cost is the supplier total above. Upload the quote from Add for the full build-up.</p>
+        </div>
+      ) : <BudgetTable inputs={i} total={total} sell={sell} marginPct={c.actual_margin_pct} />}
+      {(budget.quote?.lines?.length || history.length) && !editing ? (
+        <div className="flex flex-col gap-1.5 px-4 py-2.5" style={{ borderTop: `1px solid ${RULE}` }}>
+          <QuoteLines budget={budget} />
+          {history.length > 0 && (
+            <details className="text-[13.5px]" style={{ color: INK3 }}>
+              <summary className="cursor-pointer font-semibold">Earlier numbers ({history.length})</summary>
+              {history.map((h, idx) => <p key={idx} className="mt-1">{h.at} · material {money(h.inputs?.material_true_cost)} · customer sell {money(h.inputs?.actual_total_sell)}</p>)}
+            </details>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 // ---------- The workspace ----------
 
-export default function PurchasingJobWorkspace({ job, data, onSaved }) {
+// `framed`: the Budget & Orders page draws its own sheet; under a Purchasing row the
+// row's white card already is the sheet.
+export default function PurchasingJobWorkspace({ job, data, onSaved, framed = false }) {
   const [editor, setEditor] = useState(null);
-  const [openLine, setOpenLine] = useState(null);
+  const filesRef = useRef(null);
   const rec = useMemo(() => jobProcurementRecords(data, job.id), [data, job.id]);
+  const ordered = useMemo(() => sheetTotal(job.id, rec), [job.id, rec]);
   const jobNameById = (id) => (data.jobs || []).find((j) => j.id === id)?.canonical_name || id;
 
   const openEditor = (next) => setEditor({ ...next, key: crypto.randomUUID() });
   const done = (_r, msg) => { setEditor(null); onSaved(msg); };
   const budgetDone = (r) => done(r, `Budget saved.${r?.budget?.budget_usage === 'included' ? ' Counted in the budget.' : ''} ${r?.warnings?.join(' ') || 'Issued POs, invoices and recorded payments are unchanged.'}`);
-  const preparePO = (budgetId) => openEditor({ mode: 'po', budget_id: budgetId, job_id: job.id });
 
   const currentBudget = editor?.budget_id ? rec.budgets.find((b) => b.id === editor.budget_id) : null;
   const currentPO = editor?.po_id ? rec.pos.find((p) => p.id === editor.po_id) : null;
@@ -416,53 +535,46 @@ export default function PurchasingJobWorkspace({ job, data, onSaved }) {
     </div>
   );
 
-  const poIds = new Set(rec.pos.map((p) => p.id));
-  const looseOrders = rec.orders.filter((o) => !o.purchase_order_id || !poIds.has(o.purchase_order_id));
-  const hasLines = rec.pos.length + looseOrders.length > 0;
-  const toggleLine = (key) => setOpenLine((k) => (k === key ? null : key));
-  // Forms that are not about one budget (new PO, supplier confirmations, statuses) open under the list.
-  const listEditor = editor && editor.mode !== 'numbers' ? editorPanel(editor) : null;
+  // A form about one line opens under that line; Add's forms open under the table.
+  const lineOwns = (line, ed) => Boolean(ed) && ((ed.po_id && line.po?.id === ed.po_id) || (ed.order_id && line.orders.some((o) => o.id === ed.order_id)));
+  const editorFor = (line) => (editor && editor.mode !== 'numbers' && lineOwns(line, editor) ? editorPanel(editor) : null);
+  const ownedByLine = editor && editor.mode !== 'numbers' && (editor.po_id || editor.order_id)
+    && (rec.pos.some((p) => p.id === editor.po_id) || rec.orders.some((o) => o.id === editor.order_id));
+  const listEditor = editor && editor.mode !== 'numbers' && !ownedByLine ? editorPanel(editor) : null;
   const budgetEditor = (b) => (editor && editor.budget_id === b.id && editor.mode === 'numbers' ? editorPanel(editor) : null);
 
-  return (
-    <div className="flex flex-col gap-5 p-4 sm:p-5">
-      <section className="flex flex-col gap-2" aria-label="Purchase orders and quotes">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={EYEBROW} style={{ color: INK2 }}>Purchase orders & quotes</span>
-          <span className="flex-1" />
-          <button type="button" onClick={() => openEditor({ mode: 'po', job_id: job.id })} className={BTN} style={{ ...SEC, height: 32 }}><Plus className="h-3.5 w-3.5" />Prepare PO</button>
-          <button type="button" onClick={() => openEditor({ mode: 'supplier', job_id: job.id })} className={BTN} style={{ ...SEC, height: 32 }}><Plus className="h-3.5 w-3.5" />Record confirmation</button>
-        </div>
-        {hasLines ? (
-          <div className="overflow-hidden rounded-[10px]" style={{ border: `1px solid ${RULE}` }}>
-            <div className={`${LINE_GRID} max-[767px]:hidden`} style={{ backgroundColor: '#FAF8F3', paddingTop: 7, paddingBottom: 7 }}>
-              {['Supplier', 'PO · quote · order', 'ETA', 'Cost', ''].map((h, idx) => <span key={idx} className={`text-[13px] font-semibold uppercase tracking-[0.04em] ${idx === 3 ? 'text-right' : ''}`} style={{ color: INK2 }}>{h}</span>)}
-            </div>
-            {rec.pos.map((p) => <POLine key={p.id} po={p} budgets={rec.budgets} orders={rec.orders} onEdit={openEditor} onSaved={onSaved} open={openLine === `po:${p.id}`} onToggle={() => toggleLine(`po:${p.id}`)} />)}
-            {looseOrders.map((o) => <OrderLine key={o.id} order={o} onEdit={openEditor} onSaved={onSaved} open={openLine === `o:${o.id}`} onToggle={() => toggleLine(`o:${o.id}`)} />)}
-          </div>
-        ) : <p className="rounded-[10px] px-3 py-3 text-[13px]" style={{ border: `1px solid ${RULE}`, backgroundColor: '#FAF8F3', color: INK2 }}>No purchase orders or supplier confirmations yet.</p>}
-        {listEditor}
-        {rec.conflicts.length > 0 && (
-          <details className="rounded-[10px] p-2.5 text-[13px]" style={{ border: '1px solid #EFDFB7', backgroundColor: '#FAF0DA', color: '#6F4E10' }} open>
-            <summary className="cursor-pointer font-semibold">{rec.conflicts.length} PO reference conflict{rec.conflicts.length === 1 ? '' : 's'} - review before linking</summary>
-            {rec.conflicts.map((c) => (
-              <p key={c.number} className="mt-1"><strong>{c.number}</strong> appears against {c.job_ids.map((id, idx) => <span key={id}>{idx ? ' / ' : ''}<Link className="underline" to={`/jobs/${id}`}>{jobNameById(id)}</Link></span>)}. Original records are kept; nothing is cross-linked automatically.</p>
-            ))}
-          </details>
-        )}
-      </section>
+  const addMenu = (
+    <ActionMenu label="Add" items={[
+      { label: 'Prepare PO', onSelect: () => openEditor({ mode: 'po', job_id: job.id }) },
+      { label: 'Record supplier confirmation', onSelect: () => openEditor({ mode: 'supplier', job_id: job.id }) },
+      { label: 'Upload quote or files', onSelect: () => filesRef.current?.pick() },
+      { label: filesRef.current?.hasFolder ? 'Link a different Drive folder' : 'Link Drive folder', onSelect: () => filesRef.current?.link() },
+    ]} trigger={(
+      <button type="button" className={BTN} style={{ ...SEC, height: 32 }}><Plus className="h-4 w-4" />Add<ChevronDown className="h-4 w-4" /></button>
+    )} />
+  );
 
-      <section className="flex flex-col gap-2" aria-label="Budget">
-        <span className={EYEBROW} style={{ color: INK2 }}>Budget</span>
-        {rec.budgets.length === 0 ? <p className="text-[13px]" style={{ color: INK2 }}>No vendor quote attached yet. Add the supplier quote below to build the cost and margin.</p> : null}
+  // Quote budgets show their own tables; with none, the typed figures stand in.
+  const quoteBudgets = rec.budgets.filter((b) => !(num(b.inputs?.material_true_cost) == null && !b.quote_number && !b.quote));
+  const budgetNote = quoteBudgets.length ? `${quoteBudgets.length} vendor quote${quoteBudgets.length === 1 ? '' : 's'}` : 'Typed figures · no vendor quote';
+
+  return (
+    <div className={framed ? 'overflow-hidden rounded-[12px] bg-white' : ''}
+      style={framed ? { border: `1px solid ${EDGE}`, boxShadow: '0 1px 2px rgba(21,24,26,.05), 0 3px 8px -3px rgba(21,24,26,.10)' } : undefined}>
+      <OrdersSection job={job} rec={rec} jobNameById={jobNameById} onEdit={openEditor} onSaved={onSaved} editorFor={editorFor} listEditor={listEditor} addMenu={addMenu} />
+
+      <section aria-label="Budget" style={{ borderTop: `1px solid ${EDGE}` }}>
+        <SectionHead title="Budget" note={budgetNote} />
+        {quoteBudgets.length ? null : <TypedBudget job={job} ordered={ordered} framed={framed} />}
         {rec.budgets.map((b) => (
           <BudgetCard key={b.id} budget={b} allBudgets={rec.budgets} pos={rec.pos} editing={editor?.mode === 'numbers' && editor.budget_id === b.id}
-            onEdit={openEditor} onPreparePO={preparePO} onSaved={onSaved} editorPanel={budgetEditor(b)} />
+            onEdit={openEditor} onSaved={onSaved} editorPanel={budgetEditor(b)} />
         ))}
       </section>
 
-      <JobFilesPanel job={job} onSaved={onSaved} />
+      <div style={{ borderTop: `1px solid ${EDGE}` }}>
+        <JobFilesPanel ref={filesRef} job={job} onSaved={onSaved} headClass={HEAD} headStyle={{ backgroundColor: HEAD_BG }} />
+      </div>
     </div>
   );
 }
